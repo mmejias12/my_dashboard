@@ -3,312 +3,386 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Flujo Real REDTEC – 2026 vs 2025</title>
+<title>REDTEC – Retornos & Devoluciones 2026</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
-  :root {
-    --bg:     #111827; --bgL: #1E2A3A; --card: #1E293B;
-    --border: #334155; --accent: #E53935; --accentL: #FF6F60;
-    --blue:   #42A5F5; --green: #66BB6A; --orange: #FFA726;
-    --yellow: #FFEE58; --purple: #AB47BC; --white: #F0F0F0; --muted: #94A3B8;
-  }
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:var(--bg); color:var(--white); font-family:'Segoe UI',Arial,sans-serif; padding-bottom:48px; }
+:root {
+  --bg:#111827; --card:#1E293B; --card2:#162032; --border:#334155;
+  --accent:#E53935; --accentL:#FF6F60;
+  --green:#66BB6A; --blue:#42A5F5; --purple:#AB47BC;
+  --orange:#FFA726; --teal:#26C6DA; --yellow:#FFEE58;
+  --muted:#94A3B8; --white:#F1F5F9;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--white);font-family:'Segoe UI',Arial,sans-serif;padding-bottom:56px;}
 
-  /* HEADER */
-  .header { background:linear-gradient(90deg,#111827 60%,#2a0a0a); border-bottom:3px solid var(--accent); padding:14px 30px; display:flex; align-items:center; justify-content:space-between; }
-  .header-left { display:flex; align-items:center; gap:14px; }
-  .badge { background:var(--accent); color:#fff; font-weight:800; font-size:13px; padding:5px 12px; border-radius:6px; letter-spacing:1px; }
-  .h-title { font-size:19px; font-weight:700; }
-  .h-sub   { font-size:11px; color:var(--muted); margin-top:2px; }
-  .h-date  { font-size:11px; color:var(--muted); text-align:right; }
+/* ── HEADER ── */
+.header{background:linear-gradient(90deg,#0f172a 55%,#200808);border-bottom:3px solid var(--accent);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;}
+.badge{background:var(--accent);color:#fff;font-weight:900;font-size:13px;padding:5px 13px;border-radius:6px;letter-spacing:1.5px;}
+.h-title{font-size:19px;font-weight:700;margin-left:14px;}
+.h-sub{font-size:11px;color:var(--muted);margin-top:2px;margin-left:14px;}
+.h-date{font-size:11px;color:var(--muted);text-align:right;line-height:1.6;}
 
-  .main { padding:20px 28px; }
+/* ── CONTROL BAR ── */
+.ctrl-bar{margin:18px 26px 0;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 18px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.ctrl-sep{width:1px;height:30px;background:var(--border);margin:0 8px;flex-shrink:0;}
+.ctrl-lbl{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.6px;white-space:nowrap;}
 
-  /* FILTER BAR */
-  .filter-bar { display:flex; align-items:center; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
-  .fl { font-size:11px; color:var(--muted); font-weight:600; margin-right:4px; }
-  .fbtn { background:var(--card); border:1px solid var(--border); color:var(--muted); font-size:12px; padding:6px 15px; border-radius:20px; cursor:pointer; transition:all .2s; }
-  .fbtn:hover, .fbtn.active { background:var(--accent); border-color:var(--accent); color:#fff; }
-  .fbtn.walmart.active  { background:#1565C0; border-color:#1565C0; }
-  .fbtn.cencosud.active { background:#2E7D32; border-color:#2E7D32; }
-  .fbtn.unimarc.active  { background:#E65100; border-color:#E65100; }
-  .fbtn.tottus.active   { background:#6A1B9A; border-color:#6A1B9A; }
-  .fbtn.smu.active      { background:#00838F; border-color:#00838F; }
-  .fbtn.otro.active     { background:#546E7A; border-color:#546E7A; }
-  .sep { width:1px; height:28px; background:var(--border); margin:0 6px; }
+/* SWITCH TIPO */
+.tipo-group{display:flex;background:#0f172a;border-radius:9px;padding:3px;gap:3px;}
+.tipo-btn{padding:7px 18px;border-radius:7px;border:none;cursor:pointer;font-size:12px;font-weight:700;color:var(--muted);background:transparent;transition:all .22s;white-space:nowrap;letter-spacing:.3px;}
+.tipo-btn.t-retiro {background:#1a3d1a;color:#86efac;border:1px solid #166534;}
+.tipo-btn.t-dev    {background:#2d1a3d;color:#d8b4fe;border:1px solid #6b21a8;}
+.tipo-btn.t-ambos  {background:#1a2d4a;color:#93c5fd;border:1px solid #1d4ed8;}
 
-  /* KPI ROW */
-  .kpi-row { display:grid; grid-template-columns:repeat(6,1fr); gap:11px; margin-bottom:20px; }
-  .kpi { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:13px 12px; position:relative; overflow:hidden; }
-  .kpi::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; }
-  .kpi.red::before    { background:var(--accent); }
-  .kpi.blue::before   { background:var(--blue); }
-  .kpi.green::before  { background:var(--green); }
-  .kpi.orange::before { background:var(--orange); }
-  .kpi.purple::before { background:var(--purple); }
-  .kpi.yellow::before { background:var(--yellow); }
-  .kl  { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:5px; line-height:1.3; }
-  .kv  { font-size:24px; font-weight:800; line-height:1; }
-  .kv.red    { color:var(--accentL); }
-  .kv.blue   { color:var(--blue); }
-  .kv.green  { color:var(--green); }
-  .kv.orange { color:var(--orange); }
-  .kv.purple { color:var(--purple); }
-  .ks  { font-size:10px; color:var(--muted); margin-top:3px; }
-  .kd  { font-size:11px; font-weight:700; margin-top:3px; }
-  .kd.up   { color:var(--green); }
-  .kd.down { color:var(--accentL); }
-  .kd.neu  { color:var(--muted); }
+/* REGION BUTTONS */
+.reg-btn{padding:7px 15px;border-radius:20px;border:1.5px solid var(--border);cursor:pointer;font-size:12px;font-weight:600;color:var(--muted);background:var(--card2);transition:all .22s;}
+.reg-btn:hover{border-color:var(--accent);}
+.reg-btn.r-ambas   {background:#0d2240;border-color:#1d4ed8;color:#93c5fd;}
+.reg-btn.r-santiago{background:#3d0d0d;border-color:#dc2626;color:#fca5a5;}
+.reg-btn.r-talca   {background:#3d1f0d;border-color:#ea580c;color:#fed7aa;}
 
-  /* CHARTS */
-  .cbox { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px 18px; margin-bottom:18px; }
-  .ct  { font-size:14px; font-weight:700; margin-bottom:2px; }
-  .cs  { font-size:11px; color:var(--muted); margin-bottom:12px; }
-  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:18px; }
-  .row3 { display:grid; grid-template-columns:2fr 1fr; gap:16px; margin-bottom:18px; }
+/* RETAIL BUTTONS */
+.retail-btn{padding:5px 13px;border-radius:16px;border:1px solid var(--border);cursor:pointer;font-size:11px;font-weight:600;color:var(--muted);background:var(--card2);transition:all .2s;}
+.retail-btn:hover{border-color:#64748b;}
+.retail-btn.ra{background:var(--accent);border-color:var(--accent);color:#fff;}
+.retail-btn.rw.ra{background:#1d4ed8;border-color:#1d4ed8;color:#fff;}
+.retail-btn.rc.ra{background:#166534;border-color:#166534;color:#fff;}
+.retail-btn.ru.ra{background:#9a3412;border-color:#9a3412;color:#fff;}
+.retail-btn.rt.ra{background:#6b21a8;border-color:#6b21a8;color:#fff;}
+.retail-btn.rs.ra{background:#155e75;border-color:#155e75;color:#fff;}
+.retail-btn.ro.ra{background:#374151;border-color:#374151;color:#fff;}
 
-  /* LEGEND */
-  .leg-row { display:flex; gap:12px; margin-bottom:8px; flex-wrap:wrap; }
-  .leg { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--muted); }
-  .ld  { width:14px; height:3px; border-radius:2px; }
+/* ── MAIN ── */
+.main{padding:16px 26px;}
 
-  /* TABLA 7 DIAS */
-  .table-7d { width:100%; border-collapse:collapse; font-size:12px; }
-  .table-7d th { background:#0F172A; color:var(--muted); font-size:10px; text-transform:uppercase; padding:7px 10px; text-align:right; border-bottom:1px solid var(--border); }
-  .table-7d th:first-child { text-align:left; }
-  .table-7d td { padding:7px 10px; border-bottom:1px solid #1E293B; text-align:right; }
-  .table-7d td:first-child { text-align:left; color:var(--muted); }
-  .table-7d tr:hover td { background:#0F172A; }
-  .table-7d .total-row td { font-weight:700; color:var(--white); background:#0F172A; border-top:1px solid var(--border); }
-  .badge-retail { display:inline-block; padding:2px 7px; border-radius:10px; font-size:10px; font-weight:600; }
-  .br-walmart  { background:#1565C0; color:#fff; }
-  .br-cencosud { background:#2E7D32; color:#fff; }
-  .br-unimarc  { background:#E65100; color:#fff; }
-  .br-tottus   { background:#6A1B9A; color:#fff; }
-  .br-smu      { background:#00838F; color:#fff; }
-  .br-otro     { background:#546E7A; color:#fff; }
-  .total-chip  { background:var(--accent); color:#fff; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; }
+/* KPI GRID */
+.kpi-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px;}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:13px 13px 11px;position:relative;overflow:hidden;transition:border-color .2s;}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:11px 11px 0 0;}
+.kpi.k-green::before {background:var(--green);}
+.kpi.k-blue::before  {background:var(--blue);}
+.kpi.k-purple::before{background:var(--purple);}
+.kpi.k-teal::before  {background:var(--teal);}
+.kpi.k-orange::before{background:var(--orange);}
+.kpi.k-red::before   {background:var(--accent);}
+.kl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px;line-height:1.35;}
+.kv{font-size:23px;font-weight:800;line-height:1;}
+.kv.green {color:var(--green);}  .kv.blue  {color:var(--blue);}
+.kv.purple{color:var(--purple);} .kv.teal  {color:var(--teal);}
+.kv.orange{color:var(--orange);} .kv.red   {color:var(--accentL);}
+.ks{font-size:10px;color:var(--muted);margin-top:3px;}
+.kd{font-size:11px;font-weight:700;margin-top:4px;}
+.kd.up{color:var(--green);} .kd.dn{color:var(--accentL);} .kd.neu{color:var(--muted);}
 
-  /* INSIGHT */
-  .insight { background:#1e1e1e; border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:8px; padding:13px 17px; font-size:12px; color:#ccc; line-height:1.7; }
-  .insight strong { color:var(--accentL); }
+/* REGION CARDS */
+.reg-strip{display:grid;grid-template-columns:1fr 1fr 1.1fr;gap:10px;margin-bottom:16px;}
+.rcard{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;}
+.rcard.stgo {border-left:4px solid #dc2626;}
+.rcard.talca{border-left:4px solid #ea580c;}
+.rcard.mtd  {border-left:4px solid var(--blue);}
+.rcard-name{font-size:12px;font-weight:700;}
+.rcard-val{font-size:20px;font-weight:800;}
+.rv-stgo {color:#fca5a5;} .rv-talca{color:#fed7aa;} .rv-mtd{color:var(--teal);}
+.rcard-sub{font-size:10px;color:var(--muted);margin-top:2px;}
+.mtd-row{font-size:12px;margin-top:2px;}
 
-  canvas { max-height:280px; }
+/* CHART BOXES */
+.cbox{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:15px 17px;margin-bottom:14px;}
+.ct{font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px;margin-bottom:3px;}
+.cs{font-size:11px;color:var(--muted);margin-bottom:10px;}
+.badge-tipo{padding:2px 9px;border-radius:5px;font-size:10px;font-weight:700;}
+.bt-retiro{background:#14532d;color:#86efac;}
+.bt-dev   {background:#4c1d95;color:#d8b4fe;}
+.bt-ambos {background:#1e3a5f;color:#93c5fd;}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
+.leg-row{display:flex;gap:14px;margin-bottom:8px;flex-wrap:wrap;}
+.leg{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);}
+.ld{width:16px;height:3px;border-radius:2px;}
+canvas{max-height:270px;}
+
+/* TABLA 7d */
+.t7d{width:100%;border-collapse:collapse;font-size:12px;}
+.t7d th{background:#0f172a;color:var(--muted);font-size:10px;text-transform:uppercase;padding:7px 10px;text-align:right;border-bottom:1px solid var(--border);}
+.t7d th:first-child{text-align:left;}
+.t7d td{padding:7px 10px;border-bottom:1px solid #1a2840;text-align:right;}
+.t7d td:first-child{text-align:left;color:#64748b;}
+.t7d tr:hover td{background:#0f172a;}
+.t7d .tr-total td{font-weight:700;background:#0f172a;border-top:1px solid var(--border);}
+.chip{display:inline-block;padding:2px 9px;border-radius:9px;font-size:11px;font-weight:700;}
+.ch-e3   {background:#14532d;color:#86efac;}
+.ch-dev  {background:#4c1d95;color:#d8b4fe;}
+.ch-both {background:#1e3a5f;color:#93c5fd;}
+
+/* INSIGHT */
+.insight{background:#0f172a;border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:9px;padding:13px 18px;font-size:12px;color:#cbd5e1;line-height:1.75;}
+.insight strong{color:var(--accentL);}
 </style>
 </head>
 <body>
 
+<!-- HEADER -->
 <div class="header">
-  <div class="header-left">
+  <div style="display:flex;align-items:center;">
     <div class="badge">REDTEC</div>
     <div>
-      <div class="h-title">Flujo Real — Retornos E3 · 2026 vs 2025</div>
-      <div class="h-sub">Retornos desde retail a RedTec · Detalle por cadena · Últimos 7 días</div>
+      <div class="h-title">Retornos E3 + Devoluciones · 2026 vs 2025</div>
+      <div class="h-sub">Retiros desde retail · Devoluciones de clientes · Por región · Por cadena</div>
     </div>
   </div>
-  <div class="h-date">Actualizado: 06-03-2026 12:45<br><span style="color:#555">Fuente: SAP8 EQ (2026) / SAP7 (2025)</span></div>
+  <div class="h-date">Actualizado: 06-03-2026 22:07<br><span style="color:#475569">SAP8 EQ+DEV / SAP7 2025</span></div>
+</div>
+
+<!-- CONTROL BAR -->
+<div class="ctrl-bar">
+  <span class="ctrl-lbl">Tipo:</span>
+  <div class="tipo-group">
+    <button class="tipo-btn t-retiro" id="sw-RETIRO" onclick="setTipo('RETIRO',this)">🔄 Retiro</button>
+    <button class="tipo-btn"          id="sw-DEV"    onclick="setTipo('DEV',this)">📦 Devolución</button>
+    <button class="tipo-btn"          id="sw-AMBOS"  onclick="setTipo('AMBOS',this)">⚡ Ambos</button>
+  </div>
+
+  <div class="ctrl-sep"></div>
+  <span class="ctrl-lbl">Región:</span>
+  <button class="reg-btn r-ambas"    id="rg-AMBAS"    onclick="setRegion('AMBAS',this)">🌐 Todas</button>
+  <button class="reg-btn"            id="rg-SANTIAGO" onclick="setRegion('SANTIAGO',this)">🏙️ Santiago</button>
+  <button class="reg-btn"            id="rg-TALCA"    onclick="setRegion('TALCA',this)">🌾 Talca</button>
+
+  <div class="ctrl-sep"></div>
+  <span class="ctrl-lbl">Retail:</span>
+  <button class="retail-btn ra"  id="rb-ALL"     onclick="setRetail('ALL',this)">Todos</button>
+  <button class="retail-btn rw"  id="rb-WALMART" onclick="setRetail('WALMART',this)">Walmart</button>
+  <button class="retail-btn rc"  id="rb-CENCOSUD" onclick="setRetail('CENCOSUD',this)">Cencosud</button>
+  <button class="retail-btn ru"  id="rb-UNIMARC"  onclick="setRetail('UNIMARC/RENDIC',this)">Unimarc/Rendic</button>
+  <button class="retail-btn rt"  id="rb-TOTTUS"   onclick="setRetail('TOTTUS',this)">Tottus</button>
+  <button class="retail-btn rs"  id="rb-SMU"      onclick="setRetail('SMU/M10',this)">SMU/M10</button>
+  <button class="retail-btn ro"  id="rb-OTRO"     onclick="setRetail('OTRO',this)">Otro</button>
 </div>
 
 <div class="main">
 
-  <!-- FILTER BAR -->
-  <div class="filter-bar">
-    <span class="fl">Filtrar por Retail:</span>
-    <button class="fbtn active" id="btn-ALL"          onclick="setRetail('ALL',this)">Todos</button>
-    <button class="fbtn walmart"  id="btn-WALMART"    onclick="setRetail('WALMART',this)">Walmart</button>
-    <button class="fbtn cencosud" id="btn-CENCOSUD"   onclick="setRetail('CENCOSUD',this)">Cencosud</button>
-    <button class="fbtn unimarc"  id="btn-UNIMARC"    onclick="setRetail('UNIMARC/RENDIC',this)">Unimarc/Rendic</button>
-    <button class="fbtn tottus"   id="btn-TOTTUS"     onclick="setRetail('TOTTUS',this)">Tottus</button>
-    <button class="fbtn smu"      id="btn-SMU"        onclick="setRetail('SMU/M10',this)">SMU/M10</button>
-    <button class="fbtn otro"     id="btn-OTRO"       onclick="setRetail('OTRO',this)">Otro</button>
-    <div class="sep"></div>
-    <span class="fl">Período:</span>
-    <button class="fbtn active" id="per-ALL" onclick="setPeriod('ALL',this)">Todo</button>
-    <button class="fbtn" id="per-NOV" onclick="setPeriod('NOV',this)">Nov–Dic</button>
-    <button class="fbtn" id="per-ENE" onclick="setPeriod('ENE',this)">Ene–Mar</button>
-  </div>
-
-  <!-- KPI ROW -->
-  <div class="kpi-row">
-    <div class="kpi green">
-      <div class="kl">E3 Retornos 2026<br>Acumulado</div>
-      <div class="kv green" id="kpi-e3-26">—</div>
-      <div class="ks">pallets retornados</div>
-      <div class="kd" id="kpi-e3-delta">—</div>
+  <!-- REGION STRIP -->
+  <div class="reg-strip">
+    <div class="rcard stgo">
+      <div>
+        <div class="rcard-name">🏙️ Santiago</div>
+        <div class="rcard-sub" id="stgo-sub">E3 estimado + Devoluciones</div>
+      </div>
+      <div style="text-align:right">
+        <div class="rcard-val rv-stgo" id="stgo-val">—</div>
+        <div class="rcard-sub">pallets acum.</div>
+      </div>
     </div>
-    <div class="kpi blue">
-      <div class="kl">E3 Retornos 2025<br>Período comparable</div>
-      <div class="kv blue" id="kpi-e3-25">—</div>
-      <div class="ks">pallets retornados</div>
-      <div class="kd neu">año anterior</div>
+    <div class="rcard talca">
+      <div>
+        <div class="rcard-name">🌾 Talca</div>
+        <div class="rcard-sub" id="talca-sub">Devoluciones confirmadas</div>
+      </div>
+      <div style="text-align:right">
+        <div class="rcard-val rv-talca" id="talca-val">—</div>
+        <div class="rcard-sub">pallets acum.</div>
+      </div>
     </div>
-    <div class="kpi red">
-      <div class="kl">Walmart<br>Retornos 2026</div>
-      <div class="kv red" id="kpi-wm">—</div>
-      <div class="ks">pallets</div>
-      <div class="kd" id="kpi-wm-d">—</div>
-    </div>
-    <div class="kpi orange">
-      <div class="kl">Cencosud<br>Retornos 2026</div>
-      <div class="kv orange" id="kpi-cc">—</div>
-      <div class="ks">pallets</div>
-      <div class="kd neu" id="kpi-cc-d">—</div>
-    </div>
-    <div class="kpi purple">
-      <div class="kl">Unimarc/Rendic<br>Retornos 2026</div>
-      <div class="kv purple" id="kpi-un">—</div>
-      <div class="ks">pallets</div>
-      <div class="kd neu" id="kpi-un-d">—</div>
-    </div>
-    <div class="kpi yellow">
-      <div class="kl">Retornados<br>Últimos 7 días</div>
-      <div class="kv" style="color:var(--yellow)" id="kpi-7d">—</div>
-      <div class="ks">pallets (promedio diario)</div>
-      <div class="kd neu" id="kpi-7d-avg">—</div>
+    <div class="rcard mtd">
+      <div>
+        <div class="rcard-name" style="color:var(--teal)">📅 MTD · Mes a la fecha</div>
+        <div class="rcard-sub">Backlog al cierre: <strong style="color:#fca5a5">61.036</strong></div>
+      </div>
+      <div style="text-align:right">
+        <div class="mtd-row">🔄 E3 <strong style="color:var(--green)">19.025</strong></div>
+        <div class="mtd-row">📦 DEV <strong style="color:var(--purple)">2.486</strong></div>
+        <div class="mtd-row">⚡ Total <strong style="color:var(--teal)">21.511</strong></div>
+      </div>
     </div>
   </div>
 
-  <!-- GRÁFICO E3 COMPARATIVO 2026 vs 2025 -->
+  <!-- KPI GRID -->
+  <div class="kpi-grid">
+    <div class="kpi k-green">
+      <div class="kl" id="kl-main">Retiros E3 2026<br>Acumulado</div>
+      <div class="kv green" id="kv-main26">—</div>
+      <div class="ks">pallets recuperados</div>
+      <div class="kd" id="kd-main">—</div>
+    </div>
+    <div class="kpi k-blue">
+      <div class="kl" id="kl-ref">Referencia 2025<br>Período comparable</div>
+      <div class="kv blue" id="kv-main25">—</div>
+      <div class="ks">pallets año anterior</div>
+      <div class="kd neu">base comparación</div>
+    </div>
+    <div class="kpi k-purple">
+      <div class="kl">Devoluciones 2026<br>Total acumulado</div>
+      <div class="kv purple" id="kv-dev26">47.222</div>
+      <div class="ks">pallets devueltos</div>
+      <div class="kd" id="kd-dev">—</div>
+    </div>
+    <div class="kpi k-teal">
+      <div class="kl">Total recuperado<br>E3 + Devoluciones</div>
+      <div class="kv teal" id="kv-total">406.905</div>
+      <div class="ks">pallets totales</div>
+      <div class="kd neu" id="kd-devpct">11.6% devoluciones</div>
+    </div>
+    <div class="kpi k-orange">
+      <div class="kl">Santiago<br>Devoluciones</div>
+      <div class="kv orange">17.766</div>
+      <div class="ks">pallets · 37.6%</div>
+      <div class="kd neu">del total DEV</div>
+    </div>
+    <div class="kpi k-red">
+      <div class="kl">Talca<br>Devoluciones</div>
+      <div class="kv red">29.456</div>
+      <div class="ks">pallets · 62.4%</div>
+      <div class="kd neu">del total DEV</div>
+    </div>
+  </div>
+
+  <!-- GRÁFICO PRINCIPAL -->
   <div class="cbox">
-    <div class="ct">🔄 Retornos E3 — 2026 vs 2025 (dato duro para GG)</div>
-    <div class="cs" id="chart-e3-sub">Lo que vuelve desde retail a RedTec, día a día. 2026 línea sólida, 2025 punteada para el mismo período.</div>
-    <div class="leg-row">
-      <div class="leg"><div class="ld" style="background:#66BB6A"></div> E3 Retornos 2026</div>
-      <div class="leg"><div class="ld" style="background:#42A5F5;opacity:.7;border-top:2px dashed #42A5F5;height:0"></div> E3 Retornos 2025</div>
+    <div class="ct">
+      📈 Comparativo 2026 vs 2025
+      <span class="badge-tipo bt-retiro" id="badge-main">Retiros E3</span>
     </div>
-    <canvas id="chartE3Comp" style="max-height:300px"></canvas>
+    <div class="cs" id="cs-main">Línea sólida 2026, punteada 2025. Dato duro para el GG.</div>
+    <div class="leg-row">
+      <div class="leg"><div class="ld" id="leg-color-26" style="background:#66BB6A"></div> <span id="leg-lbl-26">E3 Retiros 2026</span></div>
+      <div class="leg"><div class="ld" style="background:#42A5F5;opacity:.65"></div> <span id="leg-lbl-25">E3 Retiros 2025</span></div>
+    </div>
+    <canvas id="chartMain" style="max-height:300px"></canvas>
   </div>
 
-  <!-- ROW 2: E3 por retail + Backlog -->
+  <!-- BARRAS + TORTA -->
   <div class="row2">
     <div class="cbox" style="margin-bottom:0">
-      <div class="ct">🏪 Retornos E3 por Retail — 2026</div>
-      <div class="cs">Composición diaria de retornos por cadena. Barras apiladas.</div>
-      <canvas id="chartE3Stack"></canvas>
+      <div class="ct">🏪 Composición diaria por retail <span class="badge-tipo bt-retiro" id="badge-stack">Retiros</span></div>
+      <div class="cs">Barras apiladas. En modo Devolución se muestra por región de destino.</div>
+      <canvas id="chartStack"></canvas>
     </div>
     <div class="cbox" style="margin-bottom:0">
-      <div class="ct">🥧 Participación por Retail</div>
-      <div class="cs" id="pie-sub">Distribución del total de retornos 2026 por cadena.</div>
+      <div class="ct">🥧 Participación acumulada <span class="badge-tipo bt-retiro" id="badge-pie">Retiros</span></div>
+      <div class="cs" id="cs-pie">Distribución por cadena / origen del período seleccionado.</div>
       <canvas id="chartPie"></canvas>
     </div>
   </div>
 
-  <!-- TABLA ÚLTIMOS 7 DÍAS -->
+  <!-- TABLA 7 DÍAS -->
   <div class="cbox">
-    <div class="ct">📋 Retornos E3 — Últimos 7 días (dato duro diario)</div>
-    <div class="cs">Para corroborar con asistente. Detalle por retail de lo retornado a RedTec cada día.</div>
-    <table class="table-7d" id="tabla7d">
-      <thead>
-        <tr>
-          <th>Fecha</th>
-          <th>Walmart</th>
-          <th>Cencosud</th>
-          <th>Unimarc/Rendic</th>
-          <th>Tottus</th>
-          <th>SMU/M10</th>
-          <th>Otro</th>
-          <th>TOTAL</th>
-        </tr>
-      </thead>
-      <tbody id="tbody7d"></tbody>
+    <div class="ct">📋 Últimos 7 días — dato duro <span class="badge-tipo bt-retiro" id="badge-tabla">Retiros E3</span></div>
+    <div class="cs">Para corroborar con asistente. Cambia según tipo y región seleccionados.</div>
+    <table class="t7d">
+      <thead id="t7d-head"></thead>
+      <tbody id="t7d-body"></tbody>
     </table>
   </div>
 
   <!-- INSIGHT -->
-  <div class="insight" id="insight-box">
-    📊 <strong>Lectura para el GG:</strong>
-    Cargando datos...
-  </div>
+  <div class="insight" id="insight"></div>
 
 </div>
 
 <script>
 // ══════════════════════════════════════════════════════════════════════════════
-// DATOS E3 2026 – desde Detalle_Clasificado_2026 (stage=E3_RETORNO)
+// DATA – E3 2026 por retail (SAP8)
 // ══════════════════════════════════════════════════════════════════════════════
 const DATES_26 = ["2025-11-03","2025-11-04","2025-11-05","2025-11-06","2025-11-07","2025-11-10","2025-11-11","2025-11-12","2025-11-13","2025-11-14","2025-11-17","2025-11-18","2025-11-19","2025-11-20","2025-11-21","2025-11-24","2025-11-25","2025-11-26","2025-11-27","2025-11-28","2025-12-01","2025-12-02","2025-12-03","2025-12-04","2025-12-05","2025-12-09","2025-12-10","2025-12-11","2025-12-12","2025-12-15","2025-12-16","2025-12-17","2025-12-18","2025-12-19","2025-12-22","2025-12-23","2025-12-24","2025-12-26","2025-12-29","2025-12-30","2025-12-31","2026-01-02","2026-01-05","2026-01-06","2026-01-07","2026-01-08","2026-01-09","2026-01-12","2026-01-13","2026-01-14","2026-01-15","2026-01-16","2026-01-19","2026-01-20","2026-01-21","2026-01-22","2026-01-23","2026-01-26","2026-01-27","2026-01-28","2026-01-29","2026-01-30","2026-02-02","2026-02-03","2026-02-04","2026-02-05","2026-02-06","2026-02-09","2026-02-10","2026-02-11","2026-02-12","2026-02-13","2026-02-16","2026-02-17","2026-02-18","2026-02-19","2026-02-20","2026-02-23","2026-02-24","2026-02-25","2026-02-26","2026-02-27","2026-03-02","2026-03-03","2026-03-04","2026-03-05"];
 
-const E3_RETAIL = {
-  TOTAL:          [6019,3958,3904,3777,3815,5005,4374,3510,4139,3930,4932,3835,3746,3497,2988,5578,3580,3288,3020,4357,4936,3909,4085,3430,3256,7121,4037,4396,3619,5671,3918,3458,4000,3659,5490,4559,3675,2162,6594,4158,2808,2968,6940,3622,6417,3675,4389,6141,2601,4584,4153,3300,4540,4095,3468,4132,3095,6744,4242,3536,3270,3817,4984,4736,3697,3677,3978,5229,4050,5780,3554,3445,4495,3497,3490,4244,2945,5208,3270,3879,3809,2769,6249,4727,3702,4347],
-  WALMART:        [2200,1482,1192,1499,1165,2360,1848,1368,1410,1247,1956,1197,958,879,1136,1778,943,1280,1039,1142,1896,1006,1267,1230,1275,2681,1372,1527,1428,2441,1040,1120,1260,1386,2222,1483,1038,506,3314,1341,1200,831,2660,1173,1520,1473,1334,2401,1447,1211,1339,860,1962,1091,890,1262,1394,2594,1052,1190,1862,1322,1560,1432,960,1405,1196,1809,1205,851,1364,1342,1796,1192,1396,1838,1229,2435,1185,1654,1628,1097,1998,1183,1480,1494],
-  CENCOSUD:       [2016,1568,992,736,992,1280,1728,768,736,768,1724,1568,1024,1568,736,2528,992,768,1344,1024,1968,1081,1056,1217,736,2208,1426,1417,992,1746,1248,736,1504,752,2048,978,1056,784,1692,1248,1008,856,2886,736,1714,1280,1200,1712,752,1792,1490,480,1938,1520,1264,978,736,1954,1386,1008,722,1024,1894,1604,961,1685,992,1792,1746,1264,1246,945,1248,946,976,1264,512,1677,722,542,718,511,2204,1682,944,1808],
+const E3 = {
+  TOTAL:           [6019,3958,3904,3777,3815,5005,4374,3510,4139,3930,4932,3835,3746,3497,2988,5578,3580,3288,3020,4357,4936,3909,4085,3430,3256,7121,4037,4396,3619,5671,3918,3458,4000,3659,5490,4559,3675,2162,6594,4158,2808,2968,6940,3622,6417,3675,4389,6141,2601,4584,4153,3300,4540,4095,3468,4132,3095,6744,4242,3536,3270,3817,4984,4736,3697,3677,3978,5229,4050,5780,3554,3445,4495,3497,3490,4244,2945,5208,3270,3879,3809,2769,6249,4727,3702,4347],
+  WALMART:         [2200,1482,1192,1499,1165,2360,1848,1368,1410,1247,1956,1197,958,879,1136,1778,943,1280,1039,1142,1896,1006,1267,1230,1275,2681,1372,1527,1428,2441,1040,1120,1260,1386,2222,1483,1038,506,3314,1341,1200,831,2660,1173,1520,1473,1334,2401,1447,1211,1339,860,1962,1091,890,1262,1394,2594,1052,1190,1862,1322,1560,1432,960,1405,1196,1809,1205,851,1364,1342,1796,1192,1396,1838,1229,2435,1185,1654,1628,1097,1998,1183,1480,1494],
+  CENCOSUD:        [2016,1568,992,736,992,1280,1728,768,736,768,1724,1568,1024,1568,736,2528,992,768,1344,1024,1968,1081,1056,1217,736,2208,1426,1417,992,1746,1248,736,1504,752,2048,978,1056,784,1692,1248,1008,856,2886,736,1714,1280,1200,1712,752,1792,1490,480,1938,1520,1264,978,736,1954,1386,1008,722,1024,1894,1604,961,1685,992,1792,1746,1264,1246,945,1248,946,976,1264,512,1677,722,542,718,511,2204,1682,944,1808],
   "UNIMARC/RENDIC":[1333,576,920,998,1006,890,252,476,876,942,532,646,856,640,504,952,972,756,320,1168,528,1337,600,576,580,1052,568,680,600,988,1088,920,680,604,814,1152,1050,250,792,800,280,1100,474,1288,1831,320,770,748,252,908,504,1332,320,540,943,1512,0,1556,320,532,252,922,730,680,1144,252,784,820,360,1996,416,442,1132,816,510,536,588,856,894,504,639,662,971,944,546,252],
-  TOTTUS:         [320,0,320,0,320,320,0,320,0,580,320,0,320,0,320,320,0,280,0,320,320,0,320,0,320,320,280,0,320,320,0,320,0,320,320,0,260,0,600,0,320,0,600,0,200,0,320,560,0,320,0,320,320,0,320,0,320,640,0,320,0,320,640,0,320,0,320,640,0,320,0,320,319,0,320,0,260,240,0,280,0,0,639,0,320,0],
-  "SMU/M10":      [0,0,60,15,25,0,0,19,0,0,0,0,0,0,25,0,0,0,0,71,0,0,0,25,0,0,0,0,0,0,0,0,17,0,29,0,85,0,0,15,0,0,0,0,54,16,34,0,0,92,0,0,0,0,0,0,19,0,0,0,0,0,0,0,0,29,0,0,0,0,0,0,0,0,0,0,0,0,0,120,18,0,42,0,0,91],
-  OTRO:           [150,332,420,529,307,155,546,559,1117,393,400,424,588,410,267,0,673,204,317,632,224,485,842,382,345,860,391,772,279,176,542,362,539,597,57,946,186,622,196,754,0,181,320,425,1098,586,731,720,150,261,820,308,0,944,51,380,626,0,1484,486,434,229,160,1020,312,306,686,168,739,1349,528,396,0,543,288,606,356,0,469,779,806,499,395,918,412,702]
+  TOTTUS:          [320,0,320,0,320,320,0,320,0,580,320,0,320,0,320,320,0,280,0,320,320,0,320,0,320,320,280,0,320,320,0,320,0,320,320,0,260,0,600,0,320,0,600,0,200,0,320,560,0,320,0,320,320,0,320,0,320,640,0,320,0,320,640,0,320,0,320,640,0,320,0,320,319,0,320,0,260,240,0,280,0,0,639,0,320,0],
+  "SMU/M10":       [0,0,60,15,25,0,0,19,0,0,0,0,0,0,25,0,0,0,0,71,0,0,0,25,0,0,0,0,0,0,0,0,17,0,29,0,85,0,0,15,0,0,0,0,54,16,34,0,0,92,0,0,0,0,0,0,19,0,0,0,0,0,0,0,0,29,0,0,0,0,0,0,0,0,0,0,0,0,0,120,18,0,42,0,0,91],
+  OTRO:            [150,332,420,529,307,155,546,559,1117,393,400,424,588,410,267,0,673,204,317,632,224,485,842,382,345,860,391,772,279,176,542,362,539,597,57,946,186,622,196,754,0,181,320,425,1098,586,731,720,150,261,820,308,0,944,51,380,626,0,1484,486,434,229,160,1020,312,306,686,168,739,1349,528,396,0,543,288,606,356,0,469,779,806,499,395,918,412,702]
 };
 
-// E3 2025 – desde Real_Flujo_2025
+// Devoluciones 2026 por región
+const DEV = {
+  TOTAL: [168,444,372,996,405,1012,776,528,373,600,332,135,932,514,245,408,592,180,1021,884,324,1096,1076,414,1056,276,672,641,252,432,1145,506,291,378,403,737,380,252,612,922,324,0,1152,780,546,308,637,542,424,540,1043,649,823,1006,485,340,558,360,711,300,601,357,496,334,984,389,306,960,612,566,730,297,312,204,249,769,279,477,555,327,406,216,463,655,1044,324],
+  STGO:  [0,0,0,696,0,616,464,76,240,86,0,135,240,334,101,78,259,0,690,512,0,728,812,0,804,150,240,281,0,0,675,240,100,150,55,386,116,0,240,482,0,0,612,240,0,0,277,0,424,0,348,169,348,718,0,100,270,0,240,0,252,81,100,70,624,0,90,672,180,0,120,0,0,0,40,317,0,129,339,0,0,0,0,240,780,0],
+  TALCA: [168,444,372,300,405,396,312,452,133,514,332,0,692,180,144,330,333,180,331,372,324,368,264,414,252,126,432,360,252,432,470,266,191,228,348,351,264,252,372,440,324,0,540,540,546,308,360,542,0,540,695,480,475,288,485,240,288,360,471,300,349,276,396,264,360,389,216,288,432,566,610,297,312,204,209,452,279,348,216,327,406,216,463,415,264,324]
+};
+
+// 2025
 const DATES_25 = ["2024-11-04","2024-11-05","2024-11-06","2024-11-07","2024-11-08","2024-11-11","2024-11-12","2024-11-13","2024-11-14","2024-11-15","2024-11-18","2024-11-19","2024-11-20","2024-11-21","2024-11-22","2024-11-25","2024-11-26","2024-11-27","2024-11-28","2024-11-29","2024-12-02","2024-12-03","2024-12-04","2024-12-05","2024-12-06","2024-12-09","2024-12-10","2024-12-11","2024-12-12","2024-12-13","2024-12-16","2024-12-17","2024-12-18","2024-12-19","2024-12-20","2024-12-23","2024-12-24","2024-12-26","2024-12-27","2024-12-30","2024-12-31","2025-01-03","2025-01-06","2025-01-07","2025-01-08","2025-01-09","2025-01-10","2025-01-13","2025-01-14","2025-01-15","2025-01-16","2025-01-17","2025-01-20","2025-01-21","2025-01-22","2025-01-23","2025-01-24","2025-01-25","2025-01-27","2025-01-28","2025-01-29","2025-01-30","2025-01-31","2025-02-01","2025-02-03","2025-02-04","2025-02-05","2025-02-06","2025-02-07","2025-02-10","2025-02-11","2025-02-12","2025-02-13","2025-02-14","2025-02-17","2025-02-18","2025-02-19","2025-02-20","2025-02-21","2025-02-24","2025-02-25","2025-02-26","2025-02-27","2025-02-28","2025-03-03","2025-03-04","2025-03-05","2025-03-06","2025-03-07","2025-03-10","2025-03-11","2025-03-25"];
-const E3_25_TOT = [8418,3780,5208,2638,2846,4947,3664,4067,3931,2891,4160,3262,3451,2510,2981,4493,3597,3502,2771,3008,4832,3302,4425,1831,4121,5061,4218,3253,4110,3940,4553,4269,3024,3270,3291,4734,2693,3386,2843,6537,3654,5470,6736,3084,4107,2495,3286,5491,3872,3558,2944,4269,4919,4714,2395,3171,4079,2264,3995,3375,3730,2872,3919,840,3614,3852,4040,3313,2495,4274,3161,3286,3164,2944,5292,3452,4286,2685,3989,4821,1992,4248,3298,2508,5691,3330,3830,3755,2825,880,70,512];
+const E3_25  = [8418,3780,5208,2638,2846,4947,3664,4067,3931,2891,4160,3262,3451,2510,2981,4493,3597,3502,2771,3008,4832,3302,4425,1831,4121,5061,4218,3253,4110,3940,4553,4269,3024,3270,3291,4734,2693,3386,2843,6537,3654,5470,6736,3084,4107,2495,3286,5491,3872,3558,2944,4269,4919,4714,2395,3171,4079,2264,3995,3375,3730,2872,3919,840,3614,3852,4040,3313,2495,4274,3161,3286,3164,2944,5292,3452,4286,2685,3989,4821,1992,4248,3298,2508,5691,3330,3830,3755,2825,880,70,512];
+const DEV_25 = [540,490,882,788,612,314,834,620,360,564,381,520,496,1196,293,360,624,477,1285,276,276,1008,259,932,96,414,308,748,604,289,428,883,253,781,279,20,252,652,456,192,0,404,1035,802,894,1132,837,372,310,679,252,774,541,1087,258,1180,132,0,770,486,780,729,529,0,764,78,528,1148,157,574,758,264,965,0,756,910,765,252,279,326,330,256,597,288,343,942,424,1003,770,0,0,0];
 
-// Colores por retail
 const RETAIL_CFG = {
-  WALMART:          { color:'#1565C0', label:'Walmart' },
-  CENCOSUD:         { color:'#2E7D32', label:'Cencosud' },
-  'UNIMARC/RENDIC': { color:'#E65100', label:'Unimarc/Rendic' },
-  TOTTUS:           { color:'#6A1B9A', label:'Tottus' },
-  'SMU/M10':        { color:'#00838F', label:'SMU/M10' },
-  OTRO:             { color:'#546E7A', label:'Otro' }
+  WALMART:          {color:'#1d4ed8', label:'Walmart'},
+  CENCOSUD:         {color:'#166534', label:'Cencosud'},
+  'UNIMARC/RENDIC': {color:'#9a3412', label:'Unimarc/Rendic'},
+  TOTTUS:           {color:'#6b21a8', label:'Tottus'},
+  'SMU/M10':        {color:'#155e75', label:'SMU/M10'},
+  OTRO:             {color:'#374151', label:'Otro'}
 };
-const RETAIL_KEYS = Object.keys(RETAIL_CFG);
+const RK = Object.keys(RETAIL_CFG);
 
 // ── ESTADO ────────────────────────────────────────────────────────────────────
-let currentRetail = 'ALL';
-let currentPeriod = 'ALL';
+let TIPO   = 'RETIRO'; // RETIRO | DEV | AMBOS
+let REGION = 'AMBAS';  // AMBAS | SANTIAGO | TALCA
+let RETAIL = 'ALL';
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
-function fmt(n) { return n.toLocaleString('es-CL'); }
-function fmtDate(d) { const p=d.split('-'); return `${p[2]}/${p[1]}`; }
-function sum(arr) { return arr.reduce((a,b)=>a+b,0); }
+const fmt  = n => Math.round(n).toLocaleString('es-CL');
+const fmtD = d => { const p=d.split('-'); return `${p[2]}/${p[1]}`; };
+const S    = a => a.reduce((s,v)=>s+(v||0),0);
 
-function filterByPeriod(dates, vals) {
-  if (currentPeriod === 'ALL') return { dates, vals };
-  const novDec = d => { const m=parseInt(d.split('-')[1]); return m===11||m===12; };
-  const eneMar = d => { const m=parseInt(d.split('-')[1]); return m>=1&&m<=3; };
-  const fn = currentPeriod==='NOV' ? novDec : eneMar;
-  const idx = dates.map((_,i)=>i).filter(i=>fn(dates[i]));
-  return { dates: idx.map(i=>dates[i]), vals: idx.map(i=>vals[i]) };
+function getDevByRegion() {
+  if (REGION==='SANTIAGO') return DEV.STGO;
+  if (REGION==='TALCA')    return DEV.TALCA;
+  return DEV.TOTAL;
 }
 
-function getE3_26(retail) {
-  const raw = retail==='ALL' ? E3_RETAIL.TOTAL : (E3_RETAIL[retail] || E3_RETAIL.TOTAL);
-  return filterByPeriod(DATES_26, raw);
+function getE3ByRetail() {
+  if (RETAIL==='ALL') return E3.TOTAL;
+  return E3[RETAIL] || E3.TOTAL;
 }
-function getE3_25() {
-  return filterByPeriod(DATES_25, E3_25_TOT);
+
+function getSeries26() {
+  if (TIPO==='RETIRO') return getE3ByRetail();
+  if (TIPO==='DEV')    return getDevByRegion();
+  const e3=getE3ByRetail(), dev=getDevByRegion();
+  return e3.map((v,i)=>(v||0)+(dev[i]||0));
+}
+
+function getSeries25() {
+  if (TIPO==='RETIRO') return E3_25;
+  if (TIPO==='DEV')    return DEV_25;
+  return E3_25.map((v,i)=>(v||0)+(DEV_25[i]||0));
+}
+
+function tipoLabel() {
+  return TIPO==='RETIRO'?'Retiros E3': TIPO==='DEV'?'Devoluciones':'E3 + Devoluciones';
+}
+function tipoBadgeClass() {
+  return TIPO==='RETIRO'?'bt-retiro': TIPO==='DEV'?'bt-dev':'bt-ambos';
+}
+function tipoColor() {
+  return TIPO==='RETIRO'?'#66BB6A': TIPO==='DEV'?'#AB47BC':'#42A5F5';
 }
 
 // ── CHARTS ────────────────────────────────────────────────────────────────────
-let charts = {};
+let CH = {};
+function killCharts() { Object.values(CH).forEach(c=>{try{c.destroy();}catch(e){}}); CH={}; }
 
-function destroyAll() { Object.values(charts).forEach(c=>{ try{c.destroy()}catch(e){} }); charts={}; }
-
-function buildE3Comp() {
-  const d26 = getE3_26(currentRetail);
-  const d25 = getE3_25();
-  const color26 = currentRetail==='ALL' ? '#66BB6A' : RETAIL_CFG[currentRetail]?.color || '#66BB6A';
-
-  charts.e3comp = new Chart(document.getElementById('chartE3Comp').getContext('2d'), {
+function buildMain() {
+  const d26 = getSeries26(), d25 = getSeries25();
+  const c   = tipoColor();
+  CH.main = new Chart(document.getElementById('chartMain').getContext('2d'),{
     type:'line',
     data:{
-      labels: d26.dates.map(fmtDate),
+      labels: DATES_26.map(fmtD),
       datasets:[
-        { label:'E3 Retornos 2026', data:d26.vals, borderColor:color26, backgroundColor:color26+'18', borderWidth:2.5, pointRadius:0, tension:0.3, fill:true, spanGaps:true },
-        { label:'E3 Retornos 2025', data:d25.vals, borderColor:'rgba(66,165,245,0.55)', borderWidth:1.5, pointRadius:0, tension:0.3, fill:false, borderDash:[5,4], spanGaps:true }
+        {label:'2026 · '+tipoLabel(), data:d26, borderColor:c, backgroundColor:c+'18', borderWidth:2.5, pointRadius:0, tension:0.3, fill:true, spanGaps:true},
+        {label:'2025 · '+tipoLabel(), data:d25, borderColor:'rgba(96,165,250,.55)', borderWidth:1.5, pointRadius:0, tension:0.3, fill:false, borderDash:[5,4], spanGaps:true}
       ]
     },
-    options:{
-      responsive:true,
-      interaction:{mode:'index',intersect:false},
-      plugins:{
-        legend:{labels:{color:'#94A3B8',font:{size:11}}},
-        tooltip:{backgroundColor:'#0F172A',titleColor:'#fff',bodyColor:'#ccc',
-          callbacks:{label:c=>' '+c.dataset.label+': '+fmt(c.parsed.y)}}
-      },
+    options:{responsive:true, interaction:{mode:'index',intersect:false},
+      plugins:{legend:{labels:{color:'#94A3B8',font:{size:11}}},
+        tooltip:{backgroundColor:'#0f172a',titleColor:'#fff',bodyColor:'#ccc',
+          callbacks:{label:c=>' '+c.dataset.label+': '+fmt(c.parsed.y)+' pal.'}}},
       scales:{
-        x:{ticks:{color:'#64748B',font:{size:9},maxTicksLimit:20},grid:{color:'#1E293B'}},
+        x:{ticks:{color:'#64748B',font:{size:9},maxTicksLimit:22},grid:{color:'#1E293B'}},
         y:{ticks:{color:'#64748B',font:{size:9}},grid:{color:'#2D3748'}}
       }
     }
@@ -316,26 +390,53 @@ function buildE3Comp() {
 }
 
 function buildStack() {
-  const d = filterByPeriod(DATES_26, E3_RETAIL.TOTAL);
-  const datasets = RETAIL_KEYS.map(rl => ({
-    label: RETAIL_CFG[rl].label,
-    data: filterByPeriod(DATES_26, E3_RETAIL[rl]).vals,
-    backgroundColor: RETAIL_CFG[rl].color + 'CC',
-    borderWidth:0,
-    stack:'s'
-  }));
-  charts.stack = new Chart(document.getElementById('chartE3Stack').getContext('2d'), {
+  let datasets;
+  if (TIPO==='DEV') {
+    datasets = [
+      {label:'Santiago', data:DEV.STGO,  backgroundColor:'#dc262688', borderWidth:0, stack:'s'},
+      {label:'Talca',    data:DEV.TALCA, backgroundColor:'#ea580c88', borderWidth:0, stack:'s'}
+    ];
+    if (REGION!=='AMBAS') {
+      const sel = REGION==='SANTIAGO' ? DEV.STGO : DEV.TALCA;
+      const col = REGION==='SANTIAGO' ? '#dc262688' : '#ea580c88';
+      datasets = [{label:REGION, data:sel, backgroundColor:col, borderWidth:0, stack:'s'}];
+    }
+  } else {
+    datasets = RK.map(rl=>({
+      label:RETAIL_CFG[rl].label,
+      data: E3[rl],
+      backgroundColor:RETAIL_CFG[rl].color+'CC',
+      borderWidth:0, stack:'s'
+    }));
+    if (TIPO==='AMBOS') datasets.push({
+      label:'📦 Devoluciones', data:getDevByRegion(),
+      backgroundColor:'#AB47BC88', borderWidth:0, stack:'s'
+    });
+  }
+
+  // Si hay filtro de retail activo, solo mostrar ese
+  if (TIPO!=='DEV' && RETAIL!=='ALL') {
+    datasets = [{
+      label: RETAIL_CFG[RETAIL]?.label || RETAIL,
+      data: E3[RETAIL]||E3.TOTAL,
+      backgroundColor:(RETAIL_CFG[RETAIL]?.color||'#999')+'CC',
+      borderWidth:0, stack:'s'
+    }];
+    if (TIPO==='AMBOS') datasets.push({
+      label:'📦 Devoluciones', data:getDevByRegion(),
+      backgroundColor:'#AB47BC88', borderWidth:0, stack:'s'
+    });
+  }
+
+  CH.stack = new Chart(document.getElementById('chartStack').getContext('2d'),{
     type:'bar',
-    data:{ labels:d.dates.map(fmtDate), datasets },
-    options:{
-      responsive:true,
-      plugins:{
-        legend:{labels:{color:'#94A3B8',font:{size:10}},position:'bottom'},
-        tooltip:{backgroundColor:'#0F172A',titleColor:'#fff',bodyColor:'#ccc',
-          callbacks:{label:c=>' '+c.dataset.label+': '+fmt(c.parsed.y)}}
-      },
+    data:{labels:DATES_26.map(fmtD), datasets},
+    options:{responsive:true,
+      plugins:{legend:{labels:{color:'#94A3B8',font:{size:9}},position:'bottom'},
+        tooltip:{backgroundColor:'#0f172a',titleColor:'#fff',bodyColor:'#ccc',
+          callbacks:{label:c=>' '+c.dataset.label+': '+fmt(c.parsed.y)}}},
       scales:{
-        x:{ticks:{color:'#64748B',font:{size:8},maxTicksLimit:20},grid:{color:'#1E293B'},stacked:true},
+        x:{ticks:{color:'#64748B',font:{size:8},maxTicksLimit:22},grid:{color:'#1E293B'},stacked:true},
         y:{ticks:{color:'#64748B',font:{size:9}},grid:{color:'#2D3748'},stacked:true}
       }
     }
@@ -343,147 +444,199 @@ function buildStack() {
 }
 
 function buildPie() {
-  const retailTotals = RETAIL_KEYS.map(rl => {
-    const d = filterByPeriod(DATES_26, E3_RETAIL[rl]);
-    return sum(d.vals);
-  });
-  charts.pie = new Chart(document.getElementById('chartPie').getContext('2d'), {
+  let labels, vals, colors;
+  if (TIPO==='DEV') {
+    labels=['Santiago','Talca']; colors=['#dc2626','#ea580c'];
+    vals  =[S(DEV.STGO), S(DEV.TALCA)];
+  } else {
+    labels = RK.map(r=>RETAIL_CFG[r].label);
+    vals   = RK.map(r=>S(E3[r]));
+    colors = RK.map(r=>RETAIL_CFG[r].color);
+    if (TIPO==='AMBOS') { labels.push('Devoluciones'); vals.push(S(DEV.TOTAL)); colors.push('#AB47BC'); }
+  }
+  const tot = S(vals);
+  CH.pie = new Chart(document.getElementById('chartPie').getContext('2d'),{
     type:'doughnut',
-    data:{
-      labels: RETAIL_KEYS.map(rl=>RETAIL_CFG[rl].label),
-      datasets:[{ data:retailTotals, backgroundColor:RETAIL_KEYS.map(rl=>RETAIL_CFG[rl].color), borderWidth:2, borderColor:'#1E293B' }]
-    },
-    options:{
-      responsive:true,
-      cutout:'65%',
-      plugins:{
-        legend:{labels:{color:'#94A3B8',font:{size:10}},position:'bottom'},
-        tooltip:{backgroundColor:'#0F172A',titleColor:'#fff',bodyColor:'#ccc',
-          callbacks:{label:c=>' '+c.label+': '+fmt(c.parsed)+' ('+((c.parsed/retailTotals.reduce((a,b)=>a+b,0))*100).toFixed(1)+'%)'}}
-      }
+    data:{labels, datasets:[{data:vals, backgroundColor:colors, borderWidth:2, borderColor:'#1E293B'}]},
+    options:{responsive:true, cutout:'63%',
+      plugins:{legend:{labels:{color:'#94A3B8',font:{size:10}},position:'bottom'},
+        tooltip:{backgroundColor:'#0f172a',titleColor:'#fff',bodyColor:'#ccc',
+          callbacks:{label:c=>' '+c.label+': '+fmt(c.parsed)+' ('+((c.parsed/tot)*100).toFixed(1)+'%)'}}}
     }
   });
 }
 
-// ── TABLA 7 DÍAS ──────────────────────────────────────────────────────────────
+// ── TABLA 7d ──────────────────────────────────────────────────────────────────
 function buildTabla7d() {
-  const last7dates = DATES_26.slice(-7);
-  const tbody = document.getElementById('tbody7d');
-  tbody.innerHTML = '';
+  const last7 = DATES_26.slice(-7);
+  const thead = document.getElementById('t7d-head');
+  const tbody = document.getElementById('t7d-body');
+  tbody.innerHTML='';
 
-  let totals = { WALMART:0, CENCOSUD:0, 'UNIMARC/RENDIC':0, TOTTUS:0, 'SMU/M10':0, OTRO:0, TOTAL:0 };
+  if (TIPO==='DEV') {
+    thead.innerHTML=`<tr><th>Fecha</th><th>🏙️ Santiago</th><th>🌾 Talca</th><th>TOTAL</th></tr>`;
+    let tS=0,tT=0,tAll=0;
+    last7.forEach(d=>{
+      const i=DATES_26.indexOf(d);
+      const s=DEV.STGO[i]||0, t=DEV.TALCA[i]||0, tot=s+t;
+      tS+=s; tT+=t; tAll+=tot;
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td><strong>${fmtD(d)}</strong> <span style="color:#475569;font-size:10px">${d}</span></td>
+        <td style="color:#fca5a5">${fmt(s)}</td>
+        <td style="color:#fed7aa">${fmt(t)}</td>
+        <td><span class="chip ch-dev">${fmt(tot)}</span></td>`;
+      tbody.appendChild(tr);
+    });
+    const tf=document.createElement('tr'); tf.className='tr-total';
+    tf.innerHTML=`<td>TOTAL 7d</td><td>${fmt(tS)}</td><td>${fmt(tT)}</td><td><span class="chip ch-dev">${fmt(tAll)}</span></td>`;
+    tbody.appendChild(tf);
 
-  last7dates.forEach(d => {
-    const idx = DATES_26.indexOf(d);
-    const row = document.createElement('tr');
-    const wm  = E3_RETAIL.WALMART[idx]||0;
-    const cc  = E3_RETAIL.CENCOSUD[idx]||0;
-    const un  = E3_RETAIL['UNIMARC/RENDIC'][idx]||0;
-    const tt  = E3_RETAIL.TOTTUS[idx]||0;
-    const sm  = E3_RETAIL['SMU/M10'][idx]||0;
-    const ot  = E3_RETAIL.OTRO[idx]||0;
-    const tot = wm+cc+un+tt+sm+ot;
-    totals.WALMART+=wm; totals.CENCOSUD+=cc; totals['UNIMARC/RENDIC']+=un;
-    totals.TOTTUS+=tt; totals['SMU/M10']+=sm; totals.OTRO+=ot; totals.TOTAL+=tot;
+  } else if (TIPO==='RETIRO') {
+    thead.innerHTML=`<tr><th>Fecha</th><th>Walmart</th><th>Cencosud</th><th>Unimarc/Rendic</th><th>Tottus</th><th>SMU/M10</th><th>Otro</th><th>TOTAL</th></tr>`;
+    let tots={WM:0,CC:0,UN:0,TT:0,SM:0,OT:0,ALL:0};
+    last7.forEach(d=>{
+      const i=DATES_26.indexOf(d);
+      const wm=E3.WALMART[i]||0,cc=E3.CENCOSUD[i]||0,un=E3['UNIMARC/RENDIC'][i]||0,
+            tt=E3.TOTTUS[i]||0,sm=E3['SMU/M10'][i]||0,ot=E3.OTRO[i]||0,tot=wm+cc+un+tt+sm+ot;
+      tots.WM+=wm;tots.CC+=cc;tots.UN+=un;tots.TT+=tt;tots.SM+=sm;tots.OT+=ot;tots.ALL+=tot;
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td><strong>${fmtD(d)}</strong> <span style="color:#475569;font-size:10px">${d}</span></td>
+        <td style="color:#93c5fd">${fmt(wm)}</td><td style="color:#86efac">${fmt(cc)}</td>
+        <td style="color:#fdba74">${fmt(un)}</td><td style="color:#d8b4fe">${fmt(tt)}</td>
+        <td style="color:#67e8f9">${fmt(sm)}</td><td style="color:#9ca3af">${fmt(ot)}</td>
+        <td><span class="chip ch-e3">${fmt(tot)}</span></td>`;
+      tbody.appendChild(tr);
+    });
+    const tf=document.createElement('tr'); tf.className='tr-total';
+    tf.innerHTML=`<td>TOTAL 7d</td><td>${fmt(tots.WM)}</td><td>${fmt(tots.CC)}</td><td>${fmt(tots.UN)}</td><td>${fmt(tots.TT)}</td><td>${fmt(tots.SM)}</td><td>${fmt(tots.OT)}</td><td><span class="chip ch-e3">${fmt(tots.ALL)}</span></td>`;
+    tbody.appendChild(tf);
 
-    row.innerHTML = `
-      <td><strong>${fmtDate(d)}</strong> <span style="color:#475569;font-size:10px">${d}</span></td>
-      <td style="color:#90CAF9">${fmt(wm)}</td>
-      <td style="color:#A5D6A7">${fmt(cc)}</td>
-      <td style="color:#FFCC80">${fmt(un)}</td>
-      <td style="color:#CE93D8">${fmt(tt)}</td>
-      <td style="color:#80DEEA">${fmt(sm)}</td>
-      <td style="color:#90A4AE">${fmt(ot)}</td>
-      <td><span class="total-chip">${fmt(tot)}</span></td>`;
-    tbody.appendChild(row);
-  });
+  } else { // AMBOS
+    thead.innerHTML=`<tr><th>Fecha</th><th>🔄 Retiro E3</th><th style="text-align:right">por Retail →</th><th>📦 Devolución</th><th>⚡ Total</th></tr>`;
+    let tE3=0,tDev=0,tAll=0;
+    last7.forEach(d=>{
+      const i=DATES_26.indexOf(d);
+      const e3=E3.TOTAL[i]||0;
+      const dv=(REGION==='SANTIAGO'?DEV.STGO[i]:REGION==='TALCA'?DEV.TALCA[i]:DEV.TOTAL[i])||0;
+      const tot=e3+dv;
+      tE3+=e3;tDev+=dv;tAll+=tot;
 
-  // Fila total
-  const trow = document.createElement('tr');
-  trow.className='total-row';
-  trow.innerHTML=`
-    <td>TOTAL 7d</td>
-    <td>${fmt(totals.WALMART)}</td>
-    <td>${fmt(totals.CENCOSUD)}</td>
-    <td>${fmt(totals['UNIMARC/RENDIC'])}</td>
-    <td>${fmt(totals.TOTTUS)}</td>
-    <td>${fmt(totals['SMU/M10'])}</td>
-    <td>${fmt(totals.OTRO)}</td>
-    <td><span class="total-chip">${fmt(totals.TOTAL)}</span></td>`;
-  tbody.appendChild(trow);
-
-  return totals.TOTAL;
+      // Breakdown retail en tooltip via title
+      const breakdown=RK.map(r=>`${RETAIL_CFG[r].label.split('/')[0]}: ${fmt(E3[r][i]||0)}`).join(' · ');
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td><strong>${fmtD(d)}</strong> <span style="color:#475569;font-size:10px">${d}</span></td>
+        <td style="color:#86efac">${fmt(e3)}</td>
+        <td style="color:#64748b;font-size:10px">${breakdown}</td>
+        <td style="color:#d8b4fe">${fmt(dv)}</td>
+        <td><span class="chip ch-both">${fmt(tot)}</span></td>`;
+      tbody.appendChild(tr);
+    });
+    const tf=document.createElement('tr'); tf.className='tr-total';
+    tf.innerHTML=`<td>TOTAL 7d</td><td>${fmt(tE3)}</td><td style="color:#64748b">—</td><td>${fmt(tDev)}</td><td><span class="chip ch-both">${fmt(tAll)}</span></td>`;
+    tbody.appendChild(tf);
+  }
 }
 
 // ── KPIs ──────────────────────────────────────────────────────────────────────
 function updateKPIs() {
-  const d26 = getE3_26(currentRetail);
-  const d25 = getE3_25();
-  const t26 = sum(d26.vals), t25 = sum(d25.vals);
-  const pct = t25 ? ((t26/t25-1)*100).toFixed(1) : 0;
-  const up  = t26 >= t25;
+  const s26 = getSeries26(), s25 = getSeries25();
+  const t26=S(s26), t25=S(s25);
+  const pct = t25?((t26/t25-1)*100).toFixed(1):0;
+  const up  = parseFloat(pct)>=0;
 
-  document.getElementById('kpi-e3-26').textContent   = fmt(t26);
-  document.getElementById('kpi-e3-25').textContent   = fmt(t25);
-  const del = document.getElementById('kpi-e3-delta');
-  del.textContent = (up?'▲ +':'▼ ')+Math.abs(pct)+'% vs 2025';
-  del.className   = 'kd '+(up?'up':'down');
+  document.getElementById('kv-main26').textContent = fmt(t26);
+  document.getElementById('kv-main25').textContent = fmt(t25);
+  const kd = document.getElementById('kd-main');
+  kd.textContent = (up?'▲ +':'▼ ')+Math.abs(pct)+'% vs 2025';
+  kd.className   = 'kd '+(up?'up':'dn');
 
-  // por retail
-  const wmT  = sum(filterByPeriod(DATES_26,E3_RETAIL.WALMART).vals);
-  const ccT  = sum(filterByPeriod(DATES_26,E3_RETAIL.CENCOSUD).vals);
-  const unT  = sum(filterByPeriod(DATES_26,E3_RETAIL['UNIMARC/RENDIC']).vals);
-  document.getElementById('kpi-wm').textContent  = fmt(wmT);
-  document.getElementById('kpi-cc').textContent  = fmt(ccT);
-  document.getElementById('kpi-un').textContent  = fmt(unT);
-  document.getElementById('kpi-wm-d').textContent= ((wmT/t26)*100).toFixed(1)+'% del total';
-  document.getElementById('kpi-cc-d').textContent= ((ccT/t26)*100).toFixed(1)+'% del total';
-  document.getElementById('kpi-un-d').textContent= ((unT/t26)*100).toFixed(1)+'% del total';
+  const e3T   = S(E3.TOTAL);
+  const devT  = S(DEV.TOTAL);
+  const dev25T= S(DEV_25);
+  const devPct = dev25T?((devT/dev25T-1)*100).toFixed(1):0;
+  const devUp  = parseFloat(devPct)>=0;
+  document.getElementById('kd-dev').textContent = (devUp?'▲ +':'▼ ')+Math.abs(devPct)+'% vs 2025';
+  document.getElementById('kd-dev').className   = 'kd '+(devUp?'up':'dn');
+  document.getElementById('kd-devpct').textContent = ((devT/(e3T+devT))*100).toFixed(1)+'% son devoluciones';
 
-  const tot7d = buildTabla7d();
-  document.getElementById('kpi-7d').textContent    = fmt(tot7d);
-  document.getElementById('kpi-7d-avg').textContent = 'Prom/día: '+fmt(Math.round(tot7d/7));
+  // Region strip
+  document.getElementById('stgo-val').textContent  = fmt(S(DEV.STGO));
+  document.getElementById('talca-val').textContent = fmt(S(DEV.TALCA));
+  document.getElementById('stgo-sub').textContent  = TIPO==='DEV'?'Solo devoluciones STGO':'Devoluciones (E3 sin split regional)';
+  document.getElementById('talca-sub').textContent = TIPO==='DEV'?'Solo devoluciones Talca':'Devoluciones confirmadas';
 
-  // Insight dinámico
-  const retLabel = currentRetail==='ALL' ? 'todos los retailers' : currentRetail;
-  document.getElementById('insight-box').innerHTML = `
-    📊 <strong>Lectura para el GG (${retLabel}):</strong>
-    Los retornos E3 acumulados en 2026 son <strong>${fmt(t26)} pallets</strong>
-    vs <strong>${fmt(t25)} pallets</strong> en el mismo período de 2025
-    → <strong>${up?'▲ mejora de +':'▼ caída de -'}${Math.abs(pct)}%</strong>.
-    En los últimos 7 días se retornaron <strong>${fmt(tot7d)} pallets</strong> (promedio ${fmt(Math.round(tot7d/7))}/día).
-    Walmart aporta el <strong>${((wmT/t26)*100).toFixed(1)}%</strong> del total de retornos 2026,
-    seguido por Cencosud (${((ccT/t26)*100).toFixed(1)}%) y Unimarc/Rendic (${((unT/t26)*100).toFixed(1)}%).`;
+  // Labels dinámicos
+  const lbl = tipoLabel(), cls = tipoBadgeClass();
+  document.getElementById('kl-main').innerHTML = lbl+' 2026<br>Acumulado';
+  document.getElementById('kl-ref').innerHTML  = lbl+' 2025<br>Período comparable';
+  document.getElementById('leg-lbl-26').textContent = '2026 · '+lbl;
+  document.getElementById('leg-lbl-25').textContent = '2025 · '+lbl;
+  document.getElementById('leg-color-26').style.background = tipoColor();
+  ['badge-main','badge-stack','badge-pie','badge-tabla'].forEach(id=>{
+    const el=document.getElementById(id);
+    el.textContent=lbl; el.className='badge-tipo '+cls;
+  });
 }
 
-// ── RENDER COMPLETO ───────────────────────────────────────────────────────────
+// ── INSIGHT ───────────────────────────────────────────────────────────────────
+function updateInsight() {
+  const e3T = S(E3.TOTAL), devT = S(DEV.TOTAL);
+  const e3_25T=S(E3_25), dev25T=S(DEV_25);
+  const e3Pct  = ((e3T/e3_25T-1)*100).toFixed(1);
+  const devPct2= ((devT/dev25T-1)*100).toFixed(1);
+  const reg = REGION==='AMBAS'?'todas las regiones':REGION==='SANTIAGO'?'Santiago':'Talca';
+  const retail = RETAIL==='ALL'?'todos los retailers':RETAIL;
+  document.getElementById('insight').innerHTML=
+    `📊 <strong>Lectura para el GG (${retail} · ${reg} · ${tipoLabel()}):</strong>
+    En 2026, RedTec recuperó <strong>${fmt(e3T)} pallets</strong> vía Retiros E3
+    (${parseFloat(e3Pct)>=0?'▲ +':'▼ '}${Math.abs(e3Pct)}% vs 2025).
+    Se suman <strong>${fmt(devT)} pallets</strong> en Devoluciones de clientes
+    (${parseFloat(devPct2)>=0?'▲ +':'▼ '}${Math.abs(devPct2)}% vs 2025).
+    → <strong>Total recuperado: ${fmt(e3T+devT)} pallets</strong>.
+    Las devoluciones representan el <strong>${((devT/(e3T+devT))*100).toFixed(1)}%</strong> del total,
+    concentradas en Talca (<strong>${((S(DEV.TALCA)/devT)*100).toFixed(0)}%</strong>) y Santiago (<strong>${((S(DEV.STGO)/devT)*100).toFixed(0)}%</strong>).
+    MTD activo: E3 <strong>19.025</strong> + DEV <strong>2.486</strong> = <strong>21.511 pallets</strong>.
+    Backlog al cierre: <strong style="color:#fca5a5">61.036 pallets</strong>.`;
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────────────
 function render() {
-  destroyAll();
-  buildE3Comp();
+  killCharts();
+  buildMain();
   buildStack();
   buildPie();
+  buildTabla7d();
   updateKPIs();
+  updateInsight();
 }
 
-// ── FILTROS ───────────────────────────────────────────────────────────────────
-function setRetail(rl, btn) {
-  currentRetail = rl;
-  document.querySelectorAll('.filter-bar .fbtn').forEach(b=>{
-    if(['ALL','WALMART','CENCOSUD','UNIMARC/RENDIC','TOTTUS','SMU/M10','OTRO'].includes(b.id?.replace('btn-',''))||b.id?.startsWith('btn-'))
-      b.classList.remove('active');
-  });
-  btn.classList.add('active');
-  document.getElementById('chart-e3-sub').textContent =
-    rl==='ALL'
-      ? 'Lo que vuelve desde retail a RedTec, día a día. 2026 línea sólida, 2025 punteada para el mismo período.'
-      : `Retornos de ${rl} a RedTec en 2026 (sólido) vs 2025 (punteado).`;
+// ── CONTROLES ─────────────────────────────────────────────────────────────────
+function setTipo(t, btn) {
+  TIPO = t;
+  document.querySelectorAll('.tipo-btn').forEach(b=>b.className='tipo-btn');
+  btn.classList.add('t-'+t.toLowerCase());
   render();
 }
 
-function setPeriod(p, btn) {
-  currentPeriod = p;
-  document.querySelectorAll('#per-ALL,#per-NOV,#per-ENE').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
+function setRegion(r, btn) {
+  REGION = r;
+  document.querySelectorAll('.reg-btn').forEach(b=>b.className='reg-btn');
+  const m = {'AMBAS':'r-ambas','SANTIAGO':'r-santiago','TALCA':'r-talca'};
+  btn.classList.add(m[r]);
+  render();
+}
+
+function setRetail(r, btn) {
+  RETAIL = r;
+  const retailMap = {'ALL':'ra','WALMART':'rw ra','CENCOSUD':'rc ra','UNIMARC/RENDIC':'ru ra','TOTTUS':'rt ra','SMU/M10':'rs ra','OTRO':'ro ra'};
+  document.querySelectorAll('.retail-btn').forEach(b=>{
+    const base = b.className.replace(/ ra$/,'').replace(' ra ','');
+    b.className = base;
+  });
+  // Encontrar el botón correcto
+  const ids={'ALL':'rb-ALL','WALMART':'rb-WALMART','CENCOSUD':'rb-CENCOSUD','UNIMARC/RENDIC':'rb-UNIMARC','TOTTUS':'rb-TOTTUS','SMU/M10':'rb-SMU','OTRO':'rb-OTRO'};
+  const el = document.getElementById(ids[r]);
+  if(el) el.classList.add('ra');
   render();
 }
 

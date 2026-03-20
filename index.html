@@ -285,6 +285,71 @@ canvas { max-height: 280px; }
 .rc-share { font-size: 10px; color: var(--muted); margin-top: 3px; }
 .rc-acc { font-size: 11px; margin-top: 6px; }
 
+/* ── REGION SELECTOR ── */
+.region-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 32px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.region-lbl {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  font-weight: 700;
+  margin-right: 4px;
+}
+.reg-btn {
+  display: flex; align-items: center; gap: 7px;
+  padding: 7px 18px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px; font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  transition: all .2s;
+}
+.reg-btn:hover { border-color: #475569; color: var(--text2); }
+.reg-btn.active-todas   { background: rgba(59,130,246,.12);  border-color: var(--accent);  color: var(--accent2); }
+.reg-btn.active-stgo    { background: rgba(52,211,153,.12);  border-color: var(--green);   color: var(--green); }
+.reg-btn.active-talca   { background: rgba(251,191,36,.12);  border-color: var(--yellow);  color: var(--yellow); }
+.reg-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.region-info {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  font-family: 'DM Mono', monospace;
+}
+.region-info span { color: var(--text2); font-weight: 500; }
+
+/* ── REGION COMPARISON STRIP ── */
+.reg-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.reg-card {
+  border-radius: 10px;
+  padding: 14px 18px;
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.reg-card.stgo  { background: rgba(52,211,153,.06);  border-left: 3px solid var(--green); }
+.reg-card.talca { background: rgba(251,191,36,.06);  border-left: 3px solid var(--yellow); }
+.reg-card-name  { font-size: 12px; font-weight: 700; }
+.reg-card-sub   { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.reg-card-val   { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; }
+.reg-card-pct   { font-size: 11px; color: var(--muted); margin-top: 2px; text-align: right; }
+
 /* FOOTER */
 .footer {
   position: fixed; bottom: 0; left: 0; right: 0;
@@ -324,15 +389,56 @@ canvas { max-height: 280px; }
   <button class="tab" onclick="showTab('proyeccion',this)">🔮 Proyección 2026</button>
 </div>
 
+<!-- REGION SELECTOR -->
+<div class="region-bar">
+  <span class="region-lbl">📍 Región:</span>
+  <button class="reg-btn active-todas" id="rbtn-todas" onclick="setRegion('todas',this)">
+    <div class="reg-dot" style="background:var(--accent2)"></div> Todas
+  </button>
+  <button class="reg-btn" id="rbtn-stgo" onclick="setRegion('Santiago',this)">
+    <div class="reg-dot" style="background:var(--green)"></div> Santiago + Norte
+  </button>
+  <button class="reg-btn" id="rbtn-talca" onclick="setRegion('Talca',this)">
+    <div class="reg-dot" style="background:var(--yellow)"></div> Talca
+  </button>
+  <div class="region-info" id="region-info">
+    Mostrando: <span id="region-name-info">Todas las regiones</span> · <span id="region-vol-info">1.223.022 pallets</span>
+  </div>
+</div>
+
 <!-- ════════════════════════════════════════════ RESUMEN ════════════════════════ -->
 <div id="tab-resumen" class="tab-panel active">
 <div class="main">
+
+  <!-- REGION COMPARE (visible solo en modo Todas) -->
+  <div class="reg-compare" id="reg-compare-strip">
+    <div class="reg-card stgo">
+      <div>
+        <div class="reg-card-name" style="color:var(--green)">🏙️ Santiago + Norte</div>
+        <div class="reg-card-sub">REDTEC SANTIAGO · COQUIMBO VIRTUAL</div>
+      </div>
+      <div style="text-align:right">
+        <div class="reg-card-val" style="color:var(--green)" id="rc-stgo-val">1.104.424</div>
+        <div class="reg-card-pct" id="rc-stgo-pct">90.3% del total · prom. 73.628/mes</div>
+      </div>
+    </div>
+    <div class="reg-card talca">
+      <div>
+        <div class="reg-card-name" style="color:var(--yellow)">🌾 Talca</div>
+        <div class="reg-card-sub">REDTEC TALCA · Domina Cencosud + Unimarc</div>
+      </div>
+      <div style="text-align:right">
+        <div class="reg-card-val" style="color:var(--yellow)" id="rc-talca-val">105.339</div>
+        <div class="reg-card-pct" id="rc-talca-pct">8.6% del total · prom. 7.023/mes</div>
+      </div>
+    </div>
+  </div>
 
   <!-- KPIs -->
   <div class="kpi-strip">
     <div class="kpi k-blue">
       <div class="kpi-label">Total retiros 2025</div>
-      <div class="kpi-value blue">987K</div>
+      <div class="kpi-value blue" id="kpi-total-val">987K</div>
       <div class="kpi-sub">pallets recuperados</div>
     </div>
     <div class="kpi k-green">
@@ -528,6 +634,95 @@ const RETAIL_COLORS = {
   Intercarry:'#2DD4BF',SMU:'#F472B6',Otro:'#64748B'
 };
 
+// ── DATOS POR REGIÓN ─────────────────────────────────────────────
+const REGION_DATA = {
+  Santiago: [
+    {mes:"2025-01",total:77410,Walmart:31930,Cencosud:21215,UMR:11802,Tottus:4780,Alvi:1291,Prisa:1105,Intercarry:463,SMU:236,Otro:4588},
+    {mes:"2025-02",total:63219,Walmart:26635,Cencosud:16608,UMR:9064,Tottus:3720,Alvi:1394,Prisa:595,Intercarry:277,SMU:126,Otro:4800},
+    {mes:"2025-03",total:75241,Walmart:32404,Cencosud:20065,UMR:10744,Tottus:3820,Alvi:1625,Prisa:828,Intercarry:590,SMU:259,Otro:4906},
+    {mes:"2025-04",total:76129,Walmart:31349,Cencosud:20736,UMR:10760,Tottus:3940,Alvi:1700,Prisa:1188,Intercarry:841,SMU:193,Otro:5422},
+    {mes:"2025-05",total:73185,Walmart:31141,Cencosud:20320,UMR:9090,Tottus:3560,Alvi:2075,Prisa:931,Intercarry:821,SMU:287,Otro:4960},
+    {mes:"2025-06",total:75964,Walmart:29674,Cencosud:20240,UMR:13986,Tottus:3800,Alvi:1528,Prisa:719,Intercarry:752,SMU:266,Otro:4999},
+    {mes:"2025-07",total:80730,Walmart:32569,Cencosud:21312,UMR:10910,Tottus:4040,Alvi:1960,Prisa:1777,Intercarry:728,SMU:185,Otro:7249},
+    {mes:"2025-08",total:67143,Walmart:25394,Cencosud:20304,UMR:9470,Tottus:3820,Alvi:1888,Prisa:935,Intercarry:564,SMU:276,Otro:4492},
+    {mes:"2025-09",total:72651,Walmart:30389,Cencosud:20576,UMR:9260,Tottus:4040,Alvi:2176,Prisa:1377,Intercarry:451,SMU:94,Otro:4288},
+    {mes:"2025-10",total:76411,Walmart:32626,Cencosud:19424,UMR:10820,Tottus:4000,Alvi:1448,Prisa:913,Intercarry:607,SMU:238,Otro:6335},
+    {mes:"2025-11",total:73516,Walmart:28079,Cencosud:20576,UMR:12534,Tottus:4060,Alvi:1560,Prisa:1207,Intercarry:494,SMU:144,Otro:4862},
+    {mes:"2025-12",total:81162,Walmart:32033,Cencosud:23824,UMR:11792,Tottus:4340,Alvi:2432,Prisa:1280,Intercarry:487,SMU:86,Otro:4888},
+    {mes:"2026-01",total:81780,Walmart:30868,Cencosud:22668,UMR:13678,Tottus:4560,Alvi:1963,Prisa:1900,Intercarry:435,SMU:215,Otro:5493},
+    {mes:"2026-02",total:72716,Walmart:28323,Cencosud:20355,UMR:11370,Tottus:3979,Alvi:2109,Prisa:1103,Intercarry:382,SMU:67,Otro:5028},
+    {mes:"2026-03",total:57167,Walmart:23388,Cencosud:14291,UMR:7697,Tottus:3198,Alvi:1777,Prisa:860,Intercarry:474,SMU:190,Otro:5292}
+  ],
+  Talca: [
+    {mes:"2025-01",total:6227,Walmart:0,Cencosud:1397,UMR:4353,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:216,Otro:261},
+    {mes:"2025-02",total:5643,Walmart:0,Cencosud:1904,UMR:3071,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:100,Otro:568},
+    {mes:"2025-03",total:6513,Walmart:0,Cencosud:3092,UMR:2961,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:161,Otro:299},
+    {mes:"2025-04",total:5992,Walmart:0,Cencosud:2513,UMR:2912,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:75,Otro:492},
+    {mes:"2025-05",total:6079,Walmart:0,Cencosud:2584,UMR:3142,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:105,Otro:248},
+    {mes:"2025-06",total:5529,Walmart:0,Cencosud:3162,UMR:2158,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:168,Otro:41},
+    {mes:"2025-07",total:7866,Walmart:0,Cencosud:3060,UMR:3815,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:0,Otro:991},
+    {mes:"2025-08",total:6104,Walmart:0,Cencosud:2023,UMR:3786,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:160,Otro:135},
+    {mes:"2025-09",total:8130,Walmart:0,Cencosud:3744,UMR:4210,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:0,Otro:176},
+    {mes:"2025-10",total:9694,Walmart:0,Cencosud:3946,UMR:4280,Tottus:0,Alvi:0,Prisa:210,Intercarry:0,SMU:170,Otro:1088},
+    {mes:"2025-11",total:7768,Walmart:0,Cencosud:4316,UMR:3081,Tottus:0,Alvi:0,Prisa:150,Intercarry:0,SMU:71,Otro:150},
+    {mes:"2025-12",total:7779,Walmart:0,Cencosud:3077,UMR:4147,Tottus:0,Alvi:0,Prisa:180,Intercarry:0,SMU:85,Otro:290},
+    {mes:"2026-01",total:7949,Walmart:0,Cencosud:4760,UMR:2746,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:0,Otro:443},
+    {mes:"2026-02",total:8020,Walmart:251,Cencosud:2890,UMR:3391,Tottus:0,Alvi:0,Prisa:148,Intercarry:0,SMU:100,Otro:1240},
+    {mes:"2026-03",total:6046,Walmart:0,Cencosud:3400,UMR:1927,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:91,Otro:628}
+  ]
+};
+
+// ── ESTADO REGIÓN ─────────────────────────────────────────────────
+let REGION_ACTIVA = 'todas';
+
+function setRegion(region, btn) {
+  REGION_ACTIVA = region;
+
+  // Actualizar botones
+  document.querySelectorAll('.reg-btn').forEach(b => {
+    b.className = 'reg-btn';
+  });
+  const clsMap = {todas:'active-todas', Santiago:'active-stgo', Talca:'active-talca'};
+  btn.classList.add(clsMap[region]);
+
+  // Info bar
+  const nombres = {todas:'Todas las regiones', Santiago:'Santiago + Norte', Talca:'Talca'};
+  const vols = {todas:'1.223.022', Santiago:'1.104.424', Talca:'105.339'};
+  document.getElementById('region-name-info').textContent = nombres[region];
+  document.getElementById('region-vol-info').textContent  = vols[region] + ' pallets';
+
+  // Mostrar/ocultar compare strip
+  document.getElementById('reg-compare-strip').style.display = region === 'todas' ? 'grid' : 'none';
+
+  // Re-renderizar resumen
+  buildResumen();
+}
+
+function getHistoricoFiltrado() {
+  if (REGION_ACTIVA === 'todas') return HISTORICO;
+  const regData = REGION_DATA[REGION_ACTIVA];
+  // Mapear totales reales de región sobre estructura HISTORICO
+  return HISTORICO.map(h => {
+    const r = regData.find(d => d.mes === h.mes);
+    if (!r) return {...h, real_total: 0};
+    return {
+      ...h,
+      real_total:     r.total,
+      real_Walmart:   r.Walmart,
+      real_Cencosud:  r.Cencosud,
+      real_UMR:       r.UMR,
+      real_Tottus:    r.Tottus,
+      real_Alvi:      r.Alvi,
+      real_Prisa:     r.Prisa,
+      real_Intercarry:r.Intercarry,
+      real_SMU:       r.SMU,
+      real_Otro:      r.Otro,
+      // forecast proporcional al share de región
+      pred_total: h.pred_total ? Math.round(h.pred_total * (r.total / (h.real_total||1)) * (h.pred_total/(h.real_total||1) > 0 ? 1 : 1)) : null
+    };
+  });
+}
+
 const fmt = n => n != null ? Math.round(n).toLocaleString('es-CL') : '—';
 const fmtM = s => { const p=s.split('-'); const names=['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']; return names[+p[1]]+' '+p[0].slice(2); };
 
@@ -557,21 +752,36 @@ function showTab(name, btn) {
 // TAB RESUMEN
 // ══════════════════════════════════════════════════════════════════
 function buildResumen() {
-  const meses = HISTORICO.map(d => fmtM(d.mes));
-  const reales = HISTORICO.map(d => d.real_total);
-  const preds  = HISTORICO.map(d => d.pred_total);
+  const DATA = getHistoricoFiltrado();
+  const meses  = DATA.map(d => fmtM(d.mes));
+  const reales = DATA.map(d => d.real_total);
+  const preds  = DATA.map(d => d.pred_total);
 
-  // Proyeccion overlay
+  // Escalar proyecciones según share de región activa
+  const shareRegion = REGION_ACTIVA === 'Santiago' ? 0.903
+                    : REGION_ACTIVA === 'Talca'    ? 0.086
+                    : 1.0;
+
   const projMeses = PROYECCIONES.map(d => fmtM(d.mes));
-  const projVals  = PROYECCIONES.map(d => d.pred_total);
-  const projHigh  = PROYECCIONES.map(d => Math.round(d.pred_total * 1.08));
-  const projLow   = PROYECCIONES.map(d => Math.round(d.pred_total * 0.92));
+  const projVals  = PROYECCIONES.map(d => Math.round(d.pred_total * shareRegion));
+  const projHigh  = projVals.map(v => Math.round(v * 1.08));
+  const projLow   = projVals.map(v => Math.round(v * 0.92));
 
   const allLabels = [...meses, ...projMeses];
   const realData  = [...reales, ...new Array(projMeses.length).fill(null)];
   const predData  = [...preds,  ...projVals];
   const highData  = [...new Array(meses.length).fill(null), ...projHigh];
   const lowData   = [...new Array(meses.length).fill(null), ...projLow];
+
+  // KPI dinámico
+  const total2025 = DATA.filter(d=>d.mes.startsWith('2025')).reduce((s,d)=>s+(d.real_total||0),0);
+  const prom = Math.round(total2025 / 12);
+  document.getElementById('kpi-total-val').textContent = (total2025/1000).toFixed(0)+'K';
+
+  // Color del gráfico según región
+  const lineColor = REGION_ACTIVA === 'Santiago' ? '#34D399'
+                  : REGION_ACTIVA === 'Talca'    ? '#FBBF24'
+                  : '#3B82F6';
 
   killChart('main');
   charts['main'] = new Chart(document.getElementById('chartMain'), {
@@ -581,7 +791,7 @@ function buildResumen() {
       datasets: [
         {
           label: 'Real', data: realData,
-          borderColor: '#3B82F6', backgroundColor: 'rgba(59,130,246,.08)',
+          borderColor: lineColor, backgroundColor: lineColor+'14',
           borderWidth: 2.5, pointRadius: 4, pointHoverRadius: 6,
           fill: true, tension: .3
         },
@@ -646,10 +856,10 @@ function buildResumen() {
     }
   });
 
-  // Retail bars
+  // Retail bars — usar DATA filtrada
   const totalPorRetail = {};
   RETAIL_KEYS.forEach(r => {
-    totalPorRetail[r] = HISTORICO.filter(d=>d[`real_${r}`]).reduce((s,d)=>s+(d[`real_${r}`]||0),0);
+    totalPorRetail[r] = DATA.filter(d=>d[`real_${r}`]).reduce((s,d)=>s+(d[`real_${r}`]||0),0);
   });
   const maxVol = Math.max(...Object.values(totalPorRetail));
   const container = document.getElementById('retail-bars-main');
@@ -684,16 +894,25 @@ function buildResumen() {
     }
   });
 
-  // Insight
+  // Insight dinámico por región
+  const regNombre = REGION_ACTIVA === 'Santiago' ? 'Santiago + Norte'
+                  : REGION_ACTIVA === 'Talca'    ? 'Talca'
+                  : 'todas las regiones';
+  const topRetail = RETAIL_KEYS.reduce((a,b) => totalPorRetail[a]>totalPorRetail[b]?a:b);
+  const topIdx    = RETAIL_KEYS.indexOf(topRetail);
+  const topVol    = totalPorRetail[topRetail];
+  const totalVol  = RETAIL_KEYS.reduce((s,r)=>s+totalPorRetail[r],0);
+  const topPct    = (topVol/totalVol*100).toFixed(1);
+
+  const insightTalca = REGION_ACTIVA === 'Talca'
+    ? ' <span class="warn">⚠ Talca opera exclusivamente con Cencosud y Unimarc/Rendic — sin Walmart ni Tottus.</span>' : '';
+
   document.getElementById('insight-main').innerHTML = `
-    📊 <strong>Lectura del modelo (Ene 2025 – Mar 2026):</strong>
-    RedTec recuperó <span class="highlight">1.223.022 pallets</span> en retiros durante el período analizado, con un promedio de
-    <span class="highlight">82.300 pallets/mes</span>. El modelo adaptativo logra una accuracy de <span class="highlight">90.8%</span>
-    en 12 meses validados, con 7 meses sobre el 90%. Los meses con mayor desviación fueron
-    <span class="warn">Jul-2025 (-15.2%)</span> y <span class="warn">Ago-2025 (+13.9%)</span> — atribuibles a cambios de comportamiento
-    estacional que el modelo corrigió al mes siguiente. Walmart concentra el <strong>36.4%</strong> del volumen,
-    seguido por Cencosud (<strong>28.9%</strong>) y Unimarc/Rendic (<strong>17.9%</strong>).
-    La tasa de retorno base se mantiene estable en <span class="highlight">85.5% ± 4.1%</span> sobre emisiones.`;
+    📊 <strong>Lectura del modelo · ${regNombre}:</strong>
+    En el período analizado se recuperaron <span class="highlight">${fmt(totalVol)} pallets</span> en retiros.
+    El retailer dominante es <strong style="color:${RETAIL_COLORS[topRetail]}">${RETAILERS[topIdx]} (${topPct}%)</strong> del volumen total.
+    La tasa de retorno base se mantiene estable en <span class="highlight">85.5% ± 4.1%</span> sobre emisiones.
+    Los meses con mayor desviación fueron <span class="warn">Jul-2025 (-15.2%)</span> y <span class="warn">Ago-2025 (+13.9%)</span> — corregidos automáticamente al mes siguiente.${insightTalca}`;
 }
 
 // ══════════════════════════════════════════════════════════════════

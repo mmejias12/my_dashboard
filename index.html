@@ -65,14 +65,9 @@ body {
 }
 .logo-group { display: flex; align-items: center; gap: 14px; }
 .logo-badge {
-  background: var(--accent);
-  color: #fff;
-  font-family: 'Syne', sans-serif;
-  font-weight: 800;
-  font-size: 14px;
-  padding: 6px 14px;
-  border-radius: 6px;
-  letter-spacing: 2px;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
 }
 .header-title {
   font-family: 'Syne', sans-serif;
@@ -350,6 +345,56 @@ canvas { max-height: 280px; }
 .reg-card-val   { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; }
 .reg-card-pct   { font-size: 11px; color: var(--muted); margin-top: 2px; text-align: right; }
 
+/* ── HEATMAP ── */
+.hm-table { border-collapse: separate; border-spacing: 3px; width: 100%; }
+.hm-th-retail {
+  text-align: left;
+  font-size: 11px; font-weight: 600;
+  color: var(--text2);
+  padding: 4px 10px 4px 0;
+  white-space: nowrap;
+  min-width: 130px;
+}
+.hm-th-mes {
+  font-size: 9px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  text-align: center;
+  padding: 4px 2px;
+  min-width: 52px;
+}
+.hm-cell {
+  border-radius: 6px;
+  padding: 8px 4px;
+  text-align: center;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: transform .15s, box-shadow .15s;
+  position: relative;
+}
+.hm-cell:hover {
+  transform: scale(1.08);
+  box-shadow: 0 0 0 2px rgba(255,255,255,.3);
+  z-index: 10;
+}
+.hm-row-label {
+  display: flex; align-items: center; gap: 7px;
+  padding: 6px 10px 6px 0;
+}
+.hm-row-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.hm-legend {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 14px; justify-content: flex-end;
+}
+.hm-legend-bar {
+  width: 180px; height: 10px; border-radius: 5px;
+  background: linear-gradient(90deg, #0B1829, #1a3a6b, #1e6b8a, #1e9c7a, #4ecb71, #a8e063, #ffd166, #ef8c4a, #e05252);
+}
+.hm-legend-lbl { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; }
+
 /* FOOTER */
 .footer {
   position: fixed; bottom: 0; left: 0; right: 0;
@@ -367,7 +412,17 @@ canvas { max-height: 280px; }
 <!-- HEADER -->
 <div class="header">
   <div class="logo-group">
-    <div class="logo-badge">REDTEC</div>
+    <div class="logo-badge">
+      <svg width="96" height="36" viewBox="0 0 96 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="96" height="36" rx="6" fill="#C0392B"/>
+        <text x="48" y="25" text-anchor="middle"
+          font-family="Arial Black, Arial, sans-serif"
+          font-weight="900"
+          font-size="14"
+          letter-spacing="3"
+          fill="#FFFFFF">REDTEC</text>
+      </svg>
+    </div>
     <div>
       <div class="header-title">Modelo Adaptativo de Retiros · 2025–2026</div>
       <div class="header-sub">Forecast basado en tasa de retorno histórica · Adaptativo por retail · Estacionalidad real</div>
@@ -387,6 +442,7 @@ canvas { max-height: 280px; }
   <button class="tab" onclick="showTab('validacion',this)">🎯 Validación del Modelo</button>
   <button class="tab" onclick="showTab('retail',this)">🏪 Por Retail</button>
   <button class="tab" onclick="showTab('proyeccion',this)">🔮 Proyección 2026</button>
+  <button class="tab" onclick="showTab('heatmap',this)">🌡️ Mapa de Calor</button>
 </div>
 
 <!-- REGION SELECTOR -->
@@ -582,6 +638,62 @@ canvas { max-height: 280px; }
     <table class="tbl" id="tabla-proyecciones"></table>
   </div>
   <div class="insight-box" id="insight-proj"></div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════ MAPA DE CALOR ═══════════════════ -->
+<div id="tab-heatmap" class="tab-panel">
+<div class="main">
+
+  <div class="row2" style="margin-bottom:20px">
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">🌡️ Modo de visualización</div>
+      <div class="card-sub">Elige cómo interpretar la intensidad de color</div>
+      <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
+        <button class="reg-btn active-todas" id="hm-btn-abs" onclick="setHeatmapMode('abs',this)">
+          <div class="reg-dot" style="background:var(--accent2)"></div> Volumen absoluto
+        </button>
+        <button class="reg-btn" id="hm-btn-pct" onclick="setHeatmapMode('pct',this)">
+          <div class="reg-dot" style="background:var(--green)"></div> % del mes
+        </button>
+        <button class="reg-btn" id="hm-btn-rel" onclick="setHeatmapMode('rel',this)">
+          <div class="reg-dot" style="background:var(--yellow)"></div> Intensidad relativa
+        </button>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">📌 Cómo leer el mapa</div>
+      <div class="card-sub" style="line-height:1.9">
+        <strong style="color:var(--accent2)">Volumen absoluto</strong> → color por cantidad real de pallets<br>
+        <strong style="color:var(--green)">% del mes</strong> → qué parte del total mensual aporta ese retail<br>
+        <strong style="color:var(--yellow)">Intensidad relativa</strong> → qué tan alto está cada retail vs su propio máximo histórico
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title" id="hm-title">🌡️ Mapa de Calor — Retiros por Retail × Mes <span class="acc-badge acc-high" id="hm-badge">Volumen absoluto</span></div>
+    <div class="card-sub">Cada celda muestra el volumen de retiros. El color va de frío (bajo) a caliente (alto). Hover para ver detalle.</div>
+    <div style="overflow-x:auto;margin-top:8px">
+      <div id="heatmap-container"></div>
+    </div>
+  </div>
+
+  <div class="row2">
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">📊 Ranking acumulado por retail</div>
+      <div class="card-sub">Total pallets retirados Ene 2025 – Mar 2026</div>
+      <canvas id="chartHmRanking"></canvas>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">📈 Volatilidad por retail</div>
+      <div class="card-sub">Coeficiente de variación mensual — qué tan irregular es cada cadena</div>
+      <canvas id="chartHmVolatilidad"></canvas>
+    </div>
+  </div>
+
+  <div class="insight-box" id="insight-heatmap"></div>
+
 </div>
 </div>
 
@@ -1225,8 +1337,258 @@ function buildProyeccion() {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// HEATMAP DATA
+// ══════════════════════════════════════════════════════════════════
+const HM_MESES = ["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12","2026-01","2026-02","2026-03"];
+const HM_RETAILERS = ["Walmart","Cencosud","Unimarc/Rendic","Otro","Tottus","Alvi","Prisa","Intercarry","SMU/M10"];
+const HM_RKEYS     = ["Walmart","Cencosud","UMR","Otro","Tottus","Alvi","Prisa","Intercarry","SMU"];
+const HM_VALUES = [
+  [31930,26825,32595,31560,31334,29860,32569,25394,30389,32626,28079,32033,30868,28574,23388],
+  [22612,18512,23157,23249,22904,23402,24372,22327,24320,23370,24892,26901,27428,23245,17691],
+  [16575,13246,15175,15112,13218,16593,14725,13256,13470,15100,15615,15939,16424,14761,9624],
+  [5307,6267,6125,6447,5963,5516,8240,4627,4464,7423,5012,5178,5936,6268,5920],
+  [4780,3720,3820,3940,3560,3800,4040,3820,4040,4000,4060,4340,4560,3979,3198],
+  [1345,1429,1649,1745,2115,1562,1960,1888,2176,1448,1560,2432,1963,2109,1777],
+  [1281,833,1066,1504,1115,957,1777,935,1377,1123,1357,1460,1900,1251,860],
+  [463,277,590,841,821,752,728,564,451,607,494,487,435,382,474],
+  [452,445,548,399,533,564,185,436,94,408,215,171,215,167,281]
+];
+// % por mes (retail / total mes)
+const HM_PCT = [
+  [37.7,37.5,38.5,37.2,38.4,36.0,36.8,34.7,37.6,37.9,34.5,36.0,34.4,35.4,37.0],
+  [26.7,25.9,27.3,27.4,28.1,28.2,27.5,30.5,30.1,27.1,30.6,30.2,30.6,28.8,28.0],
+  [19.6,18.5,17.9,17.8,16.2,20.0,16.6,18.1,16.7,17.5,19.2,17.9,18.3,18.3,15.2],
+  [6.3,8.8,7.2,7.6,7.3,6.6,9.3,6.3,5.5,8.6,6.2,5.8,6.6,7.8,9.4],
+  [5.6,5.2,4.5,4.6,4.4,4.6,4.6,5.2,5.0,4.6,5.0,4.9,5.1,4.9,5.1],
+  [1.6,2.0,1.9,2.1,2.6,1.9,2.2,2.6,2.7,1.7,1.9,2.7,2.2,2.6,2.8],
+  [1.5,1.2,1.3,1.8,1.4,1.2,2.0,1.3,1.7,1.3,1.7,1.6,2.1,1.5,1.4],
+  [0.5,0.4,0.7,1.0,1.0,0.9,0.8,0.8,0.6,0.7,0.6,0.5,0.5,0.5,0.7],
+  [0.5,0.6,0.6,0.5,0.7,0.7,0.2,0.6,0.1,0.5,0.3,0.2,0.2,0.2,0.4]
+];
+
+let HM_MODE = 'abs'; // abs | pct | rel
+
+// Escala de color: azul frío → verde → amarillo → rojo caliente
+function heatColor(t) {
+  // t: 0 (frío) → 1 (caliente)
+  const stops = [
+    [0.00, [11,24,41]],
+    [0.15, [26,58,107]],
+    [0.30, [30,107,138]],
+    [0.45, [30,156,122]],
+    [0.60, [78,203,113]],
+    [0.72, [168,224,99]],
+    [0.82, [255,209,102]],
+    [0.91, [239,140,74]],
+    [1.00, [224,82,82]]
+  ];
+  let i = 0;
+  while(i < stops.length-1 && t > stops[i+1][0]) i++;
+  const [t0,c0] = stops[i];
+  const [t1,c1] = stops[Math.min(i+1,stops.length-1)];
+  const f = t1>t0 ? (t-t0)/(t1-t0) : 0;
+  const r = Math.round(c0[0]+(c1[0]-c0[0])*f);
+  const g = Math.round(c0[1]+(c1[1]-c0[1])*f);
+  const b = Math.round(c0[2]+(c1[2]-c0[2])*f);
+  return `rgb(${r},${g},${b})`;
+}
+
+function textContrast(t) {
+  return t > 0.55 ? '#0B0F1A' : '#E2E8F0';
+}
+
+function setHeatmapMode(mode, btn) {
+  HM_MODE = mode;
+  document.querySelectorAll('#tab-heatmap .reg-btn').forEach(b => b.className='reg-btn');
+  const clsMap = {abs:'active-todas',pct:'active-stgo',rel:'active-talca'};
+  btn.classList.add(clsMap[mode]);
+  const labels = {abs:'Volumen absoluto',pct:'% del mes',rel:'Intensidad relativa'};
+  document.getElementById('hm-badge').textContent = labels[mode];
+  renderHeatmap();
+}
+
+function renderHeatmap() {
+  const container = document.getElementById('heatmap-container');
+
+  // Calcular matriz normalizada
+  let matrix; // [retail][mes] → 0..1
+  if(HM_MODE === 'abs') {
+    const maxVal = Math.max(...HM_VALUES.flat());
+    matrix = HM_VALUES.map(row => row.map(v => v/maxVal));
+  } else if(HM_MODE === 'pct') {
+    const maxPct = Math.max(...HM_PCT.flat());
+    matrix = HM_PCT.map(row => row.map(v => v/maxPct));
+  } else { // rel: cada retail normalizado por su propio máximo
+    matrix = HM_VALUES.map(row => {
+      const mx = Math.max(...row);
+      return row.map(v => mx>0 ? v/mx : 0);
+    });
+  }
+
+  // Construir tabla HTML
+  let html = `<table class="hm-table">
+    <thead><tr>
+      <th class="hm-th-retail"></th>
+      ${HM_MESES.map(m => `<th class="hm-th-mes">${fmtM(m)}</th>`).join('')}
+      <th class="hm-th-mes" style="color:var(--accent2)">Total</th>
+    </tr></thead>
+    <tbody>`;
+
+  HM_RETAILERS.forEach((retail, ri) => {
+    const color = RETAIL_COLORS[HM_RKEYS[ri]] || '#64748B';
+    const rowTotal = HM_VALUES[ri].reduce((a,b)=>a+b,0);
+    html += `<tr>
+      <td>
+        <div class="hm-row-label">
+          <div class="hm-row-dot" style="background:${color}"></div>
+          <span style="font-size:11px;font-weight:600;color:${color}">${retail}</span>
+        </div>
+      </td>`;
+
+    HM_MESES.forEach((mes, mi) => {
+      const t = matrix[ri][mi];
+      const bg = heatColor(t);
+      const tc = textContrast(t);
+      const rawVal = HM_VALUES[ri][mi];
+      const pctVal = HM_PCT[ri][mi];
+
+      const displayVal = HM_MODE === 'pct'
+        ? pctVal.toFixed(1)+'%'
+        : HM_MODE === 'rel'
+        ? (t*100).toFixed(0)+'%'
+        : rawVal >= 1000 ? (rawVal/1000).toFixed(1)+'K' : rawVal;
+
+      const tooltip = `${retail} · ${fmtM(mes)}\nVolumen: ${fmt(rawVal)} pallets\n% del mes: ${pctVal}%`;
+
+      html += `<td class="hm-cell" style="background:${bg};color:${tc}" title="${tooltip}">${displayVal}</td>`;
+    });
+
+    // Total fila
+    html += `<td class="hm-cell" style="background:rgba(59,130,246,.15);color:var(--accent2);font-weight:700">
+      ${(rowTotal/1000).toFixed(0)}K
+    </td></tr>`;
+  });
+
+  // Fila totales
+  html += `<tr style="border-top:2px solid var(--border)">
+    <td><div class="hm-row-label"><span style="font-size:11px;font-weight:700;color:var(--text2)">TOTAL MES</span></div></td>`;
+  HM_MESES.forEach((mes, mi) => {
+    const colTotal = HM_VALUES.reduce((s,row)=>s+row[mi],0);
+    html += `<td style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;font-weight:700;color:var(--teal);padding:6px 4px">${(colTotal/1000).toFixed(0)}K</td>`;
+  });
+  const grandTotal = HM_VALUES.flat().reduce((a,b)=>a+b,0);
+  html += `<td style="text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:800;color:var(--teal);padding:6px 4px">${(grandTotal/1000).toFixed(0)}K</td></tr>`;
+
+  html += `</tbody></table>
+  <div class="hm-legend">
+    <span class="hm-legend-lbl">Bajo</span>
+    <div class="hm-legend-bar"></div>
+    <span class="hm-legend-lbl">Alto</span>
+  </div>`;
+
+  container.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BUILD HEATMAP TAB
+// ══════════════════════════════════════════════════════════════════
+function buildHeatmap() {
+  renderHeatmap();
+
+  // Ranking chart
+  const totales = HM_VALUES.map(row => row.reduce((a,b)=>a+b,0));
+  killChart('hmRanking');
+  charts['hmRanking'] = new Chart(document.getElementById('chartHmRanking'), {
+    type: 'bar',
+    data: {
+      labels: HM_RETAILERS,
+      datasets: [{
+        data: totales,
+        backgroundColor: HM_RKEYS.map(r => RETAIL_COLORS[r]+'CC'),
+        borderRadius: 6, borderSkipped: false
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: {display:false},
+        tooltip: { callbacks: { label: ctx => ` ${fmt(ctx.raw)} pallets` } }
+      },
+      scales: {
+        x: { ticks: { color:'#64748B', font:{size:10}, callback: v => (v/1000).toFixed(0)+'K' }, grid:{color:'#1f2d45'} },
+        y: { ticks: { color:'#94A3B8', font:{size:11} }, grid:{display:false} }
+      }
+    }
+  });
+
+  // Volatilidad (CV = std/mean)
+  const cvData = HM_VALUES.map(row => {
+    const mean = row.reduce((a,b)=>a+b)/row.length;
+    const std  = Math.sqrt(row.reduce((s,v)=>s+Math.pow(v-mean,2),0)/row.length);
+    return mean > 0 ? +(std/mean*100).toFixed(1) : 0;
+  });
+  killChart('hmVolatilidad');
+  charts['hmVolatilidad'] = new Chart(document.getElementById('chartHmVolatilidad'), {
+    type: 'bar',
+    data: {
+      labels: HM_RETAILERS,
+      datasets: [{
+        label: 'CV %',
+        data: cvData,
+        backgroundColor: cvData.map(v =>
+          v < 8  ? 'rgba(52,211,153,.8)' :
+          v < 15 ? 'rgba(251,191,36,.8)' :
+                   'rgba(248,113,113,.8)'
+        ),
+        borderRadius: 6, borderSkipped: false
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: {display:false},
+        tooltip: { callbacks: { label: ctx => ` CV: ${ctx.raw}% ${ctx.raw<8?'· Muy estable':ctx.raw<15?'· Estable':'· Variable'}` } }
+      },
+      scales: {
+        x: { ticks: { color:'#64748B', font:{size:10}, callback: v=>v+'%' }, grid:{color:'#1f2d45'} },
+        y: { ticks: { color:'#94A3B8', font:{size:11} }, grid:{display:false} }
+      }
+    }
+  });
+
+  // Insight
+  const maxRetail = HM_RETAILERS[totales.indexOf(Math.max(...totales))];
+  const minCV = HM_RETAILERS[cvData.indexOf(Math.min(...cvData))];
+  const maxCV = HM_RETAILERS[cvData.indexOf(Math.max(...cvData))];
+  document.getElementById('insight-heatmap').innerHTML = `
+    🌡️ <strong>Lectura del mapa de calor:</strong>
+    <strong style="color:${RETAIL_COLORS[HM_RKEYS[0]]}">${maxRetail}</strong> domina con el mayor volumen en prácticamente todos los meses —
+    es el retailer de mayor intensidad de calor de forma consistente.
+    El retailer más <span class="highlight">estable</span> es <strong>${minCV}</strong> (menor coeficiente de variación),
+    lo que significa que su comportamiento es el más predecible para el modelo.
+    <strong style="color:var(--red)">${maxCV}</strong> es el más <span class="warn">volátil</span> —
+    sus retiros fluctúan más mes a mes, lo que explica parte del error en los meses de mayor desviación.
+    Usa el modo <em>Intensidad relativa</em> para ver patrones estacionales dentro de cada retail sin que el volumen absoluto distorsione la lectura.`;
+}
+
+// ══════════════════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════════════════
+// Update showTab to include heatmap
+const _origShowTab = showTab;
+function showTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  btn.classList.add('active');
+  if(name==='validacion') buildValidacion();
+  if(name==='retail') buildRetail();
+  if(name==='proyeccion') buildProyeccion();
+  if(name==='heatmap') buildHeatmap();
+}
+
 buildResumen();
 </script>
 </body>

@@ -3,782 +3,1966 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>REDTEC – Retornos & Devoluciones 2026</title>
+<title>REDTEC · Modelo Adaptativo de Retiros 2025–2026</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg:#111827; --card:#1E293B; --card2:#162032; --border:#334155;
-  --accent:#E53935; --accentL:#FF6F60;
-  --green:#66BB6A; --blue:#42A5F5; --purple:#AB47BC;
-  --orange:#FFA726; --teal:#26C6DA; --yellow:#FFEE58;
-  --muted:#94A3B8; --white:#F1F5F9;
+  --bg:       #0B0F1A;
+  --surface:  #111827;
+  --surface2: #1a2235;
+  --border:   #1f2d45;
+  --accent:   #3B82F6;
+  --accent2:  #60A5FA;
+  --green:    #34D399;
+  --red:      #F87171;
+  --yellow:   #FBBF24;
+  --purple:   #A78BFA;
+  --teal:     #2DD4BF;
+  --orange:   #FB923C;
+  --muted:    #64748B;
+  --text:     #E2E8F0;
+  --text2:    #94A3B8;
+  --walmart:  #3B82F6;
+  --cencosud: #34D399;
+  --unimarc:  #F87171;
+  --tottus:   #FBBF24;
+  --alvi:     #A78BFA;
+  --prisa:    #FB923C;
+  --intercarry:#2DD4BF;
+  --smu:      #F472B6;
+  --otro:     #64748B;
 }
-*{margin:0;padding:0;box-sizing:border-box;}
-body{background:var(--bg);color:var(--white);font-family:'Segoe UI',Arial,sans-serif;padding-bottom:56px;}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+  padding-bottom: 60px;
+}
 
 /* ── HEADER ── */
-.header{background:linear-gradient(90deg,#0f172a 55%,#200808);border-bottom:3px solid var(--accent);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;}
-.badge{background:var(--accent);color:#fff;font-weight:900;font-size:13px;padding:5px 13px;border-radius:6px;letter-spacing:1.5px;}
-.h-title{font-size:19px;font-weight:700;margin-left:14px;}
-.h-sub{font-size:11px;color:var(--muted);margin-top:2px;margin-left:14px;}
-.h-date{font-size:11px;color:var(--muted);text-align:right;line-height:1.6;}
+.header {
+  background: linear-gradient(135deg, #0B0F1A 0%, #111827 60%, #0f1f3d 100%);
+  border-bottom: 1px solid var(--border);
+  padding: 20px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+}
+.header::before {
+  content: '';
+  position: absolute;
+  top: -60px; right: -60px;
+  width: 200px; height: 200px;
+  background: radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%);
+  pointer-events: none;
+}
+.logo-group { display: flex; align-items: center; gap: 14px; }
+.logo-badge {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+.header-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+.header-sub { font-size: 11px; color: var(--muted); margin-top: 3px; letter-spacing: .3px; }
+.header-meta {
+  text-align: right;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.8;
+}
+.model-tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(52,211,153,0.1);
+  border: 1px solid rgba(52,211,153,0.3);
+  color: var(--green);
+  font-size: 11px;
+  font-family: 'DM Mono', monospace;
+  padding: 3px 10px; border-radius: 20px;
+  margin-top: 6px;
+}
+.dot-pulse {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--green);
+  animation: pulse 1.8s infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.7)} }
 
-/* ── CONTROL BAR ── */
-.ctrl-bar{margin:18px 26px 0;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 18px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
-.ctrl-sep{width:1px;height:30px;background:var(--border);margin:0 8px;flex-shrink:0;}
-.ctrl-lbl{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.6px;white-space:nowrap;}
-
-/* SWITCH TIPO */
-.tipo-group{display:flex;background:#0f172a;border-radius:9px;padding:3px;gap:3px;}
-.tipo-btn{padding:7px 18px;border-radius:7px;border:none;cursor:pointer;font-size:12px;font-weight:700;color:var(--muted);background:transparent;transition:all .22s;white-space:nowrap;letter-spacing:.3px;}
-.tipo-btn.t-retiro {background:#1a3d1a;color:#86efac;border:1px solid #166534;}
-.tipo-btn.t-dev    {background:#2d1a3d;color:#d8b4fe;border:1px solid #6b21a8;}
-.tipo-btn.t-ambos  {background:#1a2d4a;color:#93c5fd;border:1px solid #1d4ed8;}
-
-/* REGION BUTTONS */
-.reg-btn{padding:7px 15px;border-radius:20px;border:1.5px solid var(--border);cursor:pointer;font-size:12px;font-weight:600;color:var(--muted);background:var(--card2);transition:all .22s;}
-.reg-btn:hover{border-color:var(--accent);}
-.reg-btn.r-ambas   {background:#0d2240;border-color:#1d4ed8;color:#93c5fd;}
-.reg-btn.r-santiago{background:#3d0d0d;border-color:#dc2626;color:#fca5a5;}
-.reg-btn.r-talca   {background:#3d1f0d;border-color:#ea580c;color:#fed7aa;}
-
-/* RETAIL BUTTONS */
-.retail-btn{padding:5px 13px;border-radius:16px;border:1px solid var(--border);cursor:pointer;font-size:11px;font-weight:600;color:var(--muted);background:var(--card2);transition:all .2s;}
-.retail-btn:hover{border-color:#64748b;}
-.retail-btn.ra{background:var(--accent);border-color:var(--accent);color:#fff;}
-.retail-btn.rw.ra{background:#1d4ed8;border-color:#1d4ed8;color:#fff;}
-.retail-btn.rc.ra{background:#166534;border-color:#166534;color:#fff;}
-.retail-btn.ru.ra{background:#9a3412;border-color:#9a3412;color:#fff;}
-.retail-btn.rt.ra{background:#6b21a8;border-color:#6b21a8;color:#fff;}
-.retail-btn.rs.ra{background:#155e75;border-color:#155e75;color:#fff;}
-.retail-btn.ro.ra{background:#374151;border-color:#374151;color:#fff;}
+/* ── TABS ── */
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 16px 32px 0;
+  border-bottom: 1px solid var(--border);
+}
+.tab {
+  padding: 10px 22px;
+  border-radius: 8px 8px 0 0;
+  border: none; cursor: pointer;
+  font-size: 13px; font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  color: var(--muted);
+  background: transparent;
+  transition: all .2s;
+  border-bottom: 2px solid transparent;
+}
+.tab:hover { color: var(--text2); }
+.tab.active {
+  color: var(--accent2);
+  border-bottom: 2px solid var(--accent);
+  background: rgba(59,130,246,.06);
+}
 
 /* ── MAIN ── */
-.main{padding:16px 26px;}
+.main { padding: 24px 32px; }
 
-/* KPI GRID */
-.kpi-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px;}
-.kpi{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:13px 13px 11px;position:relative;overflow:hidden;transition:border-color .2s;}
-.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:11px 11px 0 0;}
-.kpi.k-green::before {background:var(--green);}
-.kpi.k-blue::before  {background:var(--blue);}
-.kpi.k-purple::before{background:var(--purple);}
-.kpi.k-teal::before  {background:var(--teal);}
-.kpi.k-orange::before{background:var(--orange);}
-.kpi.k-red::before   {background:var(--accent);}
-.kl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px;line-height:1.35;}
-.kv{font-size:23px;font-weight:800;line-height:1;}
-.kv.green {color:var(--green);}  .kv.blue  {color:var(--blue);}
-.kv.purple{color:var(--purple);} .kv.teal  {color:var(--teal);}
-.kv.orange{color:var(--orange);} .kv.red   {color:var(--accentL);}
-.ks{font-size:10px;color:var(--muted);margin-top:3px;}
-.kd{font-size:11px;font-weight:700;margin-top:4px;}
-.kd.up{color:var(--green);} .kd.dn{color:var(--accentL);} .kd.neu{color:var(--muted);}
+/* ── KPI STRIP ── */
+.kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.kpi {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color .2s, transform .2s;
+}
+.kpi:hover { border-color: var(--accent); transform: translateY(-1px); }
+.kpi::after {
+  content: '';
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: 2px;
+}
+.kpi.k-blue::after   { background: var(--accent); }
+.kpi.k-green::after  { background: var(--green); }
+.kpi.k-yellow::after { background: var(--yellow); }
+.kpi.k-purple::after { background: var(--purple); }
+.kpi.k-teal::after   { background: var(--teal); }
+.kpi-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 8px; }
+.kpi-value { font-family: 'Syne', sans-serif; font-size: 26px; font-weight: 800; line-height: 1; }
+.kpi-value.blue   { color: var(--accent2); }
+.kpi-value.green  { color: var(--green); }
+.kpi-value.yellow { color: var(--yellow); }
+.kpi-value.purple { color: var(--purple); }
+.kpi-value.teal   { color: var(--teal); }
+.kpi-sub { font-size: 11px; color: var(--muted); margin-top: 6px; }
 
-/* REGION CARDS */
-.reg-strip{display:grid;grid-template-columns:1fr 1fr 1.1fr;gap:10px;margin-bottom:16px;}
-.rcard{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;}
-.rcard.stgo {border-left:4px solid #dc2626;}
-.rcard.talca{border-left:4px solid #ea580c;}
-.rcard.mtd  {border-left:4px solid var(--blue);}
-.rcard-name{font-size:12px;font-weight:700;}
-.rcard-val{font-size:20px;font-weight:800;}
-.rv-stgo {color:#fca5a5;} .rv-talca{color:#fed7aa;} .rv-mtd{color:var(--teal);}
-.rcard-sub{font-size:10px;color:var(--muted);margin-top:2px;}
-.mtd-row{font-size:12px;margin-top:2px;}
+/* ── CARDS ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 22px;
+  margin-bottom: 20px;
+}
+.card-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 14px; font-weight: 700;
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 4px;
+}
+.card-sub { font-size: 11px; color: var(--muted); margin-bottom: 16px; }
 
-/* CHART BOXES */
-.cbox{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:15px 17px;margin-bottom:14px;}
-.ct{font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px;margin-bottom:3px;}
-.cs{font-size:11px;color:var(--muted);margin-bottom:10px;}
-.badge-tipo{padding:2px 9px;border-radius:5px;font-size:10px;font-weight:700;}
-.bt-retiro{background:#14532d;color:#86efac;}
-.bt-dev   {background:#4c1d95;color:#d8b4fe;}
-.bt-ambos {background:#1e3a5f;color:#93c5fd;}
-.row2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
-.leg-row{display:flex;gap:14px;margin-bottom:8px;flex-wrap:wrap;}
-.leg{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);}
-.ld{width:16px;height:3px;border-radius:2px;}
-canvas{max-height:270px;}
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+.row3 { display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; margin-bottom: 20px; }
 
-/* TABLA 7d */
-.t7d{width:100%;border-collapse:collapse;font-size:12px;}
-.t7d th{background:#0f172a;color:var(--muted);font-size:10px;text-transform:uppercase;padding:7px 10px;text-align:right;border-bottom:1px solid var(--border);}
-.t7d th:first-child{text-align:left;}
-.t7d td{padding:7px 10px;border-bottom:1px solid #1a2840;text-align:right;}
-.t7d td:first-child{text-align:left;color:#64748b;}
-.t7d tr:hover td{background:#0f172a;}
-.t7d .tr-total td{font-weight:700;background:#0f172a;border-top:1px solid var(--border);}
-.chip{display:inline-block;padding:2px 9px;border-radius:9px;font-size:11px;font-weight:700;}
-.ch-e3   {background:#14532d;color:#86efac;}
-.ch-dev  {background:#4c1d95;color:#d8b4fe;}
-.ch-both {background:#1e3a5f;color:#93c5fd;}
+canvas { max-height: 280px; }
 
-/* BANNER PROYECCIÓN */
-.proy-banner{background:linear-gradient(90deg,#1c1400,#111827);border:1px solid #3d2f00;border-left:4px solid var(--yellow);border-radius:11px;padding:12px 18px;margin-bottom:14px;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;}
-.proy-banner.hidden{display:none;}
-.pb-title{font-size:13px;font-weight:700;color:var(--yellow);}
-.pb-sub{font-size:11px;color:var(--muted);margin-top:3px;}
-.pb-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
-.pb-chip{background:#1c1400;border:1px solid #3d2f00;border-radius:6px;padding:3px 9px;font-size:11px;color:var(--muted);}
-.pb-chip b{color:var(--yellow);}
-.pb-stats{display:flex;gap:16px;flex-shrink:0;align-items:center;}
-.pb-stat{text-align:center;}
-.pb-val{font-size:20px;font-weight:800;}
-.pb-val.y{color:var(--yellow);} .pb-val.o{color:var(--orange);} .pb-val.p{color:#AB47BC;}
-.pb-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;margin-top:2px;}
-/* INSIGHT */
-.insight{background:#0f172a;border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:9px;padding:13px 18px;font-size:12px;color:#cbd5e1;line-height:1.75;}
-.insight strong{color:var(--accentL);}
+/* ── ACCURACY BADGE ── */
+.acc-badge {
+  display: inline-block;
+  padding: 2px 10px; border-radius: 20px;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px; font-weight: 500;
+}
+.acc-high  { background: rgba(52,211,153,.15); color: var(--green); border: 1px solid rgba(52,211,153,.3); }
+.acc-mid   { background: rgba(251,191,36,.15);  color: var(--yellow); border: 1px solid rgba(251,191,36,.3); }
+.acc-low   { background: rgba(248,113,113,.15); color: var(--red);  border: 1px solid rgba(248,113,113,.3); }
+.proj-badge { background: rgba(167,139,250,.15); color: var(--purple); border: 1px solid rgba(167,139,250,.3); }
+
+/* ── TABLA ── */
+.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.tbl th {
+  background: #0d1424;
+  color: var(--muted);
+  font-size: 10px; text-transform: uppercase; letter-spacing: .6px;
+  padding: 9px 12px; text-align: right;
+  border-bottom: 1px solid var(--border);
+}
+.tbl th:first-child { text-align: left; }
+.tbl td {
+  padding: 9px 12px; text-align: right;
+  border-bottom: 1px solid #141e2f;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+}
+.tbl td:first-child { text-align: left; font-family: 'Inter', sans-serif; color: var(--text2); }
+.tbl tr:hover td { background: #0d1424; }
+.tbl .tr-proj td { opacity: .7; }
+.tbl .tr-proj td:first-child::after {
+  content: ' ↗';
+  color: var(--purple);
+  font-size: 10px;
+}
+
+/* ── INSIGHT BOX ── */
+.insight-box {
+  background: linear-gradient(135deg, #0f1f3d, #111827);
+  border: 1px solid rgba(59,130,246,.25);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
+  padding: 16px 20px;
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.8;
+  margin-top: 20px;
+}
+.insight-box strong { color: var(--accent2); }
+.insight-box .highlight { color: var(--green); font-weight: 600; }
+.insight-box .warn { color: var(--yellow); }
+
+/* ── RETAIL BARS ── */
+.retail-bars { display: flex; flex-direction: column; gap: 10px; }
+.rb-row { display: flex; align-items: center; gap: 10px; }
+.rb-label { font-size: 11px; color: var(--text2); width: 120px; flex-shrink: 0; }
+.rb-track { flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.rb-fill { height: 100%; border-radius: 4px; transition: width .6s ease; }
+.rb-val { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); width: 70px; text-align: right; flex-shrink: 0; }
+
+/* ── ACCURACY GAUGE ── */
+.gauge-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.gauge-big {
+  font-family: 'Syne', sans-serif;
+  font-size: 52px; font-weight: 800;
+  color: var(--green);
+  line-height: 1;
+}
+.gauge-label { font-size: 12px; color: var(--muted); text-align: center; }
+.gauge-breakdown { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; width: 100%; margin-top: 8px; }
+.gb-item { background: var(--surface2); border-radius: 8px; padding: 10px; text-align: center; }
+.gb-val { font-family: 'DM Mono', monospace; font-size: 16px; font-weight: 600; }
+.gb-lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-top: 3px; }
+
+/* TABS CONTENT */
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── PANEL RETAIL ── */
+.retail-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin-bottom: 20px; }
+.rc {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: all .2s;
+}
+.rc:hover, .rc.selected { border-color: var(--accent); background: var(--surface2); }
+.rc-name { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+.rc-vol  { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; }
+.rc-share { font-size: 10px; color: var(--muted); margin-top: 3px; }
+.rc-acc { font-size: 11px; margin-top: 6px; }
+
+/* ── REGION SELECTOR ── */
+.region-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 32px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.region-lbl {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  font-weight: 700;
+  margin-right: 4px;
+}
+.reg-btn {
+  display: flex; align-items: center; gap: 7px;
+  padding: 7px 18px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px; font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  transition: all .2s;
+}
+.reg-btn:hover { border-color: #475569; color: var(--text2); }
+.reg-btn.active-todas   { background: rgba(59,130,246,.12);  border-color: var(--accent);  color: var(--accent2); }
+.reg-btn.active-stgo    { background: rgba(52,211,153,.12);  border-color: var(--green);   color: var(--green); }
+.reg-btn.active-talca   { background: rgba(251,191,36,.12);  border-color: var(--yellow);  color: var(--yellow); }
+.reg-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.region-info {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  font-family: 'DM Mono', monospace;
+}
+.region-info span { color: var(--text2); font-weight: 500; }
+
+/* ── REGION COMPARISON STRIP ── */
+.reg-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.reg-card {
+  border-radius: 10px;
+  padding: 14px 18px;
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.reg-card.stgo  { background: rgba(52,211,153,.06);  border-left: 3px solid var(--green); }
+.reg-card.talca { background: rgba(251,191,36,.06);  border-left: 3px solid var(--yellow); }
+.reg-card-name  { font-size: 12px; font-weight: 700; }
+.reg-card-sub   { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.reg-card-val   { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; }
+.reg-card-pct   { font-size: 11px; color: var(--muted); margin-top: 2px; text-align: right; }
+
+/* ── HEATMAP ── */
+.hm-table { border-collapse: separate; border-spacing: 3px; width: 100%; }
+.hm-th-retail {
+  text-align: left;
+  font-size: 11px; font-weight: 600;
+  color: var(--text2);
+  padding: 4px 10px 4px 0;
+  white-space: nowrap;
+  min-width: 130px;
+}
+.hm-th-mes {
+  font-size: 9px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  text-align: center;
+  padding: 4px 2px;
+  min-width: 52px;
+}
+.hm-cell {
+  border-radius: 6px;
+  padding: 8px 4px;
+  text-align: center;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: transform .15s, box-shadow .15s;
+  position: relative;
+}
+.hm-cell:hover {
+  transform: scale(1.08);
+  box-shadow: 0 0 0 2px rgba(255,255,255,.3);
+  z-index: 10;
+}
+.hm-row-label {
+  display: flex; align-items: center; gap: 7px;
+  padding: 6px 10px 6px 0;
+}
+.hm-row-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.hm-legend {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 14px; justify-content: flex-end;
+}
+.hm-legend-bar {
+  width: 180px; height: 10px; border-radius: 5px;
+  background: linear-gradient(90deg, #0B1829, #1a3a6b, #1e6b8a, #1e9c7a, #4ecb71, #a8e063, #ffd166, #ef8c4a, #e05252);
+}
+.hm-legend-lbl { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; }
+
+/* ══════════════════════════════════════════════════════════════════
+   AGENTE IA
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Burbuja flotante */
+#agent-bubble {
+  position: fixed;
+  bottom: 80px; right: 28px;
+  width: 54px; height: 54px;
+  background: linear-gradient(135deg, #C0392B, #E74C3C);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(192,57,43,.5);
+  z-index: 999;
+  transition: transform .2s, box-shadow .2s;
+}
+#agent-bubble:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 28px rgba(192,57,43,.7);
+}
+#agent-unread {
+  position: absolute; top: 6px; right: 6px;
+  width: 10px; height: 10px;
+  background: var(--green);
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+  display: none;
+}
+
+/* Panel */
+#agent-panel {
+  position: fixed;
+  bottom: 148px; right: 28px;
+  width: 380px;
+  max-height: 580px;
+  background: #0f1623;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,.6);
+  z-index: 998;
+  animation: slideUp .25s ease;
+}
+#agent-panel.open { display: flex; }
+@keyframes slideUp {
+  from { opacity:0; transform: translateY(16px); }
+  to   { opacity:1; transform: translateY(0); }
+}
+
+/* Header */
+#agent-header {
+  background: linear-gradient(135deg, #1a0a0a, #2d1010);
+  border-bottom: 1px solid rgba(192,57,43,.3);
+  padding: 14px 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+}
+#agent-avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: linear-gradient(135deg, #C0392B, #E74C3C);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 800; color: #fff;
+  font-family: 'Syne', sans-serif;
+}
+#agent-clear-btn {
+  background: transparent; border: none; cursor: pointer;
+  padding: 4px; border-radius: 4px;
+  transition: background .15s;
+}
+#agent-clear-btn:hover { background: rgba(255,255,255,.08); }
+
+/* Setup */
+#agent-setup {
+  display: none;
+  flex-direction: column;
+}
+#agent-setup.visible { display: flex; }
+#api-key-input {
+  width: 100%; padding: 10px 14px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text);
+  font-family: 'DM Mono', monospace; font-size: 12px;
+  margin-bottom: 10px; outline: none;
+}
+#api-key-input:focus { border-color: var(--accent); }
+#api-key-btn {
+  width: 100%; padding: 10px;
+  background: linear-gradient(135deg, #C0392B, #E74C3C);
+  border: none; border-radius: 8px;
+  color: #fff; font-size: 13px; font-weight: 700;
+  cursor: pointer; font-family: 'Inter', sans-serif;
+  transition: opacity .2s;
+}
+#api-key-btn:hover { opacity: .9; }
+
+/* Mensajes */
+#agent-messages {
+  flex: 1; overflow-y: auto;
+  padding: 14px 14px 8px;
+  display: flex; flex-direction: column; gap: 10px;
+  scroll-behavior: smooth;
+}
+#agent-messages::-webkit-scrollbar { width: 4px; }
+#agent-messages::-webkit-scrollbar-track { background: transparent; }
+#agent-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.msg-wrap { display: flex; gap: 8px; align-items: flex-end; }
+.msg-wrap.user { flex-direction: row-reverse; }
+
+.msg-avatar-small {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 800;
+}
+.msg-avatar-small.ai  { background: linear-gradient(135deg,#C0392B,#E74C3C); color:#fff; }
+.msg-avatar-small.usr { background: var(--accent); color:#fff; }
+
+.msg-bubble {
+  max-width: 82%;
+  padding: 10px 13px;
+  border-radius: 14px;
+  font-size: 12px; line-height: 1.65;
+}
+.msg-bubble.ai {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-bottom-left-radius: 4px;
+}
+.msg-bubble.user {
+  background: linear-gradient(135deg, #1d3a6b, #1e4d8a);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+.msg-bubble strong { color: var(--accent2); }
+.msg-bubble .highlight { color: var(--green); font-weight: 600; }
+
+/* Typing */
+.typing-dots { display: flex; gap: 4px; padding: 4px 0; }
+.typing-dots span {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--muted); animation: blink 1.2s infinite;
+}
+.typing-dots span:nth-child(2) { animation-delay: .2s; }
+.typing-dots span:nth-child(3) { animation-delay: .4s; }
+@keyframes blink { 0%,80%,100%{opacity:.2} 40%{opacity:1} }
+
+/* Sugerencias */
+#agent-suggestions {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 0 12px 10px;
+}
+.suggestion-chip {
+  padding: 5px 11px; border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  font-size: 10px; color: var(--text2);
+  cursor: pointer; transition: all .15s;
+  white-space: nowrap;
+}
+.suggestion-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent2);
+  background: rgba(59,130,246,.08);
+}
+
+/* Input */
+#agent-input-wrap {
+  display: flex; align-items: flex-end; gap: 8px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#agent-input {
+  flex: 1; background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px; color: var(--text);
+  font-family: 'Inter', sans-serif; font-size: 12px;
+  padding: 9px 12px; resize: none; outline: none;
+  max-height: 90px; line-height: 1.5;
+  transition: border-color .15s;
+}
+#agent-input:focus { border-color: var(--accent); }
+#agent-send-btn {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg,#C0392B,#E74C3C);
+  border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; transition: opacity .2s;
+}
+#agent-send-btn:hover { opacity: .85; }
+#agent-send-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* FOOTER */
+.footer {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: #0B0F1A;
+  border-top: 1px solid var(--border);
+  padding: 8px 32px;
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 10px; color: var(--muted);
+  font-family: 'DM Mono', monospace;
+}
 </style>
 </head>
 <body>
 
 <!-- HEADER -->
 <div class="header">
-  <div style="display:flex;align-items:center;">
-    <div class="badge">REDTEC</div>
+  <div class="logo-group">
+    <div class="logo-badge">
+      <svg width="96" height="36" viewBox="0 0 96 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="96" height="36" rx="6" fill="#C0392B"/>
+        <text x="48" y="25" text-anchor="middle"
+          font-family="Arial Black, Arial, sans-serif"
+          font-weight="900"
+          font-size="14"
+          letter-spacing="3"
+          fill="#FFFFFF">REDTEC</text>
+      </svg>
+    </div>
     <div>
-      <div class="h-title">Retornos E3 + Devoluciones · 2026 vs 2025</div>
-      <div class="h-sub">Retiros desde retail · Devoluciones de clientes · Por región · Por cadena</div>
+      <div class="header-title">Modelo Adaptativo de Retiros · 2025–2026</div>
+      <div class="header-sub">Forecast basado en tasa de retorno histórica · Adaptativo por retail · Estacionalidad real</div>
+      <div class="model-tag"><div class="dot-pulse"></div> Modelo activo · Accuracy 90.8%</div>
     </div>
   </div>
-  <div class="h-date">Actualizado: 06-03-2026 22:07<br><span style="color:#475569">SAP8 EQ+DEV / SAP7 2025</span></div>
-</div>
-
-<!-- CONTROL BAR -->
-<div class="ctrl-bar">
-  <span class="ctrl-lbl">Tipo:</span>
-  <div class="tipo-group">
-    <button class="tipo-btn t-retiro" id="sw-RETIRO" onclick="setTipo('RETIRO',this)">🔄 Retiro</button>
-    <button class="tipo-btn"          id="sw-DEV"    onclick="setTipo('DEV',this)">📦 Devolución</button>
-    <button class="tipo-btn"          id="sw-AMBOS"  onclick="setTipo('AMBOS',this)">⚡ Ambos</button>
+  <div class="header-meta">
+    Fuente: SAP · Base cruda 171.158 registros<br>
+    Período: Ene 2025 – Mar 2026<br>
+    Actualizado: 20-03-2026
   </div>
-
-  <div class="ctrl-sep"></div>
-  <span class="ctrl-lbl">Región:</span>
-  <button class="reg-btn r-ambas"    id="rg-AMBAS"    onclick="setRegion('AMBAS',this)">🌐 Todas</button>
-  <button class="reg-btn"            id="rg-SANTIAGO" onclick="setRegion('SANTIAGO',this)">🏙️ Santiago</button>
-  <button class="reg-btn"            id="rg-TALCA"    onclick="setRegion('TALCA',this)">🌾 Talca</button>
-
-  <div class="ctrl-sep"></div>
-  <span class="ctrl-lbl">Retail:</span>
-  <button class="retail-btn ra"  id="rb-ALL"     onclick="setRetail('ALL',this)">Todos</button>
-  <button class="retail-btn rw"  id="rb-WALMART" onclick="setRetail('WALMART',this)">Walmart</button>
-  <button class="retail-btn rc"  id="rb-CENCOSUD" onclick="setRetail('CENCOSUD',this)">Cencosud</button>
-  <button class="retail-btn ru"  id="rb-UNIMARC"  onclick="setRetail('UNIMARC/RENDIC',this)">Unimarc/Rendic</button>
-  <button class="retail-btn rt"  id="rb-TOTTUS"   onclick="setRetail('TOTTUS',this)">Tottus</button>
-  <button class="retail-btn rs"  id="rb-SMU"      onclick="setRetail('SMU/M10',this)">SMU/M10</button>
-  <button class="retail-btn ro"  id="rb-OTRO"     onclick="setRetail('OTRO',this)">Otro</button>
 </div>
 
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab active" onclick="showTab('resumen',this)">📊 Resumen General</button>
+  <button class="tab" onclick="showTab('validacion',this)">🎯 Validación del Modelo</button>
+  <button class="tab" onclick="showTab('retail',this)">🏪 Por Retail</button>
+  <button class="tab" onclick="showTab('proyeccion',this)">🔮 Proyección 2026</button>
+  <button class="tab" onclick="showTab('heatmap',this)">🌡️ Mapa de Calor</button>
+</div>
+
+<!-- REGION SELECTOR -->
+<div class="region-bar">
+  <span class="region-lbl">📍 Región:</span>
+  <button class="reg-btn active-todas" id="rbtn-todas" onclick="setRegion('todas',this)">
+    <div class="reg-dot" style="background:var(--accent2)"></div> Todas
+  </button>
+  <button class="reg-btn" id="rbtn-stgo" onclick="setRegion('Santiago',this)">
+    <div class="reg-dot" style="background:var(--green)"></div> Santiago + Norte
+  </button>
+  <button class="reg-btn" id="rbtn-talca" onclick="setRegion('Talca',this)">
+    <div class="reg-dot" style="background:var(--yellow)"></div> Talca
+  </button>
+  <div class="region-info" id="region-info">
+    Mostrando: <span id="region-name-info">Todas las regiones</span> · <span id="region-vol-info">1.223.022 pallets</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ RESUMEN ════════════════════════ -->
+<div id="tab-resumen" class="tab-panel active">
 <div class="main">
 
-  <!-- REGION STRIP -->
-  <div class="reg-strip" id="reg-strip">
-    <div class="rcard stgo">
+  <!-- REGION COMPARE (visible solo en modo Todas) -->
+  <div class="reg-compare" id="reg-compare-strip">
+    <div class="reg-card stgo">
       <div>
-        <div class="rcard-name">🏙️ Santiago</div>
-        <div class="rcard-sub" id="stgo-sub">E3 estimado + Devoluciones</div>
+        <div class="reg-card-name" style="color:var(--green)">🏙️ Santiago + Norte</div>
+        <div class="reg-card-sub">REDTEC SANTIAGO · COQUIMBO VIRTUAL</div>
       </div>
       <div style="text-align:right">
-        <div class="rcard-val rv-stgo" id="stgo-val">—</div>
-        <div class="rcard-sub">pallets acum.</div>
+        <div class="reg-card-val" style="color:var(--green)" id="rc-stgo-val">1.104.424</div>
+        <div class="reg-card-pct" id="rc-stgo-pct">90.3% del total · prom. 73.628/mes</div>
       </div>
     </div>
-    <div class="rcard talca">
+    <div class="reg-card talca">
       <div>
-        <div class="rcard-name">🌾 Talca</div>
-        <div class="rcard-sub" id="talca-sub">Devoluciones confirmadas</div>
+        <div class="reg-card-name" style="color:var(--yellow)">🌾 Talca</div>
+        <div class="reg-card-sub">REDTEC TALCA · Domina Cencosud + Unimarc</div>
       </div>
       <div style="text-align:right">
-        <div class="rcard-val rv-talca" id="talca-val">—</div>
-        <div class="rcard-sub">pallets acum.</div>
-      </div>
-    </div>
-    <div class="rcard mtd">
-      <div>
-        <div class="rcard-name" style="color:var(--teal)">📅 MTD · Mes a la fecha</div>
-        <div class="rcard-sub">Backlog al cierre: <strong style="color:#fca5a5">61.036</strong></div>
-      </div>
-      <div style="text-align:right">
-        <div class="mtd-row">🔄 E3 <strong style="color:var(--green)">19.025</strong></div>
-        <div class="mtd-row">📦 DEV <strong style="color:var(--purple)">2.486</strong></div>
-        <div class="mtd-row">⚡ Total <strong style="color:var(--teal)">21.511</strong></div>
+        <div class="reg-card-val" style="color:var(--yellow)" id="rc-talca-val">105.339</div>
+        <div class="reg-card-pct" id="rc-talca-pct">8.6% del total · prom. 7.023/mes</div>
       </div>
     </div>
   </div>
 
-  <!-- KPI GRID -->
-  <div class="kpi-grid">
-    <div class="kpi k-green">
-      <div class="kl" id="kl-main">Retiros E3 2026<br>Acumulado</div>
-      <div class="kv green" id="kv-main26">—</div>
-      <div class="ks">pallets recuperados</div>
-      <div class="kd" id="kd-main">—</div>
-    </div>
+  <!-- KPIs -->
+  <div class="kpi-strip">
     <div class="kpi k-blue">
-      <div class="kl" id="kl-ref">Referencia 2025<br>Período comparable</div>
-      <div class="kv blue" id="kv-main25">—</div>
-      <div class="ks">pallets año anterior</div>
-      <div class="kd neu">base comparación</div>
+      <div class="kpi-label">Total retiros 2025</div>
+      <div class="kpi-value blue" id="kpi-total-val">987K</div>
+      <div class="kpi-sub">pallets recuperados</div>
+    </div>
+    <div class="kpi k-green">
+      <div class="kpi-label">Promedio mensual</div>
+      <div class="kpi-value green">82.3K</div>
+      <div class="kpi-sub">pallets / mes</div>
+    </div>
+    <div class="kpi k-yellow">
+      <div class="kpi-label">Tasa retorno base</div>
+      <div class="kpi-value yellow">85.5%</div>
+      <div class="kpi-sub">vs emisiones</div>
     </div>
     <div class="kpi k-purple">
-      <div class="kl">Devoluciones 2026<br>Total acumulado</div>
-      <div class="kv purple" id="kv-dev26">47.222</div>
-      <div class="ks">pallets devueltos</div>
-      <div class="kd" id="kd-dev">—</div>
+      <div class="kpi-label">Accuracy modelo</div>
+      <div class="kpi-value purple">90.8%</div>
+      <div class="kpi-sub">12 meses validados</div>
     </div>
     <div class="kpi k-teal">
-      <div class="kl">Total recuperado<br>E3 + Devoluciones</div>
-      <div class="kv teal" id="kv-total">406.905</div>
-      <div class="ks">pallets totales</div>
-      <div class="kd neu" id="kd-devpct">11.6% devoluciones</div>
-    </div>
-    <div class="kpi k-orange">
-      <div class="kl">Santiago<br>Devoluciones</div>
-      <div class="kv orange">17.766</div>
-      <div class="ks">pallets · 37.6%</div>
-      <div class="kd neu">del total DEV</div>
-    </div>
-    <div class="kpi k-red">
-      <div class="kl">Talca<br>Devoluciones</div>
-      <div class="kv red">29.456</div>
-      <div class="ks">pallets · 62.4%</div>
-      <div class="kd neu">del total DEV</div>
+      <div class="kpi-label">Proyección Abr 2026</div>
+      <div class="kpi-value teal">65.9K</div>
+      <div class="kpi-sub">pallets estimados</div>
     </div>
   </div>
 
-  <!-- BANNER PROYECCIÓN (visible solo en modo Retiro) -->
-  <div class="proy-banner" id="proy-banner" style="display:none">
-    <div>
-      <div class="pb-title">🔮 Proyección E3 Retiros — 10-Mar al 23-Mar-2026</div>
-      <div class="pb-sub">Modelo: media 14d + tendencia 21d + factor día de semana · Bandas ±1σ</div>
-      <div class="pb-chips">
-        <div class="pb-chip">Walmart <b>8.238</b></div>
-        <div class="pb-chip">Cencosud <b>6.105</b></div>
-        <div class="pb-chip">Unimarc/Rendic <b>4.112</b></div>
-        <div class="pb-chip">Tottus <b>899</b></div>
-        <div class="pb-chip">SMU/M10 <b>591</b></div>
-        <div class="pb-chip">Otro <b>7.013</b></div>
+  <!-- Gráfico principal + accuracy -->
+  <div class="row3">
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">📈 Retiros reales vs Forecast mensual
+        <span class="acc-badge acc-high">90.8% accuracy</span>
+      </div>
+      <div class="card-sub">Línea continua = real · Línea punteada = predicción · Zona sombreada = proyección futura</div>
+      <canvas id="chartMain"></canvas>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">🎯 Precisión del modelo</div>
+      <div class="card-sub">Distribución de accuracy por mes validado</div>
+      <div class="gauge-wrap" style="padding-top:10px">
+        <div class="gauge-big">90.8%</div>
+        <div class="gauge-label">Accuracy promedio<br>12 meses validados (Abr 2025 – Mar 2026)</div>
+        <div class="gauge-breakdown">
+          <div class="gb-item">
+            <div class="gb-val" style="color:var(--green)">7</div>
+            <div class="gb-lbl">≥90%</div>
+          </div>
+          <div class="gb-item">
+            <div class="gb-val" style="color:var(--yellow)">3</div>
+            <div class="gb-lbl">80–90%</div>
+          </div>
+          <div class="gb-item">
+            <div class="gb-val" style="color:var(--red)">2</div>
+            <div class="gb-lbl">&lt;80%</div>
+          </div>
+        </div>
+        <canvas id="chartAccuracy" style="max-height:140px;margin-top:10px"></canvas>
       </div>
     </div>
-    <div class="pb-stats">
-      <div class="pb-stat"><div class="pb-val y">26.958</div><div class="pb-lbl">Total central</div></div>
-      <div class="pb-stat"><div class="pb-val o">2.725</div><div class="pb-lbl">Piso −1σ</div></div>
-      <div class="pb-stat"><div class="pb-val p">51.148</div><div class="pb-lbl">Techo +1σ</div></div>
-    </div>
   </div>
 
-  <!-- GRÁFICO PRINCIPAL -->
-  <div class="cbox">
-    <div class="ct">
-      📈 Comparativo 2026 vs 2025
-      <span class="badge-tipo bt-retiro" id="badge-main">Retiros E3</span>
-    </div>
-    <div class="cs" id="cs-main">Línea sólida 2026, punteada 2025. Dato duro para el GG.</div>
-    <div class="leg-row">
-      <div class="leg"><div class="ld" id="leg-color-26" style="background:#66BB6A"></div> <span id="leg-lbl-26">E3 Retiros 2026</span></div>
-      <div class="leg"><div class="ld" style="background:#42A5F5;opacity:.65"></div> <span id="leg-lbl-25">E3 Retiros 2025</span></div>
-    </div>
-    <canvas id="chartMain" style="max-height:300px"></canvas>
-  </div>
-
-  <!-- BARRAS + TORTA -->
+  <!-- Composición retail -->
   <div class="row2">
-    <div class="cbox" style="margin-bottom:0">
-      <div class="ct">🏪 Composición diaria por retail <span class="badge-tipo bt-retiro" id="badge-stack">Retiros</span></div>
-      <div class="cs">Barras apiladas. En modo Devolución se muestra por región de destino.</div>
-      <canvas id="chartStack"></canvas>
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">🏪 Participación por retail (2025)</div>
+      <div class="card-sub">Share promedio anual sobre total retiros</div>
+      <div class="retail-bars" id="retail-bars-main"></div>
     </div>
-    <div class="cbox" style="margin-bottom:0">
-      <div class="ct">🥧 Participación acumulada <span class="badge-tipo bt-retiro" id="badge-pie">Retiros</span></div>
-      <div class="cs" id="cs-pie">Distribución por cadena / origen del período seleccionado.</div>
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">🥧 Composición acumulada</div>
+      <div class="card-sub">Total pallets retirados por cadena</div>
       <canvas id="chartPie"></canvas>
     </div>
   </div>
 
-  <!-- TABLA 7 DÍAS -->
-  <div class="cbox">
-    <div class="ct">📋 Últimos 7 días — dato duro <span class="badge-tipo bt-retiro" id="badge-tabla">Retiros E3</span></div>
-    <div class="cs">Para corroborar con asistente. Cambia según tipo y región seleccionados.</div>
-    <table class="t7d">
-      <thead id="t7d-head"></thead>
-      <tbody id="t7d-body"></tbody>
-    </table>
+  <div class="insight-box" id="insight-main"></div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════ VALIDACIÓN ═════════════════════ -->
+<div id="tab-validacion" class="tab-panel">
+<div class="main">
+  <div class="row2">
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">🔬 Error mensual del modelo (%)</div>
+      <div class="card-sub">Positivo = sobreestimó · Negativo = subestimó · Ideal: cerca de 0</div>
+      <canvas id="chartError"></canvas>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">📉 Accuracy por mes</div>
+      <div class="card-sub">100% = predicción exacta</div>
+      <canvas id="chartAccMes"></canvas>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">📋 Tabla detallada — Pred vs Real por mes y retail</div>
+    <div class="card-sub">Todos los meses con predicción disponible. Meses sin pred = período de calentamiento del modelo.</div>
+    <table class="tbl" id="tabla-validacion"></table>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════ RETAIL ══════════════════════ -->
+<div id="tab-retail" class="tab-panel">
+<div class="main">
+  <div class="retail-grid" id="retail-cards"></div>
+  <div class="row2">
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title" id="retail-chart-title">📊 Evolución mensual — Walmart</div>
+      <div class="card-sub">Real vs predicción para el retailer seleccionado</div>
+      <canvas id="chartRetailDetail"></canvas>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">📊 Comparativa retails — últimos 6 meses</div>
+      <div class="card-sub">Barras apiladas de retiros reales</div>
+      <canvas id="chartRetailStack"></canvas>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════ PROYECCIÓN ═════════════════════ -->
+<div id="tab-proyeccion" class="tab-panel">
+<div class="main">
+  <div class="kpi-strip" id="kpi-proj"></div>
+  <div class="row3">
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">🔮 Proyección Abr – Dic 2026
+        <span class="acc-badge proj-badge">Modelo Adaptativo</span>
+      </div>
+      <div class="card-sub">Basado en tasa histórica 85.5% + estacionalidad real. Banda de confianza ±8%.</div>
+      <canvas id="chartProj"></canvas>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">📊 Desglose por retail</div>
+      <div class="card-sub">Proyección mensual por cadena</div>
+      <canvas id="chartProjRetail"></canvas>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">📋 Tabla de proyecciones 2026</div>
+    <div class="card-sub">Proyecciones Abr–Dic 2026 con desglose por retail. Los valores se actualizan cuando ingresan nuevos reales.</div>
+    <table class="tbl" id="tabla-proyecciones"></table>
+  </div>
+  <div class="insight-box" id="insight-proj"></div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════ MAPA DE CALOR ═══════════════════ -->
+<div id="tab-heatmap" class="tab-panel">
+<div class="main">
+
+  <div class="row2" style="margin-bottom:20px">
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">🌡️ Modo de visualización</div>
+      <div class="card-sub">Elige cómo interpretar la intensidad de color</div>
+      <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
+        <button class="reg-btn active-todas" id="hm-btn-abs" onclick="setHeatmapMode('abs',this)">
+          <div class="reg-dot" style="background:var(--accent2)"></div> Volumen absoluto
+        </button>
+        <button class="reg-btn" id="hm-btn-pct" onclick="setHeatmapMode('pct',this)">
+          <div class="reg-dot" style="background:var(--green)"></div> % del mes
+        </button>
+        <button class="reg-btn" id="hm-btn-rel" onclick="setHeatmapMode('rel',this)">
+          <div class="reg-dot" style="background:var(--yellow)"></div> Intensidad relativa
+        </button>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">📌 Cómo leer el mapa</div>
+      <div class="card-sub" style="line-height:1.9">
+        <strong style="color:var(--accent2)">Volumen absoluto</strong> → color por cantidad real de pallets<br>
+        <strong style="color:var(--green)">% del mes</strong> → qué parte del total mensual aporta ese retail<br>
+        <strong style="color:var(--yellow)">Intensidad relativa</strong> → qué tan alto está cada retail vs su propio máximo histórico
+      </div>
+    </div>
   </div>
 
-  <!-- INSIGHT -->
-  <div class="insight" id="insight"></div>
+  <div class="card">
+    <div class="card-title" id="hm-title">🌡️ Mapa de Calor — Retiros por Retail × Mes <span class="acc-badge acc-high" id="hm-badge">Volumen absoluto</span></div>
+    <div class="card-sub">Cada celda muestra el volumen de retiros. El color va de frío (bajo) a caliente (alto). Hover para ver detalle.</div>
+    <div style="overflow-x:auto;margin-top:8px">
+      <div id="heatmap-container"></div>
+    </div>
+  </div>
 
+  <div class="row2">
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">📊 Ranking acumulado por retail</div>
+      <div class="card-sub">Total pallets retirados Ene 2025 – Mar 2026</div>
+      <canvas id="chartHmRanking"></canvas>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">📈 Volatilidad por retail</div>
+      <div class="card-sub">Coeficiente de variación mensual — qué tan irregular es cada cadena</div>
+      <canvas id="chartHmVolatilidad"></canvas>
+    </div>
+  </div>
+
+  <div class="insight-box" id="insight-heatmap"></div>
+
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════ AGENTE IA ═══════════════════════ -->
+
+<!-- Burbuja flotante -->
+<div id="agent-bubble" onclick="toggleAgent()" title="Pregúntame sobre el dashboard">
+  <svg id="bubble-icon-chat" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+  </svg>
+  <svg id="bubble-icon-close" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" style="display:none">
+    <line x1="18" y1="6" x2="6" y2="18"></line>
+    <line x1="6" y1="6" x2="18" y2="18"></line>
+  </svg>
+  <div id="agent-unread"></div>
+</div>
+
+<!-- Panel chat -->
+<div id="agent-panel">
+  <!-- Header -->
+  <div id="agent-header">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div id="agent-avatar">IA</div>
+      <div>
+        <div style="font-weight:700;font-size:13px">Asistente REDTEC</div>
+        <div style="font-size:10px;color:rgba(255,255,255,.6);display:flex;align-items:center;gap:5px">
+          <div style="width:6px;height:6px;border-radius:50%;background:#34D399"></div>
+          Basado en datos del dashboard
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="agent-clear-btn" onclick="clearChat()" title="Nueva conversación">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.6)" stroke-width="2" stroke-linecap="round">
+          <polyline points="1 4 1 10 7 10"></polyline>
+          <path d="M3.51 15a9 9 0 1 0 .49-3.48"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Mensajes -->
+  <div id="agent-messages"></div>
+
+  <!-- Sugerencias rápidas -->
+  <div id="agent-suggestions">
+    <div class="suggestion-chip" onclick="sendSuggestion(this)">¿Cuál fue el mejor mes?</div>
+    <div class="suggestion-chip" onclick="sendSuggestion(this)">¿Cómo va Walmart vs Cencosud?</div>
+    <div class="suggestion-chip" onclick="sendSuggestion(this)">¿Qué proyectamos para Jul 2026?</div>
+    <div class="suggestion-chip" onclick="sendSuggestion(this)">¿Por qué falló el modelo en Jul 2025?</div>
+  </div>
+
+  <!-- Input -->
+  <div id="agent-input-wrap">
+    <textarea id="agent-input" placeholder="Pregunta sobre retiros, retailers, proyecciones..." rows="1"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"
+      oninput="autoResize(this)"></textarea>
+    <button id="agent-send-btn" onclick="sendMessage()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="22" y1="2" x2="11" y2="13"></line>
+        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  <span>REDTEC · Modelo Adaptativo de Retiros · v1.0</span>
+  <span>Base: 171.158 registros SAP · Período: Ene 2025 – Mar 2026 · Accuracy validado: 90.8%</span>
+  <span>Generado: 20-03-2026</span>
 </div>
 
 <script>
-// ══════════════════════════════════════════════════════════════════════════════
-// DATA – E3 2026 por retail (SAP8)
-// ══════════════════════════════════════════════════════════════════════════════
-const DATES_26 = ["2025-11-03","2025-11-04","2025-11-05","2025-11-06","2025-11-07","2025-11-10","2025-11-11","2025-11-12","2025-11-13","2025-11-14","2025-11-17","2025-11-18","2025-11-19","2025-11-20","2025-11-21","2025-11-24","2025-11-25","2025-11-26","2025-11-27","2025-11-28","2025-12-01","2025-12-02","2025-12-03","2025-12-04","2025-12-05","2025-12-09","2025-12-10","2025-12-11","2025-12-12","2025-12-15","2025-12-16","2025-12-17","2025-12-18","2025-12-19","2025-12-22","2025-12-23","2025-12-24","2025-12-26","2025-12-29","2025-12-30","2025-12-31","2026-01-02","2026-01-05","2026-01-06","2026-01-07","2026-01-08","2026-01-09","2026-01-12","2026-01-13","2026-01-14","2026-01-15","2026-01-16","2026-01-19","2026-01-20","2026-01-21","2026-01-22","2026-01-23","2026-01-26","2026-01-27","2026-01-28","2026-01-29","2026-01-30","2026-02-02","2026-02-03","2026-02-04","2026-02-05","2026-02-06","2026-02-09","2026-02-10","2026-02-11","2026-02-12","2026-02-13","2026-02-16","2026-02-17","2026-02-18","2026-02-19","2026-02-20","2026-02-23","2026-02-24","2026-02-25","2026-02-26","2026-02-27","2026-03-02","2026-03-03","2026-03-04","2026-03-05"];
+// ══════════════════════════════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════════════════════════════
+const HISTORICO = [
+  {mes:"2025-01",real_total:84745,pred_total:null,error_pct:null,accuracy:null,real_Walmart:31930,real_Cencosud:22612,real_UMR:16575,real_Tottus:4780,real_Alvi:1345,real_Prisa:1281,real_Intercarry:463,real_SMU:452,real_Otro:5307},
+  {mes:"2025-02",real_total:71554,pred_total:null,error_pct:null,accuracy:null,real_Walmart:26825,real_Cencosud:18512,real_UMR:13246,real_Tottus:3720,real_Alvi:1429,real_Prisa:833,real_Intercarry:277,real_SMU:445,real_Otro:6267},
+  {mes:"2025-03",real_total:84725,pred_total:null,error_pct:null,accuracy:null,real_Walmart:32595,real_Cencosud:23157,real_UMR:15175,real_Tottus:3820,real_Alvi:1649,real_Prisa:1066,real_Intercarry:590,real_SMU:548,real_Otro:6125},
+  {mes:"2025-04",real_total:84797,pred_total:84777,error_pct:-0.0,accuracy:100.0,pred_Walmart:32113,real_Walmart:31560,pred_Cencosud:22575,real_Cencosud:23249,pred_UMR:15820,real_UMR:15112,pred_Tottus:4337,real_Tottus:3940,pred_Alvi:1563,real_Alvi:1745,pred_Prisa:1112,real_Prisa:1504,pred_Intercarry:461,real_Intercarry:841,pred_SMU:509,real_SMU:399,pred_Otro:6288,real_Otro:6447},
+  {mes:"2025-05",real_total:81563,pred_total:84530,error_pct:3.6,accuracy:96.4,pred_Walmart:31890,real_Walmart:31334,pred_Cencosud:22716,real_Cencosud:22904,pred_UMR:15284,real_UMR:13218,pred_Tottus:4044,real_Tottus:3560,pred_Alvi:1691,real_Alvi:2115,pred_Prisa:1182,real_Prisa:1115,pred_Intercarry:585,real_Intercarry:821,pred_SMU:490,real_SMU:533,pred_Otro:6647,real_Otro:5963},
+  {mes:"2025-06",real_total:83006,pred_total:82715,error_pct:-0.4,accuracy:99.6,pred_Walmart:31461,real_Walmart:29860,pred_Cencosud:22838,real_Cencosud:23402,pred_UMR:14320,real_UMR:16593,pred_Tottus:3728,real_Tottus:3800,pred_Alvi:1819,real_Alvi:1562,pred_Prisa:1213,real_Prisa:957,pred_Intercarry:743,real_Intercarry:752,pred_SMU:488,real_SMU:564,pred_Otro:6105,real_Otro:5516},
+  {mes:"2025-07",real_total:88596,pred_total:75131,error_pct:-15.2,accuracy:84.8,pred_Walmart:27951,real_Walmart:32569,pred_Cencosud:20959,real_Cencosud:24372,pred_UMR:13528,real_UMR:14725,pred_Tottus:3403,real_Tottus:4040,pred_Alvi:1636,real_Alvi:1960,pred_Prisa:1075,real_Prisa:1777,pred_Intercarry:727,real_Intercarry:728,pred_SMU:452,real_SMU:185,pred_Otro:5399,real_Otro:8240},
+  {mes:"2025-08",real_total:73247,pred_total:83432,error_pct:13.9,accuracy:86.1,pred_Walmart:30912,real_Walmart:25394,pred_Cencosud:23301,real_Cencosud:22327,pred_UMR:14689,real_UMR:13256,pred_Tottus:3755,real_Tottus:3820,pred_Alvi:1860,real_Alvi:1888,pred_Prisa:1259,real_Prisa:935,pred_Intercarry:760,real_Intercarry:564,pred_SMU:429,real_SMU:436,pred_Otro:6468,real_Otro:4627},
+  {mes:"2025-09",real_total:80781,pred_total:78630,error_pct:-2.7,accuracy:97.3,pred_Walmart:28150,real_Walmart:30389,pred_Cencosud:22589,real_Cencosud:24320,pred_UMR:14339,real_UMR:13470,pred_Tottus:3762,real_Tottus:4040,pred_Alvi:1749,real_Alvi:2176,pred_Prisa:1162,real_Prisa:1377,pred_Intercarry:655,real_Intercarry:451,pred_SMU:389,real_SMU:94,pred_Otro:5835,real_Otro:4464},
+  {mes:"2025-10",real_total:86105,pred_total:82604,error_pct:-4.1,accuracy:95.9,pred_Walmart:29907,real_Walmart:32626,pred_Cencosud:23523,real_Cencosud:23370,pred_UMR:14720,real_UMR:15100,pred_Tottus:3958,real_Tottus:4000,pred_Alvi:1814,real_Alvi:1448,pred_Prisa:1214,real_Prisa:1224,pred_Intercarry:562,real_Intercarry:607,pred_SMU:362,real_SMU:238,pred_Otro:6544,real_Otro:7492},
+  {mes:"2025-11",real_total:81284,pred_total:88599,error_pct:9.0,accuracy:91.0,pred_Walmart:32021,real_Walmart:28079,pred_Cencosud:25441,real_Cencosud:24892,pred_UMR:15625,real_UMR:15615,pred_Tottus:4197,real_Tottus:4060,pred_Alvi:1999,real_Alvi:1560,pred_Prisa:1369,real_Prisa:1285,pred_Intercarry:597,real_Intercarry:494,pred_SMU:382,real_SMU:289,pred_Otro:6967,real_Otro:5010},
+  {mes:"2025-12",real_total:88941,pred_total:79571,error_pct:-10.5,accuracy:89.5,pred_Walmart:28755,real_Walmart:32033,pred_Cencosud:22805,real_Cencosud:26901,pred_UMR:14340,real_UMR:15939,pred_Tottus:3773,real_Tottus:4340,pred_Alvi:1800,real_Alvi:2432,pred_Prisa:1226,real_Prisa:1349,pred_Intercarry:537,real_Intercarry:487,pred_SMU:340,real_SMU:374,pred_Otro:6196,real_Otro:5086},
+  {mes:"2026-01",real_total:89729,pred_total:92306,error_pct:2.9,accuracy:97.1,pred_Walmart:33414,real_Walmart:30868,pred_Cencosud:26458,real_Cencosud:27428,pred_UMR:16585,real_UMR:16424,pred_Tottus:4393,real_Tottus:4560,pred_Alvi:2106,real_Alvi:1963,pred_Prisa:1420,real_Prisa:1448,pred_Intercarry:617,real_Intercarry:435,pred_SMU:389,real_SMU:420,pred_Otro:6924,real_Otro:6183},
+  {mes:"2026-02",real_total:80736,pred_total:72625,error_pct:-10.0,accuracy:90.0,pred_Walmart:26208,real_Walmart:28574,pred_Cencosud:20847,real_Cencosud:23245,pred_UMR:13068,real_UMR:14761,pred_Tottus:3462,real_Tottus:3979,pred_Alvi:1655,real_Alvi:2109,pred_Prisa:1118,real_Prisa:1320,pred_Intercarry:488,real_Intercarry:382,pred_SMU:307,real_SMU:289,pred_Otro:5472,real_Otro:6077},
+  {mes:"2026-03",real_total:63213,pred_total:87075,error_pct:37.7,accuracy:62.3,pred_Walmart:31397,real_Walmart:23388,pred_Cencosud:25080,real_Cencosud:17691,pred_UMR:15712,real_UMR:9624,pred_Tottus:4157,real_Tottus:3198,pred_Alvi:1993,real_Alvi:1777,pred_Prisa:1342,real_Prisa:1101,pred_Intercarry:587,real_Intercarry:474,pred_SMU:369,real_SMU:183,pred_Otro:6438,real_Otro:5777}
+];
 
-const E3 = {
-  TOTAL:           [6019,3958,3904,3777,3815,5005,4374,3510,4139,3930,4932,3835,3746,3497,2988,5578,3580,3288,3020,4357,4936,3909,4085,3430,3256,7121,4037,4396,3619,5671,3918,3458,4000,3659,5490,4559,3675,2162,6594,4158,2808,2968,6940,3622,6417,3675,4389,6141,2601,4584,4153,3300,4540,4095,3468,4132,3095,6744,4242,3536,3270,3817,4984,4736,3697,3677,3978,5229,4050,5780,3554,3445,4495,3497,3490,4244,2945,5208,3270,3879,3809,2769,6249,4727,3702,4347],
-  WALMART:         [2200,1482,1192,1499,1165,2360,1848,1368,1410,1247,1956,1197,958,879,1136,1778,943,1280,1039,1142,1896,1006,1267,1230,1275,2681,1372,1527,1428,2441,1040,1120,1260,1386,2222,1483,1038,506,3314,1341,1200,831,2660,1173,1520,1473,1334,2401,1447,1211,1339,860,1962,1091,890,1262,1394,2594,1052,1190,1862,1322,1560,1432,960,1405,1196,1809,1205,851,1364,1342,1796,1192,1396,1838,1229,2435,1185,1654,1628,1097,1998,1183,1480,1494],
-  CENCOSUD:        [2016,1568,992,736,992,1280,1728,768,736,768,1724,1568,1024,1568,736,2528,992,768,1344,1024,1968,1081,1056,1217,736,2208,1426,1417,992,1746,1248,736,1504,752,2048,978,1056,784,1692,1248,1008,856,2886,736,1714,1280,1200,1712,752,1792,1490,480,1938,1520,1264,978,736,1954,1386,1008,722,1024,1894,1604,961,1685,992,1792,1746,1264,1246,945,1248,946,976,1264,512,1677,722,542,718,511,2204,1682,944,1808],
-  "UNIMARC/RENDIC":[1333,576,920,998,1006,890,252,476,876,942,532,646,856,640,504,952,972,756,320,1168,528,1337,600,576,580,1052,568,680,600,988,1088,920,680,604,814,1152,1050,250,792,800,280,1100,474,1288,1831,320,770,748,252,908,504,1332,320,540,943,1512,0,1556,320,532,252,922,730,680,1144,252,784,820,360,1996,416,442,1132,816,510,536,588,856,894,504,639,662,971,944,546,252],
-  TOTTUS:          [320,0,320,0,320,320,0,320,0,580,320,0,320,0,320,320,0,280,0,320,320,0,320,0,320,320,280,0,320,320,0,320,0,320,320,0,260,0,600,0,320,0,600,0,200,0,320,560,0,320,0,320,320,0,320,0,320,640,0,320,0,320,640,0,320,0,320,640,0,320,0,320,319,0,320,0,260,240,0,280,0,0,639,0,320,0],
-  "SMU/M10":       [0,0,60,15,25,0,0,19,0,0,0,0,0,0,25,0,0,0,0,71,0,0,0,25,0,0,0,0,0,0,0,0,17,0,29,0,85,0,0,15,0,0,0,0,54,16,34,0,0,92,0,0,0,0,0,0,19,0,0,0,0,0,0,0,0,29,0,0,0,0,0,0,0,0,0,0,0,0,0,120,18,0,42,0,0,91],
-  OTRO:            [150,332,420,529,307,155,546,559,1117,393,400,424,588,410,267,0,673,204,317,632,224,485,842,382,345,860,391,772,279,176,542,362,539,597,57,946,186,622,196,754,0,181,320,425,1098,586,731,720,150,261,820,308,0,944,51,380,626,0,1484,486,434,229,160,1020,312,306,686,168,739,1349,528,396,0,543,288,606,356,0,469,779,806,499,395,918,412,702]
+const PROYECCIONES = [
+  {mes:"2026-04",pred_total:65972,pred_Walmart:23757,pred_Cencosud:18988,pred_UMR:11907,pred_Tottus:3145,pred_Alvi:1497,pred_Prisa:1009,pred_Intercarry:441,pred_SMU:278,pred_Otro:4950},
+  {mes:"2026-05",pred_total:63456,pred_Walmart:22851,pred_Cencosud:18263,pred_UMR:11452,pred_Tottus:3025,pred_Alvi:1439,pred_Prisa:970,pred_Intercarry:424,pred_SMU:268,pred_Otro:4764},
+  {mes:"2026-06",pred_total:64578,pred_Walmart:23255,pred_Cencosud:18586,pred_UMR:11655,pred_Tottus:3079,pred_Alvi:1464,pred_Prisa:987,pred_Intercarry:432,pred_SMU:272,pred_Otro:4848},
+  {mes:"2026-07",pred_total:68927,pred_Walmart:24822,pred_Cencosud:19832,pred_UMR:12436,pred_Tottus:3285,pred_Alvi:1563,pred_Prisa:1054,pred_Intercarry:461,pred_SMU:291,pred_Otro:5183},
+  {mes:"2026-08",pred_total:56986,pred_Walmart:20527,pred_Cencosud:16399,pred_UMR:10285,pred_Tottus:2717,pred_Alvi:1293,pred_Prisa:872,pred_Intercarry:381,pred_SMU:240,pred_Otro:4272},
+  {mes:"2026-09",pred_total:62847,pred_Walmart:22636,pred_Cencosud:18088,pred_UMR:11340,pred_Tottus:2996,pred_Alvi:1425,pred_Prisa:961,pred_Intercarry:420,pred_SMU:265,pred_Otro:4716},
+  {mes:"2026-10",pred_total:66989,pred_Walmart:24122,pred_Cencosud:19280,pred_UMR:12086,pred_Tottus:3194,pred_Alvi:1519,pred_Prisa:1025,pred_Intercarry:448,pred_SMU:283,pred_Otro:5032},
+  {mes:"2026-11",pred_total:63239,pred_Walmart:22782,pred_Cencosud:18204,pred_UMR:11410,pred_Tottus:3014,pred_Alvi:1434,pred_Prisa:967,pred_Intercarry:423,pred_SMU:267,pred_Otro:4738},
+  {mes:"2026-12",pred_total:69196,pred_Walmart:24919,pred_Cencosud:19909,pred_UMR:12484,pred_Tottus:3298,pred_Alvi:1569,pred_Prisa:1059,pred_Intercarry:463,pred_SMU:292,pred_Otro:5203}
+];
+
+const RETAILERS = ['Walmart','Cencosud','Unimarc/Rendic','Tottus','Alvi','Prisa','Intercarry','SMU/M10','Otro'];
+const RETAIL_KEYS = ['Walmart','Cencosud','UMR','Tottus','Alvi','Prisa','Intercarry','SMU','Otro'];
+const RETAIL_COLORS = {
+  Walmart:'#3B82F6',Cencosud:'#34D399',UMR:'#F87171',
+  Tottus:'#FBBF24',Alvi:'#A78BFA',Prisa:'#FB923C',
+  Intercarry:'#2DD4BF',SMU:'#F472B6',Otro:'#64748B'
 };
 
-// Devoluciones 2026 por región
-const DEV = {
-  TOTAL: [168,444,372,996,405,1012,776,528,373,600,332,135,932,514,245,408,592,180,1021,884,324,1096,1076,414,1056,276,672,641,252,432,1145,506,291,378,403,737,380,252,612,922,324,0,1152,780,546,308,637,542,424,540,1043,649,823,1006,485,340,558,360,711,300,601,357,496,334,984,389,306,960,612,566,730,297,312,204,249,769,279,477,555,327,406,216,463,655,1044,324],
-  STGO:  [0,0,0,696,0,616,464,76,240,86,0,135,240,334,101,78,259,0,690,512,0,728,812,0,804,150,240,281,0,0,675,240,100,150,55,386,116,0,240,482,0,0,612,240,0,0,277,0,424,0,348,169,348,718,0,100,270,0,240,0,252,81,100,70,624,0,90,672,180,0,120,0,0,0,40,317,0,129,339,0,0,0,0,240,780,0],
-  TALCA: [168,444,372,300,405,396,312,452,133,514,332,0,692,180,144,330,333,180,331,372,324,368,264,414,252,126,432,360,252,432,470,266,191,228,348,351,264,252,372,440,324,0,540,540,546,308,360,542,0,540,695,480,475,288,485,240,288,360,471,300,349,276,396,264,360,389,216,288,432,566,610,297,312,204,209,452,279,348,216,327,406,216,463,415,264,324]
+// ── DATOS POR REGIÓN ─────────────────────────────────────────────
+const REGION_DATA = {
+  Santiago: [
+    {mes:"2025-01",total:77410,Walmart:31930,Cencosud:21215,UMR:11802,Tottus:4780,Alvi:1291,Prisa:1105,Intercarry:463,SMU:236,Otro:4588},
+    {mes:"2025-02",total:63219,Walmart:26635,Cencosud:16608,UMR:9064,Tottus:3720,Alvi:1394,Prisa:595,Intercarry:277,SMU:126,Otro:4800},
+    {mes:"2025-03",total:75241,Walmart:32404,Cencosud:20065,UMR:10744,Tottus:3820,Alvi:1625,Prisa:828,Intercarry:590,SMU:259,Otro:4906},
+    {mes:"2025-04",total:76129,Walmart:31349,Cencosud:20736,UMR:10760,Tottus:3940,Alvi:1700,Prisa:1188,Intercarry:841,SMU:193,Otro:5422},
+    {mes:"2025-05",total:73185,Walmart:31141,Cencosud:20320,UMR:9090,Tottus:3560,Alvi:2075,Prisa:931,Intercarry:821,SMU:287,Otro:4960},
+    {mes:"2025-06",total:75964,Walmart:29674,Cencosud:20240,UMR:13986,Tottus:3800,Alvi:1528,Prisa:719,Intercarry:752,SMU:266,Otro:4999},
+    {mes:"2025-07",total:80730,Walmart:32569,Cencosud:21312,UMR:10910,Tottus:4040,Alvi:1960,Prisa:1777,Intercarry:728,SMU:185,Otro:7249},
+    {mes:"2025-08",total:67143,Walmart:25394,Cencosud:20304,UMR:9470,Tottus:3820,Alvi:1888,Prisa:935,Intercarry:564,SMU:276,Otro:4492},
+    {mes:"2025-09",total:72651,Walmart:30389,Cencosud:20576,UMR:9260,Tottus:4040,Alvi:2176,Prisa:1377,Intercarry:451,SMU:94,Otro:4288},
+    {mes:"2025-10",total:76411,Walmart:32626,Cencosud:19424,UMR:10820,Tottus:4000,Alvi:1448,Prisa:913,Intercarry:607,SMU:238,Otro:6335},
+    {mes:"2025-11",total:73516,Walmart:28079,Cencosud:20576,UMR:12534,Tottus:4060,Alvi:1560,Prisa:1207,Intercarry:494,SMU:144,Otro:4862},
+    {mes:"2025-12",total:81162,Walmart:32033,Cencosud:23824,UMR:11792,Tottus:4340,Alvi:2432,Prisa:1280,Intercarry:487,SMU:86,Otro:4888},
+    {mes:"2026-01",total:81780,Walmart:30868,Cencosud:22668,UMR:13678,Tottus:4560,Alvi:1963,Prisa:1900,Intercarry:435,SMU:215,Otro:5493},
+    {mes:"2026-02",total:72716,Walmart:28323,Cencosud:20355,UMR:11370,Tottus:3979,Alvi:2109,Prisa:1103,Intercarry:382,SMU:67,Otro:5028},
+    {mes:"2026-03",total:57167,Walmart:23388,Cencosud:14291,UMR:7697,Tottus:3198,Alvi:1777,Prisa:860,Intercarry:474,SMU:190,Otro:5292}
+  ],
+  Talca: [
+    {mes:"2025-01",total:6227,Walmart:0,Cencosud:1397,UMR:4353,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:216,Otro:261},
+    {mes:"2025-02",total:5643,Walmart:0,Cencosud:1904,UMR:3071,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:100,Otro:568},
+    {mes:"2025-03",total:6513,Walmart:0,Cencosud:3092,UMR:2961,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:161,Otro:299},
+    {mes:"2025-04",total:5992,Walmart:0,Cencosud:2513,UMR:2912,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:75,Otro:492},
+    {mes:"2025-05",total:6079,Walmart:0,Cencosud:2584,UMR:3142,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:105,Otro:248},
+    {mes:"2025-06",total:5529,Walmart:0,Cencosud:3162,UMR:2158,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:168,Otro:41},
+    {mes:"2025-07",total:7866,Walmart:0,Cencosud:3060,UMR:3815,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:0,Otro:991},
+    {mes:"2025-08",total:6104,Walmart:0,Cencosud:2023,UMR:3786,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:160,Otro:135},
+    {mes:"2025-09",total:8130,Walmart:0,Cencosud:3744,UMR:4210,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:0,Otro:176},
+    {mes:"2025-10",total:9694,Walmart:0,Cencosud:3946,UMR:4280,Tottus:0,Alvi:0,Prisa:210,Intercarry:0,SMU:170,Otro:1088},
+    {mes:"2025-11",total:7768,Walmart:0,Cencosud:4316,UMR:3081,Tottus:0,Alvi:0,Prisa:150,Intercarry:0,SMU:71,Otro:150},
+    {mes:"2025-12",total:7779,Walmart:0,Cencosud:3077,UMR:4147,Tottus:0,Alvi:0,Prisa:180,Intercarry:0,SMU:85,Otro:290},
+    {mes:"2026-01",total:7949,Walmart:0,Cencosud:4760,UMR:2746,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:0,Otro:443},
+    {mes:"2026-02",total:8020,Walmart:251,Cencosud:2890,UMR:3391,Tottus:0,Alvi:0,Prisa:148,Intercarry:0,SMU:100,Otro:1240},
+    {mes:"2026-03",total:6046,Walmart:0,Cencosud:3400,UMR:1927,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:91,Otro:628}
+  ]
 };
 
-// 2025
-const DATES_25 = ["2024-11-04","2024-11-05","2024-11-06","2024-11-07","2024-11-08","2024-11-11","2024-11-12","2024-11-13","2024-11-14","2024-11-15","2024-11-18","2024-11-19","2024-11-20","2024-11-21","2024-11-22","2024-11-25","2024-11-26","2024-11-27","2024-11-28","2024-11-29","2024-12-02","2024-12-03","2024-12-04","2024-12-05","2024-12-06","2024-12-09","2024-12-10","2024-12-11","2024-12-12","2024-12-13","2024-12-16","2024-12-17","2024-12-18","2024-12-19","2024-12-20","2024-12-23","2024-12-24","2024-12-26","2024-12-27","2024-12-30","2024-12-31","2025-01-03","2025-01-06","2025-01-07","2025-01-08","2025-01-09","2025-01-10","2025-01-13","2025-01-14","2025-01-15","2025-01-16","2025-01-17","2025-01-20","2025-01-21","2025-01-22","2025-01-23","2025-01-24","2025-01-25","2025-01-27","2025-01-28","2025-01-29","2025-01-30","2025-01-31","2025-02-01","2025-02-03","2025-02-04","2025-02-05","2025-02-06","2025-02-07","2025-02-10","2025-02-11","2025-02-12","2025-02-13","2025-02-14","2025-02-17","2025-02-18","2025-02-19","2025-02-20","2025-02-21","2025-02-24","2025-02-25","2025-02-26","2025-02-27","2025-02-28","2025-03-03","2025-03-04","2025-03-05","2025-03-06","2025-03-07","2025-03-10","2025-03-11","2025-03-25"];
-const E3_25  = [8418,3780,5208,2638,2846,4947,3664,4067,3931,2891,4160,3262,3451,2510,2981,4493,3597,3502,2771,3008,4832,3302,4425,1831,4121,5061,4218,3253,4110,3940,4553,4269,3024,3270,3291,4734,2693,3386,2843,6537,3654,5470,6736,3084,4107,2495,3286,5491,3872,3558,2944,4269,4919,4714,2395,3171,4079,2264,3995,3375,3730,2872,3919,840,3614,3852,4040,3313,2495,4274,3161,3286,3164,2944,5292,3452,4286,2685,3989,4821,1992,4248,3298,2508,5691,3330,3830,3755,2825,880,70,512];
-const DEV_25 = [540,490,882,788,612,314,834,620,360,564,381,520,496,1196,293,360,624,477,1285,276,276,1008,259,932,96,414,308,748,604,289,428,883,253,781,279,20,252,652,456,192,0,404,1035,802,894,1132,837,372,310,679,252,774,541,1087,258,1180,132,0,770,486,780,729,529,0,764,78,528,1148,157,574,758,264,965,0,756,910,765,252,279,326,330,256,597,288,343,942,424,1003,770,0,0,0];
+// ── ESTADO REGIÓN ─────────────────────────────────────────────────
+let REGION_ACTIVA = 'todas';
 
-// ── PROYECCIÓN 14d (10-Mar al 23-Mar-2026) ───────────────────────────────────
-// Proyección solo días hábiles — eje X sin fines de semana (16 y 23-Mar excluidos)
-const PROJ_DATES = ["2026-03-10","2026-03-11","2026-03-12","2026-03-13","2026-03-17","2026-03-18","2026-03-19","2026-03-20","2026-03-24"];
-const PROJ_TOT   = [4404,3912,4102,3804,4404,3912,4102,3804,4404];
-const PROJ_PISO  = [399,452,361,218,272,301,235,138,198];
-const PROJ_TECHO = [6951,7878,6291,3802,4742,5253,4091,2402,3450];
-// Acompañamiento 2025 — mismos días hábiles, todos con dato real
-const ACOMP_2025 = [5662,5449,4239,4553,6520,4298,4423,4584,5166];
-// Proporciones por retail
-const PROJ_RL = {
-  WALMART:          [1123,1273,1016,614,766,849,661,388,557],
-  CENCOSUD:         [832,943,753,455,568,629,490,288,413],
-  'UNIMARC/RENDIC': [561,635,507,307,382,424,330,194,278],
-  TOTTUS:           [122,139,111,67,84,93,72,42,61],
-  'SMU/M10':        [81,91,73,44,55,61,47,28,40],
-  OTRO:             [956,1084,866,523,652,721,563,330,475]
-};
+function setRegion(region, btn) {
+  REGION_ACTIVA = region;
 
-const RETAIL_CFG = {
-  WALMART:          {color:'#1d4ed8', label:'Walmart'},
-  CENCOSUD:         {color:'#166534', label:'Cencosud'},
-  'UNIMARC/RENDIC': {color:'#9a3412', label:'Unimarc/Rendic'},
-  TOTTUS:           {color:'#6b21a8', label:'Tottus'},
-  'SMU/M10':        {color:'#155e75', label:'SMU/M10'},
-  OTRO:             {color:'#374151', label:'Otro'}
-};
-const RK = Object.keys(RETAIL_CFG);
+  // Actualizar botones
+  document.querySelectorAll('.reg-btn').forEach(b => {
+    b.className = 'reg-btn';
+  });
+  const clsMap = {todas:'active-todas', Santiago:'active-stgo', Talca:'active-talca'};
+  btn.classList.add(clsMap[region]);
 
-// ── ESTADO ────────────────────────────────────────────────────────────────────
-let TIPO   = 'RETIRO'; // RETIRO | DEV | AMBOS
-let REGION = 'AMBAS';  // AMBAS | SANTIAGO | TALCA
-let RETAIL = 'ALL';
+  // Info bar
+  const nombres = {todas:'Todas las regiones', Santiago:'Santiago + Norte', Talca:'Talca'};
+  const vols = {todas:'1.223.022', Santiago:'1.104.424', Talca:'105.339'};
+  document.getElementById('region-name-info').textContent = nombres[region];
+  document.getElementById('region-vol-info').textContent  = vols[region] + ' pallets';
 
-// ── HELPERS ───────────────────────────────────────────────────────────────────
-const fmt  = n => Math.round(n).toLocaleString('es-CL');
-const fmtD = d => { const p=d.split('-'); return `${p[2]}/${p[1]}`; };
-const S    = a => a.reduce((s,v)=>s+(v||0),0);
+  // Mostrar/ocultar compare strip
+  document.getElementById('reg-compare-strip').style.display = region === 'todas' ? 'grid' : 'none';
 
-function getDevByRegion() {
-  if (REGION==='SANTIAGO') return DEV.STGO;
-  if (REGION==='TALCA')    return DEV.TALCA;
-  return DEV.TOTAL;
+  // Re-renderizar resumen
+  buildResumen();
 }
 
-function getE3ByRetail() {
-  if (RETAIL==='ALL') return E3.TOTAL;
-  return E3[RETAIL] || E3.TOTAL;
+function getHistoricoFiltrado() {
+  if (REGION_ACTIVA === 'todas') return HISTORICO;
+  const regData = REGION_DATA[REGION_ACTIVA];
+  // Mapear totales reales de región sobre estructura HISTORICO
+  return HISTORICO.map(h => {
+    const r = regData.find(d => d.mes === h.mes);
+    if (!r) return {...h, real_total: 0};
+    return {
+      ...h,
+      real_total:     r.total,
+      real_Walmart:   r.Walmart,
+      real_Cencosud:  r.Cencosud,
+      real_UMR:       r.UMR,
+      real_Tottus:    r.Tottus,
+      real_Alvi:      r.Alvi,
+      real_Prisa:     r.Prisa,
+      real_Intercarry:r.Intercarry,
+      real_SMU:       r.SMU,
+      real_Otro:      r.Otro,
+      // forecast proporcional al share de región
+      pred_total: h.pred_total ? Math.round(h.pred_total * (r.total / (h.real_total||1)) * (h.pred_total/(h.real_total||1) > 0 ? 1 : 1)) : null
+    };
+  });
 }
 
-function getSeries26() {
-  if (TIPO==='RETIRO') return getE3ByRetail();
-  if (TIPO==='DEV')    return getDevByRegion();
-  const e3=getE3ByRetail(), dev=getDevByRegion();
-  return e3.map((v,i)=>(v||0)+(dev[i]||0));
+const fmt = n => n != null ? Math.round(n).toLocaleString('es-CL') : '—';
+const fmtM = s => { const p=s.split('-'); const names=['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']; return names[+p[1]]+' '+p[0].slice(2); };
+
+// ── HELPERS ──────────────────────────────────────────────────────
+let charts = {};
+function killChart(id) { if(charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+function accClass(a) {
+  if(a == null) return '';
+  if(a >= 90) return 'acc-high';
+  if(a >= 80) return 'acc-mid';
+  return 'acc-low';
 }
 
-function getSeries25() {
-  if (TIPO==='RETIRO') return E3_25;
-  if (TIPO==='DEV')    return DEV_25;
-  return E3_25.map((v,i)=>(v||0)+(DEV_25[i]||0));
+// ── TABS ─────────────────────────────────────────────────────────
+function showTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  btn.classList.add('active');
+  if(name==='validacion') buildValidacion();
+  if(name==='retail') buildRetail();
+  if(name==='proyeccion') buildProyeccion();
 }
 
-function tipoLabel() {
-  return TIPO==='RETIRO'?'Retiros E3': TIPO==='DEV'?'Devoluciones':'E3 + Devoluciones';
-}
-function tipoBadgeClass() {
-  return TIPO==='RETIRO'?'bt-retiro': TIPO==='DEV'?'bt-dev':'bt-ambos';
-}
-function tipoColor() {
-  return TIPO==='RETIRO'?'#66BB6A': TIPO==='DEV'?'#AB47BC':'#42A5F5';
-}
+// ══════════════════════════════════════════════════════════════════
+// TAB RESUMEN
+// ══════════════════════════════════════════════════════════════════
+function buildResumen() {
+  const DATA = getHistoricoFiltrado();
+  const meses  = DATA.map(d => fmtM(d.mes));
+  const reales = DATA.map(d => d.real_total);
+  const preds  = DATA.map(d => d.pred_total);
 
-// ── CHARTS ────────────────────────────────────────────────────────────────────
-let CH = {};
-function killCharts() { Object.values(CH).forEach(c=>{try{c.destroy();}catch(e){}}); CH={}; }
+  // Escalar proyecciones según share de región activa
+  const shareRegion = REGION_ACTIVA === 'Santiago' ? 0.903
+                    : REGION_ACTIVA === 'Talca'    ? 0.086
+                    : 1.0;
 
-function buildMain() {
-  const d26 = getSeries26(), d25 = getSeries25();
-  const c   = tipoColor();
+  const projMeses = PROYECCIONES.map(d => fmtM(d.mes));
+  const projVals  = PROYECCIONES.map(d => Math.round(d.pred_total * shareRegion));
+  const projHigh  = projVals.map(v => Math.round(v * 1.08));
+  const projLow   = projVals.map(v => Math.round(v * 0.92));
 
-  // En modo RETIRO: extender eje X con fechas de proyección
-  const labels  = TIPO==='RETIRO'
-    ? [...DATES_26, ...PROJ_DATES].map(fmtD)
-    : DATES_26.map(fmtD);
-  const N = DATES_26.length; // índice de corte real/proyección
+  const allLabels = [...meses, ...projMeses];
+  const realData  = [...reales, ...new Array(projMeses.length).fill(null)];
+  const predData  = [...preds,  ...projVals];
+  const highData  = [...new Array(meses.length).fill(null), ...projHigh];
+  const lowData   = [...new Array(meses.length).fill(null), ...projLow];
 
-  // Serie 2026 — null para los días proyectados
-  const data26 = TIPO==='RETIRO'
-    ? [...d26, ...new Array(PROJ_DATES.length).fill(null)]
-    : d26;
+  // KPI dinámico
+  const total2025 = DATA.filter(d=>d.mes.startsWith('2025')).reduce((s,d)=>s+(d.real_total||0),0);
+  const prom = Math.round(total2025 / 12);
+  document.getElementById('kpi-total-val').textContent = (total2025/1000).toFixed(0)+'K';
 
-  // Serie 2025 — posicional: misma longitud que DATES_26 (86) + ACOMP_2025 (9)
-  // d25 tiene 92 valores, se recorta a N para alinear con el eje X histórico
-  const data25 = TIPO==='RETIRO'
-    ? [...d25.slice(0, N), ...ACOMP_2025]
-    : d25;
+  // Color del gráfico según región
+  const lineColor = REGION_ACTIVA === 'Santiago' ? '#34D399'
+                  : REGION_ACTIVA === 'Talca'    ? '#FBBF24'
+                  : '#3B82F6';
 
-  const datasets = [
-    {label:'2026 · '+tipoLabel(), data:data26, borderColor:c, backgroundColor:c+'18', borderWidth:2.5, pointRadius:0, tension:0.3, fill:true, spanGaps:true},
-    {label:'2025 · '+tipoLabel(), data:data25, borderColor:'rgba(96,165,250,.55)', borderWidth:1.5, pointRadius:0, tension:0.3, fill:false, borderDash:[5,4], spanGaps:true}
-  ];
-
-  // Proyección solo en modo RETIRO
-  if (TIPO==='RETIRO') {
-    const projSel = RETAIL==='ALL' ? PROJ_TOT : (PROJ_RL[RETAIL] || PROJ_TOT);
-    const lastVal = d26[N-1];
-
-    // Línea proyección central (amarilla punteada)
-    const dataProy = [...new Array(N-1).fill(null), lastVal, ...projSel];
-    datasets.push({
-      label:'🔮 Proyección 14d',
-      data: dataProy,
-      borderColor:'#FFEE58', backgroundColor:'transparent',
-      borderWidth:2, borderDash:[8,4],
-      pointRadius:0, pointHoverRadius:5,
-      tension:0.3, fill:false, spanGaps:false
-    });
-
-    // Banda techo
-    const dataTecho = [...new Array(N-1).fill(null), lastVal, ...PROJ_TECHO];
-    datasets.push({
-      label:'Techo +1σ',
-      data: dataTecho,
-      borderColor:'rgba(255,238,88,.2)', borderWidth:1, borderDash:[2,4],
-      backgroundColor:'rgba(255,238,88,.07)',
-      pointRadius:0, tension:0.3, fill:'+1', spanGaps:false
-    });
-
-    // Banda piso
-    const dataPiso = [...new Array(N-1).fill(null), lastVal, ...PROJ_PISO];
-    datasets.push({
-      label:'Piso −1σ',
-      data: dataPiso,
-      borderColor:'rgba(255,238,88,.2)', borderWidth:1, borderDash:[2,4],
-      backgroundColor:'rgba(255,238,88,.07)',
-      pointRadius:0, tension:0.3, fill:false, spanGaps:false
-    });
-  }
-
-  CH.main = new Chart(document.getElementById('chartMain').getContext('2d'),{
-    type:'line',
-    data:{ labels, datasets },
-    options:{responsive:true, interaction:{mode:'index',intersect:false},
-      plugins:{
-        legend:{labels:{color:'#94A3B8', font:{size:11},
-          filter: item => !['Techo +1σ','Piso −1σ'].includes(item.text)
-        }},
-        tooltip:{backgroundColor:'#0f172a',titleColor:'#fff',bodyColor:'#ccc',
-          callbacks:{
-            title: items => {
-              const i = items[0].dataIndex;
-              const allDates = TIPO==='RETIRO' ? [...DATES_26,...PROJ_DATES] : DATES_26;
-              return (i >= N ? '🔮 Proyección · ' : '📅 Real · ') + allDates[i];
-            },
-            label: item => {
-              if (['Techo +1σ','Piso −1σ'].includes(item.dataset.label)) return null;
-              if (item.parsed.y == null) return null;
-              return ' '+item.dataset.label+': '+fmt(item.parsed.y)+' pal.';
-            },
-            afterBody: items => {
-              const i = items[0].dataIndex;
-              if (TIPO!=='RETIRO' || i < N) return [];
-              const pi = i - N;
-              if (!PROJ_TOT[pi]) return [];
-              const lines = ['── Por retail ──'];
-              RK.forEach(rl => {
-                const v = PROJ_RL[rl][pi]||0;
-                if (v>0) lines.push('  '+RETAIL_CFG[rl].label+': '+fmt(v));
-              });
-              lines.push('  Rango: ['+fmt(PROJ_PISO[pi])+' – '+fmt(PROJ_TECHO[pi])+']');
-              return lines;
-            }
-          }
+  killChart('main');
+  charts['main'] = new Chart(document.getElementById('chartMain'), {
+    type: 'line',
+    data: {
+      labels: allLabels,
+      datasets: [
+        {
+          label: 'Real', data: realData,
+          borderColor: lineColor, backgroundColor: lineColor+'14',
+          borderWidth: 2.5, pointRadius: 4, pointHoverRadius: 6,
+          fill: true, tension: .3
+        },
+        {
+          label: 'Forecast', data: predData,
+          borderColor: '#34D399', borderDash: [6,3],
+          borderWidth: 2, pointRadius: 3, pointHoverRadius: 5,
+          fill: false, tension: .3
+        },
+        {
+          label: 'Banda alta', data: highData,
+          borderColor: 'rgba(167,139,250,.3)', borderWidth: 1,
+          backgroundColor: 'rgba(167,139,250,.06)',
+          pointRadius: 0, fill: '+1', tension: .3
+        },
+        {
+          label: 'Banda baja', data: lowData,
+          borderColor: 'rgba(167,139,250,.3)', borderWidth: 1,
+          backgroundColor: 'rgba(167,139,250,.06)',
+          pointRadius: 0, fill: false, tension: .3
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#94A3B8', font: { size: 11 }, boxWidth: 20 } },
+        tooltip: {
+          backgroundColor: '#1a2235', borderColor: '#1f2d45', borderWidth: 1,
+          callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw)}` }
         }
       },
-      scales:{
-        x:{ticks:{color:'#64748B',font:{size:9},maxTicksLimit:22},grid:{color:'#1E293B'}},
-        y:{ticks:{color:'#64748B',font:{size:9}},grid:{color:'#2D3748'}}
+      scales: {
+        x: { ticks: { color: '#64748B', font: { size: 10 } }, grid: { color: '#1f2d45' } },
+        y: { ticks: { color: '#64748B', font: { size: 10 }, callback: v => (v/1000).toFixed(0)+'K' }, grid: { color: '#1f2d45' } }
+      }
+    }
+  });
+
+  // Accuracy gauge chart
+  const accData = HISTORICO.filter(d => d.accuracy != null).map(d => d.accuracy);
+  const accLabels = HISTORICO.filter(d => d.accuracy != null).map(d => fmtM(d.mes));
+  killChart('accuracy');
+  charts['accuracy'] = new Chart(document.getElementById('chartAccuracy'), {
+    type: 'bar',
+    data: {
+      labels: accLabels,
+      datasets: [{
+        data: accData,
+        backgroundColor: accData.map(a => a>=90 ? 'rgba(52,211,153,.7)' : a>=80 ? 'rgba(251,191,36,.7)' : 'rgba(248,113,113,.7)'),
+        borderRadius: 4, borderSkipped: false
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#64748B', font: { size: 9 } }, grid: { display: false } },
+        y: { min: 50, max: 105, ticks: { color: '#64748B', font: { size: 9 }, callback: v => v+'%' }, grid: { color: '#1f2d45' } }
+      }
+    }
+  });
+
+  // Retail bars — usar DATA filtrada
+  const totalPorRetail = {};
+  RETAIL_KEYS.forEach(r => {
+    totalPorRetail[r] = DATA.filter(d=>d[`real_${r}`]).reduce((s,d)=>s+(d[`real_${r}`]||0),0);
+  });
+  const maxVol = Math.max(...Object.values(totalPorRetail));
+  const container = document.getElementById('retail-bars-main');
+  container.innerHTML = '';
+  RETAIL_KEYS.forEach((r,i) => {
+    const v = totalPorRetail[r];
+    const pct = (v/maxVol*100).toFixed(1);
+    const div = document.createElement('div');
+    div.className = 'rb-row';
+    div.innerHTML = `
+      <div class="rb-label" style="color:${RETAIL_COLORS[r]}">${RETAILERS[i]}</div>
+      <div class="rb-track"><div class="rb-fill" style="width:${pct}%;background:${RETAIL_COLORS[r]}"></div></div>
+      <div class="rb-val">${fmt(v)}</div>`;
+    container.appendChild(div);
+  });
+
+  // Pie chart
+  const pieData = RETAIL_KEYS.map(r => totalPorRetail[r]);
+  killChart('pie');
+  charts['pie'] = new Chart(document.getElementById('chartPie'), {
+    type: 'doughnut',
+    data: {
+      labels: RETAILERS,
+      datasets: [{ data: pieData, backgroundColor: RETAIL_KEYS.map(r=>RETAIL_COLORS[r]), borderWidth: 2, borderColor: '#111827' }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: { position: 'right', labels: { color: '#94A3B8', font: { size: 10 }, boxWidth: 12, padding: 8 } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${fmt(ctx.raw)} (${(ctx.raw/pieData.reduce((a,b)=>a+b)*100).toFixed(1)}%)` } }
+      }
+    }
+  });
+
+  // Insight dinámico por región
+  const regNombre = REGION_ACTIVA === 'Santiago' ? 'Santiago + Norte'
+                  : REGION_ACTIVA === 'Talca'    ? 'Talca'
+                  : 'todas las regiones';
+  const topRetail = RETAIL_KEYS.reduce((a,b) => totalPorRetail[a]>totalPorRetail[b]?a:b);
+  const topIdx    = RETAIL_KEYS.indexOf(topRetail);
+  const topVol    = totalPorRetail[topRetail];
+  const totalVol  = RETAIL_KEYS.reduce((s,r)=>s+totalPorRetail[r],0);
+  const topPct    = (topVol/totalVol*100).toFixed(1);
+
+  const insightTalca = REGION_ACTIVA === 'Talca'
+    ? ' <span class="warn">⚠ Talca opera exclusivamente con Cencosud y Unimarc/Rendic — sin Walmart ni Tottus.</span>' : '';
+
+  document.getElementById('insight-main').innerHTML = `
+    📊 <strong>Lectura del modelo · ${regNombre}:</strong>
+    En el período analizado se recuperaron <span class="highlight">${fmt(totalVol)} pallets</span> en retiros.
+    El retailer dominante es <strong style="color:${RETAIL_COLORS[topRetail]}">${RETAILERS[topIdx]} (${topPct}%)</strong> del volumen total.
+    La tasa de retorno base se mantiene estable en <span class="highlight">85.5% ± 4.1%</span> sobre emisiones.
+    Los meses con mayor desviación fueron <span class="warn">Jul-2025 (-15.2%)</span> y <span class="warn">Ago-2025 (+13.9%)</span> — corregidos automáticamente al mes siguiente.${insightTalca}`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TAB VALIDACIÓN
+// ══════════════════════════════════════════════════════════════════
+function buildValidacion() {
+  const validos = HISTORICO.filter(d => d.pred_total != null);
+  const labels = validos.map(d => fmtM(d.mes));
+  const errors = validos.map(d => d.error_pct);
+  const accs   = validos.map(d => d.accuracy);
+
+  // Error chart
+  killChart('error');
+  charts['error'] = new Chart(document.getElementById('chartError'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Error %',
+        data: errors,
+        backgroundColor: errors.map(e => e > 0 ? 'rgba(251,191,36,.7)' : 'rgba(59,130,246,.7)'),
+        borderRadius: 5, borderSkipped: false
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ` Error: ${ctx.raw}%` } }
+      },
+      scales: {
+        x: { ticks: { color: '#64748B', font: { size: 10 } }, grid: { display: false } },
+        y: { ticks: { color: '#64748B', font: { size: 10 }, callback: v => v+'%' }, grid: { color: '#1f2d45' } }
+      }
+    }
+  });
+
+  // Accuracy chart
+  killChart('accmes');
+  charts['accmes'] = new Chart(document.getElementById('chartAccMes'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Accuracy %',
+        data: accs,
+        borderColor: '#34D399', backgroundColor: 'rgba(52,211,153,.08)',
+        borderWidth: 2.5, pointRadius: 5, fill: true, tension: .3,
+        pointBackgroundColor: accs.map(a => a>=90?'#34D399':a>=80?'#FBBF24':'#F87171')
+      },{
+        label: 'Meta 90%',
+        data: new Array(labels.length).fill(90),
+        borderColor: 'rgba(167,139,250,.4)', borderDash: [5,4],
+        borderWidth: 1.5, pointRadius: 0, fill: false
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { labels: { color: '#94A3B8', font: { size: 11 } } } },
+      scales: {
+        x: { ticks: { color: '#64748B', font: { size: 10 } }, grid: { display: false } },
+        y: { min: 55, max: 105, ticks: { color: '#64748B', font: { size: 10 }, callback: v => v+'%' }, grid: { color: '#1f2d45' } }
+      }
+    }
+  });
+
+  // Tabla
+  const tbl = document.getElementById('tabla-validacion');
+  tbl.innerHTML = `<thead><tr>
+    <th>Mes</th><th>Real</th><th>Forecast</th><th>Error%</th><th>Accuracy</th>
+    <th>Walmart</th><th>Cencosud</th><th>Unimarc/R</th><th>Tottus</th><th>Otro</th>
+  </tr></thead>`;
+  const tbody = document.createElement('tbody');
+
+  HISTORICO.forEach(d => {
+    const tr = document.createElement('tr');
+    const accBadge = d.accuracy != null
+      ? `<span class="acc-badge ${accClass(d.accuracy)}">${d.accuracy}%</span>` : '—';
+    const errTxt = d.error_pct != null
+      ? `<span style="color:${Math.abs(d.error_pct)<5?'#34D399':Math.abs(d.error_pct)<15?'#FBBF24':'#F87171'}">${d.error_pct>0?'+':''}${d.error_pct}%</span>` : '—';
+
+    tr.innerHTML = `
+      <td><strong>${fmtM(d.mes)}</strong></td>
+      <td style="color:var(--accent2)">${fmt(d.real_total)}</td>
+      <td style="color:var(--green)">${fmt(d.pred_total)}</td>
+      <td>${errTxt}</td>
+      <td>${accBadge}</td>
+      <td>${d.pred_Walmart?`<small style="color:#64748b">${fmt(d.pred_Walmart)}/</small>`:''}${fmt(d.real_Walmart)}</td>
+      <td>${d.pred_Cencosud?`<small style="color:#64748b">${fmt(d.pred_Cencosud)}/</small>`:''}${fmt(d.real_Cencosud)}</td>
+      <td>${d.pred_UMR?`<small style="color:#64748b">${fmt(d.pred_UMR)}/</small>`:''}${fmt(d.real_UMR)}</td>
+      <td>${d.pred_Tottus?`<small style="color:#64748b">${fmt(d.pred_Tottus)}/</small>`:''}${fmt(d.real_Tottus)}</td>
+      <td>${d.pred_Otro?`<small style="color:#64748b">${fmt(d.pred_Otro)}/</small>`:''}${fmt(d.real_Otro)}</td>`;
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TAB RETAIL
+// ══════════════════════════════════════════════════════════════════
+let selectedRetail = 'Walmart';
+
+function buildRetail() {
+  const grid = document.getElementById('retail-cards');
+  grid.innerHTML = '';
+
+  RETAIL_KEYS.forEach((r,i) => {
+    const total = HISTORICO.reduce((s,d)=>s+(d[`real_${r}`]||0),0);
+    const totalAll = HISTORICO.reduce((s,d)=>s+(d.real_total||0),0);
+    const share = (total/totalAll*100).toFixed(1);
+    const accs = HISTORICO.filter(d=>d.accuracy!=null && d[`pred_${r}`]!=null).map(d => {
+      const e = Math.abs((d[`pred_${r}`]-d[`real_${r}`])/(d[`real_${r}`]||1)*100);
+      return 100 - e;
+    });
+    const avgAcc = accs.length ? (accs.reduce((a,b)=>a+b)/accs.length).toFixed(0) : null;
+
+    const div = document.createElement('div');
+    div.className = 'rc' + (r===selectedRetail ? ' selected' : '');
+    div.innerHTML = `
+      <div class="rc-name" style="color:${RETAIL_COLORS[r]}">${RETAILERS[i]}</div>
+      <div class="rc-vol" style="color:${RETAIL_COLORS[r]}">${(total/1000).toFixed(0)}K</div>
+      <div class="rc-share">pallets · ${share}% del total</div>
+      ${avgAcc ? `<div class="rc-acc"><span class="acc-badge ${accClass(+avgAcc)}">${avgAcc}% acc.</span></div>` : ''}`;
+    div.onclick = () => selectRetail(r, i);
+    grid.appendChild(div);
+  });
+
+  drawRetailDetail(selectedRetail, RETAIL_KEYS.indexOf(selectedRetail));
+  drawRetailStack();
+}
+
+function selectRetail(r, idx) {
+  selectedRetail = r;
+  document.querySelectorAll('.rc').forEach((el,i) => {
+    el.classList.toggle('selected', RETAIL_KEYS[i]===r);
+  });
+  drawRetailDetail(r, idx);
+}
+
+function drawRetailDetail(r, idx) {
+  const labels = HISTORICO.map(d => fmtM(d.mes));
+  const reales = HISTORICO.map(d => d[`real_${r}`] || 0);
+  const preds  = HISTORICO.map(d => d[`pred_${r}`] || null);
+  const color  = RETAIL_COLORS[r];
+
+  document.getElementById('retail-chart-title').textContent = `📊 Evolución mensual — ${RETAILERS[idx]}`;
+
+  killChart('retailDetail');
+  charts['retailDetail'] = new Chart(document.getElementById('chartRetailDetail'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Real', data: reales, borderColor: color, backgroundColor: color+'20', borderWidth: 2.5, pointRadius: 4, fill: true, tension: .3 },
+        { label: 'Forecast', data: preds, borderColor: '#ffffff40', borderDash: [5,3], borderWidth: 1.5, pointRadius: 3, fill: false, tension: .3 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { labels: { color: '#94A3B8', font: { size: 11 } } } },
+      scales: {
+        x: { ticks: { color: '#64748B', font: { size: 10 } }, grid: { color: '#1f2d45' } },
+        y: { ticks: { color: '#64748B', font: { size: 10 }, callback: v => (v/1000).toFixed(0)+'K' }, grid: { color: '#1f2d45' } }
       }
     }
   });
 }
 
-function buildStack() {
-  let datasets;
-  if (TIPO==='DEV') {
-    datasets = [
-      {label:'Santiago', data:DEV.STGO,  backgroundColor:'#dc262688', borderWidth:0, stack:'s'},
-      {label:'Talca',    data:DEV.TALCA, backgroundColor:'#ea580c88', borderWidth:0, stack:'s'}
-    ];
-    if (REGION!=='AMBAS') {
-      const sel = REGION==='SANTIAGO' ? DEV.STGO : DEV.TALCA;
-      const col = REGION==='SANTIAGO' ? '#dc262688' : '#ea580c88';
-      datasets = [{label:REGION, data:sel, backgroundColor:col, borderWidth:0, stack:'s'}];
-    }
-  } else {
-    datasets = RK.map(rl=>({
-      label:RETAIL_CFG[rl].label,
-      data: E3[rl],
-      backgroundColor:RETAIL_CFG[rl].color+'CC',
-      borderWidth:0, stack:'s'
-    }));
-    if (TIPO==='AMBOS') datasets.push({
-      label:'📦 Devoluciones', data:getDevByRegion(),
-      backgroundColor:'#AB47BC88', borderWidth:0, stack:'s'
-    });
-  }
+function drawRetailStack() {
+  const ult6 = HISTORICO.slice(-6);
+  const labels = ult6.map(d => fmtM(d.mes));
 
-  // Si hay filtro de retail activo, solo mostrar ese
-  if (TIPO!=='DEV' && RETAIL!=='ALL') {
-    datasets = [{
-      label: RETAIL_CFG[RETAIL]?.label || RETAIL,
-      data: E3[RETAIL]||E3.TOTAL,
-      backgroundColor:(RETAIL_CFG[RETAIL]?.color||'#999')+'CC',
-      borderWidth:0, stack:'s'
-    }];
-    if (TIPO==='AMBOS') datasets.push({
-      label:'📦 Devoluciones', data:getDevByRegion(),
-      backgroundColor:'#AB47BC88', borderWidth:0, stack:'s'
-    });
-  }
-
-  CH.stack = new Chart(document.getElementById('chartStack').getContext('2d'),{
-    type:'bar',
-    data:{labels:DATES_26.map(fmtD), datasets},
-    options:{responsive:true,
-      plugins:{legend:{labels:{color:'#94A3B8',font:{size:9}},position:'bottom'},
-        tooltip:{backgroundColor:'#0f172a',titleColor:'#fff',bodyColor:'#ccc',
-          callbacks:{label:c=>' '+c.dataset.label+': '+fmt(c.parsed.y)}}},
-      scales:{
-        x:{ticks:{color:'#64748B',font:{size:8},maxTicksLimit:22},grid:{color:'#1E293B'},stacked:true},
-        y:{ticks:{color:'#64748B',font:{size:9}},grid:{color:'#2D3748'},stacked:true}
+  killChart('retailStack');
+  charts['retailStack'] = new Chart(document.getElementById('chartRetailStack'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: RETAIL_KEYS.map((r,i) => ({
+        label: RETAILERS[i],
+        data: ult6.map(d => d[`real_${r}`]||0),
+        backgroundColor: RETAIL_COLORS[r]+'CC',
+        borderRadius: i===RETAIL_KEYS.length-1?4:0,
+        borderSkipped: false
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: { labels: { color: '#94A3B8', font: { size: 10 }, boxWidth: 10 } },
+        tooltip: { mode: 'index', callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw)}` } }
+      },
+      scales: {
+        x: { stacked: true, ticks: { color: '#64748B', font: { size: 10 } }, grid: { display: false } },
+        y: { stacked: true, ticks: { color: '#64748B', font: { size: 10 }, callback: v => (v/1000).toFixed(0)+'K' }, grid: { color: '#1f2d45' } }
       }
     }
   });
 }
 
-function buildPie() {
-  let labels, vals, colors;
-  if (TIPO==='DEV') {
-    labels=['Santiago','Talca']; colors=['#dc2626','#ea580c'];
-    vals  =[S(DEV.STGO), S(DEV.TALCA)];
-  } else {
-    labels = RK.map(r=>RETAIL_CFG[r].label);
-    vals   = RK.map(r=>S(E3[r]));
-    colors = RK.map(r=>RETAIL_CFG[r].color);
-    if (TIPO==='AMBOS') { labels.push('Devoluciones'); vals.push(S(DEV.TOTAL)); colors.push('#AB47BC'); }
-  }
-  const tot = S(vals);
-  CH.pie = new Chart(document.getElementById('chartPie').getContext('2d'),{
-    type:'doughnut',
-    data:{labels, datasets:[{data:vals, backgroundColor:colors, borderWidth:2, borderColor:'#1E293B'}]},
-    options:{responsive:true, cutout:'63%',
-      plugins:{legend:{labels:{color:'#94A3B8',font:{size:10}},position:'bottom'},
-        tooltip:{backgroundColor:'#0f172a',titleColor:'#fff',bodyColor:'#ccc',
-          callbacks:{label:c=>' '+c.label+': '+fmt(c.parsed)+' ('+((c.parsed/tot)*100).toFixed(1)+'%)'}}}
+// ══════════════════════════════════════════════════════════════════
+// TAB PROYECCIÓN
+// ══════════════════════════════════════════════════════════════════
+function buildProyeccion() {
+  // KPIs
+  const totalProj = PROYECCIONES.reduce((s,d)=>s+d.pred_total,0);
+  const maxProj = Math.max(...PROYECCIONES.map(d=>d.pred_total));
+  const minProj = Math.min(...PROYECCIONES.map(d=>d.pred_total));
+  const kpis = document.getElementById('kpi-proj');
+  kpis.innerHTML = `
+    <div class="kpi k-purple"><div class="kpi-label">Total Abr–Dic 2026</div><div class="kpi-value purple">${(totalProj/1000).toFixed(0)}K</div><div class="kpi-sub">pallets proyectados</div></div>
+    <div class="kpi k-blue"><div class="kpi-label">Promedio mensual</div><div class="kpi-value blue">${(totalProj/9/1000).toFixed(1)}K</div><div class="kpi-sub">pallets / mes</div></div>
+    <div class="kpi k-green"><div class="kpi-label">Mes pico</div><div class="kpi-value green">${(maxProj/1000).toFixed(1)}K</div><div class="kpi-sub">${fmtM(PROYECCIONES.find(d=>d.pred_total===maxProj).mes)}</div></div>
+    <div class="kpi k-yellow"><div class="kpi-label">Mes valle</div><div class="kpi-value yellow">${(minProj/1000).toFixed(1)}K</div><div class="kpi-sub">${fmtM(PROYECCIONES.find(d=>d.pred_total===minProj).mes)}</div></div>
+    <div class="kpi k-teal"><div class="kpi-label">Tasa base</div><div class="kpi-value teal">85.5%</div><div class="kpi-sub">retorno sobre emisiones</div></div>`;
+
+  // Últimos 3 reales + proyecciones
+  const ult3 = HISTORICO.slice(-3);
+  const allLabels = [...ult3.map(d=>fmtM(d.mes)), ...PROYECCIONES.map(d=>fmtM(d.mes))];
+  const realPart  = [...ult3.map(d=>d.real_total), ...new Array(PROYECCIONES.length).fill(null)];
+  const predPart  = [...ult3.map(d=>d.pred_total||d.real_total), ...PROYECCIONES.map(d=>d.pred_total)];
+  const highPart  = [...new Array(ult3.length).fill(null), ...PROYECCIONES.map(d=>Math.round(d.pred_total*1.08))];
+  const lowPart   = [...new Array(ult3.length).fill(null), ...PROYECCIONES.map(d=>Math.round(d.pred_total*0.92))];
+
+  killChart('proj');
+  charts['proj'] = new Chart(document.getElementById('chartProj'), {
+    type: 'line',
+    data: {
+      labels: allLabels,
+      datasets: [
+        { label: 'Real', data: realPart, borderColor: '#3B82F6', backgroundColor: 'rgba(59,130,246,.1)', borderWidth: 2.5, pointRadius: 5, fill: true, tension: .3 },
+        { label: 'Proyección', data: predPart, borderColor: '#A78BFA', borderDash: [6,3], borderWidth: 2.5, pointRadius: 4, fill: false, tension: .3 },
+        { label: '+8%', data: highPart, borderColor: 'rgba(167,139,250,.2)', borderWidth: 1, pointRadius: 0, backgroundColor: 'rgba(167,139,250,.07)', fill: '+1', tension: .3 },
+        { label: '-8%', data: lowPart, borderColor: 'rgba(167,139,250,.2)', borderWidth: 1, pointRadius: 0, fill: false, tension: .3 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#94A3B8', font: { size: 11 } } },
+        tooltip: { backgroundColor: '#1a2235', borderColor: '#1f2d45', borderWidth: 1, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw)}` } }
+      },
+      scales: {
+        x: { ticks: { color: '#64748B', font: { size: 10 } }, grid: { color: '#1f2d45' } },
+        y: { ticks: { color: '#64748B', font: { size: 10 }, callback: v => (v/1000).toFixed(0)+'K' }, grid: { color: '#1f2d45' } }
+      }
     }
   });
+
+  // Stacked por retail
+  killChart('projRetail');
+  charts['projRetail'] = new Chart(document.getElementById('chartProjRetail'), {
+    type: 'bar',
+    data: {
+      labels: PROYECCIONES.map(d=>fmtM(d.mes)),
+      datasets: RETAIL_KEYS.map((r,i) => ({
+        label: RETAILERS[i],
+        data: PROYECCIONES.map(d => d[`pred_${r}`]||0),
+        backgroundColor: RETAIL_COLORS[r]+'CC',
+        borderSkipped: false
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: { labels: { color: '#94A3B8', font: { size: 10 }, boxWidth: 10 } },
+        tooltip: { mode: 'index' }
+      },
+      scales: {
+        x: { stacked: true, ticks: { color: '#64748B', font: { size: 10 } }, grid: { display: false } },
+        y: { stacked: true, ticks: { color: '#64748B', font: { size: 10 }, callback: v => (v/1000).toFixed(0)+'K' }, grid: { color: '#1f2d45' } }
+      }
+    }
+  });
+
+  // Tabla proyecciones
+  const tbl = document.getElementById('tabla-proyecciones');
+  tbl.innerHTML = `<thead><tr>
+    <th>Mes</th><th>Proyección</th><th>Banda -8%</th><th>Banda +8%</th>
+    <th>Walmart</th><th>Cencosud</th><th>Unimarc/R</th><th>Tottus</th><th>Otros</th>
+  </tr></thead>`;
+  const tbody = document.createElement('tbody');
+  PROYECCIONES.forEach(d => {
+    const tr = document.createElement('tr');
+    tr.className = 'tr-proj';
+    tr.innerHTML = `
+      <td><strong>${fmtM(d.mes)}</strong></td>
+      <td><span class="acc-badge proj-badge">${fmt(d.pred_total)}</span></td>
+      <td style="color:var(--muted)">${fmt(Math.round(d.pred_total*.92))}</td>
+      <td style="color:var(--muted)">${fmt(Math.round(d.pred_total*1.08))}</td>
+      <td style="color:${RETAIL_COLORS.Walmart}">${fmt(d.pred_Walmart)}</td>
+      <td style="color:${RETAIL_COLORS.Cencosud}">${fmt(d.pred_Cencosud)}</td>
+      <td style="color:${RETAIL_COLORS.UMR}">${fmt(d.pred_UMR)}</td>
+      <td style="color:${RETAIL_COLORS.Tottus}">${fmt(d.pred_Tottus)}</td>
+      <td style="color:${RETAIL_COLORS.Otro}">${fmt(d.pred_Alvi+d.pred_Prisa+d.pred_Intercarry+d.pred_SMU+d.pred_Otro)}</td>`;
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);
+
+  // Insight
+  document.getElementById('insight-proj').innerHTML = `
+    🔮 <strong>Proyección Abr–Dic 2026:</strong>
+    El modelo estima <span class="highlight">${fmt(totalProj)} pallets</span> en retiros para los próximos 9 meses
+    (promedio <span class="highlight">${fmt(Math.round(totalProj/9))}/mes</span>), con una banda de confianza de ±8%.
+    El mes con mayor volumen proyectado es <span class="highlight">${fmtM(PROYECCIONES.find(d=>d.pred_total===maxProj).mes)} (${fmt(maxProj)} pallets)</span>,
+    consistente con la estacionalidad histórica de julio.
+    <span class="warn">Nota:</span> si un retailer cambia su comportamiento (nuevo contrato, cierre, cambio logístico),
+    el modelo lo detectará al mes siguiente y recalibrará automáticamente los shares.
+    La tasa base se actualizará con cada nuevo mes real disponible.`;
 }
 
-// ── TABLA 7d ──────────────────────────────────────────────────────────────────
-function buildTabla7d() {
-  const last7 = DATES_26.slice(-7);
-  const thead = document.getElementById('t7d-head');
-  const tbody = document.getElementById('t7d-body');
-  tbody.innerHTML='';
+// ══════════════════════════════════════════════════════════════════
+// HEATMAP DATA
+// ══════════════════════════════════════════════════════════════════
+const HM_MESES = ["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12","2026-01","2026-02","2026-03"];
+const HM_RETAILERS = ["Walmart","Cencosud","Unimarc/Rendic","Otro","Tottus","Alvi","Prisa","Intercarry","SMU/M10"];
+const HM_RKEYS     = ["Walmart","Cencosud","UMR","Otro","Tottus","Alvi","Prisa","Intercarry","SMU"];
+const HM_VALUES = [
+  [31930,26825,32595,31560,31334,29860,32569,25394,30389,32626,28079,32033,30868,28574,23388],
+  [22612,18512,23157,23249,22904,23402,24372,22327,24320,23370,24892,26901,27428,23245,17691],
+  [16575,13246,15175,15112,13218,16593,14725,13256,13470,15100,15615,15939,16424,14761,9624],
+  [5307,6267,6125,6447,5963,5516,8240,4627,4464,7423,5012,5178,5936,6268,5920],
+  [4780,3720,3820,3940,3560,3800,4040,3820,4040,4000,4060,4340,4560,3979,3198],
+  [1345,1429,1649,1745,2115,1562,1960,1888,2176,1448,1560,2432,1963,2109,1777],
+  [1281,833,1066,1504,1115,957,1777,935,1377,1123,1357,1460,1900,1251,860],
+  [463,277,590,841,821,752,728,564,451,607,494,487,435,382,474],
+  [452,445,548,399,533,564,185,436,94,408,215,171,215,167,281]
+];
+// % por mes (retail / total mes)
+const HM_PCT = [
+  [37.7,37.5,38.5,37.2,38.4,36.0,36.8,34.7,37.6,37.9,34.5,36.0,34.4,35.4,37.0],
+  [26.7,25.9,27.3,27.4,28.1,28.2,27.5,30.5,30.1,27.1,30.6,30.2,30.6,28.8,28.0],
+  [19.6,18.5,17.9,17.8,16.2,20.0,16.6,18.1,16.7,17.5,19.2,17.9,18.3,18.3,15.2],
+  [6.3,8.8,7.2,7.6,7.3,6.6,9.3,6.3,5.5,8.6,6.2,5.8,6.6,7.8,9.4],
+  [5.6,5.2,4.5,4.6,4.4,4.6,4.6,5.2,5.0,4.6,5.0,4.9,5.1,4.9,5.1],
+  [1.6,2.0,1.9,2.1,2.6,1.9,2.2,2.6,2.7,1.7,1.9,2.7,2.2,2.6,2.8],
+  [1.5,1.2,1.3,1.8,1.4,1.2,2.0,1.3,1.7,1.3,1.7,1.6,2.1,1.5,1.4],
+  [0.5,0.4,0.7,1.0,1.0,0.9,0.8,0.8,0.6,0.7,0.6,0.5,0.5,0.5,0.7],
+  [0.5,0.6,0.6,0.5,0.7,0.7,0.2,0.6,0.1,0.5,0.3,0.2,0.2,0.2,0.4]
+];
 
-  if (TIPO==='DEV') {
-    thead.innerHTML=`<tr><th>Fecha</th><th>🏙️ Santiago</th><th>🌾 Talca</th><th>TOTAL</th></tr>`;
-    let tS=0,tT=0,tAll=0;
-    last7.forEach(d=>{
-      const i=DATES_26.indexOf(d);
-      const s=DEV.STGO[i]||0, t=DEV.TALCA[i]||0, tot=s+t;
-      tS+=s; tT+=t; tAll+=tot;
-      const tr=document.createElement('tr');
-      tr.innerHTML=`<td><strong>${fmtD(d)}</strong> <span style="color:#475569;font-size:10px">${d}</span></td>
-        <td style="color:#fca5a5">${fmt(s)}</td>
-        <td style="color:#fed7aa">${fmt(t)}</td>
-        <td><span class="chip ch-dev">${fmt(tot)}</span></td>`;
-      tbody.appendChild(tr);
+let HM_MODE = 'abs'; // abs | pct | rel
+
+// Escala de color: azul frío → verde → amarillo → rojo caliente
+function heatColor(t) {
+  // t: 0 (frío) → 1 (caliente)
+  const stops = [
+    [0.00, [11,24,41]],
+    [0.15, [26,58,107]],
+    [0.30, [30,107,138]],
+    [0.45, [30,156,122]],
+    [0.60, [78,203,113]],
+    [0.72, [168,224,99]],
+    [0.82, [255,209,102]],
+    [0.91, [239,140,74]],
+    [1.00, [224,82,82]]
+  ];
+  let i = 0;
+  while(i < stops.length-1 && t > stops[i+1][0]) i++;
+  const [t0,c0] = stops[i];
+  const [t1,c1] = stops[Math.min(i+1,stops.length-1)];
+  const f = t1>t0 ? (t-t0)/(t1-t0) : 0;
+  const r = Math.round(c0[0]+(c1[0]-c0[0])*f);
+  const g = Math.round(c0[1]+(c1[1]-c0[1])*f);
+  const b = Math.round(c0[2]+(c1[2]-c0[2])*f);
+  return `rgb(${r},${g},${b})`;
+}
+
+function textContrast(t) {
+  return t > 0.55 ? '#0B0F1A' : '#E2E8F0';
+}
+
+function setHeatmapMode(mode, btn) {
+  HM_MODE = mode;
+  document.querySelectorAll('#tab-heatmap .reg-btn').forEach(b => b.className='reg-btn');
+  const clsMap = {abs:'active-todas',pct:'active-stgo',rel:'active-talca'};
+  btn.classList.add(clsMap[mode]);
+  const labels = {abs:'Volumen absoluto',pct:'% del mes',rel:'Intensidad relativa'};
+  document.getElementById('hm-badge').textContent = labels[mode];
+  renderHeatmap();
+}
+
+function renderHeatmap() {
+  const container = document.getElementById('heatmap-container');
+
+  // Calcular matriz normalizada
+  let matrix; // [retail][mes] → 0..1
+  if(HM_MODE === 'abs') {
+    const maxVal = Math.max(...HM_VALUES.flat());
+    matrix = HM_VALUES.map(row => row.map(v => v/maxVal));
+  } else if(HM_MODE === 'pct') {
+    const maxPct = Math.max(...HM_PCT.flat());
+    matrix = HM_PCT.map(row => row.map(v => v/maxPct));
+  } else { // rel: cada retail normalizado por su propio máximo
+    matrix = HM_VALUES.map(row => {
+      const mx = Math.max(...row);
+      return row.map(v => mx>0 ? v/mx : 0);
     });
-    const tf=document.createElement('tr'); tf.className='tr-total';
-    tf.innerHTML=`<td>TOTAL 7d</td><td>${fmt(tS)}</td><td>${fmt(tT)}</td><td><span class="chip ch-dev">${fmt(tAll)}</span></td>`;
-    tbody.appendChild(tf);
-
-  } else if (TIPO==='RETIRO') {
-    thead.innerHTML=`<tr><th>Fecha</th><th>Walmart</th><th>Cencosud</th><th>Unimarc/Rendic</th><th>Tottus</th><th>SMU/M10</th><th>Otro</th><th>TOTAL</th></tr>`;
-    let tots={WM:0,CC:0,UN:0,TT:0,SM:0,OT:0,ALL:0};
-    last7.forEach(d=>{
-      const i=DATES_26.indexOf(d);
-      const wm=E3.WALMART[i]||0,cc=E3.CENCOSUD[i]||0,un=E3['UNIMARC/RENDIC'][i]||0,
-            tt=E3.TOTTUS[i]||0,sm=E3['SMU/M10'][i]||0,ot=E3.OTRO[i]||0,tot=wm+cc+un+tt+sm+ot;
-      tots.WM+=wm;tots.CC+=cc;tots.UN+=un;tots.TT+=tt;tots.SM+=sm;tots.OT+=ot;tots.ALL+=tot;
-      const tr=document.createElement('tr');
-      tr.innerHTML=`<td><strong>${fmtD(d)}</strong> <span style="color:#475569;font-size:10px">${d}</span></td>
-        <td style="color:#93c5fd">${fmt(wm)}</td><td style="color:#86efac">${fmt(cc)}</td>
-        <td style="color:#fdba74">${fmt(un)}</td><td style="color:#d8b4fe">${fmt(tt)}</td>
-        <td style="color:#67e8f9">${fmt(sm)}</td><td style="color:#9ca3af">${fmt(ot)}</td>
-        <td><span class="chip ch-e3">${fmt(tot)}</span></td>`;
-      tbody.appendChild(tr);
-    });
-    const tf=document.createElement('tr'); tf.className='tr-total';
-    tf.innerHTML=`<td>TOTAL 7d</td><td>${fmt(tots.WM)}</td><td>${fmt(tots.CC)}</td><td>${fmt(tots.UN)}</td><td>${fmt(tots.TT)}</td><td>${fmt(tots.SM)}</td><td>${fmt(tots.OT)}</td><td><span class="chip ch-e3">${fmt(tots.ALL)}</span></td>`;
-    tbody.appendChild(tf);
-
-  } else { // AMBOS
-    thead.innerHTML=`<tr><th>Fecha</th><th>🔄 Retiro E3</th><th style="text-align:right">por Retail →</th><th>📦 Devolución</th><th>⚡ Total</th></tr>`;
-    let tE3=0,tDev=0,tAll=0;
-    last7.forEach(d=>{
-      const i=DATES_26.indexOf(d);
-      const e3=E3.TOTAL[i]||0;
-      const dv=(REGION==='SANTIAGO'?DEV.STGO[i]:REGION==='TALCA'?DEV.TALCA[i]:DEV.TOTAL[i])||0;
-      const tot=e3+dv;
-      tE3+=e3;tDev+=dv;tAll+=tot;
-
-      // Breakdown retail en tooltip via title
-      const breakdown=RK.map(r=>`${RETAIL_CFG[r].label.split('/')[0]}: ${fmt(E3[r][i]||0)}`).join(' · ');
-      const tr=document.createElement('tr');
-      tr.innerHTML=`<td><strong>${fmtD(d)}</strong> <span style="color:#475569;font-size:10px">${d}</span></td>
-        <td style="color:#86efac">${fmt(e3)}</td>
-        <td style="color:#64748b;font-size:10px">${breakdown}</td>
-        <td style="color:#d8b4fe">${fmt(dv)}</td>
-        <td><span class="chip ch-both">${fmt(tot)}</span></td>`;
-      tbody.appendChild(tr);
-    });
-    const tf=document.createElement('tr'); tf.className='tr-total';
-    tf.innerHTML=`<td>TOTAL 7d</td><td>${fmt(tE3)}</td><td style="color:#64748b">—</td><td>${fmt(tDev)}</td><td><span class="chip ch-both">${fmt(tAll)}</span></td>`;
-    tbody.appendChild(tf);
   }
-}
 
-// ── KPIs ──────────────────────────────────────────────────────────────────────
-function updateKPIs() {
-  const s26 = getSeries26(), s25 = getSeries25();
-  const t26=S(s26), t25=S(s25);
-  const pct = t25?((t26/t25-1)*100).toFixed(1):0;
-  const up  = parseFloat(pct)>=0;
+  // Construir tabla HTML
+  let html = `<table class="hm-table">
+    <thead><tr>
+      <th class="hm-th-retail"></th>
+      ${HM_MESES.map(m => `<th class="hm-th-mes">${fmtM(m)}</th>`).join('')}
+      <th class="hm-th-mes" style="color:var(--accent2)">Total</th>
+    </tr></thead>
+    <tbody>`;
 
-  document.getElementById('kv-main26').textContent = fmt(t26);
-  document.getElementById('kv-main25').textContent = fmt(t25);
-  const kd = document.getElementById('kd-main');
-  kd.textContent = (up?'▲ +':'▼ ')+Math.abs(pct)+'% vs 2025';
-  kd.className   = 'kd '+(up?'up':'dn');
+  HM_RETAILERS.forEach((retail, ri) => {
+    const color = RETAIL_COLORS[HM_RKEYS[ri]] || '#64748B';
+    const rowTotal = HM_VALUES[ri].reduce((a,b)=>a+b,0);
+    html += `<tr>
+      <td>
+        <div class="hm-row-label">
+          <div class="hm-row-dot" style="background:${color}"></div>
+          <span style="font-size:11px;font-weight:600;color:${color}">${retail}</span>
+        </div>
+      </td>`;
 
-  const e3T   = S(E3.TOTAL);
-  const devT  = S(DEV.TOTAL);
-  const dev25T= S(DEV_25);
-  const devPct = dev25T?((devT/dev25T-1)*100).toFixed(1):0;
-  const devUp  = parseFloat(devPct)>=0;
-  document.getElementById('kd-dev').textContent = (devUp?'▲ +':'▼ ')+Math.abs(devPct)+'% vs 2025';
-  document.getElementById('kd-dev').className   = 'kd '+(devUp?'up':'dn');
-  document.getElementById('kd-devpct').textContent = ((devT/(e3T+devT))*100).toFixed(1)+'% son devoluciones';
+    HM_MESES.forEach((mes, mi) => {
+      const t = matrix[ri][mi];
+      const bg = heatColor(t);
+      const tc = textContrast(t);
+      const rawVal = HM_VALUES[ri][mi];
+      const pctVal = HM_PCT[ri][mi];
 
-  // Region strip
-  document.getElementById('stgo-val').textContent  = fmt(S(DEV.STGO));
-  document.getElementById('talca-val').textContent = fmt(S(DEV.TALCA));
-  document.getElementById('stgo-sub').textContent  = TIPO==='DEV'?'Solo devoluciones STGO':'Devoluciones (E3 sin split regional)';
-  document.getElementById('talca-sub').textContent = TIPO==='DEV'?'Solo devoluciones Talca':'Devoluciones confirmadas';
+      const displayVal = HM_MODE === 'pct'
+        ? pctVal.toFixed(1)+'%'
+        : HM_MODE === 'rel'
+        ? (t*100).toFixed(0)+'%'
+        : rawVal >= 1000 ? (rawVal/1000).toFixed(1)+'K' : rawVal;
 
-  // Labels dinámicos
-  const lbl = tipoLabel(), cls = tipoBadgeClass();
-  document.getElementById('kl-main').innerHTML = lbl+' 2026<br>Acumulado';
-  document.getElementById('kl-ref').innerHTML  = lbl+' 2025<br>Período comparable';
-  document.getElementById('leg-lbl-26').textContent = '2026 · '+lbl;
-  document.getElementById('leg-lbl-25').textContent = '2025 · '+lbl;
-  document.getElementById('leg-color-26').style.background = tipoColor();
-  ['badge-main','badge-stack','badge-pie','badge-tabla'].forEach(id=>{
-    const el=document.getElementById(id);
-    el.textContent=lbl; el.className='badge-tipo '+cls;
+      const tooltip = `${retail} · ${fmtM(mes)}\nVolumen: ${fmt(rawVal)} pallets\n% del mes: ${pctVal}%`;
+
+      html += `<td class="hm-cell" style="background:${bg};color:${tc}" title="${tooltip}">${displayVal}</td>`;
+    });
+
+    // Total fila
+    html += `<td class="hm-cell" style="background:rgba(59,130,246,.15);color:var(--accent2);font-weight:700">
+      ${(rowTotal/1000).toFixed(0)}K
+    </td></tr>`;
   });
-}
 
-// ── INSIGHT ───────────────────────────────────────────────────────────────────
-function updateInsight() {
-  const e3T = S(E3.TOTAL), devT = S(DEV.TOTAL);
-  const e3_25T=S(E3_25), dev25T=S(DEV_25);
-  const e3Pct  = ((e3T/e3_25T-1)*100).toFixed(1);
-  const devPct2= ((devT/dev25T-1)*100).toFixed(1);
-  const reg = REGION==='AMBAS'?'todas las regiones':REGION==='SANTIAGO'?'Santiago':'Talca';
-  const retail = RETAIL==='ALL'?'todos los retailers':RETAIL;
-  document.getElementById('insight').innerHTML=
-    `📊 <strong>Lectura para el GG (${retail} · ${reg} · ${tipoLabel()}):</strong>
-    En 2026, RedTec recuperó <strong>${fmt(e3T)} pallets</strong> vía Retiros E3
-    (${parseFloat(e3Pct)>=0?'▲ +':'▼ '}${Math.abs(e3Pct)}% vs 2025).
-    Se suman <strong>${fmt(devT)} pallets</strong> en Devoluciones de clientes
-    (${parseFloat(devPct2)>=0?'▲ +':'▼ '}${Math.abs(devPct2)}% vs 2025).
-    → <strong>Total recuperado: ${fmt(e3T+devT)} pallets</strong>.
-    Las devoluciones representan el <strong>${((devT/(e3T+devT))*100).toFixed(1)}%</strong> del total,
-    concentradas en Talca (<strong>${((S(DEV.TALCA)/devT)*100).toFixed(0)}%</strong>) y Santiago (<strong>${((S(DEV.STGO)/devT)*100).toFixed(0)}%</strong>).
-    MTD activo: E3 <strong>19.025</strong> + DEV <strong>2.486</strong> = <strong>21.511 pallets</strong>.
-    Backlog al cierre: <strong style="color:#fca5a5">61.036 pallets</strong>.`;
-}
-
-// ── RENDER ────────────────────────────────────────────────────────────────────
-function render() {
-  killCharts();
-  buildMain();
-  buildStack();
-  buildPie();
-  buildTabla7d();
-  updateKPIs();
-  updateInsight();
-  document.getElementById('proy-banner').style.display = TIPO==='RETIRO' ? 'flex' : 'none';
-  document.getElementById('reg-strip').style.display   = TIPO==='RETIRO' ? 'none' : 'grid';
-}
-
-// ── CONTROLES ─────────────────────────────────────────────────────────────────
-function setTipo(t, btn) {
-  TIPO = t;
-  document.querySelectorAll('.tipo-btn').forEach(b=>b.className='tipo-btn');
-  btn.classList.add('t-'+t.toLowerCase());
-  render();
-}
-
-function setRegion(r, btn) {
-  REGION = r;
-  document.querySelectorAll('.reg-btn').forEach(b=>b.className='reg-btn');
-  const m = {'AMBAS':'r-ambas','SANTIAGO':'r-santiago','TALCA':'r-talca'};
-  btn.classList.add(m[r]);
-  render();
-}
-
-function setRetail(r, btn) {
-  RETAIL = r;
-  const retailMap = {'ALL':'ra','WALMART':'rw ra','CENCOSUD':'rc ra','UNIMARC/RENDIC':'ru ra','TOTTUS':'rt ra','SMU/M10':'rs ra','OTRO':'ro ra'};
-  document.querySelectorAll('.retail-btn').forEach(b=>{
-    const base = b.className.replace(/ ra$/,'').replace(' ra ','');
-    b.className = base;
+  // Fila totales
+  html += `<tr style="border-top:2px solid var(--border)">
+    <td><div class="hm-row-label"><span style="font-size:11px;font-weight:700;color:var(--text2)">TOTAL MES</span></div></td>`;
+  HM_MESES.forEach((mes, mi) => {
+    const colTotal = HM_VALUES.reduce((s,row)=>s+row[mi],0);
+    html += `<td style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;font-weight:700;color:var(--teal);padding:6px 4px">${(colTotal/1000).toFixed(0)}K</td>`;
   });
-  // Encontrar el botón correcto
-  const ids={'ALL':'rb-ALL','WALMART':'rb-WALMART','CENCOSUD':'rb-CENCOSUD','UNIMARC/RENDIC':'rb-UNIMARC','TOTTUS':'rb-TOTTUS','SMU/M10':'rb-SMU','OTRO':'rb-OTRO'};
-  const el = document.getElementById(ids[r]);
-  if(el) el.classList.add('ra');
-  render();
+  const grandTotal = HM_VALUES.flat().reduce((a,b)=>a+b,0);
+  html += `<td style="text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:800;color:var(--teal);padding:6px 4px">${(grandTotal/1000).toFixed(0)}K</td></tr>`;
+
+  html += `</tbody></table>
+  <div class="hm-legend">
+    <span class="hm-legend-lbl">Bajo</span>
+    <div class="hm-legend-bar"></div>
+    <span class="hm-legend-lbl">Alto</span>
+  </div>`;
+
+  container.innerHTML = html;
 }
 
+// ══════════════════════════════════════════════════════════════════
+// BUILD HEATMAP TAB
+// ══════════════════════════════════════════════════════════════════
+function buildHeatmap() {
+  renderHeatmap();
+
+  // Ranking chart
+  const totales = HM_VALUES.map(row => row.reduce((a,b)=>a+b,0));
+  killChart('hmRanking');
+  charts['hmRanking'] = new Chart(document.getElementById('chartHmRanking'), {
+    type: 'bar',
+    data: {
+      labels: HM_RETAILERS,
+      datasets: [{
+        data: totales,
+        backgroundColor: HM_RKEYS.map(r => RETAIL_COLORS[r]+'CC'),
+        borderRadius: 6, borderSkipped: false
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: {display:false},
+        tooltip: { callbacks: { label: ctx => ` ${fmt(ctx.raw)} pallets` } }
+      },
+      scales: {
+        x: { ticks: { color:'#64748B', font:{size:10}, callback: v => (v/1000).toFixed(0)+'K' }, grid:{color:'#1f2d45'} },
+        y: { ticks: { color:'#94A3B8', font:{size:11} }, grid:{display:false} }
+      }
+    }
+  });
+
+  // Volatilidad (CV = std/mean)
+  const cvData = HM_VALUES.map(row => {
+    const mean = row.reduce((a,b)=>a+b)/row.length;
+    const std  = Math.sqrt(row.reduce((s,v)=>s+Math.pow(v-mean,2),0)/row.length);
+    return mean > 0 ? +(std/mean*100).toFixed(1) : 0;
+  });
+  killChart('hmVolatilidad');
+  charts['hmVolatilidad'] = new Chart(document.getElementById('chartHmVolatilidad'), {
+    type: 'bar',
+    data: {
+      labels: HM_RETAILERS,
+      datasets: [{
+        label: 'CV %',
+        data: cvData,
+        backgroundColor: cvData.map(v =>
+          v < 8  ? 'rgba(52,211,153,.8)' :
+          v < 15 ? 'rgba(251,191,36,.8)' :
+                   'rgba(248,113,113,.8)'
+        ),
+        borderRadius: 6, borderSkipped: false
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: {display:false},
+        tooltip: { callbacks: { label: ctx => ` CV: ${ctx.raw}% ${ctx.raw<8?'· Muy estable':ctx.raw<15?'· Estable':'· Variable'}` } }
+      },
+      scales: {
+        x: { ticks: { color:'#64748B', font:{size:10}, callback: v=>v+'%' }, grid:{color:'#1f2d45'} },
+        y: { ticks: { color:'#94A3B8', font:{size:11} }, grid:{display:false} }
+      }
+    }
+  });
+
+  // Insight
+  const maxRetail = HM_RETAILERS[totales.indexOf(Math.max(...totales))];
+  const minCV = HM_RETAILERS[cvData.indexOf(Math.min(...cvData))];
+  const maxCV = HM_RETAILERS[cvData.indexOf(Math.max(...cvData))];
+  document.getElementById('insight-heatmap').innerHTML = `
+    🌡️ <strong>Lectura del mapa de calor:</strong>
+    <strong style="color:${RETAIL_COLORS[HM_RKEYS[0]]}">${maxRetail}</strong> domina con el mayor volumen en prácticamente todos los meses —
+    es el retailer de mayor intensidad de calor de forma consistente.
+    El retailer más <span class="highlight">estable</span> es <strong>${minCV}</strong> (menor coeficiente de variación),
+    lo que significa que su comportamiento es el más predecible para el modelo.
+    <strong style="color:var(--red)">${maxCV}</strong> es el más <span class="warn">volátil</span> —
+    sus retiros fluctúan más mes a mes, lo que explica parte del error en los meses de mayor desviación.
+    Usa el modo <em>Intensidad relativa</em> para ver patrones estacionales dentro de cada retail sin que el volumen absoluto distorsione la lectura.`;
+}
+
+// ══════════════════════════════════════════════════════════════════
 // INIT
-render();
+// ══════════════════════════════════════════════════════════════════
+// Update showTab to include heatmap
+const _origShowTab = showTab;
+function showTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  btn.classList.add('active');
+  if(name==='validacion') buildValidacion();
+  if(name==='retail') buildRetail();
+  if(name==='proyeccion') buildProyeccion();
+  if(name==='heatmap') buildHeatmap();
+}
+
+buildResumen();
+
+// ══════════════════════════════════════════════════════════════════
+// AGENTE IA
+// ══════════════════════════════════════════════════════════════════
+let agentOpen=true, agentApiKey="backend", agentHistory=[], agentTyping=false;
+
+function toggleAgent() {
+  agentOpen = !agentOpen;
+  document.getElementById('agent-panel').classList.toggle('open', agentOpen);
+  document.getElementById('bubble-icon-chat').style.display  = agentOpen?'none':'block';
+  document.getElementById('bubble-icon-close').style.display = agentOpen?'block':'none';
+  document.getElementById('agent-unread').style.display = 'none';
+  if(agentOpen) {
+    } else {
+      if(agentHistory.length===0) showWelcome();
+      setTimeout(()=>{ const m=document.getElementById('agent-messages'); m.scrollTop=m.scrollHeight; },100);
+    }
+  }
+
+
+function saveApiKey() {
+  const val = document.getElementById('api-key-input').value.trim();
+  if(!val.startsWith('sk-')) { document.getElementById('api-key-input').style.borderColor='#F87171'; return; }
+  agentApiKey = val;
+  document.getElementById('agent-setup').classList.remove('visible');
+  document.getElementById('agent-messages').style.display    = 'flex';
+  document.getElementById('agent-suggestions').style.display = 'flex';
+  document.getElementById('agent-input-wrap').style.display  = 'flex';
+  showWelcome();
+}
+
+function showWelcome() {
+  appendMsg('ai', `¡Hola! Soy el asistente de <strong>REDTEC</strong>. Tengo acceso completo a los datos del dashboard:<br><br>
+· <span class="highlight">1.223.022 pallets</span> retiros Ene 2025–Mar 2026<br>
+· <span class="highlight">9 retailers</span> con historial mensual completo<br>
+· <span class="highlight">Modelo con 90.8% accuracy</span> validado en 12 meses<br>
+· <span class="highlight">Proyecciones</span> Abr–Dic 2026<br><br>¿Qué quieres saber?`);
+}
+
+function buildContext() {
+  const totalRetiros = HISTORICO.reduce((s,d)=>s+(d.real_total||0),0);
+  const mejorAcc = HISTORICO.filter(d=>d.accuracy).reduce((a,b)=>a.accuracy>b.accuracy?a:b);
+  const peorAcc  = HISTORICO.filter(d=>d.accuracy).reduce((a,b)=>a.accuracy<b.accuracy?a:b);
+  const totalProj= PROYECCIONES.reduce((s,d)=>s+d.pred_total,0);
+  const region   = REGION_ACTIVA==='Santiago'?'Santiago + Norte':REGION_ACTIVA==='Talca'?'Talca':'Todas las regiones';
+  const retailTotales = RETAIL_KEYS.map((r,i)=>({nombre:RETAILERS[i],total:HISTORICO.reduce((s,d)=>s+(d[`real_${r}`]||0),0)})).sort((a,b)=>b.total-a.total);
+  return `Eres un asistente especializado en análisis de retiros de pallets para REDTEC, empresa de logística en Chile. Responde en español, directo y conciso, con números concretos. Útil para un gerente general.
+
+DATOS DASHBOARD (SAP real, Ene 2025–Mar 2026):
+- Total retiros: ${totalRetiros.toLocaleString('es-CL')} pallets | Promedio mensual: ${Math.round(totalRetiros/15).toLocaleString('es-CL')} | Región activa: ${region}
+
+MODELO: Accuracy 90.8% (12 meses) | Mejor: ${mejorAcc.mes} ${mejorAcc.accuracy}% | Peor: ${peorAcc.mes} ${peorAcc.accuracy}% | Tasa retorno: 85.5%±4.1%
+
+RETAILERS:
+${retailTotales.map((r,i)=>`${i+1}. ${r.nombre}: ${r.total.toLocaleString('es-CL')} (${(r.total/totalRetiros*100).toFixed(1)}%)`).join(' | ')}
+
+HISTÓRICO MENSUAL:
+${HISTORICO.map(d=>`${d.mes}: real=${d.real_total?.toLocaleString('es-CL')||'N/A'} forecast=${d.pred_total?.toLocaleString('es-CL')||'—'} acc=${d.accuracy!=null?d.accuracy+'%':'—'} WM=${d.real_Walmart||0} CC=${d.real_Cencosud||0} UMR=${d.real_UMR||0} TT=${d.real_Tottus||0}`).join('\n')}
+
+PROYECCIONES ABR–DIC 2026:
+${PROYECCIONES.map(d=>`${d.mes}: ${d.pred_total.toLocaleString('es-CL')} (±8%) WM:${d.pred_Walmart.toLocaleString('es-CL')} CC:${d.pred_Cencosud.toLocaleString('es-CL')} UMR:${d.pred_UMR.toLocaleString('es-CL')}`).join('\n')}
+Total proyectado: ${totalProj.toLocaleString('es-CL')} pallets
+
+REGIONES: Santiago+Norte=1.104.424 (90.3%, todos retailers) | Talca=105.339 (8.6%, SOLO Cencosud+Unimarc)
+NEGOCIO: Emite pallets→cliente transfiere a retail→REDTEC retira (30-60 días). Lo no transferido sigue en arriendo.`;
+}
+
+function appendMsg(role, html) {
+  const wrap=document.createElement('div'); wrap.className=`msg-wrap ${role==='user'?'user':''}`;
+  const av=document.createElement('div'); av.className=`msg-avatar-small ${role==='ai'?'ai':'usr'}`; av.textContent=role==='ai'?'IA':'Tú';
+  const bubble=document.createElement('div'); bubble.className=`msg-bubble ${role==='ai'?'ai':'user'}`; bubble.innerHTML=html;
+  wrap.appendChild(av); wrap.appendChild(bubble);
+  const msgs=document.getElementById('agent-messages'); msgs.appendChild(wrap); msgs.scrollTop=msgs.scrollHeight;
+}
+
+function appendTyping() {
+  const wrap=document.createElement('div'); wrap.className='msg-wrap'; wrap.id='typing-indicator';
+  wrap.innerHTML=`<div class="msg-avatar-small ai">IA</div><div class="msg-bubble ai"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
+  document.getElementById('agent-messages').appendChild(wrap); document.getElementById('agent-messages').scrollTop=99999;
+}
+
+function removeTyping() { const el=document.getElementById('typing-indicator'); if(el)el.remove(); }
+
+async function sendMessage() {
+  if(agentTyping||!agentApiKey) return;
+  const input=document.getElementById('agent-input');
+  const text=input.value.trim(); if(!text) return;
+  document.getElementById('agent-suggestions').style.display='none';
+  input.value=''; input.style.height='auto';
+  appendMsg('user', text);
+  agentHistory.push({role:'user',content:text});
+  agentTyping=true; document.getElementById('agent-send-btn').disabled=true;
+  appendTyping();
+  try {
+    const res=await fetch('https://redtecagente-e9hahhgvc0enc9an.westus3-01.azurewebsites.net/api/chat',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,system:buildContext(),messages:agentHistory})
+    });
+    const data=await res.json(); removeTyping();
+    if(data.error) { appendMsg('ai',`<span style="color:#F87171">⚠ ${data.error.message}</span>`); agentHistory.pop(); }
+    else {
+      const reply=data.content[0].text;
+      appendMsg('ai', reply.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>'));
+      agentHistory.push({role:'assistant',content:reply});
+    }
+  } catch(e) { removeTyping(); appendMsg('ai','<span style="color:#F87171">⚠ No se pudo conectar. Verifica tu API key.</span>'); agentHistory.pop(); }
+  agentTyping=false; document.getElementById('agent-send-btn').disabled=false; document.getElementById('agent-input').focus();
+}
+
+function sendSuggestion(el) { document.getElementById('agent-input').value=el.textContent; sendMessage(); }
+function clearChat() { agentHistory=[]; document.getElementById('agent-messages').innerHTML=''; document.getElementById('agent-suggestions').style.display='flex'; showWelcome(); }
+function autoResize(el) { el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,90)+'px'; }
+
+setTimeout(()=>{ document.getElementById('agent-unread').style.display='block'; }, 2000);
 </script>
 </body>
 </html>

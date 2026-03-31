@@ -931,20 +931,6 @@ canvas { max-height: 280px; }
     </div>
   </div>
 
-  <!-- API Key setup (primera vez) -->
-  <div id="agent-setup">
-    <div style="text-align:center;padding:24px 20px">
-      <div style="font-size:28px;margin-bottom:12px">🔑</div>
-      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px">Ingresa tu API Key de Anthropic</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:16px;line-height:1.6">
-        Solo se usa en esta sesión y no se almacena.<br>
-        Obtén una en <a href="https://console.anthropic.com" target="_blank" style="color:var(--accent2)">console.anthropic.com</a>
-      </div>
-      <input id="api-key-input" type="password" placeholder="sk-ant-..." autocomplete="off"/>
-      <button id="api-key-btn" onclick="saveApiKey()">Conectar agente →</button>
-    </div>
-  </div>
-
   <!-- Mensajes -->
   <div id="agent-messages"></div>
 
@@ -1867,7 +1853,7 @@ buildResumen();
 // ══════════════════════════════════════════════════════════════════
 // AGENTE IA
 // ══════════════════════════════════════════════════════════════════
-let agentOpen=false, agentApiKey=null, agentHistory=[], agentTyping=false;
+let agentOpen=true, agentApiKey="backend", agentHistory=[], agentTyping=false;
 
 function toggleAgent() {
   agentOpen = !agentOpen;
@@ -1876,17 +1862,12 @@ function toggleAgent() {
   document.getElementById('bubble-icon-close').style.display = agentOpen?'block':'none';
   document.getElementById('agent-unread').style.display = 'none';
   if(agentOpen) {
-    if(!agentApiKey) {
-      document.getElementById('agent-setup').classList.add('visible');
-      document.getElementById('agent-messages').style.display    = 'none';
-      document.getElementById('agent-suggestions').style.display = 'none';
-      document.getElementById('agent-input-wrap').style.display  = 'none';
     } else {
       if(agentHistory.length===0) showWelcome();
       setTimeout(()=>{ const m=document.getElementById('agent-messages'); m.scrollTop=m.scrollHeight; },100);
     }
   }
-}
+
 
 function saveApiKey() {
   const val = document.getElementById('api-key-input').value.trim();
@@ -1962,7 +1943,7 @@ async function sendMessage() {
   agentTyping=true; document.getElementById('agent-send-btn').disabled=true;
   appendTyping();
   try {
-    const res=await fetch('https://api.anthropic.com/v1/messages',{
+    const res=await fetch('https://redtecagente-e9hahhgvc0enc9an.westus3-01.azurewebsites.net/api/chat',{
       method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,system:buildContext(),messages:agentHistory})
     });

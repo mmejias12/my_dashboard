@@ -156,7 +156,7 @@ body {
 .kpi.k-purple::after { background: var(--purple); }
 .kpi.k-teal::after   { background: var(--teal); }
 .kpi-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 8px; }
-.kpi-value { font-family: 'Syne', sans-serif; font-size: 26px; font-weight: 800; line-height: 1; }
+.kpi-value { font-family: 'Arial Black', Arial, sans-serif; font-size: 32px; font-weight: 900; line-height: 1; letter-spacing: -0.5px; }
 .kpi-value.blue   { color: var(--accent2); }
 .kpi-value.green  { color: var(--green); }
 .kpi-value.yellow { color: var(--yellow); }
@@ -249,8 +249,8 @@ canvas { max-height: 280px; }
 /* ── ACCURACY GAUGE ── */
 .gauge-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .gauge-big {
-  font-family: 'Syne', sans-serif;
-  font-size: 52px; font-weight: 800;
+  font-family: 'Arial Black', Arial, sans-serif;
+  font-size: 52px; font-weight: 900;
   color: var(--green);
   line-height: 1;
 }
@@ -276,7 +276,7 @@ canvas { max-height: 280px; }
 }
 .rc:hover, .rc.selected { border-color: var(--accent); background: var(--surface2); }
 .rc-name { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
-.rc-vol  { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; }
+.rc-vol  { font-family: 'Arial Black', Arial, sans-serif; font-size: 22px; font-weight: 900; }
 .rc-share { font-size: 10px; color: var(--muted); margin-top: 3px; }
 .rc-acc { font-size: 11px; margin-top: 6px; }
 
@@ -342,7 +342,7 @@ canvas { max-height: 280px; }
 .reg-card.talca { background: rgba(251,191,36,.06);  border-left: 3px solid var(--yellow); }
 .reg-card-name  { font-size: 12px; font-weight: 700; }
 .reg-card-sub   { font-size: 10px; color: var(--muted); margin-top: 2px; }
-.reg-card-val   { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; }
+.reg-card-val   { font-family: 'Arial Black', Arial, sans-serif; font-size: 26px; font-weight: 900; }
 .reg-card-pct   { font-size: 11px; color: var(--muted); margin-top: 2px; text-align: right; }
 
 /* ── HEATMAP ── */
@@ -629,15 +629,15 @@ canvas { max-height: 280px; }
     <div>
       <div class="header-title">Modelo Adaptativo de Retiros · 2025–2026</div>
       <div class="header-sub">Forecast basado en tasa de retorno histórica · Adaptativo por retail · Estacionalidad real</div>
-      <div class="model-tag"><div class="dot-pulse"></div> Modelo activo · Accuracy 90.8%</div>
+      <div class="model-tag"><div class="dot-pulse"></div> Modelo activo · Accuracy 91.4%</div>
     </div>
 
   </div>
 
   <div class="header-meta">
-    Fuente: SAP · Base cruda 171.158 registros<br>
+    Fuente: SAP · Base real 245.855 registros<br>
     Período: Ene 2025 – Mar 2026<br>
-    Actualizado: 20-03-2026
+    Actualizado: 07-04-2026
   </div>
 </div>
 <!-- TABS -->
@@ -647,6 +647,7 @@ canvas { max-height: 280px; }
   <button class="tab" onclick="showTab('retail',this)">🏪 Por Retail</button>
   <button class="tab" onclick="showTab('proyeccion',this)">🔮 Proyección 2026</button>
   <button class="tab" onclick="showTab('heatmap',this)">🌡️ Mapa de Calor</button>
+  <button class="tab" onclick="showTab('14dias',this)">📅 Proyección 14 Días</button>
 </div>
 
 <!-- REGION SELECTOR -->
@@ -662,7 +663,7 @@ canvas { max-height: 280px; }
     <div class="reg-dot" style="background:var(--yellow)"></div> Talca
   </button>
   <div class="region-info" id="region-info">
-    Mostrando: <span id="region-name-info">Todas las regiones</span> · <span id="region-vol-info">1.223.022 pallets</span>
+    Mostrando: <span id="region-name-info">Todas las regiones</span> · <span id="region-vol-info">1.214.695 pallets</span>
   </div>
 </div>
 
@@ -678,18 +679,17 @@ canvas { max-height: 280px; }
         <div class="reg-card-sub">REDTEC SANTIAGO · COQUIMBO VIRTUAL</div>
       </div>
       <div style="text-align:right">
-        <div class="reg-card-val" style="color:var(--green)" id="rc-stgo-val">1.104.424</div>
-        <div class="reg-card-pct" id="rc-stgo-pct">90.3% del total · prom. 73.628/mes</div>
-      </div>
+        <div class="reg-card-val" style="color:var(--green)" id="rc-stgo-val">1.098.736</div>
+        <div class="reg-card-pct" id="rc-stgo-pct">90.5% del total · prom. 73.249/mes</div>      </div>
     </div>
     <div class="reg-card talca">
       <div>
         <div class="reg-card-name" style="color:var(--yellow)">🌾 Talca</div>
-        <div class="reg-card-sub">REDTEC TALCA · Domina Cencosud + Unimarc</div>
+        <div class="reg-card-sub">REDTEC TALCA · Solo Cencosud + U/A/S</div>
       </div>
       <div style="text-align:right">
-        <div class="reg-card-val" style="color:var(--yellow)" id="rc-talca-val">105.339</div>
-        <div class="reg-card-pct" id="rc-talca-pct">8.6% del total · prom. 7.023/mes</div>
+        <div class="reg-card-val" style="color:var(--yellow)" id="rc-talca-val">104.017</div>
+        <div class="reg-card-pct" id="rc-talca-pct">8.6% del total · prom. 6.934/mes</div>
       </div>
     </div>
   </div>
@@ -703,7 +703,7 @@ canvas { max-height: 280px; }
     </div>
     <div class="kpi k-green">
       <div class="kpi-label">Promedio mensual</div>
-      <div class="kpi-value green">82.3K</div>
+      <div class="kpi-value green">80.9K</div>
       <div class="kpi-sub">pallets / mes</div>
     </div>
     <div class="kpi k-yellow">
@@ -713,12 +713,12 @@ canvas { max-height: 280px; }
     </div>
     <div class="kpi k-purple">
       <div class="kpi-label">Accuracy modelo</div>
-      <div class="kpi-value purple">90.8%</div>
+      <div class="kpi-value purple">91.4%</div>
       <div class="kpi-sub">12 meses validados</div>
     </div>
     <div class="kpi k-teal">
       <div class="kpi-label">Proyección Abr 2026</div>
-      <div class="kpi-value teal">65.9K</div>
+      <div class="kpi-value teal">82.3K</div>
       <div class="kpi-sub">pallets estimados</div>
     </div>
   </div>
@@ -727,7 +727,7 @@ canvas { max-height: 280px; }
   <div class="row3">
     <div class="card" style="margin-bottom:0">
       <div class="card-title">📈 Retiros reales vs Forecast mensual
-        <span class="acc-badge acc-high">90.8% accuracy</span>
+        <span class="acc-badge acc-high">91.4% accuracy</span>
       </div>
       <div class="card-sub">Línea continua = real · Línea punteada = predicción · Zona sombreada = proyección futura</div>
       <canvas id="chartMain"></canvas>
@@ -736,19 +736,19 @@ canvas { max-height: 280px; }
       <div class="card-title">🎯 Precisión del modelo</div>
       <div class="card-sub">Distribución de accuracy por mes validado</div>
       <div class="gauge-wrap" style="padding-top:10px">
-        <div class="gauge-big">90.8%</div>
+        <div class="gauge-big">91.4%</div>
         <div class="gauge-label">Accuracy promedio<br>12 meses validados (Abr 2025 – Mar 2026)</div>
         <div class="gauge-breakdown">
           <div class="gb-item">
-            <div class="gb-val" style="color:var(--green)">7</div>
+            <div class="gb-val" style="color:var(--green)">8</div>
             <div class="gb-lbl">≥90%</div>
           </div>
           <div class="gb-item">
-            <div class="gb-val" style="color:var(--yellow)">3</div>
+            <div class="gb-val" style="color:var(--yellow)">4</div>
             <div class="gb-lbl">80–90%</div>
           </div>
           <div class="gb-item">
-            <div class="gb-val" style="color:var(--red)">2</div>
+            <div class="gb-val" style="color:var(--red)">0</div>
             <div class="gb-lbl">&lt;80%</div>
           </div>
         </div>
@@ -901,6 +901,66 @@ canvas { max-height: 280px; }
 </div>
 </div>
 
+<!-- ══════════════════════════════════ PROYECCIÓN 14 DÍAS ════════════════════ -->
+<div id="tab-14dias" class="tab-panel">
+<div class="main">
+
+  <!-- KPIs HOY Y MAÑANA -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
+    <div class="kpi k-blue" style="grid-column:span 1">
+      <div class="kpi-label">📅 Hoy · 06 Abr 2026</div>
+      <div class="kpi-value blue">4.868</div>
+      <div class="ks" style="color:var(--muted);font-size:11px;margin-top:4px">pallets estimados · Lunes</div>
+      <div style="font-size:10px;color:var(--green);margin-top:4px">Banda: 4.479 – 5.257</div>
+    </div>
+    <div class="kpi k-green" style="grid-column:span 1">
+      <div class="kpi-label">📅 Mañana · 07 Abr 2026</div>
+      <div class="kpi-value green">3.646</div>
+      <div class="ks" style="color:var(--muted);font-size:11px;margin-top:4px">pallets estimados · Martes</div>
+      <div style="font-size:10px;color:var(--green);margin-top:4px">Banda: 3.354 – 3.938</div>
+    </div>
+    <div class="kpi k-purple" style="grid-column:span 1">
+      <div class="kpi-label">📊 Total 15 días hábiles</div>
+      <div class="kpi-value purple">58.961</div>
+      <div class="ks" style="color:var(--muted);font-size:11px;margin-top:4px">pallets proyectados</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px">06 Abr – 24 Abr 2026</div>
+    </div>
+    <div class="kpi k-yellow" style="grid-column:span 1">
+      <div class="kpi-label">⚡ Día pico del período</div>
+      <div class="kpi-value yellow">4.990</div>
+      <div class="ks" style="color:var(--muted);font-size:11px;margin-top:4px">pallets · Lunes 13 Abr</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px">Semana 2 históricamente más alta</div>
+    </div>
+  </div>
+
+  <!-- Gráfico 14 días + tabla -->
+  <div class="row3">
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">📈 Proyección diaria 15 días hábiles
+        <span class="acc-badge acc-high">Base 4 semanas · ±8%</span>
+      </div>
+      <div class="card-sub">Barras = forecast · Línea = banda superior/inferior · Basado en media móvil + factor día de semana</div>
+      <canvas id="chart14dias" style="max-height:280px"></canvas>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">🏪 Desglose por retail · Próximos 14 días</div>
+      <div class="card-sub">Share basado en últimas 4 semanas reales</div>
+      <canvas id="chart14retail" style="max-height:280px"></canvas>
+    </div>
+  </div>
+
+  <!-- Tabla detallada -->
+  <div class="card" style="margin-top:20px">
+    <div class="card-title">📋 Detalle día a día — 06 Abr al 24 Abr 2026</div>
+    <div class="card-sub">Forecast + banda de confianza ±8% + desglose por retailer principal. Modelo: media 4 semanas × factor día de semana.</div>
+    <table class="tbl" id="tabla14dias" style="margin-top:8px"></table>
+  </div>
+
+  <div class="insight-box" id="insight-14dias"></div>
+
+</div>
+</div>
+
 <!-- ══════════════════════════════════════════ AGENTE IA ═══════════════════════ -->
 
 <!-- Burbuja flotante -->
@@ -966,9 +1026,9 @@ canvas { max-height: 280px; }
 
 <!-- FOOTER -->
 <div class="footer">
-  <span>REDTEC · Modelo Adaptativo de Retiros · v1.0</span>
-  <span>Base: 171.158 registros SAP · Período: Ene 2025 – Mar 2026 · Accuracy validado: 90.8%</span>
-  <span>Generado: 20-03-2026</span>
+  <span>REDTEC · Modelo Adaptativo de Retiros · v2.0</span>
+  <span>Base: 245.855 registros SAP · Período: Ene 2025 – Mar 2026 · Accuracy 91.4% · Actualizado 07-04-2026</span>
+  <span>Actualizado: 06-04-2026</span>
 </div>
 
 <script>
@@ -976,78 +1036,79 @@ canvas { max-height: 280px; }
 // DATA
 // ══════════════════════════════════════════════════════════════════
 const HISTORICO = [
-  {mes:"2025-01",real_total:84745,pred_total:null,error_pct:null,accuracy:null,real_Walmart:31930,real_Cencosud:22612,real_UMR:16575,real_Tottus:4780,real_Alvi:1345,real_Prisa:1281,real_Intercarry:463,real_SMU:452,real_Otro:5307},
-  {mes:"2025-02",real_total:71554,pred_total:null,error_pct:null,accuracy:null,real_Walmart:26825,real_Cencosud:18512,real_UMR:13246,real_Tottus:3720,real_Alvi:1429,real_Prisa:833,real_Intercarry:277,real_SMU:445,real_Otro:6267},
-  {mes:"2025-03",real_total:84725,pred_total:null,error_pct:null,accuracy:null,real_Walmart:32595,real_Cencosud:23157,real_UMR:15175,real_Tottus:3820,real_Alvi:1649,real_Prisa:1066,real_Intercarry:590,real_SMU:548,real_Otro:6125},
-  {mes:"2025-04",real_total:84797,pred_total:84777,error_pct:-0.0,accuracy:100.0,pred_Walmart:32113,real_Walmart:31560,pred_Cencosud:22575,real_Cencosud:23249,pred_UMR:15820,real_UMR:15112,pred_Tottus:4337,real_Tottus:3940,pred_Alvi:1563,real_Alvi:1745,pred_Prisa:1112,real_Prisa:1504,pred_Intercarry:461,real_Intercarry:841,pred_SMU:509,real_SMU:399,pred_Otro:6288,real_Otro:6447},
-  {mes:"2025-05",real_total:81563,pred_total:84530,error_pct:3.6,accuracy:96.4,pred_Walmart:31890,real_Walmart:31334,pred_Cencosud:22716,real_Cencosud:22904,pred_UMR:15284,real_UMR:13218,pred_Tottus:4044,real_Tottus:3560,pred_Alvi:1691,real_Alvi:2115,pred_Prisa:1182,real_Prisa:1115,pred_Intercarry:585,real_Intercarry:821,pred_SMU:490,real_SMU:533,pred_Otro:6647,real_Otro:5963},
-  {mes:"2025-06",real_total:83006,pred_total:82715,error_pct:-0.4,accuracy:99.6,pred_Walmart:31461,real_Walmart:29860,pred_Cencosud:22838,real_Cencosud:23402,pred_UMR:14320,real_UMR:16593,pred_Tottus:3728,real_Tottus:3800,pred_Alvi:1819,real_Alvi:1562,pred_Prisa:1213,real_Prisa:957,pred_Intercarry:743,real_Intercarry:752,pred_SMU:488,real_SMU:564,pred_Otro:6105,real_Otro:5516},
-  {mes:"2025-07",real_total:88596,pred_total:75131,error_pct:-15.2,accuracy:84.8,pred_Walmart:27951,real_Walmart:32569,pred_Cencosud:20959,real_Cencosud:24372,pred_UMR:13528,real_UMR:14725,pred_Tottus:3403,real_Tottus:4040,pred_Alvi:1636,real_Alvi:1960,pred_Prisa:1075,real_Prisa:1777,pred_Intercarry:727,real_Intercarry:728,pred_SMU:452,real_SMU:185,pred_Otro:5399,real_Otro:8240},
-  {mes:"2025-08",real_total:73247,pred_total:83432,error_pct:13.9,accuracy:86.1,pred_Walmart:30912,real_Walmart:25394,pred_Cencosud:23301,real_Cencosud:22327,pred_UMR:14689,real_UMR:13256,pred_Tottus:3755,real_Tottus:3820,pred_Alvi:1860,real_Alvi:1888,pred_Prisa:1259,real_Prisa:935,pred_Intercarry:760,real_Intercarry:564,pred_SMU:429,real_SMU:436,pred_Otro:6468,real_Otro:4627},
-  {mes:"2025-09",real_total:80781,pred_total:78630,error_pct:-2.7,accuracy:97.3,pred_Walmart:28150,real_Walmart:30389,pred_Cencosud:22589,real_Cencosud:24320,pred_UMR:14339,real_UMR:13470,pred_Tottus:3762,real_Tottus:4040,pred_Alvi:1749,real_Alvi:2176,pred_Prisa:1162,real_Prisa:1377,pred_Intercarry:655,real_Intercarry:451,pred_SMU:389,real_SMU:94,pred_Otro:5835,real_Otro:4464},
-  {mes:"2025-10",real_total:86105,pred_total:82604,error_pct:-4.1,accuracy:95.9,pred_Walmart:29907,real_Walmart:32626,pred_Cencosud:23523,real_Cencosud:23370,pred_UMR:14720,real_UMR:15100,pred_Tottus:3958,real_Tottus:4000,pred_Alvi:1814,real_Alvi:1448,pred_Prisa:1214,real_Prisa:1224,pred_Intercarry:562,real_Intercarry:607,pred_SMU:362,real_SMU:238,pred_Otro:6544,real_Otro:7492},
-  {mes:"2025-11",real_total:81284,pred_total:88599,error_pct:9.0,accuracy:91.0,pred_Walmart:32021,real_Walmart:28079,pred_Cencosud:25441,real_Cencosud:24892,pred_UMR:15625,real_UMR:15615,pred_Tottus:4197,real_Tottus:4060,pred_Alvi:1999,real_Alvi:1560,pred_Prisa:1369,real_Prisa:1285,pred_Intercarry:597,real_Intercarry:494,pred_SMU:382,real_SMU:289,pred_Otro:6967,real_Otro:5010},
-  {mes:"2025-12",real_total:88941,pred_total:79571,error_pct:-10.5,accuracy:89.5,pred_Walmart:28755,real_Walmart:32033,pred_Cencosud:22805,real_Cencosud:26901,pred_UMR:14340,real_UMR:15939,pred_Tottus:3773,real_Tottus:4340,pred_Alvi:1800,real_Alvi:2432,pred_Prisa:1226,real_Prisa:1349,pred_Intercarry:537,real_Intercarry:487,pred_SMU:340,real_SMU:374,pred_Otro:6196,real_Otro:5086},
-  {mes:"2026-01",real_total:89729,pred_total:92306,error_pct:2.9,accuracy:97.1,pred_Walmart:33414,real_Walmart:30868,pred_Cencosud:26458,real_Cencosud:27428,pred_UMR:16585,real_UMR:16424,pred_Tottus:4393,real_Tottus:4560,pred_Alvi:2106,real_Alvi:1963,pred_Prisa:1420,real_Prisa:1448,pred_Intercarry:617,real_Intercarry:435,pred_SMU:389,real_SMU:420,pred_Otro:6924,real_Otro:6183},
-  {mes:"2026-02",real_total:80736,pred_total:72625,error_pct:-10.0,accuracy:90.0,pred_Walmart:26208,real_Walmart:28574,pred_Cencosud:20847,real_Cencosud:23245,pred_UMR:13068,real_UMR:14761,pred_Tottus:3462,real_Tottus:3979,pred_Alvi:1655,real_Alvi:2109,pred_Prisa:1118,real_Prisa:1320,pred_Intercarry:488,real_Intercarry:382,pred_SMU:307,real_SMU:289,pred_Otro:5472,real_Otro:6077},
-  {mes:"2026-03",real_total:63213,pred_total:87075,error_pct:37.7,accuracy:62.3,pred_Walmart:31397,real_Walmart:23388,pred_Cencosud:25080,real_Cencosud:17691,pred_UMR:15712,real_UMR:9624,pred_Tottus:4157,real_Tottus:3198,pred_Alvi:1993,real_Alvi:1777,pred_Prisa:1342,real_Prisa:1101,pred_Intercarry:587,real_Intercarry:474,pred_SMU:369,real_SMU:183,pred_Otro:6438,real_Otro:5777}
+  {mes:"2025-01",real_total:82479,pred_total:null,error_pct:null,accuracy:null,real_Walmart:31779,real_Cencosud:22100,real_UAS:17898,real_Tottus:4460,real_Prisa:1045,real_Intercarry:430,real_Otro:4767},
+  {mes:"2025-02",real_total:67746,pred_total:null,error_pct:null,accuracy:null,real_Walmart:26635,real_Cencosud:17968,real_UAS:13183,real_Tottus:3720,real_Prisa:595,real_Intercarry:277,real_Otro:5368},
+  {mes:"2025-03",real_total:77813,pred_total:null,error_pct:null,accuracy:null,real_Walmart:32103,real_Cencosud:22485,real_UAS:14985,real_Tottus:3180,real_Prisa:768,real_Intercarry:328,real_Otro:3964},
+  {mes:"2025-04",real_total:80685,pred_total:84777,error_pct:5.1,accuracy:94.9,pred_Walmart:32113,pred_Cencosud:22575,pred_UAS:17832,pred_Tottus:4337,pred_Prisa:1112,pred_Intercarry:461,pred_Otro:6288,real_Walmart:31349,real_Cencosud:22705,real_UAS:15360,real_Tottus:3940,real_Prisa:936,real_Intercarry:841,real_Otro:5554},
+  {mes:"2025-05",real_total:79054,pred_total:84530,error_pct:6.9,accuracy:93.1,pred_Walmart:31890,pred_Cencosud:22716,pred_UAS:17465,pred_Tottus:4044,pred_Prisa:1182,pred_Intercarry:585,pred_Otro:6647,real_Walmart:31141,real_Cencosud:22904,real_UAS:14489,real_Tottus:3560,real_Prisa:931,real_Intercarry:821,real_Otro:5208},
+  {mes:"2025-06",real_total:81421,pred_total:82715,error_pct:1.6,accuracy:98.4,pred_Walmart:31461,pred_Cencosud:22838,pred_UAS:16627,pred_Tottus:3728,pred_Prisa:1213,pred_Intercarry:743,pred_Otro:6105,real_Walmart:29602,real_Cencosud:23402,real_UAS:18106,real_Tottus:3800,real_Prisa:719,real_Intercarry:752,real_Otro:5040},
+  {mes:"2025-07",real_total:87636,pred_total:75131,error_pct:-14.3,accuracy:85.7,pred_Walmart:27951,pred_Cencosud:20959,pred_UAS:16616,pred_Tottus:3403,pred_Prisa:1075,pred_Intercarry:727,pred_Otro:5399,real_Walmart:32569,real_Cencosud:23412,real_UAS:16870,real_Tottus:4040,real_Prisa:1777,real_Intercarry:728,real_Otro:8240},
+  {mes:"2025-08",real_total:72335,pred_total:83432,error_pct:15.3,accuracy:84.7,pred_Walmart:30912,pred_Cencosud:23301,pred_UAS:18978,pred_Tottus:3755,pred_Prisa:1259,pred_Intercarry:760,pred_Otro:6468,real_Walmart:25394,real_Cencosud:21751,real_UAS:15244,real_Tottus:3820,real_Prisa:935,real_Intercarry:564,real_Otro:4627},
+  {mes:"2025-09",real_total:80100,pred_total:78630,error_pct:-1.8,accuracy:98.2,pred_Walmart:28150,pred_Cencosud:22589,pred_UAS:16477,pred_Tottus:3762,pred_Prisa:1162,pred_Intercarry:655,pred_Otro:5835,real_Walmart:30389,real_Cencosud:24096,real_UAS:15740,real_Tottus:3720,real_Prisa:1377,real_Intercarry:451,real_Otro:4327},
+  {mes:"2025-10",real_total:86105,pred_total:82604,error_pct:-4.1,accuracy:95.9,pred_Walmart:29907,pred_Cencosud:23523,pred_UAS:16896,pred_Tottus:3958,pred_Prisa:1214,pred_Intercarry:562,pred_Otro:6544,real_Walmart:32626,real_Cencosud:23370,real_UAS:16956,real_Tottus:4000,real_Prisa:1123,real_Intercarry:607,real_Otro:7423},
+  {mes:"2025-11",real_total:78137,pred_total:88599,error_pct:13.4,accuracy:86.6,pred_Walmart:32021,pred_Cencosud:25441,pred_UAS:19006,pred_Tottus:4197,pred_Prisa:1369,pred_Intercarry:597,pred_Otro:6967,real_Walmart:26599,real_Cencosud:24380,real_UAS:16654,real_Tottus:4060,real_Prisa:1357,real_Intercarry:494,real_Otro:4593},
+  {mes:"2025-12",real_total:87709,pred_total:79571,error_pct:-9.3,accuracy:90.7,pred_Walmart:28755,pred_Cencosud:22805,pred_UAS:16480,pred_Tottus:3773,pred_Prisa:1226,pred_Intercarry:537,pred_Otro:6196,real_Walmart:31153,real_Cencosud:26677,real_UAS:18542,real_Tottus:4340,real_Prisa:1460,real_Intercarry:487,real_Otro:5050},
+  {mes:"2026-01",real_total:88972,pred_total:92306,error_pct:3.7,accuracy:96.3,pred_Walmart:33414,pred_Cencosud:26458,pred_UAS:19080,pred_Tottus:4393,pred_Prisa:1420,pred_Intercarry:617,pred_Otro:6924,real_Walmart:30867,real_Cencosud:27428,real_UAS:18322,real_Tottus:4560,real_Prisa:1900,real_Intercarry:435,real_Otro:5460},
+  {mes:"2026-02",real_total:79295,pred_total:72625,error_pct:-8.4,accuracy:91.6,pred_Walmart:26208,pred_Cencosud:20847,pred_UAS:15030,pred_Tottus:3462,pred_Prisa:1118,pred_Intercarry:488,pred_Otro:5472,real_Walmart:28538,real_Cencosud:22989,real_UAS:16421,real_Tottus:3979,real_Prisa:926,real_Intercarry:382,real_Otro:6060},
+  {mes:"2026-03",real_total:73264,pred_total:87075,error_pct:18.9,accuracy:81.1,pred_Walmart:31397,pred_Cencosud:25080,pred_UAS:18074,pred_Tottus:4157,pred_Prisa:1342,pred_Intercarry:587,pred_Otro:6438,real_Walmart:27560,real_Cencosud:19898,real_UAS:14287,real_Tottus:3838,real_Prisa:1198,real_Intercarry:555,real_Otro:5928}
 ];
 
 const PROYECCIONES = [
-  {mes:"2026-04",pred_total:65972,pred_Walmart:23757,pred_Cencosud:18988,pred_UMR:11907,pred_Tottus:3145,pred_Alvi:1497,pred_Prisa:1009,pred_Intercarry:441,pred_SMU:278,pred_Otro:4950},
-  {mes:"2026-05",pred_total:63456,pred_Walmart:22851,pred_Cencosud:18263,pred_UMR:11452,pred_Tottus:3025,pred_Alvi:1439,pred_Prisa:970,pred_Intercarry:424,pred_SMU:268,pred_Otro:4764},
-  {mes:"2026-06",pred_total:64578,pred_Walmart:23255,pred_Cencosud:18586,pred_UMR:11655,pred_Tottus:3079,pred_Alvi:1464,pred_Prisa:987,pred_Intercarry:432,pred_SMU:272,pred_Otro:4848},
-  {mes:"2026-07",pred_total:68927,pred_Walmart:24822,pred_Cencosud:19832,pred_UMR:12436,pred_Tottus:3285,pred_Alvi:1563,pred_Prisa:1054,pred_Intercarry:461,pred_SMU:291,pred_Otro:5183},
-  {mes:"2026-08",pred_total:56986,pred_Walmart:20527,pred_Cencosud:16399,pred_UMR:10285,pred_Tottus:2717,pred_Alvi:1293,pred_Prisa:872,pred_Intercarry:381,pred_SMU:240,pred_Otro:4272},
-  {mes:"2026-09",pred_total:62847,pred_Walmart:22636,pred_Cencosud:18088,pred_UMR:11340,pred_Tottus:2996,pred_Alvi:1425,pred_Prisa:961,pred_Intercarry:420,pred_SMU:265,pred_Otro:4716},
-  {mes:"2026-10",pred_total:66989,pred_Walmart:24122,pred_Cencosud:19280,pred_UMR:12086,pred_Tottus:3194,pred_Alvi:1519,pred_Prisa:1025,pred_Intercarry:448,pred_SMU:283,pred_Otro:5032},
-  {mes:"2026-11",pred_total:63239,pred_Walmart:22782,pred_Cencosud:18204,pred_UMR:11410,pred_Tottus:3014,pred_Alvi:1434,pred_Prisa:967,pred_Intercarry:423,pred_SMU:267,pred_Otro:4738},
-  {mes:"2026-12",pred_total:69196,pred_Walmart:24919,pred_Cencosud:19909,pred_UMR:12484,pred_Tottus:3298,pred_Alvi:1569,pred_Prisa:1059,pred_Intercarry:463,pred_SMU:292,pred_Otro:5203}
+  {mes:"2026-04",pred_total:82269,pred_Walmart:29515,pred_Cencosud:24236,pred_UAS:16869,pred_Tottus:4177,pred_Prisa:1370,pred_Intercarry:465,pred_Otro:5837},
+  {mes:"2026-05",pred_total:80606,pred_Walmart:28918,pred_Cencosud:23746,pred_UAS:16543,pred_Tottus:4093,pred_Prisa:1343,pred_Intercarry:455,pred_Otro:5719},
+  {mes:"2026-06",pred_total:83019,pred_Walmart:29784,pred_Cencosud:24457,pred_UAS:17036,pred_Tottus:4215,pred_Prisa:1383,pred_Intercarry:469,pred_Otro:5890},
+  {mes:"2026-07",pred_total:89356,pred_Walmart:32057,pred_Cencosud:26324,pred_UAS:18339,pred_Tottus:4537,pred_Prisa:1488,pred_Intercarry:505,pred_Otro:6339},
+  {mes:"2026-08",pred_total:73755,pred_Walmart:26460,pred_Cencosud:21728,pred_UAS:15137,pred_Tottus:3745,pred_Prisa:1229,pred_Intercarry:416,pred_Otro:5233},
+  {mes:"2026-09",pred_total:81672,pred_Walmart:29301,pred_Cencosud:24060,pred_UAS:16761,pred_Tottus:4147,pred_Prisa:1360,pred_Intercarry:461,pred_Otro:5794},
+  {mes:"2026-10",pred_total:87795,pred_Walmart:31497,pred_Cencosud:25864,pred_UAS:18017,pred_Tottus:4458,pred_Prisa:1462,pred_Intercarry:496,pred_Otro:6228},
+  {mes:"2026-11",pred_total:79671,pred_Walmart:28583,pred_Cencosud:23471,pred_UAS:16351,pred_Tottus:4045,pred_Prisa:1327,pred_Intercarry:450,pred_Otro:5652},
+  {mes:"2026-12",pred_total:89430,pred_Walmart:32084,pred_Cencosud:26346,pred_UAS:18352,pred_Tottus:4541,pred_Prisa:1490,pred_Intercarry:505,pred_Otro:6345}
 ];
 
-const RETAILERS = ['Walmart','Cencosud','Unimarc/Rendic','Tottus','Alvi','Prisa','Intercarry','SMU/M10','Otro'];
-const RETAIL_KEYS = ['Walmart','Cencosud','UMR','Tottus','Alvi','Prisa','Intercarry','SMU','Otro'];
+const RETAILERS = ['Walmart','Cencosud','U/A/S','Tottus','Prisa','Intercarry','Otro'];
+const RETAIL_KEYS = ['Walmart','Cencosud','UAS','Tottus','Prisa','Intercarry','Otro'];
+// U/A/S = Unimarc/Rendic + Alvi + SMU/M10 (mismo manejo logístico)
 const RETAIL_COLORS = {
-  Walmart:'#3B82F6',Cencosud:'#34D399',UMR:'#F87171',
-  Tottus:'#FBBF24',Alvi:'#A78BFA',Prisa:'#FB923C',
-  Intercarry:'#2DD4BF',SMU:'#F472B6',Otro:'#64748B'
+  Walmart:'#3B82F6',Cencosud:'#34D399',UAS:'#F87171',
+  Tottus:'#FBBF24',Prisa:'#FB923C',
+  Intercarry:'#2DD4BF',Otro:'#64748B'
 };
 
 // ── DATOS POR REGIÓN ─────────────────────────────────────────────
 const REGION_DATA = {
   Santiago: [
-    {mes:"2025-01",total:77410,Walmart:31930,Cencosud:21215,UMR:11802,Tottus:4780,Alvi:1291,Prisa:1105,Intercarry:463,SMU:236,Otro:4588},
-    {mes:"2025-02",total:63219,Walmart:26635,Cencosud:16608,UMR:9064,Tottus:3720,Alvi:1394,Prisa:595,Intercarry:277,SMU:126,Otro:4800},
-    {mes:"2025-03",total:75241,Walmart:32404,Cencosud:20065,UMR:10744,Tottus:3820,Alvi:1625,Prisa:828,Intercarry:590,SMU:259,Otro:4906},
-    {mes:"2025-04",total:76129,Walmart:31349,Cencosud:20736,UMR:10760,Tottus:3940,Alvi:1700,Prisa:1188,Intercarry:841,SMU:193,Otro:5422},
-    {mes:"2025-05",total:73185,Walmart:31141,Cencosud:20320,UMR:9090,Tottus:3560,Alvi:2075,Prisa:931,Intercarry:821,SMU:287,Otro:4960},
-    {mes:"2025-06",total:75964,Walmart:29674,Cencosud:20240,UMR:13986,Tottus:3800,Alvi:1528,Prisa:719,Intercarry:752,SMU:266,Otro:4999},
-    {mes:"2025-07",total:80730,Walmart:32569,Cencosud:21312,UMR:10910,Tottus:4040,Alvi:1960,Prisa:1777,Intercarry:728,SMU:185,Otro:7249},
-    {mes:"2025-08",total:67143,Walmart:25394,Cencosud:20304,UMR:9470,Tottus:3820,Alvi:1888,Prisa:935,Intercarry:564,SMU:276,Otro:4492},
-    {mes:"2025-09",total:72651,Walmart:30389,Cencosud:20576,UMR:9260,Tottus:4040,Alvi:2176,Prisa:1377,Intercarry:451,SMU:94,Otro:4288},
-    {mes:"2025-10",total:76411,Walmart:32626,Cencosud:19424,UMR:10820,Tottus:4000,Alvi:1448,Prisa:913,Intercarry:607,SMU:238,Otro:6335},
-    {mes:"2025-11",total:73516,Walmart:28079,Cencosud:20576,UMR:12534,Tottus:4060,Alvi:1560,Prisa:1207,Intercarry:494,SMU:144,Otro:4862},
-    {mes:"2025-12",total:81162,Walmart:32033,Cencosud:23824,UMR:11792,Tottus:4340,Alvi:2432,Prisa:1280,Intercarry:487,SMU:86,Otro:4888},
-    {mes:"2026-01",total:81780,Walmart:30868,Cencosud:22668,UMR:13678,Tottus:4560,Alvi:1963,Prisa:1900,Intercarry:435,SMU:215,Otro:5493},
-    {mes:"2026-02",total:72716,Walmart:28323,Cencosud:20355,UMR:11370,Tottus:3979,Alvi:2109,Prisa:1103,Intercarry:382,SMU:67,Otro:5028},
-    {mes:"2026-03",total:57167,Walmart:23388,Cencosud:14291,UMR:7697,Tottus:3198,Alvi:1777,Prisa:860,Intercarry:474,SMU:190,Otro:5292}
+    {mes:"2025-01",total:76252,Walmart:31779,Cencosud:20703,UAS:13529,Tottus:4460,Prisa:1045,Intercarry:430,Otro:4506},
+    {mes:"2025-02",total:62647,Walmart:26635,Cencosud:16608,UAS:9064,Tottus:3720,Prisa:595,Intercarry:277,Otro:4800},
+    {mes:"2025-03",total:71487,Walmart:32103,Cencosud:19393,UAS:11932,Tottus:3180,Prisa:768,Intercarry:328,Otro:3665},
+    {mes:"2025-04",total:75237,Walmart:31349,Cencosud:20736,UAS:12373,Tottus:3940,Prisa:936,Intercarry:841,Otro:5062},
+    {mes:"2025-05",total:72975,Walmart:31141,Cencosud:20320,UAS:11242,Tottus:3560,Prisa:931,Intercarry:821,Otro:4960},
+    {mes:"2025-06",total:75892,Walmart:29602,Cencosud:20240,UAS:15820,Tottus:3800,Prisa:719,Intercarry:752,Otro:4999},
+    {mes:"2025-07",total:79770,Walmart:32569,Cencosud:20352,UAS:13055,Tottus:4040,Prisa:1777,Intercarry:728,Otro:7249},
+    {mes:"2025-08",total:66231,Walmart:25394,Cencosud:19728,UAS:11298,Tottus:3820,Prisa:935,Intercarry:564,Otro:4492},
+    {mes:"2025-09",total:71970,Walmart:30389,Cencosud:20352,UAS:11530,Tottus:3720,Prisa:1377,Intercarry:451,Otro:4151},
+    {mes:"2025-10",total:76411,Walmart:32626,Cencosud:19424,UAS:12506,Tottus:4000,Prisa:913,Intercarry:607,Otro:6335},
+    {mes:"2025-11",total:70369,Walmart:26599,Cencosud:20064,UAS:13502,Tottus:4060,Prisa:1207,Intercarry:494,Otro:4443},
+    {mes:"2025-12",total:79930,Walmart:31153,Cencosud:23600,UAS:13950,Tottus:4340,Prisa:1280,Intercarry:487,Otro:4760},
+    {mes:"2026-01",total:81023,Walmart:30867,Cencosud:22668,UAS:15576,Tottus:4560,Prisa:1900,Intercarry:435,Otro:5017},
+    {mes:"2026-02",total:71423,Walmart:28287,Cencosud:20099,UAS:12921,Tottus:3979,Prisa:926,Intercarry:382,Otro:4820},
+    {mes:"2026-03",total:67117,Walmart:27560,Cencosud:17042,UAS:11624,Tottus:3838,Prisa:1198,Intercarry:555,Otro:5300}
   ],
   Talca: [
-    {mes:"2025-01",total:6227,Walmart:0,Cencosud:1397,UMR:4353,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:216,Otro:261},
-    {mes:"2025-02",total:5643,Walmart:0,Cencosud:1904,UMR:3071,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:100,Otro:568},
-    {mes:"2025-03",total:6513,Walmart:0,Cencosud:3092,UMR:2961,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:161,Otro:299},
-    {mes:"2025-04",total:5992,Walmart:0,Cencosud:2513,UMR:2912,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:75,Otro:492},
-    {mes:"2025-05",total:6079,Walmart:0,Cencosud:2584,UMR:3142,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:105,Otro:248},
-    {mes:"2025-06",total:5529,Walmart:0,Cencosud:3162,UMR:2158,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:168,Otro:41},
-    {mes:"2025-07",total:7866,Walmart:0,Cencosud:3060,UMR:3815,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:0,Otro:991},
-    {mes:"2025-08",total:6104,Walmart:0,Cencosud:2023,UMR:3786,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:160,Otro:135},
-    {mes:"2025-09",total:8130,Walmart:0,Cencosud:3744,UMR:4210,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:0,Otro:176},
-    {mes:"2025-10",total:9694,Walmart:0,Cencosud:3946,UMR:4280,Tottus:0,Alvi:0,Prisa:210,Intercarry:0,SMU:170,Otro:1088},
-    {mes:"2025-11",total:7768,Walmart:0,Cencosud:4316,UMR:3081,Tottus:0,Alvi:0,Prisa:150,Intercarry:0,SMU:71,Otro:150},
-    {mes:"2025-12",total:7779,Walmart:0,Cencosud:3077,UMR:4147,Tottus:0,Alvi:0,Prisa:180,Intercarry:0,SMU:85,Otro:290},
-    {mes:"2026-01",total:7949,Walmart:0,Cencosud:4760,UMR:2746,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:0,Otro:443},
-    {mes:"2026-02",total:8020,Walmart:251,Cencosud:2890,UMR:3391,Tottus:0,Alvi:0,Prisa:148,Intercarry:0,SMU:100,Otro:1240},
-    {mes:"2026-03",total:6046,Walmart:0,Cencosud:3400,UMR:1927,Tottus:0,Alvi:0,Prisa:0,Intercarry:0,SMU:91,Otro:628}
+    {mes:"2025-01",total:6227,Walmart:0,Cencosud:1397,UAS:4569,Tottus:0,Prisa:0,Intercarry:0,Otro:261},
+    {mes:"2025-02",total:5099,Walmart:0,Cencosud:1360,UAS:3171,Tottus:0,Prisa:0,Intercarry:0,Otro:568},
+    {mes:"2025-03",total:6326,Walmart:0,Cencosud:3092,UAS:2935,Tottus:0,Prisa:0,Intercarry:0,Otro:299},
+    {mes:"2025-04",total:5448,Walmart:0,Cencosud:1969,UAS:2987,Tottus:0,Prisa:0,Intercarry:0,Otro:492},
+    {mes:"2025-05",total:6079,Walmart:0,Cencosud:2584,UAS:3247,Tottus:0,Prisa:0,Intercarry:0,Otro:248},
+    {mes:"2025-06",total:5529,Walmart:0,Cencosud:3162,UAS:2326,Tottus:0,Prisa:0,Intercarry:0,Otro:41},
+    {mes:"2025-07",total:7866,Walmart:0,Cencosud:3060,UAS:3815,Tottus:0,Prisa:0,Intercarry:0,Otro:991},
+    {mes:"2025-08",total:6104,Walmart:0,Cencosud:2023,UAS:3946,Tottus:0,Prisa:0,Intercarry:0,Otro:135},
+    {mes:"2025-09",total:8130,Walmart:0,Cencosud:3744,UAS:4210,Tottus:0,Prisa:0,Intercarry:0,Otro:176},
+    {mes:"2025-10",total:9694,Walmart:0,Cencosud:3946,UAS:4660,Tottus:0,Prisa:210,Intercarry:0,Otro:1088},
+    {mes:"2025-11",total:7768,Walmart:0,Cencosud:4316,UAS:3152,Tottus:0,Prisa:150,Intercarry:0,Otro:150},
+    {mes:"2025-12",total:7779,Walmart:0,Cencosud:3077,UAS:4317,Tottus:0,Prisa:180,Intercarry:0,Otro:290},
+    {mes:"2026-01",total:7949,Walmart:0,Cencosud:4760,UAS:2746,Tottus:0,Prisa:0,Intercarry:0,Otro:443},
+    {mes:"2026-02",total:7872,Walmart:251,Cencosud:2890,UAS:3591,Tottus:0,Prisa:0,Intercarry:0,Otro:1240},
+    {mes:"2026-03",total:6147,Walmart:0,Cencosud:2856,UAS:2663,Tottus:0,Prisa:0,Intercarry:0,Otro:628}
   ]
 };
 
@@ -1066,7 +1127,7 @@ function setRegion(region, btn) {
 
   // Info bar
   const nombres = {todas:'Todas las regiones', Santiago:'Santiago + Norte', Talca:'Talca'};
-  const vols = {todas:'1.223.022', Santiago:'1.104.424', Talca:'105.339'};
+  const vols = {todas:'1.214.695', Santiago:'1.098.736', Talca:'104.017'};
   document.getElementById('region-name-info').textContent = nombres[region];
   document.getElementById('region-vol-info').textContent  = vols[region] + ' pallets';
 
@@ -1080,7 +1141,6 @@ function setRegion(region, btn) {
 function getHistoricoFiltrado() {
   if (REGION_ACTIVA === 'todas') return HISTORICO;
   const regData = REGION_DATA[REGION_ACTIVA];
-  // Mapear totales reales de región sobre estructura HISTORICO
   return HISTORICO.map(h => {
     const r = regData.find(d => d.mes === h.mes);
     if (!r) return {...h, real_total: 0};
@@ -1089,15 +1149,12 @@ function getHistoricoFiltrado() {
       real_total:     r.total,
       real_Walmart:   r.Walmart,
       real_Cencosud:  r.Cencosud,
-      real_UMR:       r.UMR,
+      real_UAS:       r.UAS,
       real_Tottus:    r.Tottus,
-      real_Alvi:      r.Alvi,
       real_Prisa:     r.Prisa,
       real_Intercarry:r.Intercarry,
-      real_SMU:       r.SMU,
       real_Otro:      r.Otro,
-      // forecast proporcional al share de región
-      pred_total: h.pred_total ? Math.round(h.pred_total * (r.total / (h.real_total||1)) * (h.pred_total/(h.real_total||1) > 0 ? 1 : 1)) : null
+      pred_total: h.pred_total ? Math.round(h.pred_total * (r.total / (h.real_total||1))) : null
     };
   });
 }
@@ -1125,6 +1182,8 @@ function showTab(name, btn) {
   if(name==='validacion') buildValidacion();
   if(name==='retail') buildRetail();
   if(name==='proyeccion') buildProyeccion();
+  if(name==='heatmap') buildHeatmap();
+  if(name==='14dias') build14dias();
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1137,7 +1196,7 @@ function buildResumen() {
   const preds  = DATA.map(d => d.pred_total);
 
   // Escalar proyecciones según share de región activa
-  const shareRegion = REGION_ACTIVA === 'Santiago' ? 0.903
+  const shareRegion = REGION_ACTIVA === 'Santiago' ? 0.905
                     : REGION_ACTIVA === 'Talca'    ? 0.086
                     : 1.0;
 
@@ -1362,7 +1421,7 @@ function buildValidacion() {
   const tbl = document.getElementById('tabla-validacion');
   tbl.innerHTML = `<thead><tr>
     <th>Mes</th><th>Real</th><th>Forecast</th><th>Error%</th><th>Accuracy</th>
-    <th>Walmart</th><th>Cencosud</th><th>Unimarc/R</th><th>Tottus</th><th>Otro</th>
+    <th>Walmart</th><th>Cencosud</th><th>U/A/S</th><th>Tottus</th><th>Otro</th>
   </tr></thead>`;
   const tbody = document.createElement('tbody');
 
@@ -1381,7 +1440,7 @@ function buildValidacion() {
       <td>${accBadge}</td>
       <td>${d.pred_Walmart?`<small style="color:#64748b">${fmt(d.pred_Walmart)}/</small>`:''}${fmt(d.real_Walmart)}</td>
       <td>${d.pred_Cencosud?`<small style="color:#64748b">${fmt(d.pred_Cencosud)}/</small>`:''}${fmt(d.real_Cencosud)}</td>
-      <td>${d.pred_UMR?`<small style="color:#64748b">${fmt(d.pred_UMR)}/</small>`:''}${fmt(d.real_UMR)}</td>
+      <td>${d.pred_UAS?`<small style="color:#64748b">${fmt(d.pred_UAS)}/</small>`:''}${fmt(d.real_UAS)}</td>
       <td>${d.pred_Tottus?`<small style="color:#64748b">${fmt(d.pred_Tottus)}/</small>`:''}${fmt(d.real_Tottus)}</td>
       <td>${d.pred_Otro?`<small style="color:#64748b">${fmt(d.pred_Otro)}/</small>`:''}${fmt(d.real_Otro)}</td>`;
     tbody.appendChild(tr);
@@ -1410,8 +1469,10 @@ function buildRetail() {
 
     const div = document.createElement('div');
     div.className = 'rc' + (r===selectedRetail ? ' selected' : '');
+    const subLabel = r === 'UAS' ? '<div style="font-size:9px;color:var(--muted);margin-top:2px">Unimarc/Rendic · Alvi · SMU/M10</div>' : '';
     div.innerHTML = `
       <div class="rc-name" style="color:${RETAIL_COLORS[r]}">${RETAILERS[i]}</div>
+      ${subLabel}
       <div class="rc-vol" style="color:${RETAIL_COLORS[r]}">${(total/1000).toFixed(0)}K</div>
       <div class="rc-share">pallets · ${share}% del total</div>
       ${avgAcc ? `<div class="rc-acc"><span class="acc-badge ${accClass(+avgAcc)}">${avgAcc}% acc.</span></div>` : ''}`;
@@ -1571,7 +1632,7 @@ function buildProyeccion() {
   const tbl = document.getElementById('tabla-proyecciones');
   tbl.innerHTML = `<thead><tr>
     <th>Mes</th><th>Proyección</th><th>Banda -8%</th><th>Banda +8%</th>
-    <th>Walmart</th><th>Cencosud</th><th>Unimarc/R</th><th>Tottus</th><th>Otros</th>
+    <th>Walmart</th><th>Cencosud</th><th>U/A/S</th><th>Tottus</th><th>Otros</th>
   </tr></thead>`;
   const tbody = document.createElement('tbody');
   PROYECCIONES.forEach(d => {
@@ -1584,9 +1645,9 @@ function buildProyeccion() {
       <td style="color:var(--muted)">${fmt(Math.round(d.pred_total*1.08))}</td>
       <td style="color:${RETAIL_COLORS.Walmart}">${fmt(d.pred_Walmart)}</td>
       <td style="color:${RETAIL_COLORS.Cencosud}">${fmt(d.pred_Cencosud)}</td>
-      <td style="color:${RETAIL_COLORS.UMR}">${fmt(d.pred_UMR)}</td>
+      <td style="color:${RETAIL_COLORS.UAS}">${fmt(d.pred_UAS)}</td>
       <td style="color:${RETAIL_COLORS.Tottus}">${fmt(d.pred_Tottus)}</td>
-      <td style="color:${RETAIL_COLORS.Otro}">${fmt(d.pred_Alvi+d.pred_Prisa+d.pred_Intercarry+d.pred_SMU+d.pred_Otro)}</td>`;
+      <td style="color:${RETAIL_COLORS.Otro}">${fmt(d.pred_Prisa+d.pred_Intercarry+d.pred_Otro)}</td>`;
     tbody.appendChild(tr);
   });
   tbl.appendChild(tbody);
@@ -1607,30 +1668,26 @@ function buildProyeccion() {
 // HEATMAP DATA
 // ══════════════════════════════════════════════════════════════════
 const HM_MESES = ["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12","2026-01","2026-02","2026-03"];
-const HM_RETAILERS = ["Walmart","Cencosud","Unimarc/Rendic","Otro","Tottus","Alvi","Prisa","Intercarry","SMU/M10"];
-const HM_RKEYS     = ["Walmart","Cencosud","UMR","Otro","Tottus","Alvi","Prisa","Intercarry","SMU"];
+const HM_RETAILERS = ["Walmart","Cencosud","U/A/S","Otro","Tottus","Prisa","Intercarry"];
+const HM_RKEYS     = ["Walmart","Cencosud","UAS","Otro","Tottus","Prisa","Intercarry"];
 const HM_VALUES = [
-  [31930,26825,32595,31560,31334,29860,32569,25394,30389,32626,28079,32033,30868,28574,23388],
-  [22612,18512,23157,23249,22904,23402,24372,22327,24320,23370,24892,26901,27428,23245,17691],
-  [16575,13246,15175,15112,13218,16593,14725,13256,13470,15100,15615,15939,16424,14761,9624],
-  [5307,6267,6125,6447,5963,5516,8240,4627,4464,7423,5012,5178,5936,6268,5920],
-  [4780,3720,3820,3940,3560,3800,4040,3820,4040,4000,4060,4340,4560,3979,3198],
-  [1345,1429,1649,1745,2115,1562,1960,1888,2176,1448,1560,2432,1963,2109,1777],
-  [1281,833,1066,1504,1115,957,1777,935,1377,1123,1357,1460,1900,1251,860],
-  [463,277,590,841,821,752,728,564,451,607,494,487,435,382,474],
-  [452,445,548,399,533,564,185,436,94,408,215,171,215,167,281]
+  [31779,26635,32103,31349,31141,29602,32569,25394,30389,32626,26599,31153,30867,28538,27560],
+  [22100,17968,22485,22705,22904,23402,23412,21751,24096,23370,24380,26677,27428,22989,19898],
+  [17898,13183,14985,15360,14489,18106,16870,15244,15740,16956,16654,18542,18322,16421,14287],
+  [4767,5368,3964,5554,5208,5040,8240,4627,4327,7423,4593,5050,5460,6060,5928],
+  [4460,3720,3180,3940,3560,3800,4040,3820,3720,4000,4060,4340,4560,3979,3838],
+  [1045,595,768,936,931,719,1777,935,1377,1123,1357,1460,1900,926,1198],
+  [430,277,328,841,821,752,728,564,451,607,494,487,435,382,555]
 ];
 // % por mes (retail / total mes)
 const HM_PCT = [
-  [37.7,37.5,38.5,37.2,38.4,36.0,36.8,34.7,37.6,37.9,34.5,36.0,34.4,35.4,37.0],
-  [26.7,25.9,27.3,27.4,28.1,28.2,27.5,30.5,30.1,27.1,30.6,30.2,30.6,28.8,28.0],
-  [19.6,18.5,17.9,17.8,16.2,20.0,16.6,18.1,16.7,17.5,19.2,17.9,18.3,18.3,15.2],
-  [6.3,8.8,7.2,7.6,7.3,6.6,9.3,6.3,5.5,8.6,6.2,5.8,6.6,7.8,9.4],
-  [5.6,5.2,4.5,4.6,4.4,4.6,4.6,5.2,5.0,4.6,5.0,4.9,5.1,4.9,5.1],
-  [1.6,2.0,1.9,2.1,2.6,1.9,2.2,2.6,2.7,1.7,1.9,2.7,2.2,2.6,2.8],
-  [1.5,1.2,1.3,1.8,1.4,1.2,2.0,1.3,1.7,1.3,1.7,1.6,2.1,1.5,1.4],
-  [0.5,0.4,0.7,1.0,1.0,0.9,0.8,0.8,0.6,0.7,0.6,0.5,0.5,0.5,0.7],
-  [0.5,0.6,0.6,0.5,0.7,0.7,0.2,0.6,0.1,0.5,0.3,0.2,0.2,0.2,0.4]
+  [38.5, 39.3, 41.3, 38.9, 39.4, 36.4, 37.2, 35.1, 37.9, 37.9, 34.0, 35.5, 34.7, 36.0, 37.6],
+  [26.8, 26.5, 28.9, 28.1, 29.0, 28.7, 26.7, 30.1, 30.1, 27.1, 31.2, 30.4, 30.8, 29.0, 27.2],
+  [21.7, 19.5, 19.3, 19.0, 18.3, 22.2, 19.3, 21.1, 19.7, 19.7, 21.3, 21.1, 20.6, 20.7, 19.5],
+  [5.8, 7.9, 5.1, 6.9, 6.6, 6.2, 9.4, 6.4, 5.4, 8.6, 5.9, 5.8, 6.1, 7.6, 8.1],
+  [5.4, 5.5, 4.1, 4.9, 4.5, 4.7, 4.6, 5.3, 4.6, 4.6, 5.2, 4.9, 5.1, 5.0, 5.2],
+  [1.3, 0.9, 1.0, 1.2, 1.2, 0.9, 2.0, 1.3, 1.7, 1.3, 1.7, 1.7, 2.1, 1.2, 1.6],
+  [0.5, 0.4, 0.4, 1.0, 1.0, 0.9, 0.8, 0.8, 0.6, 0.7, 0.6, 0.6, 0.5, 0.5, 0.8],
 ];
 
 let HM_MODE = 'abs'; // abs | pct | rel
@@ -1844,17 +1901,176 @@ function buildHeatmap() {
 // INIT
 // ══════════════════════════════════════════════════════════════════
 // Update showTab to include heatmap
-const _origShowTab = showTab;
-function showTab(name, btn) {
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
-  document.getElementById('tab-'+name).classList.add('active');
-  btn.classList.add('active');
-  if(name==='validacion') buildValidacion();
-  if(name==='retail') buildRetail();
-  if(name==='proyeccion') buildProyeccion();
-  if(name==='heatmap') buildHeatmap();
+
+
+// ══════════════════════════════════════════════════════════════════
+// DATOS RECALIBRADOS AL 07-ABR-2026
+// HISTORICO ya contiene datos frescos del Excel completo (245.855 registros)
+// Retailers fusionados: U/A/S = Unimarc/Rendic + Alvi + SMU/M10
+// Forecast recalibrado con tasa base 82.247 pallets/mes (últ 6 meses)
+// ══════════════════════════════════════════════════════════════════
+
+// ── DATOS PROYECCIÓN 14 DÍAS ─────────────────────────────────────
+const PROJ14 = [
+  {fecha:'2026-04-06', dow:'Lun', pred:4868, low:4479, high:5257, WM:1786, CC:1373, UMR:979,  TT:246, resto:484},
+  {fecha:'2026-04-07', dow:'Mar', pred:3646, low:3354, high:3938, WM:1337, CC:1029, UMR:733,  TT:184, resto:363},
+  {fecha:'2026-04-08', dow:'Mié', pred:3973, low:3655, high:4291, WM:1457, CC:1121, UMR:799,  TT:201, resto:395},
+  {fecha:'2026-04-09', dow:'Jue', pred:3622, low:3332, high:3912, WM:1329, CC:1022, UMR:728,  TT:183, resto:360},
+  {fecha:'2026-04-10', dow:'Vie', pred:3480, low:3202, high:3758, WM:1277, CC:982,  UMR:700,  TT:176, resto:345},
+  {fecha:'2026-04-13', dow:'Lun', pred:4990, low:4591, high:5389, WM:1830, CC:1408, UMR:1003, TT:252, resto:497},
+  {fecha:'2026-04-14', dow:'Mar', pred:3737, low:3438, high:4036, WM:1371, CC:1054, UMR:751,  TT:189, resto:372},
+  {fecha:'2026-04-15', dow:'Mié', pred:4072, low:3746, high:4398, WM:1494, CC:1149, UMR:819,  TT:206, resto:404},
+  {fecha:'2026-04-16', dow:'Jue', pred:3712, low:3415, high:4009, WM:1362, CC:1047, UMR:746,  TT:188, resto:369},
+  {fecha:'2026-04-17', dow:'Vie', pred:3567, low:3282, high:3852, WM:1308, CC:1006, UMR:717,  TT:180, resto:356},
+  {fecha:'2026-04-20', dow:'Lun', pred:4795, low:4411, high:5179, WM:1759, CC:1353, UMR:964,  TT:242, resto:477},
+  {fecha:'2026-04-21', dow:'Mar', pred:3591, low:3304, high:3878, WM:1317, CC:1013, UMR:722,  TT:182, resto:357},
+  {fecha:'2026-04-22', dow:'Mié', pred:3913, low:3600, high:4226, WM:1435, CC:1104, UMR:787,  TT:198, resto:389},
+  {fecha:'2026-04-23', dow:'Jue', pred:3567, low:3282, high:3852, WM:1308, CC:1006, UMR:717,  TT:180, resto:356},
+  {fecha:'2026-04-24', dow:'Vie', pred:3428, low:3154, high:3702, WM:1257, CC:967,  UMR:689,  TT:173, resto:342}
+];
+
+// ── BUILD 14 DÍAS ─────────────────────────────────────────────────
+function build14dias() {
+  const labels  = PROJ14.map(d => { const p=d.fecha.split('-'); return p[2]+'/'+p[1]+' '+d.dow; });
+  const preds   = PROJ14.map(d => d.pred);
+  const highs   = PROJ14.map(d => d.high);
+  const lows    = PROJ14.map(d => d.low);
+  const dowColors = PROJ14.map(d => {
+    if(d.dow==='Lun') return 'rgba(52,211,153,.85)';
+    if(d.dow==='Vie') return 'rgba(248,113,113,.75)';
+    return 'rgba(59,130,246,.75)';
+  });
+
+  killChart('14dias');
+  charts['14dias'] = new Chart(document.getElementById('chart14dias'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Forecast', data: preds,
+          backgroundColor: dowColors,
+          borderRadius: 6, borderSkipped: false, order: 2
+        },
+        {
+          label: 'Banda alta', data: highs, type: 'line',
+          borderColor: 'rgba(167,139,250,.5)', borderWidth: 1.5,
+          borderDash: [4,3], pointRadius: 0, fill: '+1',
+          backgroundColor: 'rgba(167,139,250,.06)', order: 1
+        },
+        {
+          label: 'Banda baja', data: lows, type: 'line',
+          borderColor: 'rgba(167,139,250,.5)', borderWidth: 1.5,
+          borderDash: [4,3], pointRadius: 0, fill: false, order: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#94A3B8', font: { size: 11 } } },
+        tooltip: {
+          backgroundColor: '#1a2235', borderColor: '#1f2d45', borderWidth: 1,
+          callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw)}` }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#64748B', font: { size: 10 } }, grid: { display: false } },
+        y: { ticks: { color: '#64748B', font: { size: 10 }, callback: v => v.toLocaleString('es-CL') }, grid: { color: '#1f2d45' } }
+      }
+    }
+  });
+
+  // Gráfico retail 14 días (stacked)
+  killChart('14retail');
+  charts['14retail'] = new Chart(document.getElementById('chart14retail'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Walmart',        data: PROJ14.map(d=>d.WM),    backgroundColor: '#3B82F6CC', borderRadius:0, borderSkipped:false },
+        { label: 'Cencosud',       data: PROJ14.map(d=>d.CC),    backgroundColor: '#34D399CC', borderRadius:0, borderSkipped:false },
+        { label: 'U/A/S', data: PROJ14.map(d=>d.UMR), backgroundColor: '#F87171CC', borderRadius:0, borderSkipped:false },
+        { label: 'Tottus',         data: PROJ14.map(d=>d.TT),    backgroundColor: '#FBBF24CC', borderRadius:0, borderSkipped:false },
+        { label: 'Resto',          data: PROJ14.map(d=>d.resto),  backgroundColor: '#64748BCC', borderRadius:4, borderSkipped:false }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: { labels: { color: '#94A3B8', font: { size: 10 }, boxWidth: 10 } },
+        tooltip: { mode: 'index', callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw)}` } }
+      },
+      scales: {
+        x: { stacked: true, ticks: { color: '#64748B', font: { size: 9 } }, grid: { display: false } },
+        y: { stacked: true, ticks: { color: '#64748B', font: { size: 10 }, callback: v => v.toLocaleString('es-CL') }, grid: { color: '#1f2d45' } }
+      }
+    }
+  });
+
+  // Tabla detallada
+  const tbl = document.getElementById('tabla14dias');
+  tbl.innerHTML = `<thead><tr>
+    <th>Fecha</th><th>Día</th><th>Forecast</th><th>Banda −8%</th><th>Banda +8%</th>
+    <th style="color:#3B82F6">Walmart</th><th style="color:#34D399">Cencosud</th>
+    <th style="color:#F87171">U/A/S</th><th style="color:#FBBF24">Tottus</th><th>Resto</th>
+  </tr></thead>`;
+  const tbody = document.createElement('tbody');
+  const hoy = '2026-04-06';
+  const man = '2026-04-07';
+  PROJ14.forEach(d => {
+    const tr = document.createElement('tr');
+    const esHoy = d.fecha === hoy;
+    const esMañana = d.fecha === man;
+    const dowColor = d.dow==='Lun'?'var(--green)':d.dow==='Vie'?'var(--red)':'var(--text2)';
+    tr.style.background = esHoy ? 'rgba(59,130,246,.08)' : esMañana ? 'rgba(52,211,153,.06)' : '';
+    const p = d.fecha.split('-');
+    tr.innerHTML = `
+      <td><strong style="color:${esHoy?'var(--accent2)':esMañana?'var(--green)':'var(--text)'}">${p[2]}/${p[1]}</strong>${esHoy?' <span style="font-size:9px;color:var(--accent2)">HOY</span>':esMañana?' <span style="font-size:9px;color:var(--green)">MÑN</span>':''}</td>
+      <td style="color:${dowColor};font-weight:600">${d.dow}</td>
+      <td><strong style="color:var(--accent2)">${fmt(d.pred)}</strong></td>
+      <td style="color:var(--muted)">${fmt(d.low)}</td>
+      <td style="color:var(--muted)">${fmt(d.high)}</td>
+      <td style="color:#3B82F6">${fmt(d.WM)}</td>
+      <td style="color:#34D399">${fmt(d.CC)}</td>
+      <td style="color:#F87171">${fmt(d.UMR)}</td>
+      <td style="color:#FBBF24">${fmt(d.TT)}</td>
+      <td style="color:#64748B">${fmt(d.resto)}</td>`;
+    tbody.appendChild(tr);
+  });
+  // Fila total
+  const totRow = document.createElement('tr');
+  totRow.style.borderTop = '2px solid var(--border)';
+  totRow.style.fontWeight = '700';
+  const total14 = PROJ14.reduce((s,d)=>s+d.pred,0);
+  totRow.innerHTML = `<td colspan="2" style="color:var(--text2)">TOTAL 14 días hábiles</td>
+    <td><strong style="color:var(--purple)">${fmt(total14)}</strong></td>
+    <td style="color:var(--muted)">${fmt(Math.round(total14*.92))}</td>
+    <td style="color:var(--muted)">${fmt(Math.round(total14*1.08))}</td>
+    <td style="color:#3B82F6">${fmt(PROJ14.reduce((s,d)=>s+d.WM,0))}</td>
+    <td style="color:#34D399">${fmt(PROJ14.reduce((s,d)=>s+d.CC,0))}</td>
+    <td style="color:#F87171">${fmt(PROJ14.reduce((s,d)=>s+d.UMR,0))}</td>
+    <td style="color:#FBBF24">${fmt(PROJ14.reduce((s,d)=>s+d.TT,0))}</td>
+    <td style="color:#64748B">${fmt(PROJ14.reduce((s,d)=>s+d.resto,0))}</td>`;
+  tbody.appendChild(totRow);
+  tbl.appendChild(tbody);
+
+  // Insight
+  document.getElementById('insight-14dias').innerHTML = `
+    📅 <strong>Lectura ejecutiva · 07–24 Abr 2026:</strong>
+    Para <strong style="color:var(--accent2)">hoy (Lun 06 Abr)</strong> se proyectan <strong style="color:var(--accent2)">${fmt(4868)} pallets</strong>
+    y para <strong style="color:var(--green)">mañana (Mar 07 Abr)</strong> <strong style="color:var(--green)">${fmt(3646)} pallets</strong>.
+    El período de 15 días hábiles acumula un total estimado de <strong style="color:var(--purple)">${fmt(58961)} pallets</strong>.
+    Los <strong style="color:var(--green)">Lunes</strong> son históricamente los días de mayor volumen (~4.900 pallets),
+    mientras que los <strong style="color:var(--red)">Viernes</strong> son los más bajos (~3.460 pallets).
+    <strong>Walmart</strong> concentra el <strong>36.7%</strong> del volumen proyectado,
+    seguido por <strong>Cencosud</strong> (28.2%) y <strong>U/A/S</strong> (20.1%).
+    Banda de confianza: <strong>±8%</strong> basada en el accuracy histórico del modelo.`;
 }
+
+// Update footer text
+// Footer ya actualizado en HTML
 
 buildResumen();
 
@@ -1890,9 +2106,9 @@ function saveApiKey() {
 
 function showWelcome() {
   appendMsg('ai', `¡Hola! Soy el asistente de <strong>REDTEC</strong>. Tengo acceso completo a los datos del dashboard:<br><br>
-· <span class="highlight">1.223.022 pallets</span> retiros Ene 2025–Mar 2026<br>
-· <span class="highlight">9 retailers</span> con historial mensual completo<br>
-· <span class="highlight">Modelo con 90.8% accuracy</span> validado en 12 meses<br>
+· <span class="highlight">1.214.695 pallets</span> retiros Ene 2025–Mar 2026<br>
+· <span class="highlight">7 grupos retail</span> (U/A/S fusionado) con historial mensual completo<br>
+· <span class="highlight">Modelo con 91.4% accuracy</span> validado en 12 meses<br>
 · <span class="highlight">Proyecciones</span> Abr–Dic 2026<br><br>¿Qué quieres saber?`);
 }
 
@@ -1908,16 +2124,16 @@ function buildContext() {
 DATOS DASHBOARD (SAP real, Ene 2025–Mar 2026):
 - Total retiros: ${totalRetiros.toLocaleString('es-CL')} pallets | Promedio mensual: ${Math.round(totalRetiros/15).toLocaleString('es-CL')} | Región activa: ${region}
 
-MODELO: Accuracy 90.8% (12 meses) | Mejor: ${mejorAcc.mes} ${mejorAcc.accuracy}% | Peor: ${peorAcc.mes} ${peorAcc.accuracy}% | Tasa retorno: 85.5%±4.1%
+MODELO: Accuracy 91.4% (12 meses) | Mejor: ${mejorAcc.mes} ${mejorAcc.accuracy}% | Peor: ${peorAcc.mes} ${peorAcc.accuracy}% | Tasa retorno: 85.5%±4.1%
 
 RETAILERS:
 ${retailTotales.map((r,i)=>`${i+1}. ${r.nombre}: ${r.total.toLocaleString('es-CL')} (${(r.total/totalRetiros*100).toFixed(1)}%)`).join(' | ')}
 
 HISTÓRICO MENSUAL:
-${HISTORICO.map(d=>`${d.mes}: real=${d.real_total?.toLocaleString('es-CL')||'N/A'} forecast=${d.pred_total?.toLocaleString('es-CL')||'—'} acc=${d.accuracy!=null?d.accuracy+'%':'—'} WM=${d.real_Walmart||0} CC=${d.real_Cencosud||0} UMR=${d.real_UMR||0} TT=${d.real_Tottus||0}`).join('\n')}
+${HISTORICO.map(d=>`${d.mes}: real=${d.real_total?.toLocaleString('es-CL')||'N/A'} forecast=${d.pred_total?.toLocaleString('es-CL')||'—'} acc=${d.accuracy!=null?d.accuracy+'%':'—'} WM=${d.real_Walmart||0} CC=${d.real_Cencosud||0} UAS=${d.real_UAS||0} TT=${d.real_Tottus||0}`).join('\n')}
 
 PROYECCIONES ABR–DIC 2026:
-${PROYECCIONES.map(d=>`${d.mes}: ${d.pred_total.toLocaleString('es-CL')} (±8%) WM:${d.pred_Walmart.toLocaleString('es-CL')} CC:${d.pred_Cencosud.toLocaleString('es-CL')} UMR:${d.pred_UMR.toLocaleString('es-CL')}`).join('\n')}
+${PROYECCIONES.map(d=>`${d.mes}: ${d.pred_total.toLocaleString('es-CL')} (±8%) WM:${d.pred_Walmart.toLocaleString('es-CL')} CC:${d.pred_Cencosud.toLocaleString('es-CL')} UAS:${d.pred_UAS.toLocaleString('es-CL')}`).join('\n')}
 Total proyectado: ${totalProj.toLocaleString('es-CL')} pallets
 
 REGIONES: Santiago+Norte=1.104.424 (90.3%, todos retailers) | Talca=105.339 (8.6%, SOLO Cencosud+Unimarc)

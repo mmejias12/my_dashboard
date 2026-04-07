@@ -250,6 +250,10 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 .dash-card.active:hover .dash-enter{gap:14px;}
 .dash-enter svg{width:14px;height:14px;}
 .coming-tag{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:2px;color:#2a2a2a;border:1px solid #222;padding:6px 12px;display:inline-block;border-radius:3px;}
+.dash-mini-stats{display:flex;gap:24px;margin-bottom:24px;}
+.dash-mini-item{display:flex;flex-direction:column;gap:3px;}
+.dash-mini-val{font-family:'Bebas Neue',sans-serif;font-size:22px;line-height:1;color:var(--white);}
+.dash-mini-label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#555;}
 .dash-visual{height:80px;display:flex;align-items:flex-end;gap:3px;padding:12px;background:#111;border:1px solid #1a1a1a;border-radius:4px;margin-bottom:20px;}
 .dv-bar{flex:1;background:#2a2a2a;border-radius:1px 1px 0 0;transform:scaleY(0);transform-origin:bottom;animation:barUp .5s ease forwards;}
 .dv-bar.r{background:var(--red);opacity:.8;}
@@ -482,14 +486,22 @@ footer{background:#050505;border-top:1px solid #111;padding:28px 6vw;display:fle
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12,5 19,12 12,19"/></svg>
       </div>
     </a>
-    <div class="dash-card soon reveal">
+    <a href="m3link_dashboard_dark.html" class="dash-card active reveal">
       <div>
-        <div class="dash-card-tag gray">Próximamente</div>
-        <div class="dash-card-title">Flujo Real<br>2026</div>
-        <div class="dash-card-desc">E0 → C2R → E3 → D1 con acumulados diarios, backlog y cuadratura MTD por período.</div>
+        <div class="dash-card-tag">Dashboard activo</div>
+        <div class="dash-card-title">M3LINK<br>Panel de Control</div>
+        <div class="dash-card-desc">Operaciones en tiempo real — emisiones, retiros, transferencias y relocalizaciones por rango de fechas. Filtros dinámicos, KPIs del período, exportación CSV y conexión directa al API REDTEC.</div>
       </div>
-      <div class="coming-tag">En desarrollo</div>
-    </div>
+      <div class="dash-mini-stats">
+        <div class="dash-mini-item"><span class="dash-mini-val">OPS</span><span class="dash-mini-label">Tiempo real</span></div>
+        <div class="dash-mini-item"><span class="dash-mini-val">API</span><span class="dash-mini-label">Conectado</span></div>
+        <div class="dash-mini-item"><span class="dash-mini-val">CSV</span><span class="dash-mini-label">Exportable</span></div>
+      </div>
+      <div class="dash-enter">
+        Ingresar al dashboard
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12,5 19,12 12,19"/></svg>
+      </div>
+    </a>
     <div class="dash-card soon reveal">
       <div>
         <div class="dash-card-tag gray">Próximamente</div>

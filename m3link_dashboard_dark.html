@@ -162,7 +162,7 @@
   <div class="topbar-title"><div class="live-dot"></div>Panel de control M3LINK</div>
   <div class="topbar-right">
     <div class="avatar">MM</div>
-    <span class="user-email">mmejias@redtecsa.com</span>
+    <span class="user-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="214c4c444b4840526153444555444252400f424e4c">[email&#160;protected]</a></span>
   </div>
 </div>
 
@@ -274,8 +274,14 @@
   </div>
 </div>
 
-<script>
-const API='https://apirdt1.azurewebsites.net/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRangoFechas';
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+// Detección automática de entorno
+const isLocal   = window.location.protocol === 'file:';
+const isDev     = ['localhost','127.0.0.1'].includes(window.location.hostname);
+const API_DIRECT = 'https://apirdt1.azurewebsites.net/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRangoFechas';
+const API_PROXY  = '/proxy/ops';
+// Local file:// y dev usan directo; producción (Azure) usa proxy
+const API = (isLocal || isDev) ? API_DIRECT : API_PROXY;
 let raw=[],filtered=[],cp=1,ps=15,sc=null,sd=1,activeTags=new Set();
 
 function tog(id,hdr){
@@ -295,19 +301,54 @@ async function loadData(){
   document.getElementById('pg').style.display='none';
   document.getElementById('tag-row').style.display='none';
   activeTags.clear();document.querySelectorAll('.tag').forEach(t=>t.classList.remove('on'));
+
+  // Aviso si se ejecuta local desde file://
+  if(isFileLocal){
+    tbody.innerHTML=`<tr><td colspan="10"><div class="err-msg">
+      ⚠️ Estás abriendo el archivo directamente desde tu PC (file://)<br>
+      <small style="color:var(--text-muted)">
+        El fetch al API puede ser bloqueado por el navegador en modo local.<br>
+        <strong style="color:var(--text-secondary)">Opciones:</strong><br>
+        • Sube el archivo a <strong>ashy-island-0089d900f.2.azurestaticapps.net</strong> para que funcione completo<br>
+        • O abre Chrome con: <code style="color:var(--accent)">chrome --disable-web-security --user-data-dir=/tmp/chrome</code>
+      </small>
+    </div></td></tr>`;
+    document.getElementById('tcnt').textContent='Entorno local detectado';
+    btn.disabled=false;btn.textContent='Cargar datos';
+    return;
+  }
+
   try{
     const d1=document.getElementById('d1').value,d2=document.getElementById('d2').value;
-    const res=await fetch(`${API}?fechaInicio=${d1}&fechaFin=${d2}`,{headers:{'Accept':'application/json'}});
-    if(!res.ok)throw new Error(`HTTP ${res.status}`);
+    const url = isDevServer
+      ? API_DIRECT + '?fechaInicio='+d1+'&fechaFin='+d2
+      : API_PROXY  + '?fechaInicio='+d1+'&fechaFin='+d2;
+    const res=await fetch(url,{headers:{'Accept':'application/json'}});
+    if(!res.ok)throw new Error('HTTP '+res.status+' — '+res.statusText);
     raw=await res.json();if(!Array.isArray(raw))raw=[raw];
+    if(raw.length===0){
+      tbody.innerHTML='<tr><td colspan="10"><div class="state-msg">Sin registros para el rango seleccionado</div></td></tr>';
+      document.getElementById('tcnt').textContent='0 registros';
+      btn.disabled=false;btn.textContent='Cargar datos';
+      return;
+    }
     filtered=[...raw];cp=1;sc=null;
     updateStats();buildTags();render();
     document.getElementById('stats').style.display='grid';
     document.getElementById('pg').style.display='flex';
-    if(raw.length)document.getElementById('tag-row').style.display='flex';
+    document.getElementById('tag-row').style.display='flex';
     document.getElementById('last-upd').textContent='Actualizado '+new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   }catch(e){
-    tbody.innerHTML=`<tr><td colspan="10"><div class="err-msg">⚠️ Error: ${e.message}<br><small style="color:var(--text-muted)">Puede ser CORS — intenta desde servidor o agrega encabezados al API</small></div></td></tr>`;
+    const isCors = e.message.includes('Failed to fetch') || e.message.includes('NetworkError');
+    tbody.innerHTML=`<tr><td colspan="10"><div class="err-msg">
+      ⚠️ ${isCors ? 'Error de red / CORS' : 'Error: '+e.message}<br>
+      <small style="color:var(--text-muted)">
+        ${isCors
+          ? 'El proxy aún no está activo. Verifica que <code>staticwebapp.config.json</code> esté en la raíz del sitio y que el deploy esté completo.'
+          : 'Revisa la consola del navegador (F12) para más detalles.'
+        }
+      </small>
+    </div></td></tr>`;
     document.getElementById('tcnt').textContent='Error de conexión';
   }
   btn.disabled=false;btn.textContent='Cargar datos';
@@ -385,10 +426,4 @@ function exportCSV(){
   const keys=['nroPedido','dteNro','operacion','etapaOperacion','horaIngreso','clienteOrigenStr','bodegaOrigenStr','clienteDestinoStr','bodegaDestinoStr','cantidadSolicitada','cantidadDespachada','cantidadConfirmada','cantidadPendiente','fechaRequerida','fechaDespacho','fechaConfirmacion','patente','chofer','usuario','observacion'];
   const rows=[keys.join(','),...filtered.map(r=>keys.map(k=>`"${String(r[k]??'').replace(/"/g,'""')}"`).join(','))];
   const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob(['\uFEFF'+rows.join('\n')],{type:'text/csv;charset=utf-8;'}));
-  a.download=`ops_${document.getElementById('d1').value}_${document.getElementById('d2').value}.csv`;
-  a.click();URL.revokeObjectURL(a.href);
-}
-</script>
-</body>
-</html>
+  a.href=URL.createObjectURL(new Blob(['\

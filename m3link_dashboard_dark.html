@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Panel de Control M3LINK — REDTEC</title>
+<title>Panel de Control DATALINK — REDTEC</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -159,7 +159,7 @@
     <span class="logo-name">REDTEC</span>
   </div>
   <div class="logo-sep"></div>
-  <div class="topbar-title"><div class="live-dot"></div>Panel de control M3LINK</div>
+  <div class="topbar-title"><div class="live-dot"></div>Panel de control DATALINK</div>
   <div class="topbar-right">
     <div class="avatar">MM</div>
     <span class="user-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="214c4c444b4840526153444555444252400f424e4c">[email&#160;protected]</a></span>
@@ -274,156 +274,247 @@
   </div>
 </div>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
-// Detección automática de entorno
-const isLocal   = window.location.protocol === 'file:';
-const isDev     = ['localhost','127.0.0.1'].includes(window.location.hostname);
-const API_DIRECT = 'https://apirdt1.azurewebsites.net/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRangoFechas';
-const API_PROXY  = '/proxy/ops';
-// Local file:// y dev usan directo; producción (Azure) usa proxy
-const API = (isLocal || isDev) ? API_DIRECT : API_PROXY;
-let raw=[],filtered=[],cp=1,ps=15,sc=null,sd=1,activeTags=new Set();
+<script>
+/* M3LINK Dashboard – JS limpio sin template literals */
+var isLocal  = (window.location.protocol === 'file:');
+var isDev    = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+var API_DIRECT = 'https://apirdt1.azurewebsites.net/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRangoFechas';
+var API_PROXY  = '/proxy/ops';
 
-function tog(id,hdr){
-  const el=document.getElementById(id),isOpen=el.style.maxHeight&&el.style.maxHeight!=='0px';
-  document.querySelectorAll('.s-sub').forEach(e=>e.style.maxHeight='0');
-  document.querySelectorAll('.s-hdr').forEach(h=>h.classList.remove('open'));
-  if(!isOpen){el.style.maxHeight=(el.scrollHeight+200)+'px';hdr.classList.add('open');}
+var raw = [], filtered = [], cp = 1, ps = 15, sc = null, sd = 1;
+var activeTags = [];
+
+/* SIDEBAR */
+function tog(id, hdr) {
+  var el = document.getElementById(id);
+  var isOpen = el.style.maxHeight && el.style.maxHeight !== '0px';
+  var subs = document.querySelectorAll('.s-sub');
+  for (var i=0;i<subs.length;i++) subs[i].style.maxHeight = '0';
+  var hdrs = document.querySelectorAll('.s-hdr');
+  for (var i=0;i<hdrs.length;i++) hdrs[i].classList.remove('open');
+  if (!isOpen) { el.style.maxHeight = (el.scrollHeight + 200) + 'px'; hdr.classList.add('open'); }
 }
-function act(el){document.querySelectorAll('.s-item').forEach(e=>e.classList.remove('active'));el.classList.add('active');}
-window.addEventListener('DOMContentLoaded',()=>{const g=document.getElementById('g1');g.style.maxHeight=(g.scrollHeight+100)+'px';});
+function act(el) {
+  var items = document.querySelectorAll('.s-item');
+  for (var i=0;i<items.length;i++) items[i].classList.remove('active');
+  el.classList.add('active');
+}
+window.addEventListener('DOMContentLoaded', function() {
+  var g = document.getElementById('g1');
+  if (g) g.style.maxHeight = (g.scrollHeight + 100) + 'px';
+});
 
-async function loadData(){
-  const btn=document.getElementById('btn-load'),tbody=document.getElementById('tbody');
-  btn.disabled=true;btn.textContent='Cargando...';
-  tbody.innerHTML='<tr><td colspan="10"><div class="state-msg"><div class="spinner"></div>Consultando API...</div></td></tr>';
-  document.getElementById('stats').style.display='none';
-  document.getElementById('pg').style.display='none';
-  document.getElementById('tag-row').style.display='none';
-  activeTags.clear();document.querySelectorAll('.tag').forEach(t=>t.classList.remove('on'));
+/* CARGAR DATOS */
+function loadData() {
+  var btn   = document.getElementById('btn-load');
+  var tbody = document.getElementById('tbody');
+  btn.disabled = true;
+  btn.textContent = 'Cargando...';
+  tbody.innerHTML = '<tr><td colspan="10"><div class="state-msg"><div class="spinner"></div>Consultando API...</div></td></tr>';
+  document.getElementById('stats').style.display    = 'none';
+  document.getElementById('pg').style.display       = 'none';
+  document.getElementById('tag-row').style.display  = 'none';
+  activeTags = [];
+  var tags = document.querySelectorAll('.tag');
+  for (var i=0;i<tags.length;i++) tags[i].classList.remove('on');
 
-  // Aviso si se ejecuta local desde file://
-  if(isFileLocal){
-    tbody.innerHTML=`<tr><td colspan="10"><div class="err-msg">
-      ⚠️ Estás abriendo el archivo directamente desde tu PC (file://)<br>
-      <small style="color:var(--text-muted)">
-        El fetch al API puede ser bloqueado por el navegador en modo local.<br>
-        <strong style="color:var(--text-secondary)">Opciones:</strong><br>
-        • Sube el archivo a <strong>ashy-island-0089d900f.2.azurestaticapps.net</strong> para que funcione completo<br>
-        • O abre Chrome con: <code style="color:var(--accent)">chrome --disable-web-security --user-data-dir=/tmp/chrome</code>
-      </small>
-    </div></td></tr>`;
-    document.getElementById('tcnt').textContent='Entorno local detectado';
-    btn.disabled=false;btn.textContent='Cargar datos';
+  if (isLocal) {
+    tbody.innerHTML = '<tr><td colspan="10"><div class="err-msg">Abre esta pagina desde el sitio publicado en Azure, no desde archivo local.</div></td></tr>';
+    document.getElementById('tcnt').textContent = 'Modo local';
+    btn.disabled = false; btn.textContent = 'Cargar datos';
     return;
   }
 
-  try{
-    const d1=document.getElementById('d1').value,d2=document.getElementById('d2').value;
-    const url = isDevServer
-      ? API_DIRECT + '?fechaInicio='+d1+'&fechaFin='+d2
-      : API_PROXY  + '?fechaInicio='+d1+'&fechaFin='+d2;
-    const res=await fetch(url,{headers:{'Accept':'application/json'}});
-    if(!res.ok)throw new Error('HTTP '+res.status+' — '+res.statusText);
-    raw=await res.json();if(!Array.isArray(raw))raw=[raw];
-    if(raw.length===0){
-      tbody.innerHTML='<tr><td colspan="10"><div class="state-msg">Sin registros para el rango seleccionado</div></td></tr>';
-      document.getElementById('tcnt').textContent='0 registros';
-      btn.disabled=false;btn.textContent='Cargar datos';
-      return;
-    }
-    filtered=[...raw];cp=1;sc=null;
-    updateStats();buildTags();render();
-    document.getElementById('stats').style.display='grid';
-    document.getElementById('pg').style.display='flex';
-    document.getElementById('tag-row').style.display='flex';
-    document.getElementById('last-upd').textContent='Actualizado '+new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  }catch(e){
-    const isCors = e.message.includes('Failed to fetch') || e.message.includes('NetworkError');
-    tbody.innerHTML=`<tr><td colspan="10"><div class="err-msg">
-      ⚠️ ${isCors ? 'Error de red / CORS' : 'Error: '+e.message}<br>
-      <small style="color:var(--text-muted)">
-        ${isCors
-          ? 'El proxy aún no está activo. Verifica que <code>staticwebapp.config.json</code> esté en la raíz del sitio y que el deploy esté completo.'
-          : 'Revisa la consola del navegador (F12) para más detalles.'
-        }
-      </small>
-    </div></td></tr>`;
-    document.getElementById('tcnt').textContent='Error de conexión';
+  var d1  = document.getElementById('d1').value;
+  var d2  = document.getElementById('d2').value;
+  var url = (isDev ? API_DIRECT : API_PROXY) + '?fechaInicio=' + d1 + '&fechaFin=' + d2;
+
+  fetch(url, { headers: { 'Accept': 'application/json' } })
+    .then(function(res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + res.statusText);
+      return res.json();
+    })
+    .then(function(data) {
+      raw = Array.isArray(data) ? data : [data];
+      if (raw.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10"><div class="state-msg">Sin registros para el rango seleccionado</div></td></tr>';
+        document.getElementById('tcnt').textContent = '0 registros';
+        btn.disabled = false; btn.textContent = 'Cargar datos';
+        return;
+      }
+      filtered = raw.slice(); cp = 1; sc = null;
+      updateStats(); buildTags(); render();
+      document.getElementById('stats').style.display   = 'grid';
+      document.getElementById('pg').style.display      = 'flex';
+      document.getElementById('tag-row').style.display = 'flex';
+      var now = new Date();
+      document.getElementById('last-upd').textContent = 'Actualizado ' + now.toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+      btn.disabled = false; btn.textContent = 'Cargar datos';
+    })
+    .catch(function(err) {
+      var isCors = err.message.indexOf('Failed to fetch') >= 0 || err.message.indexOf('NetworkError') >= 0;
+      var msg = isCors
+        ? 'Error de red/CORS. Verifica que staticwebapp.config.json este en la raiz y el deploy este completo.'
+        : 'Error: ' + err.message + '. Revisa consola F12.';
+      tbody.innerHTML = '<tr><td colspan="10"><div class="err-msg">' + msg + '</div></td></tr>';
+      document.getElementById('tcnt').textContent = 'Error';
+      btn.disabled = false; btn.textContent = 'Cargar datos';
+    });
+}
+
+/* STATS */
+function updateStats() {
+  document.getElementById('s0').textContent = raw.length.toLocaleString('es-CL');
+  var em=0, ret=0, tra=0, cerr=0;
+  for (var i=0;i<raw.length;i++) {
+    var op = (raw[i].operacion||'').toLowerCase();
+    var et = (raw[i].etapaOperacion||'').toLowerCase();
+    if (op.indexOf('emision')>=0)  em++;
+    if (op.indexOf('retiro')>=0)   ret++;
+    if (op.indexOf('transfer')>=0) tra++;
+    if (et.indexOf('cerrado')>=0)  cerr++;
   }
-  btn.disabled=false;btn.textContent='Cargar datos';
+  document.getElementById('s1').textContent = em;
+  document.getElementById('s2').textContent = ret;
+  document.getElementById('s3').textContent = tra;
+  document.getElementById('s4').textContent = cerr;
 }
 
-function updateStats(){
-  document.getElementById('s0').textContent=raw.length.toLocaleString('es-CL');
-  document.getElementById('s1').textContent=raw.filter(r=>(r.operacion||'').toLowerCase().includes('emision')).length;
-  document.getElementById('s2').textContent=raw.filter(r=>(r.operacion||'').toLowerCase().includes('retiro')).length;
-  document.getElementById('s3').textContent=raw.filter(r=>(r.operacion||'').toLowerCase().includes('transfer')).length;
-  document.getElementById('s4').textContent=raw.filter(r=>(r.etapaOperacion||'').toLowerCase().includes('cerrado')).length;
+/* TAGS */
+function buildTags() {
+  var ops = [];
+  for (var i=0;i<raw.length;i++) {
+    if (raw[i].operacion && ops.indexOf(raw[i].operacion) < 0) ops.push(raw[i].operacion);
+  }
+  ops.sort();
+  var html = '';
+  for (var i=0;i<ops.length;i++) {
+    html += '<span class="tag" onclick="toggleTag(this,\'' + ops[i].replace(/'/g,"\\'") + '\')">' + ops[i] + '</span>';
+  }
+  document.getElementById('tag-row').innerHTML = html;
 }
-function buildTags(){
-  const ops=[...new Set(raw.map(r=>r.operacion).filter(Boolean))].sort();
-  document.getElementById('tag-row').innerHTML=ops.map(op=>`<span class="tag" onclick="toggleTag(this,'${op.replace(/'/g,"\\'")}')">${op}</span>`).join('');
+function toggleTag(el, op) {
+  var idx = activeTags.indexOf(op);
+  if (idx >= 0) { activeTags.splice(idx,1); el.classList.remove('on'); }
+  else          { activeTags.push(op);      el.classList.add('on'); }
+  applyFilters();
 }
-function toggleTag(el,op){activeTags.has(op)?(activeTags.delete(op),el.classList.remove('on')):(activeTags.add(op),el.classList.add('on'));applyFilters();}
-function applyFilters(){
-  const q=document.getElementById('search').value.toLowerCase(),sel=document.getElementById('op-filter').value.toLowerCase();
-  filtered=raw.filter(r=>{
-    const mQ=!q||Object.values(r).some(v=>String(v||'').toLowerCase().includes(q));
-    const mS=!sel||(r.operacion||'').toLowerCase().includes(sel);
-    const mT=activeTags.size===0||activeTags.has(r.operacion);
-    return mQ&&mS&&mT;
-  });cp=1;render();
-}
-function sortBy(col){sc===col?sd*=-1:(sc=col,sd=1);filtered.sort((a,b)=>{const va=a[col]??'',vb=b[col]??'';return(typeof va==='number'?va-vb:String(va).localeCompare(String(vb),'es'))*sd;});render();}
 
-function opBadge(op){
-  if(!op)return'—';const l=op.toLowerCase();
-  if(l.includes('retiro'))return`<span class="badge b-ret">${op}</span>`;
-  if(l.includes('emision'))return`<span class="badge b-em">${op}</span>`;
-  if(l.includes('transfer'))return`<span class="badge b-tras">${op}</span>`;
-  if(l.includes('relocaliz'))return`<span class="badge b-rel">${op}</span>`;
-  if(l.includes('devoluci'))return`<span class="badge b-dev">${op}</span>`;
-  return`<span class="badge b-other">${op}</span>`;
+/* FILTROS */
+function applyFilters() {
+  var q   = document.getElementById('search').value.toLowerCase();
+  var sel = document.getElementById('op-filter').value.toLowerCase();
+  filtered = [];
+  for (var i=0;i<raw.length;i++) {
+    var r = raw[i];
+    var vals = Object.values(r);
+    var mQ = !q;
+    if (!mQ) { for(var j=0;j<vals.length;j++){if(String(vals[j]||'').toLowerCase().indexOf(q)>=0){mQ=true;break;}} }
+    var mS = !sel || (r.operacion||'').toLowerCase().indexOf(sel) >= 0;
+    var mT = activeTags.length === 0 || activeTags.indexOf(r.operacion) >= 0;
+    if (mQ && mS && mT) filtered.push(r);
+  }
+  cp = 1; render();
 }
-function etapaCls(e){
-  if(!e)return'e-other';const l=e.toLowerCase();
-  if(l.includes('cerrado'))return'e-cerrado';
-  if(l.includes('anulado'))return'e-anulado';
-  if(l==='confirmar')return'e-confirmar';
-  if(l.includes('por confirmar'))return'e-por-confirmar';
-  if(l.includes('pendiente'))return'e-pendiente';
-  if(l.includes('solicitud'))return'e-solicitud';
-  return'e-other';
+
+/* SORT */
+function sortBy(col) {
+  if (sc === col) { sd *= -1; } else { sc = col; sd = 1; }
+  filtered.sort(function(a,b) {
+    var va = a[col] != null ? a[col] : '';
+    var vb = b[col] != null ? b[col] : '';
+    if (typeof va === 'number') return (va - vb) * sd;
+    return String(va).localeCompare(String(vb),'es') * sd;
+  });
+  render();
 }
-function fmtDate(s){
-  if(!s)return'—';
-  try{const d=new Date(s);return d.toLocaleDateString('es-CL')+' '+d.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});}catch{return s;}
+
+/* BADGES */
+function opBadge(op) {
+  if (!op) return '&mdash;';
+  var l = op.toLowerCase();
+  if (l.indexOf('retiro')>=0)    return '<span class="badge b-ret">'    + op + '</span>';
+  if (l.indexOf('emision')>=0)   return '<span class="badge b-em">'     + op + '</span>';
+  if (l.indexOf('transfer')>=0)  return '<span class="badge b-tras">'   + op + '</span>';
+  if (l.indexOf('relocaliz')>=0) return '<span class="badge b-rel">'    + op + '</span>';
+  if (l.indexOf('devoluci')>=0)  return '<span class="badge b-dev">'    + op + '</span>';
+  return '<span class="badge b-other">' + op + '</span>';
 }
-function render(){
-  const tbody=document.getElementById('tbody'),slice=filtered.slice((cp-1)*ps,cp*ps);
-  if(!slice.length){tbody.innerHTML='<tr><td colspan="10"><div class="state-msg">Sin resultados</div></td></tr>';document.getElementById('tcnt').textContent='0 registros';return;}
-  tbody.innerHTML=slice.map(r=>`<tr>
-    <td class="mono" style="font-weight:500;color:var(--accent)">${r.nroPedido??'—'}</td>
-    <td title="${r.clienteOrigenStr||''}">${r.clienteOrigenStr||'—'}</td>
-    <td title="${r.clienteDestinoStr||''}">${r.clienteDestinoStr||'—'}</td>
-    <td>${opBadge(r.operacion)}</td>
-    <td class="${etapaCls(r.etapaOperacion)}">${r.etapaOperacion||'—'}</td>
-    <td style="text-align:right;font-variant-numeric:tabular-nums">${r.cantidadSolicitada??'—'}</td>
-    <td style="text-align:right;font-variant-numeric:tabular-nums">${r.cantidadDespachada??'—'}</td>
-    <td style="text-align:right;font-variant-numeric:tabular-nums">${r.cantidadConfirmada??'—'}</td>
-    <td class="mono" style="color:var(--text-secondary);font-size:10.5px">${fmtDate(r.horaIngreso)}</td>
-    <td style="color:var(--text-muted);font-size:11px">${r.usuario||'—'}</td>
-  </tr>`).join('');
-  const total=filtered.length,pages=Math.ceil(total/ps);
-  document.getElementById('tcnt').textContent=`${total.toLocaleString('es-CL')} registros${filtered.length!==raw.length?' (filtrado de '+raw.length.toLocaleString('es-CL')+')':''}`;
-  document.getElementById('pgi').textContent=`Página ${cp} de ${pages}`;
-  document.getElementById('pgc').textContent=cp;
+function etapaCls(e) {
+  if (!e) return 'e-other';
+  var l = e.toLowerCase();
+  if (l.indexOf('cerrado')>=0)       return 'e-cerrado';
+  if (l.indexOf('anulado')>=0)       return 'e-anulado';
+  if (l === 'confirmar')             return 'e-confirmar';
+  if (l.indexOf('por confirmar')>=0) return 'e-por-confirmar';
+  if (l.indexOf('pendiente')>=0)     return 'e-pendiente';
+  if (l.indexOf('solicitud')>=0)     return 'e-solicitud';
+  return 'e-other';
 }
-function goPage(p){const max=Math.ceil(filtered.length/ps);cp=Math.max(1,Math.min(max,p));render();document.querySelector('.table-wrap').scrollTop=0;}
-function exportCSV(){
-  if(!filtered.length){alert('No hay datos para exportar');return;}
-  const keys=['nroPedido','dteNro','operacion','etapaOperacion','horaIngreso','clienteOrigenStr','bodegaOrigenStr','clienteDestinoStr','bodegaDestinoStr','cantidadSolicitada','cantidadDespachada','cantidadConfirmada','cantidadPendiente','fechaRequerida','fechaDespacho','fechaConfirmacion','patente','chofer','usuario','observacion'];
-  const rows=[keys.join(','),...filtered.map(r=>keys.map(k=>`"${String(r[k]??'').replace(/"/g,'""')}"`).join(','))];
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob(['\
+function fmtDate(s) {
+  if (!s) return '&mdash;';
+  try {
+    var d = new Date(s);
+    return d.toLocaleDateString('es-CL') + ' ' + d.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
+  } catch(e) { return s; }
+}
+
+/* RENDER */
+function render() {
+  var tbody = document.getElementById('tbody');
+  var slice = filtered.slice((cp-1)*ps, cp*ps);
+  if (!slice.length) {
+    tbody.innerHTML = '<tr><td colspan="10"><div class="state-msg">Sin resultados</div></td></tr>';
+    document.getElementById('tcnt').textContent = '0 registros';
+    return;
+  }
+  var rows = '';
+  for (var i=0;i<slice.length;i++) {
+    var r = slice[i];
+    rows += '<tr>'
+      + '<td class="mono" style="font-weight:500;color:var(--accent)">'  + (r.nroPedido || '&mdash;') + '</td>'
+      + '<td title="' + (r.clienteOrigenStr||'') + '">'                  + (r.clienteOrigenStr||'&mdash;') + '</td>'
+      + '<td title="' + (r.clienteDestinoStr||'') + '">'                 + (r.clienteDestinoStr||'&mdash;') + '</td>'
+      + '<td>' + opBadge(r.operacion) + '</td>'
+      + '<td class="' + etapaCls(r.etapaOperacion) + '">'                + (r.etapaOperacion||'&mdash;') + '</td>'
+      + '<td style="text-align:right">' + (r.cantidadSolicitada  != null ? r.cantidadSolicitada  : '&mdash;') + '</td>'
+      + '<td style="text-align:right">' + (r.cantidadDespachada  != null ? r.cantidadDespachada  : '&mdash;') + '</td>'
+      + '<td style="text-align:right">' + (r.cantidadConfirmada  != null ? r.cantidadConfirmada  : '&mdash;') + '</td>'
+      + '<td class="mono" style="color:var(--text-secondary);font-size:10.5px">' + fmtDate(r.horaIngreso) + '</td>'
+      + '<td style="color:var(--text-muted);font-size:11px">' + (r.usuario||'&mdash;') + '</td>'
+      + '</tr>';
+  }
+  tbody.innerHTML = rows;
+  var total = filtered.length, pages = Math.ceil(total/ps);
+  document.getElementById('tcnt').textContent = total.toLocaleString('es-CL') + ' registros'
+    + (filtered.length !== raw.length ? ' (filtrado de ' + raw.length.toLocaleString('es-CL') + ')' : '');
+  document.getElementById('pgi').textContent  = 'Pagina ' + cp + ' de ' + pages;
+  document.getElementById('pgc').textContent  = cp;
+}
+
+/* PAGINACION */
+function goPage(p) {
+  var max = Math.ceil(filtered.length/ps);
+  cp = Math.max(1, Math.min(max, p));
+  render();
+  document.querySelector('.table-wrap').scrollTop = 0;
+}
+
+/* EXPORTAR CSV */
+function exportCSV() {
+  if (!filtered.length) { alert('No hay datos para exportar'); return; }
+  var keys = ['nroPedido','dteNro','operacion','etapaOperacion','horaIngreso','clienteOrigenStr','bodegaOrigenStr','clienteDestinoStr','bodegaDestinoStr','cantidadSolicitada','cantidadDespachada','cantidadConfirmada','cantidadPendiente','fechaRequerida','fechaDespacho','fechaConfirmacion','patente','chofer','usuario','observacion'];
+  var rows = [keys.join(',')];
+  for (var i=0;i<filtered.length;i++) {
+    var r = filtered[i];
+    rows.push(keys.map(function(k){ return '"' + String(r[k]!=null?r[k]:'').replace(/"/g,'""') + '"'; }).join(','));
+  }
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\uFEFF' + rows.join('\n')], {type:'text/csv;charset=utf-8;'}));
+  a.download = 'ops_' + document.getElementById('d1').value + '_' + document.getElementById('d2').value + '.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+</script>
+</body>
+</html>

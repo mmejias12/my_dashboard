@@ -1,12 +1,9 @@
 const https = require('https');
-const http  = require('http');
 
 const API_HOST = 'apirdt1.azurewebsites.net';
 const API_PATH = '/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRangoFechas';
 
 module.exports = async function (context, req) {
-
-  // Responder preflight OPTIONS de inmediato
   if (req.method === 'OPTIONS') {
     context.res = {
       status: 200,
@@ -20,25 +17,19 @@ module.exports = async function (context, req) {
     return;
   }
 
-  // Armar query string con los parámetros que lleguen (fechaInicio, fechaFin, etc.)
-  var query = '';
-  if (req.query && Object.keys(req.query).length > 0) {
-    query = '?' + Object.keys(req.query)
-      .map(function(k) { return encodeURIComponent(k) + '=' + encodeURIComponent(req.query[k]); })
-      .join('&');
-  }
-
-  var fullPath = API_PATH + query;
+  var d1 = (req.query && req.query.fechaInicio) ? req.query.fechaInicio : '';
+  var d2 = (req.query && req.query.fechaFin)    ? req.query.fechaFin    : '';
+  // Parámetros correctos del API: fechaInicial y fechaFinal
+  var query = '?fechaInicial=' + d1 + '&fechaFinal=' + d2;
 
   try {
-    var data = await fetchJSON(API_HOST, fullPath);
+    var data = await fetchData(API_HOST, API_PATH + query);
     context.res = {
       status: 200,
       headers: {
-        'Content-Type':                 'application/json',
-        'Access-Control-Allow-Origin':  '*',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Cache-Control':                'no-cache'
+        'Content-Type':                'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control':               'no-cache'
       },
       body: data
     };
@@ -54,7 +45,7 @@ module.exports = async function (context, req) {
   }
 };
 
-function fetchJSON(host, path) {
+function fetchData(host, path) {
   return new Promise(function(resolve, reject) {
     var options = {
       hostname: host,
@@ -63,7 +54,6 @@ function fetchJSON(host, path) {
       method:   'GET',
       headers:  { 'Accept': 'application/json' }
     };
-
     var req = https.request(options, function(res) {
       var chunks = [];
       res.on('data', function(chunk) { chunks.push(chunk); });
@@ -72,13 +62,12 @@ function fetchJSON(host, path) {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           resolve(body);
         } else {
-          reject(new Error('API responded ' + res.statusCode + ': ' + body.substring(0, 200)));
+          reject(new Error('API ' + res.statusCode + ': ' + body.substring(0, 200)));
         }
       });
     });
-
     req.on('error', function(e) { reject(e); });
-    req.setTimeout(15000, function() { req.destroy(); reject(new Error('Timeout')); });
+    req.setTimeout(20000, function() { req.destroy(); reject(new Error('Timeout')); });
     req.end();
   });
 }

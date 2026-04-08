@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Panel de Control DATALINK — REDTEC</title>
+<title>Panel de Control M2LINK — REDTEC</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -98,6 +98,8 @@
   .stat-label { font-size:10.5px;color:var(--text-muted);margin-bottom:5px; }
   .stat-value { font-size:22px;font-weight:600;line-height:1; }
   .stat-sub { font-size:10px;color:var(--text-muted);margin-top:4px; }
+  .stat-cant-label { font-size:9px;color:var(--text-muted);margin-top:6px;text-transform:uppercase;letter-spacing:.5px; }
+  .stat-cant-value { font-size:16px;font-weight:600;color:var(--b-ret-tx);line-height:1.2; }
 
   /* TABLE */
   .table-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden; }
@@ -159,7 +161,7 @@
     <span class="logo-name">REDTEC</span>
   </div>
   <div class="logo-sep"></div>
-  <div class="topbar-title"><div class="live-dot"></div>Panel de control DATALINK</div>
+  <div class="topbar-title"><div class="live-dot"></div>Panel de control M2LINK</div>
   <div class="topbar-right">
     <div class="avatar">MM</div>
     <span class="user-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="214c4c444b4840526153444555444252400f424e4c">[email&#160;protected]</a></span>
@@ -234,7 +236,13 @@
     <div class="stats" id="stats" style="display:none">
       <div class="stat-card"><div class="stat-label">Total registros</div><div class="stat-value" id="s0" style="color:var(--text-primary)">—</div><div class="stat-sub">en el período</div></div>
       <div class="stat-card"><div class="stat-label">Emisiones</div><div class="stat-value" id="s1" style="color:var(--b-em-tx)">—</div><div class="stat-sub">operaciones</div></div>
-      <div class="stat-card"><div class="stat-label">Retiros</div><div class="stat-value" id="s2" style="color:var(--b-ret-tx)">—</div><div class="stat-sub">operaciones</div></div>
+      <div class="stat-card">
+        <div class="stat-label">Retiros</div>
+        <div class="stat-value" id="s2" style="color:var(--b-ret-tx)">—</div>
+        <div class="stat-sub">operaciones</div>
+        <div class="stat-cant-label">cant. confirmada</div>
+        <div class="stat-cant-value" id="s2-cant">—</div>
+      </div>
       <div class="stat-card"><div class="stat-label">Transferencias</div><div class="stat-value" id="s3" style="color:var(--b-tra-tx)">—</div><div class="stat-sub">operaciones</div></div>
       <div class="stat-card"><div class="stat-label">Cerrados</div><div class="stat-value" id="s4" style="color:var(--e-green)">—</div><div class="stat-sub">etapa</div></div>
     </div>
@@ -376,6 +384,13 @@ function updateStats() {
   }
   document.getElementById('s1').textContent = em;
   document.getElementById('s2').textContent = ret;
+  var retCant = 0;
+  for (var i=0;i<raw.length;i++) {
+    if ((raw[i].operacion||'').toLowerCase().indexOf('retiro') >= 0) {
+      retCant += (raw[i].cantidadConfirmada || 0);
+    }
+  }
+  document.getElementById('s2-cant').textContent = retCant.toLocaleString('es-CL');
   document.getElementById('s3').textContent = tra;
   document.getElementById('s4').textContent = cerr;
 }

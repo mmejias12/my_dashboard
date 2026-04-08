@@ -386,7 +386,7 @@ function updateStats() {
   document.getElementById('s2').textContent = ret;
   var retCant = 0;
   for (var i=0;i<raw.length;i++) {
-    if ((raw[i].operacion||'').toLowerCase().indexOf('retiro') >= 0) {
+    if ((raw[i].operacion||'').trim().toLowerCase() === 'retiro') {
       retCant += (raw[i].cantidadConfirmada || 0);
     }
   }

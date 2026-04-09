@@ -150,6 +150,15 @@
   .filter-chip-term { font-weight:600;color:var(--accent); }
   .filter-chip-val { font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:var(--b-ret-tx); }
   .filter-chip-label { font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px; }
+  .ret-bodegas { display:flex;flex-wrap:wrap;gap:6px;margin-top:7px; }
+  .ret-bod-item { display:flex;flex-direction:column;align-items:center;background:rgba(255,255,255,0.04);border-radius:6px;padding:3px 8px;min-width:44px; }
+  .ret-bod-alias { font-size:9px;color:var(--text-muted);letter-spacing:.4px;text-transform:uppercase; }
+  .ret-bod-val { font-size:13px;font-weight:600;color:var(--b-ret-tx);line-height:1.2; }
+  .ret-fecha-aviso { font-size:9px;color:#fb923c;margin-top:5px;line-height:1.4;border-top:1px solid rgba(251,146,60,0.2);padding-top:4px; }
+  .chip-bodegas { display:flex;gap:6px;flex-wrap:wrap;margin-top:4px; }
+  .chip-bod { background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.2);border-radius:5px;padding:2px 8px;font-size:11px; }
+  .chip-bod-alias { color:var(--accent);font-weight:600; }
+  .chip-bod-val { color:var(--b-ret-tx);font-weight:600;margin-left:4px; }
 
   ::-webkit-scrollbar{width:5px;height:5px}
   ::-webkit-scrollbar-track{background:transparent}
@@ -247,6 +256,8 @@
         <div class="stat-sub">operaciones</div>
         <div class="stat-cant-label">cant. confirmada</div>
         <div class="stat-cant-value" id="s2-cant">—</div>
+        <div class="ret-bodegas" id="s2-bodegas"></div>
+        <div class="ret-fecha-aviso" id="s2-aviso" style="display:none"></div>
       </div>
       <div class="stat-card"><div class="stat-label">Transferencias</div><div class="stat-value" id="s3" style="color:var(--b-tra-tx)">—</div><div class="stat-sub">operaciones</div></div>
       <div class="stat-card"><div class="stat-label">Cerrados</div><div class="stat-value" id="s4" style="color:var(--e-green)">—</div><div class="stat-sub">etapa</div></div>
@@ -294,6 +305,23 @@ var isDev    = (window.location.hostname === 'localhost' || window.location.host
 var API_DIRECT = 'https://apirdt1.azurewebsites.net/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRangoFechas';
 var API_PROXY  = '/proxy/ops';
 
+
+/* Alias de bodegas */
+function aliasBodyDest(str) {
+  if (!str) return str;
+  var s = str.toUpperCase();
+  if (s.indexOf('SANTIAGO') >= 0)  return 'Stgo';
+  if (s.indexOf('TALCA') >= 0)     return 'Tal';
+  if (s.indexOf('COQUIMBO') >= 0)  return 'CoqV';
+  if (s.indexOf('RANCAGUA') >= 0)  return 'Rca';
+  if (s.indexOf('CONCEPCION') >= 0 || s.indexOf('CONCEPCIÓN') >= 0) return 'Conce';
+  if (s.indexOf('TEMUCO') >= 0)    return 'Tmu';
+  if (s.indexOf('VALPARAISO') >= 0 || s.indexOf('VALPARAÍSO') >= 0) return 'Valpo';
+  if (s.indexOf('LA SERENA') >= 0) return 'LSer';
+  if (s.indexOf('ANTOFAGASTA') >= 0) return 'Antof';
+  // fallback: primeras 4 letras
+  return str.substring(0, 4);
+}
 var raw = [], filtered = [], cp = 1, ps = 15, sc = null, sd = 1;
 var activeTags = [];
 
@@ -399,12 +427,57 @@ function updateStats() {
   document.getElementById('s1').textContent = em;
   document.getElementById('s2').textContent = ret;
   var retCant = 0;
+  var bodegaMap = {};
+  var fechaAvisos = {};
+  var d1val = document.getElementById('d1').value;
+  var d2val = document.getElementById('d2').value;
   for (var i=0;i<raw.length;i++) {
     if ((raw[i].operacion||'').trim().toLowerCase() === 'retiro') {
-      retCant += (raw[i].cantidadConfirmada || 0);
+      var conf = (raw[i].cantidadConfirmada || 0);
+      retCant += conf;
+      // Desglose por bodega destino
+      var dest = raw[i].bodegaDestinoStr || 'Otra';
+      bodegaMap[dest] = (bodegaMap[dest] || 0) + conf;
+      // Aviso fecha confirmacion distinta al rango
+      if (raw[i].fechaConfirmacion && conf > 0) {
+        var fc = raw[i].fechaConfirmacion.substring(0, 10);
+        if (fc > d2val) {
+          fechaAvisos[fc] = (fechaAvisos[fc] || 0) + conf;
+        }
+      }
     }
   }
   document.getElementById('s2-cant').textContent = retCant.toLocaleString('es-CL');
+  // Renderizar desglose bodegas
+  var bodKeys = Object.keys(bodegaMap);
+  bodKeys.sort(function(a,b){ return bodegaMap[b]-bodegaMap[a]; });
+  var bodHtml = '';
+  for (var i=0;i<bodKeys.length;i++) {
+    if (bodegaMap[bodKeys[i]] > 0) {
+      bodHtml += '<div class="ret-bod-item">'
+        + '<span class="ret-bod-alias">' + aliasBodyDest(bodKeys[i]) + '</span>'
+        + '<span class="ret-bod-val">' + bodegaMap[bodKeys[i]].toLocaleString('es-CL') + '</span>'
+        + '</div>';
+    }
+  }
+  document.getElementById('s2-bodegas').innerHTML = bodHtml;
+  // Aviso fechas confirmadas fuera del rango
+  var avisoEl = document.getElementById('s2-aviso');
+  var avisoKeys = Object.keys(fechaAvisos);
+  if (avisoKeys.length > 0) {
+    var avisoTxt = 'Periodo consultado tiene fecha confirmada distinta: ';
+    var partes = [];
+    for (var i=0;i<avisoKeys.length;i++) {
+      var fparts = avisoKeys[i].split('-');
+      var fformat = fparts[2]+'/'+fparts[1]+'/'+fparts[0].substring(2);
+      partes.push(fformat + ' cant: ' + fechaAvisos[avisoKeys[i]].toLocaleString('es-CL'));
+    }
+    avisoEl.textContent = '⚠ ' + avisoTxt + partes.join(', ');
+    avisoEl.style.display = 'block';
+  } else {
+    avisoEl.style.display = 'none';
+    avisoEl.textContent = '';
+  }
   document.getElementById('s3').textContent = tra;
   document.getElementById('s4').textContent = cerr;
 }
@@ -454,7 +527,26 @@ function applyFilters() {
       sumaDesp += (filtered[i].cantidadDespachada || 0);
     }
     chipRow.style.display = 'block';
-    chipRow.innerHTML = '<div class="filter-chip">'
+    // Desglose bodegas origen del filtro aplicado
+    var chipBodMap = {};
+    for (var i=0;i<filtered.length;i++) {
+      var dest2 = filtered[i].bodegaDestinoStr || 'Otra';
+      var conf2 = (filtered[i].cantidadConfirmada || 0);
+      chipBodMap[dest2] = (chipBodMap[dest2] || 0) + conf2;
+    }
+    var chipBodKeys = Object.keys(chipBodMap);
+    chipBodKeys.sort(function(a,b){ return chipBodMap[b]-chipBodMap[a]; });
+    var chipBodHtml = '';
+    for (var i=0;i<chipBodKeys.length;i++) {
+      if (chipBodMap[chipBodKeys[i]] > 0) {
+        chipBodHtml += '<span class="chip-bod">'
+          + '<span class="chip-bod-alias">' + aliasBodyDest(chipBodKeys[i]) + '</span>'
+          + '<span class="chip-bod-val">' + chipBodMap[chipBodKeys[i]].toLocaleString('es-CL') + '</span>'
+          + '</span>';
+      }
+    }
+    chipRow.innerHTML = '<div class="filter-chip" style="flex-direction:column;align-items:flex-start;gap:4px">'
+      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
       + '<span class="filter-chip-label">Filtro</span>'
       + '<span class="filter-chip-term">' + document.getElementById('search').value + '</span>'
       + '<span style="color:var(--border-md)">|</span>'
@@ -463,6 +555,8 @@ function applyFilters() {
       + '<span class="filter-chip-label">Desp.</span><span class="filter-chip-val">' + sumaDesp.toLocaleString('es-CL') + '</span>'
       + '<span style="color:var(--border-md)">|</span>'
       + '<span class="filter-chip-label">Conf.</span><span class="filter-chip-val">' + sumaConf.toLocaleString('es-CL') + '</span>'
+      + '</div>'
+      + (chipBodHtml ? '<div class="chip-bodegas">' + chipBodHtml + '</div>' : '')
       + '</div>';
   } else {
     chipRow.style.display = 'none';

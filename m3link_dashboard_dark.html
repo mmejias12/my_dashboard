@@ -146,6 +146,10 @@
   @keyframes spin{to{transform:rotate(360deg)}}
   .err-msg { color:var(--e-red);font-size:12px;text-align:center;padding:2rem;line-height:1.7; }
   .mono { font-family:'JetBrains Mono',monospace;font-size:11px; }
+  .filter-chip { display:inline-flex;align-items:center;gap:8px;background:var(--bg-card);border:1px solid var(--border-accent);border-radius:20px;padding:5px 14px;font-size:12px;color:var(--text-secondary);margin-bottom:.75rem; }
+  .filter-chip-term { font-weight:600;color:var(--accent); }
+  .filter-chip-val { font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:var(--b-ret-tx); }
+  .filter-chip-label { font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px; }
 
   ::-webkit-scrollbar{width:5px;height:5px}
   ::-webkit-scrollbar-track{background:transparent}
@@ -210,11 +214,11 @@
     <div class="cbar">
       <div class="ctrl-group">
         <span class="ctrl-label">Desde</span>
-        <input type="date" id="d1" class="ctrl-date" value="2026-04-04">
+        <input type="date" id="d1" class="ctrl-date">
       </div>
       <div class="ctrl-group">
         <span class="ctrl-label">Hasta</span>
-        <input type="date" id="d2" class="ctrl-date" value="2026-04-08">
+        <input type="date" id="d2" class="ctrl-date">
       </div>
       <button class="btn" id="btn-load" onclick="loadData()">Cargar datos</button>
       <button class="btn" onclick="exportCSV()">↓ Exportar CSV</button>
@@ -233,6 +237,7 @@
 
     <div class="tag-row" id="tag-row" style="display:none"></div>
 
+    <div id="filter-chip-row" style="display:none"></div>
     <div class="stats" id="stats" style="display:none">
       <div class="stat-card"><div class="stat-label">Total registros</div><div class="stat-value" id="s0" style="color:var(--text-primary)">—</div><div class="stat-sub">en el período</div></div>
       <div class="stat-card"><div class="stat-label">Emisiones</div><div class="stat-value" id="s1" style="color:var(--b-em-tx)">—</div><div class="stat-sub">operaciones</div></div>
@@ -310,6 +315,15 @@ function act(el) {
 window.addEventListener('DOMContentLoaded', function() {
   var g = document.getElementById('g1');
   if (g) g.style.maxHeight = (g.scrollHeight + 100) + 'px';
+  // Fechas por defecto: 01 del mes actual → hoy
+  var hoy = new Date();
+  var yyyy = hoy.getFullYear();
+  var mm   = String(hoy.getMonth() + 1).padStart(2, '0');
+  var dd   = String(hoy.getDate()).padStart(2, '0');
+  var hoyStr    = yyyy + '-' + mm + '-' + dd;
+  var primerDia = yyyy + '-' + mm + '-01';
+  document.getElementById('d1').value = primerDia;
+  document.getElementById('d2').value = hoyStr;
 });
 
 /* CARGAR DATOS */
@@ -430,6 +444,30 @@ function applyFilters() {
     if (mQ && mS && mT) filtered.push(r);
   }
   cp = 1; render();
+  // Chip de resumen al buscar por texto
+  var chipRow = document.getElementById('filter-chip-row');
+  if (q && q.length >= 2 && filtered.length > 0) {
+    var sumaConf = 0, sumaSol = 0, sumaDesp = 0;
+    for (var i=0;i<filtered.length;i++) {
+      sumaConf += (filtered[i].cantidadConfirmada || 0);
+      sumaSol  += (filtered[i].cantidadSolicitada || 0);
+      sumaDesp += (filtered[i].cantidadDespachada || 0);
+    }
+    chipRow.style.display = 'block';
+    chipRow.innerHTML = '<div class="filter-chip">'
+      + '<span class="filter-chip-label">Filtro</span>'
+      + '<span class="filter-chip-term">' + document.getElementById('search').value + '</span>'
+      + '<span style="color:var(--border-md)">|</span>'
+      + '<span class="filter-chip-label">Sol.</span><span class="filter-chip-val">' + sumaSol.toLocaleString('es-CL') + '</span>'
+      + '<span style="color:var(--border-md)">|</span>'
+      + '<span class="filter-chip-label">Desp.</span><span class="filter-chip-val">' + sumaDesp.toLocaleString('es-CL') + '</span>'
+      + '<span style="color:var(--border-md)">|</span>'
+      + '<span class="filter-chip-label">Conf.</span><span class="filter-chip-val">' + sumaConf.toLocaleString('es-CL') + '</span>'
+      + '</div>';
+  } else {
+    chipRow.style.display = 'none';
+    chipRow.innerHTML = '';
+  }
 }
 
 /* SORT */

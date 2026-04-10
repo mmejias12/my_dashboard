@@ -231,7 +231,7 @@
         <input type="date" id="d2" class="ctrl-date">
       </div>
       <button class="btn" id="btn-load" onclick="loadData()">Cargar datos</button>
-      <button class="btn" onclick="exportCSV()">↓ Exportar CSV</button>
+      <button class="btn" onclick="exportXLSX()">↓ Exportar Excel</button>
       <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
         <select class="sel" id="op-filter" onchange="applyFilters()">
           <option value="">Todas las operaciones</option>
@@ -680,20 +680,64 @@ function goPage(p) {
 }
 
 /* EXPORTAR CSV */
-function exportCSV() {
+function exportXLSX() {
   if (!filtered.length) { alert('No hay datos para exportar'); return; }
-  var keys = ['nroPedido','dteNro','operacion','etapaOperacion','horaIngreso','clienteOrigenStr','bodegaOrigenStr','clienteDestinoStr','bodegaDestinoStr','cantidadSolicitada','cantidadDespachada','cantidadConfirmada','cantidadPendiente','fechaRequerida','fechaDespacho','fechaConfirmacion','patente','chofer','usuario','observacion'];
-  var rows = [keys.join(',')];
+  var cols = [
+    { key: 'nroPedido',          label: 'Nro Pedido' },
+    { key: 'dteNro',             label: 'DTE Nro' },
+    { key: 'nroCita',            label: 'Nro Cita' },
+    { key: 'operacion',          label: 'Operacion' },
+    { key: 'etapaOperacion',     label: 'Etapa Operacion' },
+    { key: 'horaIngreso',        label: 'Hora Ingreso' },
+    { key: 'clienteOrigenStr',   label: 'Cliente Origen' },
+    { key: 'bodegaOrigenStr',    label: 'Bodega Origen' },
+    { key: 'clienteDestinoStr',  label: 'Cliente Destino' },
+    { key: 'bodegaDestinoStr',   label: 'Bodega Destino' },
+    { key: 'direccion',          label: 'Direccion' },
+    { key: 'cantidadSolicitada', label: 'Cant. Solicitada' },
+    { key: 'cantidadDespachada', label: 'Cant. Despachada' },
+    { key: 'cantidadConfirmada', label: 'Cant. Confirmada' },
+    { key: 'cantidadPendiente',  label: 'Cant. Pendiente' },
+    { key: 'fechaRequerida',     label: 'Fecha Requerida' },
+    { key: 'fechaDespacho',      label: 'Fecha Despacho' },
+    { key: 'fechaConfirmacion',  label: 'Fecha Confirmacion' },
+    { key: 'tipoDocumento',      label: 'Tipo Documento' },
+    { key: 'nroDocumento',       label: 'Nro Documento' },
+    { key: 'patente',            label: 'Patente' },
+    { key: 'chofer',             label: 'Chofer' },
+    { key: 'usuario',            label: 'Usuario' },
+    { key: 'observacion',        label: 'Observacion' }
+  ];
+  var sheetData = [cols.map(function(c){ return c.label; })];
   for (var i=0;i<filtered.length;i++) {
     var r = filtered[i];
-    rows.push(keys.map(function(k){ return '"' + String(r[k]!=null?r[k]:'').replace(/"/g,'""') + '"'; }).join(','));
+    var row = cols.map(function(col) {
+      var val = r[col.key];
+      if (val == null) return '';
+      if (col.key.indexOf('fecha') >= 0 || col.key === 'horaIngreso') {
+        try { return new Date(val).toLocaleString('es-CL'); } catch(e) { return val; }
+      }
+      return val;
+    });
+    sheetData.push(row);
   }
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob(['\uFEFF' + rows.join('\n')], {type:'text/csv;charset=utf-8;'}));
-  a.download = 'ops_' + document.getElementById('d1').value + '_' + document.getElementById('d2').value + '.csv';
-  a.click();
-  URL.revokeObjectURL(a.href);
+  var ws = XLSX.utils.aoa_to_sheet(sheetData);
+  ws['!cols'] = cols.map(function(col, ci) {
+    var max = col.label.length;
+    for (var r=1;r<sheetData.length;r++) {
+      var v = String(sheetData[r][ci] || '');
+      if (v.length > max) max = v.length;
+    }
+    return { wch: Math.min(max + 2, 45) };
+  });
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Operaciones');
+  var d1 = document.getElementById('d1').value;
+  var d2 = document.getElementById('d2').value;
+  XLSX.writeFile(wb, 'ops_' + d1 + '_' + d2 + '.xlsx');
 }
+
 </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </body>
 </html>

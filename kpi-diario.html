@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KPI Diario — REDTEC M3LINK</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg-page:      #0f1117;
+  --bg-surface:   #181b23;
+  --bg-card:      #1e222d;
+  --bg-input:     #252932;
+  --bg-hover:     #252d3a;
+  --border:       rgba(255,255,255,0.07);
+  --border-md:    rgba(255,255,255,0.12);
+  --text-primary: #e8eaf0;
+  --text-sec:     #9da3b4;
+  --text-muted:   #5a6070;
+  --accent:       #4ade80;
+  --accent-dim:   rgba(74,222,128,0.15);
+  --accent-border:rgba(74,222,128,0.35);
+  --red-logo:     #C0170C;
+  /* retailer colors */
+  --c-wm:  #3b82f6;  --c-wm-dim:  rgba(59,130,246,0.15);
+  --c-cc:  #f59e0b;  --c-cc-dim:  rgba(245,158,11,0.15);
+  --c-tt:  #ef4444;  --c-tt-dim:  rgba(239,68,68,0.15);
+  --c-sm:  #8b5cf6;  --c-sm-dim:  rgba(139,92,246,0.15);
+  --c-ot:  #6b7280;  --c-ot-dim:  rgba(107,114,128,0.15);
+  /* tipo movimiento */
+  --c-dev: #4ade80;
+  --c-e3:  #60a5fa;
+  --c-otm: #6b7280;
+  --radius-sm: 6px; --radius-md: 9px; --radius-lg: 13px;
+}
+html, body { height:100%; font-family:'Inter',sans-serif; font-size:13px; background:var(--bg-page); color:var(--text-primary); -webkit-font-smoothing:antialiased; }
+
+/* TOPBAR */
+.topbar { position:fixed;top:0;left:0;right:0;z-index:100;height:50px;background:var(--bg-surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1.25rem;gap:12px; }
+.logo { display:flex;align-items:center;gap:9px; }
+.logo-box { width:27px;height:27px;border-radius:6px;background:var(--red-logo);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:12px; }
+.logo-name { font-weight:600;font-size:13.5px; }
+.logo-sep { width:1px;height:18px;background:var(--border-md);margin:0 6px; }
+.topbar-title { font-size:12.5px;color:var(--text-sec);display:flex;align-items:center;gap:7px; }
+.live-dot { width:7px;height:7px;background:var(--accent);border-radius:50%;animation:pulse 2.5s ease-in-out infinite;box-shadow:0 0 6px var(--accent); }
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.topbar-right { margin-left:auto;display:flex;align-items:center;gap:10px; }
+.back-btn { font-size:11.5px;color:var(--text-sec);text-decoration:none;display:flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid var(--border-md);border-radius:var(--radius-sm);transition:background .12s; }
+.back-btn:hover { background:var(--bg-hover); }
+
+/* LAYOUT */
+.layout { display:flex;padding-top:50px;min-height:100vh; }
+
+/* SIDEBAR */
+.sidebar { width:210px;min-width:210px;background:var(--bg-surface);border-right:1px solid var(--border);padding:.875rem 0;position:sticky;top:50px;height:calc(100vh - 50px);overflow-y:auto; }
+.s-label { font-size:10px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--text-muted);padding:.5rem 1rem .3rem; }
+.s-hdr { display:flex;align-items:center;justify-content:space-between;padding:.45rem 1rem;font-size:12px;font-weight:500;color:var(--text-sec);cursor:pointer;user-select:none; }
+.s-hdr:hover { background:var(--bg-hover);color:var(--text-primary); }
+.s-chevron { font-size:10px;transition:transform .2s;color:var(--text-muted); }
+.s-hdr.open .s-chevron { transform:rotate(90deg); }
+.s-sub { overflow:hidden;transition:max-height .22s ease; }
+.s-item { display:block;padding:.35rem 1rem .35rem 1.5rem;font-size:11.5px;color:var(--text-sec);cursor:pointer;border-left:2px solid transparent;text-decoration:none;transition:all .12s; }
+.s-item:hover { background:var(--bg-hover);color:var(--text-primary); }
+.s-item.active { color:var(--accent);border-left-color:var(--accent);background:rgba(74,222,128,0.08);font-weight:500; }
+.s-divider { height:1px;background:var(--border);margin:.5rem 1rem; }
+
+/* MAIN */
+.main { flex:1;padding:1.25rem 1.375rem;min-width:0; }
+.page-header { display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1rem;gap:12px;flex-wrap:wrap; }
+.page-title { font-size:15px;font-weight:600; }
+.breadcrumb { font-size:11px;color:var(--text-muted);margin-top:3px; }
+.last-upd { font-size:10.5px;color:var(--text-muted);align-self:flex-end; }
+
+/* CONTROLS */
+.cbar { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:.875rem 1rem;display:flex;align-items:flex-end;gap:.875rem;margin-bottom:.875rem;flex-wrap:wrap; }
+.ctrl-group { display:flex;flex-direction:column;gap:4px; }
+.ctrl-label { font-size:11px;color:var(--text-sec); }
+.ctrl-date { font-size:13px;padding:8px 11px;border:1px solid var(--border-md);border-radius:var(--radius-sm);background:var(--bg-input);color:var(--text-primary);outline:none;font-family:'Inter',sans-serif;width:160px;color-scheme:dark; }
+.ctrl-date:focus { border-color:var(--accent); }
+.btn { font-size:12.5px;padding:8px 16px;border:1px solid var(--border-md);border-radius:var(--radius-sm);background:var(--bg-input);color:var(--text-primary);cursor:pointer;font-family:'Inter',sans-serif;font-weight:500;transition:background .12s; }
+.btn:hover { background:var(--bg-hover); }
+.btn:disabled { opacity:.4;cursor:not-allowed; }
+.period-badge { display:flex;align-items:center;gap:6px;background:var(--accent-dim);border:1px solid var(--accent-border);border-radius:20px;padding:4px 12px;font-size:11px;color:var(--accent);font-weight:500;align-self:center; }
+
+/* KPI CARDS */
+.kpi-grid { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:.875rem; }
+@media(max-width:900px){.kpi-grid{grid-template-columns:repeat(2,1fr);}}
+.kpi-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:.875rem 1rem;position:relative;overflow:hidden; }
+.kpi-card::before { content:'';position:absolute;top:0;left:0;right:0;height:2px; }
+.kpi-card.dev::before { background:var(--c-dev); }
+.kpi-card.txn::before { background:var(--c-wm); }
+.kpi-card.avg::before { background:var(--c-cc); }
+.kpi-card.top::before { background:var(--c-tt); }
+.kpi-label { font-size:10.5px;color:var(--text-muted);margin-bottom:5px; }
+.kpi-value { font-size:24px;font-weight:600;line-height:1; }
+.kpi-sub { font-size:10px;color:var(--text-muted);margin-top:4px; }
+.kpi-sub span { font-weight:500; }
+
+/* SECTION HEADERS */
+.section-hdr { display:flex;align-items:center;gap:10px;margin-bottom:.625rem; }
+.section-title { font-size:12.5px;font-weight:600;color:var(--text-primary); }
+.section-badge { font-size:10px;padding:2px 8px;border-radius:10px;font-weight:500; }
+.badge-dev { background:rgba(74,222,128,0.15);color:var(--c-dev); }
+.badge-e3  { background:rgba(96,165,250,0.15);color:var(--c-e3); }
+.badge-ot  { background:rgba(107,114,128,0.15);color:var(--c-otm); }
+.section-sub { font-size:10.5px;color:var(--text-muted);margin-left:auto; }
+
+/* CHART CARD */
+.chart-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1rem;margin-bottom:.875rem; }
+.chart-wrap { position:relative;height:220px; }
+
+/* RETAILER TOGGLES */
+.retailer-toggles { display:flex;gap:6px;flex-wrap:wrap;margin-bottom:.75rem; }
+.rtoggle { display:flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;border:1px solid var(--border-md);font-size:11px;cursor:pointer;font-weight:500;transition:all .12s;user-select:none;background:var(--bg-card); }
+.rtoggle.off { opacity:.35; }
+.rtoggle-dot { width:8px;height:8px;border-radius:50%; }
+
+/* PIVOT TABLE */
+.pivot-wrap { overflow-x:auto;max-height:300px;overflow-y:auto; }
+.pivot-table { width:100%;border-collapse:collapse;font-size:11px; }
+.pivot-table th { position:sticky;top:0;background:var(--bg-surface);padding:6px 10px;text-align:center;font-size:10px;font-weight:600;color:var(--text-muted);border-bottom:1px solid var(--border-md);white-space:nowrap;z-index:2; }
+.pivot-table th.retailer-col { text-align:left;position:sticky;left:0;z-index:3;background:var(--bg-surface); }
+.pivot-table td { padding:5px 10px;text-align:center;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums; }
+.pivot-table td.retailer-cell { text-align:left;font-weight:500;position:sticky;left:0;background:var(--bg-card);z-index:1;white-space:nowrap; }
+.pivot-table tr:hover td { background:var(--bg-hover); }
+.pivot-table tr:hover td.retailer-cell { background:var(--bg-hover); }
+.pivot-table td.total-col { font-weight:600;color:var(--c-dev);border-left:1px solid var(--border-md); }
+.pivot-table tr.total-row td { font-weight:600;border-top:1px solid var(--border-md);background:var(--bg-surface);color:var(--text-primary); }
+.pivot-table tr.total-row td.retailer-cell { background:var(--bg-surface); }
+.heat-0 { color:var(--text-muted); }
+.heat-1 { color:#93c5fd; }
+.heat-2 { color:#60a5fa; }
+.heat-3 { color:#3b82f6; }
+.heat-4 { color:#4ade80; }
+.heat-5 { color:#22c55e;font-weight:600; }
+.retailer-dot { display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px; }
+
+/* TIPO MOV LEGEND */
+.tipo-legend { display:flex;gap:12px;margin-bottom:.625rem; }
+.tipo-item { display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-sec); }
+.tipo-dot { width:10px;height:10px;border-radius:2px; }
+
+/* STATE */
+.state-msg { display:flex;align-items:center;justify-content:center;padding:2.5rem;color:var(--text-muted);font-size:12.5px;gap:10px;flex-direction:column; }
+.spinner { width:18px;height:18px;border:2px solid var(--border-md);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite; }
+@keyframes spin{to{transform:rotate(360deg)}}
+
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-box">R</div>
+    <span class="logo-name">REDTEC</span>
+  </div>
+  <div class="logo-sep"></div>
+  <div class="topbar-title"><div class="live-dot"></div>KPI Diario — Pallets</div>
+  <div class="topbar-right">
+    <a href="m3link_dashboard_dark.html" class="back-btn">← Volver al dashboard</a>
+  </div>
+</div>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="s-label">Comercial</div>
+    <div class="s-hdr" onclick="tog('g1',this)">Listados x fecha <span class="s-chevron">›</span></div>
+    <div class="s-sub" id="g1" style="max-height:0">
+      <a href="m3link_dashboard_dark.html" class="s-item">Ops x rango fechas</a>
+      <a href="m3link_dashboard_dark.html" class="s-item">Transacciones x cliente</a>
+    </div>
+    <div class="s-divider"></div>
+    <div class="s-hdr open" onclick="tog('g2',this)">KPIs y reportes <span class="s-chevron">›</span></div>
+    <div class="s-sub" id="g2">
+      <a href="kpi-diario.html" class="s-item active">KPI diario</a>
+      <a href="#" class="s-item">Pedidos recientes</a>
+      <a href="#" class="s-item">Gráficos semanales</a>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="page-header">
+      <div>
+        <div class="page-title">KPI Diario — Pallets DEV</div>
+        <div class="breadcrumb">KPIs y reportes › Análisis de devoluciones por retailer y región</div>
+      </div>
+      <div class="last-upd" id="last-upd"></div>
+    </div>
+
+    <!-- CONTROLS -->
+    <div class="cbar">
+      <div class="ctrl-group">
+        <span class="ctrl-label">Desde</span>
+        <input type="date" id="d1" class="ctrl-date">
+      </div>
+      <div class="ctrl-group">
+        <span class="ctrl-label">Hasta</span>
+        <input type="date" id="d2" class="ctrl-date">
+      </div>
+      <button class="btn" id="btn-load" onclick="loadData()">Cargar datos</button>
+      <div class="period-badge" id="period-badge" style="display:none">
+        <span id="period-text">—</span>
+      </div>
+    </div>
+
+    <!-- KPI CARDS -->
+    <div class="kpi-grid" id="kpi-grid" style="display:none">
+      <div class="kpi-card dev">
+        <div class="kpi-label">Total pallets DEV</div>
+        <div class="kpi-value" id="k-dev" style="color:var(--c-dev)">—</div>
+        <div class="kpi-sub">pallets retornados confirmados</div>
+      </div>
+      <div class="kpi-card txn">
+        <div class="kpi-label">Transacciones DEV</div>
+        <div class="kpi-value" id="k-txn" style="color:var(--c-wm)">—</div>
+        <div class="kpi-sub">movimientos de retorno</div>
+      </div>
+      <div class="kpi-card avg">
+        <div class="kpi-label">Promedio diario DEV</div>
+        <div class="kpi-value" id="k-avg" style="color:var(--c-cc)">—</div>
+        <div class="kpi-sub">pallets por día hábil</div>
+      </div>
+      <div class="kpi-card top">
+        <div class="kpi-label">Top retailer</div>
+        <div class="kpi-value" id="k-top" style="font-size:18px;color:var(--c-tt)">—</div>
+        <div class="kpi-sub" id="k-top-sub">pallets DEV en el período</div>
+      </div>
+    </div>
+
+    <!-- BLOQUE 2: GRÁFICO LÍNEA DEV POR DÍA -->
+    <div id="block2" style="display:none">
+      <div class="section-hdr">
+        <span class="section-title">Pallets DEV por día</span>
+        <span class="section-badge badge-dev">Solo DEV</span>
+        <span class="section-sub">Una línea por retailer · click para mostrar/ocultar</span>
+      </div>
+      <div class="retailer-toggles" id="retailer-toggles"></div>
+      <div class="chart-card">
+        <div class="chart-wrap">
+          <canvas id="chart-linea"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- BLOQUE 3: PIVOT TABLE -->
+    <div id="block3" style="display:none">
+      <div class="section-hdr">
+        <span class="section-title">Pivot: Retailer × Día</span>
+        <span class="section-badge badge-dev">DEV · últimos 14 días del rango</span>
+        <span class="section-sub">Pallets DEV confirmados · color = intensidad</span>
+      </div>
+      <div class="chart-card" style="padding:.75rem">
+        <div class="pivot-wrap">
+          <table class="pivot-table" id="pivot-table"></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- BLOQUE 4: BARRAS APILADAS DEV vs E3 vs OT -->
+    <div id="block4" style="display:none">
+      <div class="section-hdr">
+        <span class="section-title">Comparativo tipos de movimiento por día</span>
+        <span class="section-badge badge-dev">DEV</span>
+        <span class="section-badge badge-e3">E3</span>
+        <span class="section-badge badge-ot">OT</span>
+      </div>
+      <div class="tipo-legend">
+        <div class="tipo-item"><div class="tipo-dot" style="background:var(--c-dev)"></div>DEV — Devolución real</div>
+        <div class="tipo-item"><div class="tipo-dot" style="background:var(--c-e3)"></div>E3 — Envío a tercero</div>
+        <div class="tipo-item"><div class="tipo-dot" style="background:var(--c-otm)"></div>OT — Otros / administrativo</div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-wrap">
+          <canvas id="chart-barras"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div id="empty-state">
+      <div class="chart-card">
+        <div class="state-msg">Seleccione un período y presione "Cargar datos"</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+var API_PROXY  = '/api/kpi-proxy';
+var API_DIRECT = 'https://func-walmart-reporting-csharp-b5a0fecwazamcnby.westus3-01.azurewebsites.net/api/kpi-diario';
+var isLocal = (window.location.protocol === 'file:');
+var isDev   = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+var raw = [];
+var retailerColors = { WM:'#3b82f6', CC:'#f59e0b', TT:'#ef4444', SM:'#8b5cf6', OT:'#6b7280' };
+var retailerNames  = { WM:'Walmart', CC:'Cencosud', TT:'Tottus', SM:'SMU', OT:'Otros' };
+var activeRetailers = { WM:true, CC:true, TT:true, SM:true, OT:true };
+var chartLinea = null, chartBarras = null;
+
+/* ── SIDEBAR ─────────────────────────────────────────────── */
+function tog(id, hdr) {
+  var el = document.getElementById(id);
+  var isOpen = el.style.maxHeight && el.style.maxHeight !== '0px';
+  document.querySelectorAll('.s-sub').forEach(function(e){e.style.maxHeight='0';});
+  document.querySelectorAll('.s-hdr').forEach(function(h){h.classList.remove('open');});
+  if (!isOpen) { el.style.maxHeight = (el.scrollHeight+200)+'px'; hdr.classList.add('open'); }
+}
+
+/* ── INIT FECHAS ─────────────────────────────────────────── */
+window.addEventListener('DOMContentLoaded', function() {
+  var hoy = new Date();
+  var yyyy = hoy.getFullYear();
+  var mm   = String(hoy.getMonth()+1).padStart(2,'0');
+  var dd   = String(hoy.getDate()).padStart(2,'0');
+  document.getElementById('d2').value = yyyy+'-'+mm+'-'+dd;
+  document.getElementById('d1').value = yyyy+'-'+mm+'-01';
+  var g2 = document.getElementById('g2');
+  if (g2) g2.style.maxHeight = (g2.scrollHeight+100)+'px';
+});
+
+/* ── LOAD DATA ───────────────────────────────────────────── */
+function loadData() {
+  var btn = document.getElementById('btn-load');
+  btn.disabled = true; btn.textContent = 'Cargando...';
+  document.getElementById('empty-state').innerHTML = '<div class="chart-card"><div class="state-msg"><div class="spinner"></div>Consultando API...</div></div>';
+  ['kpi-grid','block2','block3','block4'].forEach(function(id){ document.getElementById(id).style.display='none'; });
+
+  var d1 = document.getElementById('d1').value;
+  var d2 = document.getElementById('d2').value;
+  var url = (isLocal || isDev)
+    ? API_DIRECT + '?desde=' + d1 + '&hasta=' + d2
+    : API_PROXY  + '?desde=' + d1 + '&hasta=' + d2;
+
+  fetch(url, { headers:{'Accept':'application/json'} })
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function(data) {
+      raw = Array.isArray(data) ? data : [data];
+      renderAll(d1, d2);
+      document.getElementById('empty-state').innerHTML = '';
+      document.getElementById('last-upd').textContent = 'Actualizado ' + new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      btn.disabled = false; btn.textContent = 'Cargar datos';
+    })
+    .catch(function(err) {
+      document.getElementById('empty-state').innerHTML = '<div class="chart-card"><div class="state-msg">Error: ' + err.message + '</div></div>';
+      btn.disabled = false; btn.textContent = 'Cargar datos';
+    });
+}
+
+/* ── RENDER ALL ──────────────────────────────────────────── */
+function renderAll(d1, d2) {
+  var days = daysBetween(d1, d2);
+  // Period badge
+  var f1 = fmtDateShort(d1), f2 = fmtDateShort(d2);
+  document.getElementById('period-badge').style.display = 'flex';
+  document.getElementById('period-text').textContent = f1 + ' – ' + f2 + ' · ' + days + ' días';
+
+  renderKPIs();
+  renderToggle();
+  renderLineChart(d1, d2);
+  renderPivot(d1, d2);
+  renderBarChart(d1, d2);
+
+  document.getElementById('kpi-grid').style.display = 'grid';
+  document.getElementById('block2').style.display = 'block';
+  document.getElementById('block3').style.display = 'block';
+  document.getElementById('block4').style.display = 'block';
+}
+
+/* ── KPIs ────────────────────────────────────────────────── */
+function renderKPIs() {
+  var devData = raw.filter(function(r){ return r.TipoMovimiento === 'DEV'; });
+  var totalPallets = 0, totalTxn = 0;
+  var retailerMap = {};
+  var fechaSet = {};
+  devData.forEach(function(r) {
+    totalPallets += (r.TotalPallets || 0);
+    totalTxn     += (r.NroTransacciones || 0);
+    var ret = r.Retailer || 'OT';
+    retailerMap[ret] = (retailerMap[ret]||0) + (r.TotalPallets||0);
+    fechaSet[r.FechaConfirmacion] = true;
+  });
+  var diasHabiles = Object.keys(fechaSet).length || 1;
+  var avg = Math.round(totalPallets / diasHabiles);
+
+  // Top retailer
+  var topRet = 'N/A', topVal = 0;
+  Object.keys(retailerMap).forEach(function(k) {
+    if (retailerMap[k] > topVal) { topVal = retailerMap[k]; topRet = k; }
+  });
+
+  document.getElementById('k-dev').textContent = totalPallets.toLocaleString('es-CL');
+  document.getElementById('k-txn').textContent = totalTxn.toLocaleString('es-CL');
+  document.getElementById('k-avg').textContent = avg.toLocaleString('es-CL');
+  document.getElementById('k-top').textContent = (retailerNames[topRet] || topRet);
+  document.getElementById('k-top-sub').textContent = topVal.toLocaleString('es-CL') + ' pallets DEV en el período';
+}
+
+/* ── TOGGLES ─────────────────────────────────────────────── */
+function renderToggle() {
+  var cont = document.getElementById('retailer-toggles');
+  cont.innerHTML = '';
+  Object.keys(retailerColors).forEach(function(r) {
+    var el = document.createElement('div');
+    el.className = 'rtoggle' + (activeRetailers[r] ? '' : ' off');
+    el.innerHTML = '<div class="rtoggle-dot" style="background:'+retailerColors[r]+'"></div>'+(retailerNames[r]||r);
+    el.onclick = function() {
+      activeRetailers[r] = !activeRetailers[r];
+      el.classList.toggle('off');
+      updateLineChart();
+    };
+    cont.appendChild(el);
+  });
+}
+
+/* ── HELPERS ─────────────────────────────────────────────── */
+function getAllDates(d1, d2) {
+  var dates = [], cur = new Date(d1 + 'T00:00:00');
+  var end = new Date(d2 + 'T00:00:00');
+  while (cur <= end) {
+    dates.push(cur.toISOString().substring(0,10));
+    cur.setDate(cur.getDate()+1);
+  }
+  return dates;
+}
+function daysBetween(d1, d2) {
+  return Math.round((new Date(d2) - new Date(d1)) / 86400000) + 1;
+}
+function fmtDateShort(s) {
+  var p = s.split('-');
+  return p[2]+'/'+p[1]+'/'+p[0].substring(2);
+}
+function fmtDateLabel(s) {
+  var p = s.split('-');
+  return p[2]+'/'+p[1];
+}
+
+/* ── LINE CHART ──────────────────────────────────────────── */
+var lineData = {};
+function renderLineChart(d1, d2) {
+  var dates = getAllDates(d1, d2);
+  // Acumular DEV por fecha y retailer
+  lineData = {};
+  Object.keys(retailerColors).forEach(function(r){ lineData[r] = {}; });
+  raw.filter(function(r){ return r.TipoMovimiento === 'DEV'; }).forEach(function(r) {
+    var fecha = r.FechaConfirmacion.substring(0,10);
+    var ret = r.Retailer || 'OT';
+    if (!lineData[ret]) lineData[ret] = {};
+    lineData[ret][fecha] = (lineData[ret][fecha]||0) + (r.TotalPallets||0);
+  });
+
+  var datasets = Object.keys(retailerColors).map(function(r) {
+    return {
+      label: retailerNames[r]||r,
+      data: dates.map(function(d){ return lineData[r][d]||0; }),
+      borderColor: retailerColors[r],
+      backgroundColor: retailerColors[r]+'33',
+      borderWidth: 2,
+      pointRadius: dates.length > 20 ? 2 : 4,
+      pointHoverRadius: 6,
+      tension: 0.3,
+      fill: false,
+      hidden: !activeRetailers[r]
+    };
+  });
+
+  if (chartLinea) chartLinea.destroy();
+  var ctx = document.getElementById('chart-linea').getContext('2d');
+  chartLinea = new Chart(ctx, {
+    type: 'line',
+    data: { labels: dates.map(fmtDateLabel), datasets: datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode:'index', intersect:false },
+      plugins: {
+        legend: { display:false },
+        tooltip: {
+          backgroundColor:'#1e222d',
+          borderColor:'rgba(255,255,255,0.1)',
+          borderWidth:1,
+          titleColor:'#e8eaf0',
+          bodyColor:'#9da3b4',
+          callbacks: {
+            label: function(ctx) {
+              return ' ' + ctx.dataset.label + ': ' + ctx.parsed.y.toLocaleString('es-CL') + ' pallets';
+            }
+          }
+        }
+      },
+      scales: {
+        x: { grid:{color:'rgba(255,255,255,0.05)'}, ticks:{color:'#5a6070',font:{size:10}}, border:{color:'rgba(255,255,255,0.07)'} },
+        y: { grid:{color:'rgba(255,255,255,0.05)'}, ticks:{color:'#5a6070',font:{size:10},callback:function(v){return v.toLocaleString('es-CL');}}, border:{color:'rgba(255,255,255,0.07)'} }
+      }
+    }
+  });
+}
+
+function updateLineChart() {
+  if (!chartLinea) return;
+  chartLinea.data.datasets.forEach(function(ds) {
+    var key = Object.keys(retailerNames).find(function(k){ return retailerNames[k]===ds.label; }) || ds.label;
+    ds.hidden = !activeRetailers[key];
+  });
+  chartLinea.update();
+}
+
+/* ── PIVOT TABLE ─────────────────────────────────────────── */
+function renderPivot(d1, d2) {
+  var allDates = getAllDates(d1, d2);
+  // Limitar a últimos 14 días
+  var pivotDates = allDates.slice(-14);
+  var retailers = ['WM','CC','TT','SM','OT'];
+
+  // Acumular
+  var pivot = {};
+  retailers.forEach(function(r){ pivot[r] = {}; });
+  raw.filter(function(r){ return r.TipoMovimiento==='DEV'; }).forEach(function(r) {
+    var fecha = r.FechaConfirmacion.substring(0,10);
+    var ret = r.Retailer || 'OT';
+    if (!pivot[ret]) pivot[ret] = {};
+    pivot[ret][fecha] = (pivot[ret][fecha]||0) + (r.TotalPallets||0);
+  });
+
+  // Calcular max para heatmap
+  var allVals = [];
+  retailers.forEach(function(r) {
+    pivotDates.forEach(function(d){ allVals.push(pivot[r][d]||0); });
+  });
+  var maxVal = Math.max.apply(null, allVals) || 1;
+
+  function heatClass(v) {
+    if (!v) return 'heat-0';
+    var p = v / maxVal;
+    if (p < 0.1) return 'heat-1';
+    if (p < 0.3) return 'heat-2';
+    if (p < 0.5) return 'heat-3';
+    if (p < 0.75) return 'heat-4';
+    return 'heat-5';
+  }
+
+  var tbl = document.getElementById('pivot-table');
+  var html = '<thead><tr><th class="retailer-col">Retailer</th>';
+  pivotDates.forEach(function(d){ html += '<th>' + fmtDateLabel(d) + '</th>'; });
+  html += '<th>Total</th></tr></thead><tbody>';
+
+  var colTotals = {};
+  pivotDates.forEach(function(d){ colTotals[d] = 0; });
+  var grandTotal = 0;
+
+  retailers.forEach(function(r) {
+    var rowTotal = 0;
+    html += '<tr>';
+    html += '<td class="retailer-cell"><span class="retailer-dot" style="background:'+retailerColors[r]+'"></span>'+(retailerNames[r]||r)+'</td>';
+    pivotDates.forEach(function(d) {
+      var v = pivot[r][d]||0;
+      rowTotal += v;
+      colTotals[d] += v;
+      html += '<td class="' + heatClass(v) + '">' + (v ? v.toLocaleString('es-CL') : '—') + '</td>';
+    });
+    grandTotal += rowTotal;
+    html += '<td class="total-col">' + rowTotal.toLocaleString('es-CL') + '</td></tr>';
+  });
+
+  // Fila total
+  html += '<tr class="total-row"><td class="retailer-cell">Total</td>';
+  pivotDates.forEach(function(d){
+    html += '<td>' + (colTotals[d]||0).toLocaleString('es-CL') + '</td>';
+  });
+  html += '<td class="total-col">' + grandTotal.toLocaleString('es-CL') + '</td></tr>';
+  html += '</tbody>';
+  tbl.innerHTML = html;
+}
+
+/* ── BAR CHART ───────────────────────────────────────────── */
+function renderBarChart(d1, d2) {
+  var dates = getAllDates(d1, d2);
+  var devByDate = {}, e3ByDate = {}, otByDate = {};
+  dates.forEach(function(d){ devByDate[d]=0; e3ByDate[d]=0; otByDate[d]=0; });
+
+  raw.forEach(function(r) {
+    var fecha = r.FechaConfirmacion.substring(0,10);
+    if (!devByDate.hasOwnProperty(fecha)) return;
+    var v = r.TotalPallets || 0;
+    if (r.TipoMovimiento === 'DEV') devByDate[fecha] += v;
+    else if (r.TipoMovimiento === 'E3') e3ByDate[fecha] += v;
+    else otByDate[fecha] += v;
+  });
+
+  if (chartBarras) chartBarras.destroy();
+  var ctx = document.getElementById('chart-barras').getContext('2d');
+  chartBarras = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: dates.map(fmtDateLabel),
+      datasets: [
+        { label:'DEV', data: dates.map(function(d){return devByDate[d];}), backgroundColor:'rgba(74,222,128,0.7)', borderColor:'rgba(74,222,128,1)', borderWidth:1, borderRadius:3 },
+        { label:'E3',  data: dates.map(function(d){return e3ByDate[d];}),  backgroundColor:'rgba(96,165,250,0.6)', borderColor:'rgba(96,165,250,1)', borderWidth:1, borderRadius:3 },
+        { label:'OT',  data: dates.map(function(d){return otByDate[d];}),  backgroundColor:'rgba(107,114,128,0.45)', borderColor:'rgba(107,114,128,0.8)', borderWidth:1, borderRadius:3 }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      interaction:{ mode:'index', intersect:false },
+      plugins: {
+        legend:{ display:false },
+        tooltip:{
+          backgroundColor:'#1e222d', borderColor:'rgba(255,255,255,0.1)', borderWidth:1,
+          titleColor:'#e8eaf0', bodyColor:'#9da3b4',
+          callbacks:{
+            label:function(ctx){ return ' '+ctx.dataset.label+': '+ctx.parsed.y.toLocaleString('es-CL')+' pallets'; }
+          }
+        }
+      },
+      scales: {
+        x:{ stacked:true, grid:{color:'rgba(255,255,255,0.05)'}, ticks:{color:'#5a6070',font:{size:10}}, border:{color:'rgba(255,255,255,0.07)'} },
+        y:{ stacked:true, grid:{color:'rgba(255,255,255,0.05)'}, ticks:{color:'#5a6070',font:{size:10},callback:function(v){return v.toLocaleString('es-CL');}}, border:{color:'rgba(255,255,255,0.07)'} }
+      }
+    }
+  });
+}
+</script>
+
+<!-- PROXY: necesita api/kpi-proxy en Azure Functions -->
+<!-- Agregar en api/ la función kpi-proxy/index.js -->
+</body>
+</html>

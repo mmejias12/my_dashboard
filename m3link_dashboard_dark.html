@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Panel de Control M3LINK — REDTEC</title>
+<title>Panel de Control M2LINK — REDTEC</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -161,6 +161,49 @@
   .chip-bod-alias { color:var(--accent);font-weight:600; }
   .chip-bod-val { color:var(--b-ret-tx);font-weight:600;margin-left:4px; }
 
+  /* MODAL */
+  .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:500;display:flex;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(3px); }
+  .modal-box { background:#1e222d;border:1px solid rgba(255,255,255,.12);border-radius:13px;width:100%;max-width:680px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(0,0,0,.6); }
+  .modal-head { display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;border-bottom:1px solid rgba(255,255,255,.07); }
+  .modal-title { font-size:14px;font-weight:600;color:#e8eaf0; }
+  .modal-subtitle { font-size:11px;color:#5a6070;margin-top:2px; }
+  .modal-close { width:28px;height:28px;border-radius:6px;border:1px solid rgba(255,255,255,.12);background:transparent;color:#9da3b4;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:background .12s; }
+  .modal-close:hover { background:rgba(255,255,255,.08); }
+  .modal-body { overflow-y:auto;padding:1.25rem; }
+  /* INFO GRID */
+  .modal-info-grid { display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:1.25rem; }
+  .info-block { background:rgba(255,255,255,.03);border-radius:8px;padding:.625rem .875rem; }
+  .info-label { font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;color:#5a6070;margin-bottom:3px; }
+  .info-value { font-size:12px;font-weight:500;color:#e8eaf0; }
+  .info-value.mono { font-family:'JetBrains Mono',monospace;font-size:11px; }
+  /* TIMELINE */
+  .timeline-title { font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:#5a6070;margin-bottom:.875rem; }
+  .timeline { position:relative;padding-left:1.5rem; }
+  .timeline::before { content:'';position:absolute;left:6px;top:8px;bottom:8px;width:1px;background:rgba(255,255,255,.1); }
+  .tl-item { position:relative;margin-bottom:1rem; }
+  .tl-item:last-child { margin-bottom:0; }
+  .tl-dot { position:absolute;left:-1.5rem;top:3px;width:13px;height:13px;border-radius:50%;border:2px solid;display:flex;align-items:center;justify-content:center; }
+  .tl-dot.done { border-color:#4ade80;background:rgba(74,222,128,.15); }
+  .tl-dot.done::after { content:'';width:5px;height:5px;border-radius:50%;background:#4ade80; }
+  .tl-dot.pending { border-color:#5a6070;background:rgba(255,255,255,.03); }
+  .tl-dot.active { border-color:#60a5fa;background:rgba(96,165,250,.15); }
+  .tl-dot.active::after { content:'';width:5px;height:5px;border-radius:50%;background:#60a5fa; }
+  .tl-dot.warn { border-color:#f87171;background:rgba(248,113,113,.15); }
+  .tl-dot.warn::after { content:'';width:5px;height:5px;border-radius:50%;background:#f87171; }
+  .tl-header { display:flex;align-items:center;justify-content:space-between;margin-bottom:4px; }
+  .tl-stage { font-size:12px;font-weight:500;color:#e8eaf0; }
+  .tl-date { font-size:10.5px;color:#5a6070;font-family:'JetBrains Mono',monospace; }
+  .tl-detail { display:flex;gap:16px;flex-wrap:wrap; }
+  .tl-kv { display:flex;flex-direction:column;gap:1px; }
+  .tl-k { font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:#5a6070; }
+  .tl-v { font-size:11.5px;font-weight:500;color:#9da3b4; }
+  .tl-v.green { color:#4ade80; }
+  .tl-v.blue  { color:#60a5fa; }
+  .tl-v.amber { color:#fcd34d; }
+  .tl-v.red   { color:#f87171; }
+  .obs-box { background:rgba(255,255,255,.03);border-left:2px solid rgba(255,255,255,.1);border-radius:0 6px 6px 0;padding:.5rem .75rem;margin-top:1rem;font-size:11.5px;color:#9da3b4;line-height:1.6; }
+  .obs-label { font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:#5a6070;margin-bottom:3px; }
+  .preview-note { font-size:10px;color:#5a6070;text-align:center;padding:.625rem;border-top:1px solid rgba(255,255,255,.05);margin-top:1rem;font-style:italic; }
   ::-webkit-scrollbar{width:5px;height:5px}
   ::-webkit-scrollbar-track{background:transparent}
   ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}
@@ -175,7 +218,7 @@
     <span class="logo-name">REDTEC</span>
   </div>
   <div class="logo-sep"></div>
-  <div class="topbar-title"><div class="live-dot"></div>Panel de control M3LINK</div>
+  <div class="topbar-title"><div class="live-dot"></div>Panel de control M2LINK</div>
   <div class="topbar-right">
     <div class="avatar">MM</div>
     <span class="user-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="214c4c444b4840526153444555444252400f424e4c">[email&#160;protected]</a></span>
@@ -650,8 +693,9 @@ function render() {
   var rows = '';
   for (var i=0;i<slice.length;i++) {
     var r = slice[i];
+    var pedidoId = r.nroPedido || '';
     rows += '<tr>'
-      + '<td class="mono" style="font-weight:500;color:var(--accent)">'  + (r.nroPedido || '&mdash;') + '</td>'
+      + '<td class="mono" style="font-weight:500;color:var(--accent);cursor:pointer;text-decoration:underline;text-decoration-color:rgba(74,222,128,.4)" onclick="openModal(' + JSON.stringify(r) + ')">'  + (pedidoId || '&mdash;') + '</td>'
       + '<td title="' + (r.clienteOrigenStr||'') + '">'                  + (r.clienteOrigenStr||'&mdash;') + '</td>'
       + '<td title="' + (r.clienteDestinoStr||'') + '">'                 + (r.clienteDestinoStr||'&mdash;') + '</td>'
       + '<td>' + opBadge(r.operacion) + '</td>'
@@ -672,6 +716,110 @@ function render() {
 }
 
 /* PAGINACION */
+/* ── MODAL ──────────────────────────────────────────────── */
+function openModal(r) {
+  document.getElementById('modal-title').textContent = 'Pedido #' + (r.nroPedido || '—');
+  document.getElementById('modal-subtitle').textContent = (r.operacion || '') + ' · ' + (r.etapaOperacion || '') + ' · ' + (r.clienteDestinoStr || '');
+
+  var body = '';
+
+  // INFO GRID
+  body += '<div class="modal-info-grid">';
+  body += infoBlock('Cliente origen',  r.clienteOrigenStr  || '—');
+  body += infoBlock('Cliente destino', r.clienteDestinoStr || '—');
+  body += infoBlock('Bodega origen',   r.bodegaOrigenStr   || '—');
+  body += infoBlock('Bodega destino',  r.bodegaDestinoStr  || '—');
+  body += infoBlock('Patente',  r.patente  || '—');
+  body += infoBlock('Chofer',   r.chofer   || '—');
+  body += infoBlock('Nro DTE',  r.dteNro   || '—', true);
+  body += infoBlock('Nro Cita', r.nroCita  || '—', true);
+  body += '</div>';
+
+  // TIMELINE
+  body += '<div class="timeline-title">Historial del pedido</div>';
+  body += '<div class="timeline">';
+
+  // Paso 1: Ingreso
+  body += tlItem(
+    'done',
+    'Registro creado',
+    fmtFull(r.horaIngreso),
+    [ {k:'Usuario', v: r.usuario || '—'},
+      {k:'Sol.', v: (r.cantidadSolicitada != null ? r.cantidadSolicitada.toLocaleString('es-CL') : '—'), cls:'blue'},
+      {k:'Operación', v: r.operacion || '—'} ]
+  );
+
+  // Paso 2: Despacho
+  var despDot = r.fechaDespacho ? 'done' : 'pending';
+  var despCant = r.cantidadDespachada != null ? r.cantidadDespachada.toLocaleString('es-CL') : '—';
+  body += tlItem(
+    despDot,
+    'Despacho',
+    r.fechaDespacho ? fmtDate(r.fechaDespacho) : 'Pendiente',
+    [ {k:'Desp.', v: despCant, cls: r.fechaDespacho ? 'amber' : 'red'},
+      {k:'Requerida', v: fmtDate(r.fechaRequerida) || '—'},
+      {k:'Patente', v: r.patente || '—'} ]
+  );
+
+  // Paso 3: Confirmación
+  var confDot = r.fechaConfirmacion ? (r.etapaOperacion && r.etapaOperacion.toLowerCase().includes('anulado') ? 'warn' : 'done') : (r.etapaOperacion && r.etapaOperacion.toLowerCase().includes('confirmar') ? 'active' : 'pending');
+  var confCant = r.cantidadConfirmada != null ? r.cantidadConfirmada.toLocaleString('es-CL') : '—';
+  var pendCant = r.cantidadPendiente  != null ? r.cantidadPendiente.toLocaleString('es-CL')  : '—';
+  body += tlItem(
+    confDot,
+    r.fechaConfirmacion ? 'Confirmado — ' + (r.etapaOperacion || '') : (r.etapaOperacion || 'Pendiente confirmación'),
+    r.fechaConfirmacion ? fmtFull(r.fechaConfirmacion) : '—',
+    [ {k:'Conf.', v: confCant, cls: r.fechaConfirmacion ? 'green' : 'red'},
+      {k:'Pendiente', v: pendCant, cls: (r.cantidadPendiente && r.cantidadPendiente < 0) ? 'amber' : ''},
+      {k:'Nro DTE', v: r.dteNro || '—', mono:true} ]
+  );
+
+  body += '</div>';
+
+  // Observación
+  if (r.observacion && r.observacion.trim()) {
+    body += '<div class="obs-box"><div class="obs-label">Observación</div>' + r.observacion + '</div>';
+  }
+
+  // Nota preview
+  body += '<div class="preview-note">Vista preliminar · Historial completo disponible próximamente</div>';
+
+  document.getElementById('modal-body').innerHTML = body;
+  document.getElementById('modal-overlay').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function infoBlock(label, value, mono) {
+  return '<div class="info-block"><div class="info-label">' + label + '</div><div class="info-value' + (mono ? ' mono' : '') + '">' + value + '</div></div>';
+}
+
+function tlItem(dot, stage, date, kvs) {
+  var html = '<div class="tl-item"><div class="tl-dot ' + dot + '"></div>';
+  html += '<div class="tl-header"><span class="tl-stage">' + stage + '</span><span class="tl-date">' + date + '</span></div>';
+  html += '<div class="tl-detail">';
+  kvs.forEach(function(kv) {
+    html += '<div class="tl-kv"><span class="tl-k">' + kv.k + '</span><span class="tl-v' + (kv.cls ? ' '+kv.cls : '') + (kv.mono ? ' mono' : '') + '">' + kv.v + '</span></div>';
+  });
+  html += '</div></div>';
+  return html;
+}
+
+function fmtFull(s) {
+  if (!s) return '—';
+  try { var d=new Date(s); return d.toLocaleDateString('es-CL')+' '+d.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'}); } catch(e){return s;}
+}
+
+function closeModal(e) {
+  if (e.target === document.getElementById('modal-overlay')) closeModalDirect();
+}
+function closeModalDirect() {
+  document.getElementById('modal-overlay').style.display = 'none';
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeModalDirect();
+});
+
 function goPage(p) {
   var max = Math.ceil(filtered.length/ps);
   cp = Math.max(1, Math.min(max, p));
@@ -739,5 +887,18 @@ function exportXLSX() {
 
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<div class="modal-overlay" id="modal-overlay" style="display:none" onclick="closeModal(event)">
+  <div class="modal-box" id="modal-box">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="modal-title">Pedido #—</div>
+        <div class="modal-subtitle" id="modal-subtitle">—</div>
+      </div>
+      <button class="modal-close" onclick="closeModalDirect()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
 </body>
 </html>

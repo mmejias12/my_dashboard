@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Panel de Control M2LINK — REDTEC</title>
+<title>Panel de Control M3LINK — REDTEC</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -218,7 +218,7 @@
     <span class="logo-name">REDTEC</span>
   </div>
   <div class="logo-sep"></div>
-  <div class="topbar-title"><div class="live-dot"></div>Panel de control M2LINK</div>
+  <div class="topbar-title"><div class="live-dot"></div>Panel de control M3LINK</div>
   <div class="topbar-right">
     <div class="avatar">MM</div>
     <span class="user-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="214c4c444b4840526153444555444252400f424e4c">[email&#160;protected]</a></span>
@@ -684,7 +684,8 @@ function fmtDate(s) {
 /* RENDER */
 function render() {
   var tbody = document.getElementById('tbody');
-  var slice = filtered.slice((cp-1)*ps, cp*ps);
+  var start = (cp-1)*ps;
+  var slice = filtered.slice(start, start+ps);
   if (!slice.length) {
     tbody.innerHTML = '<tr><td colspan="10"><div class="state-msg">Sin resultados</div></td></tr>';
     document.getElementById('tcnt').textContent = '0 registros';
@@ -694,8 +695,9 @@ function render() {
   for (var i=0;i<slice.length;i++) {
     var r = slice[i];
     var pedidoId = r.nroPedido || '';
+    var rowIdx = start + i;
     rows += '<tr>'
-      + '<td class="mono" style="font-weight:500;color:var(--accent);cursor:pointer;text-decoration:underline;text-decoration-color:rgba(74,222,128,.4)" onclick="openModal(' + JSON.stringify(r) + ')">'  + (pedidoId || '&mdash;') + '</td>'
+      + '<td class="mono" style="font-weight:500;color:var(--accent);cursor:pointer;text-decoration:underline;text-decoration-color:rgba(74,222,128,.4)" onclick="openModal(' + rowIdx + ')">'  + (pedidoId || '&mdash;') + '</td>'
       + '<td title="' + (r.clienteOrigenStr||'') + '">'                  + (r.clienteOrigenStr||'&mdash;') + '</td>'
       + '<td title="' + (r.clienteDestinoStr||'') + '">'                 + (r.clienteDestinoStr||'&mdash;') + '</td>'
       + '<td>' + opBadge(r.operacion) + '</td>'
@@ -717,7 +719,9 @@ function render() {
 
 /* PAGINACION */
 /* ── MODAL ──────────────────────────────────────────────── */
-function openModal(r) {
+function openModal(idx) {
+  var r = filtered[idx];
+  if (!r) return;
   document.getElementById('modal-title').textContent = 'Pedido #' + (r.nroPedido || '—');
   document.getElementById('modal-subtitle').textContent = (r.operacion || '') + ' · ' + (r.etapaOperacion || '') + ' · ' + (r.clienteDestinoStr || '');
 

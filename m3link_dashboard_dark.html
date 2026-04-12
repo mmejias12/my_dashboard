@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Panel de Control M3LINK — REDTEC</title>
+<title>Panel de Control M2LINK — REDTEC</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -208,6 +208,23 @@
   ::-webkit-scrollbar-track{background:transparent}
   ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}
   ::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.2)}
+
+  /* TOTALS BAR */
+  .totals-bar { display:flex;align-items:center;padding:.625rem 1rem;
+    border-top:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,.03);
+    gap:6px;overflow-x:auto;white-space:nowrap; }
+  .totals-label { font-size:10px;color:#5a6070;flex-shrink:0; }
+  .total-item { display:inline-flex;align-items:center;gap:5px;flex-shrink:0; }
+  .total-item-label { font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:#5a6070; }
+  .total-item-val { font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace; }
+  .total-sep { width:1px;height:16px;background:rgba(255,255,255,0.12);flex-shrink:0;margin:0 4px; }
+  .pend-info { display:inline-flex;align-items:center;gap:4px;cursor:help;position:relative; }
+  .pend-info .pend-tip { display:none;position:absolute;bottom:calc(100% + 8px);right:0;
+    width:260px;background:#1e222d;border:1px solid rgba(248,113,113,.3);border-radius:8px;
+    padding:.625rem .75rem;font-size:11px;color:#9da3b4;line-height:1.6;z-index:999;
+    box-shadow:0 8px 24px rgba(0,0,0,.5); }
+  .pend-info:hover .pend-tip { display:block; }
+  .pend-tip-title { font-size:11px;font-weight:600;color:#f87171;margin-bottom:4px; }
 </style>
 </head>
 <body>
@@ -218,7 +235,7 @@
     <span class="logo-name">REDTEC</span>
   </div>
   <div class="logo-sep"></div>
-  <div class="topbar-title"><div class="live-dot"></div>Panel de control M3LINK</div>
+  <div class="topbar-title"><div class="live-dot"></div>Panel de control M2LINK</div>
   <div class="topbar-right">
     <div class="avatar">MM</div>
     <span class="user-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="214c4c444b4840526153444555444252400f424e4c">[email&#160;protected]</a></span>
@@ -346,27 +363,42 @@
         </table>
       </div>
       <div class="totals-bar" id="totals-bar" style="display:none">
-        <span class="totals-label" id="totals-desc">Totales del filtro</span>
-        <div class="totals-group">
-          <div class="total-item">
-            <span class="total-item-label">Sol.</span>
-            <span class="total-item-val" id="tot-sol" style="color:#9da3b4">—</span>
-          </div>
-          <div class="total-sep"></div>
-          <div class="total-item">
-            <span class="total-item-label">Desp.</span>
-            <span class="total-item-val" id="tot-desp" style="color:#fcd34d">—</span>
-          </div>
-          <div class="total-sep"></div>
-          <div class="total-item">
-            <span class="total-item-label">Conf.</span>
-            <span class="total-item-val" id="tot-conf" style="color:var(--accent)">—</span>
-          </div>
-          <div class="total-sep"></div>
-          <div class="total-item">
-            <span class="total-item-label">Pendiente</span>
+        <span class="totals-label" id="totals-desc">Totales</span>
+        <div class="total-sep"></div>
+        <div class="total-item">
+          <span class="total-item-label">Sol.</span>
+          <span class="total-item-val" id="tot-sol" style="color:#9da3b4">—</span>
+        </div>
+        <div class="total-sep"></div>
+        <div class="total-item">
+          <span class="total-item-label">Desp.</span>
+          <span class="total-item-val" id="tot-desp" style="color:#fcd34d">—</span>
+        </div>
+        <div class="total-sep"></div>
+        <div class="total-item">
+          <span class="total-item-label">Conf.</span>
+          <span class="total-item-val" id="tot-conf" style="color:var(--accent)">—</span>
+        </div>
+        <div class="total-sep"></div>
+        <div class="total-item">
+          <span class="total-item-label">Pendiente</span>
+          <span class="pend-info">
             <span class="total-item-val" id="tot-pend" style="color:#f87171">—</span>
-          </div>
+            <span id="pend-icon" style="display:none;font-size:11px">ⓘ</span>
+            <div class="pend-tip">
+              <div class="pend-tip-title">⚠ ¿Por qué hay pendiente?</div>
+              Cantidad pendiente = Despachado − Confirmado.<br><br>
+              Puede indicar:<br>
+              • Pallets despachados aún no confirmados por el cliente<br>
+              • Diferencias en recepción (daño, merma, rechazo)<br>
+              • Operación aún en curso (no cerrada)<br>
+              • Error de registro o ajuste pendiente
+            </div>
+          </span>
+        </div>
+        <div id="col-totals-section" style="display:none;display:flex;align-items:center;gap:6px;margin-left:8px">
+          <div class="total-sep"></div>
+          <span class="totals-label" style="color:#534AB7">▼ Por columna (filtro activo)</span>
         </div>
       </div>
       <div class="pagination" id="pg" style="display:none">
@@ -777,15 +809,33 @@ function renderTotals() {
     totConf += (filtered[i].cantidadConfirmada  || 0);
     totPend += (filtered[i].cantidadPendiente   || 0);
   }
-  // Etiqueta dinámica
-  var desc = filtered.length === raw.length
-    ? 'Totales del período (' + filtered.length.toLocaleString('es-CL') + ' registros)'
-    : 'Totales del filtro (' + filtered.length.toLocaleString('es-CL') + ' de ' + raw.length.toLocaleString('es-CL') + ')';
+
+  // Etiqueta: solo mostrar "filtro" si hay filtro activo
+  var isFiltrado = filtered.length !== raw.length;
+  var desc = isFiltrado
+    ? 'Filtro (' + filtered.length.toLocaleString('es-CL') + ' de ' + raw.length.toLocaleString('es-CL') + ')'
+    : 'Período (' + filtered.length.toLocaleString('es-CL') + ' reg.)';
   document.getElementById('totals-desc').textContent = desc;
+
   document.getElementById('tot-sol').textContent  = totSol.toLocaleString('es-CL');
   document.getElementById('tot-desp').textContent = totDesp.toLocaleString('es-CL');
   document.getElementById('tot-conf').textContent = totConf.toLocaleString('es-CL');
-  document.getElementById('tot-pend').textContent = totPend.toLocaleString('es-CL');
+
+  // Pendiente: mostrar con ícono de info si es negativo o hay diferencia
+  var pendEl   = document.getElementById('tot-pend');
+  var iconEl   = document.getElementById('pend-icon');
+  pendEl.textContent = totPend.toLocaleString('es-CL');
+  if (totPend < 0) {
+    pendEl.style.color = '#f87171';
+    iconEl.style.display = 'inline';
+  } else if (totPend > 0) {
+    pendEl.style.color = '#fcd34d';
+    iconEl.style.display = 'inline';
+  } else {
+    pendEl.style.color = 'var(--accent)';
+    iconEl.style.display = 'none';
+  }
+
   document.getElementById('totals-bar').style.display = 'flex';
 }
 

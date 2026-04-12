@@ -60,6 +60,12 @@ html,body { height:100%; font-family:"Inter",sans-serif; font-size:13px;
   font-size:12px;font-weight:600;font-family:"Inter",sans-serif;transition:background .12s; }
 .btn-load:hover { background:rgba(74,222,128,.2); }
 .btn-load:disabled { opacity:.4;cursor:not-allowed; }
+.view-btns { display:flex;gap:6px;margin-top:8px; }
+.vbtn { flex:1;padding:6px;border-radius:6px;border:1px solid var(--border-md);
+  background:var(--bg-input);color:var(--text-sec);cursor:pointer;
+  font-size:11px;font-weight:600;font-family:"Inter",sans-serif;transition:all .15s;text-align:center; }
+.vbtn:hover { background:var(--bg-hover);color:var(--text-pri); }
+.vbtn.active { background:rgba(74,222,128,.12);color:var(--accent);border-color:rgba(74,222,128,.35); }
 
 .stat-row { display:flex;justify-content:space-between; }
 .stat-item { text-align:center; }
@@ -127,6 +133,10 @@ html,body { height:100%; font-family:"Inter",sans-serif; font-size:13px;
       <input type="date" id="d2" class="ctrl-date">
     </div>
     <button class="btn-load" id="btn-load" onclick="loadData()">⟳ Cargar mapa</button>
+    <div class="view-btns">
+      <div class="vbtn active" id="vbtn-chile" onclick="setVista('chile')">🇨🇱 Chile</div>
+      <div class="vbtn" id="vbtn-stgo" onclick="setVista('stgo')">🏙 Santiago</div>
+    </div>
   </div>
   <div class="pcard" id="stats-card" style="display:none">
     <div class="stat-row">
@@ -191,6 +201,11 @@ var BODEGAS = {
 var RC = {WM:[59,130,246],CC:[245,158,11],TT:[239,68,68],SM:[139,92,246],RT:[74,222,128],OT:[107,114,128]};
 var RN = {WM:"Walmart",CC:"Cencosud",TT:"Tottus",SM:"SMU/Alvi",RT:"Redtec",OT:"Otros"};
 
+/* Bounding box RM: lat -33.1 a -33.9 / lng -71.0 a -70.4 */
+var VISTA_CHILE = {longitude:-70.65,latitude:-34.5,zoom:5.8,pitch:50,bearing:-12};
+var VISTA_STGO  = {longitude:-70.67,latitude:-33.47,zoom:9.5,pitch:55,bearing:-8};
+var vistaActual = "chile";
+
 var API_PROXY="/api/ops",API_DIRECT="https://apirdt1.azurewebsites.net/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRangoFechas";
 var isLocal=location.protocol==="file:",isDev=["localhost","127.0.0.1"].includes(location.hostname);
 var rawData=[],puntos=[],activeR={WM:1,CC:1,TT:1,SM:1,RT:1,OT:1};
@@ -230,6 +245,23 @@ function baseTiles(){
       });
     }
   });
+}
+
+function setVista(v) {
+  vistaActual = v;
+  document.getElementById("vbtn-chile").className = "vbtn" + (v==="chile"?" active":"");
+  document.getElementById("vbtn-stgo").className  = "vbtn" + (v==="stgo" ?" active":"");
+  var vs = v==="stgo" ? VISTA_STGO : VISTA_CHILE;
+  if (deckInst) {
+    deckInst.setProps({ initialViewState: Object.assign({}, vs, {transitionDuration:800}) });
+  }
+  if (puntos.length) renderLayers();
+}
+
+function inStgo(p) {
+  // Bounding box Región Metropolitana
+  return p.coords[0] >= -71.1 && p.coords[0] <= -70.35
+      && p.coords[1] >= -33.95 && p.coords[1] <= -33.05;
 }
 
 function loadData(){
@@ -314,13 +346,18 @@ function procesarDatos(){
 function renderLayers(){
   if(!deckInst)return;
   var vis=puntos.filter(function(p){return activeR[p.retailer];});
+  // En vista Santiago filtrar solo RM
+  if(vistaActual==="stgo") vis=vis.filter(inStgo);
   var maxP=vis.length?vis[0].pallets:1;
+  // Radio más pequeño en Santiago para no solapar
+  var colRadius = vistaActual==="stgo" ? 1200 : 6000;
+  var maxElev   = vistaActual==="stgo" ? 60000 : 150000;
 
   var colLayer=new deck.ColumnLayer({
     id:"cols",data:vis,
-    diskResolution:20,radius:6000,extruded:true,pickable:true,
+    diskResolution:20,radius:colRadius,extruded:true,pickable:true,
     getPosition:function(d){return d.coords;},
-    getElevation:function(d){return Math.max(800,(d.pallets/maxP)*150000);},
+    getElevation:function(d){return Math.max(500,(d.pallets/maxP)*maxElev);},
     getFillColor:function(d){var c=RC[d.retailer]||RC.OT;return[c[0],c[1],c[2],210];},
     getLineColor:function(d){var c=RC[d.retailer]||RC.OT;return[c[0],c[1],c[2],255];},
     lineWidthMinPixels:1,
@@ -332,12 +369,13 @@ function renderLayers(){
     id:"glow",data:vis,pickable:false,opacity:.12,stroked:false,filled:true,
     radiusScale:1,radiusMinPixels:6,radiusMaxPixels:70,
     getPosition:function(d){return d.coords;},
-    getRadius:function(d){return Math.max(10000,(d.pallets/maxP)*90000);},
+    getRadius:function(d){return Math.max(colRadius*1.8,(d.pallets/maxP)*(colRadius*15));},
     getFillColor:function(d){var c=RC[d.retailer]||RC.OT;return[c[0],c[1],c[2],60];}
   });
 
+  var lblMin = vistaActual==="stgo" ? 20 : 50;
   var lblLayer=new deck.TextLayer({
-    id:"labels",data:vis.filter(function(p){return p.pallets>=50;}),
+    id:"labels",data:vis.filter(function(p){return p.pallets>=lblMin;}),
     pickable:false,
     getPosition:function(d){return[d.coords[0],d.coords[1],Math.max(800,(d.pallets/maxP)*150000)+3000];},
     getText:function(d){return d.pallets.toLocaleString("es-CL");},

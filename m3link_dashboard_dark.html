@@ -345,6 +345,30 @@
           </tbody>
         </table>
       </div>
+      <div class="totals-bar" id="totals-bar" style="display:none">
+        <span class="totals-label" id="totals-desc">Totales del filtro</span>
+        <div class="totals-group">
+          <div class="total-item">
+            <span class="total-item-label">Sol.</span>
+            <span class="total-item-val" id="tot-sol" style="color:#9da3b4">—</span>
+          </div>
+          <div class="total-sep"></div>
+          <div class="total-item">
+            <span class="total-item-label">Desp.</span>
+            <span class="total-item-val" id="tot-desp" style="color:#fcd34d">—</span>
+          </div>
+          <div class="total-sep"></div>
+          <div class="total-item">
+            <span class="total-item-label">Conf.</span>
+            <span class="total-item-val" id="tot-conf" style="color:var(--accent)">—</span>
+          </div>
+          <div class="total-sep"></div>
+          <div class="total-item">
+            <span class="total-item-label">Pendiente</span>
+            <span class="total-item-val" id="tot-pend" style="color:#f87171">—</span>
+          </div>
+        </div>
+      </div>
       <div class="pagination" id="pg" style="display:none">
         <span class="page-info" id="pgi"></span>
         <div class="page-btns">
@@ -455,6 +479,7 @@ function loadData() {
       updateStats(); buildTags(); render();
       document.getElementById('stats').style.display   = 'grid';
       document.getElementById('pg').style.display      = 'flex';
+    document.getElementById('totals-bar').style.display = 'flex';
       document.getElementById('tag-row').style.display = 'flex';
       var now = new Date();
       document.getElementById('last-upd').textContent = 'Actualizado ' + now.toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
@@ -737,6 +762,31 @@ function render() {
     + (filtered.length !== raw.length ? ' (filtrado de ' + raw.length.toLocaleString('es-CL') + ')' : '');
   document.getElementById('pgi').textContent  = 'Pagina ' + cp + ' de ' + pages;
   document.getElementById('pgc').textContent  = cp;
+  renderTotals();
+}
+
+function renderTotals() {
+  if (!filtered.length) {
+    document.getElementById('totals-bar').style.display = 'none';
+    return;
+  }
+  var totSol=0, totDesp=0, totConf=0, totPend=0;
+  for (var i=0;i<filtered.length;i++) {
+    totSol  += (filtered[i].cantidadSolicitada  || 0);
+    totDesp += (filtered[i].cantidadDespachada  || 0);
+    totConf += (filtered[i].cantidadConfirmada  || 0);
+    totPend += (filtered[i].cantidadPendiente   || 0);
+  }
+  // Etiqueta dinámica
+  var desc = filtered.length === raw.length
+    ? 'Totales del período (' + filtered.length.toLocaleString('es-CL') + ' registros)'
+    : 'Totales del filtro (' + filtered.length.toLocaleString('es-CL') + ' de ' + raw.length.toLocaleString('es-CL') + ')';
+  document.getElementById('totals-desc').textContent = desc;
+  document.getElementById('tot-sol').textContent  = totSol.toLocaleString('es-CL');
+  document.getElementById('tot-desp').textContent = totDesp.toLocaleString('es-CL');
+  document.getElementById('tot-conf').textContent = totConf.toLocaleString('es-CL');
+  document.getElementById('tot-pend').textContent = totPend.toLocaleString('es-CL');
+  document.getElementById('totals-bar').style.display = 'flex';
 }
 
 /* PAGINACION */

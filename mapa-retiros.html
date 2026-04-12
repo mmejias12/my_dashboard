@@ -48,12 +48,13 @@ html,body { height:100%; font-family:"Inter",sans-serif; font-size:13px;
 
 .ctrl-label { font-size:10px;color:var(--text-muted);margin-bottom:4px;
   text-transform:uppercase;letter-spacing:.5px; }
-.ctrl-date { font-size:12px;padding:6px 9px;border:1px solid var(--border-md);
-  border-radius:6px;background:rgba(37,41,50,.9);color:var(--text-pri);
-  outline:none;font-family:"Inter",sans-serif;width:100%;color-scheme:dark; }
+
 .ctrl-date:focus { border-color:var(--accent); }
-.date-row { display:flex;gap:6px;align-items:center; }
-.date-sep { font-size:11px;color:var(--text-muted); }
+.date-row { display:flex;gap:4px;align-items:center; }
+.date-sep { font-size:11px;color:var(--text-muted);flex-shrink:0; }
+.ctrl-date { font-size:11px;padding:6px 7px;border:1px solid var(--border-md);
+  border-radius:6px;background:rgba(37,41,50,.9);color:var(--text-pri);
+  outline:none;font-family:"Inter",sans-serif;width:100%;min-width:0;color-scheme:dark; }
 .btn-load { width:100%;margin-top:8px;padding:7px;border:1px solid rgba(74,222,128,.3);
   border-radius:6px;background:rgba(74,222,128,.1);color:var(--accent);cursor:pointer;
   font-size:12px;font-weight:600;font-family:"Inter",sans-serif;transition:background .12s; }
@@ -209,9 +210,25 @@ function initDeck(){
     initialViewState:{longitude:-70.65,latitude:-34.5,zoom:5.8,pitch:50,bearing:-12,minZoom:4,maxZoom:14},
     controller:true,
     onViewStateChange:function(o){deckInst.setProps({viewState:o.viewState});},
-    layers:[],
+    layers:[baseTiles()],
     views:[new deck.MapView({repeat:false})],
     _typedArrayManagerProps:{overAlloc:1,poolSize:0}
+  });
+}
+
+function baseTiles(){
+  return new deck.TileLayer({
+    id:"base-tiles",
+    data:"https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+    minZoom:0,maxZoom:19,tileSize:256,
+    renderSubLayers:function(props){
+      var bbox=props.tile.bbox;
+      return new deck.BitmapLayer(props,{
+        data:null,
+        image:props.data,
+        bounds:[bbox.west,bbox.south,bbox.east,bbox.north]
+      });
+    }
   });
 }
 
@@ -329,7 +346,7 @@ function renderLayers(){
     fontFamily:"JetBrains Mono, monospace",fontWeight:600
   });
 
-  deckInst.setProps({layers:[glowLayer,colLayer,lblLayer]});
+  deckInst.setProps({layers:[baseTiles(),glowLayer,colLayer,lblLayer]});
 }
 
 function showTip(info){

@@ -310,7 +310,14 @@
         <div class="ret-bodegas" id="s2-bodegas"></div>
         <div class="ret-fecha-aviso" id="s2-aviso" style="display:none"></div>
       </div>
-      <div class="stat-card"><div class="stat-label">Transferencias</div><div class="stat-value" id="s3" style="color:var(--b-tra-tx)">—</div><div class="stat-sub">operaciones</div></div>
+      <div class="stat-card">
+        <div class="stat-label">Transferencias</div>
+        <div class="stat-value" id="s3" style="color:var(--b-tra-tx)">—</div>
+        <div class="stat-sub">operaciones</div>
+        <div class="stat-cant-label">cant. confirmada</div>
+        <div class="stat-cant-value" id="s3-cant" style="color:var(--b-tra-tx)">—</div>
+        <div class="ret-bodegas" id="s3-detalle" style="margin-top:6px"></div>
+      </div>
       <div class="stat-card"><div class="stat-label">Cerrados</div><div class="stat-value" id="s4" style="color:var(--e-green)">—</div><div class="stat-sub">etapa</div></div>
     </div>
 
@@ -554,6 +561,20 @@ function updateStats() {
     avisoEl.textContent = '';
   }
   document.getElementById('s3').textContent = tra;
+  // Transferencias: sol / desp / conf
+  var traSol = 0, traDesp = 0, traConf = 0;
+  for (var i=0;i<raw.length;i++) {
+    if ((raw[i].operacion||'').toLowerCase().indexOf('transfer') >= 0) {
+      traSol  += (raw[i].cantidadSolicitada  || 0);
+      traDesp += (raw[i].cantidadDespachada  || 0);
+      traConf += (raw[i].cantidadConfirmada  || 0);
+    }
+  }
+  document.getElementById('s3-cant').textContent = traConf.toLocaleString('es-CL');
+  document.getElementById('s3-detalle').innerHTML =
+    '<div class="ret-bod-item"><span class="ret-bod-alias">Sol.</span><span class="ret-bod-val" style="color:var(--b-tra-tx)">' + traSol.toLocaleString('es-CL') + '</span></div>' +
+    '<div class="ret-bod-item"><span class="ret-bod-alias">Desp.</span><span class="ret-bod-val" style="color:var(--b-tra-tx)">' + traDesp.toLocaleString('es-CL') + '</span></div>' +
+    '<div class="ret-bod-item"><span class="ret-bod-alias">Conf.</span><span class="ret-bod-val" style="color:var(--b-tra-tx)">' + traConf.toLocaleString('es-CL') + '</span></div>';
   document.getElementById('s4').textContent = cerr;
 }
 

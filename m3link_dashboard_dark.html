@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Panel de Control M3LINK — REDTEC</title>
+<title>Panel de Control M2LINK — REDTEC</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -235,7 +235,7 @@
     <span class="logo-name">REDTEC</span>
   </div>
   <div class="logo-sep"></div>
-  <div class="topbar-title"><div class="live-dot"></div>Panel de control M3LINK</div>
+  <div class="topbar-title"><div class="live-dot"></div>Panel de control M2LINK</div>
   <div class="topbar-right">
     <div class="avatar">MM</div>
     <span class="user-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="214c4c444b4840526153444555444252400f424e4c">[email&#160;protected]</a></span>
@@ -380,22 +380,10 @@
           <span class="total-item-val" id="tot-conf" style="color:var(--accent)">—</span>
         </div>
         <div class="total-sep"></div>
-        <div class="total-item" id="pend-wrapper" style="position:relative;cursor:help"
-             onmouseenter="showPendTip()" onmouseleave="hidePendTip()">
+        <div class="total-item" id="pend-wrapper" style="cursor:help"
+             onmouseenter="showPendTip(event)" onmouseleave="hidePendTip()">
           <span class="total-item-label">Pendiente ⓘ</span>
           <span class="total-item-val" id="tot-pend" style="color:#f87171">—</span>
-          <div id="pend-tip-box" style="display:none;position:absolute;bottom:calc(100% + 10px);right:0;
-            width:270px;background:#1e222d;border:1px solid rgba(248,113,113,.35);border-radius:9px;
-            padding:.75rem;font-size:11px;color:#9da3b4;line-height:1.65;z-index:9999;
-            box-shadow:0 10px 30px rgba(0,0,0,.6);pointer-events:none;">
-            <div style="font-size:11.5px;font-weight:600;color:#f87171;margin-bottom:6px">⚠ ¿Por qué hay pendiente?</div>
-            <strong style="color:#e8eaf0">Pendiente = Despachado − Confirmado</strong><br><br>
-            Puede indicar:<br>
-            • Pallets despachados aún no confirmados por el cliente<br>
-            • Diferencias en recepción (daño, merma o rechazo)<br>
-            • Operación aún en curso (no cerrada)<br>
-            • Error de registro o ajuste pendiente
-          </div>
         </div>
         <div id="col-totals-section" style="display:none;display:flex;align-items:center;gap:6px;margin-left:8px">
           <div class="total-sep"></div>
@@ -798,9 +786,19 @@ function render() {
   renderTotals();
 }
 
-function showPendTip() {
+function showPendTip(e) {
   var box = document.getElementById('pend-tip-box');
-  if (box) box.style.display = 'block';
+  if (!box) return;
+  var wrapper = document.getElementById('pend-wrapper');
+  var rect = wrapper.getBoundingClientRect();
+  box.style.display = 'block';
+  // Posicionar encima del elemento, alineado a la derecha
+  var tipW = 270;
+  var left = Math.min(rect.right - tipW, window.innerWidth - tipW - 10);
+  var top  = rect.top - box.offsetHeight - 10;
+  if (top < 10) top = rect.bottom + 6;
+  box.style.left = Math.max(10, left) + 'px';
+  box.style.top  = top + 'px';
 }
 function hidePendTip() {
   var box = document.getElementById('pend-tip-box');
@@ -1020,6 +1018,18 @@ function exportXLSX() {
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
+<div id="pend-tip-box" style="display:none;position:fixed;width:270px;
+  background:#1e222d;border:1px solid rgba(248,113,113,.35);border-radius:9px;
+  padding:.75rem;font-size:11px;color:#9da3b4;line-height:1.65;z-index:9999;
+  box-shadow:0 10px 30px rgba(0,0,0,.6);pointer-events:none;">
+  <div style="font-size:11.5px;font-weight:600;color:#f87171;margin-bottom:6px">⚠ ¿Por qué hay pendiente?</div>
+  <strong style="color:#e8eaf0">Pendiente = Despachado − Confirmado</strong><br><br>
+  Puede indicar:<br>
+  • Pallets despachados aún no confirmados por el cliente<br>
+  • Diferencias en recepción (daño, merma o rechazo)<br>
+  • Operación aún en curso (no cerrada)<br>
+  • Error de registro o ajuste pendiente
+</div>
 <div class="modal-overlay" id="modal-overlay" style="display:none" onclick="closeModal(event)">
   <div class="modal-box" id="modal-box">
     <div class="modal-head">

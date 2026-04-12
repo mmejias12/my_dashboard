@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapa Retiros — REDTEC M3LINK</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg-page:    #0f1117;
+  --bg-surface: #181b23;
+  --bg-card:    #1e222d;
+  --bg-input:   #252932;
+  --bg-hover:   #252d3a;
+  --border:     rgba(255,255,255,0.07);
+  --border-md:  rgba(255,255,255,0.12);
+  --text-pri:   #e8eaf0;
+  --text-sec:   #9da3b4;
+  --text-muted: #5a6070;
+  --accent:     #4ade80;
+  --red-logo:   #C0170C;
+  --c-wm: #3b82f6; --c-cc: #f59e0b; --c-tt: #ef4444;
+  --c-sm: #8b5cf6; --c-ot: #6b7280;
+}
+html,body { height:100%; font-family:'Inter',sans-serif; font-size:13px; background:var(--bg-page); color:var(--text-pri); -webkit-font-smoothing:antialiased; overflow:hidden; }
+
+/* TOPBAR */
+.topbar { position:fixed;top:0;left:0;right:0;z-index:200;height:50px;background:var(--bg-surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1.25rem;gap:12px; }
+.logo { display:flex;align-items:center;gap:9px; }
+.logo-box { width:27px;height:27px;border-radius:6px;background:var(--red-logo);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:12px; }
+.logo-name { font-weight:600;font-size:13.5px; }
+.logo-sep { width:1px;height:18px;background:var(--border-md);margin:0 6px; }
+.topbar-title { font-size:12.5px;color:var(--text-sec);display:flex;align-items:center;gap:7px; }
+.live-dot { width:7px;height:7px;background:var(--accent);border-radius:50%;animation:pulse 2.5s ease-in-out infinite;box-shadow:0 0 6px var(--accent); }
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.topbar-right { margin-left:auto;display:flex;align-items:center;gap:10px; }
+.back-btn { font-size:11.5px;color:var(--text-sec);text-decoration:none;display:flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid var(--border-md);border-radius:6px;transition:background .12s; }
+.back-btn:hover { background:var(--bg-hover); }
+
+/* MAP CONTAINER */
+#map-container { position:fixed;top:50px;left:0;right:0;bottom:0;z-index:1; }
+
+/* LEFT PANEL */
+.panel { position:fixed;top:62px;left:12px;z-index:100;width:260px;display:flex;flex-direction:column;gap:8px; }
+
+.panel-card { background:rgba(24,27,35,0.92);border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:.875rem;backdrop-filter:blur(12px); }
+
+.ctrl-label { font-size:10.5px;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px; }
+.ctrl-date { font-size:12px;padding:6px 9px;border:1px solid var(--border-md);border-radius:6px;background:rgba(37,41,50,0.9);color:var(--text-pri);outline:none;font-family:'Inter',sans-serif;width:100%;color-scheme:dark; }
+.ctrl-date:focus { border-color:var(--accent); }
+.date-row { display:flex;gap:6px;align-items:center; }
+.date-sep { font-size:11px;color:var(--text-muted); }
+.btn-load { width:100%;margin-top:8px;padding:7px;border:1px solid var(--border-md);border-radius:6px;background:rgba(74,222,128,0.12);color:var(--accent);cursor:pointer;font-size:12px;font-weight:600;font-family:'Inter',sans-serif;transition:background .12s;letter-spacing:.3px; }
+.btn-load:hover { background:rgba(74,222,128,0.22); }
+.btn-load:disabled { opacity:.4;cursor:not-allowed; }
+
+/* STATS */
+.stat-row { display:flex;justify-content:space-between;align-items:center; }
+.stat-item { text-align:center; }
+.stat-val { font-size:18px;font-weight:600;color:var(--accent); }
+.stat-lbl { font-size:9.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px; }
+
+/* LEGEND */
+.legend-title { font-size:11px;font-weight:600;color:var(--text-pri);margin-bottom:8px; }
+.legend-item { display:flex;align-items:center;justify-content:space-between;padding:3px 0; }
+.legend-left { display:flex;align-items:center;gap:7px; }
+.legend-dot { width:10px;height:10px;border-radius:50%; }
+.legend-name { font-size:11.5px;color:var(--text-sec); }
+.legend-val { font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text-pri);font-weight:500; }
+.legend-bar-wrap { height:3px;background:rgba(255,255,255,.06);border-radius:2px;margin-top:2px; }
+.legend-bar { height:3px;border-radius:2px;transition:width .5s ease; }
+
+/* FILTERS */
+.filter-title { font-size:11px;font-weight:600;color:var(--text-pri);margin-bottom:7px; }
+.filter-chips { display:flex;flex-wrap:wrap;gap:5px; }
+.fchip { padding:3px 10px;border-radius:20px;border:1px solid var(--border-md);font-size:10.5px;cursor:pointer;font-weight:500;transition:all .12s;background:var(--bg-card);color:var(--text-sec); }
+.fchip.on { color:white; }
+
+/* TOOLTIP */
+.tooltip { position:fixed;z-index:300;background:rgba(24,27,35,0.96);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:.75rem 1rem;pointer-events:none;min-width:200px;backdrop-filter:blur(10px);box-shadow:0 8px 24px rgba(0,0,0,.5); }
+.tt-name { font-size:13px;font-weight:600;color:var(--text-pri);margin-bottom:6px; }
+.tt-row { display:flex;justify-content:space-between;gap:16px;font-size:11.5px; }
+.tt-label { color:var(--text-muted); }
+.tt-val { color:var(--text-pri);font-weight:500;font-family:'JetBrains Mono',monospace; }
+
+/* STATE */
+.map-state { position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:150;text-align:center;color:var(--text-muted);pointer-events:none; }
+.spinner { width:28px;height:28px;border:2px solid rgba(255,255,255,.1);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 12px; }
+@keyframes spin{to{transform:rotate(360deg)}}
+
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:2px}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo"><div class="logo-box">R</div><span class="logo-name">REDTEC</span></div>
+  <div class="logo-sep"></div>
+  <div class="topbar-title"><div class="live-dot"></div>Mapa de retiros en vivo</div>
+  <div class="topbar-right">
+    <a href="m3link_dashboard_dark.html" class="back-btn">← Volver al dashboard</a>
+  </div>
+</div>
+
+<!-- MAP -->
+<div id="map-container"></div>
+
+<!-- STATE MSG -->
+<div class="map-state" id="map-state">
+  <div style="font-size:13px;color:var(--text-muted)">Selecciona un período y presiona Cargar</div>
+</div>
+
+<!-- TOOLTIP -->
+<div class="tooltip" id="tooltip" style="display:none"></div>
+
+<!-- LEFT PANEL -->
+<div class="panel">
+
+  <!-- Controles -->
+  <div class="panel-card">
+    <div class="ctrl-label">Período</div>
+    <div class="date-row">
+      <input type="date" id="d1" class="ctrl-date">
+      <span class="date-sep">—</span>
+      <input type="date" id="d2" class="ctrl-date">
+    </div>
+    <button class="btn-load" id="btn-load" onclick="loadData()">⟳ Cargar mapa</button>
+  </div>
+
+  <!-- Stats -->
+  <div class="panel-card" id="stats-card" style="display:none">
+    <div class="stat-row">
+      <div class="stat-item">
+        <div class="stat-val" id="st-puntos">—</div>
+        <div class="stat-lbl">Ubicaciones</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val" id="st-pallets" style="color:#60a5fa">—</div>
+        <div class="stat-lbl">Pallets conf.</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val" id="st-ops" style="color:#fcd34d">—</div>
+        <div class="stat-lbl">Operaciones</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filtro retailer -->
+  <div class="panel-card" id="filter-card" style="display:none">
+    <div class="filter-title">Filtrar por retailer</div>
+    <div class="filter-chips" id="filter-chips"></div>
+  </div>
+
+  <!-- Leyenda top retailers -->
+  <div class="panel-card" id="legend-card" style="display:none">
+    <div class="legend-title">Top ubicaciones · pallets</div>
+    <div id="legend-list"></div>
+  </div>
+
+</div>
+
+<!-- Deck.gl + MapLibre -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/deck.gl/8.9.27/deck.gl.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/3.6.2/maplibre-gl.js"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/3.6.2/maplibre-gl.css" rel="stylesheet">
+
+<script>
+// ── COORDENADAS CONOCIDAS ──────────────────────────────────────────────────────
+// Extraídas de los datos reales + coordenadas reales de Chile
+var BODEGAS = {
+  // WALMART
+  'ZWM01 CD WM LO AGUIRRE SECO':      { lat:-33.4728, lng:-70.7892, retailer:'WM', ciudad:'Lo Aguirre' },
+  'ZWM02 CD WM QUILICURA FRIO':        { lat:-33.3601, lng:-70.7274, retailer:'WM', ciudad:'Quilicura' },
+  'ZWM11 CD WM EL PEÑON':             { lat:-33.5614, lng:-70.7341, retailer:'WM', ciudad:'El Peñón' },
+  '00041 HIPER HUECHURABA VESPUCI':    { lat:-33.3689, lng:-70.6512, retailer:'WM', ciudad:'Huechuraba' },
+  '00626 HIPER PPE GALES LA REINA':    { lat:-33.4502, lng:-70.5743, retailer:'WM', ciudad:'La Reina' },
+  // CENCOSUD
+  'ZCS01 CD CENCOSUD NOVICIADO':       { lat:-33.3921, lng:-70.8734, retailer:'CC', ciudad:'Noviciado' },
+  // TOTTUS
+  'ZT434 CD TOTTUS CONGELADOS':        { lat:-33.4567, lng:-70.6892, retailer:'TT', ciudad:'Santiago' },
+  'ZTT01 CD TOTTUS LA FARFANA':        { lat:-33.4801, lng:-70.7654, retailer:'TT', ciudad:'La Farfana' },
+  // SMU / UNIMARC
+  'ZUN01 CD UNIMARC LO AGUIRRE':       { lat:-33.4812, lng:-70.7756, retailer:'SM', ciudad:'Lo Aguirre' },
+  // ALVI
+  'ZAL03 CD ALVI AEROPARQUE':          { lat:-33.3845, lng:-70.7923, retailer:'SM', ciudad:'Aeroparque' },
+  // CLIENTES ESPECIALES
+  'REDTEC SANTIAGO':                    { lat:-33.4401, lng:-70.6534, retailer:'RT', ciudad:'Santiago' },
+  'REDTEC TALCA':                       { lat:-35.4264, lng:-71.6554, retailer:'RT', ciudad:'Talca' },
+  'REDTEC SANTIAGO VIRTUAL':            { lat:-33.4501, lng:-70.6434, retailer:'RT', ciudad:'Santiago' },
+  // OTROS DISTRIBUIDORES
+  'LAF CD RENCA':                       { lat:-33.4123, lng:-70.7234, retailer:'OT', ciudad:'Renca' },
+  'PUNTO AZUL TIL-TIL':                { lat:-33.0934, lng:-70.9234, retailer:'OT', ciudad:'Til-Til' },
+  'HAMBURGO CD RENCA':                  { lat:-33.4023, lng:-70.7134, retailer:'OT', ciudad:'Renca' },
+  'HAMBURGO TRANSFERENCIA CONCEPCION': { lat:-36.8201, lng:-73.0444, retailer:'OT', ciudad:'Concepción' },
+  'LAF TRANSFERENCIA CONCEPCION':       { lat:-36.8301, lng:-73.0544, retailer:'OT', ciudad:'Concepción' },
+  'ALIMENTOS ANDINO RENCA':             { lat:-33.4223, lng:-70.7334, retailer:'OT', ciudad:'Renca' },
+  'ARCOR CERRILLOS Gral. Velasquez 9309':{ lat:-33.5001, lng:-70.7234, retailer:'OT', ciudad:'Cerrillos' },
+  'VIRUTEX CD PUDAHUEL':                { lat:-33.4334, lng:-70.7834, retailer:'OT', ciudad:'Pudahuel' },
+  'ALIFRUT RENGO PLANTA':               { lat:-34.4134, lng:-70.8634, retailer:'OT', ciudad:'Rengo' },
+  'QUINTA VESPUCIO':                    { lat:-33.4934, lng:-70.6534, retailer:'OT', ciudad:'Santiago' },
+  // PF
+  'PF CENTRO DISTRIBUCION TALCA':       { lat:-35.4364, lng:-71.6454, retailer:'OT', ciudad:'Talca' },
+  'PF TALCA PLANTA 1':                  { lat:-35.4264, lng:-71.6354, retailer:'OT', ciudad:'Talca' },
+  'PF RANCAGUA':                        { lat:-34.1701, lng:-70.7401, retailer:'OT', ciudad:'Rancagua' },
+  'PF CONCEPCION':                      { lat:-36.8101, lng:-73.0544, retailer:'OT', ciudad:'Concepción' },
+  'PF PUERTO MONTT':                    { lat:-41.4693, lng:-72.9424, retailer:'OT', ciudad:'Puerto Montt' },
+  'PF TEMUCO':                          { lat:-38.7359, lng:-72.5904, retailer:'OT', ciudad:'Temuco' },
+  'PF TDR VALDIVIA':                    { lat:-39.8196, lng:-73.2452, retailer:'OT', ciudad:'Valdivia' },
+  'PF LA SERENA':                       { lat:-29.9027, lng:-71.2520, retailer:'OT', ciudad:'La Serena' },
+  'PF ANTOFAGASTA':                     { lat:-23.6509, lng:-70.3954, retailer:'OT', ciudad:'Antofagasta' },
+  'PF IQUIQUE':                         { lat:-20.2208, lng:-70.1431, retailer:'OT', ciudad:'Iquique' },
+  'PF ARICA':                           { lat:-18.4783, lng:-70.3126, retailer:'OT', ciudad:'Arica' },
+  'PF COPIAPO':                         { lat:-27.3668, lng:-70.3323, retailer:'OT', ciudad:'Copiapó' },
+  'PF CHILLAN':                         { lat:-36.6063, lng:-72.1034, retailer:'OT', ciudad:'Chillán' },
+  'PF SANTIAGO PLANTA':                 { lat:-33.4601, lng:-70.6434, retailer:'OT', ciudad:'Santiago' },
+};
+
+var RETAILER_COLORS = {
+  WM: [59, 130, 246],   // azul
+  CC: [245, 158, 11],   // amarillo
+  TT: [239, 68, 68],    // rojo
+  SM: [139, 92, 246],   // morado
+  RT: [74, 222, 128],   // verde (Redtec)
+  OT: [107, 114, 128],  // gris
+};
+var RETAILER_NAMES = { WM:'Walmart', CC:'Cencosud', TT:'Tottus', SM:'SMU/Alvi', RT:'Redtec', OT:'Otros' };
+
+var API_PROXY  = '/api/ops';
+var API_DIRECT = 'https://apirdt1.azurewebsites.net/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRangoFechas';
+var isLocal = window.location.protocol === 'file:';
+var isDev   = ['localhost','127.0.0.1'].includes(window.location.hostname);
+
+var deckgl = null, rawData = [], puntos = [], activeRetailers = {};
+Object.keys(RETAILER_NAMES).forEach(function(k){ activeRetailers[k] = true; });
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', function() {
+  var hoy  = new Date();
+  var yyyy = hoy.getFullYear();
+  var mm   = String(hoy.getMonth()+1).padStart(2,'0');
+  var dd   = String(hoy.getDate()).padStart(2,'0');
+  document.getElementById('d2').value = yyyy+'-'+mm+'-'+dd;
+  document.getElementById('d1').value = yyyy+'-'+mm+'-01';
+  initMap();
+});
+
+// ── INIT MAP ──────────────────────────────────────────────────────────────────
+function initMap() {
+  var map = new maplibregl.Map({
+    container: 'map-container',
+    style: {
+      version: 8,
+      sources: {
+        'osm': {
+          type: 'raster',
+          tiles: ['https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'],
+          tileSize: 256,
+          attribution: '© OpenStreetMap © CARTO'
+        }
+      },
+      layers: [{ id: 'osm', type: 'raster', source: 'osm' }]
+    },
+    center: [-70.65, -34.5],
+    zoom: 6.5,
+    pitch: 45,
+    bearing: -10,
+    antialias: true
+  });
+
+  map.on('load', function() {
+    deckgl = new deck.DeckGL({
+      container: 'map-container',
+      mapStyle: null,
+      map: map,
+      initialViewState: { longitude:-70.65, latitude:-34.5, zoom:6.5, pitch:45, bearing:-10 },
+      controller: true,
+      layers: []
+    });
+  });
+}
+
+// ── LOAD DATA ─────────────────────────────────────────────────────────────────
+function loadData() {
+  var btn = document.getElementById('btn-load');
+  btn.disabled = true; btn.textContent = 'Cargando...';
+  document.getElementById('map-state').innerHTML = '<div class="spinner"></div><div style="font-size:12px">Consultando API...</div>';
+
+  var d1  = document.getElementById('d1').value;
+  var d2  = document.getElementById('d2').value;
+  var url = (isLocal || isDev)
+    ? API_DIRECT + '?fechaInicial=' + d1 + '&fechaFinal=' + d2
+    : API_PROXY  + '?fechaInicio='  + d1 + '&fechaFin='   + d2;
+
+  fetch(url, { headers:{ 'Accept':'application/json' } })
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(function(data) {
+      rawData = Array.isArray(data) ? data : [data];
+      procesarDatos();
+      btn.disabled = false; btn.textContent = '⟳ Cargar mapa';
+    })
+    .catch(function(err) {
+      document.getElementById('map-state').innerHTML = '<div style="color:#f87171;font-size:12px">Error: '+err.message+'</div>';
+      btn.disabled = false; btn.textContent = '⟳ Cargar mapa';
+    });
+}
+
+// ── PROCESAR DATOS ────────────────────────────────────────────────────────────
+function procesarDatos() {
+  // Filtrar solo Retiros
+  var retiros = rawData.filter(function(r){
+    return (r.operacion||'').trim().toLowerCase() === 'retiro';
+  });
+
+  // Agrupar por bodega origen
+  var mapa = {};
+  retiros.forEach(function(r) {
+    var bod = r.bodegaOrigenStr || '';
+    if (!mapa[bod]) {
+      mapa[bod] = { nombre: bod, pallets: 0, ops: 0, confirmadas: 0, retailer: 'OT', coords: null };
+    }
+    mapa[bod].pallets     += (r.cantidadConfirmada  || 0);
+    mapa[bod].ops         += 1;
+    mapa[bod].confirmadas += (r.cantidadConfirmada  || 0);
+  });
+
+  // Asignar coordenadas
+  puntos = [];
+  Object.keys(mapa).forEach(function(bod) {
+    var info = mapa[bod];
+    var coords = null;
+    var retailer = 'OT';
+    var ciudad = bod;
+
+    // Buscar en tabla exacta
+    if (BODEGAS[bod]) {
+      coords   = [BODEGAS[bod].lng, BODEGAS[bod].lat];
+      retailer = BODEGAS[bod].retailer;
+      ciudad   = BODEGAS[bod].ciudad;
+    } else {
+      // Buscar por palabras clave
+      var b = bod.toUpperCase();
+      if      (b.indexOf('WALMART') >= 0 || b.indexOf('ZWM') >= 0)  { retailer='WM'; coords=approxCoords(b); }
+      else if (b.indexOf('CENCOSUD') >= 0 || b.indexOf('ZCS') >= 0) { retailer='CC'; coords=approxCoords(b); }
+      else if (b.indexOf('TOTTUS') >= 0 || b.indexOf('ZTT') >= 0)   { retailer='TT'; coords=approxCoords(b); }
+      else if (b.indexOf('UNIMARC') >= 0 || b.indexOf('ZUN') >= 0 || b.indexOf('ALVI') >= 0) { retailer='SM'; coords=approxCoords(b); }
+      else if (b.indexOf('REDTEC') >= 0) { retailer='RT'; coords=approxCoords(b); }
+      else { retailer='OT'; coords=approxCoords(b); }
+    }
+
+    if (coords && info.pallets >= 0) {
+      puntos.push({
+        nombre:   info.nombre,
+        ciudad:   ciudad,
+        coords:   coords,
+        pallets:  info.pallets,
+        ops:      info.ops,
+        retailer: retailer
+      });
+    }
+  });
+
+  // Ordenar por pallets desc
+  puntos.sort(function(a,b){ return b.pallets - a.pallets; });
+
+  renderMap();
+  renderStats();
+  renderFilters();
+  renderLegend();
+  document.getElementById('map-state').innerHTML = '';
+}
+
+// Coordenadas aproximadas por ciudad mencionada en el nombre
+function approxCoords(b) {
+  if (b.indexOf('ARICA') >= 0)        return [-70.31, -18.47];
+  if (b.indexOf('IQUIQUE') >= 0)      return [-70.14, -20.22];
+  if (b.indexOf('ANTOFAGASTA') >= 0)  return [-70.39, -23.65];
+  if (b.indexOf('COPIAPO') >= 0)      return [-70.33, -27.36];
+  if (b.indexOf('LA SERENA') >= 0 || b.indexOf('COQUIMBO') >= 0) return [-71.25, -29.90];
+  if (b.indexOf('VALPARAISO') >= 0 || b.indexOf('VALPO') >= 0 || b.indexOf('VIÑA') >= 0) return [-71.61, -33.04];
+  if (b.indexOf('RANCAGUA') >= 0)     return [-70.74, -34.17];
+  if (b.indexOf('TALCA') >= 0)        return [-71.65, -35.42];
+  if (b.indexOf('CHILLAN') >= 0)      return [-72.10, -36.60];
+  if (b.indexOf('CONCEPCION') >= 0 || b.indexOf('BIOBIO') >= 0 || b.indexOf('HUALPEN') >= 0) return [-73.04, -36.82];
+  if (b.indexOf('TEMUCO') >= 0)       return [-72.59, -38.73];
+  if (b.indexOf('VALDIVIA') >= 0)     return [-73.24, -39.81];
+  if (b.indexOf('PUERTO MONTT') >= 0) return [-72.94, -41.46];
+  if (b.indexOf('QUILICURA') >= 0)    return [-70.72, -33.36];
+  if (b.indexOf('HUECHURABA') >= 0)   return [-70.65, -33.36];
+  if (b.indexOf('RENCA') >= 0)        return [-70.72, -33.41];
+  if (b.indexOf('CERRILLOS') >= 0)    return [-70.72, -33.50];
+  if (b.indexOf('PUDAHUEL') >= 0)     return [-70.78, -33.43];
+  if (b.indexOf('LO AGUIRRE') >= 0)   return [-70.78, -33.47];
+  if (b.indexOf('TIL-TIL') >= 0 || b.indexOf('TILTIL') >= 0) return [-70.92, -33.09];
+  if (b.indexOf('MAIPO') >= 0 || b.indexOf('BUIN') >= 0) return [-70.73, -33.73];
+  if (b.indexOf('PEÑAFLOR') >= 0 || b.indexOf('TALAGANTE') >= 0) return [-70.88, -33.65];
+  // Default Santiago
+  return [-70.65 + (Math.random()-.5)*.08, -33.45 + (Math.random()-.5)*.08];
+}
+
+// ── RENDER MAP ────────────────────────────────────────────────────────────────
+function renderMap() {
+  if (!deckgl) return;
+  var maxPallets = puntos.length ? puntos[0].pallets : 1;
+
+  var visibles = puntos.filter(function(p){ return activeRetailers[p.retailer]; });
+
+  var columnLayer = new deck.ColumnLayer({
+    id: 'retiros-columns',
+    data: visibles,
+    diskResolution: 24,
+    radius: 4500,
+    extruded: true,
+    pickable: true,
+    getPosition:   function(d){ return d.coords; },
+    getElevation:  function(d){ return Math.max(500, (d.pallets / maxPallets) * 120000); },
+    getFillColor:  function(d){
+      var c = RETAILER_COLORS[d.retailer] || [107,114,128];
+      return [c[0], c[1], c[2], 200];
+    },
+    getLineColor:  function(d){
+      var c = RETAILER_COLORS[d.retailer] || [107,114,128];
+      return [c[0], c[1], c[2], 255];
+    },
+    lineWidthMinPixels: 1,
+    elevationScale: 1,
+    onHover: function(info) { showTooltip(info); },
+    transitions: { getElevation: { duration: 600, type: 'spring' } }
+  });
+
+  var scatterLayer = new deck.ScatterplotLayer({
+    id: 'retiros-glow',
+    data: visibles,
+    pickable: false,
+    opacity: 0.15,
+    stroked: false,
+    filled: true,
+    radiusScale: 1,
+    radiusMinPixels: 8,
+    radiusMaxPixels: 60,
+    getPosition:  function(d){ return d.coords; },
+    getRadius:    function(d){ return Math.max(8000, (d.pallets/maxPallets)*80000); },
+    getFillColor: function(d){
+      var c = RETAILER_COLORS[d.retailer] || [107,114,128];
+      return [c[0], c[1], c[2], 80];
+    }
+  });
+
+  var textLayer = new deck.TextLayer({
+    id: 'retiros-labels',
+    data: visibles.filter(function(p){ return p.pallets > 100; }),
+    pickable: false,
+    getPosition:  function(d){ return [d.coords[0], d.coords[1], Math.max(500,(d.pallets/maxPallets)*120000)+2000]; },
+    getText:      function(d){ return d.pallets.toLocaleString('es-CL'); },
+    getSize: 12,
+    getColor: [255,255,255,220],
+    getAngle: 0,
+    getTextAnchor: 'middle',
+    getAlignmentBaseline: 'bottom',
+    fontFamily: 'JetBrains Mono, monospace',
+    fontWeight: 600,
+    background: true,
+    getBorderColor: [0,0,0,0],
+    backgroundPadding: [3,2,3,2],
+    getBackgroundColor: [0,0,0,0]
+  });
+
+  deckgl.setProps({ layers: [scatterLayer, columnLayer, textLayer] });
+}
+
+// ── TOOLTIP ───────────────────────────────────────────────────────────────────
+function showTooltip(info) {
+  var tt = document.getElementById('tooltip');
+  if (!info.object) { tt.style.display = 'none'; return; }
+  var d = info.object;
+  var c = RETAILER_COLORS[d.retailer] || [107,114,128];
+  tt.style.display = 'block';
+  tt.style.left  = (info.x + 16) + 'px';
+  tt.style.top   = (info.y - 10) + 'px';
+  tt.style.borderColor = 'rgba('+c[0]+','+c[1]+','+c[2]+',.35)';
+  tt.innerHTML =
+    '<div class="tt-name" style="color:rgb('+c[0]+','+c[1]+','+c[2]+')">' + (d.ciudad || d.nombre) + '</div>' +
+    '<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">' + d.nombre + '</div>' +
+    '<div class="tt-row"><span class="tt-label">Retailer</span><span class="tt-val">' + (RETAILER_NAMES[d.retailer]||d.retailer) + '</span></div>' +
+    '<div class="tt-row"><span class="tt-label">Pallets conf.</span><span class="tt-val">' + d.pallets.toLocaleString('es-CL') + '</span></div>' +
+    '<div class="tt-row"><span class="tt-label">Operaciones</span><span class="tt-val">' + d.ops.toLocaleString('es-CL') + '</span></div>';
+}
+
+// ── STATS ─────────────────────────────────────────────────────────────────────
+function renderStats() {
+  var totalPallets = puntos.reduce(function(s,p){return s+p.pallets;},0);
+  var totalOps     = puntos.reduce(function(s,p){return s+p.ops;},0);
+  document.getElementById('st-puntos').textContent  = puntos.length;
+  document.getElementById('st-pallets').textContent = totalPallets.toLocaleString('es-CL');
+  document.getElementById('st-ops').textContent     = totalOps.toLocaleString('es-CL');
+  document.getElementById('stats-card').style.display = 'block';
+}
+
+// ── FILTERS ───────────────────────────────────────────────────────────────────
+function renderFilters() {
+  var cont = document.getElementById('filter-chips');
+  cont.innerHTML = '';
+  var retailers = [...new Set(puntos.map(function(p){return p.retailer;}))];
+  retailers.forEach(function(r) {
+    var c = RETAILER_COLORS[r]||[107,114,128];
+    var el = document.createElement('div');
+    el.className = 'fchip on';
+    el.style.borderColor = 'rgba('+c[0]+','+c[1]+','+c[2]+',.4)';
+    el.style.color = 'rgb('+c[0]+','+c[1]+','+c[2]+')';
+    el.style.background = 'rgba('+c[0]+','+c[1]+','+c[2]+',.1)';
+    el.textContent = RETAILER_NAMES[r]||r;
+    el.onclick = function() {
+      activeRetailers[r] = !activeRetailers[r];
+      if (activeRetailers[r]) {
+        el.classList.add('on');
+        el.style.background = 'rgba('+c[0]+','+c[1]+','+c[2]+',.1)';
+      } else {
+        el.classList.remove('on');
+        el.style.background = 'transparent';
+        el.style.borderColor = 'rgba(255,255,255,.12)';
+        el.style.color = 'var(--text-muted)';
+      }
+      renderMap();
+    };
+    cont.appendChild(el);
+  });
+  document.getElementById('filter-card').style.display = 'block';
+}
+
+// ── LEGEND ────────────────────────────────────────────────────────────────────
+function renderLegend() {
+  var top = puntos.slice(0,8);
+  var maxP = top.length ? top[0].pallets : 1;
+  var html = '';
+  top.forEach(function(p) {
+    var c = RETAILER_COLORS[p.retailer]||[107,114,128];
+    var pct = Math.round((p.pallets/maxP)*100);
+    html += '<div class="legend-item">'
+      + '<div class="legend-left"><div class="legend-dot" style="background:rgb('+c[0]+','+c[1]+','+c[2]+')"></div>'
+      + '<span class="legend-name">' + (p.ciudad||p.nombre).substring(0,18) + '</span></div>'
+      + '<span class="legend-val">' + p.pallets.toLocaleString('es-CL') + '</span>'
+      + '</div>'
+      + '<div class="legend-bar-wrap"><div class="legend-bar" style="width:'+pct+'%;background:rgb('+c[0]+','+c[1]+','+c[2]+')"></div></div>';
+  });
+  document.getElementById('legend-list').innerHTML = html;
+  document.getElementById('legend-card').style.display = 'block';
+}
+</script>
+</body>
+</html>

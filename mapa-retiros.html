@@ -145,7 +145,7 @@ html,body { height:100%; font-family:"Inter",sans-serif; font-size:13px;
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/deck.gl/8.9.27/deck.gl.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/deck.gl@8.9.35/dist.min.js"></script>
 <script>
 var BODEGAS = {
   "ZWM01 CD WM LO AGUIRRE SECO":[-70.7892,-33.4728,"WM","Lo Aguirre"],
@@ -196,7 +196,7 @@ var isLocal=location.protocol==="file:",isDev=["localhost","127.0.0.1"].includes
 var rawData=[],puntos=[],activeR={WM:1,CC:1,TT:1,SM:1,RT:1,OT:1};
 var deckInst=null;
 
-window.addEventListener("DOMContentLoaded",function(){
+window.addEventListener("load",function(){
   var h=new Date(),y=h.getFullYear(),m=String(h.getMonth()+1).padStart(2,"0"),d=String(h.getDate()).padStart(2,"0");
   document.getElementById("d2").value=y+"-"+m+"-"+d;
   document.getElementById("d1").value=y+"-"+m+"-01";

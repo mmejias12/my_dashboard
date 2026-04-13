@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cartola Financiera — REDTEC M3LINK</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+:root {
+  --bg-page:#0f1117; --bg-surface:#181b23; --bg-card:#1e222d;
+  --bg-input:#252932; --bg-hover:#252d3a;
+  --border:rgba(255,255,255,0.07); --border-md:rgba(255,255,255,0.12);
+  --text-pri:#e8eaf0; --text-sec:#9da3b4; --text-muted:#5a6070;
+  --accent:#4ade80; --red-logo:#C0170C;
+  --c-uf:#60a5fa; --c-clp:#fcd34d; --c-warn:#f87171; --c-ok:#4ade80;
+  --c-arriendo:#4ade80; --c-emision:#60a5fa; --c-transf:#f59e0b;
+  --c-dev:#f87171; --c-traspaso:#8b5cf6; --c-twm:#06b6d4;
+  --radius-sm:6px; --radius-md:9px; --radius-lg:13px;
+}
+html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
+  background:var(--bg-page); color:var(--text-pri); -webkit-font-smoothing:antialiased; }
+
+/* TOPBAR */
+.topbar { position:sticky;top:0;z-index:200;height:50px;background:var(--bg-surface);
+  border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1.25rem;gap:12px; }
+.logo { display:flex;align-items:center;gap:9px; }
+.logo-box { width:27px;height:27px;border-radius:6px;background:var(--red-logo);
+  display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:12px; }
+.logo-name { font-weight:600;font-size:13.5px; }
+.logo-sep { width:1px;height:18px;background:var(--border-md);margin:0 6px; }
+.topbar-title { font-size:12.5px;color:var(--text-sec);display:flex;align-items:center;gap:7px; }
+.live-dot { width:7px;height:7px;background:var(--c-uf);border-radius:50%;
+  animation:pulse 2.5s ease-in-out infinite;box-shadow:0 0 6px var(--c-uf); }
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.topbar-right { margin-left:auto;display:flex;align-items:center;gap:10px; }
+.back-btn { font-size:11.5px;color:var(--text-sec);text-decoration:none;
+  display:flex;align-items:center;gap:5px;padding:4px 10px;
+  border:1px solid var(--border-md);border-radius:var(--radius-sm);transition:background .12s; }
+.back-btn:hover { background:var(--bg-hover); }
+.last-upd { font-size:10.5px;color:var(--text-muted); }
+
+/* LAYOUT */
+.layout { display:flex; }
+.sidebar { width:210px;min-width:210px;background:var(--bg-surface);border-right:1px solid var(--border);
+  padding:.875rem 0;position:sticky;top:50px;height:calc(100vh - 50px);overflow-y:auto; }
+.s-label { font-size:10px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;
+  color:var(--text-muted);padding:.5rem 1rem .3rem; }
+.s-hdr { display:flex;align-items:center;justify-content:space-between;padding:.45rem 1rem;
+  font-size:12px;font-weight:500;color:var(--text-sec);cursor:pointer;user-select:none; }
+.s-hdr:hover { background:var(--bg-hover);color:var(--text-pri); }
+.s-chevron { font-size:10px;transition:transform .2s;color:var(--text-muted); }
+.s-hdr.open .s-chevron { transform:rotate(90deg); }
+.s-sub { overflow:hidden;transition:max-height .22s ease; }
+.s-item { display:block;padding:.35rem 1rem .35rem 1.5rem;font-size:11.5px;color:var(--text-sec);
+  cursor:pointer;border-left:2px solid transparent;text-decoration:none;transition:all .12s; }
+.s-item:hover { background:var(--bg-hover);color:var(--text-pri); }
+.s-item.active { color:var(--c-uf);border-left-color:var(--c-uf);
+  background:rgba(96,165,250,.08);font-weight:500; }
+.s-divider { height:1px;background:var(--border);margin:.5rem 1rem; }
+
+/* MAIN */
+.main { flex:1;padding:1.25rem 1.375rem;min-width:0; }
+.page-header { display:flex;align-items:flex-start;justify-content:space-between;
+  margin-bottom:1rem;gap:12px;flex-wrap:wrap; }
+.page-title { font-size:15px;font-weight:600; }
+.breadcrumb { font-size:11px;color:var(--text-muted);margin-top:3px; }
+
+/* CONTROLS */
+.cbar { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);
+  padding:.875rem 1rem;display:flex;align-items:flex-end;gap:.875rem;margin-bottom:.875rem;flex-wrap:wrap; }
+.ctrl-group { display:flex;flex-direction:column;gap:4px; }
+.ctrl-label { font-size:11px;color:var(--text-sec); }
+.ctrl-date { font-size:13px;padding:8px 11px;border:1px solid var(--border-md);border-radius:var(--radius-sm);
+  background:var(--bg-input);color:var(--text-pri);outline:none;font-family:'Inter',sans-serif;
+  width:160px;color-scheme:dark; }
+.ctrl-date:focus { border-color:var(--c-uf); }
+.btn { font-size:12.5px;padding:8px 16px;border:1px solid var(--border-md);border-radius:var(--radius-sm);
+  background:var(--bg-input);color:var(--text-pri);cursor:pointer;font-family:'Inter',sans-serif;
+  font-weight:500;transition:background .12s; }
+.btn:hover { background:var(--bg-hover); }
+.btn:disabled { opacity:.4;cursor:not-allowed; }
+.period-badge { display:flex;align-items:center;gap:6px;background:rgba(96,165,250,.12);
+  border:1px solid rgba(96,165,250,.3);border-radius:20px;padding:4px 12px;
+  font-size:11px;color:var(--c-uf);font-weight:500;align-self:center; }
+
+/* SECTION */
+.section-hdr { display:flex;align-items:center;gap:10px;margin-bottom:.625rem;margin-top:1rem; }
+.section-title { font-size:12.5px;font-weight:600; }
+.section-badge { font-size:10px;padding:2px 8px;border-radius:10px;font-weight:500; }
+.badge-blue { background:rgba(96,165,250,.15);color:var(--c-uf); }
+.badge-green { background:rgba(74,222,128,.15);color:var(--accent); }
+.badge-warn { background:rgba(248,113,113,.15);color:var(--c-warn); }
+.section-sub { font-size:10.5px;color:var(--text-muted);margin-left:auto; }
+
+/* KPI GRID - resumen financiero */
+.kpi-flow { display:flex;align-items:stretch;gap:0;margin-bottom:.875rem;
+  background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden; }
+.kfi { flex:1;padding:.875rem 1rem;position:relative; }
+.kfi + .kfi { border-left:1px solid var(--border); }
+.kfi-label { font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px; }
+.kfi-val { font-size:20px;font-weight:600;line-height:1; }
+.kfi-sub { font-size:10px;color:var(--text-muted);margin-top:3px; }
+.kfi-desc { font-size:10px;color:var(--text-sec);margin-top:5px;line-height:1.4; }
+.kfi-arrow { position:absolute;right:-10px;top:50%;transform:translateY(-50%);
+  color:var(--text-muted);font-size:16px;z-index:1; }
+.kfi-neg { color:var(--c-warn); }
+.kfi-pos { color:var(--accent); }
+.kfi-blue { color:var(--c-uf); }
+.kfi-gold { color:var(--c-clp); }
+
+/* TIPO CARDS */
+.tipo-grid { display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin-bottom:.875rem; }
+@media(max-width:1100px){ .tipo-grid{grid-template-columns:repeat(3,1fr);} }
+.tipo-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);
+  padding:.75rem;position:relative;overflow:hidden; }
+.tipo-card::before { content:'';position:absolute;top:0;left:0;right:0;height:2px; }
+.tipo-arriendo::before { background:var(--c-arriendo); }
+.tipo-emision::before  { background:var(--c-emision); }
+.tipo-transf::before   { background:var(--c-transf); }
+.tipo-dev::before      { background:var(--c-dev); }
+.tipo-traspaso::before { background:var(--c-traspaso); }
+.tipo-twm::before      { background:var(--c-twm); }
+.tipo-label { font-size:9.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px; }
+.tipo-clp { font-size:15px;font-weight:600; }
+.tipo-uf  { font-size:11px;color:var(--c-uf);margin-top:2px;font-family:'JetBrains Mono',monospace; }
+.tipo-qty { font-size:10px;color:var(--text-muted);margin-top:3px; }
+
+/* CHARTS GRID */
+.charts-2col { display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:.875rem; }
+@media(max-width:900px){ .charts-2col{grid-template-columns:1fr;} }
+.chart-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1rem; }
+.chart-title { font-size:11.5px;font-weight:600;margin-bottom:.75rem; }
+.chart-wrap { position:relative;height:200px; }
+
+/* TOP CLIENTES */
+.top-list { display:flex;flex-direction:column;gap:5px; }
+.top-item { display:flex;align-items:center;gap:8px;padding:5px 0; }
+.top-rank { font-size:10px;color:var(--text-muted);width:16px;text-align:right;flex-shrink:0; }
+.top-name { font-size:11.5px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.top-bar-wrap { width:100px;height:4px;background:rgba(255,255,255,.06);border-radius:2px;flex-shrink:0; }
+.top-bar { height:4px;border-radius:2px;background:var(--c-uf); }
+.top-val { font-size:11px;font-family:'JetBrains Mono',monospace;font-weight:500;
+  color:var(--text-pri);text-align:right;width:80px;flex-shrink:0; }
+
+/* ALERTAS */
+.alert-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:.875rem; }
+@media(max-width:900px){ .alert-grid{grid-template-columns:1fr;} }
+.alert-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1rem; }
+.alert-head { display:flex;align-items:center;gap:8px;margin-bottom:.75rem; }
+.alert-icon { font-size:16px; }
+.alert-title { font-size:11.5px;font-weight:600; }
+.alert-count { margin-left:auto;font-size:18px;font-weight:600; }
+.alert-list { display:flex;flex-direction:column;gap:4px;max-height:180px;overflow-y:auto; }
+.alert-item { font-size:11px;color:var(--text-sec);padding:4px 8px;
+  background:rgba(255,255,255,.03);border-radius:4px;border-left:2px solid; }
+.alert-empty { font-size:11px;color:var(--text-muted);text-align:center;padding:1rem; }
+
+/* TABLA EMISIONES vs TRANSPORTE */
+.tbl-wrap { overflow-x:auto;max-height:260px;overflow-y:auto; }
+.tbl { width:100%;border-collapse:collapse;font-size:11.5px; }
+.tbl th { position:sticky;top:0;background:var(--bg-surface);padding:6px 10px;
+  text-align:left;font-size:10px;font-weight:600;color:var(--text-muted);
+  border-bottom:1px solid var(--border-md);white-space:nowrap; }
+.tbl td { padding:5px 10px;border-bottom:1px solid var(--border); }
+.tbl tr:hover td { background:var(--bg-hover); }
+.tbl td.mono { font-family:'JetBrains Mono',monospace;font-size:11px; }
+.tbl td.ok   { color:var(--accent); }
+.tbl td.diff { color:var(--c-warn);font-weight:600; }
+.tbl td.neutral { color:var(--text-muted); }
+
+/* TABLA CLIENTES */
+.clientes-tbl-wrap { overflow-x:auto;max-height:300px;overflow-y:auto; }
+
+/* STATE */
+.state-msg { display:flex;align-items:center;justify-content:center;padding:2.5rem;
+  color:var(--text-muted);font-size:12.5px;gap:10px;flex-direction:column; }
+.spinner { width:18px;height:18px;border:2px solid var(--border-md);border-top-color:var(--c-uf);
+  border-radius:50%;animation:spin .7s linear infinite; }
+@keyframes spin{to{transform:rotate(360deg)}}
+
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo"><div class="logo-box">R</div><span class="logo-name">REDTEC</span></div>
+  <div class="logo-sep"></div>
+  <div class="topbar-title"><div class="live-dot"></div>Cartola Financiera</div>
+  <div class="topbar-right">
+    <span class="last-upd" id="last-upd"></span>
+    <a href="m3link_dashboard_dark.html" class="back-btn">← Dashboard</a>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="s-label">Comercial</div>
+    <div class="s-hdr" onclick="tog('g1',this)">Listados x fecha <span class="s-chevron">›</span></div>
+    <div class="s-sub" id="g1" style="max-height:0">
+      <a href="m3link_dashboard_dark.html" class="s-item">Ops x rango fechas</a>
+    </div>
+    <div class="s-divider"></div>
+    <div class="s-hdr open" onclick="tog('g2',this)">KPIs y reportes <span class="s-chevron">›</span></div>
+    <div class="s-sub" id="g2">
+      <a href="kpi-diario.html" class="s-item">KPI diario</a>
+      <a href="mapa-retiros.html" class="s-item">🗺 Mapa de retiros</a>
+      <a href="cartola-financiera.html" class="s-item active">💰 Cartola financiera</a>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Cartola Financiera — Resumen semanal</div>
+        <div class="breadcrumb">KPIs y reportes › Facturación por cliente · UF y CLP · Alertas de actividad</div>
+      </div>
+    </div>
+
+    <!-- CONTROLS -->
+    <div class="cbar">
+      <div class="ctrl-group">
+        <span class="ctrl-label">Desde</span>
+        <input type="date" id="d1" class="ctrl-date">
+      </div>
+      <div class="ctrl-group">
+        <span class="ctrl-label">Hasta</span>
+        <input type="date" id="d2" class="ctrl-date">
+      </div>
+      <button class="btn" onclick="loadData()">Cargar datos</button>
+      <div class="period-badge" id="period-badge" style="display:none">
+        <span id="period-text">—</span>
+      </div>
+    </div>
+
+    <!-- ESTADO INICIAL -->
+    <div id="empty-state">
+      <div class="chart-card">
+        <div class="state-msg">Seleccione un período y presione "Cargar datos"</div>
+      </div>
+    </div>
+
+    <!-- CONTENIDO (oculto hasta cargar) -->
+    <div id="content" style="display:none">
+
+      <!-- BLOQUE 1: FLUJO FINANCIERO -->
+      <div class="section-hdr">
+        <span class="section-title">Flujo de facturación</span>
+        <span class="section-badge badge-blue">Del período al facturado real</span>
+      </div>
+      <div class="kpi-flow" id="kpi-flow">
+        <div class="kfi">
+          <div class="kfi-label">Total Cartola</div>
+          <div class="kfi-val kfi-blue" id="f-total-clp">—</div>
+          <div class="kfi-sub kfi-blue" id="f-total-uf">— UF</div>
+          <div class="kfi-desc" id="f-total-cli">— clientes · — registros</div>
+          <span class="kfi-arrow">›</span>
+        </div>
+        <div class="kfi">
+          <div class="kfi-label">(-) Ex-clientes</div>
+          <div class="kfi-val kfi-neg" id="f-excli-clp">—</div>
+          <div class="kfi-sub" id="f-excli-uf">— UF</div>
+          <div class="kfi-desc">Contrato vencido · aún con inventario</div>
+          <span class="kfi-arrow">›</span>
+        </div>
+        <div class="kfi">
+          <div class="kfi-label">(-) Solo Arriendo</div>
+          <div class="kfi-val kfi-neg" id="f-arr-clp">—</div>
+          <div class="kfi-sub" id="f-arr-uf">— UF</div>
+          <div class="kfi-desc">Solo días pallet · sin emisión</div>
+          <span class="kfi-arrow">›</span>
+        </div>
+        <div class="kfi">
+          <div class="kfi-label">Subtotal neto</div>
+          <div class="kfi-val kfi-gold" id="f-sub-clp">—</div>
+          <div class="kfi-sub kfi-gold" id="f-sub-uf">— UF</div>
+          <div class="kfi-desc" id="f-sub-cli">— clientes activos</div>
+          <span class="kfi-arrow">›</span>
+        </div>
+        <div class="kfi">
+          <div class="kfi-label">Total Facturable</div>
+          <div class="kfi-val kfi-pos" id="f-fact-clp">—</div>
+          <div class="kfi-sub kfi-pos" id="f-fact-uf">— UF</div>
+          <div class="kfi-desc" id="f-fact-cli">— clientes con emisión/transf</div>
+        </div>
+      </div>
+
+      <!-- BLOQUE 2: DESGLOSE POR TIPO -->
+      <div class="section-hdr">
+        <span class="section-title">Desglose por tipo de operación</span>
+        <span class="section-badge badge-green">Monto en CLP y UF</span>
+      </div>
+      <div class="tipo-grid" id="tipo-grid"></div>
+
+      <!-- BLOQUE 3: GRÁFICOS -->
+      <div class="charts-2col">
+        <div class="chart-card">
+          <div class="chart-title">Top 10 clientes — netoCLP del período</div>
+          <div class="chart-wrap"><canvas id="chart-top"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Distribución por tipo de operación</div>
+          <div class="chart-wrap"><canvas id="chart-tipo"></canvas></div>
+        </div>
+      </div>
+
+      <!-- BLOQUE 4: DETALLE POR CLIENTE -->
+      <div class="section-hdr">
+        <span class="section-title">Detalle por cliente</span>
+        <span class="section-badge badge-blue">Período seleccionado</span>
+        <span class="section-sub" id="detalle-count">— clientes</span>
+      </div>
+      <div class="chart-card" style="padding:.75rem;margin-bottom:.875rem">
+        <div class="clientes-tbl-wrap">
+          <table class="tbl" id="tbl-clientes">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th style="text-align:right">Pallets</th>
+                <th style="text-align:right">Arriendo CLP</th>
+                <th style="text-align:right">Emisión CLP</th>
+                <th style="text-align:right">Transf. CLP</th>
+                <th style="text-align:right">Otros CLP</th>
+                <th style="text-align:right">Total CLP</th>
+                <th style="text-align:right">Total UF</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-clientes"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- BLOQUE 5: ALERTAS -->
+      <div class="section-hdr">
+        <span class="section-title">Alertas de actividad</span>
+        <span class="section-badge badge-warn">Clientes que requieren atención</span>
+      </div>
+      <div class="alert-grid">
+        <div class="alert-card">
+          <div class="alert-head">
+            <span class="alert-icon">⚠️</span>
+            <span class="alert-title">Sin emisión en el período</span>
+            <span class="alert-count" id="cnt-sin-em" style="color:#f87171">—</span>
+          </div>
+          <div class="alert-list" id="list-sin-em">
+            <div class="alert-empty">Cargando...</div>
+          </div>
+        </div>
+        <div class="alert-card">
+          <div class="alert-head">
+            <span class="alert-icon">🔴</span>
+            <span class="alert-title">Sin emisión ni transferencia</span>
+            <span class="alert-count" id="cnt-sin-emtr" style="color:#f87171">—</span>
+          </div>
+          <div class="alert-list" id="list-sin-emtr">
+            <div class="alert-empty">Cargando...</div>
+          </div>
+        </div>
+        <div class="alert-card">
+          <div class="alert-head">
+            <span class="alert-icon">✅</span>
+            <span class="alert-title">Solo arriendo (ex-clientes)</span>
+            <span class="alert-count" id="cnt-solo-arr" style="color:#fcd34d">—</span>
+          </div>
+          <div class="alert-list" id="list-solo-arr">
+            <div class="alert-empty">Cargando...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BLOQUE 6: EMISIONES vs DATOS -->
+      <div class="section-hdr">
+        <span class="section-title">Comparativo emisiones</span>
+        <span class="section-badge badge-blue">Clientes con emisión · UF y CLP</span>
+        <span class="section-sub">Clientes que tienen movimientos de emisión en el período</span>
+      </div>
+      <div class="chart-card" style="padding:.75rem;margin-bottom:1.5rem">
+        <div class="tbl-wrap">
+          <table class="tbl" id="tbl-emisiones">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th style="text-align:right">Pallets emitidos</th>
+                <th style="text-align:right">netoUF emisión</th>
+                <th style="text-align:right">netoCLP emisión</th>
+                <th style="text-align:right">Arriendo pallets</th>
+                <th style="text-align:right">Arriendo CLP</th>
+                <th>Relación</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-emisiones"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /layout -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+var API_PROXY  = '/api/cartola-proxy';
+var API_DIRECT = 'https://apirdt1.azurewebsites.net/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/CartolaDiariasXRangoFechas';
+var isLocal = location.protocol === 'file:';
+var isDev   = ['localhost','127.0.0.1'].includes(location.hostname);
+
+var raw = [];
+var chartTop = null, chartTipo = null;
+
+// ── SIDEBAR ───────────────────────────────────────────────────────────────────
+function tog(id, hdr) {
+  var el = document.getElementById(id);
+  var isOpen = el.style.maxHeight && el.style.maxHeight !== '0px';
+  document.querySelectorAll('.s-sub').forEach(function(e){e.style.maxHeight='0';});
+  document.querySelectorAll('.s-hdr').forEach(function(h){h.classList.remove('open');});
+  if (!isOpen) { el.style.maxHeight=(el.scrollHeight+200)+'px'; hdr.classList.add('open'); }
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', function() {
+  var hoy = new Date();
+  var yyyy = hoy.getFullYear();
+  var mm   = String(hoy.getMonth()+1).padStart(2,'0');
+  var dd   = String(hoy.getDate()).padStart(2,'0');
+  document.getElementById('d2').value = yyyy+'-'+mm+'-'+dd;
+  // Inicio de semana (lunes anterior)
+  var lunes = new Date(hoy);
+  lunes.setDate(hoy.getDate() - ((hoy.getDay()+6)%7));
+  document.getElementById('d1').value = lunes.getFullYear()+'-'+
+    String(lunes.getMonth()+1).padStart(2,'0')+'-'+
+    String(lunes.getDate()).padStart(2,'0');
+  var g2 = document.getElementById('g2');
+  if (g2) g2.style.maxHeight = (g2.scrollHeight+100)+'px';
+});
+
+// ── LOAD DATA ─────────────────────────────────────────────────────────────────
+function loadData() {
+  var btn = document.querySelector('.btn');
+  btn.disabled = true; btn.textContent = 'Cargando...';
+  document.getElementById('empty-state').innerHTML =
+    '<div class="chart-card"><div class="state-msg"><div class="spinner"></div>Consultando API CartolaDiarias...</div></div>';
+  document.getElementById('content').style.display = 'none';
+
+  var d1 = document.getElementById('d1').value;
+  var d2 = document.getElementById('d2').value;
+
+  var url = (isLocal||isDev)
+    ? API_DIRECT + '?fechainicial=' + d1 + '&fechafinal=' + d2
+    : API_PROXY  + '?fechainicial=' + d1 + '&fechafinal=' + d2;
+
+  fetch(url, {headers:{'Accept':'application/json'}})
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(function(data) {
+      raw = Array.isArray(data) ? data : [];
+      if (!raw.length) {
+        document.getElementById('empty-state').innerHTML =
+          '<div class="chart-card"><div class="state-msg">Sin datos para el rango seleccionado</div></div>';
+        btn.disabled=false; btn.textContent='Cargar datos'; return;
+      }
+      renderAll(d1, d2);
+      btn.disabled=false; btn.textContent='Cargar datos';
+      document.getElementById('last-upd').textContent =
+        'Actualizado '+new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    })
+    .catch(function(e) {
+      document.getElementById('empty-state').innerHTML =
+        '<div class="chart-card"><div class="state-msg" style="color:#f87171">Error: '+e.message+'</div></div>';
+      btn.disabled=false; btn.textContent='Cargar datos';
+    });
+}
+
+// ── RENDER ALL ────────────────────────────────────────────────────────────────
+function renderAll(d1, d2) {
+  // Period badge
+  var f1=fmtDateShort(d1), f2=fmtDateShort(d2);
+  document.getElementById('period-badge').style.display='flex';
+  document.getElementById('period-text').textContent = f1+' – '+f2;
+
+  // Agregar datos por cliente
+  var clientes = agruparPorCliente();
+
+  renderFlujo(clientes);
+  renderTipoCards(clientes);
+  renderCharts(clientes);
+  renderTablaClientes(clientes);
+  renderAlertas(clientes);
+  renderEmisiones(clientes);
+
+  document.getElementById('empty-state').innerHTML = '';
+  document.getElementById('content').style.display = 'block';
+}
+
+// ── AGRUPADOR ─────────────────────────────────────────────────────────────────
+function agruparPorCliente() {
+  var map = {};
+  raw.forEach(function(r) {
+    var code = r.cardCode;
+    if (!map[code]) {
+      map[code] = {
+        code: code, name: r.cardName,
+        arriendo:0, emision:0, transferencia:0, traspasoClp:0,
+        devolucion:0, twm:0, relocaliza:0, otrosClp:0,
+        totalCLP:0, totalUF:0,
+        pallets:0, palletsArr:0, palletsEm:0,
+        tieneEmision:false, tieneTransf:false
+      };
+    }
+    var c = map[code];
+    var op = (r.operacion||'').toUpperCase();
+    var clp = r.netoCLP||0;
+    var uf  = r.netoUF||0;
+    var qty = r.cantidad||0;
+    c.totalCLP += clp;
+    c.totalUF  += uf;
+    c.pallets  += qty;
+    if      (op==='ARRIENDO DIAS PALLET') { c.arriendo+=clp; c.palletsArr+=qty; }
+    else if (op==='EMISION')              { c.emision+=clp;  c.palletsEm+=qty; c.tieneEmision=true; }
+    else if (op==='TRANSFERENCIA')        { c.transferencia+=clp; c.tieneTransf=true; }
+    else if (op==='TRANSFERENCIA WALMART'){ c.twm+=clp; c.tieneTransf=true; }
+    else if (op==='TRASPASO')             { c.traspasoClp+=clp; }
+    else if (op==='RELOCALIZA')           { c.relocaliza+=clp; }
+    else                                  { c.otrosClp+=clp; }
+  });
+  return Object.values(map).sort(function(a,b){return b.totalCLP-a.totalCLP;});
+}
+
+// ── BLOQUE 1: FLUJO FINANCIERO ────────────────────────────────────────────────
+function renderFlujo(clientes) {
+  var totalCLP=0, totalUF=0;
+  clientes.forEach(function(c){totalCLP+=c.totalCLP;totalUF+=c.totalUF;});
+
+  // Ex-clientes: solo arriendo, sin emisión ni transferencia
+  var exCLP=0, exUF=0, exCount=0;
+  clientes.filter(function(c){return !c.tieneEmision&&!c.tieneTransf;}).forEach(function(c){
+    exCLP+=c.arriendo; exUF+=c.totalUF; exCount++;
+  });
+
+  // Solo arriendo: tienen algo más pero su emisión/transf es 0
+  var soloArrCLP=0, soloArrUF=0;
+  clientes.filter(function(c){return c.tieneEmision||c.tieneTransf;}).forEach(function(c){
+    soloArrCLP+=c.arriendo;
+  });
+
+  var subCLP = totalCLP - exCLP;
+  var subUF  = totalUF  - exUF;
+  var subCount = clientes.length - exCount;
+
+  // Facturable: los que tienen emisión o transferencia
+  var factCLP=0, factUF=0, factCount=0;
+  clientes.filter(function(c){return c.tieneEmision||c.tieneTransf;}).forEach(function(c){
+    factCLP+=c.totalCLP; factUF+=c.totalUF; factCount++;
+  });
+
+  set('f-total-clp', fmtCLP(totalCLP));
+  set('f-total-uf',  fmtUF(totalUF)+' UF');
+  set('f-total-cli', clientes.length+' clientes · '+raw.length.toLocaleString('es-CL')+' registros');
+  set('f-excli-clp', '-'+fmtCLP(exCLP));
+  set('f-excli-uf',  fmtUF(exUF)+' UF');
+  set('f-arr-clp',   fmtCLP(soloArrCLP));
+  set('f-arr-uf',    '— UF');
+  set('f-sub-clp',   fmtCLP(subCLP));
+  set('f-sub-uf',    fmtUF(subUF)+' UF');
+  set('f-sub-cli',   subCount+' clientes activos');
+  set('f-fact-clp',  fmtCLP(factCLP));
+  set('f-fact-uf',   fmtUF(factUF)+' UF');
+  set('f-fact-cli',  factCount+' clientes con emisión/transf');
+}
+
+// ── BLOQUE 2: TIPO CARDS ──────────────────────────────────────────────────────
+function renderTipoCards(clientes) {
+  var tipos = {
+    'ARRIENDO DIAS PALLET': {label:'Días Pallet Arriendo', cls:'tipo-arriendo', clp:0, uf:0, qty:0},
+    'EMISION':              {label:'Emisiones',            cls:'tipo-emision',  clp:0, uf:0, qty:0},
+    'TRANSFERENCIA':        {label:'Transferencias',       cls:'tipo-transf',   clp:0, uf:0, qty:0},
+    'TRANSFERENCIA WALMART':{label:'Transf. Walmart',      cls:'tipo-twm',      clp:0, uf:0, qty:0},
+    'TRASPASO':             {label:'Traspasos',             cls:'tipo-traspaso', clp:0, uf:0, qty:0},
+    'RELOCALIZA':           {label:'Relocalizaciones',      cls:'tipo-dev',      clp:0, uf:0, qty:0},
+  };
+  raw.forEach(function(r) {
+    var op = (r.operacion||'').toUpperCase();
+    if (tipos[op]) {
+      tipos[op].clp += (r.netoCLP||0);
+      tipos[op].uf  += (r.netoUF||0);
+      tipos[op].qty += (r.cantidad||0);
+    }
+  });
+  var html = '';
+  Object.keys(tipos).forEach(function(k) {
+    var t = tipos[k];
+    html += '<div class="tipo-card '+t.cls+'">'
+      + '<div class="tipo-label">'+t.label+'</div>'
+      + '<div class="tipo-clp">'+fmtCLP(t.clp)+'</div>'
+      + '<div class="tipo-uf">'+fmtUF(t.uf)+' UF</div>'
+      + '<div class="tipo-qty">'+t.qty.toLocaleString('es-CL')+' pallets</div>'
+      + '</div>';
+  });
+  document.getElementById('tipo-grid').innerHTML = html;
+}
+
+// ── BLOQUE 3: GRÁFICOS ────────────────────────────────────────────────────────
+function renderCharts(clientes) {
+  // Top 10 clientes
+  var top = clientes.slice(0,10);
+  var labels = top.map(function(c){return c.name.split(' ').slice(0,3).join(' ');});
+  var vals   = top.map(function(c){return c.totalCLP;});
+  var colors = ['#60a5fa','#4ade80','#f59e0b','#ef4444','#8b5cf6',
+                '#06b6d4','#f87171','#a3e635','#fb923c','#e879f9'];
+  if (chartTop) chartTop.destroy();
+  chartTop = new Chart(document.getElementById('chart-top').getContext('2d'), {
+    type:'bar',
+    data:{ labels:labels, datasets:[{label:'CLP',data:vals,
+      backgroundColor:colors.map(function(c){return c+'aa';}),
+      borderColor:colors,borderWidth:1,borderRadius:3}] },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}, tooltip:{
+        backgroundColor:'#1e222d',borderColor:'rgba(255,255,255,.1)',borderWidth:1,
+        titleColor:'#e8eaf0',bodyColor:'#9da3b4',
+        callbacks:{label:function(ctx){return ' '+fmtCLP(ctx.parsed.x);}}}},
+      scales:{
+        x:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#5a6070',font:{size:10},
+           callback:function(v){return '$'+Math.round(v/1000000)+'M';}},border:{color:'rgba(255,255,255,.07)'}},
+        y:{grid:{display:false},ticks:{color:'#9da3b4',font:{size:10}},border:{color:'rgba(255,255,255,.07)'}}
+      }
+    }
+  });
+
+  // Donut tipos
+  var tipoMap = {'Arriendo':0,'Emisión':0,'Transf.':0,'T.Walmart':0,'Traspaso':0,'Otros':0};
+  raw.forEach(function(r) {
+    var op = (r.operacion||'').toUpperCase();
+    var clp = r.netoCLP||0;
+    if      (op==='ARRIENDO DIAS PALLET')  tipoMap['Arriendo']+=clp;
+    else if (op==='EMISION')               tipoMap['Emisión']+=clp;
+    else if (op==='TRANSFERENCIA')         tipoMap['Transf.']+=clp;
+    else if (op==='TRANSFERENCIA WALMART') tipoMap['T.Walmart']+=clp;
+    else if (op==='TRASPASO')              tipoMap['Traspaso']+=clp;
+    else                                   tipoMap['Otros']+=clp;
+  });
+  var tipoColors = ['#4ade80','#60a5fa','#f59e0b','#06b6d4','#8b5cf6','#6b7280'];
+  if (chartTipo) chartTipo.destroy();
+  chartTipo = new Chart(document.getElementById('chart-tipo').getContext('2d'), {
+    type:'doughnut',
+    data:{labels:Object.keys(tipoMap),datasets:[{data:Object.values(tipoMap),
+      backgroundColor:tipoColors.map(function(c){return c+'cc';}),
+      borderColor:tipoColors,borderWidth:2,hoverOffset:8}]},
+    options:{
+      responsive:true,maintainAspectRatio:false,cutout:'60%',
+      plugins:{legend:{position:'right',labels:{color:'#9da3b4',font:{size:11},
+        padding:12,boxWidth:12,boxHeight:12}},
+        tooltip:{backgroundColor:'#1e222d',borderColor:'rgba(255,255,255,.1)',borderWidth:1,
+          titleColor:'#e8eaf0',bodyColor:'#9da3b4',
+          callbacks:{label:function(ctx){
+            var total=ctx.dataset.data.reduce(function(a,b){return a+b;},0);
+            var pct=total?Math.round(ctx.raw/total*100):0;
+            return ' '+ctx.label+': '+fmtCLP(ctx.raw)+' ('+pct+'%)';
+          }}}
+      }
+    }
+  });
+}
+
+// ── BLOQUE 4: TABLA CLIENTES ──────────────────────────────────────────────────
+function renderTablaClientes(clientes) {
+  document.getElementById('detalle-count').textContent = clientes.length+' clientes';
+  var html = '';
+  clientes.forEach(function(c) {
+    var otros = c.traspasoClp + c.devolucion + c.relocaliza + c.otrosClp;
+    html += '<tr>'
+      + '<td title="'+c.code+'">'+c.name+'</td>'
+      + '<td class="mono" style="text-align:right">'+c.pallets.toLocaleString('es-CL')+'</td>'
+      + '<td class="mono" style="text-align:right;color:var(--c-arriendo)">'+fmtCLP(c.arriendo)+'</td>'
+      + '<td class="mono" style="text-align:right;color:var(--c-emision)">'+fmtCLP(c.emision)+'</td>'
+      + '<td class="mono" style="text-align:right;color:var(--c-transf)">'+fmtCLP(c.transferencia+c.twm)+'</td>'
+      + '<td class="mono" style="text-align:right;color:var(--text-muted)">'+fmtCLP(otros)+'</td>'
+      + '<td class="mono" style="text-align:right;color:var(--c-clp);font-weight:600">'+fmtCLP(c.totalCLP)+'</td>'
+      + '<td class="mono" style="text-align:right;color:var(--c-uf)">'+fmtUF(c.totalUF)+'</td>'
+      + '</tr>';
+  });
+  // Fila totales
+  var totCLP=0,totUF=0,totArr=0,totEm=0,totTr=0,totOt=0,totPal=0;
+  clientes.forEach(function(c){
+    totCLP+=c.totalCLP;totUF+=c.totalUF;totArr+=c.arriendo;
+    totEm+=c.emision;totTr+=c.transferencia+c.twm;
+    totOt+=c.traspasoClp+c.devolucion+c.relocaliza+c.otrosClp;
+    totPal+=c.pallets;
+  });
+  html += '<tr style="border-top:2px solid var(--border-md);font-weight:600;background:var(--bg-surface)">'
+    + '<td>TOTAL ('+clientes.length+' clientes)</td>'
+    + '<td class="mono" style="text-align:right">'+totPal.toLocaleString('es-CL')+'</td>'
+    + '<td class="mono" style="text-align:right;color:var(--c-arriendo)">'+fmtCLP(totArr)+'</td>'
+    + '<td class="mono" style="text-align:right;color:var(--c-emision)">'+fmtCLP(totEm)+'</td>'
+    + '<td class="mono" style="text-align:right;color:var(--c-transf)">'+fmtCLP(totTr)+'</td>'
+    + '<td class="mono" style="text-align:right;color:var(--text-muted)">'+fmtCLP(totOt)+'</td>'
+    + '<td class="mono" style="text-align:right;color:var(--c-clp);font-weight:700">'+fmtCLP(totCLP)+'</td>'
+    + '<td class="mono" style="text-align:right;color:var(--c-uf)">'+fmtUF(totUF)+'</td>'
+    + '</tr>';
+  document.getElementById('tbody-clientes').innerHTML = html;
+}
+
+// ── BLOQUE 5: ALERTAS ─────────────────────────────────────────────────────────
+function renderAlertas(clientes) {
+  // Sin emisión
+  var sinEm = clientes.filter(function(c){return !c.tieneEmision;});
+  renderAlertList('cnt-sin-em','list-sin-em', sinEm, '#f87171', 'arriendo');
+
+  // Sin emisión ni transferencia
+  var sinEmTr = clientes.filter(function(c){return !c.tieneEmision&&!c.tieneTransf;});
+  renderAlertList('cnt-sin-emtr','list-sin-emtr', sinEmTr, '#f87171', 'arriendo');
+
+  // Solo arriendo (ex-clientes: sin emisión ni transferencia)
+  var soloArr = clientes.filter(function(c){return !c.tieneEmision&&!c.tieneTransf&&c.arriendo>0;});
+  renderAlertList('cnt-solo-arr','list-solo-arr', soloArr, '#fcd34d', 'arriendo');
+}
+
+function renderAlertList(cntId, listId, items, color, valField) {
+  document.getElementById(cntId).textContent = items.length;
+  document.getElementById(cntId).style.color = items.length > 0 ? color : '#4ade80';
+  if (!items.length) {
+    document.getElementById(listId).innerHTML = '<div class="alert-empty">✅ Ninguno</div>';
+    return;
+  }
+  var html = '';
+  items.slice(0,8).forEach(function(c) {
+    html += '<div class="alert-item" style="border-left-color:'+color+'">'
+      + '<strong style="color:#e8eaf0">'+c.name+'</strong>'
+      + ' — '+fmtCLP(c[valField]||c.totalCLP)
+      + '</div>';
+  });
+  if (items.length > 8) html += '<div class="alert-empty">...y '+(items.length-8)+' más</div>';
+  document.getElementById(listId).innerHTML = html;
+}
+
+// ── BLOQUE 6: EMISIONES ───────────────────────────────────────────────────────
+function renderEmisiones(clientes) {
+  var conEm = clientes.filter(function(c){return c.tieneEmision;});
+  conEm.sort(function(a,b){return b.emision-a.emision;});
+  var html = '';
+  conEm.forEach(function(c) {
+    var relacion = c.palletsArr > 0
+      ? Math.round((c.palletsEm / c.palletsArr)*100)+'%'
+      : '—';
+    var clsRel = c.palletsEm > c.palletsArr ? 'diff' : c.palletsEm > 0 ? 'ok' : 'neutral';
+    // Calcular netoUF de emisión
+    var emUF = 0;
+    raw.filter(function(r){return r.cardCode===c.code&&(r.operacion||'').toUpperCase()==='EMISION';})
+       .forEach(function(r){emUF+=r.netoUF||0;});
+    html += '<tr>'
+      + '<td title="'+c.code+'">'+c.name+'</td>'
+      + '<td class="mono" style="text-align:right">'+c.palletsEm.toLocaleString('es-CL')+'</td>'
+      + '<td class="mono" style="text-align:right;color:var(--c-uf)">'+fmtUF(emUF)+'</td>'
+      + '<td class="mono" style="text-align:right;color:var(--c-emision)">'+fmtCLP(c.emision)+'</td>'
+      + '<td class="mono" style="text-align:right">'+c.palletsArr.toLocaleString('es-CL')+'</td>'
+      + '<td class="mono" style="text-align:right;color:var(--c-arriendo)">'+fmtCLP(c.arriendo)+'</td>'
+      + '<td class="'+clsRel+'">'+relacion+'</td>'
+      + '</tr>';
+  });
+  document.getElementById('tbody-emisiones').innerHTML = html ||
+    '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:1rem">Sin emisiones en el período</td></tr>';
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function set(id, val) {
+  var el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+function fmtCLP(v) {
+  if (!v) return '$0';
+  return '$'+Math.round(v).toLocaleString('es-CL');
+}
+function fmtUF(v) {
+  if (!v) return '0,000';
+  return v.toFixed(3).replace('.',',');
+}
+function fmtDateShort(s) {
+  var p = s.split('-');
+  return p[2]+'/'+p[1]+'/'+p[0].substring(2);
+}
+</script>
+</body>
+</html>

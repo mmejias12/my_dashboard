@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Top 10 — REDTEC M3LINK</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg-page:#0f1117;--bg-surface:#181b23;--bg-card:#1e222d;--bg-input:#252932;--bg-hover:#252d3a;
+  --border:rgba(255,255,255,.07);--border-md:rgba(255,255,255,.12);
+  --text-pri:#e8eaf0;--text-sec:#9da3b4;--text-muted:#5a6070;
+  --accent:#4ade80;--red-logo:#C0170C;
+}
+html,body{min-height:100%;font-family:'Inter',sans-serif;font-size:13px;background:var(--bg-page);color:var(--text-pri);-webkit-font-smoothing:antialiased}
+
+/* TOPBAR */
+.topbar{position:sticky;top:0;z-index:200;height:50px;background:var(--bg-surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1.25rem;gap:12px}
+.logo{display:flex;align-items:center;gap:9px}
+.logo-box{width:27px;height:27px;border-radius:6px;background:var(--red-logo);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px}
+.logo-name{font-weight:600;font-size:13.5px}
+.logo-sep{width:1px;height:18px;background:var(--border-md);margin:0 6px}
+.topbar-title{font-size:12.5px;color:var(--text-sec);display:flex;align-items:center;gap:7px}
+.live-dot{width:7px;height:7px;background:var(--accent);border-radius:50%;animation:pulse 2.5s ease-in-out infinite;box-shadow:0 0 6px var(--accent)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.back-btn{font-size:11.5px;color:var(--text-sec);text-decoration:none;display:flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid var(--border-md);border-radius:6px;transition:background .12s}
+.back-btn:hover{background:var(--bg-hover)}
+
+/* LAYOUT */
+.layout{display:flex}
+.sidebar{width:210px;min-width:210px;background:var(--bg-surface);border-right:1px solid var(--border);padding:.875rem 0;position:sticky;top:50px;height:calc(100vh - 50px);overflow-y:auto}
+.s-label{font-size:10px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--text-muted);padding:.5rem 1rem .3rem}
+.s-hdr{display:flex;align-items:center;justify-content:space-between;padding:.45rem 1rem;font-size:12px;font-weight:500;color:var(--text-sec);cursor:pointer;user-select:none}
+.s-hdr:hover{background:var(--bg-hover);color:var(--text-pri)}
+.s-chevron{font-size:10px;transition:transform .2s;color:var(--text-muted)}
+.s-hdr.open .s-chevron{transform:rotate(90deg)}
+.s-sub{overflow:hidden;transition:max-height .22s ease}
+.s-item{display:block;padding:.35rem 1rem .35rem 1.5rem;font-size:11.5px;color:var(--text-sec);cursor:pointer;border-left:2px solid transparent;text-decoration:none;transition:all .12s}
+.s-item:hover{background:var(--bg-hover);color:var(--text-pri)}
+.s-item.active{color:var(--accent);border-left-color:var(--accent);background:rgba(74,222,128,.08);font-weight:500}
+.s-divider{height:1px;background:var(--border);margin:.5rem 1rem}
+
+/* MAIN */
+.main{flex:1;padding:1.25rem 1.375rem;min-width:0}
+.page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1rem;gap:12px;flex-wrap:wrap}
+.page-title{font-size:15px;font-weight:600}
+.breadcrumb{font-size:11px;color:var(--text-muted);margin-top:3px}
+
+/* CONTROLS */
+.cbar{background:var(--bg-card);border:1px solid var(--border);border-radius:9px;padding:.875rem 1rem;display:flex;align-items:flex-end;gap:.875rem;margin-bottom:.875rem;flex-wrap:wrap}
+.ctrl-group{display:flex;flex-direction:column;gap:4px}
+.ctrl-label{font-size:11px;color:var(--text-sec)}
+.ctrl-date{font-size:13px;padding:8px 11px;border:1px solid var(--border-md);border-radius:6px;background:var(--bg-input);color:var(--text-pri);outline:none;font-family:'Inter',sans-serif;width:160px;color-scheme:dark}
+.ctrl-date:focus{border-color:var(--accent)}
+.btn-load{font-size:12.5px;padding:8px 16px;border:1px solid var(--border-md);border-radius:6px;background:var(--bg-input);color:var(--text-pri);cursor:pointer;font-family:'Inter',sans-serif;font-weight:500;transition:background .12s}
+.btn-load:hover{background:var(--bg-hover)}
+.btn-load:disabled{opacity:.4;cursor:not-allowed}
+
+/* TOGGLE OPERACIONES */
+.op-toggles{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:.875rem}
+.op-btn{padding:6px 14px;border-radius:20px;border:1px solid var(--border-md);font-size:12px;font-weight:500;cursor:pointer;font-family:'Inter',sans-serif;background:var(--bg-card);color:var(--text-sec);transition:all .15s;user-select:none}
+.op-btn.active{color:#fff}
+.op-btn:hover{filter:brightness(1.15)}
+
+/* 4 CUADRANTES */
+.quads{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:.875rem}
+@media(max-width:900px){.quads{grid-template-columns:1fr}}
+.quad{background:var(--bg-card);border:1px solid var(--border);border-radius:13px;padding:1rem}
+.quad-title{font-size:11.5px;font-weight:600;color:var(--text-sec);margin-bottom:.75rem;display:flex;align-items:center;gap:6px}
+.quad-icon{font-size:14px}
+.chart-wrap{position:relative;height:220px}
+
+/* BARRA RANKING */
+.rank-list{display:flex;flex-direction:column;gap:6px}
+.rank-item{display:flex;align-items:center;gap:8px}
+.rank-num{font-size:10px;color:var(--text-muted);width:16px;text-align:right;flex-shrink:0}
+.rank-name{font-size:11.5px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rank-bar-wrap{width:90px;height:5px;background:rgba(255,255,255,.06);border-radius:3px;flex-shrink:0}
+.rank-bar{height:5px;border-radius:3px;transition:width .5s ease}
+.rank-val{font-size:11px;font-family:'JetBrains Mono',monospace;font-weight:500;text-align:right;width:70px;flex-shrink:0}
+
+/* RESUMEN KPI */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:.875rem}
+.kpi-mini{background:var(--bg-card);border:1px solid var(--border);border-radius:9px;padding:.75rem 1rem}
+.kpi-mini-label{font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px}
+.kpi-mini-val{font-size:20px;font-weight:600}
+.kpi-mini-sub{font-size:10px;color:var(--text-muted);margin-top:3px}
+
+/* STATE */
+.state-msg{display:flex;align-items:center;justify-content:center;padding:2.5rem;color:var(--text-muted);font-size:12.5px;gap:10px;flex-direction:column}
+.spinner{width:18px;height:18px;border:2px solid var(--border-md);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo"><div class="logo-box">R</div><span class="logo-name">REDTEC</span></div>
+  <div class="logo-sep"></div>
+  <div class="topbar-title"><div class="live-dot"></div>Top 10 — Emisiones · Retiros · Devoluciones</div>
+  <div class="topbar-right">
+    <a href="m3link_dashboard_dark.html" class="back-btn">← Dashboard</a>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="s-label">Comercial</div>
+    <div class="s-hdr" onclick="tog('g1',this)">Listados x fecha <span class="s-chevron">›</span></div>
+    <div class="s-sub" id="g1" style="max-height:0">
+      <a href="m3link_dashboard_dark.html" class="s-item">Ops x rango fechas</a>
+    </div>
+    <div class="s-divider"></div>
+    <div class="s-hdr open" onclick="tog('g2',this)">Emisiones retiros dev. <span class="s-chevron">›</span></div>
+    <div class="s-sub" id="g2">
+      <a href="top10.html" class="s-item active">Top 10 emisiones</a>
+      <a href="analisis-cliente.html" class="s-item">Análisis x cliente</a>
+      <a href="comparativo-retiros.html" class="s-item">Comparativo retiros</a>
+    </div>
+    <div class="s-divider"></div>
+    <div class="s-hdr" onclick="tog('g3',this)">KPIs y reportes <span class="s-chevron">›</span></div>
+    <div class="s-sub" id="g3" style="max-height:0">
+      <a href="kpi-diario.html" class="s-item">KPI diario</a>
+      <a href="mapa-retiros.html" class="s-item">🗺 Mapa de retiros</a>
+      <a href="cartola-financiera.html" class="s-item">💰 Cartola financiera</a>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Top 10 por tipo de operación</div>
+        <div class="breadcrumb">Emisiones retiros dev. › Ranking de clientes, bodegas, choferes y usuarios</div>
+      </div>
+    </div>
+
+    <!-- CONTROLS -->
+    <div class="cbar">
+      <div class="ctrl-group"><span class="ctrl-label">Desde</span><input type="date" id="d1" class="ctrl-date"></div>
+      <div class="ctrl-group"><span class="ctrl-label">Hasta</span><input type="date" id="d2" class="ctrl-date"></div>
+      <button class="btn-load" onclick="loadData()">Cargar datos</button>
+    </div>
+
+    <!-- TOGGLES -->
+    <div class="op-toggles" id="op-toggles"></div>
+
+    <!-- KPI ROW -->
+    <div class="kpi-row" id="kpi-row" style="display:none">
+      <div class="kpi-mini"><div class="kpi-mini-label">Operaciones</div><div class="kpi-mini-val" id="k-ops">—</div><div class="kpi-mini-sub" id="k-tipo-lbl">tipo seleccionado</div></div>
+      <div class="kpi-mini"><div class="kpi-mini-label">Cant. Confirmada</div><div class="kpi-mini-val" id="k-conf" style="color:#4ade80">—</div><div class="kpi-mini-sub">pallets</div></div>
+      <div class="kpi-mini"><div class="kpi-mini-label">Cant. Solicitada</div><div class="kpi-mini-val" id="k-sol" style="color:#60a5fa">—</div><div class="kpi-mini-sub">pallets</div></div>
+      <div class="kpi-mini"><div class="kpi-mini-label">% Cumplimiento</div><div class="kpi-mini-val" id="k-pct" style="color:#fcd34d">—</div><div class="kpi-mini-sub">conf/sol</div></div>
+    </div>
+
+    <!-- STATE -->
+    <div id="empty-state"><div class="quad" style="grid-column:1/-1"><div class="state-msg">Selecciona un período y presiona "Cargar datos"</div></div></div>
+
+    <!-- CUADRANTES -->
+    <div class="quads" id="quads" style="display:none">
+      <div class="quad">
+        <div class="quad-title"><span class="quad-icon">🏢</span>Top 10 clientes — cant. confirmada</div>
+        <div class="chart-wrap"><canvas id="chart-clientes"></canvas></div>
+      </div>
+      <div class="quad">
+        <div class="quad-title"><span class="quad-icon">🏭</span>Top 10 bodegas</div>
+        <div id="list-bodegas" class="rank-list"></div>
+      </div>
+      <div class="quad">
+        <div class="quad-title"><span class="quad-icon">🚛</span>Top 10 choferes / patentes</div>
+        <div id="list-choferes" class="rank-list"></div>
+      </div>
+      <div class="quad">
+        <div class="quad-title"><span class="quad-icon">👤</span>Top 10 usuarios</div>
+        <div id="list-usuarios" class="rank-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+var API_PROXY='/api/ops';
+var API_DIRECT='https://apirdt1.azurewebsites.net/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRangoFechas';
+var isLocal=location.protocol==='file:';
+var isDev=['localhost','127.0.0.1'].includes(location.hostname);
+var raw=[], opActual='Emision', chartClientes=null;
+
+var OPS = [
+  {key:'Emision',       label:'Emisión',        color:'#60a5fa'},
+  {key:'Retiro',        label:'Retiro',          color:'#4ade80'},
+  {key:'Devolucion ',   label:'Devolución',      color:'#f87171'},
+  {key:'Transferencias',label:'Transferencias',  color:'#f59e0b'},
+  {key:'Relocalizacion',label:'Relocalización',  color:'#8b5cf6'},
+  {key:'Traspasos',     label:'Traspasos',       color:'#06b6d4'},
+  {key:'Trans Diferenciada',label:'Trans. Dif.', color:'#e879f9'},
+];
+
+function tog(id,hdr){
+  var el=document.getElementById(id);
+  var isOpen=el.style.maxHeight&&el.style.maxHeight!=='0px';
+  document.querySelectorAll('.s-sub').forEach(function(e){e.style.maxHeight='0'});
+  document.querySelectorAll('.s-hdr').forEach(function(h){h.classList.remove('open')});
+  if(!isOpen){el.style.maxHeight=(el.scrollHeight+200)+'px';hdr.classList.add('open')}
+}
+
+window.addEventListener('DOMContentLoaded',function(){
+  var h=new Date(),y=h.getFullYear(),m=String(h.getMonth()+1).padStart(2,'0'),d=String(h.getDate()).padStart(2,'0');
+  document.getElementById('d2').value=y+'-'+m+'-'+d;
+  document.getElementById('d1').value=y+'-'+m+'-01';
+  // Render toggle buttons
+  var cont=document.getElementById('op-toggles');
+  OPS.forEach(function(op){
+    var btn=document.createElement('button');
+    btn.className='op-btn'+(op.key===opActual?' active':'');
+    btn.textContent=op.label;
+    btn.style.borderColor=op.color+'66';
+    if(op.key===opActual){btn.style.background=op.color+'22';btn.style.color=op.color;}
+    btn.onclick=function(){selectOp(op.key);};
+    btn.dataset.key=op.key;
+    cont.appendChild(btn);
+  });
+  var g2=document.getElementById('g2');
+  if(g2) g2.style.maxHeight=(g2.scrollHeight+100)+'px';
+});
+
+function selectOp(key){
+  opActual=key;
+  document.querySelectorAll('.op-btn').forEach(function(btn){
+    var op=OPS.find(function(o){return o.key===btn.dataset.key;});
+    if(!op) return;
+    if(btn.dataset.key===key){
+      btn.classList.add('active');
+      btn.style.background=op.color+'22';
+      btn.style.color=op.color;
+      btn.style.borderColor=op.color+'66';
+    } else {
+      btn.classList.remove('active');
+      btn.style.background='';
+      btn.style.color='';
+      btn.style.borderColor='rgba(255,255,255,.12)';
+    }
+  });
+  if(raw.length) renderAll();
+}
+
+function loadData(){
+  var btn=document.querySelector('.btn-load');
+  btn.disabled=true; btn.textContent='Cargando...';
+  document.getElementById('empty-state').innerHTML='<div class="quad"><div class="state-msg"><div class="spinner"></div>Consultando API...</div></div>';
+  document.getElementById('quads').style.display='none';
+  document.getElementById('kpi-row').style.display='none';
+
+  var d1=document.getElementById('d1').value, d2=document.getElementById('d2').value;
+  var url=(isLocal||isDev)
+    ? API_DIRECT+'?fechaInicial='+d1+'&fechaFinal='+d2
+    : API_PROXY +'?fechaInicio='+d1+'&fechaFin='+d2;
+
+  fetch(url,{headers:{'Accept':'application/json'}})
+    .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
+    .then(function(data){
+      raw=Array.isArray(data)?data:[];
+      if(!raw.length){
+        document.getElementById('empty-state').innerHTML='<div class="quad"><div class="state-msg">Sin datos para el período</div></div>';
+        btn.disabled=false;btn.textContent='Cargar datos';return;
+      }
+      renderAll();
+      btn.disabled=false;btn.textContent='Cargar datos';
+    })
+    .catch(function(e){
+      document.getElementById('empty-state').innerHTML='<div class="quad"><div class="state-msg" style="color:#f87171">Error: '+e.message+'</div></div>';
+      btn.disabled=false;btn.textContent='Cargar datos';
+    });
+}
+
+function renderAll(){
+  var op=OPS.find(function(o){return o.key===opActual;})||OPS[0];
+  var filtrado=raw.filter(function(r){return (r.operacion||'').trim()===opActual.trim();});
+
+  if(!filtrado.length){
+    document.getElementById('empty-state').innerHTML='<div class="quad"><div class="state-msg">Sin registros para "'+op.label+'" en el período</div></div>';
+    document.getElementById('quads').style.display='none';
+    document.getElementById('kpi-row').style.display='none';
+    return;
+  }
+  document.getElementById('empty-state').innerHTML='';
+
+  // KPIs
+  var totOps=filtrado.length;
+  var totConf=filtrado.reduce(function(s,r){return s+(r.cantidadConfirmada||0);},0);
+  var totSol =filtrado.reduce(function(s,r){return s+(r.cantidadSolicitada||0);},0);
+  var pct=totSol>0?Math.round((totConf/totSol)*100):0;
+  document.getElementById('k-ops').textContent=totOps.toLocaleString('es-CL');
+  document.getElementById('k-conf').textContent=totConf.toLocaleString('es-CL');
+  document.getElementById('k-sol').textContent=totSol.toLocaleString('es-CL');
+  document.getElementById('k-pct').textContent=pct+'%';
+  document.getElementById('k-tipo-lbl').textContent=op.label;
+  document.getElementById('kpi-row').style.display='grid';
+
+  // Top clientes
+  var clienteMap={};
+  filtrado.forEach(function(r){
+    var k=r.clienteOrigenStr||r.clienteDestinoStr||'Sin cliente';
+    clienteMap[k]=(clienteMap[k]||0)+(r.cantidadConfirmada||0);
+  });
+  var topClientes=topN(clienteMap,10);
+
+  // Bodegas
+  var bodegaField = ['Retiro','Devolucion '].indexOf(opActual)>=0 ? 'bodegaOrigenStr' : 'bodegaDestinoStr';
+  var bodegaMap={};
+  filtrado.forEach(function(r){
+    var k=r[bodegaField]||r.bodegaOrigenStr||'Sin bodega';
+    bodegaMap[k]=(bodegaMap[k]||0)+(r.cantidadConfirmada||0);
+  });
+  var topBodegas=topN(bodegaMap,10);
+
+  // Choferes
+  var choferMap={};
+  filtrado.forEach(function(r){
+    var k=(r.chofer||'Sin chofer').toUpperCase()+' / '+(r.patente||'—');
+    choferMap[k]=(choferMap[k]||0)+(r.cantidadConfirmada||0);
+  });
+  var topChoferes=topN(choferMap,10);
+
+  // Usuarios
+  var usuMap={};
+  filtrado.forEach(function(r){
+    var k=r.usuario||'Sin usuario';
+    usuMap[k]=(usuMap[k]||0)+(r.cantidadConfirmada||0);
+  });
+  var topUsuarios=topN(usuMap,10);
+
+  renderBarChart(topClientes, op.color);
+  renderRankList('list-bodegas',  topBodegas,  op.color);
+  renderRankList('list-choferes', topChoferes, op.color);
+  renderRankList('list-usuarios', topUsuarios, op.color);
+
+  document.getElementById('quads').style.display='grid';
+}
+
+function topN(map, n){
+  return Object.entries(map)
+    .sort(function(a,b){return b[1]-a[1];})
+    .slice(0,n);
+}
+
+function renderBarChart(data, color){
+  var labels=data.map(function(d){
+    var parts=d[0].split(' ');
+    return parts.slice(0,3).join(' ');
+  });
+  var vals=data.map(function(d){return d[1];});
+  if(chartClientes) chartClientes.destroy();
+  chartClientes=new Chart(document.getElementById('chart-clientes').getContext('2d'),{
+    type:'bar',
+    data:{labels:labels,datasets:[{label:'Cant. Confirmada',data:vals,
+      backgroundColor:color+'aa',borderColor:color,borderWidth:1,borderRadius:3}]},
+    options:{
+      indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{backgroundColor:'#1e222d',
+        borderColor:'rgba(255,255,255,.1)',borderWidth:1,titleColor:'#e8eaf0',bodyColor:'#9da3b4',
+        callbacks:{label:function(ctx){return ' '+ctx.parsed.x.toLocaleString('es-CL')+' pallets';}}}},
+      scales:{
+        x:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#5a6070',font:{size:10}},
+           border:{color:'rgba(255,255,255,.07)'}},
+        y:{grid:{display:false},ticks:{color:'#9da3b4',font:{size:10}},
+           border:{color:'rgba(255,255,255,.07)'}}
+      }
+    }
+  });
+}
+
+function renderRankList(id, data, color){
+  var max=data.length?data[0][1]:1;
+  var html='';
+  data.forEach(function(d,i){
+    var pct=Math.round((d[1]/max)*100);
+    html+='<div class="rank-item">'
+      +'<span class="rank-num">'+(i+1)+'</span>'
+      +'<span class="rank-name" title="'+d[0]+'">'+d[0]+'</span>'
+      +'<div class="rank-bar-wrap"><div class="rank-bar" style="width:'+pct+'%;background:'+color+'"></div></div>'
+      +'<span class="rank-val" style="color:'+color+'">'+d[1].toLocaleString('es-CL')+'</span>'
+      +'</div>';
+  });
+  document.getElementById(id).innerHTML=html||'<div style="color:var(--text-muted);font-size:11px;padding:.5rem">Sin datos</div>';
+}
+
+function fmtDate(s){var p=s.split('-');return p[2]+'/'+p[1]+'/'+p[0].substring(2);}
+</script>
+</body>
+</html>

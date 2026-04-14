@@ -604,57 +604,9 @@ canvas { max-height: 280px; }
 }
 
 
-/* ── INTEGRACIÓN API REAL ── */
-.api-bar {
-  background: #181b23;
-  border-bottom: 1px solid rgba(255,255,255,.07);
-  padding: 10px 20px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.api-ctrl-label { font-size: 11px; color: #9da3b4; white-space: nowrap; }
-.api-date {
-  font-size: 12px; padding: 6px 10px;
-  border: 1px solid rgba(255,255,255,.12);
-  border-radius: 6px;
-  background: #252932; color: #e8eaf0;
-  outline: none; font-family: 'Inter', sans-serif;
-  width: 145px; color-scheme: dark;
-}
-.api-date:focus { border-color: #4ade80; }
-.api-btn {
-  font-size: 12px; padding: 6px 14px;
-  border: 1px solid rgba(255,255,255,.12);
-  border-radius: 6px;
-  background: #252932; color: #e8eaf0;
-  cursor: pointer; font-family: 'Inter', sans-serif;
-  font-weight: 500; transition: background .12s;
-  white-space: nowrap;
-}
-.api-btn:hover { background: #252d3a; }
-.api-btn:disabled { opacity: .4; cursor: not-allowed; }
-.api-badge {
-  font-size: 10px; padding: 3px 10px;
-  border-radius: 10px; font-weight: 500;
-  background: rgba(74,222,128,.12);
-  border: 1px solid rgba(74,222,128,.3);
-  color: #4ade80;
-}
-.api-badge.loading { background: rgba(251,191,36,.12); border-color: rgba(251,191,36,.3); color: #fcd34d; }
-.api-badge.error { background: rgba(248,113,113,.12); border-color: rgba(248,113,113,.3); color: #f87171; }
-.data-mode-indicator {
-  margin-left: auto;
-  font-size: 11px; color: #5a6070;
-  display: flex; align-items: center; gap: 6px;
-}
-.data-mode-dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: #5a6070;
-}
-.data-mode-dot.live { background: #4ade80; animation: pulse 2s infinite; }
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+/* M3LINK API integration */
+.api-date:focus { border-color: #4ade80 !important; }
+
 </style>
 </head>
 <body>
@@ -666,8 +618,7 @@ canvas { max-height: 280px; }
       <a href="index.html" style="display:inline-block;">
         <svg width="96" height="36" viewBox="0 0 96 36" fill="none" xmlns="http://www.w3.org/2000/svg">
           <rect width="96" height="36" rx="6" fill="#C0392B"/>
-          <text x="48" y="25" text-anchor="middle"
-            font-family="Arial Black, Arial, sans-serif"
+          <text x="48" y="25" text-anchor="middle" font-family="Arial Black, Arial, sans-serif"
             font-weight="900" font-size="14" letter-spacing="3" fill="#FFFFFF">REDTEC</text>
         </svg>
       </a>
@@ -680,26 +631,22 @@ canvas { max-height: 280px; }
   </div>
   <div class="header-meta">
     Fuente: API OpsXRangoFechas<br>
-    Período activo: <span id="hdr-periodo">—</span><br>
-    <span id="hdr-updated">Cargando...</span>
+    Período: <span id="hdr-periodo">Histórico 2025 + 2026</span><br>
+    <span id="hdr-updated">Listo</span>
     &nbsp;·&nbsp;<a href="m3link_dashboard_dark.html" style="color:#4ade80;font-size:11px">← Dashboard</a>
   </div>
 </div>
 
 <!-- BARRA API REAL -->
-<div class="api-bar">
-  <span class="api-ctrl-label">Período API:</span>
-  <input type="date" id="api-d1" class="api-date">
-  <span class="api-ctrl-label">—</span>
-  <input type="date" id="api-d2" class="api-date">
-  <button class="api-btn" id="api-btn" onclick="loadApiData()">⟳ Cargar datos reales</button>
-  <span class="api-badge loading" id="api-badge">Listo</span>
-  <div class="data-mode-indicator">
-    <div class="data-mode-dot live" id="data-dot"></div>
-    <span id="data-mode-txt">Modo: Histórico 2025 + API</span>
-  </div>
+<div style="background:#181b23;border-bottom:1px solid rgba(255,255,255,.07);padding:10px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+  <span style="font-size:11px;color:#9da3b4;white-space:nowrap">Período API:</span>
+  <input type="date" id="api-d1" style="font-size:12px;padding:6px 10px;border:1px solid rgba(255,255,255,.12);border-radius:6px;background:#252932;color:#e8eaf0;outline:none;font-family:Inter,sans-serif;width:145px;color-scheme:dark">
+  <span style="font-size:11px;color:#9da3b4">—</span>
+  <input type="date" id="api-d2" style="font-size:12px;padding:6px 10px;border:1px solid rgba(255,255,255,.12);border-radius:6px;background:#252932;color:#e8eaf0;outline:none;font-family:Inter,sans-serif;width:145px;color-scheme:dark">
+  <button id="api-btn" onclick="loadApiData()" style="font-size:12px;padding:6px 14px;border:1px solid rgba(255,255,255,.12);border-radius:6px;background:#252932;color:#e8eaf0;cursor:pointer;font-family:Inter,sans-serif;font-weight:500;transition:background .12s">⟳ Cargar datos reales</button>
+  <span id="api-badge" style="font-size:10px;padding:3px 10px;border-radius:10px;font-weight:500;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.3);color:#4ade80">Listo</span>
+  <span style="margin-left:auto;font-size:11px;color:#5a6070" id="data-mode-txt">Modo: Histórico 2025 + API</span>
 </div>
-
 <!-- TABS -->
 <div class="tabs">
   <button class="tab active" onclick="showTab('resumen',this)">📊 Resumen General</button>
@@ -723,12 +670,12 @@ canvas { max-height: 280px; }
     <div class="reg-dot" style="background:var(--yellow)"></div> Talca
   </button>
   <div class="region-info" id="region-info">
-    Mostrando: <span id="region-name-info">Todas las regiones</span> · <span id="region-vol-info">—</span>
+    Mostrando: <span id="region-name-info">Todas las regiones</span> · <span id="region-vol-info">1.214.695 pallets</span>
   </div>
 </div>
 
-<!-- TABS HTML ORIGINALES -->
-id="tab-resumen" class="tab-panel active">
+<!-- ════════════════════════════════════════════ RESUMEN ════════════════════════ -->
+<div id="tab-resumen" class="tab-panel active">
 <div class="main">
 
   <!-- REGION COMPARE (visible solo en modo Todas) -->
@@ -834,7 +781,10 @@ id="tab-resumen" class="tab-panel active">
   <div class="insight-box" id="insight-main"></div>
 
 </div>
-id="tab-validacion" class="tab-panel">
+</div>
+
+<!-- ═══════════════════════════════════════════ VALIDACIÓN ═════════════════════ -->
+<div id="tab-validacion" class="tab-panel">
 <div class="main">
   <div class="row2">
     <div class="card" style="margin-bottom:0">
@@ -854,7 +804,10 @@ id="tab-validacion" class="tab-panel">
     <table class="tbl" id="tabla-validacion"></table>
   </div>
 </div>
-id="tab-retail" class="tab-panel">
+</div>
+
+<!-- ══════════════════════════════════════════════ RETAIL ══════════════════════ -->
+<div id="tab-retail" class="tab-panel">
 <div class="main">
   <div class="retail-grid" id="retail-cards"></div>
   <div class="row2">
@@ -870,7 +823,10 @@ id="tab-retail" class="tab-panel">
     </div>
   </div>
 </div>
-id="tab-proyeccion" class="tab-panel">
+</div>
+
+<!-- ═══════════════════════════════════════════ PROYECCIÓN ═════════════════════ -->
+<div id="tab-proyeccion" class="tab-panel">
 <div class="main">
   <div class="kpi-strip" id="kpi-proj"></div>
   <div class="row3">
@@ -894,7 +850,10 @@ id="tab-proyeccion" class="tab-panel">
   </div>
   <div class="insight-box" id="insight-proj"></div>
 </div>
-id="tab-heatmap" class="tab-panel">
+</div>
+
+<!-- ══════════════════════════════════════════ MAPA DE CALOR ═══════════════════ -->
+<div id="tab-heatmap" class="tab-panel">
 <div class="main">
 
   <div class="row2" style="margin-bottom:20px">
@@ -947,34 +906,37 @@ id="tab-heatmap" class="tab-panel">
   <div class="insight-box" id="insight-heatmap"></div>
 
 </div>
-id="tab-14dias" class="tab-panel">
+</div>
+
+<!-- ══════════════════════════════════ PROYECCIÓN 14 DÍAS ════════════════════ -->
+<div id="tab-14dias" class="tab-panel">
 <div class="main">
 
-  <!-- KPIs HOY Y MAÑANA -->
+  <!-- KPIs HOY Y MAÑANA — dinámicos -->
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
     <div class="kpi k-blue" style="grid-column:span 1">
-      <div class="kpi-label">📅 Hoy · 06 Abr 2026</div>
-      <div class="kpi-value blue">4.868</div>
-      <div class="ks" style="color:var(--muted);font-size:11px;margin-top:4px">pallets estimados · Lunes</div>
-      <div style="font-size:10px;color:var(--green);margin-top:4px">Banda: 4.479 – 5.257</div>
+      <div class="kpi-label" id="kpi14-hoy-label">📅 Hoy · —</div>
+      <div class="kpi-value blue" id="kpi14-hoy-val">—</div>
+      <div class="ks" style="color:var(--muted);font-size:11px;margin-top:4px" id="kpi14-hoy-sub">pallets estimados</div>
+      <div style="font-size:10px;color:var(--green);margin-top:4px" id="kpi14-hoy-banda">Banda: — – —</div>
     </div>
     <div class="kpi k-green" style="grid-column:span 1">
-      <div class="kpi-label">📅 Mañana · 07 Abr 2026</div>
-      <div class="kpi-value green">3.646</div>
-      <div class="ks" style="color:var(--muted);font-size:11px;margin-top:4px">pallets estimados · Martes</div>
-      <div style="font-size:10px;color:var(--green);margin-top:4px">Banda: 3.354 – 3.938</div>
+      <div class="kpi-label" id="kpi14-man-label">📅 Mañana · —</div>
+      <div class="kpi-value green" id="kpi14-man-val">—</div>
+      <div class="ks" style="color:var(--muted);font-size:11px;margin-top:4px" id="kpi14-man-sub">pallets estimados</div>
+      <div style="font-size:10px;color:var(--green);margin-top:4px" id="kpi14-man-banda">Banda: — – —</div>
     </div>
     <div class="kpi k-purple" style="grid-column:span 1">
-      <div class="kpi-label">📊 Total 15 días hábiles</div>
-      <div class="kpi-value purple">58.961</div>
-      <div class="ks" style="color:var(--muted);font-size:11px;margin-top:4px">pallets proyectados</div>
-      <div style="font-size:10px;color:var(--muted);margin-top:4px">06 Abr – 24 Abr 2026</div>
+      <div class="kpi-label">📊 Total días hábiles</div>
+      <div class="kpi-value purple" id="kpi14-total-val">—</div>
+      <div class="ks" style="color:var(--muted);font-size:11px;margin-top:4px" id="kpi14-total-sub">pallets proyectados</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px" id="kpi14-total-rango">— días hábiles</div>
     </div>
     <div class="kpi k-yellow" style="grid-column:span 1">
       <div class="kpi-label">⚡ Día pico del período</div>
-      <div class="kpi-value yellow">4.990</div>
-      <div class="ks" style="color:var(--muted);font-size:11px;margin-top:4px">pallets · Lunes 13 Abr</div>
-      <div style="font-size:10px;color:var(--muted);margin-top:4px">Semana 2 históricamente más alta</div>
+      <div class="kpi-value yellow" id="kpi14-pico-val">—</div>
+      <div class="ks" style="color:var(--muted);font-size:11px;margin-top:4px" id="kpi14-pico-sub">pallets</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px" id="kpi14-pico-banda">Banda: — – —</div>
     </div>
   </div>
 
@@ -1004,12 +966,82 @@ id="tab-14dias" class="tab-panel">
   <div class="insight-box" id="insight-14dias"></div>
 
 </div>
+</div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<!-- ══════════════════════════════════════════ AGENTE IA ═══════════════════════ -->
+
+<!-- Burbuja flotante -->
+<div id="agent-bubble" onclick="toggleAgent()" title="Pregúntame sobre el dashboard">
+  <svg id="bubble-icon-chat" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+  </svg>
+  <svg id="bubble-icon-close" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" style="display:none">
+    <line x1="18" y1="6" x2="6" y2="18"></line>
+    <line x1="6" y1="6" x2="18" y2="18"></line>
+  </svg>
+  <div id="agent-unread"></div>
+</div>
+
+<!-- Panel chat -->
+<div id="agent-panel">
+  <!-- Header -->
+  <div id="agent-header">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div id="agent-avatar">IA</div>
+      <div>
+        <div style="font-weight:700;font-size:13px">Asistente REDTEC</div>
+        <div style="font-size:10px;color:rgba(255,255,255,.6);display:flex;align-items:center;gap:5px">
+          <div style="width:6px;height:6px;border-radius:50%;background:#34D399"></div>
+          Basado en datos del dashboard
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="agent-clear-btn" onclick="clearChat()" title="Nueva conversación">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.6)" stroke-width="2" stroke-linecap="round">
+          <polyline points="1 4 1 10 7 10"></polyline>
+          <path d="M3.51 15a9 9 0 1 0 .49-3.48"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Mensajes -->
+  <div id="agent-messages"></div>
+
+  <!-- Sugerencias rápidas -->
+  <div id="agent-suggestions">
+    <div class="suggestion-chip" onclick="sendSuggestion(this)">¿Cuál fue el mejor mes?</div>
+    <div class="suggestion-chip" onclick="sendSuggestion(this)">¿Cómo va Walmart vs Cencosud?</div>
+    <div class="suggestion-chip" onclick="sendSuggestion(this)">¿Qué proyectamos para Jul 2026?</div>
+    <div class="suggestion-chip" onclick="sendSuggestion(this)">¿Por qué falló el modelo en Jul 2025?</div>
+  </div>
+
+  <!-- Input -->
+  <div id="agent-input-wrap">
+    <textarea id="agent-input" placeholder="Pregunta sobre retiros, retailers, proyecciones..." rows="1"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"
+      oninput="autoResize(this)"></textarea>
+    <button id="agent-send-btn" onclick="sendMessage()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="22" y1="2" x2="11" y2="13"></line>
+        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  <span>REDTEC · Modelo Adaptativo de Retiros · v2.0</span>
+  <span>Base: 245.855 registros SAP · Período: Ene 2025 – Mar 2026 · Accuracy 91.4% · Actualizado 07-04-2026</span>
+  <span>Actualizado: 06-04-2026</span>
+</div>
+
 <script>
-// ═══════════════════════════════════════════════════════════════
-// DATOS HISTÓRICOS 2025 (conservados del modelo original)
-// ═══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════════════════════════════
 const HISTORICO = [
   {mes:"2025-01",real_total:82479,pred_total:null,error_pct:null,accuracy:null,real_Walmart:31779,real_Cencosud:22100,real_UAS:17898,real_Tottus:4460,real_Prisa:1045,real_Intercarry:430,real_Otro:4767},
   {mes:"2025-02",real_total:67746,pred_total:null,error_pct:null,accuracy:null,real_Walmart:26635,real_Cencosud:17968,real_UAS:13183,real_Tottus:3720,real_Prisa:595,real_Intercarry:277,real_Otro:5368},
@@ -1090,189 +1122,1169 @@ const REGION_DATA = {
 // ── ESTADO REGIÓN ─────────────────────────────────────────────────
 let REGION_ACTIVA = 'todas';
 
+function setRegion(region, btn) {
+  REGION_ACTIVA = region;
+
+  // Actualizar botones
+  document.querySelectorAll('.reg-btn').forEach(b => {
+    b.className = 'reg-btn';
+  });
+  const clsMap = {todas:'active-todas', Santiago:'active-stgo', Talca:'active-talca'};
+  btn.classList.add(clsMap[region]);
+
+  // Info bar
+  const nombres = {todas:'Todas las regiones', Santiago:'Santiago + Norte', Talca:'Talca'};
+  const vols = {todas:'1.214.695', Santiago:'1.098.736', Talca:'104.017'};
+  document.getElementById('region-name-info').textContent = nombres[region];
+  document.getElementById('region-vol-info').textContent  = vols[region] + ' pallets';
+
+  // Mostrar/ocultar compare strip
+  document.getElementById('reg-compare-strip').style.display = region === 'todas' ? 'grid' : 'none';
+
+  // Re-renderizar resumen
+  buildResumen();
+}
+
+function getHistoricoFiltrado() {
+  if (REGION_ACTIVA === 'todas') return HISTORICO;
+  const regData = REGION_DATA[REGION_ACTIVA];
+  return HISTORICO.map(h => {
+    const r = regData.find(d => d.mes === h.mes);
+    if (!r) return {...h, real_total: 0};
+    return {
+      ...h,
+      real_total:     r.total,
+      real_Walmart:   r.Walmart,
+      real_Cencosud:  r.Cencosud,
+      real_UAS:       r.UAS,
+      real_Tottus:    r.Tottus,
+      real_Prisa:     r.Prisa,
+      real_Intercarry:r.Intercarry,
+      real_Otro:      r.Otro,
+      pred_total: h.pred_total ? Math.round(h.pred_total * (r.total / (h.real_total||1))) : null
+    };
+  });
+}
+
+const fmt = n => n != null ? Math.round(n).toLocaleString('es-CL') : '—';
+const fmtM = s => { const p=s.split('-'); const names=['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']; return names[+p[1]]+' '+p[0].slice(2); };
+
+// ── HELPERS ──────────────────────────────────────────────────────
+let charts = {};
+function killChart(id) { if(charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+function accClass(a) {
+  if(a == null) return '';
+  if(a >= 90) return 'acc-high';
+  if(a >= 80) return 'acc-mid';
+  return 'acc-low';
+}
+
+// ── TABS ─────────────────────────────────────────────────────────
+function showTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  btn.classList.add('active');
+  if(name==='validacion') buildValidacion();
+  if(name==='retail') buildRetail();
+  if(name==='proyeccion') buildProyeccion();
+  if(name==='heatmap') buildHeatmap();
+  if(name==='14dias') build14dias();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TAB RESUMEN
+// ══════════════════════════════════════════════════════════════════
+function buildResumen() {
+  const DATA = getHistoricoFiltrado();
+  const meses  = DATA.map(d => fmtM(d.mes));
+  const reales = DATA.map(d => d.real_total);
+  const preds  = DATA.map(d => d.pred_total);
+
+  // Escalar proyecciones según share de región activa
+  const shareRegion = REGION_ACTIVA === 'Santiago' ? 0.905
+                    : REGION_ACTIVA === 'Talca'    ? 0.086
+                    : 1.0;
+
+  const projMeses = PROYECCIONES.map(d => fmtM(d.mes));
+  const projVals  = PROYECCIONES.map(d => Math.round(d.pred_total * shareRegion));
+  const projHigh  = projVals.map(v => Math.round(v * 1.08));
+  const projLow   = projVals.map(v => Math.round(v * 0.92));
+
+  const allLabels = [...meses, ...projMeses];
+  const realData  = [...reales, ...new Array(projMeses.length).fill(null)];
+  const predData  = [...preds,  ...projVals];
+  const highData  = [...new Array(meses.length).fill(null), ...projHigh];
+  const lowData   = [...new Array(meses.length).fill(null), ...projLow];
+
+  // KPI dinámico
+  const total2025 = DATA.filter(d=>d.mes.startsWith('2025')).reduce((s,d)=>s+(d.real_total||0),0);
+  const prom = Math.round(total2025 / 12);
+  document.getElementById('kpi-total-val').textContent = (total2025/1000).toFixed(0)+'K';
+
+  // Color del gráfico según región
+  const lineColor = REGION_ACTIVA === 'Santiago' ? '#34D399'
+                  : REGION_ACTIVA === 'Talca'    ? '#FBBF24'
+                  : '#3B82F6';
+
+  killChart('main');
+  charts['main'] = new Chart(document.getElementById('chartMain'), {
+    type: 'line',
+    data: {
+      labels: allLabels,
+      datasets: [
+        {
+          label: 'Real', data: realData,
+          borderColor: lineColor, backgroundColor: lineColor+'14',
+          borderWidth: 2.5, pointRadius: 4, pointHoverRadius: 6,
+          fill: true, tension: .3
+        },
+        {
+          label: 'Forecast', data: predData,
+          borderColor: '#34D399', borderDash: [6,3],
+          borderWidth: 2, pointRadius: 3, pointHoverRadius: 5,
+          fill: false, tension: .3
+        },
+        {
+          label: 'Banda alta', data: highData,
+          borderColor: 'rgba(167,139,250,.3)', borderWidth: 1,
+          backgroundColor: 'rgba(167,139,250,.06)',
+          pointRadius: 0, fill: '+1', tension: .3
+        },
+        {
+          label: 'Banda baja', data: lowData,
+          borderColor: 'rgba(167,139,250,.3)', borderWidth: 1,
+          backgroundColor: 'rgba(167,139,250,.06)',
+          pointRadius: 0, fill: false, tension: .3
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#94A3B8', font: { size: 11 }, boxWidth: 20 } },
+        tooltip: {
+          backgroundColor: '#1a2235', borderColor: '#1f2d45', borderWidth: 1,
+          callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw)}` }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#64748B', font: { size: 10 } }, grid: { color: '#1f2d45' } },
+        y: { ticks: { color: '#64748B', font: { size: 10 }, callback: v => (v/1000).toFixed(0)+'K' }, grid: { color: '#1f2d45' } }
+      }
+    }
+  });
+
+  // Accuracy gauge chart
+  const accData = HISTORICO.filter(d => d.accuracy != null).map(d => d.accuracy);
+  const accLabels = HISTORICO.filter(d => d.accuracy != null).map(d => fmtM(d.mes));
+  killChart('accuracy');
+  charts['accuracy'] = new Chart(document.getElementById('chartAccuracy'), {
+    type: 'bar',
+    data: {
+      labels: accLabels,
+      datasets: [{
+        data: accData,
+        backgroundColor: accData.map(a => a>=90 ? 'rgba(52,211,153,.7)' : a>=80 ? 'rgba(251,191,36,.7)' : 'rgba(248,113,113,.7)'),
+        borderRadius: 4, borderSkipped: false
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#64748B', font: { size: 9 } }, grid: { display: false } },
+        y: { min: 50, max: 105, ticks: { color: '#64748B', font: { size: 9 }, callback: v => v+'%' }, grid: { color: '#1f2d45' } }
+      }
+    }
+  });
+
+  // Retail bars — usar DATA filtrada
+  const totalPorRetail = {};
+  RETAIL_KEYS.forEach(r => {
+    totalPorRetail[r] = DATA.filter(d=>d[`real_${r}`]).reduce((s,d)=>s+(d[`real_${r}`]||0),0);
+  });
+  const maxVol = Math.max(...Object.values(totalPorRetail));
+  const container = document.getElementById('retail-bars-main');
+  container.innerHTML = '';
+  RETAIL_KEYS.forEach((r,i) => {
+    const v = totalPorRetail[r];
+    const pct = (v/maxVol*100).toFixed(1);
+    const div = document.createElement('div');
+    div.className = 'rb-row';
+    div.innerHTML = `
+      <div class="rb-label" style="color:${RETAIL_COLORS[r]}">${RETAILERS[i]}</div>
+      <div class="rb-track"><div class="rb-fill" style="width:${pct}%;background:${RETAIL_COLORS[r]}"></div></div>
+      <div class="rb-val">${fmt(v)}</div>`;
+    container.appendChild(div);
+  });
+
+  // Pie chart
+  const pieData = RETAIL_KEYS.map(r => totalPorRetail[r]);
+  killChart('pie');
+  charts['pie'] = new Chart(document.getElementById('chartPie'), {
+    type: 'doughnut',
+    data: {
+      labels: RETAILERS,
+      datasets: [{ data: pieData, backgroundColor: RETAIL_KEYS.map(r=>RETAIL_COLORS[r]), borderWidth: 2, borderColor: '#111827' }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: { position: 'right', labels: { color: '#94A3B8', font: { size: 10 }, boxWidth: 12, padding: 8 } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${fmt(ctx.raw)} (${(ctx.raw/pieData.reduce((a,b)=>a+b)*100).toFixed(1)}%)` } }
+      }
+    }
+  });
+
+  // Insight dinámico por región
+  const regNombre = REGION_ACTIVA === 'Santiago' ? 'Santiago + Norte'
+                  : REGION_ACTIVA === 'Talca'    ? 'Talca'
+                  : 'todas las regiones';
+  const topRetail = RETAIL_KEYS.reduce((a,b) => totalPorRetail[a]>totalPorRetail[b]?a:b);
+  const topIdx    = RETAIL_KEYS.indexOf(topRetail);
+  const topVol    = totalPorRetail[topRetail];
+  const totalVol  = RETAIL_KEYS.reduce((s,r)=>s+totalPorRetail[r],0);
+  const topPct    = (topVol/totalVol*100).toFixed(1);
+
+  const insightTalca = REGION_ACTIVA === 'Talca'
+    ? ' <span class="warn">⚠ Talca opera exclusivamente con Cencosud y Unimarc/Rendic — sin Walmart ni Tottus.</span>' : '';
+
+  document.getElementById('insight-main').innerHTML = `
+    📊 <strong>Lectura del modelo · ${regNombre}:</strong>
+    En el período analizado se recuperaron <span class="highlight">${fmt(totalVol)} pallets</span> en retiros.
+    El retailer dominante es <strong style="color:${RETAIL_COLORS[topRetail]}">${RETAILERS[topIdx]} (${topPct}%)</strong> del volumen total.
+    La tasa de retorno base se mantiene estable en <span class="highlight">85.5% ± 4.1%</span> sobre emisiones.
+    Los meses con mayor desviación fueron <span class="warn">Jul-2025 (-15.2%)</span> y <span class="warn">Ago-2025 (+13.9%)</span> — corregidos automáticamente al mes siguiente.${insightTalca}`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TAB VALIDACIÓN
+// ══════════════════════════════════════════════════════════════════
+function buildValidacion() {
+  const validos = HISTORICO.filter(d => d.pred_total != null);
+  const labels = validos.map(d => fmtM(d.mes));
+  const errors = validos.map(d => d.error_pct);
+  const accs   = validos.map(d => d.accuracy);
+
+  // Error chart
+  killChart('error');
+  charts['error'] = new Chart(document.getElementById('chartError'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Error %',
+        data: errors,
+        backgroundColor: errors.map(e => e > 0 ? 'rgba(251,191,36,.7)' : 'rgba(59,130,246,.7)'),
+        borderRadius: 5, borderSkipped: false
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ` Error: ${ctx.raw}%` } }
+      },
+      scales: {
+        x: { ticks: { color: '#64748B', font: { size: 10 } }, grid: { display: false } },
+        y: { ticks: { color: '#64748B', font: { size: 10 }, callback: v => v+'%' }, grid: { color: '#1f2d45' } }
+      }
+    }
+  });
+
+  // Accuracy chart
+  killChart('accmes');
+  charts['accmes'] = new Chart(document.getElementById('chartAccMes'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Accuracy %',
+        data: accs,
+        borderColor: '#34D399', backgroundColor: 'rgba(52,211,153,.08)',
+        borderWidth: 2.5, pointRadius: 5, fill: true, tension: .3,
+        pointBackgroundColor: accs.map(a => a>=90?'#34D399':a>=80?'#FBBF24':'#F87171')
+      },{
+        label: 'Meta 90%',
+        data: new Array(labels.length).fill(90),
+        borderColor: 'rgba(167,139,250,.4)', borderDash: [5,4],
+        borderWidth: 1.5, pointRadius: 0, fill: false
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { labels: { color: '#94A3B8', font: { size: 11 } } } },
+      scales: {
+        x: { ticks: { color: '#64748B', font: { size: 10 } }, grid: { display: false } },
+        y: { min: 55, max: 105, ticks: { color: '#64748B', font: { size: 10 }, callback: v => v+'%' }, grid: { color: '#1f2d45' } }
+      }
+    }
+  });
+
+  // Tabla
+  const tbl = document.getElementById('tabla-validacion');
+  tbl.innerHTML = `<thead><tr>
+    <th>Mes</th><th>Real</th><th>Forecast</th><th>Error%</th><th>Accuracy</th>
+    <th>Walmart</th><th>Cencosud</th><th>U/A/S</th><th>Tottus</th><th>Otro</th>
+  </tr></thead>`;
+  const tbody = document.createElement('tbody');
+
+  HISTORICO.forEach(d => {
+    const tr = document.createElement('tr');
+    const accBadge = d.accuracy != null
+      ? `<span class="acc-badge ${accClass(d.accuracy)}">${d.accuracy}%</span>` : '—';
+    const errTxt = d.error_pct != null
+      ? `<span style="color:${Math.abs(d.error_pct)<5?'#34D399':Math.abs(d.error_pct)<15?'#FBBF24':'#F87171'}">${d.error_pct>0?'+':''}${d.error_pct}%</span>` : '—';
+
+    tr.innerHTML = `
+      <td><strong>${fmtM(d.mes)}</strong></td>
+      <td style="color:var(--accent2)">${fmt(d.real_total)}</td>
+      <td style="color:var(--green)">${fmt(d.pred_total)}</td>
+      <td>${errTxt}</td>
+      <td>${accBadge}</td>
+      <td>${d.pred_Walmart?`<small style="color:#64748b">${fmt(d.pred_Walmart)}/</small>`:''}${fmt(d.real_Walmart)}</td>
+      <td>${d.pred_Cencosud?`<small style="color:#64748b">${fmt(d.pred_Cencosud)}/</small>`:''}${fmt(d.real_Cencosud)}</td>
+      <td>${d.pred_UAS?`<small style="color:#64748b">${fmt(d.pred_UAS)}/</small>`:''}${fmt(d.real_UAS)}</td>
+      <td>${d.pred_Tottus?`<small style="color:#64748b">${fmt(d.pred_Tottus)}/</small>`:''}${fmt(d.real_Tottus)}</td>
+      <td>${d.pred_Otro?`<small style="color:#64748b">${fmt(d.pred_Otro)}/</small>`:''}${fmt(d.real_Otro)}</td>`;
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TAB RETAIL
+// ══════════════════════════════════════════════════════════════════
+let selectedRetail = 'Walmart';
+
+function buildRetail() {
+  const grid = document.getElementById('retail-cards');
+  grid.innerHTML = '';
+
+  RETAIL_KEYS.forEach((r,i) => {
+    const total = HISTORICO.reduce((s,d)=>s+(d[`real_${r}`]||0),0);
+    const totalAll = HISTORICO.reduce((s,d)=>s+(d.real_total||0),0);
+    const share = (total/totalAll*100).toFixed(1);
+    const accs = HISTORICO.filter(d=>d.accuracy!=null && d[`pred_${r}`]!=null).map(d => {
+      const e = Math.abs((d[`pred_${r}`]-d[`real_${r}`])/(d[`real_${r}`]||1)*100);
+      return 100 - e;
+    });
+    const avgAcc = accs.length ? (accs.reduce((a,b)=>a+b)/accs.length).toFixed(0) : null;
+
+    const div = document.createElement('div');
+    div.className = 'rc' + (r===selectedRetail ? ' selected' : '');
+    const subLabel = r === 'UAS' ? '<div style="font-size:9px;color:var(--muted);margin-top:2px">Unimarc/Rendic · Alvi · SMU/M10</div>' : '';
+    div.innerHTML = `
+      <div class="rc-name" style="color:${RETAIL_COLORS[r]}">${RETAILERS[i]}</div>
+      ${subLabel}
+      <div class="rc-vol" style="color:${RETAIL_COLORS[r]}">${(total/1000).toFixed(0)}K</div>
+      <div class="rc-share">pallets · ${share}% del total</div>
+      ${avgAcc ? `<div class="rc-acc"><span class="acc-badge ${accClass(+avgAcc)}">${avgAcc}% acc.</span></div>` : ''}`;
+    div.onclick = () => selectRetail(r, i);
+    grid.appendChild(div);
+  });
+
+  drawRetailDetail(selectedRetail, RETAIL_KEYS.indexOf(selectedRetail));
+  drawRetailStack();
+}
+
+function selectRetail(r, idx) {
+  selectedRetail = r;
+  document.querySelectorAll('.rc').forEach((el,i) => {
+    el.classList.toggle('selected', RETAIL_KEYS[i]===r);
+  });
+  drawRetailDetail(r, idx);
+}
+
+function drawRetailDetail(r, idx) {
+  const labels = HISTORICO.map(d => fmtM(d.mes));
+  const reales = HISTORICO.map(d => d[`real_${r}`] || 0);
+  const preds  = HISTORICO.map(d => d[`pred_${r}`] || null);
+  const color  = RETAIL_COLORS[r];
+
+  document.getElementById('retail-chart-title').textContent = `📊 Evolución mensual — ${RETAILERS[idx]}`;
+
+  killChart('retailDetail');
+  charts['retailDetail'] = new Chart(document.getElementById('chartRetailDetail'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Real', data: reales, borderColor: color, backgroundColor: color+'20', borderWidth: 2.5, pointRadius: 4, fill: true, tension: .3 },
+        { label: 'Forecast', data: preds, borderColor: '#ffffff40', borderDash: [5,3], borderWidth: 1.5, pointRadius: 3, fill: false, tension: .3 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { labels: { color: '#94A3B8', font: { size: 11 } } } },
+      scales: {
+        x: { ticks: { color: '#64748B', font: { size: 10 } }, grid: { color: '#1f2d45' } },
+        y: { ticks: { color: '#64748B', font: { size: 10 }, callback: v => (v/1000).toFixed(0)+'K' }, grid: { color: '#1f2d45' } }
+      }
+    }
+  });
+}
+
+function drawRetailStack() {
+  const ult6 = HISTORICO.slice(-6);
+  const labels = ult6.map(d => fmtM(d.mes));
+
+  killChart('retailStack');
+  charts['retailStack'] = new Chart(document.getElementById('chartRetailStack'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: RETAIL_KEYS.map((r,i) => ({
+        label: RETAILERS[i],
+        data: ult6.map(d => d[`real_${r}`]||0),
+        backgroundColor: RETAIL_COLORS[r]+'CC',
+        borderRadius: i===RETAIL_KEYS.length-1?4:0,
+        borderSkipped: false
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: { labels: { color: '#94A3B8', font: { size: 10 }, boxWidth: 10 } },
+        tooltip: { mode: 'index', callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw)}` } }
+      },
+      scales: {
+        x: { stacked: true, ticks: { color: '#64748B', font: { size: 10 } }, grid: { display: false } },
+        y: { stacked: true, ticks: { color: '#64748B', font: { size: 10 }, callback: v => (v/1000).toFixed(0)+'K' }, grid: { color: '#1f2d45' } }
+      }
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TAB PROYECCIÓN
+// ══════════════════════════════════════════════════════════════════
+function buildProyeccion() {
+  // KPIs
+  const totalProj = PROYECCIONES.reduce((s,d)=>s+d.pred_total,0);
+  const maxProj = Math.max(...PROYECCIONES.map(d=>d.pred_total));
+  const minProj = Math.min(...PROYECCIONES.map(d=>d.pred_total));
+  const kpis = document.getElementById('kpi-proj');
+  kpis.innerHTML = `
+    <div class="kpi k-purple"><div class="kpi-label">Total Abr–Dic 2026</div><div class="kpi-value purple">${(totalProj/1000).toFixed(0)}K</div><div class="kpi-sub">pallets proyectados</div></div>
+    <div class="kpi k-blue"><div class="kpi-label">Promedio mensual</div><div class="kpi-value blue">${(totalProj/9/1000).toFixed(1)}K</div><div class="kpi-sub">pallets / mes</div></div>
+    <div class="kpi k-green"><div class="kpi-label">Mes pico</div><div class="kpi-value green">${(maxProj/1000).toFixed(1)}K</div><div class="kpi-sub">${fmtM(PROYECCIONES.find(d=>d.pred_total===maxProj).mes)}</div></div>
+    <div class="kpi k-yellow"><div class="kpi-label">Mes valle</div><div class="kpi-value yellow">${(minProj/1000).toFixed(1)}K</div><div class="kpi-sub">${fmtM(PROYECCIONES.find(d=>d.pred_total===minProj).mes)}</div></div>
+    <div class="kpi k-teal"><div class="kpi-label">Tasa base</div><div class="kpi-value teal">85.5%</div><div class="kpi-sub">retorno sobre emisiones</div></div>`;
+
+  // Últimos 3 reales + proyecciones
+  const ult3 = HISTORICO.slice(-3);
+  const allLabels = [...ult3.map(d=>fmtM(d.mes)), ...PROYECCIONES.map(d=>fmtM(d.mes))];
+  const realPart  = [...ult3.map(d=>d.real_total), ...new Array(PROYECCIONES.length).fill(null)];
+  const predPart  = [...ult3.map(d=>d.pred_total||d.real_total), ...PROYECCIONES.map(d=>d.pred_total)];
+  const highPart  = [...new Array(ult3.length).fill(null), ...PROYECCIONES.map(d=>Math.round(d.pred_total*1.08))];
+  const lowPart   = [...new Array(ult3.length).fill(null), ...PROYECCIONES.map(d=>Math.round(d.pred_total*0.92))];
+
+  killChart('proj');
+  charts['proj'] = new Chart(document.getElementById('chartProj'), {
+    type: 'line',
+    data: {
+      labels: allLabels,
+      datasets: [
+        { label: 'Real', data: realPart, borderColor: '#3B82F6', backgroundColor: 'rgba(59,130,246,.1)', borderWidth: 2.5, pointRadius: 5, fill: true, tension: .3 },
+        { label: 'Proyección', data: predPart, borderColor: '#A78BFA', borderDash: [6,3], borderWidth: 2.5, pointRadius: 4, fill: false, tension: .3 },
+        { label: '+8%', data: highPart, borderColor: 'rgba(167,139,250,.2)', borderWidth: 1, pointRadius: 0, backgroundColor: 'rgba(167,139,250,.07)', fill: '+1', tension: .3 },
+        { label: '-8%', data: lowPart, borderColor: 'rgba(167,139,250,.2)', borderWidth: 1, pointRadius: 0, fill: false, tension: .3 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#94A3B8', font: { size: 11 } } },
+        tooltip: { backgroundColor: '#1a2235', borderColor: '#1f2d45', borderWidth: 1, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw)}` } }
+      },
+      scales: {
+        x: { ticks: { color: '#64748B', font: { size: 10 } }, grid: { color: '#1f2d45' } },
+        y: { ticks: { color: '#64748B', font: { size: 10 }, callback: v => (v/1000).toFixed(0)+'K' }, grid: { color: '#1f2d45' } }
+      }
+    }
+  });
+
+  // Stacked por retail
+  killChart('projRetail');
+  charts['projRetail'] = new Chart(document.getElementById('chartProjRetail'), {
+    type: 'bar',
+    data: {
+      labels: PROYECCIONES.map(d=>fmtM(d.mes)),
+      datasets: RETAIL_KEYS.map((r,i) => ({
+        label: RETAILERS[i],
+        data: PROYECCIONES.map(d => d[`pred_${r}`]||0),
+        backgroundColor: RETAIL_COLORS[r]+'CC',
+        borderSkipped: false
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: { labels: { color: '#94A3B8', font: { size: 10 }, boxWidth: 10 } },
+        tooltip: { mode: 'index' }
+      },
+      scales: {
+        x: { stacked: true, ticks: { color: '#64748B', font: { size: 10 } }, grid: { display: false } },
+        y: { stacked: true, ticks: { color: '#64748B', font: { size: 10 }, callback: v => (v/1000).toFixed(0)+'K' }, grid: { color: '#1f2d45' } }
+      }
+    }
+  });
+
+  // Tabla proyecciones
+  const tbl = document.getElementById('tabla-proyecciones');
+  tbl.innerHTML = `<thead><tr>
+    <th>Mes</th><th>Proyección</th><th>Banda -8%</th><th>Banda +8%</th>
+    <th>Walmart</th><th>Cencosud</th><th>U/A/S</th><th>Tottus</th><th>Otros</th>
+  </tr></thead>`;
+  const tbody = document.createElement('tbody');
+  PROYECCIONES.forEach(d => {
+    const tr = document.createElement('tr');
+    tr.className = 'tr-proj';
+    tr.innerHTML = `
+      <td><strong>${fmtM(d.mes)}</strong></td>
+      <td><span class="acc-badge proj-badge">${fmt(d.pred_total)}</span></td>
+      <td style="color:var(--muted)">${fmt(Math.round(d.pred_total*.92))}</td>
+      <td style="color:var(--muted)">${fmt(Math.round(d.pred_total*1.08))}</td>
+      <td style="color:${RETAIL_COLORS.Walmart}">${fmt(d.pred_Walmart)}</td>
+      <td style="color:${RETAIL_COLORS.Cencosud}">${fmt(d.pred_Cencosud)}</td>
+      <td style="color:${RETAIL_COLORS.UAS}">${fmt(d.pred_UAS)}</td>
+      <td style="color:${RETAIL_COLORS.Tottus}">${fmt(d.pred_Tottus)}</td>
+      <td style="color:${RETAIL_COLORS.Otro}">${fmt(d.pred_Prisa+d.pred_Intercarry+d.pred_Otro)}</td>`;
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);
+
+  // Insight
+  document.getElementById('insight-proj').innerHTML = `
+    🔮 <strong>Proyección Abr–Dic 2026:</strong>
+    El modelo estima <span class="highlight">${fmt(totalProj)} pallets</span> en retiros para los próximos 9 meses
+    (promedio <span class="highlight">${fmt(Math.round(totalProj/9))}/mes</span>), con una banda de confianza de ±8%.
+    El mes con mayor volumen proyectado es <span class="highlight">${fmtM(PROYECCIONES.find(d=>d.pred_total===maxProj).mes)} (${fmt(maxProj)} pallets)</span>,
+    consistente con la estacionalidad histórica de julio.
+    <span class="warn">Nota:</span> si un retailer cambia su comportamiento (nuevo contrato, cierre, cambio logístico),
+    el modelo lo detectará al mes siguiente y recalibrará automáticamente los shares.
+    La tasa base se actualizará con cada nuevo mes real disponible.`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// HEATMAP DATA
+// ══════════════════════════════════════════════════════════════════
+const HM_MESES = ["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12","2026-01","2026-02","2026-03"];
+const HM_RETAILERS = ["Walmart","Cencosud","U/A/S","Otro","Tottus","Prisa","Intercarry"];
+const HM_RKEYS     = ["Walmart","Cencosud","UAS","Otro","Tottus","Prisa","Intercarry"];
+const HM_VALUES = [
+  [31779,26635,32103,31349,31141,29602,32569,25394,30389,32626,26599,31153,30867,28538,27560],
+  [22100,17968,22485,22705,22904,23402,23412,21751,24096,23370,24380,26677,27428,22989,19898],
+  [17898,13183,14985,15360,14489,18106,16870,15244,15740,16956,16654,18542,18322,16421,14287],
+  [4767,5368,3964,5554,5208,5040,8240,4627,4327,7423,4593,5050,5460,6060,5928],
+  [4460,3720,3180,3940,3560,3800,4040,3820,3720,4000,4060,4340,4560,3979,3838],
+  [1045,595,768,936,931,719,1777,935,1377,1123,1357,1460,1900,926,1198],
+  [430,277,328,841,821,752,728,564,451,607,494,487,435,382,555]
+];
+// % por mes (retail / total mes)
+const HM_PCT = [
+  [38.5, 39.3, 41.3, 38.9, 39.4, 36.4, 37.2, 35.1, 37.9, 37.9, 34.0, 35.5, 34.7, 36.0, 37.6],
+  [26.8, 26.5, 28.9, 28.1, 29.0, 28.7, 26.7, 30.1, 30.1, 27.1, 31.2, 30.4, 30.8, 29.0, 27.2],
+  [21.7, 19.5, 19.3, 19.0, 18.3, 22.2, 19.3, 21.1, 19.7, 19.7, 21.3, 21.1, 20.6, 20.7, 19.5],
+  [5.8, 7.9, 5.1, 6.9, 6.6, 6.2, 9.4, 6.4, 5.4, 8.6, 5.9, 5.8, 6.1, 7.6, 8.1],
+  [5.4, 5.5, 4.1, 4.9, 4.5, 4.7, 4.6, 5.3, 4.6, 4.6, 5.2, 4.9, 5.1, 5.0, 5.2],
+  [1.3, 0.9, 1.0, 1.2, 1.2, 0.9, 2.0, 1.3, 1.7, 1.3, 1.7, 1.7, 2.1, 1.2, 1.6],
+  [0.5, 0.4, 0.4, 1.0, 1.0, 0.9, 0.8, 0.8, 0.6, 0.7, 0.6, 0.6, 0.5, 0.5, 0.8],
+];
+
+let HM_MODE = 'abs'; // abs | pct | rel
+
+// Escala de color: azul frío → verde → amarillo → rojo caliente
+function heatColor(t) {
+  // t: 0 (frío) → 1 (caliente)
+  const stops = [
+    [0.00, [11,24,41]],
+    [0.15, [26,58,107]],
+    [0.30, [30,107,138]],
+    [0.45, [30,156,122]],
+    [0.60, [78,203,113]],
+    [0.72, [168,224,99]],
+    [0.82, [255,209,102]],
+    [0.91, [239,140,74]],
+    [1.00, [224,82,82]]
+  ];
+  let i = 0;
+  while(i < stops.length-1 && t > stops[i+1][0]) i++;
+  const [t0,c0] = stops[i];
+  const [t1,c1] = stops[Math.min(i+1,stops.length-1)];
+  const f = t1>t0 ? (t-t0)/(t1-t0) : 0;
+  const r = Math.round(c0[0]+(c1[0]-c0[0])*f);
+  const g = Math.round(c0[1]+(c1[1]-c0[1])*f);
+  const b = Math.round(c0[2]+(c1[2]-c0[2])*f);
+  return `rgb(${r},${g},${b})`;
+}
+
+function textContrast(t) {
+  return t > 0.55 ? '#0B0F1A' : '#E2E8F0';
+}
+
+function setHeatmapMode(mode, btn) {
+  HM_MODE = mode;
+  document.querySelectorAll('#tab-heatmap .reg-btn').forEach(b => b.className='reg-btn');
+  const clsMap = {abs:'active-todas',pct:'active-stgo',rel:'active-talca'};
+  btn.classList.add(clsMap[mode]);
+  const labels = {abs:'Volumen absoluto',pct:'% del mes',rel:'Intensidad relativa'};
+  document.getElementById('hm-badge').textContent = labels[mode];
+  renderHeatmap();
+}
+
+function renderHeatmap() {
+  const container = document.getElementById('heatmap-container');
+
+  // Calcular matriz normalizada
+  let matrix; // [retail][mes] → 0..1
+  if(HM_MODE === 'abs') {
+    const maxVal = Math.max(...HM_VALUES.flat());
+    matrix = HM_VALUES.map(row => row.map(v => v/maxVal));
+  } else if(HM_MODE === 'pct') {
+    const maxPct = Math.max(...HM_PCT.flat());
+    matrix = HM_PCT.map(row => row.map(v => v/maxPct));
+  } else { // rel: cada retail normalizado por su propio máximo
+    matrix = HM_VALUES.map(row => {
+      const mx = Math.max(...row);
+      return row.map(v => mx>0 ? v/mx : 0);
+    });
+  }
+
+  // Construir tabla HTML
+  let html = `<table class="hm-table">
+    <thead><tr>
+      <th class="hm-th-retail"></th>
+      ${HM_MESES.map(m => `<th class="hm-th-mes">${fmtM(m)}</th>`).join('')}
+      <th class="hm-th-mes" style="color:var(--accent2)">Total</th>
+    </tr></thead>
+    <tbody>`;
+
+  HM_RETAILERS.forEach((retail, ri) => {
+    const color = RETAIL_COLORS[HM_RKEYS[ri]] || '#64748B';
+    const rowTotal = HM_VALUES[ri].reduce((a,b)=>a+b,0);
+    html += `<tr>
+      <td>
+        <div class="hm-row-label">
+          <div class="hm-row-dot" style="background:${color}"></div>
+          <span style="font-size:11px;font-weight:600;color:${color}">${retail}</span>
+        </div>
+      </td>`;
+
+    HM_MESES.forEach((mes, mi) => {
+      const t = matrix[ri][mi];
+      const bg = heatColor(t);
+      const tc = textContrast(t);
+      const rawVal = HM_VALUES[ri][mi];
+      const pctVal = HM_PCT[ri][mi];
+
+      const displayVal = HM_MODE === 'pct'
+        ? pctVal.toFixed(1)+'%'
+        : HM_MODE === 'rel'
+        ? (t*100).toFixed(0)+'%'
+        : rawVal >= 1000 ? (rawVal/1000).toFixed(1)+'K' : rawVal;
+
+      const tooltip = `${retail} · ${fmtM(mes)}\nVolumen: ${fmt(rawVal)} pallets\n% del mes: ${pctVal}%`;
+
+      html += `<td class="hm-cell" style="background:${bg};color:${tc}" title="${tooltip}">${displayVal}</td>`;
+    });
+
+    // Total fila
+    html += `<td class="hm-cell" style="background:rgba(59,130,246,.15);color:var(--accent2);font-weight:700">
+      ${(rowTotal/1000).toFixed(0)}K
+    </td></tr>`;
+  });
+
+  // Fila totales
+  html += `<tr style="border-top:2px solid var(--border)">
+    <td><div class="hm-row-label"><span style="font-size:11px;font-weight:700;color:var(--text2)">TOTAL MES</span></div></td>`;
+  HM_MESES.forEach((mes, mi) => {
+    const colTotal = HM_VALUES.reduce((s,row)=>s+row[mi],0);
+    html += `<td style="text-align:center;font-family:'DM Mono',monospace;font-size:10px;font-weight:700;color:var(--teal);padding:6px 4px">${(colTotal/1000).toFixed(0)}K</td>`;
+  });
+  const grandTotal = HM_VALUES.flat().reduce((a,b)=>a+b,0);
+  html += `<td style="text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:800;color:var(--teal);padding:6px 4px">${(grandTotal/1000).toFixed(0)}K</td></tr>`;
+
+  html += `</tbody></table>
+  <div class="hm-legend">
+    <span class="hm-legend-lbl">Bajo</span>
+    <div class="hm-legend-bar"></div>
+    <span class="hm-legend-lbl">Alto</span>
+  </div>`;
+
+  container.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BUILD HEATMAP TAB
+// ══════════════════════════════════════════════════════════════════
+function buildHeatmap() {
+  renderHeatmap();
+
+  // Ranking chart
+  const totales = HM_VALUES.map(row => row.reduce((a,b)=>a+b,0));
+  killChart('hmRanking');
+  charts['hmRanking'] = new Chart(document.getElementById('chartHmRanking'), {
+    type: 'bar',
+    data: {
+      labels: HM_RETAILERS,
+      datasets: [{
+        data: totales,
+        backgroundColor: HM_RKEYS.map(r => RETAIL_COLORS[r]+'CC'),
+        borderRadius: 6, borderSkipped: false
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: {display:false},
+        tooltip: { callbacks: { label: ctx => ` ${fmt(ctx.raw)} pallets` } }
+      },
+      scales: {
+        x: { ticks: { color:'#64748B', font:{size:10}, callback: v => (v/1000).toFixed(0)+'K' }, grid:{color:'#1f2d45'} },
+        y: { ticks: { color:'#94A3B8', font:{size:11} }, grid:{display:false} }
+      }
+    }
+  });
+
+  // Volatilidad (CV = std/mean)
+  const cvData = HM_VALUES.map(row => {
+    const mean = row.reduce((a,b)=>a+b)/row.length;
+    const std  = Math.sqrt(row.reduce((s,v)=>s+Math.pow(v-mean,2),0)/row.length);
+    return mean > 0 ? +(std/mean*100).toFixed(1) : 0;
+  });
+  killChart('hmVolatilidad');
+  charts['hmVolatilidad'] = new Chart(document.getElementById('chartHmVolatilidad'), {
+    type: 'bar',
+    data: {
+      labels: HM_RETAILERS,
+      datasets: [{
+        label: 'CV %',
+        data: cvData,
+        backgroundColor: cvData.map(v =>
+          v < 8  ? 'rgba(52,211,153,.8)' :
+          v < 15 ? 'rgba(251,191,36,.8)' :
+                   'rgba(248,113,113,.8)'
+        ),
+        borderRadius: 6, borderSkipped: false
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: {display:false},
+        tooltip: { callbacks: { label: ctx => ` CV: ${ctx.raw}% ${ctx.raw<8?'· Muy estable':ctx.raw<15?'· Estable':'· Variable'}` } }
+      },
+      scales: {
+        x: { ticks: { color:'#64748B', font:{size:10}, callback: v=>v+'%' }, grid:{color:'#1f2d45'} },
+        y: { ticks: { color:'#94A3B8', font:{size:11} }, grid:{display:false} }
+      }
+    }
+  });
+
+  // Insight
+  const maxRetail = HM_RETAILERS[totales.indexOf(Math.max(...totales))];
+  const minCV = HM_RETAILERS[cvData.indexOf(Math.min(...cvData))];
+  const maxCV = HM_RETAILERS[cvData.indexOf(Math.max(...cvData))];
+  document.getElementById('insight-heatmap').innerHTML = `
+    🌡️ <strong>Lectura del mapa de calor:</strong>
+    <strong style="color:${RETAIL_COLORS[HM_RKEYS[0]]}">${maxRetail}</strong> domina con el mayor volumen en prácticamente todos los meses —
+    es el retailer de mayor intensidad de calor de forma consistente.
+    El retailer más <span class="highlight">estable</span> es <strong>${minCV}</strong> (menor coeficiente de variación),
+    lo que significa que su comportamiento es el más predecible para el modelo.
+    <strong style="color:var(--red)">${maxCV}</strong> es el más <span class="warn">volátil</span> —
+    sus retiros fluctúan más mes a mes, lo que explica parte del error en los meses de mayor desviación.
+    Usa el modo <em>Intensidad relativa</em> para ver patrones estacionales dentro de cada retail sin que el volumen absoluto distorsione la lectura.`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════════
+// Update showTab to include heatmap
 
 
-// ═══════════════════════════════════════════════════════════════
-// INTEGRACIÓN API REAL — M3LINK
-// ═══════════════════════════════════════════════════════════════
-var API_PROXY  = '/api/ops';
-var API_DIRECT = 'https://apirdt1.azurewebsites.net/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRangoFechas';
-var isLocal = location.protocol === 'file:';
-var isDev   = ['localhost','127.0.0.1'].includes(location.hostname);
+// ══════════════════════════════════════════════════════════════════
+// DATOS RECALIBRADOS AL 07-ABR-2026
+// HISTORICO ya contiene datos frescos del Excel completo (245.855 registros)
+// Retailers fusionados: U/A/S = Unimarc/Rendic + Alvi + SMU/M10
+// Forecast recalibrado con tasa base 82.247 pallets/mes (últ 6 meses)
+// ══════════════════════════════════════════════════════════════════
 
-// Mapeo de clientes del API a retailers del dashboard
-var CLIENTE_RETAIL = {
-  'WALMART': 'Walmart',
-  'CENCOSUD': 'Cencosud',
-  'TOTTUS': 'Tottus',
-  'HIPERMERCADOS TOTTUS': 'Tottus',
-  'ALVI': 'UAS',
-  'UNIMARC': 'UAS',
-  'RENDIC': 'UAS',
-  'SMU': 'UAS',
-  'PRISA': 'Prisa',
-  'INTERCARRY': 'Intercarry',
+// ── DATOS PROYECCIÓN 14 DÍAS ─────────────────────────────────────
+const PROJ14 = [
+  {fecha:'2026-04-06', dow:'Lun', pred:4868, low:4479, high:5257, WM:1786, CC:1373, UMR:979,  TT:246, resto:484},
+  {fecha:'2026-04-07', dow:'Mar', pred:3646, low:3354, high:3938, WM:1337, CC:1029, UMR:733,  TT:184, resto:363},
+  {fecha:'2026-04-08', dow:'Mié', pred:3973, low:3655, high:4291, WM:1457, CC:1121, UMR:799,  TT:201, resto:395},
+  {fecha:'2026-04-09', dow:'Jue', pred:3622, low:3332, high:3912, WM:1329, CC:1022, UMR:728,  TT:183, resto:360},
+  {fecha:'2026-04-10', dow:'Vie', pred:3480, low:3202, high:3758, WM:1277, CC:982,  UMR:700,  TT:176, resto:345},
+  {fecha:'2026-04-13', dow:'Lun', pred:4990, low:4591, high:5389, WM:1830, CC:1408, UMR:1003, TT:252, resto:497},
+  {fecha:'2026-04-14', dow:'Mar', pred:3737, low:3438, high:4036, WM:1371, CC:1054, UMR:751,  TT:189, resto:372},
+  {fecha:'2026-04-15', dow:'Mié', pred:4072, low:3746, high:4398, WM:1494, CC:1149, UMR:819,  TT:206, resto:404},
+  {fecha:'2026-04-16', dow:'Jue', pred:3712, low:3415, high:4009, WM:1362, CC:1047, UMR:746,  TT:188, resto:369},
+  {fecha:'2026-04-17', dow:'Vie', pred:3567, low:3282, high:3852, WM:1308, CC:1006, UMR:717,  TT:180, resto:356},
+  {fecha:'2026-04-20', dow:'Lun', pred:4795, low:4411, high:5179, WM:1759, CC:1353, UMR:964,  TT:242, resto:477},
+  {fecha:'2026-04-21', dow:'Mar', pred:3591, low:3304, high:3878, WM:1317, CC:1013, UMR:722,  TT:182, resto:357},
+  {fecha:'2026-04-22', dow:'Mié', pred:3913, low:3600, high:4226, WM:1435, CC:1104, UMR:787,  TT:198, resto:389},
+  {fecha:'2026-04-23', dow:'Jue', pred:3567, low:3282, high:3852, WM:1308, CC:1006, UMR:717,  TT:180, resto:356},
+  {fecha:'2026-04-24', dow:'Vie', pred:3428, low:3154, high:3702, WM:1257, CC:967,  UMR:689,  TT:173, resto:342}
+];
+
+// ── BUILD 14 DÍAS ─────────────────────────────────────────────────
+function build14dias() {
+  // ── KPIs dinámicos (HOY, MAÑANA, TOTAL, PICO) ──────────────
+  build14diasKPIs();
+
+  const labels  = PROJ14.map(d => { const p=d.fecha.split('-'); return p[2]+'/'+p[1]+' '+d.dow; });
+  const preds   = PROJ14.map(d => d.pred);
+  const highs   = PROJ14.map(d => d.high);
+  const lows    = PROJ14.map(d => d.low);
+  const dowColors = PROJ14.map(d => {
+    if(d.dow==='Lun') return 'rgba(52,211,153,.85)';
+    if(d.dow==='Vie') return 'rgba(248,113,113,.75)';
+    return 'rgba(59,130,246,.75)';
+  });
+
+  killChart('14dias');
+  charts['14dias'] = new Chart(document.getElementById('chart14dias'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Forecast', data: preds,
+          backgroundColor: dowColors,
+          borderRadius: 6, borderSkipped: false, order: 2
+        },
+        {
+          label: 'Banda alta', data: highs, type: 'line',
+          borderColor: 'rgba(167,139,250,.5)', borderWidth: 1.5,
+          borderDash: [4,3], pointRadius: 0, fill: '+1',
+          backgroundColor: 'rgba(167,139,250,.06)', order: 1
+        },
+        {
+          label: 'Banda baja', data: lows, type: 'line',
+          borderColor: 'rgba(167,139,250,.5)', borderWidth: 1.5,
+          borderDash: [4,3], pointRadius: 0, fill: false, order: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#94A3B8', font: { size: 11 } } },
+        tooltip: {
+          backgroundColor: '#1a2235', borderColor: '#1f2d45', borderWidth: 1,
+          callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw)}` }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#64748B', font: { size: 10 } }, grid: { display: false } },
+        y: { ticks: { color: '#64748B', font: { size: 10 }, callback: v => v.toLocaleString('es-CL') }, grid: { color: '#1f2d45' } }
+      }
+    }
+  });
+
+  // Gráfico retail 14 días (stacked)
+  killChart('14retail');
+  charts['14retail'] = new Chart(document.getElementById('chart14retail'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Walmart',        data: PROJ14.map(d=>d.WM),    backgroundColor: '#3B82F6CC', borderRadius:0, borderSkipped:false },
+        { label: 'Cencosud',       data: PROJ14.map(d=>d.CC),    backgroundColor: '#34D399CC', borderRadius:0, borderSkipped:false },
+        { label: 'U/A/S', data: PROJ14.map(d=>d.UMR), backgroundColor: '#F87171CC', borderRadius:0, borderSkipped:false },
+        { label: 'Tottus',         data: PROJ14.map(d=>d.TT),    backgroundColor: '#FBBF24CC', borderRadius:0, borderSkipped:false },
+        { label: 'Resto',          data: PROJ14.map(d=>d.resto),  backgroundColor: '#64748BCC', borderRadius:4, borderSkipped:false }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: { labels: { color: '#94A3B8', font: { size: 10 }, boxWidth: 10 } },
+        tooltip: { mode: 'index', callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw)}` } }
+      },
+      scales: {
+        x: { stacked: true, ticks: { color: '#64748B', font: { size: 9 } }, grid: { display: false } },
+        y: { stacked: true, ticks: { color: '#64748B', font: { size: 10 }, callback: v => v.toLocaleString('es-CL') }, grid: { color: '#1f2d45' } }
+      }
+    }
+  });
+
+  // Tabla detallada
+  const tbl = document.getElementById('tabla14dias');
+  tbl.innerHTML = `<thead><tr>
+    <th>Fecha</th><th>Día</th><th>Forecast</th><th>Banda −8%</th><th>Banda +8%</th>
+    <th style="color:#3B82F6">Walmart</th><th style="color:#34D399">Cencosud</th>
+    <th style="color:#F87171">U/A/S</th><th style="color:#FBBF24">Tottus</th><th>Resto</th>
+  </tr></thead>`;
+  const tbody = document.createElement('tbody');
+  const hoy = '2026-04-06';
+  const man = '2026-04-07';
+  PROJ14.forEach(d => {
+    const tr = document.createElement('tr');
+    const esHoy = d.fecha === hoy;
+    const esMañana = d.fecha === man;
+    const dowColor = d.dow==='Lun'?'var(--green)':d.dow==='Vie'?'var(--red)':'var(--text2)';
+    tr.style.background = esHoy ? 'rgba(59,130,246,.08)' : esMañana ? 'rgba(52,211,153,.06)' : '';
+    const p = d.fecha.split('-');
+    tr.innerHTML = `
+      <td><strong style="color:${esHoy?'var(--accent2)':esMañana?'var(--green)':'var(--text)'}">${p[2]}/${p[1]}</strong>${esHoy?' <span style="font-size:9px;color:var(--accent2)">HOY</span>':esMañana?' <span style="font-size:9px;color:var(--green)">MÑN</span>':''}</td>
+      <td style="color:${dowColor};font-weight:600">${d.dow}</td>
+      <td><strong style="color:var(--accent2)">${fmt(d.pred)}</strong></td>
+      <td style="color:var(--muted)">${fmt(d.low)}</td>
+      <td style="color:var(--muted)">${fmt(d.high)}</td>
+      <td style="color:#3B82F6">${fmt(d.WM)}</td>
+      <td style="color:#34D399">${fmt(d.CC)}</td>
+      <td style="color:#F87171">${fmt(d.UMR)}</td>
+      <td style="color:#FBBF24">${fmt(d.TT)}</td>
+      <td style="color:#64748B">${fmt(d.resto)}</td>`;
+    tbody.appendChild(tr);
+  });
+  // Fila total
+  const totRow = document.createElement('tr');
+  totRow.style.borderTop = '2px solid var(--border)';
+  totRow.style.fontWeight = '700';
+  const total14 = PROJ14.reduce((s,d)=>s+d.pred,0);
+  totRow.innerHTML = `<td colspan="2" style="color:var(--text2)">TOTAL 14 días hábiles</td>
+    <td><strong style="color:var(--purple)">${fmt(total14)}</strong></td>
+    <td style="color:var(--muted)">${fmt(Math.round(total14*.92))}</td>
+    <td style="color:var(--muted)">${fmt(Math.round(total14*1.08))}</td>
+    <td style="color:#3B82F6">${fmt(PROJ14.reduce((s,d)=>s+d.WM,0))}</td>
+    <td style="color:#34D399">${fmt(PROJ14.reduce((s,d)=>s+d.CC,0))}</td>
+    <td style="color:#F87171">${fmt(PROJ14.reduce((s,d)=>s+d.UMR,0))}</td>
+    <td style="color:#FBBF24">${fmt(PROJ14.reduce((s,d)=>s+d.TT,0))}</td>
+    <td style="color:#64748B">${fmt(PROJ14.reduce((s,d)=>s+d.resto,0))}</td>`;
+  tbody.appendChild(totRow);
+  tbl.appendChild(tbody);
+
+  // Insight
+  document.getElementById('insight-14dias').innerHTML = `
+    📅 <strong>Lectura ejecutiva · 07–24 Abr 2026:</strong>
+    Para <strong style="color:var(--accent2)">hoy (Lun 06 Abr)</strong> se proyectan <strong style="color:var(--accent2)">${fmt(4868)} pallets</strong>
+    y para <strong style="color:var(--green)">mañana (Mar 07 Abr)</strong> <strong style="color:var(--green)">${fmt(3646)} pallets</strong>.
+    El período de 15 días hábiles acumula un total estimado de <strong style="color:var(--purple)">${fmt(58961)} pallets</strong>.
+    Los <strong style="color:var(--green)">Lunes</strong> son históricamente los días de mayor volumen (~4.900 pallets),
+    mientras que los <strong style="color:var(--red)">Viernes</strong> son los más bajos (~3.460 pallets).
+    <strong>Walmart</strong> concentra el <strong>36.7%</strong> del volumen proyectado,
+    seguido por <strong>Cencosud</strong> (28.2%) y <strong>U/A/S</strong> (20.1%).
+    Banda de confianza: <strong>±8%</strong> basada en el accuracy histórico del modelo.`;
+}
+
+// Update footer text
+// Footer ya actualizado en HTML
+
+buildResumen();
+
+// ══════════════════════════════════════════════════════════════════
+// AGENTE IA
+// ══════════════════════════════════════════════════════════════════
+let agentOpen=true, agentApiKey="backend", agentHistory=[], agentTyping=false;
+
+function toggleAgent() {
+  agentOpen = !agentOpen;
+  document.getElementById('agent-panel').classList.toggle('open', agentOpen);
+  document.getElementById('bubble-icon-chat').style.display  = agentOpen?'none':'block';
+  document.getElementById('bubble-icon-close').style.display = agentOpen?'block':'none';
+  document.getElementById('agent-unread').style.display = 'none';
+  if(agentOpen) {
+    } else {
+      if(agentHistory.length===0) showWelcome();
+      setTimeout(()=>{ const m=document.getElementById('agent-messages'); m.scrollTop=m.scrollHeight; },100);
+    }
+  }
+
+
+function saveApiKey() {
+  const val = document.getElementById('api-key-input').value.trim();
+  if(!val.startsWith('sk-')) { document.getElementById('api-key-input').style.borderColor='#F87171'; return; }
+  agentApiKey = val;
+  document.getElementById('agent-setup').classList.remove('visible');
+  document.getElementById('agent-messages').style.display    = 'flex';
+  document.getElementById('agent-suggestions').style.display = 'flex';
+  document.getElementById('agent-input-wrap').style.display  = 'flex';
+  showWelcome();
+}
+
+function showWelcome() {
+  appendMsg('ai', `¡Hola! Soy el asistente de <strong>REDTEC</strong>. Tengo acceso completo a los datos del dashboard:<br><br>
+· <span class="highlight">1.214.695 pallets</span> retiros Ene 2025–Mar 2026<br>
+· <span class="highlight">7 grupos retail</span> (U/A/S fusionado) con historial mensual completo<br>
+· <span class="highlight">Modelo con 91.4% accuracy</span> validado en 12 meses<br>
+· <span class="highlight">Proyecciones</span> Abr–Dic 2026<br><br>¿Qué quieres saber?`);
+}
+
+function buildContext() {
+  const totalRetiros = HISTORICO.reduce((s,d)=>s+(d.real_total||0),0);
+  const mejorAcc = HISTORICO.filter(d=>d.accuracy).reduce((a,b)=>a.accuracy>b.accuracy?a:b);
+  const peorAcc  = HISTORICO.filter(d=>d.accuracy).reduce((a,b)=>a.accuracy<b.accuracy?a:b);
+  const totalProj= PROYECCIONES.reduce((s,d)=>s+d.pred_total,0);
+  const region   = REGION_ACTIVA==='Santiago'?'Santiago + Norte':REGION_ACTIVA==='Talca'?'Talca':'Todas las regiones';
+  const retailTotales = RETAIL_KEYS.map((r,i)=>({nombre:RETAILERS[i],total:HISTORICO.reduce((s,d)=>s+(d[`real_${r}`]||0),0)})).sort((a,b)=>b.total-a.total);
+  return `Eres un asistente especializado en análisis de retiros de pallets para REDTEC, empresa de logística en Chile. Responde en español, directo y conciso, con números concretos. Útil para un gerente general.
+
+DATOS DASHBOARD (SAP real, Ene 2025–Mar 2026):
+- Total retiros: ${totalRetiros.toLocaleString('es-CL')} pallets | Promedio mensual: ${Math.round(totalRetiros/15).toLocaleString('es-CL')} | Región activa: ${region}
+
+MODELO: Accuracy 91.4% (12 meses) | Mejor: ${mejorAcc.mes} ${mejorAcc.accuracy}% | Peor: ${peorAcc.mes} ${peorAcc.accuracy}% | Tasa retorno: 85.5%±4.1%
+
+RETAILERS:
+${retailTotales.map((r,i)=>`${i+1}. ${r.nombre}: ${r.total.toLocaleString('es-CL')} (${(r.total/totalRetiros*100).toFixed(1)}%)`).join(' | ')}
+
+HISTÓRICO MENSUAL:
+${HISTORICO.map(d=>`${d.mes}: real=${d.real_total?.toLocaleString('es-CL')||'N/A'} forecast=${d.pred_total?.toLocaleString('es-CL')||'—'} acc=${d.accuracy!=null?d.accuracy+'%':'—'} WM=${d.real_Walmart||0} CC=${d.real_Cencosud||0} UAS=${d.real_UAS||0} TT=${d.real_Tottus||0}`).join('\n')}
+
+PROYECCIONES ABR–DIC 2026:
+${PROYECCIONES.map(d=>`${d.mes}: ${d.pred_total.toLocaleString('es-CL')} (±8%) WM:${d.pred_Walmart.toLocaleString('es-CL')} CC:${d.pred_Cencosud.toLocaleString('es-CL')} UAS:${d.pred_UAS.toLocaleString('es-CL')}`).join('\n')}
+Total proyectado: ${totalProj.toLocaleString('es-CL')} pallets
+
+REGIONES: Santiago+Norte=1.104.424 (90.3%, todos retailers) | Talca=105.339 (8.6%, SOLO Cencosud+Unimarc)
+NEGOCIO: Emite pallets→cliente transfiere a retail→REDTEC retira (30-60 días). Lo no transferido sigue en arriendo.`;
+}
+
+function appendMsg(role, html) {
+  const wrap=document.createElement('div'); wrap.className=`msg-wrap ${role==='user'?'user':''}`;
+  const av=document.createElement('div'); av.className=`msg-avatar-small ${role==='ai'?'ai':'usr'}`; av.textContent=role==='ai'?'IA':'Tú';
+  const bubble=document.createElement('div'); bubble.className=`msg-bubble ${role==='ai'?'ai':'user'}`; bubble.innerHTML=html;
+  wrap.appendChild(av); wrap.appendChild(bubble);
+  const msgs=document.getElementById('agent-messages'); msgs.appendChild(wrap); msgs.scrollTop=msgs.scrollHeight;
+}
+
+function appendTyping() {
+  const wrap=document.createElement('div'); wrap.className='msg-wrap'; wrap.id='typing-indicator';
+  wrap.innerHTML=`<div class="msg-avatar-small ai">IA</div><div class="msg-bubble ai"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
+  document.getElementById('agent-messages').appendChild(wrap); document.getElementById('agent-messages').scrollTop=99999;
+}
+
+function removeTyping() { const el=document.getElementById('typing-indicator'); if(el)el.remove(); }
+
+async function sendMessage() {
+  if(agentTyping||!agentApiKey) return;
+  const input=document.getElementById('agent-input');
+  const text=input.value.trim(); if(!text) return;
+  document.getElementById('agent-suggestions').style.display='none';
+  input.value=''; input.style.height='auto';
+  appendMsg('user', text);
+  agentHistory.push({role:'user',content:text});
+  agentTyping=true; document.getElementById('agent-send-btn').disabled=true;
+  appendTyping();
+  try {
+    const res=await fetch('https://redtecagente-e9hahhgvc0enc9an.westus3-01.azurewebsites.net/api/chat',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,system:buildContext(),messages:agentHistory})
+    });
+    const data=await res.json(); removeTyping();
+    if(data.error) { appendMsg('ai',`<span style="color:#F87171">⚠ ${data.error.message}</span>`); agentHistory.pop(); }
+    else {
+      const reply=data.content[0].text;
+      appendMsg('ai', reply.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>'));
+      agentHistory.push({role:'assistant',content:reply});
+    }
+  } catch(e) { removeTyping(); appendMsg('ai','<span style="color:#F87171">⚠ No se pudo conectar. Verifica tu API key.</span>'); agentHistory.pop(); }
+  agentTyping=false; document.getElementById('agent-send-btn').disabled=false; document.getElementById('agent-input').focus();
+}
+
+function sendSuggestion(el) { document.getElementById('agent-input').value=el.textContent; sendMessage(); }
+function clearChat() { agentHistory=[]; document.getElementById('agent-messages').innerHTML=''; document.getElementById('agent-suggestions').style.display='flex'; showWelcome(); }
+function autoResize(el) { el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,90)+'px'; }
+
+setTimeout(()=>{ document.getElementById('agent-unread').style.display='block'; }, 2000);
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+
+// ══════════════════════════════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════════════════════════════
+const HISTORICO = [
+  {mes:"2025-01",real_total:82479,pred_total:null,error_pct:null,accuracy:null,real_Walmart:31779,real_Cencosud:22100,real_UAS:17898,real_Tottus:4460,real_Prisa:1045,real_Intercarry:430,real_Otro:4767},
+  {mes:"2025-02",real_total:67746,pred_total:null,error_pct:null,accuracy:null,real_Walmart:26635,real_Cencosud:17968,real_UAS:13183,real_Tottus:3720,real_Prisa:595,real_Intercarry:277,real_Otro:5368},
+  {mes:"2025-03",real_total:77813,pred_total:null,error_pct:null,accuracy:null,real_Walmart:32103,real_Cencosud:22485,real_UAS:14985,real_Tottus:3180,real_Prisa:768,real_Intercarry:328,real_Otro:3964},
+  {mes:"2025-04",real_total:80685,pred_total:84777,error_pct:5.1,accuracy:94.9,pred_Walmart:32113,pred_Cencosud:22575,pred_UAS:17832,pred_Tottus:4337,pred_Prisa:1112,pred_Intercarry:461,pred_Otro:6288,real_Walmart:31349,real_Cencosud:22705,real_UAS:15360,real_Tottus:3940,real_Prisa:936,real_Intercarry:841,real_Otro:5554},
+  {mes:"2025-05",real_total:79054,pred_total:84530,error_pct:6.9,accuracy:93.1,pred_Walmart:31890,pred_Cencosud:22716,pred_UAS:17465,pred_Tottus:4044,pred_Prisa:1182,pred_Intercarry:585,pred_Otro:6647,real_Walmart:31141,real_Cencosud:22904,real_UAS:14489,real_Tottus:3560,real_Prisa:931,real_Intercarry:821,real_Otro:5208},
+  {mes:"2025-06",real_total:81421,pred_total:82715,error_pct:1.6,accuracy:98.4,pred_Walmart:31461,pred_Cencosud:22838,pred_UAS:16627,pred_Tottus:3728,pred_Prisa:1213,pred_Intercarry:743,pred_Otro:6105,real_Walmart:29602,real_Cencosud:23402,real_UAS:18106,real_Tottus:3800,real_Prisa:719,real_Intercarry:752,real_Otro:5040},
+  {mes:"2025-07",real_total:87636,pred_total:75131,error_pct:-14.3,accuracy:85.7,pred_Walmart:27951,pred_Cencosud:20959,pred_UAS:16616,pred_Tottus:3403,pred_Prisa:1075,pred_Intercarry:727,pred_Otro:5399,real_Walmart:32569,real_Cencosud:23412,real_UAS:16870,real_Tottus:4040,real_Prisa:1777,real_Intercarry:728,real_Otro:8240},
+  {mes:"2025-08",real_total:72335,pred_total:83432,error_pct:15.3,accuracy:84.7,pred_Walmart:30912,pred_Cencosud:23301,pred_UAS:18978,pred_Tottus:3755,pred_Prisa:1259,pred_Intercarry:760,pred_Otro:6468,real_Walmart:25394,real_Cencosud:21751,real_UAS:15244,real_Tottus:3820,real_Prisa:935,real_Intercarry:564,real_Otro:4627},
+  {mes:"2025-09",real_total:80100,pred_total:78630,error_pct:-1.8,accuracy:98.2,pred_Walmart:28150,pred_Cencosud:22589,pred_UAS:16477,pred_Tottus:3762,pred_Prisa:1162,pred_Intercarry:655,pred_Otro:5835,real_Walmart:30389,real_Cencosud:24096,real_UAS:15740,real_Tottus:3720,real_Prisa:1377,real_Intercarry:451,real_Otro:4327},
+  {mes:"2025-10",real_total:86105,pred_total:82604,error_pct:-4.1,accuracy:95.9,pred_Walmart:29907,pred_Cencosud:23523,pred_UAS:16896,pred_Tottus:3958,pred_Prisa:1214,pred_Intercarry:562,pred_Otro:6544,real_Walmart:32626,real_Cencosud:23370,real_UAS:16956,real_Tottus:4000,real_Prisa:1123,real_Intercarry:607,real_Otro:7423},
+  {mes:"2025-11",real_total:78137,pred_total:88599,error_pct:13.4,accuracy:86.6,pred_Walmart:32021,pred_Cencosud:25441,pred_UAS:19006,pred_Tottus:4197,pred_Prisa:1369,pred_Intercarry:597,pred_Otro:6967,real_Walmart:26599,real_Cencosud:24380,real_UAS:16654,real_Tottus:4060,real_Prisa:1357,real_Intercarry:494,real_Otro:4593},
+  {mes:"2025-12",real_total:87709,pred_total:79571,error_pct:-9.3,accuracy:90.7,pred_Walmart:28755,pred_Cencosud:22805,pred_UAS:16480,pred_Tottus:3773,pred_Prisa:1226,pred_Intercarry:537,pred_Otro:6196,real_Walmart:31153,real_Cencosud:26677,real_UAS:18542,real_Tottus:4340,real_Prisa:1460,real_Intercarry:487,real_Otro:5050},
+  {mes:"2026-01",real_total:88972,pred_total:92306,error_pct:3.7,accuracy:96.3,pred_Walmart:33414,pred_Cencosud:26458,pred_UAS:19080,pred_Tottus:4393,pred_Prisa:1420,pred_Intercarry:617,pred_Otro:6924,real_Walmart:30867,real_Cencosud:27428,real_UAS:18322,real_Tottus:4560,real_Prisa:1900,real_Intercarry:435,real_Otro:5460},
+  {mes:"2026-02",real_total:79295,pred_total:72625,error_pct:-8.4,accuracy:91.6,pred_Walmart:26208,pred_Cencosud:20847,pred_UAS:15030,pred_Tottus:3462,pred_Prisa:1118,pred_Intercarry:488,pred_Otro:5472,real_Walmart:28538,real_Cencosud:22989,real_UAS:16421,real_Tottus:3979,real_Prisa:926,real_Intercarry:382,real_Otro:6060},
+  {mes:"2026-03",real_total:73264,pred_total:87075,error_pct:18.9,accuracy:81.1,pred_Walmart:31397,pred_Cencosud:25080,pred_UAS:18074,pred_Tottus:4157,pred_Prisa:1342,pred_Intercarry:587,pred_Otro:6438,real_Walmart:27560,real_Cencosud:19898,real_UAS:14287,real_Tottus:3838,real_Prisa:1198,real_Intercarry:555,real_Otro:5928}
+];
+
+const PROYECCIONES = [
+  {mes:"2026-04",pred_total:82269,pred_Walmart:29515,pred_Cencosud:24236,pred_UAS:16869,pred_Tottus:4177,pred_Prisa:1370,pred_Intercarry:465,pred_Otro:5837},
+  {mes:"2026-05",pred_total:80606,pred_Walmart:28918,pred_Cencosud:23746,pred_UAS:16543,pred_Tottus:4093,pred_Prisa:1343,pred_Intercarry:455,pred_Otro:5719},
+  {mes:"2026-06",pred_total:83019,pred_Walmart:29784,pred_Cencosud:24457,pred_UAS:17036,pred_Tottus:4215,pred_Prisa:1383,pred_Intercarry:469,pred_Otro:5890},
+  {mes:"2026-07",pred_total:89356,pred_Walmart:32057,pred_Cencosud:26324,pred_UAS:18339,pred_Tottus:4537,pred_Prisa:1488,pred_Intercarry:505,pred_Otro:6339},
+  {mes:"2026-08",pred_total:73755,pred_Walmart:26460,pred_Cencosud:21728,pred_UAS:15137,pred_Tottus:3745,pred_Prisa:1229,pred_Intercarry:416,pred_Otro:5233},
+  {mes:"2026-09",pred_total:81672,pred_Walmart:29301,pred_Cencosud:24060,pred_UAS:16761,pred_Tottus:4147,pred_Prisa:1360,pred_Intercarry:461,pred_Otro:5794},
+  {mes:"2026-10",pred_total:87795,pred_Walmart:31497,pred_Cencosud:25864,pred_UAS:18017,pred_Tottus:4458,pred_Prisa:1462,pred_Intercarry:496,pred_Otro:6228},
+  {mes:"2026-11",pred_total:79671,pred_Walmart:28583,pred_Cencosud:23471,pred_UAS:16351,pred_Tottus:4045,pred_Prisa:1327,pred_Intercarry:450,pred_Otro:5652},
+  {mes:"2026-12",pred_total:89430,pred_Walmart:32084,pred_Cencosud:26346,pred_UAS:18352,pred_Tottus:4541,pred_Prisa:1490,pred_Intercarry:505,pred_Otro:6345}
+];
+
+const RETAILERS = ['Walmart','Cencosud','U/A/S','Tottus','Prisa','Intercarry','Otro'];
+const RETAIL_KEYS = ['Walmart','Cencosud','UAS','Tottus','Prisa','Intercarry','Otro'];
+// U/A/S = Unimarc/Rendic + Alvi + SMU/M10 (mismo manejo logístico)
+const RETAIL_COLORS = {
+  Walmart:'#3B82F6',Cencosud:'#34D399',UAS:'#F87171',
+  Tottus:'#FBBF24',Prisa:'#FB923C',
+  Intercarry:'#2DD4BF',Otro:'#64748B'
 };
 
-// Mapeo bodegaOrigenStr → región
-function getRegionFromBodega(bodega) {
-  var b = (bodega||'').toUpperCase();
-  if (b.indexOf('TALCA') >= 0) return 'Talca';
-  if (b.indexOf('COQUIMBO') >= 0) return 'Santiago'; // Coquimbo virtual → Santiago
-  return 'Santiago'; // Default REDTEC SANTIAGO + otros
-}
+// ── DATOS POR REGIÓN ─────────────────────────────────────────────
+const REGION_DATA = {
+  Santiago: [
+    {mes:"2025-01",total:76252,Walmart:31779,Cencosud:20703,UAS:13529,Tottus:4460,Prisa:1045,Intercarry:430,Otro:4506},
+    {mes:"2025-02",total:62647,Walmart:26635,Cencosud:16608,UAS:9064,Tottus:3720,Prisa:595,Intercarry:277,Otro:4800},
+    {mes:"2025-03",total:71487,Walmart:32103,Cencosud:19393,UAS:11932,Tottus:3180,Prisa:768,Intercarry:328,Otro:3665},
+    {mes:"2025-04",total:75237,Walmart:31349,Cencosud:20736,UAS:12373,Tottus:3940,Prisa:936,Intercarry:841,Otro:5062},
+    {mes:"2025-05",total:72975,Walmart:31141,Cencosud:20320,UAS:11242,Tottus:3560,Prisa:931,Intercarry:821,Otro:4960},
+    {mes:"2025-06",total:75892,Walmart:29602,Cencosud:20240,UAS:15820,Tottus:3800,Prisa:719,Intercarry:752,Otro:4999},
+    {mes:"2025-07",total:79770,Walmart:32569,Cencosud:20352,UAS:13055,Tottus:4040,Prisa:1777,Intercarry:728,Otro:7249},
+    {mes:"2025-08",total:66231,Walmart:25394,Cencosud:19728,UAS:11298,Tottus:3820,Prisa:935,Intercarry:564,Otro:4492},
+    {mes:"2025-09",total:71970,Walmart:30389,Cencosud:20352,UAS:11530,Tottus:3720,Prisa:1377,Intercarry:451,Otro:4151},
+    {mes:"2025-10",total:76411,Walmart:32626,Cencosud:19424,UAS:12506,Tottus:4000,Prisa:913,Intercarry:607,Otro:6335},
+    {mes:"2025-11",total:70369,Walmart:26599,Cencosud:20064,UAS:13502,Tottus:4060,Prisa:1207,Intercarry:494,Otro:4443},
+    {mes:"2025-12",total:79930,Walmart:31153,Cencosud:23600,UAS:13950,Tottus:4340,Prisa:1280,Intercarry:487,Otro:4760},
+    {mes:"2026-01",total:81023,Walmart:30867,Cencosud:22668,UAS:15576,Tottus:4560,Prisa:1900,Intercarry:435,Otro:5017},
+    {mes:"2026-02",total:71423,Walmart:28287,Cencosud:20099,UAS:12921,Tottus:3979,Prisa:926,Intercarry:382,Otro:4820},
+    {mes:"2026-03",total:67117,Walmart:27560,Cencosud:17042,UAS:11624,Tottus:3838,Prisa:1198,Intercarry:555,Otro:5300}
+  ],
+  Talca: [
+    {mes:"2025-01",total:6227,Walmart:0,Cencosud:1397,UAS:4569,Tottus:0,Prisa:0,Intercarry:0,Otro:261},
+    {mes:"2025-02",total:5099,Walmart:0,Cencosud:1360,UAS:3171,Tottus:0,Prisa:0,Intercarry:0,Otro:568},
+    {mes:"2025-03",total:6326,Walmart:0,Cencosud:3092,UAS:2935,Tottus:0,Prisa:0,Intercarry:0,Otro:299},
+    {mes:"2025-04",total:5448,Walmart:0,Cencosud:1969,UAS:2987,Tottus:0,Prisa:0,Intercarry:0,Otro:492},
+    {mes:"2025-05",total:6079,Walmart:0,Cencosud:2584,UAS:3247,Tottus:0,Prisa:0,Intercarry:0,Otro:248},
+    {mes:"2025-06",total:5529,Walmart:0,Cencosud:3162,UAS:2326,Tottus:0,Prisa:0,Intercarry:0,Otro:41},
+    {mes:"2025-07",total:7866,Walmart:0,Cencosud:3060,UAS:3815,Tottus:0,Prisa:0,Intercarry:0,Otro:991},
+    {mes:"2025-08",total:6104,Walmart:0,Cencosud:2023,UAS:3946,Tottus:0,Prisa:0,Intercarry:0,Otro:135},
+    {mes:"2025-09",total:8130,Walmart:0,Cencosud:3744,UAS:4210,Tottus:0,Prisa:0,Intercarry:0,Otro:176},
+    {mes:"2025-10",total:9694,Walmart:0,Cencosud:3946,UAS:4660,Tottus:0,Prisa:210,Intercarry:0,Otro:1088},
+    {mes:"2025-11",total:7768,Walmart:0,Cencosud:4316,UAS:3152,Tottus:0,Prisa:150,Intercarry:0,Otro:150},
+    {mes:"2025-12",total:7779,Walmart:0,Cencosud:3077,UAS:4317,Tottus:0,Prisa:180,Intercarry:0,Otro:290},
+    {mes:"2026-01",total:7949,Walmart:0,Cencosud:4760,UAS:2746,Tottus:0,Prisa:0,Intercarry:0,Otro:443},
+    {mes:"2026-02",total:7872,Walmart:251,Cencosud:2890,UAS:3591,Tottus:0,Prisa:0,Intercarry:0,Otro:1240},
+    {mes:"2026-03",total:6147,Walmart:0,Cencosud:2856,UAS:2663,Tottus:0,Prisa:0,Intercarry:0,Otro:628}
+  ]
+};
 
-function clienteToRetail(nombre) {
-  var n = (nombre||'').toUpperCase();
-  for (var key in CLIENTE_RETAIL) {
-    if (n.indexOf(key) >= 0) return CLIENTE_RETAIL[key];
-  }
-  return 'Otro';
-}
+// ── ESTADO REGIÓN ─────────────────────────────────────────────────
+let REGION_ACTIVA = 'todas';
 
-// Datos del API actual (se actualizan al cargar)
-var API_DATA_RAW  = [];
-var API_RESUMEN   = null; // resumen calculado del período
-
-function loadApiData() {
-  var btn = document.getElementById('api-btn');
-  var badge = document.getElementById('api-badge');
-  btn.disabled = true; btn.textContent = 'Cargando...';
-  badge.className = 'api-badge loading';
-  badge.textContent = 'Consultando...';
-
-  var d1 = document.getElementById('api-d1').value;
-  var d2 = document.getElementById('api-d2').value;
-  var url = (isLocal||isDev)
-    ? API_DIRECT + '?fechaInicial=' + d1 + '&fechaFinal=' + d2
-    : API_PROXY  + '?fechaInicio='  + d1 + '&fechaFin='   + d2;
-
-  fetch(url, {headers:{'Accept':'application/json'}})
-    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
-    .then(function(data) {
-      API_DATA_RAW = Array.isArray(data) ? data : [];
-      // Filtrar solo retiros para el R3
-      var retiros = API_DATA_RAW.filter(function(r){
-        return (r.operacion||'').trim().toLowerCase() === 'retiro';
-      });
-      procesarApiData(retiros, d1, d2);
-      btn.disabled = false; btn.textContent = '⟳ Cargar datos reales';
-      badge.className = 'api-badge';
-      badge.textContent = retiros.length.toLocaleString('es-CL') + ' retiros';
-      document.getElementById('data-dot').className = 'data-mode-dot live';
-      document.getElementById('data-mode-txt').textContent = 'En vivo: ' + d1 + ' → ' + d2;
-      document.getElementById('hdr-updated').textContent = 'API: ' + new Date().toLocaleTimeString('es-CL');
-      document.getElementById('hdr-periodo').textContent = d1 + ' → ' + d2;
-    })
-    .catch(function(e) {
-      btn.disabled = false; btn.textContent = '⟳ Cargar datos reales';
-      badge.className = 'api-badge error';
-      badge.textContent = 'Error: ' + e.message;
-    });
-}
-
-function procesarApiData(retiros, d1, d2) {
-  if (!retiros.length) return;
-
-  // Agrupar por mes y retail
-  var byMes = {};
-  retiros.forEach(function(r) {
-    var fecha = (r.fechaRequerida||r.horaIngreso||'').substring(0,7); // YYYY-MM
-    if (!fecha) return;
-    var retail = clienteToRetail(r.clienteOrigenStr);
-    var conf   = (r.cantidadConfirmada||0);
-    var region = getRegionFromBodega(r.bodegaOrigenStr||r.bodegaDestinoStr||'');
-    if (!byMes[fecha]) byMes[fecha] = {
-      mes:fecha, total:0, region_Santiago:0, region_Talca:0,
-      Walmart:0, Cencosud:0, UAS:0, Tottus:0, Prisa:0, Intercarry:0, Otro:0
-    };
-    byMes[fecha].total += conf;
-    byMes[fecha][retail] = (byMes[fecha][retail]||0) + conf;
-    byMes[fecha]['region_'+region] = (byMes[fecha]['region_'+region]||0) + conf;
-  });
-
-  var meses = Object.keys(byMes).sort();
-
-  // Inyectar datos reales del API en HISTORICO
-  // Si el mes ya existe, actualizar; si no, agregar
-  meses.forEach(function(mes) {
-    var d = byMes[mes];
-    var existing = HISTORICO.find(function(h){ return h.mes === mes; });
-    if (existing) {
-      // Actualizar con datos reales del API
-      existing.real_total     = d.total;
-      existing.real_Walmart   = d.Walmart;
-      existing.real_Cencosud  = d.Cencosud;
-      existing.real_UAS       = d.UAS;
-      existing.real_Tottus    = d.Tottus;
-      existing.real_Prisa     = d.Prisa;
-      existing.real_Intercarry= d.Intercarry;
-      existing.real_Otro      = d.Otro;
-    } else {
-      HISTORICO.push({
-        mes: mes,
-        real_total:     d.total,
-        pred_total:     null,
-        error_pct:      null,
-        accuracy:       null,
-        real_Walmart:   d.Walmart,
-        real_Cencosud:  d.Cencosud,
-        real_UAS:       d.UAS,
-        real_Tottus:    d.Tottus,
-        real_Prisa:     d.Prisa,
-        real_Intercarry:d.Intercarry,
-        real_Otro:      d.Otro
-      });
-    }
-  });
-  HISTORICO.sort(function(a,b){ return a.mes.localeCompare(b.mes); });
-
-  // Actualizar REGION_DATA con datos del API
-  meses.forEach(function(mes) {
-    var d = byMes[mes];
-    var stgo_total  = d.region_Santiago || 0;
-    var talca_total = d.region_Talca    || 0;
-    var pct_stgo    = ['Walmart','Cencosud','UAS','Tottus','Prisa','Intercarry','Otro'];
-    // Agregar/actualizar en REGION_DATA Santiago
-    var existStgo = REGION_DATA.Santiago.find(function(s){return s.mes===mes;});
-    if (existStgo) {
-      existStgo.total = stgo_total;
-    } else if (stgo_total > 0) {
-      REGION_DATA.Santiago.push({mes:mes, total:stgo_total,
-        Walmart:Math.round(d.Walmart*.9), Cencosud:Math.round(d.Cencosud*.92),
-        UAS:Math.round(d.UAS*.85), Tottus:d.Tottus, Prisa:d.Prisa,
-        Intercarry:d.Intercarry, Otro:d.Otro});
-    }
-    var existTal = REGION_DATA.Talca.find(function(t){return t.mes===mes;});
-    if (existTal) {
-      existTal.total = talca_total;
-    } else if (talca_total > 0) {
-      REGION_DATA.Talca.push({mes:mes, total:talca_total,
-        Walmart:Math.round(d.Walmart*.1), Cencosud:Math.round(d.Cencosud*.08),
-        UAS:Math.round(d.UAS*.15), Tottus:0, Prisa:0, Intercarry:0, Otro:0});
-    }
-  });
-
-  // Actualizar el KPI header del resumen
-  API_RESUMEN = {
-    totalRetiros: retiros.length,
-    totalPallets: retiros.reduce(function(s,r){return s+(r.cantidadConfirmada||0);},0),
-    totalSolicitado: retiros.reduce(function(s,r){return s+(r.cantidadSolicitada||0);},0),
-    pctCumplimiento: 0,
-    periodo: d1 + ' → ' + d2,
-    meses: meses
-  };
-  if (API_RESUMEN.totalSolicitado > 0)
-    API_RESUMEN.pctCumplimiento = Math.round((API_RESUMEN.totalPallets/API_RESUMEN.totalSolicitado)*100);
-
-  // Refrescar la tab activa
-  var activeTab = document.querySelector('.tab.active');
-  if (activeTab) activeTab.click();
-}
-
-// ═══════════════════════════════════════════════════════════════
-// FUNCIONES ORIGINALES DEL DASHBOARD R3
-// ═══════════════════════════════════════════════════════════════
 function setRegion(region, btn) {
   REGION_ACTIVA = region;
 
@@ -2348,20 +3360,231 @@ setTimeout(()=>{ document.getElementById('agent-unread').style.display='block'; 
 
 
 // ═══════════════════════════════════════════════════════════════
-// INIT CON FECHAS DINÁMICAS
+// KPIs DINÁMICOS — TAB PROYECCIÓN 14 DÍAS
+// Calcula HOY, MAÑANA, total y pico según fechas reales
 // ═══════════════════════════════════════════════════════════════
-window.addEventListener('DOMContentLoaded', function() {
-  // Fechas API: mes actual
+function build14diasKPIs() {
+  var MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  var DIAS  = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+
+  // Fecha de referencia = d1 del selector API (o hoy si no hay selector)
+  var d1Input = document.getElementById('api-d1');
+  var d2Input = document.getElementById('api-d2');
+  var refDate = new Date();                                     // fallback: hoy real
+  var endDate = null;
+
+  if (d1Input && d1Input.value) {
+    var parts = d1Input.value.split('-');
+    refDate = new Date(+parts[0], +parts[1]-1, +parts[2]);
+  }
+  if (d2Input && d2Input.value) {
+    var parts2 = d2Input.value.split('-');
+    endDate = new Date(+parts2[0], +parts2[1]-1, +parts2[2]);
+  }
+
+  // Convertir Date → string YYYY-MM-DD para comparar con PROJ14
+  function toYMD(dt) {
+    return dt.getFullYear() + '-'
+      + String(dt.getMonth()+1).padStart(2,'0') + '-'
+      + String(dt.getDate()).padStart(2,'0');
+  }
+
+  // Formato legible "14 Abr 2026 · Lunes"
+  function fmtLabel(ymd) {
+    var p = ymd.split('-');
+    var dt = new Date(+p[0], +p[1]-1, +p[2]);
+    return p[2] + ' ' + MESES[+p[1]-1] + ' ' + p[0] + ' · ' + DIAS[dt.getDay()];
+  }
+  function fmtCorto(ymd) {          // "14 Abr"
+    var p = ymd.split('-');
+    return p[2] + ' ' + MESES[+p[1]-1];
+  }
+
+  var refYMD = toYMD(refDate);
+  var endYMD = endDate ? toYMD(endDate) : null;
+
+  // ── HOY: primer registro de PROJ14 >= refDate ────────────────
+  var dHoy = PROJ14.find(function(d){ return d.fecha >= refYMD; });
+  if (!dHoy) dHoy = PROJ14[PROJ14.length-1];   // fallback: último disponible
+
+  // ── MAÑANA: siguiente en PROJ14 tras dHoy ───────────────────
+  var idxHoy = PROJ14.indexOf(dHoy);
+  var dMan   = PROJ14[idxHoy + 1] || null;
+
+  // ── PERÍODO: todos los PROJ14 entre d1 y d2 del selector ────
+  var periodoData = PROJ14.filter(function(d) {
+    if (d.fecha < refYMD) return false;
+    if (endYMD && d.fecha > endYMD) return false;
+    return true;
+  });
+  // Si el filtro no da nada, usar todos
+  if (!periodoData.length) periodoData = PROJ14;
+
+  var totalPeriodo = periodoData.reduce(function(s,d){ return s + d.pred; }, 0);
+  var dPico = periodoData.reduce(function(best,d){ return d.pred > best.pred ? d : best; }, periodoData[0]);
+
+  // ── PINTAR KPIs ──────────────────────────────────────────────
+  function set(id, val) { var el=document.getElementById(id); if(el) el.textContent=val; }
+
+  // HOY
+  set('kpi14-hoy-label',  '📅 ' + (refYMD === toYMD(new Date()) ? 'Hoy' : 'Desde') + ' · ' + fmtCorto(dHoy.fecha));
+  set('kpi14-hoy-val',    fmt(dHoy.pred));
+  set('kpi14-hoy-sub',    'pallets estimados · ' + dHoy.dow);
+  set('kpi14-hoy-banda',  'Banda: ' + fmt(dHoy.low) + ' – ' + fmt(dHoy.high));
+
+  // MAÑANA
+  if (dMan) {
+    set('kpi14-man-label',  '📅 Siguiente · ' + fmtCorto(dMan.fecha));
+    set('kpi14-man-val',    fmt(dMan.pred));
+    set('kpi14-man-sub',    'pallets estimados · ' + dMan.dow);
+    set('kpi14-man-banda',  'Banda: ' + fmt(dMan.low) + ' – ' + fmt(dMan.high));
+  }
+
+  // TOTAL período
+  set('kpi14-total-val',   fmt(totalPeriodo));
+  set('kpi14-total-sub',   'pallets en ' + periodoData.length + ' días hábiles');
+  set('kpi14-total-rango', fmtCorto(periodoData[0].fecha) + ' – ' + fmtCorto(periodoData[periodoData.length-1].fecha) + ' ' + periodoData[0].fecha.split('-')[0]);
+
+  // PICO
+  if (dPico) {
+    set('kpi14-pico-val',   fmt(dPico.pred));
+    set('kpi14-pico-sub',   'pallets · ' + dPico.dow + ' ' + fmtCorto(dPico.fecha));
+    set('kpi14-pico-banda', 'Banda: ' + fmt(dPico.low) + ' – ' + fmt(dPico.high));
+  }
+}
+// ═══════════════════════════════════════════════════════════════
+// INTEGRACIÓN API REAL — M3LINK
+// ═══════════════════════════════════════════════════════════════
+var API_PROXY  = '/api/ops';
+var API_DIRECT = 'https://apirdt1.azurewebsites.net/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRangoFechas';
+var isLocal = location.protocol === 'file:';
+var isDev   = ['localhost','127.0.0.1'].includes(location.hostname);
+
+var CLIENTE_RETAIL_MAP = {
+  'WALMART':'Walmart','CENCOSUD':'Cencosud','TOTTUS':'Tottus',
+  'ALVI':'UAS','UNIMARC':'UAS','RENDIC':'UAS','SMU':'UAS','M10':'UAS',
+  'PRISA':'Prisa','INTERCARRY':'Intercarry'
+};
+function clienteToRetail(nombre) {
+  var n = (nombre||'').toUpperCase();
+  for (var k in CLIENTE_RETAIL_MAP) { if (n.indexOf(k) >= 0) return CLIENTE_RETAIL_MAP[k]; }
+  return 'Otro';
+}
+function getRegion(bodega) {
+  var b = (bodega||'').toUpperCase();
+  if (b.indexOf('TALCA') >= 0) return 'Talca';
+  return 'Santiago';
+}
+
+function loadApiData() {
+  var btn = document.getElementById('api-btn');
+  var badge = document.getElementById('api-badge');
+  btn.disabled = true; btn.textContent = 'Cargando...';
+  badge.style.background = 'rgba(251,191,36,.12)';
+  badge.style.color = '#fcd34d';
+  badge.style.borderColor = 'rgba(251,191,36,.3)';
+  badge.textContent = 'Consultando...';
+
+  var d1 = document.getElementById('api-d1').value;
+  var d2 = document.getElementById('api-d2').value;
+  var url = (isLocal||isDev)
+    ? API_DIRECT + '?fechaInicial=' + d1 + '&fechaFinal=' + d2
+    : API_PROXY  + '?fechaInicio='  + d1 + '&fechaFin='   + d2;
+
+  fetch(url, {headers:{'Accept':'application/json'}})
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(function(data) {
+      var raw = Array.isArray(data) ? data : [];
+      var retiros = raw.filter(function(r){ return (r.operacion||'').trim().toLowerCase() === 'retiro'; });
+      procesarRetiros(retiros, d1, d2);
+      btn.disabled = false; btn.textContent = '⟳ Cargar datos reales';
+      badge.style.background = 'rgba(74,222,128,.12)';
+      badge.style.color = '#4ade80';
+      badge.style.borderColor = 'rgba(74,222,128,.3)';
+      badge.textContent = retiros.length.toLocaleString('es-CL') + ' retiros';
+      document.getElementById('data-mode-txt').textContent = 'En vivo: ' + d1 + ' → ' + d2;
+      document.getElementById('hdr-updated').textContent = 'API ' + new Date().toLocaleTimeString('es-CL');
+      document.getElementById('hdr-periodo').textContent = d1 + ' → ' + d2;
+    })
+    .catch(function(e) {
+      btn.disabled = false; btn.textContent = '⟳ Cargar datos reales';
+      badge.style.background = 'rgba(248,113,113,.12)';
+      badge.style.color = '#f87171';
+      badge.style.borderColor = 'rgba(248,113,113,.3)';
+      badge.textContent = 'Error: ' + e.message;
+    });
+}
+
+function procesarRetiros(retiros, d1, d2) {
+  if (!retiros.length) return;
+  var byMes = {};
+  retiros.forEach(function(r) {
+    var mes = (r.fechaRequerida||r.horaIngreso||'').substring(0,7);
+    if (!mes || mes.length < 7) return;
+    var retail = clienteToRetail(r.clienteOrigenStr);
+    var conf   = r.cantidadConfirmada || 0;
+    var region = getRegion(r.bodegaOrigenStr || r.bodegaDestinoStr || '');
+    if (!byMes[mes]) byMes[mes] = {
+      mes:mes, total:0, stgo:0, talca:0,
+      Walmart:0, Cencosud:0, UAS:0, Tottus:0, Prisa:0, Intercarry:0, Otro:0
+    };
+    byMes[mes].total += conf;
+    byMes[mes][retail] = (byMes[mes][retail]||0) + conf;
+    if (region === 'Talca') byMes[mes].talca += conf;
+    else byMes[mes].stgo += conf;
+  });
+
+  Object.keys(byMes).sort().forEach(function(mes) {
+    var d = byMes[mes];
+    // Actualizar o agregar en HISTORICO
+    var existH = HISTORICO.find(function(h){ return h.mes === mes; });
+    if (existH) {
+      existH.real_total = d.total;
+      existH.real_Walmart = d.Walmart; existH.real_Cencosud = d.Cencosud;
+      existH.real_UAS = d.UAS; existH.real_Tottus = d.Tottus;
+      existH.real_Prisa = d.Prisa; existH.real_Intercarry = d.Intercarry; existH.real_Otro = d.Otro;
+    } else {
+      HISTORICO.push({
+        mes:mes, real_total:d.total, pred_total:null, error_pct:null, accuracy:null,
+        real_Walmart:d.Walmart, real_Cencosud:d.Cencosud, real_UAS:d.UAS,
+        real_Tottus:d.Tottus, real_Prisa:d.Prisa, real_Intercarry:d.Intercarry, real_Otro:d.Otro
+      });
+    }
+    HISTORICO.sort(function(a,b){ return a.mes.localeCompare(b.mes); });
+
+    // Actualizar REGION_DATA
+    ['Santiago','Talca'].forEach(function(reg) {
+      var val = reg === 'Talca' ? d.talca : d.stgo;
+      if (val <= 0) return;
+      var existR = REGION_DATA[reg].find(function(x){ return x.mes === mes; });
+      if (existR) { existR.total = val; }
+      else {
+        var ratio = reg === 'Talca' ? 0.1 : 0.9;
+        REGION_DATA[reg].push({mes:mes, total:val,
+          Walmart:Math.round(d.Walmart*ratio), Cencosud:Math.round(d.Cencosud*ratio),
+          UAS:Math.round(d.UAS*ratio), Tottus:Math.round(d.Tottus*ratio),
+          Prisa:Math.round(d.Prisa*ratio), Intercarry:Math.round(d.Intercarry*ratio),
+          Otro:Math.round(d.Otro*ratio)});
+        REGION_DATA[reg].sort(function(a,b){return a.mes.localeCompare(b.mes);});
+      }
+    });
+  });
+
+  // Refrescar tab activa
+  var activeTab = document.querySelector('.tab.active');
+  if (activeTab) activeTab.click();
+}
+
+
+// ── INIT CON FECHAS DINÁMICAS ─────────────────────────────────────
+window.addEventListener('load', function() {
   var hoy = new Date();
   var y = hoy.getFullYear();
   var m = String(hoy.getMonth()+1).padStart(2,'0');
   var d = String(hoy.getDate()).padStart(2,'0');
   document.getElementById('api-d1').value = y+'-'+m+'-01';
   document.getElementById('api-d2').value = y+'-'+m+'-'+d;
-  document.getElementById('hdr-periodo').textContent = 'Histórico 2025 + 2026 en curso';
-  document.getElementById('hdr-updated').textContent = 'Fuente: datos históricos · actualiza con API';
-  // Iniciar dashboard con datos históricos
-  buildResumen();
+  document.getElementById('hdr-periodo').textContent = y+'-'+m+'-01 → '+y+'-'+m+'-'+d;
 });
 </script>
 </body>

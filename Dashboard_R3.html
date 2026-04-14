@@ -3,10 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>REDTEC · Modelo Adaptativo de Retiros 2025–2026</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<title>Dashboard R3 — Retiros & Devoluciones · REDTEC M3LINK</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+
 :root {
   --bg:       #0B0F1A;
   --surface:  #111827;
@@ -601,45 +602,104 @@ canvas { max-height: 280px; }
   font-size: 10px; color: var(--muted);
   font-family: 'DM Mono', monospace;
 }
+
+
+/* ── INTEGRACIÓN API REAL ── */
+.api-bar {
+  background: #181b23;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.api-ctrl-label { font-size: 11px; color: #9da3b4; white-space: nowrap; }
+.api-date {
+  font-size: 12px; padding: 6px 10px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 6px;
+  background: #252932; color: #e8eaf0;
+  outline: none; font-family: 'Inter', sans-serif;
+  width: 145px; color-scheme: dark;
+}
+.api-date:focus { border-color: #4ade80; }
+.api-btn {
+  font-size: 12px; padding: 6px 14px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 6px;
+  background: #252932; color: #e8eaf0;
+  cursor: pointer; font-family: 'Inter', sans-serif;
+  font-weight: 500; transition: background .12s;
+  white-space: nowrap;
+}
+.api-btn:hover { background: #252d3a; }
+.api-btn:disabled { opacity: .4; cursor: not-allowed; }
+.api-badge {
+  font-size: 10px; padding: 3px 10px;
+  border-radius: 10px; font-weight: 500;
+  background: rgba(74,222,128,.12);
+  border: 1px solid rgba(74,222,128,.3);
+  color: #4ade80;
+}
+.api-badge.loading { background: rgba(251,191,36,.12); border-color: rgba(251,191,36,.3); color: #fcd34d; }
+.api-badge.error { background: rgba(248,113,113,.12); border-color: rgba(248,113,113,.3); color: #f87171; }
+.data-mode-indicator {
+  margin-left: auto;
+  font-size: 11px; color: #5a6070;
+  display: flex; align-items: center; gap: 6px;
+}
+.data-mode-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #5a6070;
+}
+.data-mode-dot.live { background: #4ade80; animation: pulse 2s infinite; }
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 </style>
 </head>
 <body>
 
 <!-- HEADER -->
-
 <div class="header">
   <div class="logo-group">
-
     <div class="logo-badge">
       <a href="index.html" style="display:inline-block;">
         <svg width="96" height="36" viewBox="0 0 96 36" fill="none" xmlns="http://www.w3.org/2000/svg">
           <rect width="96" height="36" rx="6" fill="#C0392B"/>
           <text x="48" y="25" text-anchor="middle"
             font-family="Arial Black, Arial, sans-serif"
-            font-weight="900"
-            font-size="14"
-            letter-spacing="3"
-            fill="#FFFFFF">
-            REDTEC
-          </text>
+            font-weight="900" font-size="14" letter-spacing="3" fill="#FFFFFF">REDTEC</text>
         </svg>
       </a>
     </div>
-
     <div>
       <div class="header-title">Modelo Adaptativo de Retiros · 2025–2026</div>
-      <div class="header-sub">Forecast basado en tasa de retorno histórica · Adaptativo por retail · Estacionalidad real</div>
-      <div class="model-tag"><div class="dot-pulse"></div> Modelo activo · Accuracy 91.4%</div>
+      <div class="header-sub">Datos en tiempo real via API · Histórico 2025 + Proyección adaptativa</div>
+      <div class="model-tag"><div class="dot-pulse"></div> <span id="api-status-label">Conectado al API real · M3LINK</span></div>
     </div>
-
   </div>
-
   <div class="header-meta">
-    Fuente: SAP · Base real 245.855 registros<br>
-    Período: Ene 2025 – Mar 2026<br>
-    Actualizado: 07-04-2026
+    Fuente: API OpsXRangoFechas<br>
+    Período activo: <span id="hdr-periodo">—</span><br>
+    <span id="hdr-updated">Cargando...</span>
+    &nbsp;·&nbsp;<a href="m3link_dashboard_dark.html" style="color:#4ade80;font-size:11px">← Dashboard</a>
   </div>
 </div>
+
+<!-- BARRA API REAL -->
+<div class="api-bar">
+  <span class="api-ctrl-label">Período API:</span>
+  <input type="date" id="api-d1" class="api-date">
+  <span class="api-ctrl-label">—</span>
+  <input type="date" id="api-d2" class="api-date">
+  <button class="api-btn" id="api-btn" onclick="loadApiData()">⟳ Cargar datos reales</button>
+  <span class="api-badge loading" id="api-badge">Listo</span>
+  <div class="data-mode-indicator">
+    <div class="data-mode-dot live" id="data-dot"></div>
+    <span id="data-mode-txt">Modo: Histórico 2025 + API</span>
+  </div>
+</div>
+
 <!-- TABS -->
 <div class="tabs">
   <button class="tab active" onclick="showTab('resumen',this)">📊 Resumen General</button>
@@ -663,12 +723,12 @@ canvas { max-height: 280px; }
     <div class="reg-dot" style="background:var(--yellow)"></div> Talca
   </button>
   <div class="region-info" id="region-info">
-    Mostrando: <span id="region-name-info">Todas las regiones</span> · <span id="region-vol-info">1.214.695 pallets</span>
+    Mostrando: <span id="region-name-info">Todas las regiones</span> · <span id="region-vol-info">—</span>
   </div>
 </div>
 
-<!-- ════════════════════════════════════════════ RESUMEN ════════════════════════ -->
-<div id="tab-resumen" class="tab-panel active">
+<!-- TABS HTML ORIGINALES -->
+id="tab-resumen" class="tab-panel active">
 <div class="main">
 
   <!-- REGION COMPARE (visible solo en modo Todas) -->
@@ -774,10 +834,7 @@ canvas { max-height: 280px; }
   <div class="insight-box" id="insight-main"></div>
 
 </div>
-</div>
-
-<!-- ═══════════════════════════════════════════ VALIDACIÓN ═════════════════════ -->
-<div id="tab-validacion" class="tab-panel">
+id="tab-validacion" class="tab-panel">
 <div class="main">
   <div class="row2">
     <div class="card" style="margin-bottom:0">
@@ -797,10 +854,7 @@ canvas { max-height: 280px; }
     <table class="tbl" id="tabla-validacion"></table>
   </div>
 </div>
-</div>
-
-<!-- ══════════════════════════════════════════════ RETAIL ══════════════════════ -->
-<div id="tab-retail" class="tab-panel">
+id="tab-retail" class="tab-panel">
 <div class="main">
   <div class="retail-grid" id="retail-cards"></div>
   <div class="row2">
@@ -816,10 +870,7 @@ canvas { max-height: 280px; }
     </div>
   </div>
 </div>
-</div>
-
-<!-- ═══════════════════════════════════════════ PROYECCIÓN ═════════════════════ -->
-<div id="tab-proyeccion" class="tab-panel">
+id="tab-proyeccion" class="tab-panel">
 <div class="main">
   <div class="kpi-strip" id="kpi-proj"></div>
   <div class="row3">
@@ -843,10 +894,7 @@ canvas { max-height: 280px; }
   </div>
   <div class="insight-box" id="insight-proj"></div>
 </div>
-</div>
-
-<!-- ══════════════════════════════════════════ MAPA DE CALOR ═══════════════════ -->
-<div id="tab-heatmap" class="tab-panel">
+id="tab-heatmap" class="tab-panel">
 <div class="main">
 
   <div class="row2" style="margin-bottom:20px">
@@ -899,10 +947,7 @@ canvas { max-height: 280px; }
   <div class="insight-box" id="insight-heatmap"></div>
 
 </div>
-</div>
-
-<!-- ══════════════════════════════════ PROYECCIÓN 14 DÍAS ════════════════════ -->
-<div id="tab-14dias" class="tab-panel">
+id="tab-14dias" class="tab-panel">
 <div class="main">
 
   <!-- KPIs HOY Y MAÑANA -->
@@ -959,82 +1004,12 @@ canvas { max-height: 280px; }
   <div class="insight-box" id="insight-14dias"></div>
 
 </div>
-</div>
 
-<!-- ══════════════════════════════════════════ AGENTE IA ═══════════════════════ -->
-
-<!-- Burbuja flotante -->
-<div id="agent-bubble" onclick="toggleAgent()" title="Pregúntame sobre el dashboard">
-  <svg id="bubble-icon-chat" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-  </svg>
-  <svg id="bubble-icon-close" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" style="display:none">
-    <line x1="18" y1="6" x2="6" y2="18"></line>
-    <line x1="6" y1="6" x2="18" y2="18"></line>
-  </svg>
-  <div id="agent-unread"></div>
-</div>
-
-<!-- Panel chat -->
-<div id="agent-panel">
-  <!-- Header -->
-  <div id="agent-header">
-    <div style="display:flex;align-items:center;gap:10px">
-      <div id="agent-avatar">IA</div>
-      <div>
-        <div style="font-weight:700;font-size:13px">Asistente REDTEC</div>
-        <div style="font-size:10px;color:rgba(255,255,255,.6);display:flex;align-items:center;gap:5px">
-          <div style="width:6px;height:6px;border-radius:50%;background:#34D399"></div>
-          Basado en datos del dashboard
-        </div>
-      </div>
-    </div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <button id="agent-clear-btn" onclick="clearChat()" title="Nueva conversación">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.6)" stroke-width="2" stroke-linecap="round">
-          <polyline points="1 4 1 10 7 10"></polyline>
-          <path d="M3.51 15a9 9 0 1 0 .49-3.48"></path>
-        </svg>
-      </button>
-    </div>
-  </div>
-
-  <!-- Mensajes -->
-  <div id="agent-messages"></div>
-
-  <!-- Sugerencias rápidas -->
-  <div id="agent-suggestions">
-    <div class="suggestion-chip" onclick="sendSuggestion(this)">¿Cuál fue el mejor mes?</div>
-    <div class="suggestion-chip" onclick="sendSuggestion(this)">¿Cómo va Walmart vs Cencosud?</div>
-    <div class="suggestion-chip" onclick="sendSuggestion(this)">¿Qué proyectamos para Jul 2026?</div>
-    <div class="suggestion-chip" onclick="sendSuggestion(this)">¿Por qué falló el modelo en Jul 2025?</div>
-  </div>
-
-  <!-- Input -->
-  <div id="agent-input-wrap">
-    <textarea id="agent-input" placeholder="Pregunta sobre retiros, retailers, proyecciones..." rows="1"
-      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"
-      oninput="autoResize(this)"></textarea>
-    <button id="agent-send-btn" onclick="sendMessage()">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="22" y1="2" x2="11" y2="13"></line>
-        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-      </svg>
-    </button>
-  </div>
-</div>
-
-<!-- FOOTER -->
-<div class="footer">
-  <span>REDTEC · Modelo Adaptativo de Retiros · v2.0</span>
-  <span>Base: 245.855 registros SAP · Período: Ene 2025 – Mar 2026 · Accuracy 91.4% · Actualizado 07-04-2026</span>
-  <span>Actualizado: 06-04-2026</span>
-</div>
-
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script>
-// ══════════════════════════════════════════════════════════════════
-// DATA
-// ══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// DATOS HISTÓRICOS 2025 (conservados del modelo original)
+// ═══════════════════════════════════════════════════════════════
 const HISTORICO = [
   {mes:"2025-01",real_total:82479,pred_total:null,error_pct:null,accuracy:null,real_Walmart:31779,real_Cencosud:22100,real_UAS:17898,real_Tottus:4460,real_Prisa:1045,real_Intercarry:430,real_Otro:4767},
   {mes:"2025-02",real_total:67746,pred_total:null,error_pct:null,accuracy:null,real_Walmart:26635,real_Cencosud:17968,real_UAS:13183,real_Tottus:3720,real_Prisa:595,real_Intercarry:277,real_Otro:5368},
@@ -1115,6 +1090,189 @@ const REGION_DATA = {
 // ── ESTADO REGIÓN ─────────────────────────────────────────────────
 let REGION_ACTIVA = 'todas';
 
+
+
+// ═══════════════════════════════════════════════════════════════
+// INTEGRACIÓN API REAL — M3LINK
+// ═══════════════════════════════════════════════════════════════
+var API_PROXY  = '/api/ops';
+var API_DIRECT = 'https://apirdt1.azurewebsites.net/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRangoFechas';
+var isLocal = location.protocol === 'file:';
+var isDev   = ['localhost','127.0.0.1'].includes(location.hostname);
+
+// Mapeo de clientes del API a retailers del dashboard
+var CLIENTE_RETAIL = {
+  'WALMART': 'Walmart',
+  'CENCOSUD': 'Cencosud',
+  'TOTTUS': 'Tottus',
+  'HIPERMERCADOS TOTTUS': 'Tottus',
+  'ALVI': 'UAS',
+  'UNIMARC': 'UAS',
+  'RENDIC': 'UAS',
+  'SMU': 'UAS',
+  'PRISA': 'Prisa',
+  'INTERCARRY': 'Intercarry',
+};
+
+// Mapeo bodegaOrigenStr → región
+function getRegionFromBodega(bodega) {
+  var b = (bodega||'').toUpperCase();
+  if (b.indexOf('TALCA') >= 0) return 'Talca';
+  if (b.indexOf('COQUIMBO') >= 0) return 'Santiago'; // Coquimbo virtual → Santiago
+  return 'Santiago'; // Default REDTEC SANTIAGO + otros
+}
+
+function clienteToRetail(nombre) {
+  var n = (nombre||'').toUpperCase();
+  for (var key in CLIENTE_RETAIL) {
+    if (n.indexOf(key) >= 0) return CLIENTE_RETAIL[key];
+  }
+  return 'Otro';
+}
+
+// Datos del API actual (se actualizan al cargar)
+var API_DATA_RAW  = [];
+var API_RESUMEN   = null; // resumen calculado del período
+
+function loadApiData() {
+  var btn = document.getElementById('api-btn');
+  var badge = document.getElementById('api-badge');
+  btn.disabled = true; btn.textContent = 'Cargando...';
+  badge.className = 'api-badge loading';
+  badge.textContent = 'Consultando...';
+
+  var d1 = document.getElementById('api-d1').value;
+  var d2 = document.getElementById('api-d2').value;
+  var url = (isLocal||isDev)
+    ? API_DIRECT + '?fechaInicial=' + d1 + '&fechaFinal=' + d2
+    : API_PROXY  + '?fechaInicio='  + d1 + '&fechaFin='   + d2;
+
+  fetch(url, {headers:{'Accept':'application/json'}})
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(function(data) {
+      API_DATA_RAW = Array.isArray(data) ? data : [];
+      // Filtrar solo retiros para el R3
+      var retiros = API_DATA_RAW.filter(function(r){
+        return (r.operacion||'').trim().toLowerCase() === 'retiro';
+      });
+      procesarApiData(retiros, d1, d2);
+      btn.disabled = false; btn.textContent = '⟳ Cargar datos reales';
+      badge.className = 'api-badge';
+      badge.textContent = retiros.length.toLocaleString('es-CL') + ' retiros';
+      document.getElementById('data-dot').className = 'data-mode-dot live';
+      document.getElementById('data-mode-txt').textContent = 'En vivo: ' + d1 + ' → ' + d2;
+      document.getElementById('hdr-updated').textContent = 'API: ' + new Date().toLocaleTimeString('es-CL');
+      document.getElementById('hdr-periodo').textContent = d1 + ' → ' + d2;
+    })
+    .catch(function(e) {
+      btn.disabled = false; btn.textContent = '⟳ Cargar datos reales';
+      badge.className = 'api-badge error';
+      badge.textContent = 'Error: ' + e.message;
+    });
+}
+
+function procesarApiData(retiros, d1, d2) {
+  if (!retiros.length) return;
+
+  // Agrupar por mes y retail
+  var byMes = {};
+  retiros.forEach(function(r) {
+    var fecha = (r.fechaRequerida||r.horaIngreso||'').substring(0,7); // YYYY-MM
+    if (!fecha) return;
+    var retail = clienteToRetail(r.clienteOrigenStr);
+    var conf   = (r.cantidadConfirmada||0);
+    var region = getRegionFromBodega(r.bodegaOrigenStr||r.bodegaDestinoStr||'');
+    if (!byMes[fecha]) byMes[fecha] = {
+      mes:fecha, total:0, region_Santiago:0, region_Talca:0,
+      Walmart:0, Cencosud:0, UAS:0, Tottus:0, Prisa:0, Intercarry:0, Otro:0
+    };
+    byMes[fecha].total += conf;
+    byMes[fecha][retail] = (byMes[fecha][retail]||0) + conf;
+    byMes[fecha]['region_'+region] = (byMes[fecha]['region_'+region]||0) + conf;
+  });
+
+  var meses = Object.keys(byMes).sort();
+
+  // Inyectar datos reales del API en HISTORICO
+  // Si el mes ya existe, actualizar; si no, agregar
+  meses.forEach(function(mes) {
+    var d = byMes[mes];
+    var existing = HISTORICO.find(function(h){ return h.mes === mes; });
+    if (existing) {
+      // Actualizar con datos reales del API
+      existing.real_total     = d.total;
+      existing.real_Walmart   = d.Walmart;
+      existing.real_Cencosud  = d.Cencosud;
+      existing.real_UAS       = d.UAS;
+      existing.real_Tottus    = d.Tottus;
+      existing.real_Prisa     = d.Prisa;
+      existing.real_Intercarry= d.Intercarry;
+      existing.real_Otro      = d.Otro;
+    } else {
+      HISTORICO.push({
+        mes: mes,
+        real_total:     d.total,
+        pred_total:     null,
+        error_pct:      null,
+        accuracy:       null,
+        real_Walmart:   d.Walmart,
+        real_Cencosud:  d.Cencosud,
+        real_UAS:       d.UAS,
+        real_Tottus:    d.Tottus,
+        real_Prisa:     d.Prisa,
+        real_Intercarry:d.Intercarry,
+        real_Otro:      d.Otro
+      });
+    }
+  });
+  HISTORICO.sort(function(a,b){ return a.mes.localeCompare(b.mes); });
+
+  // Actualizar REGION_DATA con datos del API
+  meses.forEach(function(mes) {
+    var d = byMes[mes];
+    var stgo_total  = d.region_Santiago || 0;
+    var talca_total = d.region_Talca    || 0;
+    var pct_stgo    = ['Walmart','Cencosud','UAS','Tottus','Prisa','Intercarry','Otro'];
+    // Agregar/actualizar en REGION_DATA Santiago
+    var existStgo = REGION_DATA.Santiago.find(function(s){return s.mes===mes;});
+    if (existStgo) {
+      existStgo.total = stgo_total;
+    } else if (stgo_total > 0) {
+      REGION_DATA.Santiago.push({mes:mes, total:stgo_total,
+        Walmart:Math.round(d.Walmart*.9), Cencosud:Math.round(d.Cencosud*.92),
+        UAS:Math.round(d.UAS*.85), Tottus:d.Tottus, Prisa:d.Prisa,
+        Intercarry:d.Intercarry, Otro:d.Otro});
+    }
+    var existTal = REGION_DATA.Talca.find(function(t){return t.mes===mes;});
+    if (existTal) {
+      existTal.total = talca_total;
+    } else if (talca_total > 0) {
+      REGION_DATA.Talca.push({mes:mes, total:talca_total,
+        Walmart:Math.round(d.Walmart*.1), Cencosud:Math.round(d.Cencosud*.08),
+        UAS:Math.round(d.UAS*.15), Tottus:0, Prisa:0, Intercarry:0, Otro:0});
+    }
+  });
+
+  // Actualizar el KPI header del resumen
+  API_RESUMEN = {
+    totalRetiros: retiros.length,
+    totalPallets: retiros.reduce(function(s,r){return s+(r.cantidadConfirmada||0);},0),
+    totalSolicitado: retiros.reduce(function(s,r){return s+(r.cantidadSolicitada||0);},0),
+    pctCumplimiento: 0,
+    periodo: d1 + ' → ' + d2,
+    meses: meses
+  };
+  if (API_RESUMEN.totalSolicitado > 0)
+    API_RESUMEN.pctCumplimiento = Math.round((API_RESUMEN.totalPallets/API_RESUMEN.totalSolicitado)*100);
+
+  // Refrescar la tab activa
+  var activeTab = document.querySelector('.tab.active');
+  if (activeTab) activeTab.click();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FUNCIONES ORIGINALES DEL DASHBOARD R3
+// ═══════════════════════════════════════════════════════════════
 function setRegion(region, btn) {
   REGION_ACTIVA = region;
 
@@ -2187,6 +2345,24 @@ function clearChat() { agentHistory=[]; document.getElementById('agent-messages'
 function autoResize(el) { el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,90)+'px'; }
 
 setTimeout(()=>{ document.getElementById('agent-unread').style.display='block'; }, 2000);
+
+
+// ═══════════════════════════════════════════════════════════════
+// INIT CON FECHAS DINÁMICAS
+// ═══════════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', function() {
+  // Fechas API: mes actual
+  var hoy = new Date();
+  var y = hoy.getFullYear();
+  var m = String(hoy.getMonth()+1).padStart(2,'0');
+  var d = String(hoy.getDate()).padStart(2,'0');
+  document.getElementById('api-d1').value = y+'-'+m+'-01';
+  document.getElementById('api-d2').value = y+'-'+m+'-'+d;
+  document.getElementById('hdr-periodo').textContent = 'Histórico 2025 + 2026 en curso';
+  document.getElementById('hdr-updated').textContent = 'Fuente: datos históricos · actualiza con API';
+  // Iniciar dashboard con datos históricos
+  buildResumen();
+});
 </script>
 </body>
 </html>

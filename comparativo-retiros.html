@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comparativo Retiros — REDTEC M3LINK</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg-page:#0f1117;--bg-surface:#181b23;--bg-card:#1e222d;--bg-input:#252932;--bg-hover:#252d3a;
+  --border:rgba(255,255,255,.07);--border-md:rgba(255,255,255,.12);
+  --text-pri:#e8eaf0;--text-sec:#9da3b4;--text-muted:#5a6070;
+  --accent:#4ade80;--red-logo:#C0170C;
+  --c-a:#60a5fa; --c-b:#f59e0b;
+}
+html,body{min-height:100%;font-family:'Inter',sans-serif;font-size:13px;background:var(--bg-page);color:var(--text-pri);-webkit-font-smoothing:antialiased}
+.topbar{position:sticky;top:0;z-index:200;height:50px;background:var(--bg-surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1.25rem;gap:12px}
+.logo{display:flex;align-items:center;gap:9px}
+.logo-box{width:27px;height:27px;border-radius:6px;background:var(--red-logo);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px}
+.logo-name{font-weight:600;font-size:13.5px}
+.logo-sep{width:1px;height:18px;background:var(--border-md);margin:0 6px}
+.topbar-title{font-size:12.5px;color:var(--text-sec)}
+.topbar-right{margin-left:auto}
+.back-btn{font-size:11.5px;color:var(--text-sec);text-decoration:none;padding:4px 10px;border:1px solid var(--border-md);border-radius:6px}
+.layout{display:flex}
+.sidebar{width:210px;min-width:210px;background:var(--bg-surface);border-right:1px solid var(--border);padding:.875rem 0;position:sticky;top:50px;height:calc(100vh - 50px);overflow-y:auto}
+.s-label{font-size:10px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--text-muted);padding:.5rem 1rem .3rem}
+.s-hdr{display:flex;align-items:center;justify-content:space-between;padding:.45rem 1rem;font-size:12px;font-weight:500;color:var(--text-sec);cursor:pointer;user-select:none}
+.s-hdr:hover{background:var(--bg-hover);color:var(--text-pri)}
+.s-chevron{font-size:10px;transition:transform .2s;color:var(--text-muted)}
+.s-hdr.open .s-chevron{transform:rotate(90deg)}
+.s-sub{overflow:hidden;transition:max-height .22s ease}
+.s-item{display:block;padding:.35rem 1rem .35rem 1.5rem;font-size:11.5px;color:var(--text-sec);text-decoration:none;border-left:2px solid transparent;transition:all .12s}
+.s-item:hover{background:var(--bg-hover);color:var(--text-pri)}
+.s-item.active{color:var(--accent);border-left-color:var(--accent);background:rgba(74,222,128,.08);font-weight:500}
+.s-divider{height:1px;background:var(--border);margin:.5rem 1rem}
+.main{flex:1;padding:1.25rem 1.375rem;min-width:0}
+.page-title{font-size:15px;font-weight:600;margin-bottom:3px}
+.breadcrumb{font-size:11px;color:var(--text-muted);margin-bottom:1rem}
+
+/* CONTROLES COMPARATIVO */
+.comp-controls{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:.875rem}
+@media(max-width:800px){.comp-controls{grid-template-columns:1fr}}
+.comp-panel{background:var(--bg-card);border:1px solid;border-radius:11px;padding:1rem}
+.comp-panel.pa{border-color:rgba(96,165,250,.3)}
+.comp-panel.pb{border-color:rgba(245,158,11,.3)}
+.comp-title{font-size:11.5px;font-weight:600;margin-bottom:.75rem;display:flex;align-items:center;gap:6px}
+.comp-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.ctrl-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.ctrl-group{display:flex;flex-direction:column;gap:4px}
+.ctrl-label{font-size:11px;color:var(--text-sec)}
+.ctrl-date{font-size:12px;padding:7px 10px;border:1px solid var(--border-md);border-radius:6px;background:var(--bg-input);color:var(--text-pri);outline:none;font-family:'Inter',sans-serif;width:145px;color-scheme:dark}
+.ctrl-date:focus{border-color:var(--accent)}
+.ctrl-select{font-size:12px;padding:7px 10px;border:1px solid var(--border-md);border-radius:6px;background:var(--bg-input);color:var(--text-pri);outline:none;font-family:'Inter',sans-serif;min-width:180px;color-scheme:dark}
+.btn-comp{font-size:12.5px;padding:8px 20px;border:1px solid var(--border-md);border-radius:6px;background:var(--bg-input);color:var(--text-pri);cursor:pointer;font-family:'Inter',sans-serif;font-weight:600;transition:background .12s;display:block;margin:.875rem auto 0}
+.btn-comp:hover{background:var(--bg-hover)}
+.btn-comp:disabled{opacity:.4;cursor:not-allowed}
+
+/* TABLA COMPARATIVA */
+.comp-table-wrap{background:var(--bg-card);border:1px solid var(--border);border-radius:13px;padding:1rem;margin-bottom:.875rem;overflow-x:auto}
+.comp-tbl{width:100%;border-collapse:collapse}
+.comp-tbl th{padding:8px 12px;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);border-bottom:1px solid var(--border-md);white-space:nowrap}
+.comp-tbl td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px}
+.comp-tbl tr:last-child td{border-bottom:none}
+.comp-tbl .metric{color:var(--text-sec);font-size:12px}
+.comp-tbl .val-a{color:var(--c-a);font-family:'JetBrains Mono',monospace;font-weight:600;text-align:right}
+.comp-tbl .val-b{color:var(--c-b);font-family:'JetBrains Mono',monospace;font-weight:600;text-align:right}
+.comp-tbl .variacion{text-align:center;font-weight:600;font-size:12px}
+.var-up{color:#4ade80}
+.var-dn{color:#f87171}
+.var-eq{color:#9da3b4}
+
+/* CHARTS */
+.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:.875rem}
+@media(max-width:900px){.charts-row{grid-template-columns:1fr}}
+.chart-card{background:var(--bg-card);border:1px solid var(--border);border-radius:13px;padding:1rem}
+.chart-title{font-size:11.5px;font-weight:600;margin-bottom:.75rem;color:var(--text-sec)}
+.chart-wrap{position:relative;height:220px}
+
+/* TABLA CLIENTES COMPARATIVO */
+.tbl-wrap{overflow-x:auto;max-height:300px;overflow-y:auto}
+.tbl{width:100%;border-collapse:collapse;font-size:11.5px}
+.tbl th{position:sticky;top:0;background:var(--bg-surface);padding:6px 10px;text-align:left;font-size:10px;font-weight:600;color:var(--text-muted);border-bottom:1px solid var(--border-md);white-space:nowrap}
+.tbl td{padding:5px 10px;border-bottom:1px solid var(--border)}
+.tbl tr:hover td{background:var(--bg-hover)}
+.tbl td.mono{font-family:'JetBrains Mono',monospace;font-size:11px}
+
+/* STATE */
+.state-msg{display:flex;align-items:center;justify-content:center;padding:3rem;color:var(--text-muted);font-size:12.5px;flex-direction:column;gap:10px}
+.spinner{width:18px;height:18px;border:2px solid var(--border-md);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="logo"><div class="logo-box">R</div><span class="logo-name">REDTEC</span></div>
+  <div class="logo-sep"></div>
+  <div class="topbar-title">Comparativo de retiros</div>
+  <div class="topbar-right"><a href="m3link_dashboard_dark.html" class="back-btn">← Dashboard</a></div>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="s-label">Comercial</div>
+    <div class="s-hdr" onclick="tog('g1',this)">Listados x fecha <span class="s-chevron">›</span></div>
+    <div class="s-sub" id="g1" style="max-height:0"><a href="m3link_dashboard_dark.html" class="s-item">Ops x rango fechas</a></div>
+    <div class="s-divider"></div>
+    <div class="s-hdr open" onclick="tog('g2',this)">Emisiones retiros dev. <span class="s-chevron">›</span></div>
+    <div class="s-sub" id="g2">
+      <a href="top10.html" class="s-item">Top 10 emisiones</a>
+      <a href="analisis-cliente.html" class="s-item">Análisis x cliente</a>
+      <a href="comparativo-retiros.html" class="s-item active">Comparativo retiros</a>
+    </div>
+    <div class="s-divider"></div>
+    <div class="s-hdr" onclick="tog('g3',this)">KPIs y reportes <span class="s-chevron">›</span></div>
+    <div class="s-sub" id="g3" style="max-height:0">
+      <a href="kpi-diario.html" class="s-item">KPI diario</a>
+      <a href="mapa-retiros.html" class="s-item">🗺 Mapa de retiros</a>
+      <a href="cartola-financiera.html" class="s-item">💰 Cartola financiera</a>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="page-title">Comparativo de retiros</div>
+    <div class="breadcrumb">Emisiones retiros dev. › Comparar dos períodos o dos clientes · operaciones · cumplimiento · tendencia</div>
+
+    <!-- CONTROLES -->
+    <div class="comp-controls">
+      <div class="comp-panel pa">
+        <div class="comp-title"><div class="comp-dot" style="background:var(--c-a)"></div>Período A — Azul</div>
+        <div class="ctrl-row">
+          <div class="ctrl-group"><span class="ctrl-label">Desde</span><input type="date" id="a1" class="ctrl-date"></div>
+          <div class="ctrl-group"><span class="ctrl-label">Hasta</span><input type="date" id="a2" class="ctrl-date"></div>
+          <div class="ctrl-group"><span class="ctrl-label">Filtrar cliente (opcional)</span>
+            <select id="a-cli" class="ctrl-select"><option value="">Todos los clientes</option></select></div>
+        </div>
+      </div>
+      <div class="comp-panel pb">
+        <div class="comp-title"><div class="comp-dot" style="background:var(--c-b)"></div>Período B — Naranja</div>
+        <div class="ctrl-row">
+          <div class="ctrl-group"><span class="ctrl-label">Desde</span><input type="date" id="b1" class="ctrl-date"></div>
+          <div class="ctrl-group"><span class="ctrl-label">Hasta</span><input type="date" id="b2" class="ctrl-date"></div>
+          <div class="ctrl-group"><span class="ctrl-label">Filtrar cliente (opcional)</span>
+            <select id="b-cli" class="ctrl-select"><option value="">Todos los clientes</option></select></div>
+        </div>
+      </div>
+    </div>
+    <button class="btn-comp" id="btn-comp" onclick="comparar()">⚖ Comparar</button>
+
+    <div id="empty-state" style="margin-top:1rem"><div class="chart-card"><div class="state-msg">Configura los dos períodos y presiona "Comparar"</div></div></div>
+    <div id="content" style="display:none;margin-top:1rem">
+
+      <!-- TABLA MÉTRICAS -->
+      <div class="comp-table-wrap">
+        <table class="comp-tbl">
+          <thead><tr>
+            <th>Métrica</th>
+            <th style="text-align:right;color:var(--c-a)">Período A</th>
+            <th style="text-align:right;color:var(--c-b)">Período B</th>
+            <th style="text-align:center">Variación</th>
+          </tr></thead>
+          <tbody id="tbody-metricas"></tbody>
+        </table>
+      </div>
+
+      <!-- GRÁFICOS -->
+      <div class="charts-row">
+        <div class="chart-card">
+          <div class="chart-title">Comparativo diario — cant. confirmada</div>
+          <div class="chart-wrap"><canvas id="chart-diario"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Top clientes — A vs B</div>
+          <div class="chart-wrap"><canvas id="chart-clientes"></canvas></div>
+        </div>
+      </div>
+
+      <!-- TABLA CLIENTES -->
+      <div class="chart-card" style="padding:.75rem;margin-bottom:1.5rem">
+        <div class="chart-title" style="margin-bottom:.75rem">Detalle por cliente — comparativo</div>
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <thead><tr>
+              <th>Cliente</th>
+              <th style="text-align:right;color:var(--c-a)">A — Ops</th>
+              <th style="text-align:right;color:var(--c-a)">A — Conf.</th>
+              <th style="text-align:right;color:var(--c-b)">B — Ops</th>
+              <th style="text-align:right;color:var(--c-b)">B — Conf.</th>
+              <th style="text-align:center">Variación</th>
+            </tr></thead>
+            <tbody id="tbody-clientes"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+var API_PROXY='/api/ops';
+var API_DIRECT='https://apirdt1.azurewebsites.net/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRangoFechas';
+var isLocal=location.protocol==='file:';
+var isDev=['localhost','127.0.0.1'].includes(location.hostname);
+var rawA=[], rawB=[];
+var chartDiario=null, chartClientes=null;
+
+function tog(id,hdr){
+  var el=document.getElementById(id);
+  var isOpen=el.style.maxHeight&&el.style.maxHeight!=='0px';
+  document.querySelectorAll('.s-sub').forEach(function(e){e.style.maxHeight='0'});
+  document.querySelectorAll('.s-hdr').forEach(function(h){h.classList.remove('open')});
+  if(!isOpen){el.style.maxHeight=(el.scrollHeight+200)+'px';hdr.classList.add('open')}
+}
+
+window.addEventListener('DOMContentLoaded',function(){
+  var h=new Date(),y=h.getFullYear(),m=String(h.getMonth()+1).padStart(2,'0'),d=String(h.getDate()).padStart(2,'0');
+  // Período B: mes actual
+  document.getElementById('b1').value=y+'-'+m+'-01';
+  document.getElementById('b2').value=y+'-'+m+'-'+d;
+  // Período A: mes anterior
+  var mesAnt=new Date(h);mesAnt.setMonth(mesAnt.getMonth()-1);
+  var yA=mesAnt.getFullYear(),mA=String(mesAnt.getMonth()+1).padStart(2,'0');
+  var diasMes=new Date(yA,mesAnt.getMonth()+1,0).getDate();
+  document.getElementById('a1').value=yA+'-'+mA+'-01';
+  document.getElementById('a2').value=yA+'-'+mA+'-'+String(diasMes).padStart(2,'0');
+  var g2=document.getElementById('g2');
+  if(g2) g2.style.maxHeight=(g2.scrollHeight+100)+'px';
+});
+
+function fetchOps(d1, d2){
+  var url=(isLocal||isDev)?API_DIRECT+'?fechaInicial='+d1+'&fechaFinal='+d2:API_PROXY+'?fechaInicio='+d1+'&fechaFin='+d2;
+  return fetch(url,{headers:{'Accept':'application/json'}}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();});
+}
+
+function comparar(){
+  var btn=document.getElementById('btn-comp');
+  btn.disabled=true;btn.textContent='Cargando...';
+  document.getElementById('empty-state').innerHTML='<div class="chart-card"><div class="state-msg"><div class="spinner"></div>Consultando ambos períodos...</div></div>';
+  document.getElementById('content').style.display='none';
+
+  var a1=document.getElementById('a1').value, a2=document.getElementById('a2').value;
+  var b1=document.getElementById('b1').value, b2=document.getElementById('b2').value;
+  var aCli=document.getElementById('a-cli').value;
+  var bCli=document.getElementById('b-cli').value;
+
+  Promise.all([fetchOps(a1,a2), fetchOps(b1,b2)])
+    .then(function(results){
+      rawA=Array.isArray(results[0])?results[0]:[];
+      rawB=Array.isArray(results[1])?results[1]:[];
+
+      // Solo retiros
+      rawA=rawA.filter(function(r){return (r.operacion||'').trim()==='Retiro';});
+      rawB=rawB.filter(function(r){return (r.operacion||'').trim()==='Retiro';});
+
+      // Filtrar cliente si aplica
+      if(aCli) rawA=rawA.filter(function(r){return r.clienteOrigenStr===aCli||r.clienteDestinoStr===aCli;});
+      if(bCli) rawB=rawB.filter(function(r){return r.clienteOrigenStr===bCli||r.clienteDestinoStr===bCli;});
+
+      // Poblar selectores con todos los clientes
+      var allClientes=[...new Set([].concat(
+        rawA.map(function(r){return r.clienteOrigenStr||'';}),
+        rawB.map(function(r){return r.clienteOrigenStr||'';})
+      ))].filter(Boolean).sort();
+      ['a-cli','b-cli'].forEach(function(id){
+        var sel=document.getElementById(id);
+        var cur=sel.value;
+        sel.innerHTML='<option value="">Todos los clientes</option>';
+        allClientes.forEach(function(c){sel.innerHTML+='<option value="'+escHtml(c)+'"'+(c===cur?' selected':'')+'>'+escHtml(c)+'</option>';});
+      });
+
+      renderComparativo(a1,a2,b1,b2);
+      btn.disabled=false;btn.textContent='⚖ Comparar';
+    })
+    .catch(function(e){
+      document.getElementById('empty-state').innerHTML='<div class="chart-card"><div class="state-msg" style="color:#f87171">Error: '+e.message+'</div></div>';
+      btn.disabled=false;btn.textContent='⚖ Comparar';
+    });
+}
+
+function renderComparativo(a1,a2,b1,b2){
+  var mA=calcMetricas(rawA,a1,a2), mB=calcMetricas(rawB,b1,b2);
+  document.getElementById('empty-state').innerHTML='';
+  document.getElementById('content').style.display='block';
+
+  // Tabla métricas
+  var metricas=[
+    {label:'Período',           vA:fmtDateShort(a1)+' – '+fmtDateShort(a2), vB:fmtDateShort(b1)+' – '+fmtDateShort(b2), num:false},
+    {label:'Total operaciones',  vA:mA.ops,   vB:mB.ops,   num:true},
+    {label:'Cant. Solicitada',   vA:mA.sol,   vB:mB.sol,   num:true},
+    {label:'Cant. Confirmada',   vA:mA.conf,  vB:mB.conf,  num:true},
+    {label:'Cant. Pendiente',    vA:mA.pend,  vB:mB.pend,  num:true, inv:true},
+    {label:'Promedio diario',    vA:mA.avg,   vB:mB.avg,   num:true},
+    {label:'% Cumplimiento',     vA:mA.pct+'%', vB:mB.pct+'%', num:false, pctComp:{a:mA.pct,b:mB.pct}},
+    {label:'Clientes únicos',    vA:mA.clientes, vB:mB.clientes, num:true},
+    {label:'Días con actividad', vA:mA.diasAct, vB:mB.diasAct, num:true},
+  ];
+  var html='';
+  metricas.forEach(function(m){
+    var varHtml='—';
+    if(m.num&&m.vA!==m.vB){
+      var diff=m.vB-m.vA, pct=m.vA>0?Math.round((diff/m.vA)*100):0;
+      var up=m.inv?diff<0:diff>0;
+      varHtml='<span class="'+(up?'var-up':'var-dn')+'">'+(diff>0?'↑':'↓')+' '+Math.abs(pct)+'%</span>';
+    } else if(m.pctComp){
+      var dp=m.pctComp.b-m.pctComp.a;
+      if(dp!==0) varHtml='<span class="'+(dp>0?'var-up':'var-dn')+'">'+(dp>0?'+':'')+dp+' pts</span>';
+      else varHtml='<span class="var-eq">= igual</span>';
+    }
+    html+='<tr>'
+      +'<td class="metric">'+m.label+'</td>'
+      +'<td class="val-a">'+(m.num?(typeof m.vA==='number'?m.vA.toLocaleString('es-CL'):m.vA):m.vA)+'</td>'
+      +'<td class="val-b">'+(m.num?(typeof m.vB==='number'?m.vB.toLocaleString('es-CL'):m.vB):m.vB)+'</td>'
+      +'<td class="variacion">'+varHtml+'</td>'
+      +'</tr>';
+  });
+  document.getElementById('tbody-metricas').innerHTML=html;
+
+  // Gráfico diario
+  var diasA=agruparPorDia(rawA), diasB=agruparPorDia(rawB);
+  var allDays=[...new Set([...Object.keys(diasA),...Object.keys(diasB)])].sort();
+  if(chartDiario) chartDiario.destroy();
+  chartDiario=new Chart(document.getElementById('chart-diario').getContext('2d'),{
+    type:'line',
+    data:{labels:allDays.map(fmtDateShort),datasets:[
+      {label:'Período A',data:allDays.map(function(d){return diasA[d]||0;}),
+        borderColor:'#60a5fa',backgroundColor:'rgba(96,165,250,.1)',borderWidth:2,pointRadius:3,tension:.3,fill:false},
+      {label:'Período B',data:allDays.map(function(d){return diasB[d]||0;}),
+        borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,.1)',borderWidth:2,pointRadius:3,tension:.3,fill:false,borderDash:[5,3]}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#9da3b4',font:{size:11}}},
+        tooltip:{backgroundColor:'#1e222d',borderColor:'rgba(255,255,255,.1)',borderWidth:1,
+          titleColor:'#e8eaf0',bodyColor:'#9da3b4',
+          callbacks:{label:function(ctx){return ' '+ctx.dataset.label+': '+ctx.parsed.y.toLocaleString('es-CL')+' pallets';}}}},
+      scales:{x:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#5a6070',font:{size:10}},border:{color:'rgba(255,255,255,.07)'}},
+        y:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#5a6070',font:{size:10}},border:{color:'rgba(255,255,255,.07)'}}}
+    }
+  });
+
+  // Top clientes comparativo
+  var cliA=agruparPorCliente(rawA), cliB=agruparPorCliente(rawB);
+  var allCli=[...new Set([...Object.keys(cliA),...Object.keys(cliB)])];
+  allCli.sort(function(a,b){return ((cliB[b]||0)+(cliA[b]||0))-((cliB[a]||0)+(cliA[a]||0));});
+  var topCli=allCli.slice(0,8);
+  var shortNames=topCli.map(function(c){return c.split(' ').slice(0,2).join(' ');});
+  if(chartClientes) chartClientes.destroy();
+  chartClientes=new Chart(document.getElementById('chart-clientes').getContext('2d'),{
+    type:'bar',
+    data:{labels:shortNames,datasets:[
+      {label:'Período A',data:topCli.map(function(c){return cliA[c]||0;}),
+        backgroundColor:'rgba(96,165,250,.6)',borderColor:'#60a5fa',borderWidth:1,borderRadius:3},
+      {label:'Período B',data:topCli.map(function(c){return cliB[c]||0;}),
+        backgroundColor:'rgba(245,158,11,.6)',borderColor:'#f59e0b',borderWidth:1,borderRadius:3}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#9da3b4',font:{size:11}}},
+        tooltip:{backgroundColor:'#1e222d',borderColor:'rgba(255,255,255,.1)',borderWidth:1,
+          titleColor:'#e8eaf0',bodyColor:'#9da3b4',
+          callbacks:{label:function(ctx){return ' '+ctx.dataset.label+': '+ctx.parsed.y.toLocaleString('es-CL')+' pallets';}}}},
+      scales:{x:{grid:{display:false},ticks:{color:'#9da3b4',font:{size:10}},border:{color:'rgba(255,255,255,.07)'}},
+        y:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#5a6070',font:{size:10}},border:{color:'rgba(255,255,255,.07)'}}}
+    }
+  });
+
+  // Tabla clientes
+  var htmlTbl='';
+  allCli.forEach(function(c){
+    var vA=cliA[c]||0, vB=cliB[c]||0;
+    var opsA=(rawA.filter(function(r){return r.clienteOrigenStr===c||r.clienteDestinoStr===c;}).length);
+    var opsB=(rawB.filter(function(r){return r.clienteOrigenStr===c||r.clienteDestinoStr===c;}).length);
+    var diff=vB-vA;
+    var varHtml=diff===0?'<span class="var-eq">—</span>':
+      '<span class="'+(diff>0?'var-up':'var-dn')+'">'+(diff>0?'↑':'↓')+' '+Math.abs(diff).toLocaleString('es-CL')+'</span>';
+    htmlTbl+='<tr>'
+      +'<td title="'+escHtml(c)+'">'+c+'</td>'
+      +'<td class="mono" style="text-align:right;color:var(--c-a)">'+opsA+'</td>'
+      +'<td class="mono" style="text-align:right;color:var(--c-a)">'+vA.toLocaleString('es-CL')+'</td>'
+      +'<td class="mono" style="text-align:right;color:var(--c-b)">'+opsB+'</td>'
+      +'<td class="mono" style="text-align:right;color:var(--c-b)">'+vB.toLocaleString('es-CL')+'</td>'
+      +'<td style="text-align:center">'+varHtml+'</td>'
+      +'</tr>';
+  });
+  document.getElementById('tbody-clientes').innerHTML=htmlTbl;
+}
+
+function calcMetricas(data,d1,d2){
+  var ops=data.length;
+  var sol=0,conf=0,pend=0;
+  data.forEach(function(r){sol+=(r.cantidadSolicitada||0);conf+=(r.cantidadConfirmada||0);pend+=(r.cantidadPendiente||0);});
+  var pct=sol>0?Math.round((conf/sol)*100):0;
+  var dias=daysBetween(d1,d2)||1;
+  var avg=Math.round(conf/dias);
+  var cliSet=new Set(data.map(function(r){return r.clienteOrigenStr||r.clienteDestinoStr||'';}));
+  cliSet.delete('');
+  var diasSet=new Set(data.map(function(r){return (r.fechaRequerida||'').substring(0,10);}));
+  return {ops:ops,sol:sol,conf:conf,pend:pend,pct:pct,avg:avg,clientes:cliSet.size,diasAct:diasSet.size};
+}
+function agruparPorDia(data){
+  var m={};
+  data.forEach(function(r){var f=(r.fechaRequerida||r.horaIngreso||'').substring(0,10);if(f) m[f]=(m[f]||0)+(r.cantidadConfirmada||0);});
+  return m;
+}
+function agruparPorCliente(data){
+  var m={};
+  data.forEach(function(r){var k=r.clienteOrigenStr||r.clienteDestinoStr||'Sin cliente';m[k]=(m[k]||0)+(r.cantidadConfirmada||0);});
+  return m;
+}
+function daysBetween(d1,d2){return Math.round((new Date(d2)-new Date(d1))/86400000)+1;}
+function fmtDateShort(s){var p=s.split('-');return p[2]+'/'+p[1];}
+function escHtml(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+</script>
+</body>
+</html>

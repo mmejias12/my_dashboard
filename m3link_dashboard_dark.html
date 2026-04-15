@@ -92,7 +92,7 @@
   .tag.on { background:var(--bg-active);color:var(--accent);border-color:var(--border-accent); }
 
   /* STATS */
-  .stats { display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:.875rem; }
+  .stats { display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1fr;gap:10px;margin-bottom:.875rem; }
   @media(max-width:900px){.stats{grid-template-columns:repeat(3,1fr);}}
   .stat-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:.875rem 1rem; }
   .stat-label { font-size:10.5px;color:var(--text-muted);margin-bottom:5px; }
@@ -225,6 +225,31 @@
     box-shadow:0 8px 24px rgba(0,0,0,.5); }
   .pend-info:hover .pend-tip { display:block; }
   .pend-tip-title { font-size:11px;font-weight:600;color:#f87171;margin-bottom:4px; }
+
+  /* Resumen 6 KPIs en primera tarjeta */
+  .resumen-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px 8px;
+  }
+  .res-item {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .res-label {
+    font-size: 9px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    white-space: nowrap;
+  }
+  .res-val {
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1.2;
+  }
 </style>
 </head>
 <body>
@@ -272,6 +297,22 @@
       <a href="mapa-retiros.html" class="s-item">🗺 Mapa de retiros</a>
       <a href="cartola-financiera.html" class="s-item">💰 Cartola financiera</a>
     </div>
+
+    <div class="s-divider"></div>
+
+    <div class="s-label">Recursos Humanos</div>
+    <div class="s-hdr" onclick="tog('g-rrhh',this)">Gestión RRHH <span class="s-chevron">›</span></div>
+    <div class="s-sub" id="g-rrhh" style="max-height:0">
+      <div class="s-item" style="color:var(--text-muted);cursor:default;font-size:10.5px;font-style:italic">Próximamente</div>
+    </div>
+
+    <div class="s-divider"></div>
+
+    <div class="s-label">Transportes</div>
+    <div class="s-hdr" onclick="tog('g-trans',this)">Gestión Transporte <span class="s-chevron">›</span></div>
+    <div class="s-sub" id="g-trans" style="max-height:0">
+      <div class="s-item" style="color:var(--text-muted);cursor:default;font-size:10.5px;font-style:italic">Próximamente</div>
+    </div>
   </div>
 
   <div class="main">
@@ -311,7 +352,35 @@
 
     <div id="filter-chip-row" style="display:none"></div>
     <div class="stats" id="stats" style="display:none">
-      <div class="stat-card"><div class="stat-label">Total registros</div><div class="stat-value" id="s0" style="color:var(--text-primary)">—</div><div class="stat-sub">en el período</div></div>
+      <div class="stat-card" style="grid-column:span 1">
+        <div class="stat-label" style="margin-bottom:6px">Resumen del período</div>
+        <div class="resumen-grid">
+          <div class="res-item">
+            <span class="res-label">Emisiones</span>
+            <span class="res-val" id="r-em" style="color:var(--b-em-tx)">—</span>
+          </div>
+          <div class="res-item">
+            <span class="res-label">Devoluciones</span>
+            <span class="res-val" id="r-dev" style="color:var(--b-dev-tx)">—</span>
+          </div>
+          <div class="res-item">
+            <span class="res-label">Transferencias</span>
+            <span class="res-val" id="r-tra" style="color:var(--b-tra-tx)">—</span>
+          </div>
+          <div class="res-item">
+            <span class="res-label">Retiros</span>
+            <span class="res-val" id="r-ret" style="color:var(--b-ret-tx)">—</span>
+          </div>
+          <div class="res-item">
+            <span class="res-label">Relocalización</span>
+            <span class="res-val" id="r-rel" style="color:var(--b-rel-tx)">—</span>
+          </div>
+          <div class="res-item">
+            <span class="res-label">Traspasos</span>
+            <span class="res-val" id="r-tras" style="color:#a78bfa">—</span>
+          </div>
+        </div>
+      </div>
       <div class="stat-card">
         <div class="stat-label">Emisiones</div>
         <div class="stat-value" id="s1" style="color:var(--b-em-tx)">—</div>
@@ -337,7 +406,14 @@
         <div class="stat-cant-value" id="s3-cant" style="color:var(--b-tra-tx)">—</div>
         <div class="ret-bodegas" id="s3-detalle" style="margin-top:6px"></div>
       </div>
-      <div class="stat-card"><div class="stat-label">Cerrados</div><div class="stat-value" id="s4" style="color:var(--e-green)">—</div><div class="stat-sub">etapa</div></div>
+      <div class="stat-card">
+        <div class="stat-label">Devoluciones</div>
+        <div class="stat-value" id="s4" style="color:var(--b-dev-tx)">—</div>
+        <div class="stat-sub">operaciones</div>
+        <div class="stat-cant-label">cant. confirmada</div>
+        <div class="stat-cant-value" id="s4-cant" style="color:var(--b-dev-tx)">—</div>
+        <div class="ret-bodegas" id="s4-bodegas"></div>
+      </div>
     </div>
 
     <div class="table-card">
@@ -520,15 +596,26 @@ function loadData() {
 
 /* STATS */
 function updateStats() {
-  document.getElementById('s0').textContent = raw.length.toLocaleString('es-CL');
-  var em=0, ret=0, tra=0, cerr=0;
+  // Contadores por tipo
+  var em=0, ret=0, tra=0, dev=0, rel=0, tras=0;
+  var emConf=0, retConf=0, traConf2=0, devConf=0, relConf=0, trasConf=0;
   for (var i=0;i<raw.length;i++) {
     var op = (raw[i].operacion||'').toLowerCase();
     var et = (raw[i].etapaOperacion||'').toLowerCase();
     if (op.indexOf('emision')>=0)  em++;
-    if (op.trim() === 'retiro')   ret++;
-    if (op.indexOf('transfer')>=0) tra++;
-    if (et.indexOf('cerrado')>=0)  cerr++;
+    if (op.trim() === 'retiro')    ret++;
+    if (op.indexOf('transfer')>=0 || op.indexOf('trans diferenciada')>=0) tra++;
+    if (op.indexOf('devolucion')>=0) dev++;
+    if (op.indexOf('relocaliz')>=0)  rel++;
+    if (op.indexOf('traspaso')>=0)   tras++;
+    // cant confirmada por tipo
+    var conf_i = raw[i].cantidadConfirmada || 0;
+    if (op.indexOf('emision')>=0)    emConf  += conf_i;
+    if (op.trim() === 'retiro')      retConf += conf_i;
+    if (op.indexOf('transfer')>=0 || op.indexOf('trans diferenciada')>=0) traConf2 += conf_i;
+    if (op.indexOf('devolucion')>=0) devConf += conf_i;
+    if (op.indexOf('relocaliz')>=0)  relConf += conf_i;
+    if (op.indexOf('traspaso')>=0)   trasConf+= conf_i;
   }
   // Emisiones: cant confirmada + desglose bodega origen
   var emCant = 0;
@@ -541,6 +628,13 @@ function updateStats() {
       emBodMap[orig] = (emBodMap[orig] || 0) + ec;
     }
   }
+  // Resumen 6 KPIs
+  document.getElementById('r-em').textContent   = emConf.toLocaleString('es-CL');
+  document.getElementById('r-dev').textContent  = devConf.toLocaleString('es-CL');
+  document.getElementById('r-tra').textContent  = traConf2.toLocaleString('es-CL');
+  document.getElementById('r-ret').textContent  = retConf.toLocaleString('es-CL');
+  document.getElementById('r-rel').textContent  = relConf.toLocaleString('es-CL');
+  document.getElementById('r-tras').textContent = trasConf.toLocaleString('es-CL');
   document.getElementById('s1').textContent = em;
   document.getElementById('s1-cant').textContent = emCant.toLocaleString('es-CL');
   var emBodKeys = Object.keys(emBodMap);
@@ -612,7 +706,7 @@ function updateStats() {
   // Transferencias: sol / desp / conf
   var traSol = 0, traDesp = 0, traConf = 0;
   for (var i=0;i<raw.length;i++) {
-    if ((raw[i].operacion||'').toLowerCase().indexOf('transfer') >= 0) {
+    if ((raw[i].operacion||'').toLowerCase().indexOf('transfer') >= 0 || (raw[i].operacion||'').toLowerCase().indexOf('trans diferenciada') >= 0) {
       traSol  += (raw[i].cantidadSolicitada  || 0);
       traDesp += (raw[i].cantidadDespachada  || 0);
       traConf += (raw[i].cantidadConfirmada  || 0);
@@ -623,7 +717,29 @@ function updateStats() {
     '<div class="ret-bod-item"><span class="ret-bod-alias">Sol.</span><span class="ret-bod-val" style="color:var(--b-tra-tx)">' + traSol.toLocaleString('es-CL') + '</span></div>' +
     '<div class="ret-bod-item"><span class="ret-bod-alias">Desp.</span><span class="ret-bod-val" style="color:var(--b-tra-tx)">' + traDesp.toLocaleString('es-CL') + '</span></div>' +
     '<div class="ret-bod-item"><span class="ret-bod-alias">Conf.</span><span class="ret-bod-val" style="color:var(--b-tra-tx)">' + traConf.toLocaleString('es-CL') + '</span></div>';
-  document.getElementById('s4').textContent = cerr;
+  // Devoluciones ticket
+  document.getElementById('s4').textContent = dev;
+  document.getElementById('s4-cant').textContent = devConf.toLocaleString('es-CL');
+  // Desglose bodegas origen de devoluciones
+  var devBodMap = {};
+  for (var i=0;i<raw.length;i++) {
+    if ((raw[i].operacion||'').toLowerCase().indexOf('devolucion') >= 0) {
+      var dbc = raw[i].cantidadConfirmada || 0;
+      var dbo = raw[i].bodegaOrigenStr || 'Otra';
+      devBodMap[dbo] = (devBodMap[dbo] || 0) + dbc;
+    }
+  }
+  var devBodKeys = Object.keys(devBodMap).sort(function(a,b){ return devBodMap[b]-devBodMap[a]; });
+  var devHtml = '';
+  for (var i=0;i<devBodKeys.length;i++) {
+    if (devBodMap[devBodKeys[i]] > 0) {
+      devHtml += '<div class="ret-bod-item">'
+        + '<span class="ret-bod-alias">' + aliasBodyDest(devBodKeys[i]) + '</span>'
+        + '<span class="ret-bod-val" style="color:var(--b-dev-tx)">' + devBodMap[devBodKeys[i]].toLocaleString('es-CL') + '</span>'
+        + '</div>';
+    }
+  }
+  document.getElementById('s4-bodegas').innerHTML = devHtml;
 }
 
 /* TAGS */

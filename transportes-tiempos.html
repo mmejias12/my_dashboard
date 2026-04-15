@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Transportes — Tiempos en Puntos · REDTEC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#09090f;--s1:#0f1018;--s2:#14151f;--s3:#1a1b28;
+  --border:rgba(255,255,255,.06);--border-md:rgba(255,255,255,.1);
+  --t1:#f0f1f5;--t2:#8b90a8;--t3:#4a4f66;
+  --green:#22d47a;--blue:#4f8ef7;--amber:#f5a623;--red:#f56060;--purple:#a78bfa;--cyan:#22d4d4;
+  --r-cd:#4f8ef7;--r-sala:#22d47a;--r-cliente:#f5a623;--r-otros:#a78bfa;--r-redtec:#22d4d4;
+}
+html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;background:var(--bg);color:var(--t1);-webkit-font-smoothing:antialiased}
+
+/* HEADER */
+.hdr{height:52px;background:var(--s1);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:14px;position:sticky;top:0;z-index:100}
+.hdr-logo{width:28px;height:28px;background:#c0392b;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:11px;text-decoration:none;flex-shrink:0}
+.hdr-title{font-size:13px;font-weight:600}
+.hdr-sub{font-size:11px;color:var(--t3)}
+.hdr-sep{width:1px;height:18px;background:var(--border-md)}
+.live-pill{display:flex;align-items:center;gap:5px;background:rgba(34,212,122,.1);border:1px solid rgba(34,212,122,.2);border-radius:20px;padding:3px 10px;font-size:10.5px;color:var(--green);font-weight:500}
+.live-dot{width:6px;height:6px;background:var(--green);border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.hdr-right{margin-left:auto}
+.back-link{font-size:11px;color:var(--t3);text-decoration:none;padding:4px 10px;border:1px solid var(--border-md);border-radius:6px}
+
+/* QUERY BAR */
+.qbar{background:var(--s1);border-bottom:1px solid var(--border);padding:10px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ql{font-size:11px;color:var(--t3);white-space:nowrap}
+.qdate{font-size:12px;padding:7px 10px;background:var(--s2);border:1px solid var(--border-md);border-radius:6px;color:var(--t1);outline:none;font-family:'DM Sans',sans-serif;width:148px;color-scheme:dark}
+.qdate:focus{border-color:var(--green)}
+.qbtn{font-size:12px;padding:7px 16px;background:var(--green);color:#09090f;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-family:'DM Sans',sans-serif;transition:opacity .15s;white-space:nowrap}
+.qbtn:hover{opacity:.88}
+.qbtn:disabled{opacity:.4;cursor:not-allowed}
+.qstatus{margin-left:auto;font-size:11px;color:var(--t3);display:flex;align-items:center;gap:6px}
+.sdot{width:7px;height:7px;border-radius:50%;background:var(--t3)}
+.sdot.ok{background:var(--green)}.sdot.loading{background:var(--amber);animation:pulse 1s infinite}.sdot.err{background:var(--red)}
+
+/* TABS */
+.tabs{display:flex;background:var(--s1);border-bottom:1px solid var(--border);padding:0 20px}
+.tab{font-size:12px;padding:11px 16px;color:var(--t3);cursor:pointer;border:none;background:none;font-family:'DM Sans',sans-serif;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap}
+.tab:hover{color:var(--t2)}
+.tab.active{color:var(--t1);border-bottom-color:var(--green);font-weight:500}
+
+/* MAIN */
+.main{padding:16px 20px;max-width:1600px}
+
+/* KPI STRIP */
+.kpi-strip{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:14px}
+@media(max-width:1100px){.kpi-strip{grid-template-columns:repeat(3,1fr)}}
+.kpi{background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:currentColor;opacity:.7}
+.kpi.k-green{color:var(--green)}.kpi.k-blue{color:var(--blue)}.kpi.k-amber{color:var(--amber)}.kpi.k-red{color:var(--red)}.kpi.k-purple{color:var(--purple)}.kpi.k-cyan{color:var(--cyan)}
+.kpi-label{font-size:9.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--t3);margin-bottom:6px;font-weight:500}
+.kpi-val{font-size:24px;font-weight:600;line-height:1;font-family:'DM Mono',monospace;color:currentColor}
+.kpi-sub{font-size:10px;color:var(--t3);margin-top:5px}
+
+/* GRIDS */
+.g2{display:grid;grid-template-columns:1.6fr 1fr;gap:12px;margin-bottom:12px}
+.g22{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px}
+@media(max-width:1000px){.g2,.g22,.g3{grid-template-columns:1fr}}
+
+/* CARD */
+.card{background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px}
+.card-title{font-size:11.5px;font-weight:600;color:var(--t2);margin-bottom:3px}
+.card-sub{font-size:10.5px;color:var(--t3);margin-bottom:13px}
+
+/* TABLA */
+.tbl-wrap{overflow-x:auto;max-height:320px;overflow-y:auto}
+.tbl{width:100%;border-collapse:collapse;font-size:11.5px}
+.tbl th{position:sticky;top:0;background:var(--s1);padding:6px 10px;text-align:left;font-size:9.5px;font-weight:600;color:var(--t3);border-bottom:1px solid var(--border-md);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+.tbl td{padding:6px 10px;border-bottom:1px solid var(--border)}
+.tbl tr:hover td{background:rgba(255,255,255,.02)}
+.tbl td.mono{font-family:'DM Mono',monospace;font-size:11px}
+
+/* TIEMPO BADGES */
+.t-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;font-family:'DM Mono',monospace}
+.t-ok{background:rgba(34,212,122,.15);color:var(--green)}
+.t-warn{background:rgba(245,166,35,.12);color:var(--amber)}
+.t-crit{background:rgba(245,96,96,.12);color:var(--red)}
+
+/* PUNTO TYPE BADGES */
+.tipo-badge{display:inline-block;padding:1px 7px;border-radius:4px;font-size:10px;font-weight:500}
+.tipo-cd{background:rgba(79,142,247,.15);color:var(--blue)}
+.tipo-sala{background:rgba(34,212,122,.15);color:var(--green)}
+.tipo-cliente{background:rgba(245,166,35,.12);color:var(--amber)}
+.tipo-otros{background:rgba(167,139,250,.15);color:var(--purple)}
+.tipo-redtec{background:rgba(34,212,212,.12);color:var(--cyan)}
+
+/* BAR RANKING */
+.rbar-item{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.rbar-name{font-size:11px;color:var(--t2);width:180px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rbar-track{flex:1;height:5px;background:rgba(255,255,255,.05);border-radius:3px;overflow:hidden}
+.rbar-fill{height:100%;border-radius:3px;transition:width .5s}
+.rbar-val{font-size:10.5px;font-family:'DM Mono',monospace;color:var(--t1);text-align:right;width:55px;flex-shrink:0}
+
+/* STATUS FLOW */
+.flow-row{display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:11px}
+.flow-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.flow-inicio{background:var(--green)}.flow-ruta{background:var(--amber)}.flow-fin{background:var(--blue)}.flow-other{background:var(--t3)}
+.flow-time{color:var(--t3);font-family:'DM Mono',monospace;font-size:10.5px;margin-left:auto}
+
+/* EMPTY */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;color:var(--t3);gap:10px;text-align:center}
+
+/* LOGIN PANEL */
+.login-panel{background:var(--s2);border:1px solid var(--border-md);border-radius:10px;padding:20px;max-width:420px;margin:20px auto}
+.login-field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.login-label{font-size:11px;color:var(--t2)}
+.login-input{font-size:12px;padding:8px 10px;background:var(--s3);border:1px solid var(--border-md);border-radius:6px;color:var(--t1);outline:none;font-family:'DM Sans',sans-serif}
+.login-input:focus{border-color:var(--green)}
+
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:2px}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="hdr">
+  <a href="m3link_dashboard_dark.html" class="hdr-logo">R</a>
+  <div class="hdr-sep"></div>
+  <div><div class="hdr-title">Transportes — Tiempos en Puntos</div><div class="hdr-sub">GPS Condor · WideTech · Tiempos en retails, CDs y clientes</div></div>
+  <div class="live-pill"><div class="live-dot"></div><span id="live-label">WideTech API</span></div>
+  <div class="hdr-right"><a href="m3link_dashboard_dark.html" class="back-link">← Dashboard</a></div>
+</div>
+
+<!-- QUERY BAR -->
+<div class="qbar">
+  <span class="ql">Período:</span>
+  <input type="date" id="d1" class="qdate">
+  <span class="ql">—</span>
+  <input type="date" id="d2" class="qdate">
+  <button class="qbtn" id="qbtn" onclick="consultar()">🔍 Consultar</button>
+  <div class="qstatus">
+    <div class="sdot" id="sdot"></div>
+    <span id="stxt">Ingresa credenciales y consulta</span>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab active" onclick="showTab('resumen',this)">📊 Resumen</button>
+  <button class="tab" onclick="showTab('puntos',this)">📍 Por punto</button>
+  <button class="tab" onclick="showTab('choferes',this)">🚛 Por chofer</button>
+  <button class="tab" onclick="showTab('detalle',this)">📋 Detalle entregas</button>
+  <button class="tab" onclick="showTab('config',this)">⚙️ Configuración</button>
+</div>
+
+<!-- TAB: RESUMEN -->
+<div id="tab-resumen" style="display:block">
+  <div class="main">
+    <div id="res-empty" class="empty-state">
+      <div style="font-size:36px;opacity:.3">🚚</div>
+      <div style="font-size:13px;color:var(--t2);font-weight:500">Consulta un período para ver los tiempos en puntos</div>
+      <div style="font-size:11.5px">Configura las credenciales en ⚙️ Configuración si es la primera vez</div>
+    </div>
+    <div id="res-content" style="display:none">
+      <!-- KPIs -->
+      <div class="kpi-strip">
+        <div class="kpi k-blue"><div class="kpi-label">Total entregas</div><div class="kpi-val" id="k-total">—</div><div class="kpi-sub" id="k-total-sub">puntos visitados</div></div>
+        <div class="kpi k-green"><div class="kpi-label">Completadas</div><div class="kpi-val" id="k-comp">—</div><div class="kpi-sub" id="k-comp-sub">entregas exitosas</div></div>
+        <div class="kpi k-amber"><div class="kpi-label">Tiempo prom. CD Retail</div><div class="kpi-val" id="k-tcd">—</div><div class="kpi-sub">hh:mm por visita</div></div>
+        <div class="kpi k-purple"><div class="kpi-label">Tiempo prom. Sala Retail</div><div class="kpi-val" id="k-tsala">—</div><div class="kpi-sub">hh:mm por visita</div></div>
+        <div class="kpi k-cyan"><div class="kpi-label">Choferes activos</div><div class="kpi-val" id="k-chof">—</div><div class="kpi-sub" id="k-chof-sub">en el período</div></div>
+      </div>
+
+      <div class="g2">
+        <!-- Gráfico por tipo de recinto -->
+        <div class="card">
+          <div class="card-title">Tiempo promedio por tipo de recinto</div>
+          <div class="card-sub">Promedio de duración de estadía en cada categoría de punto</div>
+          <canvas id="chart-tipo" height="200"></canvas>
+        </div>
+        <!-- Distribución por estado -->
+        <div class="card">
+          <div class="card-title">Estado de entregas</div>
+          <div class="card-sub">Distribución de resultados del período</div>
+          <canvas id="chart-estado" height="200"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Top 15 puntos con mayor tiempo promedio</div>
+        <div class="card-sub">Puntos de interés ordenados por duración media de estadía</div>
+        <div id="bars-puntos"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: POR PUNTO -->
+<div id="tab-puntos" style="display:none">
+  <div class="main">
+    <div id="pts-empty" class="empty-state">
+      <div style="font-size:36px;opacity:.3">📍</div>
+      <div style="font-size:13px;color:var(--t2);font-weight:500">Consulta un período primero</div>
+    </div>
+    <div id="pts-content" style="display:none">
+      <div class="g22">
+        <div class="card">
+          <div class="card-title">CD Retail — tiempos promedio</div>
+          <div class="card-sub">Centros de distribución Walmart, Cencosud, Tottus, etc.</div>
+          <div class="tbl-wrap"><table class="tbl">
+            <thead><tr><th>Punto</th><th style="text-align:right">Visitas</th><th style="text-align:right">Prom.</th><th style="text-align:right">Máx.</th></tr></thead>
+            <tbody id="tbody-cd"></tbody>
+          </table></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Salas Retail — tiempos promedio</div>
+          <div class="card-sub">Hipermercados y salas de venta</div>
+          <div class="tbl-wrap"><table class="tbl">
+            <thead><tr><th>Punto</th><th style="text-align:right">Visitas</th><th style="text-align:right">Prom.</th><th style="text-align:right">Máx.</th></tr></thead>
+            <tbody id="tbody-sala"></tbody>
+          </table></div>
+        </div>
+      </div>
+      <div class="g22">
+        <div class="card">
+          <div class="card-title">Clientes — tiempos promedio</div>
+          <div class="card-sub">Puntos de entrega a clientes</div>
+          <div class="tbl-wrap"><table class="tbl">
+            <thead><tr><th>Punto</th><th style="text-align:right">Visitas</th><th style="text-align:right">Prom.</th><th style="text-align:right">Máx.</th></tr></thead>
+            <tbody id="tbody-cliente"></tbody>
+          </table></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Otros CD Retail</div>
+          <div class="card-sub">IFCO, otros puntos logísticos</div>
+          <div class="tbl-wrap"><table class="tbl">
+            <thead><tr><th>Punto</th><th style="text-align:right">Visitas</th><th style="text-align:right">Prom.</th><th style="text-align:right">Máx.</th></tr></thead>
+            <tbody id="tbody-otros"></tbody>
+          </table></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: POR CHOFER -->
+<div id="tab-choferes" style="display:none">
+  <div class="main">
+    <div id="chof-empty" class="empty-state">
+      <div style="font-size:36px;opacity:.3">🚛</div>
+      <div style="font-size:13px;color:var(--t2);font-weight:500">Consulta un período primero</div>
+    </div>
+    <div id="chof-content" style="display:none">
+      <div class="card">
+        <div class="card-title">Resumen por chofer / usuario</div>
+        <div class="card-sub">Total entregas, tiempo total en puntos y tiempo promedio por visita</div>
+        <div class="tbl-wrap"><table class="tbl">
+          <thead><tr>
+            <th>Chofer / Usuario</th>
+            <th style="text-align:right">Entregas</th>
+            <th style="text-align:right">Completadas</th>
+            <th style="text-align:right">T. promedio</th>
+            <th style="text-align:right">T. total</th>
+            <th>Último punto</th>
+          </tr></thead>
+          <tbody id="tbody-choferes"></tbody>
+        </table></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Tiempo total acumulado por chofer</div>
+        <div class="card-sub">Horas totales en puntos de interés en el período</div>
+        <canvas id="chart-choferes" height="180"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: DETALLE -->
+<div id="tab-detalle" style="display:none">
+  <div class="main">
+    <div id="det-empty" class="empty-state">
+      <div style="font-size:36px;opacity:.3">📋</div>
+      <div style="font-size:13px;color:var(--t2);font-weight:500">Consulta un período primero</div>
+    </div>
+    <div id="det-content" style="display:none">
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-title">Detalle completo de entregas</div>
+        <div class="card-sub">Todas las visitas del período con estados, tiempos y ubicaciones</div>
+        <div class="tbl-wrap" style="max-height:500px">
+          <table class="tbl">
+            <thead><tr>
+              <th>Ruta</th><th>Punto</th><th>Cliente</th><th>Chofer</th>
+              <th>Fecha</th><th>INICIO</th><th>EN RUTA</th><th>FINALIZADO</th>
+              <th>Tiempo en punto</th><th>Guía</th><th>Qty</th><th>Estado</th>
+            </tr></thead>
+            <tbody id="tbody-detalle"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: CONFIG -->
+<div id="tab-config" style="display:none">
+  <div class="main">
+    <div class="login-panel">
+      <div class="card-title" style="margin-bottom:14px;font-size:13px">⚙️ Credenciales WideTech / GPS Condor</div>
+      <div class="login-field">
+        <span class="login-label">Usuario</span>
+        <input type="text" id="cfg-user" class="login-input" placeholder="redtec chile" value="redtec chile">
+      </div>
+      <div class="login-field">
+        <span class="login-label">Contraseña</span>
+        <input type="password" id="cfg-pass" class="login-input" placeholder="••••••••" value="redtec2023">
+      </div>
+      <div class="login-field">
+        <span class="login-label">URL API EDelivery</span>
+        <input type="text" id="cfg-url" class="login-input" value="https://web1ws.shareservice.co/EDeliveryApi/rest">
+      </div>
+      <button class="qbtn" style="width:100%;margin-top:8px" onclick="testLogin()">🔐 Probar conexión</button>
+      <div id="cfg-status" style="margin-top:10px;font-size:11.5px;color:var(--t3);text-align:center"></div>
+    </div>
+    <div class="login-panel" style="margin-top:16px">
+      <div class="card-title" style="margin-bottom:10px;font-size:12px">📘 Clasificación de puntos</div>
+      <div style="font-size:11.5px;color:var(--t2);line-height:1.8">
+        El dashboard clasifica automáticamente los puntos según su nombre:<br>
+        <span class="tipo-badge tipo-cd">CD Retail</span> — ZWM, ZCS, ZTT, WM, CC, CD...<br>
+        <span class="tipo-badge tipo-sala">Sala Retail</span> — HIPER, SUPERMERCADO, SALA...<br>
+        <span class="tipo-badge tipo-cliente">Cliente</span> — otros puntos de entrega<br>
+        <span class="tipo-badge tipo-redtec">REDTEC</span> — base de operaciones<br><br>
+        <span style="color:var(--t3)">Los estados INICIO / EN RUTA / FINALIZADO se extraen del campo StatusInfo de la API WideTech.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+// ═══ ESTADO ════════════════════════════════════════════════════
+var AUTH = null, DATA = [], charts = {};
+var MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+// ═══ HELPERS ══════════════════════════════════════════════════
+function set(id,v){var e=document.getElementById(id);if(e)e.textContent=v;}
+function fmtK(n){if(n==null)return'—';if(n>=1000)return(n/1000).toFixed(1).replace('.',',')+'K';return Math.round(n).toLocaleString('es-CL');}
+function killChart(k){if(charts[k]){charts[k].destroy();delete charts[k];}}
+
+// Calcular tiempo en punto a partir de StatusInfo
+function calcTiempo(statusArr) {
+  if (!statusArr || statusArr.length < 2) return null;
+  var inicio = null, fin = null;
+  statusArr.forEach(function(s) {
+    var st = (s.Status||'').toUpperCase();
+    var dt = new Date(s.Date.replace(/\//g,'-'));
+    if (st === 'INICIO' || st === 'START') inicio = dt;
+    if (st === 'FINALIZADO' || st === 'END' || st === 'FIN') fin = dt;
+  });
+  if (!inicio || !fin) {
+    // Fallback: primer y último estado
+    var all = statusArr.map(s => new Date(s.Date.replace(/\//g,'-'))).filter(d => !isNaN(d));
+    if (all.length >= 2) { inicio = all[0]; fin = all[all.length-1]; }
+    else return null;
+  }
+  return Math.max(0, (fin - inicio) / 60000); // minutos
+}
+
+function fmtMinutos(mins) {
+  if (mins == null || isNaN(mins)) return '—';
+  var h = Math.floor(mins/60);
+  var m = Math.round(mins%60);
+  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+}
+
+function tiempoCls(mins) {
+  if (mins == null) return '';
+  if (mins <= 60)  return 't-ok';
+  if (mins <= 120) return 't-warn';
+  return 't-crit';
+}
+
+function clasificarPunto(nombre) {
+  if (!nombre) return 'OTROS';
+  var n = nombre.toUpperCase();
+  if (n === 'REDTEC' || n.indexOf('REDTEC') >= 0) return 'REDTEC';
+  if (n.indexOf('ZWM') >= 0 || n.indexOf('ZCS') >= 0 || n.indexOf('ZTT') >= 0 ||
+      n.indexOf('CD WM') >= 0 || n.indexOf('CD CC') >= 0 || n.indexOf('CD CENCOSUD') >= 0 ||
+      n.indexOf('BODEGA') >= 0 || n.indexOf(' CD ') >= 0 || n.indexOf('QUILICURA FRIO') >= 0 ||
+      n.indexOf('LO AGUIRRE') >= 0 || n.indexOf('NOVICIADO') >= 0 || n.indexOf('EL PENON') >= 0)
+    return 'CD RETAIL';
+  if (n.indexOf('HIPER') >= 0 || n.indexOf('SUPERMERCADO') >= 0 || n.indexOf('SALA') >= 0 ||
+      n.indexOf('WALMART') >= 0 || n.indexOf('WALLMART') >= 0 || n.indexOf('JUMBO') >= 0 ||
+      n.indexOf('UNIMARC') >= 0 || n.indexOf('TOTTUS') >= 0 || n.indexOf('SMU') >= 0)
+    return 'SALAS RETAIL';
+  if (n.indexOf('IFCO') >= 0 || n.indexOf('SISA') >= 0)
+    return 'OTROS CD RETAIL';
+  return 'CLIENTES';
+}
+
+function tipoColor(tipo) {
+  if (tipo === 'CD RETAIL')      return '#4f8ef7';
+  if (tipo === 'SALAS RETAIL')   return '#22d47a';
+  if (tipo === 'CLIENTES')       return '#f5a623';
+  if (tipo === 'OTROS CD RETAIL')return '#a78bfa';
+  if (tipo === 'REDTEC')         return '#22d4d4';
+  return '#6b7280';
+}
+
+function tipoBadge(tipo) {
+  var cls = tipo==='CD RETAIL'?'tipo-cd':tipo==='SALAS RETAIL'?'tipo-sala':tipo==='CLIENTES'?'tipo-cliente':tipo==='REDTEC'?'tipo-redtec':'tipo-otros';
+  return '<span class="tipo-badge '+cls+'">'+tipo+'</span>';
+}
+
+// ═══ TABS ═════════════════════════════════════════════════════
+function showTab(name, btn) {
+  ['resumen','puntos','choferes','detalle','config'].forEach(t => document.getElementById('tab-'+t).style.display='none');
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-'+name).style.display='block';
+  if(btn) btn.classList.add('active');
+  if(name==='puntos'&&DATA.length)   renderPuntos();
+  if(name==='choferes'&&DATA.length) renderChoferes();
+  if(name==='detalle'&&DATA.length)  renderDetalle();
+}
+
+// ═══ AUTH ══════════════════════════════════════════════════════
+var API_BASE = 'https://web1ws.shareservice.co/EDeliveryApi/rest';
+
+async function getAuth() {
+  var user = document.getElementById('cfg-user').value || 'redtec chile';
+  var pass = document.getElementById('cfg-pass').value || 'redtec2023';
+  var url  = document.getElementById('cfg-url').value || API_BASE;
+  API_BASE = url;
+  
+  var res = await fetch(API_BASE + '/LoginUser', {
+    method: 'POST',
+    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ strLogin: user, strPassword: pass, intLang: '1' })
+  });
+  var data = await res.json();
+  if (data.Err && data.Err.Code === 0) { AUTH = data; return true; }
+  return false;
+}
+
+async function testLogin() {
+  var el = document.getElementById('cfg-status');
+  el.textContent = 'Conectando...'; el.style.color = 'var(--amber)';
+  var ok = await getAuth().catch(e => false);
+  if (ok) {
+    el.textContent = '✅ Conexión exitosa. Token válido por 24h.'; el.style.color = 'var(--green)';
+  } else {
+    el.textContent = '❌ Error de autenticación. Verifica credenciales.'; el.style.color = 'var(--red)';
+  }
+}
+
+// ═══ CONSULTAR ════════════════════════════════════════════════
+function setStatus(type,msg){
+  document.getElementById('sdot').className='sdot '+(type==='ok'?'ok':type==='loading'?'loading':'err');
+  set('stxt',msg);
+}
+
+async function consultar() {
+  var btn = document.getElementById('qbtn');
+  var d1  = document.getElementById('d1').value;
+  var d2  = document.getElementById('d2').value;
+  if (!d1 || !d2) return;
+  
+  btn.disabled = true; btn.textContent = 'Consultando...';
+  setStatus('loading','Autenticando...');
+  
+  try {
+    // Login si no hay auth
+    if (!AUTH) {
+      var ok = await getAuth();
+      if (!ok) throw new Error('Autenticación fallida');
+    }
+    
+    setStatus('loading','Descargando entregas...');
+    
+    // Convertir fechas a timestamp ms
+    var start = new Date(d1 + 'T00:00:00').getTime();
+    var end   = new Date(d2 + 'T23:59:59').getTime();
+    
+    var res = await fetch(API_BASE + '/ReportDeliveryStatus', {
+      method: 'POST',
+      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        AuthObj: AUTH,
+        dStartDate: '/Date(' + start + ')/',
+        dEndDate:   '/Date(' + end   + ')/'
+      })
+    });
+    var data = await res.json();
+    
+    if (data.Err && data.Err.Code !== 0) throw new Error('API: ' + data.Err.Desc);
+    
+    // Parsear datos
+    var table  = data.dataList[0];
+    var struct = table.Struct;
+    DATA = table.Data.map(function(row) {
+      var r = {};
+      struct.forEach(function(k,i){ r[k] = row[i]; });
+      // Parsear StatusInfo y FormData
+      try { r._status = JSON.parse(r.StatusInfo); } catch(e) { r._status = []; }
+      try { r._form   = JSON.parse(r.FormData); } catch(e)   { r._form   = {}; }
+      // Calcular tiempo en punto
+      r._tiempoMins = calcTiempo(r._status);
+      r._tipo = clasificarPunto(r.PointName || r.PointCustom || '');
+      // Extraer hora de cada estado
+      r._horaInicio = '';
+      r._horaEnRuta = '';
+      r._horaFin    = '';
+      (r._status||[]).forEach(function(s) {
+        var st = (s.Status||'').toUpperCase();
+        var hr = s.Date ? s.Date.split(' ')[1]||'' : '';
+        if (st==='INICIO'||st==='START')                 r._horaInicio = hr;
+        if (st==='EN RUTA'||st==='EN_RUTA'||st==='RUTA') r._horaEnRuta = hr;
+        if (st==='FINALIZADO'||st==='FIN'||st==='END')   r._horaFin    = hr;
+      });
+      return r;
+    });
+    
+    btn.disabled = false; btn.textContent = '🔍 Consultar';
+    setStatus('ok', DATA.length.toLocaleString('es-CL') + ' entregas · ' + d1 + ' → ' + d2);
+    set('live-label', 'En vivo · ' + new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'}));
+    
+    renderResumen();
+    document.getElementById('res-empty').style.display   = 'none';
+    document.getElementById('res-content').style.display = 'block';
+    
+  } catch(e) {
+    btn.disabled = false; btn.textContent = '🔍 Consultar';
+    setStatus('err', 'Error: ' + e.message);
+  }
+}
+
+// ═══ TAB 1: RESUMEN ═══════════════════════════════════════════
+function renderResumen() {
+  var total = DATA.length;
+  var comp  = DATA.filter(d => d.PointState === 'Completado').length;
+  var chofSet = new Set(DATA.map(d => d.Usuario || 'Sin usuario'));
+
+  // Tiempos por tipo
+  var byTipo = {};
+  DATA.forEach(function(d) {
+    if (!d._tipo || d._tipo === 'REDTEC') return;
+    if (!byTipo[d._tipo]) byTipo[d._tipo] = [];
+    if (d._tiempoMins != null) byTipo[d._tipo].push(d._tiempoMins);
+  });
+  
+  var avgCD   = byTipo['CD RETAIL']      ? byTipo['CD RETAIL'].reduce((s,v)=>s+v,0)/byTipo['CD RETAIL'].length : null;
+  var avgSala = byTipo['SALAS RETAIL']   ? byTipo['SALAS RETAIL'].reduce((s,v)=>s+v,0)/byTipo['SALAS RETAIL'].length : null;
+
+  // KPIs
+  set('k-total',     fmtK(total));
+  set('k-total-sub', total.toLocaleString('es-CL') + ' registros');
+  set('k-comp',      fmtK(comp));
+  set('k-comp-sub',  Math.round(comp/Math.max(total,1)*100) + '% del total');
+  set('k-tcd',   fmtMinutos(avgCD));
+  set('k-tsala', fmtMinutos(avgSala));
+  set('k-chof',  chofSet.size.toString());
+  set('k-chof-sub', 'usuarios activos');
+
+  // Gráfico barras por tipo
+  var tiposOrden = ['CD RETAIL','SALAS RETAIL','OTROS CD RETAIL','CLIENTES'];
+  var labels = tiposOrden.filter(t => byTipo[t] && byTipo[t].length);
+  var avgVals = labels.map(t => {
+    var arr = byTipo[t];
+    return Math.round(arr.reduce((s,v)=>s+v,0)/arr.length);
+  });
+  
+  killChart('tipo');
+  charts['tipo'] = new Chart(document.getElementById('chart-tipo').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Minutos promedio',
+        data: avgVals,
+        backgroundColor: labels.map(tipoColor).map(c => c+'cc'),
+        borderColor: labels.map(tipoColor),
+        borderWidth: 1, borderRadius: 5, borderSkipped: false
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { backgroundColor: '#14151f', borderColor: 'rgba(255,255,255,.07)', borderWidth: 1,
+          titleColor: '#f0f1f5', bodyColor: '#8b90a8',
+          callbacks: { label: ctx => ' ' + fmtMinutos(ctx.raw) + ' (' + Math.round(ctx.raw) + ' min)' } }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#4a4f66', font: { size: 10 } } },
+        y: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: '#4a4f66', font: { size: 10 },
+          callback: v => fmtMinutos(v) } }
+      }
+    }
+  });
+
+  // Donut estados
+  var estadoCounts = {};
+  DATA.forEach(d => { estadoCounts[d.PointState||'Sin estado'] = (estadoCounts[d.PointState||'Sin estado']||0)+1; });
+  var estKeys = Object.keys(estadoCounts);
+  var estColors = estKeys.map(k => k==='Completado'?'#22d47a':k.includes('No')?'#f56060':'#f5a623');
+  killChart('estado');
+  charts['estado'] = new Chart(document.getElementById('chart-estado').getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: estKeys,
+      datasets: [{ data: estKeys.map(k => estadoCounts[k]),
+        backgroundColor: estColors.map(c => c+'cc'), borderColor: estColors, borderWidth: 2, hoverOffset: 6 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true, cutout: '55%',
+      plugins: { legend: { position: 'right', labels: { color: '#8b90a8', font: { size: 11 }, padding: 10, boxWidth: 10 } },
+        tooltip: { backgroundColor: '#14151f', borderColor: 'rgba(255,255,255,.07)', borderWidth: 1,
+          titleColor: '#f0f1f5', bodyColor: '#8b90a8' } }
+    }
+  });
+
+  // Bars top puntos
+  var byPunto = {};
+  DATA.forEach(function(d) {
+    var k = d.PointName || d.PointCustom || 'Sin nombre';
+    if (!byPunto[k]) byPunto[k] = { mins: [], tipo: d._tipo };
+    if (d._tiempoMins != null) byPunto[k].mins.push(d._tiempoMins);
+  });
+  var top15 = Object.entries(byPunto)
+    .filter(([k,v]) => v.mins.length > 0 && v.tipo !== 'REDTEC')
+    .map(([k,v]) => ({ nombre: k, avg: v.mins.reduce((s,n)=>s+n,0)/v.mins.length, visitas: v.mins.length, tipo: v.tipo }))
+    .sort((a,b) => b.avg-a.avg).slice(0,15);
+  var maxAvg = top15.length ? top15[0].avg : 1;
+  document.getElementById('bars-puntos').innerHTML = top15.map(function(p) {
+    var pct = Math.round(p.avg/maxAvg*100);
+    return '<div class="rbar-item">'
+      + '<span class="rbar-name" title="'+p.nombre+'">'+p.nombre+'</span>'
+      + '<div class="rbar-track"><div class="rbar-fill" style="width:'+pct+'%;background:'+tipoColor(p.tipo)+'"></div></div>'
+      + '<span class="rbar-val"><span class="t-badge '+tiempoCls(p.avg)+'">'+fmtMinutos(p.avg)+'</span></span>'
+      + '</div>';
+  }).join('');
+}
+
+// ═══ TAB 2: POR PUNTO ═════════════════════════════════════════
+function renderPuntos() {
+  var byPunto = {};
+  DATA.forEach(function(d) {
+    var k = d.PointName || d.PointCustom || 'Sin nombre';
+    if (!byPunto[k]) byPunto[k] = { mins: [], tipo: d._tipo, visitas: 0 };
+    byPunto[k].visitas++;
+    if (d._tiempoMins != null) byPunto[k].mins.push(d._tiempoMins);
+  });
+  
+  var renderTbody = function(tipoFiltro, tbodyId) {
+    var rows = Object.entries(byPunto)
+      .filter(([k,v]) => v.tipo === tipoFiltro && v.mins.length > 0)
+      .map(([k,v]) => ({
+        nombre: k, visitas: v.visitas,
+        avg: v.mins.reduce((s,n)=>s+n,0)/v.mins.length,
+        max: Math.max(...v.mins)
+      })).sort((a,b) => b.avg-a.avg);
+    
+    document.getElementById(tbodyId).innerHTML = rows.map(r =>
+      '<tr><td title="'+r.nombre+'" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.nombre+'</td>'
+      + '<td class="mono" style="text-align:right">'+r.visitas+'</td>'
+      + '<td class="mono" style="text-align:right"><span class="t-badge '+tiempoCls(r.avg)+'">'+fmtMinutos(r.avg)+'</span></td>'
+      + '<td class="mono" style="text-align:right"><span class="t-badge '+tiempoCls(r.max)+'">'+fmtMinutos(r.max)+'</span></td>'
+      + '</tr>'
+    ).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--t3);padding:1rem">Sin datos</td></tr>';
+  };
+  
+  renderTbody('CD RETAIL',       'tbody-cd');
+  renderTbody('SALAS RETAIL',    'tbody-sala');
+  renderTbody('CLIENTES',        'tbody-cliente');
+  renderTbody('OTROS CD RETAIL', 'tbody-otros');
+  
+  document.getElementById('pts-empty').style.display   = 'none';
+  document.getElementById('pts-content').style.display = 'block';
+}
+
+// ═══ TAB 3: POR CHOFER ════════════════════════════════════════
+function renderChoferes() {
+  var byChofer = {};
+  DATA.forEach(function(d) {
+    var k = d.Usuario || 'Sin usuario';
+    if (!byChofer[k]) byChofer[k] = { total: 0, comp: 0, mins: [], lastPunto: '' };
+    byChofer[k].total++;
+    if (d.PointState === 'Completado') byChofer[k].comp++;
+    if (d._tiempoMins != null) byChofer[k].mins.push(d._tiempoMins);
+    byChofer[k].lastPunto = d.PointName || d.PointCustom || '';
+  });
+  
+  var choferes = Object.entries(byChofer).sort((a,b) => b[1].total-a[1].total);
+  
+  document.getElementById('tbody-choferes').innerHTML = choferes.map(function([nombre, v]) {
+    var avg   = v.mins.length ? v.mins.reduce((s,n)=>s+n,0)/v.mins.length : null;
+    var total = v.mins.reduce((s,n)=>s+n,0);
+    return '<tr>'
+      + '<td style="font-weight:500">'+nombre+'</td>'
+      + '<td class="mono" style="text-align:right">'+v.total+'</td>'
+      + '<td class="mono" style="text-align:right;color:var(--green)">'+v.comp+'</td>'
+      + '<td class="mono" style="text-align:right"><span class="t-badge '+tiempoCls(avg)+'">'+fmtMinutos(avg)+'</span></td>'
+      + '<td class="mono" style="text-align:right;color:var(--blue)">'+fmtMinutos(total)+'</td>'
+      + '<td style="font-size:10.5px;color:var(--t3);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+v.lastPunto+'</td>'
+      + '</tr>';
+  }).join('');
+  
+  // Gráfico barras tiempo total
+  var top8 = choferes.slice(0,8).map(([nombre,v]) => ({
+    nombre, total: v.mins.reduce((s,n)=>s+n,0)
+  }));
+  killChart('choferes');
+  charts['choferes'] = new Chart(document.getElementById('chart-choferes').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: top8.map(c => c.nombre.split(' ').slice(0,2).join(' ')),
+      datasets: [{ label: 'Minutos totales', data: top8.map(c => Math.round(c.total)),
+        backgroundColor: 'rgba(79,142,247,.75)', borderColor: '#4f8ef7', borderWidth: 1, borderRadius: 4, borderSkipped: false }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false },
+        tooltip: { backgroundColor: '#14151f', borderColor: 'rgba(255,255,255,.07)', borderWidth: 1,
+          titleColor: '#f0f1f5', bodyColor: '#8b90a8',
+          callbacks: { label: ctx => ' ' + fmtMinutos(ctx.raw) + ' total' } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#4a4f66', font: { size: 10 } } },
+        y: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: '#4a4f66', font: { size: 10 },
+          callback: v => fmtMinutos(v) } }
+      }
+    }
+  });
+  
+  document.getElementById('chof-empty').style.display   = 'none';
+  document.getElementById('chof-content').style.display = 'block';
+}
+
+// ═══ TAB 4: DETALLE ═══════════════════════════════════════════
+function renderDetalle() {
+  var sorted = DATA.slice().sort((a,b) => {
+    var da = a.DateCompletion||'', db = b.DateCompletion||'';
+    return db.localeCompare(da);
+  });
+  
+  document.getElementById('tbody-detalle').innerHTML = sorted.map(function(d) {
+    var guia = d._form ? (d._form['Numero De Guia'] || d._form['Numero De Gua'] || '—') : '—';
+    var qty  = d._form ? (d._form['Cantidad Entregada'] || d._form['Cantidad No Entregada'] || '—') : '—';
+    var fecha = (d.DateCompletion||'').split(' ')[0] || '—';
+    var estadoCls = d.PointState==='Completado'?'color:var(--green)':'color:var(--red)';
+    return '<tr>'
+      + '<td style="color:var(--t3)">'+d.RouteName+'</td>'
+      + '<td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+d.PointName+'">'
+        + (d.PointName||'—') + '</td>'
+      + '<td style="font-size:10.5px;color:var(--t3)">'+tipoBadge(d._tipo)+'</td>'
+      + '<td style="font-size:11px;color:var(--t2)">'+( d.Usuario||'—')+'</td>'
+      + '<td class="mono" style="font-size:10.5px">'+fecha+'</td>'
+      + '<td class="mono" style="font-size:10.5px;color:var(--green)">'+d._horaInicio+'</td>'
+      + '<td class="mono" style="font-size:10.5px;color:var(--amber)">'+d._horaEnRuta+'</td>'
+      + '<td class="mono" style="font-size:10.5px;color:var(--blue)">'+d._horaFin+'</td>'
+      + '<td class="mono"><span class="t-badge '+tiempoCls(d._tiempoMins)+'">'+fmtMinutos(d._tiempoMins)+'</span></td>'
+      + '<td class="mono" style="font-size:10.5px">'+guia+'</td>'
+      + '<td class="mono" style="font-size:10.5px">'+qty+'</td>'
+      + '<td style="font-size:10.5px;'+estadoCls+'">'+( d.PointState||'—')+'</td>'
+      + '</tr>';
+  }).join('');
+  
+  document.getElementById('det-empty').style.display   = 'none';
+  document.getElementById('det-content').style.display = 'block';
+}
+
+// ═══ INIT ═════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', function() {
+  var hoy = new Date();
+  var y=hoy.getFullYear(), m=String(hoy.getMonth()+1).padStart(2,'0'), d=String(hoy.getDate()).padStart(2,'0');
+  document.getElementById('d1').value = y+'-'+m+'-01';
+  document.getElementById('d2').value = y+'-'+m+'-'+d;
+});
+</script>
+</body>
+</html>

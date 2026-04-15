@@ -721,23 +721,34 @@ function updateStats() {
   document.getElementById('s4').textContent = dev;
   document.getElementById('s4-cant').textContent = devConf.toLocaleString('es-CL');
   // Desglose bodegas origen de devoluciones
-  var devBodMap = {};
+  // Devoluciones: desglose por bodegaDestinoStr
+  // REDTEC SANTIAGO + SANTIAGO INSPECCION → Stgo
+  // REDTEC TALCA → Talca
+  var devDestMap = { 'Stgo': 0, 'Talca': 0 };
   for (var i=0;i<raw.length;i++) {
     if ((raw[i].operacion||'').toLowerCase().indexOf('devolucion') >= 0) {
       var dbc = raw[i].cantidadConfirmada || 0;
-      var dbo = raw[i].bodegaOrigenStr || 'Otra';
-      devBodMap[dbo] = (devBodMap[dbo] || 0) + dbc;
+      var dbd = (raw[i].bodegaDestinoStr || '').toUpperCase();
+      if (dbd.indexOf('TALCA') >= 0) {
+        devDestMap['Talca'] += dbc;
+      } else {
+        // REDTEC SANTIAGO y SANTIAGO INSPECCION → Stgo
+        devDestMap['Stgo'] += dbc;
+      }
     }
   }
-  var devBodKeys = Object.keys(devBodMap).sort(function(a,b){ return devBodMap[b]-devBodMap[a]; });
   var devHtml = '';
-  for (var i=0;i<devBodKeys.length;i++) {
-    if (devBodMap[devBodKeys[i]] > 0) {
-      devHtml += '<div class="ret-bod-item">'
-        + '<span class="ret-bod-alias">' + aliasBodyDest(devBodKeys[i]) + '</span>'
-        + '<span class="ret-bod-val" style="color:var(--b-dev-tx)">' + devBodMap[devBodKeys[i]].toLocaleString('es-CL') + '</span>'
-        + '</div>';
-    }
+  if (devDestMap['Stgo'] > 0) {
+    devHtml += '<div class="ret-bod-item">'
+      + '<span class="ret-bod-alias">Stgo</span>'
+      + '<span class="ret-bod-val" style="color:var(--b-dev-tx)">' + devDestMap['Stgo'].toLocaleString('es-CL') + '</span>'
+      + '</div>';
+  }
+  if (devDestMap['Talca'] > 0) {
+    devHtml += '<div class="ret-bod-item">'
+      + '<span class="ret-bod-alias">Talca</span>'
+      + '<span class="ret-bod-val" style="color:var(--b-dev-tx)">' + devDestMap['Talca'].toLocaleString('es-CL') + '</span>'
+      + '</div>';
   }
   document.getElementById('s4-bodegas').innerHTML = devHtml;
 }

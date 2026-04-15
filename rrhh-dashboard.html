@@ -146,7 +146,7 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 <div class="status-bar">
   <div class="sdot" id="sdot"></div>
   <span id="stxt">Presiona "Cargar datos" para consultar la API de Talana</span>
-  <span style="margin-left:auto;color:var(--t3)">Proxy: <code style="color:var(--blue)">/api/talana-proxy</code> · Token: integración-centralizacion@redtec.cl</span>
+  <span style="margin-left:auto;color:var(--t3)">Proxy: <code style="color:var(--blue)">/api/talana-proxy</code> → <code style="color:var(--green)">talana.com</code> · Empresa ID: <strong>2921</strong> · Token: integración-centralizacion@redtec.cl</span>
 </div>
 
 <!-- TABS -->
@@ -333,7 +333,8 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 // PROXY: /api/talana-proxy?endpoint=/es/api/RECURSO/&param=val
 // Para desarrollo local directo se puede cambiar PROXY_BASE a
 // https://app.talana.com (si no hay CORS bloqueado)
-var PROXY  = '/api/talana-proxy';
+var PROXY      = '/api/talana-proxy';
+var EMPRESA_ID = '2921'; // REDTEC en Talana (confirmado del correo Postman)
 var isLocal = location.protocol === 'file:';
 var isDev   = ['localhost','127.0.0.1'].includes(location.hostname);
 
@@ -355,10 +356,14 @@ function setStatus(t,m){
 
 // ═══ API FETCH ════════════════════════════════════════════════
 async function apiFetch(endpoint, params) {
-  var qs = new URLSearchParams(params||{}).toString();
+  var p = Object.assign({}, params||{});
+  var qs = new URLSearchParams(p).toString();
   var url = PROXY + '?endpoint=' + encodeURIComponent(endpoint) + (qs?'&'+qs:'');
   var r = await fetch(url, {headers:{'Accept':'application/json'}});
-  if (!r.ok) throw new Error('HTTP '+r.status+' en '+endpoint);
+  if (!r.ok) {
+    var txt = await r.text().catch(()=>'');
+    throw new Error('HTTP '+r.status+' en '+endpoint+(txt?' — '+txt.substring(0,120):''));
+  }
   return r.json();
 }
 
@@ -425,7 +430,30 @@ async function cargarTodo() {
 
   } catch(e) {
     btn.disabled = false; btn.textContent = '🔄 Reintentar';
-    setStatus('err', 'Error: ' + e.message);
+    var msg = e.message;
+    // Error 502 = proxy no pudo conectar con Talana
+    if (msg.includes('502')) {
+      msg = '⚠️ El proxy no puede conectar con talana.com. Ver instrucción abajo.';
+      $('res-empty').innerHTML = '<div class="empty" style="padding:40px;max-width:620px;margin:0 auto;text-align:left">'
+        + '<div style="font-size:28px;margin-bottom:12px">⚠️</div>'
+        + '<div style="font-size:14px;font-weight:600;color:var(--amber);margin-bottom:8px">URL de producción Talana no configurada</div>'
+        + '<div style="font-size:12px;color:var(--t2);line-height:1.7;margin-bottom:16px">'
+        + 'El proxy usa <code style="color:var(--blue)">talana.com</code> (confirmado del correo Postman) pero Azure Functions no puede alcanzarlo. '
+        + 'Empresa REDTEC ID: <code style="color:var(--green)">2921</code>.<br><br>'
+        + '<strong style="color:var(--t1)">Posibles causas:</strong><br>'
+        + '1. <strong>talana.com redirige a HTTPS</strong> — el proxy ya prueba http y https<br>'
+        + '2. <strong>IP de Azure Functions bloqueada</strong> — Talana puede requerir whitelist de IPs<br>'
+        + '3. <strong>URL distinta para API</strong> — puede ser <code>api.talana.com</code> o similar<br><br>'
+        + '<strong style="color:var(--t1)">Acción:</strong> Contactar soporte Talana con: <em>"¿Cuál es la IP/URL que debo usar para consumir la API REST desde un servidor externo? Ya tenemos el token y vemos que la empresa ID es 2921."</em>'
+        + '</div>'
+        + '<div style="font-size:11px;color:var(--t3);background:var(--s3);padding:10px 14px;border-radius:6px;border:1px solid var(--br)">'
+        + '💡 Mientras tanto puedes pedir a Talana acceso a su URL de producción. '
+        + 'El token <code>' + '44655ede...cc3603db' + '</code> ya es válido — solo falta la URL correcta.'
+        + '</div>'
+        + '</div>';
+      $('res-empty').style.display = 'block';
+    }
+    setStatus('err', msg);
   }
 }
 

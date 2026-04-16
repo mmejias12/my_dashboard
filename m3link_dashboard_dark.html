@@ -204,7 +204,97 @@
   .obs-box { background:rgba(255,255,255,.03);border-left:2px solid rgba(255,255,255,.1);border-radius:0 6px 6px 0;padding:.5rem .75rem;margin-top:1rem;font-size:11.5px;color:#9da3b4;line-height:1.6; }
   .obs-label { font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:#5a6070;margin-bottom:3px; }
   .preview-note { font-size:10px;color:#5a6070;text-align:center;padding:.625rem;border-top:1px solid rgba(255,255,255,.05);margin-top:1rem;font-style:italic; }
-  ::-webkit-scrollbar{width:5px;height:5px}
+  /* ── TOOLTIP EMISIONES POR CIUDAD ── */
+.em-tooltip-wrap {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+}
+.em-tooltip-wrap .em-tooltip {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-card);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 10px;
+  padding: 11px 14px;
+  width: 230px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  z-index: 999;
+  transition: opacity .18s, visibility .18s;
+}
+.em-tooltip-wrap:hover .em-tooltip {
+  visibility: visible;
+  opacity: 1;
+}
+/* flecha del tooltip */
+.em-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: rgba(255,255,255,.12);
+}
+.em-tooltip::before {
+  content: '';
+  position: absolute;
+  top: calc(100% - 1px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--bg-card);
+  z-index: 1;
+}
+.em-tt-title {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.em-tt-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 5px;
+  gap: 8px;
+}
+.em-tt-row:last-child { margin-bottom: 0; }
+.em-tt-ciudad {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-sec);
+  min-width: 48px;
+}
+.em-tt-vals {
+  display: flex;
+  gap: 10px;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.em-tt-sol  { color: var(--c-uf); }
+.em-tt-desp { color: var(--accent); }
+.em-tt-sep  { width: 1px; height: 14px; background: var(--border-md); }
+.em-tt-hint {
+  font-size: 9.5px;
+  color: var(--text-muted);
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+}
+.em-tt-hint span { display: flex; align-items: center; gap: 3px; }
+.em-tt-hint .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+::-webkit-scrollbar{width:5px;height:5px}
   ::-webkit-scrollbar-track{background:transparent}
   ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}
   ::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.2)}
@@ -250,6 +340,181 @@
     font-family: 'JetBrains Mono', monospace;
     line-height: 1.2;
   }
+
+/* ══════════════════════════════════════════════════════════
+   AGENTE IA FLOTANTE — Operaciones x Rango Fechas
+   Posición: fixed bottom-right, no tapa contenido
+   Panel se abre hacia arriba+izquierda
+   ══════════════════════════════════════════════════════════ */
+
+/* Burbuja flotante */
+#ag-bubble {
+  position: fixed;
+  bottom: 28px; right: 28px;
+  width: 52px; height: 52px;
+  background: linear-gradient(135deg, #C0392B, #E74C3C);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(192,57,43,.55);
+  z-index: 9999;
+  transition: transform .2s, box-shadow .2s;
+  user-select: none;
+}
+#ag-bubble:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 28px rgba(192,57,43,.75);
+}
+#ag-bubble svg { pointer-events: none; }
+#ag-unread {
+  position: absolute; top: 4px; right: 4px;
+  width: 11px; height: 11px;
+  background: var(--accent);
+  border-radius: 50%;
+  border: 2px solid var(--bg-page);
+  display: none;
+}
+
+/* Panel */
+#ag-panel {
+  position: fixed;
+  bottom: 92px; right: 28px;
+  width: 370px;
+  max-height: 560px;
+  background: #0d111a;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 14px;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,.65);
+  z-index: 9998;
+  animation: agSlideUp .22s ease;
+}
+#ag-panel.open { display: flex; }
+@keyframes agSlideUp {
+  from { opacity:0; transform: translateY(14px); }
+  to   { opacity:1; transform: translateY(0); }
+}
+
+/* Header */
+#ag-header {
+  background: linear-gradient(135deg, #1a0a0a 0%, #2a0f0f 100%);
+  border-bottom: 1px solid rgba(192,57,43,.25);
+  padding: 12px 14px;
+  display: flex; align-items: center; gap: 10px;
+  flex-shrink: 0;
+}
+#ag-avatar {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: linear-gradient(135deg, #C0392B, #E74C3C);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 800; color: #fff;
+  flex-shrink: 0;
+}
+#ag-hdr-info { flex: 1; min-width: 0; }
+#ag-hdr-name { font-size: 12.5px; font-weight: 600; color: var(--text-pri); }
+#ag-hdr-sub  { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
+#ag-status   { width: 7px; height: 7px; background: var(--accent); border-radius: 50%;
+               box-shadow: 0 0 6px var(--accent); flex-shrink: 0; }
+#ag-close-btn, #ag-clear-btn {
+  background: transparent; border: none; cursor: pointer;
+  color: var(--text-muted); font-size: 16px; padding: 4px;
+  border-radius: 4px; transition: background .12s, color .12s;
+  line-height: 1;
+}
+#ag-close-btn:hover, #ag-clear-btn:hover {
+  background: rgba(255,255,255,.07); color: var(--text-pri);
+}
+
+/* Contexto badge */
+#ag-ctx-badge {
+  background: rgba(74,222,128,.08);
+  border-bottom: 1px solid rgba(74,222,128,.15);
+  padding: 6px 14px;
+  font-size: 10px; color: rgba(74,222,128,.8);
+  display: flex; align-items: center; gap: 6px;
+  flex-shrink: 0;
+}
+#ag-ctx-badge.no-data {
+  background: rgba(248,113,113,.07);
+  border-bottom-color: rgba(248,113,113,.15);
+  color: rgba(248,113,113,.8);
+}
+#ag-ctx-dot { width: 5px; height: 5px; background: currentColor; border-radius: 50%; flex-shrink: 0; }
+
+/* Mensajes */
+#ag-messages {
+  flex: 1; overflow-y: auto;
+  padding: 12px;
+  display: flex; flex-direction: column; gap: 10px;
+  min-height: 0;
+}
+.ag-msg { display: flex; align-items: flex-start; gap: 7px; }
+.ag-msg.user { flex-direction: row-reverse; }
+.ag-av {
+  width: 26px; height: 26px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 700; flex-shrink: 0;
+}
+.ag-av.ai  { background: linear-gradient(135deg,#C0392B,#E74C3C); color:#fff; }
+.ag-av.usr { background: rgba(255,255,255,.1); color: var(--text-sec); }
+.ag-bbl {
+  max-width: 88%; padding: 8px 11px;
+  border-radius: 10px; font-size: 12px; line-height: 1.55;
+}
+.ag-bbl.ai   { background: rgba(255,255,255,.05); color: var(--text-pri); border-radius: 2px 10px 10px 10px; }
+.ag-bbl.user { background: rgba(192,57,43,.25); color: var(--text-pri); border-radius: 10px 2px 10px 10px; }
+
+/* Typing dots */
+.ag-dots { display: flex; gap: 4px; align-items: center; padding: 2px 0; }
+.ag-dots span {
+  width: 5px; height: 5px; background: var(--text-muted); border-radius: 50%;
+  animation: agDot .9s infinite;
+}
+.ag-dots span:nth-child(2) { animation-delay: .2s; }
+.ag-dots span:nth-child(3) { animation-delay: .4s; }
+@keyframes agDot { 0%,80%,100%{opacity:.2;transform:scale(.8)} 40%{opacity:1;transform:scale(1)} }
+
+/* Sugerencias */
+#ag-suggestions {
+  padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 5px;
+  border-top: 1px solid var(--border); flex-shrink: 0;
+}
+.ag-sug {
+  font-size: 10.5px; padding: 4px 9px;
+  background: rgba(255,255,255,.05); border: 1px solid var(--border-md);
+  border-radius: 12px; cursor: pointer; color: var(--text-sec);
+  transition: all .12s; white-space: nowrap;
+}
+.ag-sug:hover { background: rgba(255,255,255,.1); color: var(--text-pri); }
+
+/* Input */
+#ag-input-wrap {
+  display: flex; align-items: flex-end; gap: 7px;
+  padding: 10px 12px; border-top: 1px solid var(--border); flex-shrink: 0;
+}
+#ag-input {
+  flex: 1; background: var(--bg-input); border: 1px solid var(--border-md);
+  border-radius: 8px; padding: 8px 11px; color: var(--text-pri);
+  font-size: 12px; font-family: 'Inter',sans-serif; outline: none;
+  resize: none; max-height: 80px; line-height: 1.4;
+  transition: border-color .12s;
+}
+#ag-input:focus { border-color: #C0392B; }
+#ag-send {
+  width: 34px; height: 34px; background: #C0392B; border: none;
+  border-radius: 8px; cursor: pointer; display: flex;
+  align-items: center; justify-content: center;
+  transition: background .12s; flex-shrink: 0;
+}
+#ag-send:hover { background: #E74C3C; }
+#ag-send:disabled { opacity: .4; cursor: not-allowed; }
+#ag-send svg { pointer-events: none; }
+
+#ag-messages::-webkit-scrollbar { width: 3px; }
+#ag-messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
+
 </style>
 </head>
 <body>
@@ -383,13 +648,23 @@
           </div>
         </div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card em-tooltip-wrap">
         <div class="stat-label">Emisiones</div>
         <div class="stat-value" id="s1" style="color:var(--b-em-tx)">—</div>
         <div class="stat-sub">operaciones</div>
         <div class="stat-cant-label">cant. confirmada</div>
         <div class="stat-cant-value" id="s1-cant" style="color:var(--b-em-tx)">—</div>
         <div class="ret-bodegas" id="s1-bodegas"></div>
+        <!-- TOOLTIP CIUDAD SOL/DESP -->
+        <div class="em-tooltip" id="em-tooltip">
+          <div class="em-tt-title">📦 Solicitado vs Despachado</div>
+          <div id="em-tt-body">—</div>
+          <div class="em-tt-hint">
+            <span><span class="dot" style="background:var(--c-uf)"></span>Sol.</span>
+            <span><span class="dot" style="background:var(--accent)"></span>Desp.</span>
+            <span style="color:var(--text-muted);font-size:9px">· excluye anulados</span>
+          </div>
+        </div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Retiros</div>
@@ -582,7 +857,12 @@ function loadData() {
     document.getElementById('totals-bar').style.display = 'flex';
       document.getElementById('tag-row').style.display = 'flex';
       var now = new Date();
-      document.getElementById('last-upd').textContent = 'Actualizado ' + now.toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+      // Notificar al agente con el resumen del período
+  if (typeof agNotifyData === 'function') {
+    var _agResumen = em + ' emisiones · ' + ret + ' retiros · ' + raw.length + ' registros';
+    agNotifyData(_agResumen);
+  }
+  document.getElementById('last-upd').textContent = 'Actualizado ' + now.toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
       btn.disabled = false; btn.textContent = 'Cargar datos';
     })
     .catch(function(err) {
@@ -622,14 +902,42 @@ function updateStats() {
   // Emisiones: cant confirmada + desglose bodega origen
   var emCant = 0;
   var emBodMap = {};
+  // Tooltip: solicitado vs despachado por ciudad (excluye anulados)
+  var emCiudadMap = {};
   for (var j=0;j<raw.length;j++) {
     if ((raw[j].operacion||'').toLowerCase().indexOf('emision') >= 0) {
       var ec = (raw[j].cantidadConfirmada || 0);
       emCant += ec;
       var orig = raw[j].bodegaOrigenStr || 'Otra';
       emBodMap[orig] = (emBodMap[orig] || 0) + ec;
+      // Ciudad: excluir anulados
+      var etapa = (raw[j].etapaOperacion||'').toLowerCase();
+      if (etapa.indexOf('anulad') < 0) {
+        var ciudadKey = orig.toUpperCase().indexOf('TALCA') >= 0 ? 'Talca'
+                      : orig.toUpperCase().indexOf('STGO') >= 0 || orig.toUpperCase().indexOf('SANTIAGO') >= 0 ? 'Stgo'
+                      : orig || 'Otra';
+        if (!emCiudadMap[ciudadKey]) emCiudadMap[ciudadKey] = { sol: 0, desp: 0 };
+        emCiudadMap[ciudadKey].sol  += (raw[j].cantidadSolicitada  || 0);
+        emCiudadMap[ciudadKey].desp += (raw[j].cantidadDespachada  || 0);
+      }
     }
   }
+  // Renderizar tooltip por ciudad
+  var ciudades = Object.keys(emCiudadMap).sort();
+  var ttHtml = '';
+  for (var ci=0; ci<ciudades.length; ci++) {
+    var ciu = ciudades[ci];
+    var cv  = emCiudadMap[ciu];
+    ttHtml += '<div class="em-tt-row">'
+      + '<span class="em-tt-ciudad">' + ciu + '</span>'
+      + '<div class="em-tt-vals">'
+      + '<span class="em-tt-sol">Sol&nbsp;' + cv.sol.toLocaleString('es-CL') + '</span>'
+      + '<div class="em-tt-sep"></div>'
+      + '<span class="em-tt-desp">Desp&nbsp;' + cv.desp.toLocaleString('es-CL') + '</span>'
+      + '</div></div>';
+  }
+  var ttEl = document.getElementById('em-tt-body');
+  if (ttEl) ttEl.innerHTML = ttHtml || '<span style="color:var(--text-muted);font-size:11px">Sin datos</span>';
   // Resumen 6 KPIs
   document.getElementById('r-em').textContent   = emConf.toLocaleString('es-CL');
   document.getElementById('r-dev').textContent  = devConf.toLocaleString('es-CL');
@@ -1172,5 +1480,285 @@ function exportXLSX() {
     <div class="modal-body" id="modal-body"></div>
   </div>
 </div>
+
+<!-- ══════════════════════════════════════════════════════════
+     AGENTE IA FLOTANTE — Operaciones x Rango Fechas
+     ══════════════════════════════════════════════════════════ -->
+
+<!-- Burbuja -->
+<div id="ag-bubble" onclick="agToggle()" title="Agente IA · Operaciones">
+  <div id="ag-unread"></div>
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg>
+</div>
+
+<!-- Panel -->
+<div id="ag-panel">
+
+  <!-- Header -->
+  <div id="ag-header">
+    <div id="ag-avatar">IA</div>
+    <div id="ag-hdr-info">
+      <div id="ag-hdr-name">Agente REDTEC</div>
+      <div id="ag-hdr-sub">Operaciones · Análisis en tiempo real</div>
+    </div>
+    <div id="ag-status"></div>
+    <button id="ag-clear-btn" onclick="agClear()" title="Limpiar chat">↺</button>
+    <button id="ag-close-btn" onclick="agToggle()" title="Cerrar">✕</button>
+  </div>
+
+  <!-- Badge de contexto -->
+  <div id="ag-ctx-badge" class="no-data">
+    <div id="ag-ctx-dot"></div>
+    <span id="ag-ctx-txt">Carga datos primero para activar el análisis</span>
+  </div>
+
+  <!-- Mensajes -->
+  <div id="ag-messages"></div>
+
+  <!-- Sugerencias rápidas -->
+  <div id="ag-suggestions">
+    <span class="ag-sug" onclick="agSuggest(this)">¿Qué emisiones están pendientes?</span>
+    <span class="ag-sug" onclick="agSuggest(this)">¿Cuántos pallets sin despachar?</span>
+    <span class="ag-sug" onclick="agSuggest(this)">Resumen del período</span>
+    <span class="ag-sug" onclick="agSuggest(this)">¿Qué clientes tienen retiros hoy?</span>
+  </div>
+
+  <!-- Input -->
+  <div id="ag-input-wrap">
+    <textarea id="ag-input" rows="1" placeholder="Pregunta sobre las operaciones del período..."
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();agSend();}"
+      oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,80)+'px'"></textarea>
+    <button id="ag-send" onclick="agSend()" title="Enviar">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<script>
+/* ── AGENTE IA OPERACIONES ───────────────────────────────────── */
+var AG = {
+  open:    false,
+  typing:  false,
+  history: [],
+  hasData: false
+};
+
+function agToggle() {
+  AG.open = !AG.open;
+  document.getElementById('ag-panel').classList.toggle('open', AG.open);
+  document.getElementById('ag-unread').style.display = 'none';
+  if (AG.open && AG.history.length === 0) agWelcome();
+  if (AG.open) setTimeout(() => document.getElementById('ag-input').focus(), 100);
+}
+
+function agWelcome() {
+  agAppend('ai',
+    '¡Hola! Soy el agente de operaciones REDTEC. 👋<br><br>' +
+    'Puedo analizar las operaciones del período cargado: emisiones, retiros, transferencias, ' +
+    'clientes, etapas y cantidades.<br><br>' +
+    '<em style="color:var(--text-muted);font-size:11px">Carga un período para activar el análisis en tiempo real.</em>'
+  );
+}
+
+function agClear() {
+  AG.history = [];
+  document.getElementById('ag-messages').innerHTML = '';
+  document.getElementById('ag-suggestions').style.display = 'flex';
+  agWelcome();
+}
+
+function agSuggest(el) {
+  document.getElementById('ag-suggestions').style.display = 'none';
+  document.getElementById('ag-input').value = el.textContent;
+  agSend();
+}
+
+// Llamado desde el dashboard cuando se cargan datos nuevos
+function agNotifyData(resumen) {
+  AG.hasData = true;
+  var badge = document.getElementById('ag-ctx-badge');
+  badge.className = '';
+  document.getElementById('ag-ctx-txt').textContent =
+    '✓ Datos cargados · ' + resumen;
+  // Mostrar punto verde en burbuja si panel está cerrado
+  if (!AG.open) {
+    document.getElementById('ag-unread').style.display = 'block';
+  }
+}
+
+function agBuildContext() {
+  // Capturar datos actuales del dashboard
+  var datos = typeof raw !== 'undefined' ? raw : [];
+  if (!datos.length) return 'No hay datos cargados en el dashboard actualmente.';
+
+  var d1 = document.getElementById('d1')?.value || '—';
+  var d2 = document.getElementById('d2')?.value || '—';
+
+  // Agrupar por operación y etapa
+  var ops = {}, etapas = {}, clientes = {}, sinDespachar = [];
+  datos.forEach(function(r) {
+    var op = (r.operacion||'Sin tipo').trim();
+    var et = (r.etapaOperacion||'—').trim();
+    var cl = (r.clienteDestinoStr||r.clienteOrigenStr||'—').trim();
+    if (!ops[op]) ops[op] = { ops:0, sol:0, desp:0, conf:0 };
+    ops[op].ops++;
+    ops[op].sol  += r.cantidadSolicitada  || 0;
+    ops[op].desp += r.cantidadDespachada  || 0;
+    ops[op].conf += r.cantidadConfirmada  || 0;
+    etapas[et] = (etapas[et]||0) + 1;
+    if (!clientes[cl]) clientes[cl] = { sol:0, desp:0, conf:0, ops:[] };
+    clientes[cl].sol  += r.cantidadSolicitada  || 0;
+    clientes[cl].desp += r.cantidadDespachada  || 0;
+    clientes[cl].conf += r.cantidadConfirmada  || 0;
+    clientes[cl].ops.push(op);
+    // Pendientes de despachar (no anulados, desp=0)
+    if ((r.cantidadSolicitada||0) > 0 && (r.cantidadDespachada||0) === 0
+        && et.toLowerCase().indexOf('anulad') < 0) {
+      sinDespachar.push({
+        pedido: r.nroPedido, cliente: cl, op: op,
+        sol: r.cantidadSolicitada, etapa: et
+      });
+    }
+  });
+
+  // Top 5 clientes por solicitado
+  var topCli = Object.entries(clientes)
+    .sort(function(a,b){ return b[1].sol - a[1].sol; })
+    .slice(0, 5)
+    .map(function(e){ return e[0]+': sol='+e[1].sol+' desp='+e[1].desp+' conf='+e[1].conf; });
+
+  // Resumen ops
+  var opsStr = Object.entries(ops).map(function(e){
+    return e[0]+': '+e[1].ops+' ops | sol='+e[1].sol+' desp='+e[1].desp+' conf='+e[1].conf;
+  }).join('
+');
+
+  // Etapas
+  var etStr = Object.entries(etapas)
+    .sort(function(a,b){ return b[1]-a[1]; })
+    .map(function(e){ return e[0]+': '+e[1]; }).join(' | ');
+
+  // Sin despachar (max 8)
+  var sdStr = sinDespachar.slice(0,8).map(function(r){
+    return 'Pedido '+r.pedido+' ('+r.op+'): '+r.cliente+' sol='+r.sol+' etapa='+r.etapa;
+  }).join('
+');
+
+  return 'Eres un asistente de operaciones logísticas de REDTEC. Responde en español, conciso y con números concretos. Útil para el equipo comercial y gerencia.
+
+' +
+    'PERÍODO ANALIZADO: ' + d1 + ' al ' + d2 + '
+' +
+    'TOTAL REGISTROS: ' + datos.length + '
+
+' +
+    'RESUMEN POR TIPO DE OPERACIÓN:
+' + opsStr + '
+
+' +
+    'ETAPAS:
+' + etStr + '
+
+' +
+    'TOP 5 CLIENTES (por cant. solicitada):
+' + topCli.join('
+') + '
+
+' +
+    (sdStr ? 'SIN DESPACHAR (no anulados, desp=0):
+' + sdStr + '
+
+' : '') +
+    'NEGOCIO: REDTEC emite/transfiere pallets a clientes que los retiran desde retail. ' +
+    'Solicitado=lo pedido, Despachado=lo enviado, Confirmado=lo recibido. ' +
+    'Diferencia sol-desp indica pendiente de despacho. Etapa "Anulado" excluye del análisis.';
+}
+
+async function agSend() {
+  if (AG.typing) return;
+  var input = document.getElementById('ag-input');
+  var text = input.value.trim();
+  if (!text) return;
+
+  document.getElementById('ag-suggestions').style.display = 'none';
+  input.value = ''; input.style.height = 'auto';
+  agAppend('user', text);
+  AG.history.push({ role:'user', content: text });
+  AG.typing = true;
+  document.getElementById('ag-send').disabled = true;
+
+  // Typing indicator
+  var typing = document.createElement('div');
+  typing.className = 'ag-msg'; typing.id = 'ag-typing';
+  typing.innerHTML = '<div class="ag-av ai">IA</div><div class="ag-bbl ai"><div class="ag-dots"><span></span><span></span><span></span></div></div>';
+  document.getElementById('ag-messages').appendChild(typing);
+  document.getElementById('ag-messages').scrollTop = 99999;
+
+  try {
+    var ctx = agBuildContext();
+    var res = await fetch('https://redtecagente-e9hahhgvc0enc9an.westus3-01.azurewebsites.net/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 800,
+        system: ctx,
+        messages: AG.history
+      })
+    });
+    var data = await res.json();
+    var el = document.getElementById('ag-typing');
+    if (el) el.remove();
+
+    if (data.error) {
+      agAppend('ai', '<span style="color:#F87171">⚠ ' + (data.error.message||'Error al conectar') + '</span>');
+      AG.history.pop();
+    } else {
+      var reply = data.content[0].text;
+      agAppend('ai', reply
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/
+/g, '<br>'));
+      AG.history.push({ role:'assistant', content: reply });
+    }
+  } catch(e) {
+    var el2 = document.getElementById('ag-typing');
+    if (el2) el2.remove();
+    agAppend('ai', '<span style="color:#F87171">⚠ No se pudo conectar. Reintenta en un momento.</span>');
+    AG.history.pop();
+  }
+
+  AG.typing = false;
+  document.getElementById('ag-send').disabled = false;
+  document.getElementById('ag-input').focus();
+}
+
+function agAppend(role, html) {
+  var wrap = document.createElement('div');
+  wrap.className = 'ag-msg' + (role==='user' ? ' user' : '');
+  var av = document.createElement('div');
+  av.className = 'ag-av ' + (role==='ai' ? 'ai' : 'usr');
+  av.textContent = role==='ai' ? 'IA' : 'Tú';
+  var bbl = document.createElement('div');
+  bbl.className = 'ag-bbl ' + (role==='ai' ? 'ai' : 'user');
+  bbl.innerHTML = html;
+  wrap.appendChild(av);
+  wrap.appendChild(bbl);
+  document.getElementById('ag-messages').appendChild(wrap);
+  document.getElementById('ag-messages').scrollTop = 99999;
+}
+
+// Mostrar punto de notificación después de 3s si hay datos
+setTimeout(function() {
+  if (typeof raw !== 'undefined' && raw && raw.length > 0) {
+    document.getElementById('ag-unread').style.display = 'block';
+  }
+}, 3000);
+</script>
+
 </body>
 </html>

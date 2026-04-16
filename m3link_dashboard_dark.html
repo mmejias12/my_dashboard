@@ -1591,91 +1591,72 @@ function agNotifyData(resumen) {
 }
 
 function agBuildContext() {
-  // Capturar datos actuales del dashboard
   var datos = typeof raw !== 'undefined' ? raw : [];
   if (!datos.length) return 'No hay datos cargados en el dashboard actualmente.';
 
-  var d1 = document.getElementById('d1')?.value || '—';
-  var d2 = document.getElementById('d2')?.value || '—';
+  var d1 = document.getElementById('d1') ? document.getElementById('d1').value : '—';
+  var d2 = document.getElementById('d2') ? document.getElementById('d2').value : '—';
 
-  // Agrupar por operación y etapa
   var ops = {}, etapas = {}, clientes = {}, sinDespachar = [];
-  datos.forEach(function(r) {
-    var op = (r.operacion||'Sin tipo').trim();
-    var et = (r.etapaOperacion||'—').trim();
-    var cl = (r.clienteDestinoStr||r.clienteOrigenStr||'—').trim();
+  for (var i = 0; i < datos.length; i++) {
+    var r = datos[i];
+    var op = (r.operacion || 'Sin tipo').trim();
+    var et = (r.etapaOperacion || '—').trim();
+    var cl = (r.clienteDestinoStr || r.clienteOrigenStr || '—').trim();
     if (!ops[op]) ops[op] = { ops:0, sol:0, desp:0, conf:0 };
     ops[op].ops++;
     ops[op].sol  += r.cantidadSolicitada  || 0;
     ops[op].desp += r.cantidadDespachada  || 0;
     ops[op].conf += r.cantidadConfirmada  || 0;
-    etapas[et] = (etapas[et]||0) + 1;
-    if (!clientes[cl]) clientes[cl] = { sol:0, desp:0, conf:0, ops:[] };
+    etapas[et] = (etapas[et] || 0) + 1;
+    if (!clientes[cl]) clientes[cl] = { sol:0, desp:0, conf:0 };
     clientes[cl].sol  += r.cantidadSolicitada  || 0;
     clientes[cl].desp += r.cantidadDespachada  || 0;
     clientes[cl].conf += r.cantidadConfirmada  || 0;
-    clientes[cl].ops.push(op);
-    // Pendientes de despachar (no anulados, desp=0)
-    if ((r.cantidadSolicitada||0) > 0 && (r.cantidadDespachada||0) === 0
+    if ((r.cantidadSolicitada || 0) > 0 && (r.cantidadDespachada || 0) === 0
         && et.toLowerCase().indexOf('anulad') < 0) {
-      sinDespachar.push({
-        pedido: r.nroPedido, cliente: cl, op: op,
-        sol: r.cantidadSolicitada, etapa: et
-      });
+      sinDespachar.push('Pedido ' + r.nroPedido + ' (' + op + '): ' + cl + ' sol=' + r.cantidadSolicitada + ' etapa=' + et);
     }
-  });
+  }
 
-  // Top 5 clientes por solicitado
   var topCli = Object.entries(clientes)
     .sort(function(a,b){ return b[1].sol - a[1].sol; })
     .slice(0, 5)
-    .map(function(e){ return e[0]+': sol='+e[1].sol+' desp='+e[1].desp+' conf='+e[1].conf; });
+    .map(function(e){ return e[0] + ': sol=' + e[1].sol + ' desp=' + e[1].desp + ' conf=' + e[1].conf; });
 
-  // Resumen ops
-  var opsStr = Object.entries(ops).map(function(e){
-    return e[0]+': '+e[1].ops+' ops | sol='+e[1].sol+' desp='+e[1].desp+' conf='+e[1].conf;
-  }).join('
-');
+  var opsLines = Object.entries(ops).map(function(e){
+    return e[0] + ': ' + e[1].ops + ' ops | sol=' + e[1].sol + ' desp=' + e[1].desp + ' conf=' + e[1].conf;
+  });
 
-  // Etapas
-  var etStr = Object.entries(etapas)
-    .sort(function(a,b){ return b[1]-a[1]; })
-    .map(function(e){ return e[0]+': '+e[1]; }).join(' | ');
+  var etLines = Object.entries(etapas)
+    .sort(function(a,b){ return b[1] - a[1]; })
+    .map(function(e){ return e[0] + ': ' + e[1]; });
 
-  // Sin despachar (max 8)
-  var sdStr = sinDespachar.slice(0,8).map(function(r){
-    return 'Pedido '+r.pedido+' ('+r.op+'): '+r.cliente+' sol='+r.sol+' etapa='+r.etapa;
-  }).join('
-');
+  var ctx = [
+    'Eres un asistente de operaciones logísticas de REDTEC. Responde en español, conciso y con números concretos. Útil para el equipo comercial y gerencia.',
+    '',
+    'PERÍODO ANALIZADO: ' + d1 + ' al ' + d2,
+    'TOTAL REGISTROS: ' + datos.length,
+    '',
+    'RESUMEN POR TIPO DE OPERACIÓN:',
+    opsLines.join('\n'),
+    '',
+    'ETAPAS: ' + etLines.join(' | '),
+    '',
+    'TOP 5 CLIENTES (por cant. solicitada):',
+    topCli.join('\n'),
+    ''
+  ];
 
-  return 'Eres un asistente de operaciones logísticas de REDTEC. Responde en español, conciso y con números concretos. Útil para el equipo comercial y gerencia.
+  if (sinDespachar.length > 0) {
+    ctx.push('SIN DESPACHAR (no anulados, desp=0):');
+    ctx.push(sinDespachar.slice(0, 8).join('\n'));
+    ctx.push('');
+  }
 
-' +
-    'PERÍODO ANALIZADO: ' + d1 + ' al ' + d2 + '
-' +
-    'TOTAL REGISTROS: ' + datos.length + '
+  ctx.push('NEGOCIO: REDTEC emite/transfiere pallets a clientes que los retiran desde retail. Solicitado=lo pedido, Despachado=lo enviado, Confirmado=lo recibido. Diferencia sol-desp indica pendiente de despacho. Etapa Anulado excluye del análisis.');
 
-' +
-    'RESUMEN POR TIPO DE OPERACIÓN:
-' + opsStr + '
-
-' +
-    'ETAPAS:
-' + etStr + '
-
-' +
-    'TOP 5 CLIENTES (por cant. solicitada):
-' + topCli.join('
-') + '
-
-' +
-    (sdStr ? 'SIN DESPACHAR (no anulados, desp=0):
-' + sdStr + '
-
-' : '') +
-    'NEGOCIO: REDTEC emite/transfiere pallets a clientes que los retiran desde retail. ' +
-    'Solicitado=lo pedido, Despachado=lo enviado, Confirmado=lo recibido. ' +
-    'Diferencia sol-desp indica pendiente de despacho. Etapa "Anulado" excluye del análisis.';
+  return ctx.join('\n');
 }
 
 async function agSend() {

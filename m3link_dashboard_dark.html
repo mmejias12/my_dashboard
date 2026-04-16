@@ -341,179 +341,6 @@
     line-height: 1.2;
   }
 
-/* ══════════════════════════════════════════════════════════
-   AGENTE IA FLOTANTE — Operaciones x Rango Fechas
-   Posición: fixed bottom-right, no tapa contenido
-   Panel se abre hacia arriba+izquierda
-   ══════════════════════════════════════════════════════════ */
-
-/* Burbuja flotante */
-#ag-bubble {
-  position: fixed;
-  bottom: 28px; right: 28px;
-  width: 52px; height: 52px;
-  background: linear-gradient(135deg, #C0392B, #E74C3C);
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 4px 20px rgba(192,57,43,.55);
-  z-index: 9999;
-  transition: transform .2s, box-shadow .2s;
-  user-select: none;
-}
-#ag-bubble:hover {
-  transform: scale(1.08);
-  box-shadow: 0 6px 28px rgba(192,57,43,.75);
-}
-#ag-bubble svg { pointer-events: none; }
-#ag-unread {
-  position: absolute; top: 4px; right: 4px;
-  width: 11px; height: 11px;
-  background: var(--accent);
-  border-radius: 50%;
-  border: 2px solid var(--bg-page);
-  display: none;
-}
-
-/* Panel */
-#ag-panel {
-  position: fixed;
-  bottom: 92px; right: 28px;
-  width: 370px;
-  max-height: 560px;
-  background: #0d111a;
-  border: 1px solid rgba(255,255,255,.1);
-  border-radius: 14px;
-  display: none;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0,0,0,.65);
-  z-index: 9998;
-  animation: agSlideUp .22s ease;
-}
-#ag-panel.open { display: flex; }
-@keyframes agSlideUp {
-  from { opacity:0; transform: translateY(14px); }
-  to   { opacity:1; transform: translateY(0); }
-}
-
-/* Header */
-#ag-header {
-  background: linear-gradient(135deg, #1a0a0a 0%, #2a0f0f 100%);
-  border-bottom: 1px solid rgba(192,57,43,.25);
-  padding: 12px 14px;
-  display: flex; align-items: center; gap: 10px;
-  flex-shrink: 0;
-}
-#ag-avatar {
-  width: 32px; height: 32px; border-radius: 50%;
-  background: linear-gradient(135deg, #C0392B, #E74C3C);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 10px; font-weight: 800; color: #fff;
-  flex-shrink: 0;
-}
-#ag-hdr-info { flex: 1; min-width: 0; }
-#ag-hdr-name { font-size: 12.5px; font-weight: 600; color: var(--text-pri); }
-#ag-hdr-sub  { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
-#ag-status   { width: 7px; height: 7px; background: var(--accent); border-radius: 50%;
-               box-shadow: 0 0 6px var(--accent); flex-shrink: 0; }
-#ag-close-btn, #ag-clear-btn {
-  background: transparent; border: none; cursor: pointer;
-  color: var(--text-muted); font-size: 16px; padding: 4px;
-  border-radius: 4px; transition: background .12s, color .12s;
-  line-height: 1;
-}
-#ag-close-btn:hover, #ag-clear-btn:hover {
-  background: rgba(255,255,255,.07); color: var(--text-pri);
-}
-
-/* Contexto badge */
-#ag-ctx-badge {
-  background: rgba(74,222,128,.08);
-  border-bottom: 1px solid rgba(74,222,128,.15);
-  padding: 6px 14px;
-  font-size: 10px; color: rgba(74,222,128,.8);
-  display: flex; align-items: center; gap: 6px;
-  flex-shrink: 0;
-}
-#ag-ctx-badge.no-data {
-  background: rgba(248,113,113,.07);
-  border-bottom-color: rgba(248,113,113,.15);
-  color: rgba(248,113,113,.8);
-}
-#ag-ctx-dot { width: 5px; height: 5px; background: currentColor; border-radius: 50%; flex-shrink: 0; }
-
-/* Mensajes */
-#ag-messages {
-  flex: 1; overflow-y: auto;
-  padding: 12px;
-  display: flex; flex-direction: column; gap: 10px;
-  min-height: 0;
-}
-.ag-msg { display: flex; align-items: flex-start; gap: 7px; }
-.ag-msg.user { flex-direction: row-reverse; }
-.ag-av {
-  width: 26px; height: 26px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 9px; font-weight: 700; flex-shrink: 0;
-}
-.ag-av.ai  { background: linear-gradient(135deg,#C0392B,#E74C3C); color:#fff; }
-.ag-av.usr { background: rgba(255,255,255,.1); color: var(--text-sec); }
-.ag-bbl {
-  max-width: 88%; padding: 8px 11px;
-  border-radius: 10px; font-size: 12px; line-height: 1.55;
-}
-.ag-bbl.ai   { background: rgba(255,255,255,.05); color: var(--text-pri); border-radius: 2px 10px 10px 10px; }
-.ag-bbl.user { background: rgba(192,57,43,.25); color: var(--text-pri); border-radius: 10px 2px 10px 10px; }
-
-/* Typing dots */
-.ag-dots { display: flex; gap: 4px; align-items: center; padding: 2px 0; }
-.ag-dots span {
-  width: 5px; height: 5px; background: var(--text-muted); border-radius: 50%;
-  animation: agDot .9s infinite;
-}
-.ag-dots span:nth-child(2) { animation-delay: .2s; }
-.ag-dots span:nth-child(3) { animation-delay: .4s; }
-@keyframes agDot { 0%,80%,100%{opacity:.2;transform:scale(.8)} 40%{opacity:1;transform:scale(1)} }
-
-/* Sugerencias */
-#ag-suggestions {
-  padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 5px;
-  border-top: 1px solid var(--border); flex-shrink: 0;
-}
-.ag-sug {
-  font-size: 10.5px; padding: 4px 9px;
-  background: rgba(255,255,255,.05); border: 1px solid var(--border-md);
-  border-radius: 12px; cursor: pointer; color: var(--text-sec);
-  transition: all .12s; white-space: nowrap;
-}
-.ag-sug:hover { background: rgba(255,255,255,.1); color: var(--text-pri); }
-
-/* Input */
-#ag-input-wrap {
-  display: flex; align-items: flex-end; gap: 7px;
-  padding: 10px 12px; border-top: 1px solid var(--border); flex-shrink: 0;
-}
-#ag-input {
-  flex: 1; background: var(--bg-input); border: 1px solid var(--border-md);
-  border-radius: 8px; padding: 8px 11px; color: var(--text-pri);
-  font-size: 12px; font-family: 'Inter',sans-serif; outline: none;
-  resize: none; max-height: 80px; line-height: 1.4;
-  transition: border-color .12s;
-}
-#ag-input:focus { border-color: #C0392B; }
-#ag-send {
-  width: 34px; height: 34px; background: #C0392B; border: none;
-  border-radius: 8px; cursor: pointer; display: flex;
-  align-items: center; justify-content: center;
-  transition: background .12s; flex-shrink: 0;
-}
-#ag-send:hover { background: #E74C3C; }
-#ag-send:disabled { opacity: .4; cursor: not-allowed; }
-#ag-send svg { pointer-events: none; }
-
-#ag-messages::-webkit-scrollbar { width: 3px; }
-#ag-messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
 
 </style>
 </head>
@@ -857,10 +684,8 @@ function loadData() {
     document.getElementById('totals-bar').style.display = 'flex';
       document.getElementById('tag-row').style.display = 'flex';
       var now = new Date();
-      // Notificar al agente con el resumen del período
-  if (typeof agNotifyData === 'function') {
-    var _agResumen = em + ' emisiones · ' + ret + ' retiros · ' + raw.length + ' registros';
-    agNotifyData(_agResumen);
+      if (typeof window.agData === 'function') {
+    window.agData('Datos cargados: ' + em + ' emisiones · ' + ret + ' retiros · ' + raw.length + ' registros');
   }
   document.getElementById('last-upd').textContent = 'Actualizado ' + now.toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
       btn.disabled = false; btn.textContent = 'Cargar datos';
@@ -1481,265 +1306,309 @@ function exportXLSX() {
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════════
-     AGENTE IA FLOTANTE — Operaciones x Rango Fechas
-     ══════════════════════════════════════════════════════════ -->
+</body>
+</html>
+<!-- ═══════════════════════════════════════════════════════════
+     AGENTE IA — REDTEC OPERACIONES
+     Posición: bottom-center (no interfiere al cambiar sección)
+     ═══════════════════════════════════════════════════════════ -->
+<style>
+#agB{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);
+  display:flex;align-items:center;gap:8px;background:linear-gradient(135deg,#C0392B,#E74C3C);
+  border:none;border-radius:24px;padding:9px 18px 9px 14px;cursor:pointer;
+  box-shadow:0 4px 18px rgba(192,57,43,.5);z-index:9999;
+  font-family:'Inter',sans-serif;font-size:12px;font-weight:600;color:#fff;
+  transition:transform .18s,box-shadow .18s;user-select:none;white-space:nowrap}
+#agB:hover{transform:translateX(-50%) scale(1.04);box-shadow:0 6px 24px rgba(192,57,43,.7)}
+#agBdot{width:7px;height:7px;background:#4ade80;border-radius:50%;
+  border:2px solid rgba(255,255,255,.3);display:none;flex-shrink:0}
 
-<!-- Burbuja -->
-<div id="ag-bubble" onclick="agToggle()" title="Agente IA · Operaciones">
-  <div id="ag-unread"></div>
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-  </svg>
-</div>
+#agP{position:fixed;bottom:72px;left:50%;transform:translateX(-50%);
+  width:390px;max-height:560px;background:#0d111a;
+  border:1px solid rgba(255,255,255,.1);border-radius:14px;
+  display:none;flex-direction:column;overflow:hidden;
+  box-shadow:0 20px 60px rgba(0,0,0,.7);z-index:9998;
+  animation:agUp .2s ease}
+#agP.on{display:flex}
+@keyframes agUp{from{opacity:0;transform:translateX(-50%) translateY(12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+
+#agH{background:linear-gradient(135deg,#1a0808,#2d1010);
+  border-bottom:1px solid rgba(192,57,43,.2);
+  padding:11px 14px;display:flex;align-items:center;gap:9px;flex-shrink:0}
+#agAv{width:30px;height:30px;border-radius:50%;flex-shrink:0;
+  background:linear-gradient(135deg,#C0392B,#E74C3C);
+  display:flex;align-items:center;justify-content:center;
+  font-size:9px;font-weight:800;color:#fff}
+#agHN{font-size:12px;font-weight:600;color:#f0f1f5}
+#agHS{font-size:10px;color:#4a4f66;margin-top:1px}
+#agSt{width:6px;height:6px;background:#4ade80;border-radius:50%;
+  box-shadow:0 0 5px #4ade80;margin-left:auto;flex-shrink:0}
+#agX,#agClr{background:none;border:none;cursor:pointer;color:#4a4f66;
+  font-size:15px;padding:3px 5px;border-radius:4px;line-height:1}
+#agX:hover,#agClr:hover{background:rgba(255,255,255,.07);color:#f0f1f5}
+
+#agCtx{background:rgba(74,222,128,.07);border-bottom:1px solid rgba(74,222,128,.12);
+  padding:5px 13px;font-size:10px;color:rgba(74,222,128,.75);
+  display:flex;align-items:center;gap:5px;flex-shrink:0}
+#agCtx.nd{background:rgba(245,166,35,.07);border-bottom-color:rgba(245,166,35,.12);color:rgba(245,166,35,.75)}
+#agCtxDot{width:5px;height:5px;background:currentColor;border-radius:50%;flex-shrink:0}
+
+#agM{flex:1;overflow-y:auto;padding:11px 12px;display:flex;flex-direction:column;gap:9px;min-height:0}
+.am{display:flex;align-items:flex-start;gap:6px}
+.am.u{flex-direction:row-reverse}
+.aav{width:25px;height:25px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;flex-shrink:0}
+.aav.ai{background:linear-gradient(135deg,#C0392B,#E74C3C);color:#fff}
+.aav.us{background:rgba(255,255,255,.08);color:#8b90a8}
+.ab{max-width:87%;padding:7px 10px;border-radius:9px;font-size:11.5px;line-height:1.55}
+.ab.ai{background:rgba(255,255,255,.05);color:#f0f1f5;border-radius:2px 9px 9px 9px}
+.ab.us{background:rgba(192,57,43,.22);color:#f0f1f5;border-radius:9px 2px 9px 9px}
+.adots{display:flex;gap:3px;align-items:center;padding:2px 0}
+.adots span{width:5px;height:5px;background:#4a4f66;border-radius:50%;animation:adot .9s infinite}
+.adots span:nth-child(2){animation-delay:.2s}
+.adots span:nth-child(3){animation-delay:.4s}
+@keyframes adot{0%,80%,100%{opacity:.2;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
+
+#agSugs{padding:7px 11px;display:flex;flex-wrap:wrap;gap:4px;border-top:1px solid rgba(255,255,255,.06);flex-shrink:0}
+.asug{font-size:10px;padding:3px 8px;background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.09);border-radius:11px;cursor:pointer;
+  color:#8b90a8;transition:all .12s;white-space:nowrap}
+.asug:hover{background:rgba(255,255,255,.1);color:#f0f1f5}
+
+#agIn{display:flex;align-items:flex-end;gap:6px;
+  padding:9px 11px;border-top:1px solid rgba(255,255,255,.06);flex-shrink:0}
+#agTxt{flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);
+  border-radius:7px;padding:7px 10px;color:#f0f1f5;font-size:11.5px;
+  font-family:'Inter',sans-serif;outline:none;resize:none;max-height:75px;line-height:1.4}
+#agTxt:focus{border-color:#C0392B}
+#agGo{width:32px;height:32px;background:#C0392B;border:none;border-radius:7px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  transition:background .12s}
+#agGo:hover{background:#E74C3C}
+#agGo:disabled{opacity:.4;cursor:not-allowed}
+#agM::-webkit-scrollbar{width:3px}
+#agM::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:2px}
+</style>
+
+<!-- Botón central -->
+<button id="agB" onclick="agT()">
+  <div id="agBdot"></div>
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+  Agente IA
+</button>
 
 <!-- Panel -->
-<div id="ag-panel">
-
-  <!-- Header -->
-  <div id="ag-header">
-    <div id="ag-avatar">IA</div>
-    <div id="ag-hdr-info">
-      <div id="ag-hdr-name">Agente REDTEC</div>
-      <div id="ag-hdr-sub">Operaciones · Análisis en tiempo real</div>
-    </div>
-    <div id="ag-status"></div>
-    <button id="ag-clear-btn" onclick="agClear()" title="Limpiar chat">↺</button>
-    <button id="ag-close-btn" onclick="agToggle()" title="Cerrar">✕</button>
+<div id="agP">
+  <div id="agH">
+    <div id="agAv">IA</div>
+    <div><div id="agHN">Agente REDTEC</div><div id="agHS">Operaciones · Análisis en tiempo real</div></div>
+    <div id="agSt"></div>
+    <button id="agClr" onclick="agClr()" title="Limpiar">↺</button>
+    <button id="agX"   onclick="agT()"   title="Cerrar">✕</button>
   </div>
-
-  <!-- Badge de contexto -->
-  <div id="ag-ctx-badge" class="no-data">
-    <div id="ag-ctx-dot"></div>
-    <span id="ag-ctx-txt">Carga datos primero para activar el análisis</span>
+  <div id="agCtx" class="nd">
+    <div id="agCtxDot"></div>
+    <span id="agCtxTxt">Carga datos del período para activar el análisis</span>
   </div>
-
-  <!-- Mensajes -->
-  <div id="ag-messages"></div>
-
-  <!-- Sugerencias rápidas -->
-  <div id="ag-suggestions">
-    <span class="ag-sug" onclick="agSuggest(this)">¿Qué emisiones están pendientes?</span>
-    <span class="ag-sug" onclick="agSuggest(this)">¿Cuántos pallets sin despachar?</span>
-    <span class="ag-sug" onclick="agSuggest(this)">Resumen del período</span>
-    <span class="ag-sug" onclick="agSuggest(this)">¿Qué clientes tienen retiros hoy?</span>
+  <div id="agM"></div>
+  <div id="agSugs">
+    <span class="asug" onclick="agSug(this)">¿Emisiones pendientes?</span>
+    <span class="asug" onclick="agSug(this)">¿Qué hay sin despachar?</span>
+    <span class="asug" onclick="agSug(this)">Resumen del período</span>
+    <span class="asug" onclick="agSug(this)">Clientes con retiros</span>
   </div>
-
-  <!-- Input -->
-  <div id="ag-input-wrap">
-    <textarea id="ag-input" rows="1" placeholder="Pregunta sobre las operaciones del período..."
-      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();agSend();}"
-      oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,80)+'px'"></textarea>
-    <button id="ag-send" onclick="agSend()" title="Enviar">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
-      </svg>
+  <div id="agIn">
+    <textarea id="agTxt" rows="1" placeholder="Pregunta sobre las operaciones..."
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();agSend()}"
+      oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,75)+'px'"></textarea>
+    <button id="agGo" onclick="agSend()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
     </button>
   </div>
 </div>
 
 <script>
-/* ── AGENTE IA OPERACIONES ───────────────────────────────────── */
-var AG = {
-  open:    false,
-  typing:  false,
-  history: [],
-  hasData: false
-};
+(function() {
+  var isOpen = false;
+  var busy = false;
+  var hist = [];
 
-function agToggle() {
-  AG.open = !AG.open;
-  document.getElementById('ag-panel').classList.toggle('open', AG.open);
-  document.getElementById('ag-unread').style.display = 'none';
-  if (AG.open && AG.history.length === 0) agWelcome();
-  if (AG.open) setTimeout(() => document.getElementById('ag-input').focus(), 100);
-}
-
-function agWelcome() {
-  agAppend('ai',
-    '¡Hola! Soy el agente de operaciones REDTEC. 👋<br><br>' +
-    'Puedo analizar las operaciones del período cargado: emisiones, retiros, transferencias, ' +
-    'clientes, etapas y cantidades.<br><br>' +
-    '<em style="color:var(--text-muted);font-size:11px">Carga un período para activar el análisis en tiempo real.</em>'
-  );
-}
-
-function agClear() {
-  AG.history = [];
-  document.getElementById('ag-messages').innerHTML = '';
-  document.getElementById('ag-suggestions').style.display = 'flex';
-  agWelcome();
-}
-
-function agSuggest(el) {
-  document.getElementById('ag-suggestions').style.display = 'none';
-  document.getElementById('ag-input').value = el.textContent;
-  agSend();
-}
-
-// Llamado desde el dashboard cuando se cargan datos nuevos
-function agNotifyData(resumen) {
-  AG.hasData = true;
-  var badge = document.getElementById('ag-ctx-badge');
-  badge.className = '';
-  document.getElementById('ag-ctx-txt').textContent =
-    '✓ Datos cargados · ' + resumen;
-  // Mostrar punto verde en burbuja si panel está cerrado
-  if (!AG.open) {
-    document.getElementById('ag-unread').style.display = 'block';
-  }
-}
-
-function agBuildContext() {
-  var datos = typeof raw !== 'undefined' ? raw : [];
-  if (!datos.length) return 'No hay datos cargados en el dashboard actualmente.';
-
-  var d1 = document.getElementById('d1') ? document.getElementById('d1').value : '—';
-  var d2 = document.getElementById('d2') ? document.getElementById('d2').value : '—';
-
-  var ops = {}, etapas = {}, clientes = {}, sinDespachar = [];
-  for (var i = 0; i < datos.length; i++) {
-    var r = datos[i];
-    var op = (r.operacion || 'Sin tipo').trim();
-    var et = (r.etapaOperacion || '—').trim();
-    var cl = (r.clienteDestinoStr || r.clienteOrigenStr || '—').trim();
-    if (!ops[op]) ops[op] = { ops:0, sol:0, desp:0, conf:0 };
-    ops[op].ops++;
-    ops[op].sol  += r.cantidadSolicitada  || 0;
-    ops[op].desp += r.cantidadDespachada  || 0;
-    ops[op].conf += r.cantidadConfirmada  || 0;
-    etapas[et] = (etapas[et] || 0) + 1;
-    if (!clientes[cl]) clientes[cl] = { sol:0, desp:0, conf:0 };
-    clientes[cl].sol  += r.cantidadSolicitada  || 0;
-    clientes[cl].desp += r.cantidadDespachada  || 0;
-    clientes[cl].conf += r.cantidadConfirmada  || 0;
-    if ((r.cantidadSolicitada || 0) > 0 && (r.cantidadDespachada || 0) === 0
-        && et.toLowerCase().indexOf('anulad') < 0) {
-      sinDespachar.push('Pedido ' + r.nroPedido + ' (' + op + '): ' + cl + ' sol=' + r.cantidadSolicitada + ' etapa=' + et);
+  function agT() {
+    isOpen = !isOpen;
+    var p = document.getElementById('agP');
+    if (isOpen) {
+      p.classList.add('on');
+      document.getElementById('agBdot').style.display = 'none';
+      if (hist.length === 0) agWelcome();
+      setTimeout(function() { document.getElementById('agTxt').focus(); }, 120);
+    } else {
+      p.classList.remove('on');
     }
   }
+  window.agT = agT;
 
-  var topCli = Object.entries(clientes)
-    .sort(function(a,b){ return b[1].sol - a[1].sol; })
-    .slice(0, 5)
-    .map(function(e){ return e[0] + ': sol=' + e[1].sol + ' desp=' + e[1].desp + ' conf=' + e[1].conf; });
-
-  var opsLines = Object.entries(ops).map(function(e){
-    return e[0] + ': ' + e[1].ops + ' ops | sol=' + e[1].sol + ' desp=' + e[1].desp + ' conf=' + e[1].conf;
-  });
-
-  var etLines = Object.entries(etapas)
-    .sort(function(a,b){ return b[1] - a[1]; })
-    .map(function(e){ return e[0] + ': ' + e[1]; });
-
-  var ctx = [
-    'Eres un asistente de operaciones logísticas de REDTEC. Responde en español, conciso y con números concretos. Útil para el equipo comercial y gerencia.',
-    '',
-    'PERÍODO ANALIZADO: ' + d1 + ' al ' + d2,
-    'TOTAL REGISTROS: ' + datos.length,
-    '',
-    'RESUMEN POR TIPO DE OPERACIÓN:',
-    opsLines.join('\n'),
-    '',
-    'ETAPAS: ' + etLines.join(' | '),
-    '',
-    'TOP 5 CLIENTES (por cant. solicitada):',
-    topCli.join('\n'),
-    ''
-  ];
-
-  if (sinDespachar.length > 0) {
-    ctx.push('SIN DESPACHAR (no anulados, desp=0):');
-    ctx.push(sinDespachar.slice(0, 8).join('\n'));
-    ctx.push('');
+  function agWelcome() {
+    agAdd('ai',
+      'Hola! Soy el agente de operaciones REDTEC.<br><br>' +
+      'Puedo analizar el período cargado: emisiones, retiros, transferencias, ' +
+      'clientes pendientes y cantidades.<br><br>' +
+      '<span style="color:#4a4f66;font-size:10.5px">Carga un período con el botón "Cargar datos" para activar el análisis.</span>'
+    );
   }
 
-  ctx.push('NEGOCIO: REDTEC emite/transfiere pallets a clientes que los retiran desde retail. Solicitado=lo pedido, Despachado=lo enviado, Confirmado=lo recibido. Diferencia sol-desp indica pendiente de despacho. Etapa Anulado excluye del análisis.');
+  function agClr() {
+    hist = [];
+    document.getElementById('agM').innerHTML = '';
+    document.getElementById('agSugs').style.display = 'flex';
+    agWelcome();
+  }
+  window.agClr = agClr;
 
-  return ctx.join('\n');
-}
+  function agSug(el) {
+    document.getElementById('agSugs').style.display = 'none';
+    document.getElementById('agTxt').value = el.textContent;
+    agSend();
+  }
+  window.agSug = agSug;
 
-async function agSend() {
-  if (AG.typing) return;
-  var input = document.getElementById('ag-input');
-  var text = input.value.trim();
-  if (!text) return;
+  // Llamado desde renderAll cuando llegan datos
+  window.agData = function(resumen) {
+    var ctx = document.getElementById('agCtx');
+    ctx.className = '';
+    document.getElementById('agCtxTxt').textContent = resumen;
+    if (!isOpen) {
+      document.getElementById('agBdot').style.display = 'block';
+    }
+  };
 
-  document.getElementById('ag-suggestions').style.display = 'none';
-  input.value = ''; input.style.height = 'auto';
-  agAppend('user', text);
-  AG.history.push({ role:'user', content: text });
-  AG.typing = true;
-  document.getElementById('ag-send').disabled = true;
+  function buildCtx() {
+    var datos = (typeof raw !== 'undefined') ? raw : [];
+    if (!datos.length) return 'No hay datos cargados.';
 
-  // Typing indicator
-  var typing = document.createElement('div');
-  typing.className = 'ag-msg'; typing.id = 'ag-typing';
-  typing.innerHTML = '<div class="ag-av ai">IA</div><div class="ag-bbl ai"><div class="ag-dots"><span></span><span></span><span></span></div></div>';
-  document.getElementById('ag-messages').appendChild(typing);
-  document.getElementById('ag-messages').scrollTop = 99999;
+    var d1el = document.getElementById('d1');
+    var d2el = document.getElementById('d2');
+    var d1 = d1el ? d1el.value : '?';
+    var d2 = d2el ? d2el.value : '?';
 
-  try {
-    var ctx = agBuildContext();
-    var res = await fetch('https://redtecagente-e9hahhgvc0enc9an.westus3-01.azurewebsites.net/api/chat', {
+    var ops = {};
+    var etapas = {};
+    var clis = {};
+    var pendientes = [];
+
+    for (var i = 0; i < datos.length; i++) {
+      var r = datos[i];
+      var op = String(r.operacion || 'Sin tipo').trim();
+      var et = String(r.etapaOperacion || 'Sin etapa').trim();
+      var cl = String(r.clienteDestinoStr || r.clienteOrigenStr || 'Sin nombre').trim();
+      var sol  = Number(r.cantidadSolicitada)  || 0;
+      var desp = Number(r.cantidadDespachada)  || 0;
+      var conf = Number(r.cantidadConfirmada)  || 0;
+
+      if (!ops[op])  ops[op]  = {n:0, sol:0, desp:0, conf:0};
+      if (!clis[cl]) clis[cl] = {sol:0, desp:0, conf:0};
+      ops[op].n++;   ops[op].sol  += sol;  ops[op].desp += desp; ops[op].conf += conf;
+      etapas[et] = (etapas[et] || 0) + 1;
+      clis[cl].sol  += sol;
+      clis[cl].desp += desp;
+      clis[cl].conf += conf;
+
+      if (sol > 0 && desp === 0 && et.toLowerCase().indexOf('anulad') < 0) {
+        pendientes.push('  Ped.' + r.nroPedido + ' ' + op + ' ' + cl + ' sol=' + sol + ' etapa=' + et);
+      }
+    }
+
+    var lines = [];
+    lines.push('Eres un asistente de operaciones logisticas REDTEC. Responde en espanol, directo y con numeros.');
+    lines.push('PERIODO: ' + d1 + ' a ' + d2 + ' | TOTAL REGISTROS: ' + datos.length);
+    lines.push('');
+    lines.push('OPERACIONES:');
+    Object.keys(ops).forEach(function(k) {
+      var v = ops[k];
+      lines.push('  ' + k + ': ' + v.n + ' ops | sol=' + v.sol + ' desp=' + v.desp + ' conf=' + v.conf);
+    });
+    lines.push('');
+    lines.push('ETAPAS: ' + Object.keys(etapas).map(function(k){ return k+'='+etapas[k]; }).join(', '));
+    lines.push('');
+    lines.push('TOP 5 CLIENTES (por solicitado):');
+    Object.entries(clis).sort(function(a,b){ return b[1].sol - a[1].sol; }).slice(0,5).forEach(function(e){
+      lines.push('  ' + e[0] + ' sol=' + e[1].sol + ' desp=' + e[1].desp + ' conf=' + e[1].conf);
+    });
+    if (pendientes.length) {
+      lines.push('');
+      lines.push('SIN DESPACHAR (excluye anulados):');
+      pendientes.slice(0,8).forEach(function(p){ lines.push(p); });
+    }
+    lines.push('');
+    lines.push('NEGOCIO: sol=solicitado, desp=despachado, conf=confirmado. Diferencia sol-desp=pendiente.');
+    return lines.join('\n');
+  }
+
+  function agSend() {
+    if (busy) return;
+    var txt = document.getElementById('agTxt');
+    var msg = txt.value.trim();
+    if (!msg) return;
+    document.getElementById('agSugs').style.display = 'none';
+    txt.value = ''; txt.style.height = 'auto';
+    agAdd('user', msg);
+    hist.push({role:'user', content:msg});
+    busy = true;
+    document.getElementById('agGo').disabled = true;
+
+    var ld = document.createElement('div');
+    ld.className = 'am'; ld.id = 'agLD';
+    ld.innerHTML = '<div class="aav ai">IA</div><div class="ab ai"><div class="adots"><span></span><span></span><span></span></div></div>';
+    var m = document.getElementById('agM');
+    m.appendChild(ld); m.scrollTop = 99999;
+
+    fetch('https://redtecagente-e9hahhgvc0enc9an.westus3-01.azurewebsites.net/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 800,
-        system: ctx,
-        messages: AG.history
+        system: buildCtx(),
+        messages: hist
       })
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      var el = document.getElementById('agLD');
+      if (el) el.remove();
+      if (data.error) {
+        agAdd('ai', '<span style="color:#f56060">Error: ' + (data.error.message || 'Sin respuesta') + '</span>');
+        hist.pop();
+      } else {
+        var reply = data.content[0].text;
+        agAdd('ai', reply.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>'));
+        hist.push({role:'assistant', content:reply});
+      }
+      busy = false;
+      document.getElementById('agGo').disabled = false;
+      document.getElementById('agTxt').focus();
+    })
+    .catch(function(e) {
+      var el = document.getElementById('agLD');
+      if (el) el.remove();
+      agAdd('ai', '<span style="color:#f56060">No se pudo conectar. Reintenta.</span>');
+      hist.pop();
+      busy = false;
+      document.getElementById('agGo').disabled = false;
     });
-    var data = await res.json();
-    var el = document.getElementById('ag-typing');
-    if (el) el.remove();
-
-    if (data.error) {
-      agAppend('ai', '<span style="color:#F87171">⚠ ' + (data.error.message||'Error al conectar') + '</span>');
-      AG.history.pop();
-    } else {
-      var reply = data.content[0].text;
-      agAppend('ai', reply
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/
-/g, '<br>'));
-      AG.history.push({ role:'assistant', content: reply });
-    }
-  } catch(e) {
-    var el2 = document.getElementById('ag-typing');
-    if (el2) el2.remove();
-    agAppend('ai', '<span style="color:#F87171">⚠ No se pudo conectar. Reintenta en un momento.</span>');
-    AG.history.pop();
   }
+  window.agSend = agSend;
 
-  AG.typing = false;
-  document.getElementById('ag-send').disabled = false;
-  document.getElementById('ag-input').focus();
-}
-
-function agAppend(role, html) {
-  var wrap = document.createElement('div');
-  wrap.className = 'ag-msg' + (role==='user' ? ' user' : '');
-  var av = document.createElement('div');
-  av.className = 'ag-av ' + (role==='ai' ? 'ai' : 'usr');
-  av.textContent = role==='ai' ? 'IA' : 'Tú';
-  var bbl = document.createElement('div');
-  bbl.className = 'ag-bbl ' + (role==='ai' ? 'ai' : 'user');
-  bbl.innerHTML = html;
-  wrap.appendChild(av);
-  wrap.appendChild(bbl);
-  document.getElementById('ag-messages').appendChild(wrap);
-  document.getElementById('ag-messages').scrollTop = 99999;
-}
-
-// Mostrar punto de notificación después de 3s si hay datos
-setTimeout(function() {
-  if (typeof raw !== 'undefined' && raw && raw.length > 0) {
-    document.getElementById('ag-unread').style.display = 'block';
+  function agAdd(role, html) {
+    var w = document.createElement('div');
+    w.className = 'am' + (role === 'user' ? ' u' : '');
+    var av = document.createElement('div');
+    av.className = 'aav ' + (role === 'ai' ? 'ai' : 'us');
+    av.textContent = role === 'ai' ? 'IA' : 'Tú';
+    var b = document.createElement('div');
+    b.className = 'ab ' + (role === 'ai' ? 'ai' : 'us');
+    b.innerHTML = html;
+    w.appendChild(av); w.appendChild(b);
+    var m = document.getElementById('agM');
+    m.appendChild(w); m.scrollTop = 99999;
   }
-}, 3000);
+})();
 </script>
-
-</body>
-</html>

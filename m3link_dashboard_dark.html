@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Panel de Control M3LINK — REDTEC</title>
+<title>Panel de Control M2LINK — REDTEC</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -352,7 +352,7 @@
     <span class="logo-name">REDTEC</span>
   </div>
   <div class="logo-sep"></div>
-  <div class="topbar-title"><div class="live-dot"></div>Panel de control M3LINK</div>
+  <div class="topbar-title"><div class="live-dot"></div>Panel de control M2LINK</div>
   <div class="topbar-right">
     <div class="avatar">MM</div>
     <span class="user-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="214c4c444b4840526153444555444252400f424e4c">[email&#160;protected]</a></span>
@@ -684,10 +684,16 @@ function loadData() {
     document.getElementById('totals-bar').style.display = 'flex';
       document.getElementById('tag-row').style.display = 'flex';
       var now = new Date();
-      if (typeof window.agData === 'function') {
-    window.agData('Datos cargados: ' + em + ' emisiones · ' + ret + ' retiros · ' + raw.length + ' registros');
+document.getElementById('last-upd').textContent = 'Actualizado ' + now.toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  if (typeof window.agData === 'function') {
+    var _em=0, _ret=0;
+    for(var _i=0;_i<raw.length;_i++){
+      var _op=(raw[_i].operacion||'').toLowerCase();
+      if(_op.indexOf('emision')>=0) _em++;
+      if(_op.trim()==='retiro') _ret++;
+    }
+    window.agData(_em + ' em · ' + _ret + ' ret · ' + raw.length + ' reg.');
   }
-  document.getElementById('last-upd').textContent = 'Actualizado ' + now.toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
       btn.disabled = false; btn.textContent = 'Cargar datos';
     })
     .catch(function(err) {
@@ -1313,24 +1319,25 @@ function exportXLSX() {
      Posición: bottom-center (no interfiere al cambiar sección)
      ═══════════════════════════════════════════════════════════ -->
 <style>
-#agB{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);
-  display:flex;align-items:center;gap:8px;background:linear-gradient(135deg,#C0392B,#E74C3C);
-  border:none;border-radius:24px;padding:9px 18px 9px 14px;cursor:pointer;
+#agB{position:fixed;bottom:24px;right:24px;
+  width:52px;height:52px;
+  background:linear-gradient(135deg,#C0392B,#E74C3C);
+  border:none;border-radius:50%;cursor:pointer;
   box-shadow:0 4px 18px rgba(192,57,43,.5);z-index:9999;
-  font-family:'Inter',sans-serif;font-size:12px;font-weight:600;color:#fff;
-  transition:transform .18s,box-shadow .18s;user-select:none;white-space:nowrap}
-#agB:hover{transform:translateX(-50%) scale(1.04);box-shadow:0 6px 24px rgba(192,57,43,.7)}
+  display:flex;align-items:center;justify-content:center;
+  transition:transform .18s,box-shadow .18s;user-select:none}
+#agB:hover{transform:scale(1.08);box-shadow:0 6px 24px rgba(192,57,43,.7)}
 #agBdot{width:7px;height:7px;background:#4ade80;border-radius:50%;
   border:2px solid rgba(255,255,255,.3);display:none;flex-shrink:0}
 
-#agP{position:fixed;bottom:72px;left:50%;transform:translateX(-50%);
+#agP{position:fixed;bottom:88px;right:24px;
   width:390px;max-height:560px;background:#0d111a;
   border:1px solid rgba(255,255,255,.1);border-radius:14px;
   display:none;flex-direction:column;overflow:hidden;
   box-shadow:0 20px 60px rgba(0,0,0,.7);z-index:9998;
   animation:agUp .2s ease}
 #agP.on{display:flex}
-@keyframes agUp{from{opacity:0;transform:translateX(-50%) translateY(12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+@keyframes agUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 
 #agH{background:linear-gradient(135deg,#1a0808,#2d1010);
   border-bottom:1px solid rgba(192,57,43,.2);
@@ -1390,10 +1397,9 @@ function exportXLSX() {
 </style>
 
 <!-- Botón central -->
-<button id="agB" onclick="agT()">
+<button id="agB" onclick="agT()" title="Agente IA · Operaciones">
   <div id="agBdot"></div>
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-  Agente IA
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
 </button>
 
 <!-- Panel -->

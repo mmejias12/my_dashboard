@@ -80,10 +80,20 @@ module.exports = async function (context, req) {
       status:  result.status,
       headers: {
         ...corsHeaders,
-        'X-Workera-Host':     WORKERA_HOST,
-        'X-Workera-Endpoint': endpoint
+        'X-Workera-Host':        WORKERA_HOST,
+        'X-Workera-Endpoint':    endpoint,
+        'X-Workera-Full-Path':   path,
+        'X-Workera-User-Sent':   API_USER.substring(0, 3) + '***@' + (API_USER.split('@')[1] || ''),
+        'X-Workera-Key-Length':  String(API_KEY.length),
+        'X-Workera-Resp-Server': result.respHeaders && (result.respHeaders.server || '') ,
+        'X-Workera-Resp-CType':  result.respHeaders && (result.respHeaders['content-type'] || '')
       },
-      body: result.body
+      body: result.body || JSON.stringify({
+        _debug: 'Respuesta vacía de Workera',
+        _status: result.status,
+        _respHeaders: result.respHeaders,
+        _pathSent: path
+      })
     };
   } catch (err) {
     context.res = {
@@ -116,7 +126,11 @@ function callWorkera(path, method, body, apiUser, apiKey) {
     const reqOut = https.request(options, (res) => {
       let chunks = '';
       res.on('data', d => chunks += d);
-      res.on('end',  () => resolve({ status: res.statusCode, body: chunks }));
+      res.on('end',  () => resolve({
+        status: res.statusCode,
+        body: chunks,
+        respHeaders: res.headers
+      }));
     });
 
     reqOut.on('error', err => reject(err));

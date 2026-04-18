@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Asistencia Workera · REDTEC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#09090f;--s1:#0f1018;--s2:#14151f;--s3:#1a1b28;
+  --br:rgba(255,255,255,.06);--brm:rgba(255,255,255,.1);
+  --t1:#f0f1f5;--t2:#8b90a8;--t3:#4a4f66;
+  --green:#22d47a;--blue:#4f8ef7;--amber:#f5a623;--red:#f56060;
+  --purple:#a78bfa;--cyan:#22d4d4;--pink:#f472b6;
+}
+html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;background:var(--bg);color:var(--t1);-webkit-font-smoothing:antialiased}
+
+/* HDR */
+.hdr{height:52px;background:var(--s1);border-bottom:1px solid var(--br);display:flex;align-items:center;padding:0 20px;gap:12px;position:sticky;top:0;z-index:100}
+.logo{width:28px;height:28px;background:#c0392b;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:11px;text-decoration:none;flex-shrink:0}
+.hdr-title{font-size:13px;font-weight:600}
+.hdr-sub{font-size:11px;color:var(--t3)}
+.sep{width:1px;height:18px;background:var(--brm)}
+.pill{display:flex;align-items:center;gap:5px;background:rgba(34,212,212,.1);border:1px solid rgba(34,212,212,.25);border-radius:20px;padding:3px 10px;font-size:10.5px;color:var(--cyan);font-weight:500}
+.pill-dot{width:6px;height:6px;background:var(--cyan);border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.hdr-r{margin-left:auto;display:flex;align-items:center;gap:8px}
+.back{font-size:11px;color:var(--t3);text-decoration:none;padding:4px 10px;border:1px solid var(--brm);border-radius:6px}
+.back:hover{color:var(--t2)}
+
+/* CONTROLS */
+.ctrls{background:var(--s1);border-bottom:1px solid var(--br);padding:11px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ctrl-lbl{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;font-weight:500}
+.ctrl-inp,.ctrl-sel{background:var(--s2);border:1px solid var(--brm);color:var(--t1);padding:5px 9px;border-radius:6px;font-size:12px;font-family:inherit;outline:none;transition:border-color .15s}
+.ctrl-inp:focus,.ctrl-sel:focus{border-color:var(--cyan)}
+.load-btn{font-size:12px;padding:6px 16px;background:var(--cyan);color:#09090f;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-family:'DM Sans',sans-serif;transition:opacity .15s}
+.load-btn:hover{opacity:.88}
+.load-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* STATUS */
+.status-bar{background:var(--s1);border-bottom:1px solid var(--br);padding:7px 20px;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--t3)}
+.sdot{width:7px;height:7px;border-radius:50%;background:var(--t3);flex-shrink:0}
+.sdot.ok{background:var(--green)}.sdot.load{background:var(--amber);animation:pulse 1s infinite}.sdot.err{background:var(--red)}
+
+/* TABS */
+.tabs{display:flex;background:var(--s1);border-bottom:1px solid var(--br);padding:0 20px;overflow-x:auto}
+.tab{font-size:12px;padding:10px 16px;color:var(--t3);cursor:pointer;border:none;background:none;font-family:'DM Sans',sans-serif;border-bottom:2px solid transparent;transition:all .13s;white-space:nowrap}
+.tab:hover{color:var(--t2)}
+.tab.on{color:var(--t1);border-bottom-color:var(--cyan);font-weight:500}
+
+/* MAIN */
+.main{padding:16px 20px;max-width:1600px}
+.view{display:none}
+.view.on{display:block}
+
+/* KPI STRIP */
+.krow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin-bottom:13px}
+@media(max-width:1100px){.krow{grid-template-columns:repeat(3,1fr)}}
+.kpi{background:var(--s2);border:1px solid var(--br);border-radius:10px;padding:11px 14px;position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:currentColor;opacity:.75}
+.kpi.blue{color:var(--blue)}.kpi.green{color:var(--green)}.kpi.amber{color:var(--amber)}
+.kpi.red{color:var(--red)}.kpi.purple{color:var(--purple)}.kpi.cyan{color:var(--cyan)}
+.kl{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--t3);margin-bottom:5px;font-weight:500}
+.kv{font-size:22px;font-weight:600;line-height:1;font-family:'DM Mono',monospace;color:currentColor}
+.ks{font-size:10px;color:var(--t3);margin-top:4px}
+
+/* CARD */
+.card{background:var(--s2);border:1px solid var(--br);border-radius:10px;padding:14px;margin-bottom:11px}
+.ct{font-size:11.5px;font-weight:600;color:var(--t2);margin-bottom:3px}
+.cs{font-size:10.5px;color:var(--t3);margin-bottom:11px}
+
+/* TABLA */
+.tw{overflow:auto;max-height:500px}
+.tbl{width:100%;border-collapse:collapse;font-size:11.5px}
+.tbl th{position:sticky;top:0;background:var(--s1);padding:6px 10px;text-align:left;font-size:9px;font-weight:600;color:var(--t3);border-bottom:1px solid var(--brm);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+.tbl td{padding:7px 10px;border-bottom:1px solid var(--br);color:var(--t2);white-space:nowrap}
+.tbl tr:hover td{background:var(--s3)}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:500}
+.bg{background:rgba(34,212,122,.15);color:var(--green)}
+.br{background:rgba(245,96,96,.15);color:var(--red)}
+.ba{background:rgba(245,166,35,.15);color:var(--amber)}
+.bb{background:rgba(79,142,247,.15);color:var(--blue)}
+
+.empty{text-align:center;padding:40px;color:var(--t3);font-size:12px}
+.err-panel{background:rgba(245,96,96,.05);border:1px solid rgba(245,96,96,.15);border-radius:8px;padding:16px;margin:14px 0;color:var(--t2);font-size:12px;line-height:1.6}
+.err-panel code{background:var(--s3);padding:2px 6px;border-radius:3px;color:var(--amber);font-family:'DM Mono',monospace;font-size:11px}
+
+.hint{font-size:10.5px;color:var(--t3);margin-top:6px}
+.hint code{background:var(--s3);padding:1px 5px;border-radius:3px;color:var(--cyan);font-family:'DM Mono',monospace}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <a href="index.html" class="logo">R</a>
+  <div>
+    <div class="hdr-title">Asistencia Workera</div>
+    <div class="hdr-sub">Control de asistencia · REDTEC</div>
+  </div>
+  <div class="sep"></div>
+  <div class="pill"><div class="pill-dot"></div>API Workera</div>
+  <div class="hdr-r">
+    <a href="index.html" class="back">← Dashboard</a>
+  </div>
+</header>
+
+<div class="ctrls">
+  <span class="ctrl-lbl">Empresa:</span>
+  <select id="empresa" class="ctrl-sel">
+    <option value="SURTEC">SURTEC</option>
+    <option value="INMOBILIARIA">INMOBILIARIA RT SPA</option>
+    <option value="TRANSPORTES">TRANSPORTES RT SPA</option>
+    <option value="REDTEC">REDTEC S.A.</option>
+  </select>
+  <span class="ctrl-lbl">Sucursal:</span>
+  <select id="sucursal" class="ctrl-sel"><option value="">Todas</option></select>
+  <span class="ctrl-lbl">Depto:</span>
+  <select id="depto" class="ctrl-sel"><option value="">Todos</option></select>
+  <span class="ctrl-lbl">Desde:</span>
+  <input type="date" id="d1" class="ctrl-inp">
+  <span class="ctrl-lbl">Hasta:</span>
+  <input type="date" id="d2" class="ctrl-inp">
+  <button id="btn-load" class="load-btn" onclick="cargar()">🔄 Cargar datos</button>
+</div>
+
+<div class="status-bar">
+  <div id="sdot" class="sdot"></div>
+  <span id="status-txt">Listo. Proxy: <code style="color:var(--cyan)">/api/workera-proxy</code> → <code style="color:var(--green)">api.workera.com</code></span>
+</div>
+
+<div class="tabs">
+  <button class="tab on" onclick="tab('emp')">Trabajadores</button>
+  <button class="tab" onclick="tab('ast')">Marcaciones</button>
+  <button class="tab" onclick="tab('per')">Permisos</button>
+  <button class="tab" onclick="tab('tur')">Turnos</button>
+  <button class="tab" onclick="tab('suc')">Sucursales</button>
+</div>
+
+<div class="main">
+  <!-- TRABAJADORES -->
+  <div id="v-emp" class="view on">
+    <div class="krow">
+      <div class="kpi cyan"><div class="kl">Total trabajadores</div><div class="kv" id="k-emp-total">—</div><div class="ks">En resultado</div></div>
+      <div class="kpi green"><div class="kl">Activos</div><div class="kv" id="k-emp-act">—</div><div class="ks">Estado activo</div></div>
+      <div class="kpi red"><div class="kl">Inactivos</div><div class="kv" id="k-emp-ina">—</div><div class="ks">Desvinculados</div></div>
+      <div class="kpi blue"><div class="kl">Sucursales</div><div class="kv" id="k-emp-suc">—</div><div class="ks">Con personal</div></div>
+      <div class="kpi purple"><div class="kl">Departamentos</div><div class="kv" id="k-emp-dep">—</div><div class="ks">Únicos</div></div>
+    </div>
+    <div class="card">
+      <div class="ct">Listado de trabajadores</div>
+      <div class="cs">Endpoint: /employee · filtra por sucursal + departamento</div>
+      <div class="tw">
+        <table class="tbl" id="tbl-emp">
+          <thead><tr><th>Código</th><th>RUT</th><th>Nombre</th><th>Apellidos</th><th>Cargo</th><th>Departamento</th><th>Sucursal</th><th>Estado</th></tr></thead>
+          <tbody id="tbody-emp"><tr><td colspan="8"><div class="empty">Presiona "Cargar datos" para consultar</div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- MARCACIONES -->
+  <div id="v-ast" class="view">
+    <div class="krow">
+      <div class="kpi cyan"><div class="kl">Total marcaciones</div><div class="kv" id="k-ast-total">—</div><div class="ks">En período</div></div>
+      <div class="kpi green"><div class="kl">Entradas</div><div class="kv" id="k-ast-in">—</div><div class="ks">Tipo IN</div></div>
+      <div class="kpi amber"><div class="kl">Salidas</div><div class="kv" id="k-ast-out">—</div><div class="ks">Tipo OUT</div></div>
+      <div class="kpi blue"><div class="kl">Personas únicas</div><div class="kv" id="k-ast-peo">—</div><div class="ks">Con marca</div></div>
+      <div class="kpi purple"><div class="kl">Días cubiertos</div><div class="kv" id="k-ast-dias">—</div><div class="ks">Con actividad</div></div>
+    </div>
+    <div class="card">
+      <div class="ct">Registros de asistencia</div>
+      <div class="cs">Endpoint: /attendanceData · 20 por página · puede tardar varios minutos en rangos amplios</div>
+      <div class="tw">
+        <table class="tbl" id="tbl-ast">
+          <thead><tr><th>Fecha</th><th>Hora</th><th>Trabajador</th><th>RUT</th><th>Tipo</th><th>Dispositivo</th><th>Sucursal</th></tr></thead>
+          <tbody id="tbody-ast"><tr><td colspan="7"><div class="empty">Presiona "Cargar datos" para consultar</div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- PERMISOS -->
+  <div id="v-per" class="view">
+    <div class="card">
+      <div class="ct">Permisos especiales</div>
+      <div class="cs">Endpoint: /permission · Salidas especiales en el período</div>
+      <div class="tw">
+        <table class="tbl" id="tbl-per">
+          <thead><tr><th>ID</th><th>Trabajador</th><th>Tipo</th><th>Inicio</th><th>Fin</th><th>Comentario</th></tr></thead>
+          <tbody id="tbody-per"><tr><td colspan="6"><div class="empty">Presiona "Cargar datos" para consultar</div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TURNOS -->
+  <div id="v-tur" class="view">
+    <div class="card">
+      <div class="ct">Asignación de turnos</div>
+      <div class="cs">Endpoint: /workshift/assign</div>
+      <div class="tw">
+        <table class="tbl" id="tbl-tur">
+          <thead><tr><th>Trabajador</th><th>Turno</th><th>Desde</th><th>Hasta</th></tr></thead>
+          <tbody id="tbody-tur"><tr><td colspan="4"><div class="empty">Presiona "Cargar datos" para consultar</div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUCURSALES -->
+  <div id="v-suc" class="view">
+    <div class="card">
+      <div class="ct">Sucursales registradas</div>
+      <div class="cs">Endpoint: /branchOffice · Se cargan automáticamente al abrir</div>
+      <div class="tw">
+        <table class="tbl" id="tbl-suc">
+          <thead><tr><th>Código</th><th>Nombre</th><th>Dirección</th><th>Zona horaria</th><th>Estado</th></tr></thead>
+          <tbody id="tbody-suc"><tr><td colspan="5"><div class="empty">Se cargará automáticamente</div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var PROXY = '/api/workera-proxy';
+var tabActivo = 'emp';
+var cacheSucursales = [];
+
+// Inicializar fechas: hoy - 7 días
+var hoy = new Date();
+var hace7 = new Date(hoy); hace7.setDate(hace7.getDate() - 7);
+document.getElementById('d1').value = hace7.toISOString().substring(0,10);
+document.getElementById('d2').value = hoy.toISOString().substring(0,10);
+
+function $(id) { return document.getElementById(id); }
+
+function tab(t) {
+  tabActivo = t;
+  document.querySelectorAll('.tab').forEach(function(el) { el.classList.remove('on'); });
+  document.querySelectorAll('.view').forEach(function(el) { el.classList.remove('on'); });
+  event.target.classList.add('on');
+  $('v-' + t).classList.add('on');
+}
+
+function setStatus(tipo, msg) {
+  var dot = $('sdot');
+  dot.className = 'sdot ' + tipo;
+  $('status-txt').innerHTML = msg;
+}
+
+async function apiFetch(endpoint, params) {
+  var qs = new URLSearchParams(Object.assign({ endpoint: endpoint }, params || {})).toString();
+  var url = PROXY + '?' + qs;
+  var r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+  var txt = await r.text();
+  if (!r.ok) {
+    var detalle = '';
+    try { detalle = ' — ' + (JSON.parse(txt).detalle || JSON.parse(txt).error || txt.substring(0,100)); }
+    catch (e) { detalle = ' — ' + txt.substring(0,100); }
+    throw new Error('HTTP ' + r.status + detalle);
+  }
+  return txt ? JSON.parse(txt) : {};
+}
+
+// Cargar sucursales al abrir
+async function cargarSucursales() {
+  try {
+    setStatus('load', 'Cargando sucursales...');
+    var data = await apiFetch('/branchOffice');
+    cacheSucursales = Array.isArray(data) ? data : (data.results || data.data || []);
+    renderSucursales();
+    actualizarFiltros();
+    setStatus('ok', 'Sucursales cargadas: ' + cacheSucursales.length);
+  } catch (e) {
+    setStatus('err', 'Error sucursales: ' + e.message);
+    mostrarErrorSetup(e.message);
+  }
+}
+
+function actualizarFiltros() {
+  var sel = $('sucursal');
+  sel.innerHTML = '<option value="">Todas</option>';
+  cacheSucursales.forEach(function(s) {
+    var code = s.code || s.codigo || s.codigoSucursal || '';
+    var name = s.name || s.nombre || s.descripcion || code;
+    sel.innerHTML += '<option value="' + code + '">' + name + '</option>';
+  });
+}
+
+function renderSucursales() {
+  var tb = $('tbody-suc');
+  if (!cacheSucursales.length) {
+    tb.innerHTML = '<tr><td colspan="5"><div class="empty">Sin sucursales</div></td></tr>';
+    return;
+  }
+  tb.innerHTML = cacheSucursales.map(function(s) {
+    return '<tr>' +
+      '<td><strong>' + (s.code || s.codigo || '—') + '</strong></td>' +
+      '<td>' + (s.name || s.nombre || '—') + '</td>' +
+      '<td>' + (s.address || s.direccion || '—') + '</td>' +
+      '<td>' + (s.timezone || s.zonaHoraria || '—') + '</td>' +
+      '<td><span class="badge ' + (s.enabled !== false ? 'bg">Activa' : 'br">Inactiva') + '</span></td>' +
+    '</tr>';
+  }).join('');
+}
+
+async function cargar() {
+  var btn = $('btn-load');
+  btn.disabled = true; btn.textContent = '⏳ Cargando...';
+
+  try {
+    if (tabActivo === 'emp')      await cargarTrabajadores();
+    else if (tabActivo === 'ast') await cargarMarcaciones();
+    else if (tabActivo === 'per') await cargarPermisos();
+    else if (tabActivo === 'tur') await cargarTurnos();
+    else if (tabActivo === 'suc') await cargarSucursales();
+  } catch (e) {
+    setStatus('err', 'Error: ' + e.message);
+    mostrarErrorSetup(e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔄 Cargar datos';
+  }
+}
+
+async function cargarTrabajadores() {
+  var suc = $('sucursal').value;
+  var dep = $('depto').value;
+  if (!suc || !dep) {
+    setStatus('err', '⚠️ Trabajadores requiere sucursal Y departamento (limitación del API Workera)');
+    return;
+  }
+  setStatus('load', 'Cargando trabajadores de ' + suc + '/' + dep + '...');
+  var data = await apiFetch('/employee', { branchOffice: suc, department: dep, page: 1 });
+  var lista = Array.isArray(data) ? data : (data.results || data.data || []);
+  renderTrabajadores(lista);
+  setStatus('ok', 'Trabajadores: ' + lista.length);
+}
+
+function renderTrabajadores(lista) {
+  $('k-emp-total').textContent = lista.length.toLocaleString('es-CL');
+  var act = lista.filter(function(e) { return e.active !== false && e.enabled !== false; }).length;
+  $('k-emp-act').textContent = act.toLocaleString('es-CL');
+  $('k-emp-ina').textContent = (lista.length - act).toLocaleString('es-CL');
+  $('k-emp-suc').textContent = new Set(lista.map(function(e) { return e.branchOffice || e.sucursal; })).size;
+  $('k-emp-dep').textContent = new Set(lista.map(function(e) { return e.department || e.departamento; })).size;
+
+  var tb = $('tbody-emp');
+  if (!lista.length) { tb.innerHTML = '<tr><td colspan="8"><div class="empty">Sin trabajadores</div></td></tr>'; return; }
+  tb.innerHTML = lista.map(function(e) {
+    return '<tr>' +
+      '<td><strong>' + (e.code || e.codigo || '—') + '</strong></td>' +
+      '<td>' + (e.identification || e.rut || '—') + '</td>' +
+      '<td>' + (e.name || e.nombre || '—') + '</td>' +
+      '<td>' + ((e.lastName || '') + ' ' + (e.secondLastName || '')).trim() + '</td>' +
+      '<td>' + (e.position || e.cargo || '—') + '</td>' +
+      '<td>' + (e.department || e.departamento || '—') + '</td>' +
+      '<td>' + (e.branchOffice || e.sucursal || '—') + '</td>' +
+      '<td><span class="badge ' + (e.active !== false ? 'bg">Activo' : 'br">Inactivo') + '</span></td>' +
+    '</tr>';
+  }).join('');
+}
+
+async function cargarMarcaciones() {
+  var d1 = $('d1').value, d2 = $('d2').value;
+  var suc = $('sucursal').value, dep = $('depto').value;
+  var params = { start: d1, end: d2, page: 1 };
+  if (suc) params.branchOffice = suc;
+  if (dep) params.department = dep;
+
+  setStatus('load', 'Cargando marcaciones ' + d1 + '→' + d2 + ' (puede tardar)...');
+  var data = await apiFetch('/attendanceData', params);
+  var lista = Array.isArray(data) ? data : (data.results || data.data || []);
+  renderMarcaciones(lista);
+  setStatus('ok', 'Marcaciones: ' + lista.length + ' (pág 1)');
+}
+
+function renderMarcaciones(lista) {
+  $('k-ast-total').textContent = lista.length.toLocaleString('es-CL');
+  var ins  = lista.filter(function(m) { return (m.type||'').toLowerCase().indexOf('in') >= 0 && (m.type||'').toLowerCase().indexOf('out') < 0; }).length;
+  var outs = lista.filter(function(m) { return (m.type||'').toLowerCase().indexOf('out') >= 0; }).length;
+  $('k-ast-in').textContent = ins.toLocaleString('es-CL');
+  $('k-ast-out').textContent = outs.toLocaleString('es-CL');
+  $('k-ast-peo').textContent = new Set(lista.map(function(m) { return m.employee && m.employee.code; })).size;
+  $('k-ast-dias').textContent = new Set(lista.map(function(m) { return (m.date||m.fecha||'').substring(0,10); })).size;
+
+  var tb = $('tbody-ast');
+  if (!lista.length) { tb.innerHTML = '<tr><td colspan="7"><div class="empty">Sin marcaciones en el período</div></td></tr>'; return; }
+  tb.innerHTML = lista.map(function(m) {
+    var fecha = (m.date || m.fecha || '').substring(0,10);
+    var hora  = (m.time || m.hora || m.date || '').substring(11,19);
+    var emp = m.employee || {};
+    return '<tr>' +
+      '<td>' + fecha + '</td>' +
+      '<td><strong>' + hora + '</strong></td>' +
+      '<td>' + (emp.name || '—') + ' ' + (emp.lastName || '') + '</td>' +
+      '<td>' + (emp.identification || '—') + '</td>' +
+      '<td><span class="badge ' + ((m.type||'').toLowerCase().indexOf('in') >= 0 && (m.type||'').toLowerCase().indexOf('out') < 0 ? 'bg">ENTRADA' : 'ba">SALIDA') + '</span></td>' +
+      '<td>' + (m.device || m.dispositivo || '—') + '</td>' +
+      '<td>' + (m.branchOffice || '—') + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+async function cargarPermisos() {
+  var d1 = $('d1').value, d2 = $('d2').value;
+  setStatus('load', 'Cargando permisos...');
+  var data = await apiFetch('/permission', { start: d1, end: d2, page: 1 });
+  var lista = Array.isArray(data) ? data : (data.results || data.data || []);
+  var tb = $('tbody-per');
+  if (!lista.length) { tb.innerHTML = '<tr><td colspan="6"><div class="empty">Sin permisos en el período</div></td></tr>'; }
+  else {
+    tb.innerHTML = lista.map(function(p) {
+      var emp = p.employee || {};
+      return '<tr>' +
+        '<td>' + (p.id || '—') + '</td>' +
+        '<td>' + (emp.name || '—') + ' ' + (emp.lastName || '') + '</td>' +
+        '<td>' + (p.permissionType || p.type || '—') + '</td>' +
+        '<td>' + (p.startDate || p.start || '—') + '</td>' +
+        '<td>' + (p.endDate || p.end || '—') + '</td>' +
+        '<td>' + (p.comment || '—') + '</td>' +
+      '</tr>';
+    }).join('');
+  }
+  setStatus('ok', 'Permisos: ' + lista.length);
+}
+
+async function cargarTurnos() {
+  setStatus('load', 'Cargando asignaciones de turnos...');
+  var data = await apiFetch('/workshift/assign', { page: 1 });
+  var lista = Array.isArray(data) ? data : (data.results || data.data || []);
+  var tb = $('tbody-tur');
+  if (!lista.length) { tb.innerHTML = '<tr><td colspan="4"><div class="empty">Sin asignaciones</div></td></tr>'; }
+  else {
+    tb.innerHTML = lista.map(function(t) {
+      var emp = t.employee || {};
+      return '<tr>' +
+        '<td>' + (emp.name || '—') + ' ' + (emp.lastName || '') + '</td>' +
+        '<td>' + (t.workshift || t.turno || '—') + '</td>' +
+        '<td>' + (t.startDate || '—') + '</td>' +
+        '<td>' + (t.endDate || '—') + '</td>' +
+      '</tr>';
+    }).join('');
+  }
+  setStatus('ok', 'Turnos: ' + lista.length);
+}
+
+function mostrarErrorSetup(msg) {
+  if (msg.indexOf('500') >= 0 && msg.indexOf('credenciales') >= 0) {
+    var tb = $('tbody-emp');
+    tb.innerHTML = '<tr><td colspan="8">' +
+      '<div class="err-panel">' +
+      '<div style="font-weight:600;color:var(--amber);margin-bottom:8px">⚠️ Credenciales Workera no configuradas</div>' +
+      '<div>Para que este dashboard funcione necesitas configurar las API keys de Workera en Azure:</div>' +
+      '<ol style="margin-top:10px;padding-left:22px;line-height:1.9">' +
+      '<li>Inicia sesión en <code>workera.com/app/login</code> con la empresa <strong>SURTEC</strong></li>' +
+      '<li>Click en tu perfil (arriba derecha) → <strong>Editar perfil</strong></li>' +
+      '<li>Panel derecho → opción <strong>API</strong> → botón <strong>Habilitar API KEY</strong></li>' +
+      '<li>Copia el <code>API User</code> (tu correo) y el <code>API Key</code> (32 caracteres)</li>' +
+      '<li>Ve a Azure Portal → Function App → Configuration → Application Settings</li>' +
+      '<li>Agrega: <code>WORKERA_USER</code> = tu correo / <code>WORKERA_KEY</code> = los 32 caracteres</li>' +
+      '<li>Guarda y recarga este dashboard</li>' +
+      '</ol>' +
+      '</div>' +
+    '</td></tr>';
+  }
+}
+
+// Al cargar la página, cargar sucursales
+window.addEventListener('DOMContentLoaded', function() {
+  cargarSucursales();
+});
+</script>
+
+</body>
+</html>

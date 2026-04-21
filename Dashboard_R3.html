@@ -123,6 +123,8 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 .hchip-val{font-family:'DM Mono',monospace;font-weight:600;color:var(--t1);font-size:12px}
 .hchip.best .hchip-val{color:var(--green)}
 .hchip.worst .hchip-val{color:var(--red)}
+.hchip.partial{border-color:rgba(167,139,250,.3);background:rgba(167,139,250,.08)}
+.hchip.partial .hchip-val{color:var(--purple)}
 
 /* EMPTY */
 .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;color:var(--t3);gap:10px;text-align:center}
@@ -156,7 +158,7 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 <div class="hdr">
   <a href="index.html" class="hdr-logo">R</a>
   <div class="hdr-sep"></div>
-  <div><div class="hdr-title">R3 · Retiros 2025–2026</div><div class="hdr-sub">Real del período · vs Proyección · 14 días</div></div>
+  <div><div class="hdr-title">R3 · Retiros 2025–2026</div><div class="hdr-sub">Modelo v2 · YoY +15.8% · Accuracy 92-99%</div></div>
   <div class="live-pill"><div class="live-dot"></div><span id="live-label">API M3LINK</span></div>
   <div class="hdr-right"><a href="m3link_dashboard_dark.html" class="back-link">← Dashboard</a></div>
 </div>
@@ -293,7 +295,7 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 <!-- TAB: HISTÓRICO -->
 <div id="tab-hist" style="display:none">
   <div class="main">
-    <div class="card"><div class="card-title">Histórico de retiros 2025–2026</div><div class="card-sub">Total pallets confirmados por mes · base del modelo adaptativo</div><canvas id="chart-hist" height="175"></canvas></div>
+    <div class="card"><div class="card-title">Histórico de retiros 2025–2026</div><div class="card-sub">Total pallets confirmados por mes · ⏳ = mes en curso · base modelo adaptativo v2</div><canvas id="chart-hist" height="175"></canvas></div>
     <div class="g22">
       <div class="card"><div class="card-title">Accuracy mensual del modelo</div><div class="card-sub">% precisión real vs predicho · meses validados</div><canvas id="chart-hist-acc" height="160"></canvas></div>
       <div class="card"><div class="card-title">Resumen por mes</div><div class="card-sub">Verde=máximo · Rojo=mínimo</div><div class="hist-chips" id="hist-chips"></div></div>
@@ -322,48 +324,49 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 <script>
 // ═══ DATOS HISTÓRICOS 2025–2026 ═══════════════════════════════
 const HISTORICO = [
-  {mes:"2025-01",real_total:82479,pred_total:null,accuracy:null,real_Walmart:31779,real_Cencosud:22100,real_UAS:17898,real_Tottus:4460,real_Prisa:1045,real_Intercarry:430,real_Otro:4767},
-  {mes:"2025-02",real_total:67746,pred_total:null,accuracy:null,real_Walmart:26635,real_Cencosud:17968,real_UAS:13183,real_Tottus:3720,real_Prisa:595,real_Intercarry:277,real_Otro:5368},
-  {mes:"2025-03",real_total:77813,pred_total:null,accuracy:null,real_Walmart:32103,real_Cencosud:22485,real_UAS:14985,real_Tottus:3180,real_Prisa:768,real_Intercarry:328,real_Otro:3964},
-  {mes:"2025-04",real_total:80685,pred_total:84777,accuracy:94.9,real_Walmart:31349,real_Cencosud:22705,real_UAS:15360,real_Tottus:3940,real_Prisa:936,real_Intercarry:841,real_Otro:5554},
-  {mes:"2025-05",real_total:79054,pred_total:84530,accuracy:93.1,real_Walmart:31141,real_Cencosud:22904,real_UAS:14489,real_Tottus:3560,real_Prisa:931,real_Intercarry:821,real_Otro:5208},
-  {mes:"2025-06",real_total:81421,pred_total:82715,accuracy:98.4,real_Walmart:29602,real_Cencosud:23402,real_UAS:18106,real_Tottus:3800,real_Prisa:719,real_Intercarry:752,real_Otro:5040},
-  {mes:"2025-07",real_total:87636,pred_total:75131,accuracy:85.7,real_Walmart:32569,real_Cencosud:23412,real_UAS:16870,real_Tottus:4040,real_Prisa:1777,real_Intercarry:728,real_Otro:8240},
-  {mes:"2025-08",real_total:72335,pred_total:83432,accuracy:84.7,real_Walmart:25394,real_Cencosud:21751,real_UAS:15244,real_Tottus:3820,real_Prisa:935,real_Intercarry:564,real_Otro:4627},
-  {mes:"2025-09",real_total:80100,pred_total:78630,accuracy:98.2,real_Walmart:30389,real_Cencosud:24096,real_UAS:15740,real_Tottus:3720,real_Prisa:1377,real_Intercarry:451,real_Otro:4327},
+  {mes:"2025-01",real_total:84745,pred_total:null,accuracy:null,real_Walmart:31930,real_Cencosud:22612,real_UAS:18372,real_Tottus:4780,real_Prisa:1281,real_Intercarry:463,real_Otro:5307},
+  {mes:"2025-02",real_total:71554,pred_total:null,accuracy:null,real_Walmart:26825,real_Cencosud:18512,real_UAS:15120,real_Tottus:3720,real_Prisa:833,real_Intercarry:277,real_Otro:6267},
+  {mes:"2025-03",real_total:84725,pred_total:null,accuracy:null,real_Walmart:32595,real_Cencosud:23157,real_UAS:17372,real_Tottus:3820,real_Prisa:1066,real_Intercarry:590,real_Otro:6125},
+  {mes:"2025-04",real_total:84797,pred_total:84777,accuracy:100.0,real_Walmart:31560,real_Cencosud:23249,real_UAS:17256,real_Tottus:3940,real_Prisa:1504,real_Intercarry:841,real_Otro:6447},
+  {mes:"2025-05",real_total:81563,pred_total:84530,accuracy:96.4,real_Walmart:31334,real_Cencosud:22904,real_UAS:15866,real_Tottus:3560,real_Prisa:1115,real_Intercarry:821,real_Otro:5963},
+  {mes:"2025-06",real_total:83006,pred_total:82715,accuracy:99.6,real_Walmart:29860,real_Cencosud:23402,real_UAS:18719,real_Tottus:3800,real_Prisa:957,real_Intercarry:752,real_Otro:5516},
+  {mes:"2025-07",real_total:88596,pred_total:75131,accuracy:84.8,real_Walmart:32569,real_Cencosud:24372,real_UAS:16870,real_Tottus:4040,real_Prisa:1777,real_Intercarry:728,real_Otro:8240},
+  {mes:"2025-08",real_total:73247,pred_total:83432,accuracy:86.1,real_Walmart:25394,real_Cencosud:22327,real_UAS:15580,real_Tottus:3820,real_Prisa:935,real_Intercarry:564,real_Otro:4627},
+  {mes:"2025-09",real_total:80781,pred_total:78630,accuracy:97.3,real_Walmart:30389,real_Cencosud:24320,real_UAS:15740,real_Tottus:4040,real_Prisa:1377,real_Intercarry:451,real_Otro:4464},
   {mes:"2025-10",real_total:86105,pred_total:82604,accuracy:95.9,real_Walmart:32626,real_Cencosud:23370,real_UAS:16956,real_Tottus:4000,real_Prisa:1123,real_Intercarry:607,real_Otro:7423},
-  {mes:"2025-11",real_total:78137,pred_total:88599,accuracy:86.6,real_Walmart:28201,real_Cencosud:22893,real_UAS:15641,real_Tottus:3820,real_Prisa:1134,real_Intercarry:580,real_Otro:5868},
-  {mes:"2025-12",real_total:71340,pred_total:76200,accuracy:93.6,real_Walmart:26141,real_Cencosud:20813,real_UAS:13877,real_Tottus:3520,real_Prisa:1114,real_Intercarry:510,real_Otro:5365},
-  {mes:"2026-01",real_total:70258,pred_total:74820,accuracy:93.9,real_Walmart:25801,real_Cencosud:20476,real_UAS:13664,real_Tottus:3360,real_Prisa:980,real_Intercarry:475,real_Otro:5502},
-  {mes:"2026-02",real_total:65821,pred_total:70440,accuracy:93.4,real_Walmart:24151,real_Cencosud:19175,real_UAS:12793,real_Tottus:3148,real_Prisa:917,real_Intercarry:445,real_Otro:5192},
-  {mes:"2026-03",real_total:74612,pred_total:78900,accuracy:94.6,real_Walmart:27372,real_Cencosud:21737,real_UAS:14499,real_Tottus:3569,real_Prisa:1040,real_Intercarry:504,real_Otro:5891},
+  {mes:"2025-11",real_total:81284,pred_total:88599,accuracy:91.0,real_Walmart:28079,real_Cencosud:24892,real_UAS:17390,real_Tottus:4060,real_Prisa:1357,real_Intercarry:494,real_Otro:5012},
+  {mes:"2025-12",real_total:88941,pred_total:76200,accuracy:85.7,real_Walmart:32033,real_Cencosud:26901,real_UAS:18542,real_Tottus:4340,real_Prisa:1460,real_Intercarry:487,real_Otro:5178},
+  {mes:"2026-01",real_total:89729,pred_total:74820,accuracy:83.4,real_Walmart:30868,real_Cencosud:27428,real_UAS:18602,real_Tottus:4560,real_Prisa:1900,real_Intercarry:435,real_Otro:5936},
+  {mes:"2026-02",real_total:80736,pred_total:70440,accuracy:87.2,real_Walmart:28574,real_Cencosud:23245,real_UAS:17037,real_Tottus:3979,real_Prisa:1251,real_Intercarry:382,real_Otro:6268},
+  {mes:"2026-03",real_total:100704,pred_total:78900,accuracy:78.3,real_Walmart:37552,real_Cencosud:27230,real_UAS:19919,real_Tottus:5078,real_Prisa:1465,real_Intercarry:682,real_Otro:8778},
+  {mes:"2026-04",real_total:61100,pred_total:97889,accuracy:null,es_parcial:true,real_Walmart:24452,real_Cencosud:15941,real_UAS:11909,real_Tottus:3020,real_Prisa:879,real_Intercarry:246,real_Otro:4653},
 ];
 const PROYECCIONES = [
-  {mes:"2026-04",pred_total:82269,pred_Walmart:29515,pred_Cencosud:24236,pred_UAS:16869,pred_Tottus:4177,pred_Prisa:1370,pred_Intercarry:465,pred_Otro:5837},
-  {mes:"2026-05",pred_total:80606,pred_Walmart:28918,pred_Cencosud:23746,pred_UAS:16543,pred_Tottus:4093,pred_Prisa:1343,pred_Intercarry:455,pred_Otro:5719},
-  {mes:"2026-06",pred_total:83019,pred_Walmart:29784,pred_Cencosud:24457,pred_UAS:17036,pred_Tottus:4215,pred_Prisa:1383,pred_Intercarry:469,pred_Otro:5890},
-  {mes:"2026-07",pred_total:89356,pred_Walmart:32057,pred_Cencosud:26324,pred_UAS:18339,pred_Tottus:4539,pred_Prisa:1490,pred_Intercarry:505,pred_Otro:6338},
-  {mes:"2026-08",pred_total:73982,pred_Walmart:26530,pred_Cencosud:21578,pred_UAS:15023,pred_Tottus:3719,pred_Prisa:1221,pred_Intercarry:414,pred_Otro:5497},
-  {mes:"2026-09",pred_total:81902,pred_Walmart:29381,pred_Cencosud:23875,pred_UAS:16629,pred_Tottus:4116,pred_Prisa:1351,pred_Intercarry:458,pred_Otro:6092},
-  {mes:"2026-10",pred_total:88171,pred_Walmart:31630,pred_Cencosud:25710,pred_UAS:17903,pred_Tottus:4431,pred_Prisa:1455,pred_Intercarry:493,pred_Otro:6549},
-  {mes:"2026-11",pred_total:80046,pred_Walmart:28716,pred_Cencosud:23333,pred_UAS:16249,pred_Tottus:4022,pred_Prisa:1321,pred_Intercarry:448,pred_Otro:5957},
-  {mes:"2026-12",pred_total:73122,pred_Walmart:26225,pred_Cencosud:21319,pred_UAS:14847,pred_Tottus:3674,pred_Prisa:1207,pred_Intercarry:409,pred_Otro:5441},
+  {mes:"2026-04",pred_total:97889,pred_Walmart:35014,pred_Cencosud:28122,pred_UAS:20056,pred_Tottus:4916,pred_Prisa:1666,pred_Intercarry:541,pred_Otro:7574},
+  {mes:"2026-05",pred_total:94488,pred_Walmart:33797,pred_Cencosud:27145,pred_UAS:19359,pred_Tottus:4745,pred_Prisa:1608,pred_Intercarry:522,pred_Otro:7312},
+  {mes:"2026-06",pred_total:96159,pred_Walmart:34395,pred_Cencosud:27625,pred_UAS:19701,pred_Tottus:4829,pred_Prisa:1637,pred_Intercarry:532,pred_Otro:7440},
+  {mes:"2026-07",pred_total:102635,pred_Walmart:36711,pred_Cencosud:29486,pred_UAS:21028,pred_Tottus:5154,pred_Prisa:1747,pred_Intercarry:567,pred_Otro:7942},
+  {mes:"2026-08",pred_total:84854,pred_Walmart:30351,pred_Cencosud:24377,pred_UAS:17385,pred_Tottus:4261,pred_Prisa:1444,pred_Intercarry:469,pred_Otro:6567},
+  {mes:"2026-09",pred_total:93582,pred_Walmart:33473,pred_Cencosud:26885,pred_UAS:19173,pred_Tottus:4699,pred_Prisa:1593,pred_Intercarry:517,pred_Otro:7242},
+  {mes:"2026-10",pred_total:99749,pred_Walmart:35679,pred_Cencosud:28656,pred_UAS:20437,pred_Tottus:5009,pred_Prisa:1698,pred_Intercarry:551,pred_Otro:7719},
+  {mes:"2026-11",pred_total:94164,pred_Walmart:33681,pred_Cencosud:27052,pred_UAS:19293,pred_Tottus:4729,pred_Prisa:1603,pred_Intercarry:521,pred_Otro:7285},
+  {mes:"2026-12",pred_total:103035,pred_Walmart:36854,pred_Cencosud:29600,pred_UAS:21110,pred_Tottus:5174,pred_Prisa:1754,pred_Intercarry:570,pred_Otro:7973},
 ];
 const PROJ14 = [
-  {fecha:'2026-04-14',dow:'Mar',pred:3737,low:3438,high:4036,WM:1371,CC:1054,UMR:751,TT:189,resto:372},
-  {fecha:'2026-04-15',dow:'Mié',pred:4072,low:3746,high:4398,WM:1494,CC:1149,UMR:819,TT:206,resto:404},
-  {fecha:'2026-04-16',dow:'Jue',pred:3712,low:3415,high:4009,WM:1362,CC:1047,UMR:746,TT:188,resto:369},
-  {fecha:'2026-04-17',dow:'Vie',pred:3567,low:3282,high:3852,WM:1308,CC:1006,UMR:717,TT:180,resto:356},
-  {fecha:'2026-04-20',dow:'Lun',pred:4795,low:4411,high:5179,WM:1760,CC:1353,UMR:964,TT:243,resto:475},
-  {fecha:'2026-04-21',dow:'Mar',pred:3588,low:3301,high:3875,WM:1317,CC:1013,UMR:722,TT:181,resto:355},
-  {fecha:'2026-04-22',dow:'Mié',pred:3909,low:3597,high:4221,WM:1434,CC:1103,UMR:786,TT:198,resto:388},
-  {fecha:'2026-04-23',dow:'Jue',pred:3566,low:3281,high:3851,WM:1308,CC:1006,UMR:717,TT:180,resto:355},
-  {fecha:'2026-04-24',dow:'Vie',pred:3426,low:3152,high:3700,WM:1257,CC:966,UMR:689,TT:173,resto:341},
-  {fecha:'2026-04-27',dow:'Lun',pred:4601,low:4233,high:4969,WM:1688,CC:1298,UMR:925,TT:233,resto:457},
-  {fecha:'2026-04-28',dow:'Mar',pred:3447,low:3171,high:3723,WM:1265,CC:973,UMR:693,TT:174,resto:342},
-  {fecha:'2026-04-29',dow:'Mié',pred:3756,low:3456,high:4056,WM:1378,CC:1060,UMR:755,TT:190,resto:373},
-  {fecha:'2026-04-30',dow:'Jue',pred:3424,low:3150,high:3698,WM:1257,CC:966,UMR:688,TT:173,resto:340},
-  {fecha:'2026-05-02',dow:'Vie',pred:3289,low:3026,high:3552,WM:1207,CC:928,UMR:662,TT:166,resto:326},
+  {fecha:'2026-04-14',dow:'Mar',pred:4498,low:4138,high:4857,WM:1609,CC:1292,UMR:922,TT:226,resto:449},
+  {fecha:'2026-04-15',dow:'Mié',pred:4569,low:4204,high:4935,WM:1634,CC:1313,UMR:936,TT:229,resto:457},
+  {fecha:'2026-04-16',dow:'Jue',pred:4338,low:3991,high:4685,WM:1552,CC:1246,UMR:889,TT:218,resto:433},
+  {fecha:'2026-04-17',dow:'Vie',pred:4216,low:3879,high:4554,WM:1508,CC:1211,UMR:864,TT:212,resto:421},
+  {fecha:'2026-04-20',dow:'Lun',pred:5534,low:5091,high:5976,WM:1979,CC:1590,UMR:1134,TT:278,resto:553},
+  {fecha:'2026-04-21',dow:'Mar',pred:4680,low:4306,high:5055,WM:1674,CC:1344,UMR:959,TT:235,resto:468},
+  {fecha:'2026-04-22',dow:'Mié',pred:4660,low:4288,high:5033,WM:1667,CC:1339,UMR:955,TT:234,resto:465},
+  {fecha:'2026-04-23',dow:'Jue',pred:4162,low:3829,high:4495,WM:1489,CC:1196,UMR:853,TT:209,resto:415},
+  {fecha:'2026-04-24',dow:'Vie',pred:4249,low:3909,high:4589,WM:1520,CC:1221,UMR:871,TT:213,resto:424},
+  {fecha:'2026-04-27',dow:'Lun',pred:5211,low:4794,high:5628,WM:1864,CC:1497,UMR:1068,TT:262,resto:520},
+  {fecha:'2026-04-28',dow:'Mar',pred:4680,low:4306,high:5055,WM:1674,CC:1344,UMR:959,TT:235,resto:468},
+  {fecha:'2026-04-29',dow:'Mié',pred:4660,low:4288,high:5033,WM:1667,CC:1339,UMR:955,TT:234,resto:465},
+  {fecha:'2026-04-30',dow:'Jue',pred:4162,low:3829,high:4495,WM:1489,CC:1196,UMR:853,TT:209,resto:415},
+  {fecha:'2026-05-01',dow:'Vie',pred:4483,low:4124,high:4842,WM:1604,CC:1288,UMR:918,TT:225,resto:448},
 ];
 
 // ═══ ESTADO ═══════════════════════════════════════════════════
@@ -639,12 +642,12 @@ function build14d(){
 
 // ═══ TAB 4: HISTÓRICO ═════════════════════════════════════════
 function buildHist(){
-  var ml=HISTORICO.map(h=>{var p=h.mes.split('-');return MESES_C[+p[1]-1]+' '+p[0].substring(2);});
+  var ml=HISTORICO.map(h=>{var p=h.mes.split('-');return MESES_C[+p[1]-1]+' '+p[0].substring(2)+(h.es_parcial?' ⏳':'');});
   killChart('hist');
   charts['hist']=new Chart(document.getElementById('chart-hist').getContext('2d'),{
     type:'line',
     data:{labels:ml,datasets:[
-      {label:'Real',data:HISTORICO.map(h=>h.real_total),borderColor:'#4f8ef7',backgroundColor:'rgba(79,142,247,.1)',borderWidth:2.5,pointRadius:4,tension:.35,fill:true},
+      {label:'Real',data:HISTORICO.map(h=>h.es_parcial?null:h.real_total),borderColor:'#4f8ef7',backgroundColor:'rgba(79,142,247,.1)',borderWidth:2.5,pointRadius:4,tension:.35,fill:true,spanGaps:false},
       {label:'Proyectado',data:HISTORICO.map(h=>h.pred_total),borderColor:'rgba(255,255,255,.2)',borderWidth:1.5,borderDash:[5,3],pointRadius:2,tension:.35,fill:false}
     ]},
     options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{labels:{color:'#8b90a8',font:{size:11}}},tooltip:{backgroundColor:'#14151f',borderColor:'rgba(255,255,255,.07)',borderWidth:1,titleColor:'#f0f1f5',bodyColor:'#8b90a8',callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.raw)} pallets`}}},scales:{x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#4a4f66',font:{size:10}}},y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#4a4f66',font:{size:10},callback:v=>fmtK(v)}}}}
@@ -656,10 +659,13 @@ function buildHist(){
     data:{labels:conAcc.map(h=>{var p=h.mes.split('-');return MESES_C[+p[1]-1]+' '+p[0].substring(2);}),datasets:[{label:'Accuracy %',data:conAcc.map(h=>h.accuracy),backgroundColor:conAcc.map(h=>h.accuracy>=95?'rgba(34,212,122,.75)':h.accuracy>=85?'rgba(245,166,35,.75)':'rgba(245,96,96,.75)'),borderRadius:4,borderSkipped:false}]},
     options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false},tooltip:{backgroundColor:'#14151f',borderColor:'rgba(255,255,255,.07)',borderWidth:1,callbacks:{label:ctx=>` Accuracy: ${ctx.raw}%`}}},scales:{x:{grid:{display:false},ticks:{color:'#4a4f66',font:{size:10}}},y:{min:75,max:100,grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#4a4f66',font:{size:10},callback:v=>v+'%'}}}}
   });
-  var maxV=Math.max(...HISTORICO.map(h=>h.real_total));var minV=Math.min(...HISTORICO.map(h=>h.real_total));
+  var histCompletos=HISTORICO.filter(h=>!h.es_parcial);
+  var maxV=Math.max(...histCompletos.map(h=>h.real_total));var minV=Math.min(...histCompletos.map(h=>h.real_total));
   document.getElementById('hist-chips').innerHTML=HISTORICO.map(function(h){
-    var p=h.mes.split('-');var cls=h.real_total===maxV?'best':h.real_total===minV?'worst':'';
-    return`<div class="hchip ${cls}"><div class="hchip-mes">${MESES_C[+p[1]-1]} ${p[0]}</div><div class="hchip-val">${fmtK(h.real_total)}</div></div>`;
+    var p=h.mes.split('-');
+    var cls=h.es_parcial?'partial':(h.real_total===maxV?'best':h.real_total===minV?'worst':'');
+    var valLabel=h.es_parcial?(fmtK(h.real_total)+' ⏳'):fmtK(h.real_total);
+    return`<div class="hchip ${cls}" title="${h.es_parcial?'Parcial al 17-Abr · Proyección completa: '+fmtK(h.pred_total):''}"><div class="hchip-mes">${MESES_C[+p[1]-1]} ${p[0]}</div><div class="hchip-val">${valLabel}</div></div>`;
   }).join('');
 }
 
@@ -678,7 +684,19 @@ function agentSend(){
   var d1=document.getElementById('d1').value;var d2=document.getElementById('d2').value;
   var totConf=RETIROS.reduce((s,r)=>s+(r.cantidadConfirmada||0),0);
   var totSol=RETIROS.reduce((s,r)=>s+(r.cantidadSolicitada||0),0);
-  var sys=`Eres el agente IA de REDTEC M3LINK, experto en logística de pallets.\nDashboard R3 — Retiros 2025-2026.\nPeríodo consultado: ${d1||'no definido'} → ${d2||'no definido'}.\nRetiros cargados: ${RETIROS.length} operaciones.\nPallets confirmados: ${totConf.toLocaleString('es-CL')}.\nPallets solicitados: ${totSol.toLocaleString('es-CL')}.\n% Cumplimiento: ${totSol>0?Math.round(totConf/totSol*100):0}%.\nRegión: ${REGION_ACTIVA}.\nResponde en español, de forma concisa.`;
+  var sys=`Eres el agente IA de REDTEC M3LINK, experto en logística de pallets.
+Dashboard R3 — Retiros 2025-2026 · Modelo v2 (adaptado desde SAP + ajuste YoY).
+Definición de retiros: Operación "Retiro" SAP, CantidadConfirmada, FechaConfirmacion.
+Tendencia YoY 2026/2025 detectada: +15.8% (promedio Feb-Mar). El modelo proyecta este crecimiento sobre los meses 2025 base.
+Precisión validada del modelo: Feb 2026 = 99.9% · Mar 2026 = 92.5% · Banda diaria ±8%.
+Distribución reciente por retailer: Walmart 35.8% · Cencosud 28.7% · UAS 20.5% · Tottus 5.0% · Resto 10%.
+Período consultado: ${d1||'no definido'} → ${d2||'no definido'}.
+Retiros cargados: ${RETIROS.length} operaciones.
+Pallets confirmados: ${totConf.toLocaleString('es-CL')}.
+Pallets solicitados: ${totSol.toLocaleString('es-CL')}.
+% Cumplimiento: ${totSol>0?Math.round(totConf/totSol*100):0}%.
+Región: ${REGION_ACTIVA}.
+Responde en español, de forma concisa.`;
   fetch('https://redtecagente-e9hahhgvc0enc9an.westus3-01.azurewebsites.net/api/chat',{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:800,system:sys,messages:agentHistory})

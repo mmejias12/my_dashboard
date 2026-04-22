@@ -552,13 +552,8 @@ let CFG = {
   usarProxy: true
 };
 
-// Flota (placas + nombres)
-let PLACAS = [
-  {placa:'BBRD42',chofer:'Chofer 1',activa:true},
-  {placa:'FLKK78',chofer:'Chofer 2',activa:true},
-  {placa:'GHMM91',chofer:'Chofer 3',activa:true},
-  {placa:'LS3119',chofer:'Chofer 4',activa:true},
-];
+// Flota (placas + nombres) — se carga desde localStorage
+let PLACAS = [];
 
 // Charts
 let chartTipo = null, chartDona = null, chartChoferes = null;
@@ -729,37 +724,179 @@ async function cargarDatos(){
   document.getElementById('btn-ico').textContent = '▶';
   
   if(DB.length === 0){
-    setBadge('amber','amber', errores > 0 ? 'Error API' : 'Sin paradas');
-    setInfo(errores > 0 ? `Error en ${errores} placa(s). Revisa conexión/proxy.` : `Sin paradas en el período (mín. ${minStop} min). Prueba bajar el tiempo mínimo.`,'');
+    if(errores === placasActivas.length){
+      // Todas las placas fallaron → CORS o config mal
+      setBadge('rojo','rojo','Error conexión');
+      setInfo('✗ No se pudo conectar al API. Ver diagnóstico abajo ↓','red');
+      mostrarDiagnostico();
+    } else {
+      setBadge('amber','amber','Sin paradas');
+      setInfo(`Sin paradas en el período (mín. ${minStop} min). ${errores>0?errores+' placa(s) con error.':''}  Prueba bajar el tiempo mínimo o ampliar fechas.`,'');
+    }
     renderEmptyCharts();
   } else {
     setBadge('verde','verde',`${DB.length} paradas`);
     setInfo(`${DB.length} paradas · ${placasActivas.length} placas · ${errores > 0 ? errores+' errores' : 'OK'}`, errores>0?'amber':'');
     document.getElementById('btn-xls').style.display = '';
+    document.getElementById('diag-panel').style.display = 'none';
     renderAll();
   }
 }
 
+// ──────────────────────────────────────────────
+//  FETCH CON DIAGNÓSTICO
+// ──────────────────────────────────────────────
 async function fetchPlaca(placa, chofer, fi, ff, minStop){
   const fiStr = fi.replace(/-/g,'/') + ' 00:00:00';
   const ffStr = ff.replace(/-/g,'/') + ' 23:59:59';
   
-  // Intentar proxy primero, luego directo
-  const urls = [
-    `${CFG.proxyBase}?placa=${encodeURIComponent(placa)}&fi=${fi}&ff=${ff}&minStop=${minStop}`,
-    `${CFG.url}/GetStopsDataRangeByPlate?sLogin=${encodeURIComponent(CFG.user)}&sPassword=${encodeURIComponent(CFG.pass)}&sPlate=${encodeURIComponent(placa)}&sStartDate=${encodeURIComponent(fiStr)}&sEndDate=${encodeURIComponent(ffStr)}&iMinStopTime=${minStop}`
-  ];
+  const log = (msg) => { console.log(`[GPS ${placa}]`, msg); };
   
-  for(const url of urls){
-    try{
-      const res = await fetch(url, {signal: AbortSignal.timeout(15000)});
-      if(!res.ok) continue;
+  // 1. Intentar proxy Azure
+  try{
+    log('Intentando proxy Azure: ' + CFG.proxyBase);
+    const res = await fetch(`${CFG.proxyBase}?placa=${encodeURIComponent(placa)}&fi=${fi}&ff=${ff}&minStop=${minStop}`, {signal: AbortSignal.timeout(10000)});
+    if(res.ok){
       const txt = await res.text();
-      if(txt.includes('110') || txt.includes('sin data') || txt.length < 50) return [];
-      return parseXML(txt, placa, chofer);
-    } catch(e){ continue; }
+      log('Proxy OK, bytes=' + txt.length + ', preview=' + txt.substring(0,80));
+      if(txt.includes('<') && txt.length > 100){
+        const rows = parseXML(txt, placa, chofer);
+        log('Proxy → ' + rows.length + ' paradas');
+        return rows;
+      }
+      if(txt.includes('110')){ log('Proxy cod 110: sin paradas'); return []; }
+      if(txt.includes('108')){ throw new Error('Sin permisos (cod 108)'); }
+    } else {
+      log('Proxy HTTP ' + res.status + ' — proxy no existe todavía');
+    }
+  } catch(e){
+    log('Proxy falló: ' + e.message);
   }
-  throw new Error('No se pudo obtener datos para ' + placa);
+  
+  // 2. Llamada directa GET (puede fallar por CORS)
+  const urlGet = `${CFG.url}/GetStopsDataRangeByPlate?sLogin=${encodeURIComponent(CFG.user)}&sPassword=${encodeURIComponent(CFG.pass)}&sPlate=${encodeURIComponent(placa)}&sStartDate=${encodeURIComponent(fiStr)}&sEndDate=${encodeURIComponent(ffStr)}&iMinStopTime=${minStop}`;
+  try{
+    log('Intentando GET directo...');
+    const res = await fetch(urlGet, {signal: AbortSignal.timeout(12000)});
+    if(res.ok){
+      const txt = await res.text();
+      log('GET directo OK, bytes=' + txt.length);
+      if(txt.includes('110')){ log('cod 110: sin paradas'); return []; }
+      if(txt.includes('108')){ throw new Error('Sin permisos (cod 108) en GET directo'); }
+      const rows = parseXML(txt, placa, chofer);
+      log('GET directo → ' + rows.length + ' paradas');
+      return rows;
+    }
+  } catch(e){
+    log('GET directo falló: ' + e.message + (e.message.includes('CORS')||e.message.includes('fetch')?'  ← CORS bloqueado':''));
+  }
+  
+  // 3. Llamada SOAP (a veces pasa CORS cuando GET no pasa)
+  const soapEnv = `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <soap:Body>
+    <GetStopsDataRangeByPlate xmlns="http://tempuri.org/">
+      <sLogin>${CFG.user}</sLogin>
+      <sPassword>${CFG.pass}</sPassword>
+      <sPlate>${placa}</sPlate>
+      <sStartDate>${fiStr}</sStartDate>
+      <sEndDate>${ffStr}</sEndDate>
+      <iMinStopTime>${minStop}</iMinStopTime>
+    </GetStopsDataRangeByPlate>
+  </soap:Body>
+</soap:Envelope>`;
+  try{
+    log('Intentando SOAP POST...');
+    const res = await fetch(CFG.url, {
+      method: 'POST',
+      headers: {'Content-Type':'text/xml; charset=utf-8','SOAPAction':'"http://tempuri.org/GetStopsDataRangeByPlate"'},
+      body: soapEnv,
+      signal: AbortSignal.timeout(12000)
+    });
+    if(res.ok){
+      const txt = await res.text();
+      log('SOAP OK, bytes=' + txt.length);
+      if(txt.includes('110')){ log('SOAP cod 110: sin paradas'); return []; }
+      if(txt.includes('108')){ throw new Error('Sin permisos (cod 108) via SOAP'); }
+      const rows = parseXML(txt, placa, chofer);
+      log('SOAP → ' + rows.length + ' paradas');
+      return rows;
+    }
+  } catch(e){
+    log('SOAP falló: ' + e.message);
+  }
+  
+  // Todos los intentos fallaron
+  throw new Error(`CORS_BLOCK: No se pudo acceder al API para ${placa}. Necesitas el proxy Azure.`);
+}
+
+// ──────────────────────────────────────────────
+//  PANEL DIAGNÓSTICO
+// ──────────────────────────────────────────────
+function mostrarDiagnostico(){
+  let panel = document.getElementById('diag-panel');
+  if(!panel){
+    panel = document.createElement('div');
+    panel.id = 'diag-panel';
+    panel.style.cssText = 'background:#1a0808;border:1px solid rgba(240,86,86,.3);border-radius:10px;padding:16px 18px;margin-top:0;display:flex;flex-direction:column;gap:10px';
+    document.querySelector('.main').insertBefore(panel, document.querySelector('.kpi-row'));
+  }
+  panel.style.display = '';
+  
+  const proxyUrl = window.location.hostname.includes('azurestaticapps') || window.location.hostname.includes('redtec') 
+    ? window.location.origin + '/api/gps-stops-proxy'
+    : '/api/gps-stops-proxy (proxy no detectado en este host)';
+  
+  panel.innerHTML = `
+    <div style="color:var(--red);font-weight:600;font-size:12px;display:flex;align-items:center;gap:7px">
+      <span>⛔</span> Error de conexión al API GPS Condor
+    </div>
+    <div style="font-size:12px;color:#c87070;line-height:1.7">
+      El browser bloquea las llamadas directas a <code style="color:var(--amber);font-family:'DM Mono',monospace">shareservice.co</code> por política CORS.<br>
+      El proxy Azure <code style="color:var(--amber);font-family:'DM Mono',monospace">/api/gps-stops-proxy</code> no está respondiendo todavía.<br>
+      <strong style="color:var(--t1)">Solución:</strong> necesitas el Azure Function proxy desplegado en tu Static Web App.
+    </div>
+    <div style="background:rgba(0,0,0,.3);border-radius:6px;padding:12px;font-size:11.5px;color:#8090a0;display:flex;flex-direction:column;gap:6px">
+      <div style="color:var(--t1);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">📋 Código proxy Azure Function (api/gps-stops-proxy/index.js)</div>
+      <code style="font-family:'DM Mono',monospace;font-size:10.5px;color:#a0d4ff;white-space:pre-wrap">module.exports = async function(context, req) {
+  const {placa,fi,ff,minStop=15} = req.query;
+  const url = \`https://web1ws.shareservice.co/WsReports.asmx/GetStopsDataRangeByPlate?sLogin=redtec%20chile&sPassword=redtec2023&sPlate=\${encodeURIComponent(placa)}&sStartDate=\${fi.replace(/-/g,'/')}%2000%3A00%3A00&sEndDate=\${ff.replace(/-/g,'/')}%2023%3A59%3A59&iMinStopTime=\${minStop}\`;
+  const res = await fetch(url);
+  const txt = await res.text();
+  context.res = {
+    headers:{'Content-Type':'application/xml','Access-Control-Allow-Origin':'*'},
+    body: txt
+  };
+};</code>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button onclick="probarUrlDirecto()" class="btn-xls" style="font-size:11.5px;padding:6px 12px">🔍 Diagnosticar en consola</button>
+      <button onclick="switchTab('config')" class="page-btn" style="font-size:11.5px">⚙ Ver config</button>
+      <button onclick="document.getElementById('diag-panel').style.display='none'" class="page-btn" style="font-size:11.5px">✕ Cerrar</button>
+    </div>
+  `;
+}
+
+async function probarUrlDirecto(){
+  const fi = document.getElementById('fi').value || new Date().toISOString().split('T')[0];
+  const placa = PLACAS[0]?.placa || 'LS3119';
+  const url = `${CFG.url}/GetStopsDataRangeByPlate?sLogin=${encodeURIComponent(CFG.user)}&sPassword=${encodeURIComponent(CFG.pass)}&sPlate=${encodeURIComponent(placa)}&sStartDate=${encodeURIComponent(fi.replace(/-/g,'/')+' 00:00:00')}&sEndDate=${encodeURIComponent(fi.replace(/-/g,'/')+' 23:59:59')}&iMinStopTime=1`;
+  console.log('%c[DIAGNÓSTICO GPS Condor]', 'color:#4b8df8;font-weight:bold;font-size:13px');
+  console.log('URL directo:', url);
+  console.log('Proxy configurado:', CFG.proxyBase);
+  console.log('Placa de prueba:', placa);
+  try{
+    const r = await fetch(url, {signal:AbortSignal.timeout(8000)});
+    const txt = await r.text();
+    console.log('%c✓ Respuesta directa OK', 'color:#1ec96a');
+    console.log('Status:', r.status, '| Bytes:', txt.length);
+    console.log('Preview:', txt.substring(0,300));
+    alert(`✓ Conexión directa funcionó!\nStatus: ${r.status}\nBytes: ${txt.length}\nVer consola F12 para detalles.`);
+  } catch(e){
+    console.error('%c✗ Conexión directa falló (CORS esperado)', 'color:#f05656', e.message);
+    console.log('%c→ Solución: despliega el proxy Azure Function', 'color:#f4a836;font-weight:bold');
+    alert(`CORS bloqueado (esperado desde el browser).\n\nNecesitas el proxy Azure.\nVer consola F12 y el panel de diagnóstico para el código.`);
+  }
 }
 
 function consolidarMedianoche(rows){
@@ -1203,8 +1340,16 @@ function loadConfig(){
     if(saved.user){ document.getElementById('cfg-user').value = saved.user; CFG.user = saved.user; }
     if(saved.pass){ document.getElementById('cfg-pass').value = saved.pass; CFG.pass = saved.pass; }
     if(saved.url){ document.getElementById('cfg-url').value = saved.url; CFG.url = saved.url; }
-    if(saved.placas){ PLACAS = saved.placas; }
+    if(saved.placas && saved.placas.length){ PLACAS = saved.placas; }
   }catch(e){}
+  
+  // Aviso si no hay placas configuradas
+  if(PLACAS.length === 0){
+    setTimeout(() => {
+      setInfo('\u26a0 Sin flota configurada \u2014 ve a Configuraci\u00f3n \u2192 Flota registrada y agrega tus 11 placas', 'amber');
+      setBadge('amber','amber','Sin flota');
+    }, 200);
+  }
 }
 
 function guardarConfig(){

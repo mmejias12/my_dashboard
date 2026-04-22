@@ -726,33 +726,29 @@ function calcMins(ti, to){
 // ──────────────────────────────────────────────
 function parseXMLMultiPlaca(xmlStr){
   const parser = new DOMParser();
-  const doc = parser.parseFromString(xmlStr, 'text/xml');
+  // Usar text/html — más tolerante con caracteres especiales (ñ, é, &, etc)
+  // Los selectores quedan en minúsculas porque HTML los normaliza
+  const doc = parser.parseFromString(xmlStr, 'text/html');
   const rows = [];
 
-  // Verificar error de parseo
-  if(doc.querySelector('parsererror')){
-    console.warn('[GPS] Error parseando XML:', doc.querySelector('parsererror').textContent.substring(0,200));
-    return rows;
-  }
-
-  const plates = doc.querySelectorAll('Plate');
+  const plates = doc.querySelectorAll('plate');
   plates.forEach(plate => {
     const placa  = plate.getAttribute('id') || '';
     // Usar nombre del API si está disponible, fallback al diccionario precargado
-    const nombreApi = plate.getAttribute('Name') || '';
+    const nombreApi = plate.getAttribute('name') || '';
     const chofer = nombreApi.trim() || FLOTA_NOMBRES[placa] || placa;
-    const noData = plate.getAttribute('NoData') === 'true';
+    const noData = plate.getAttribute('nodata') === 'true';
 
     if(noData || !placa) return;
 
-    const items = plate.querySelectorAll('ITEM');
+    const items = plate.querySelectorAll('item');
     items.forEach(item => {
       const g = tag => item.querySelector(tag)?.textContent?.trim() || '';
 
-      const location = limpiarNombre(g('LOCATION'));
-      const start    = g('START');   // formato: "2026/04/21 05:55:22"
-      const end      = g('END');
-      const seconds  = parseInt(g('SECOND') || '0', 10); // campo confiable del API
+      const location = limpiarNombre(g('location'));
+      const start    = g('start');   // formato: "2026/04/21 05:55:22"
+      const end      = g('end');
+      const seconds  = parseInt(g('second') || '0', 10); // campo confiable del API
 
       if(!location || !start) return;
 
@@ -909,9 +905,9 @@ async function fetchTodaLaFlota(fi, ff, minStop){
   console.log('[GPS] Filas parseadas:', rows.length);
 
   // Mostrar errores de placas individuales si los hay
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(txt, 'text/xml');
-  const errors = doc.querySelectorAll('Error');
+  const parser2 = new DOMParser();
+  const doc = parser2.parseFromString(txt, 'text/html');
+  const errors = doc.querySelectorAll('error');
   if(errors.length){
     const errList = [...errors].map(e => e.getAttribute('plate') + ': ' + e.textContent.trim().substring(0,60)).join(' | ');
     console.warn('[GPS] Errores de placas:', errList);

@@ -14,6 +14,12 @@ const FLEET = [
   'NC8771', 'RW5303', 'SP3393', 'VG1943', 'XC9869', 'YG5106'
 ];
 
+// Concurrencia y throttle (el API de WideTech rechaza rafagas)
+const MAX_CONCURRENT  = 2;     // maximo 2 requests al mismo tiempo
+const DELAY_MS        = 800;   // pausa entre tandas de requests
+const RETRY_MAX       = 2;     // reintentos si sale rate-limited
+const RETRY_DELAY_MS  = 2500;  // pausa antes de reintentar
+
 module.exports = async function (context, req) {
   // CORS preflight
   if (req.method === 'OPTIONS') {
@@ -34,13 +40,10 @@ module.exports = async function (context, req) {
   // Decidir que placas consultar
   var plates;
   if (q.plate) {
-    // Singular: una sola placa
     plates = [q.plate];
   } else if (q.plates) {
-    // Plural: lista separada por coma
     plates = q.plates.split(',').map(function(p) { return p.trim(); }).filter(Boolean);
   } else {
-    // Sin parametro: usar toda la flota
     plates = FLEET;
   }
 
@@ -57,20 +60,13 @@ module.exports = async function (context, req) {
   var iTime = q.time || '300';
   var sType = q.type || '';
 
-  // Disparar todas las consultas en paralelo
+  // Ejecutar las consultas con concurrencia limitada + reintentos
   var startMs = Date.now();
-  var results = await Promise.all(plates.map(function(plate) {
-    return queryPlate(plate, sStartDate1, sStartDate2, iTime, sType)
-      .then(function(xml) {
-        return { plate: plate, ok: true, xml: xml };
-      })
-      .catch(function(err) {
-        return { plate: plate, ok: false, error: err.message };
-      });
-  }));
+  var results = await runWithThrottle(plates, function(plate) {
+    return queryPlateWithRetry(plate, sStartDate1, sStartDate2, iTime, sType);
+  });
   var elapsedMs = Date.now() - startMs;
 
-  // Combinar los XMLs en uno solo
   var combinedXml = combineResponses(results, {
     desde: sStartDate1,
     hasta: sStartDate2,
@@ -96,6 +92,46 @@ module.exports = async function (context, req) {
     body: combinedXml
   };
 };
+
+/**
+ * Ejecuta una funcion async sobre cada item con concurrencia maxima,
+ * separando tandas con un delay para respetar rate limits.
+ */
+async function runWithThrottle(items, asyncFn) {
+  var results = [];
+  for (var i = 0; i < items.length; i += MAX_CONCURRENT) {
+    var batch = items.slice(i, i + MAX_CONCURRENT);
+    var batchResults = await Promise.all(batch.map(function(item) {
+      return asyncFn(item)
+        .then(function(xml) { return { plate: item, ok: true, xml: xml }; })
+        .catch(function(err) { return { plate: item, ok: false, error: err.message }; });
+    }));
+    results = results.concat(batchResults);
+    // Pausa antes de la siguiente tanda (si queda alguna)
+    if (i + MAX_CONCURRENT < items.length) {
+      await sleep(DELAY_MS);
+    }
+  }
+  return results;
+}
+
+async function queryPlateWithRetry(plate, sStartDate1, sStartDate2, iTime, sType) {
+  var lastErr;
+  for (var attempt = 0; attempt <= RETRY_MAX; attempt++) {
+    try {
+      return await queryPlate(plate, sStartDate1, sStartDate2, iTime, sType);
+    } catch (err) {
+      lastErr = err;
+      // Reintentar solo si es rate limit
+      if (err.message.indexOf('Demasiadas solicitudes') !== -1 && attempt < RETRY_MAX) {
+        await sleep(RETRY_DELAY_MS);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
+}
 
 function queryPlate(plate, sStartDate1, sStartDate2, iTime, sType) {
   var formBody = querystring.stringify({
@@ -143,7 +179,6 @@ function queryPlate(plate, sStartDate1, sStartDate2, iTime, sType) {
 }
 
 function combineResponses(results, meta) {
-  // Extraer nodo <Plate>...</Plate> de cada XML exitoso
   var plateBlocks = [];
   var errors = [];
 
@@ -153,13 +188,14 @@ function combineResponses(results, meta) {
       if (match) {
         plateBlocks.push(match[0]);
       } else {
-        // El XML vino bien pero sin bloque Plate (probablemente sin data)
         plateBlocks.push(
           '<Plate id="' + r.plate + '" Name="" MobileID="" NoData="true" />'
         );
       }
     } else {
-      errors.push('<Error plate="' + r.plate + '">' + escapeXml(r.error) + '</Error>');
+      errors.push(
+        '<Error plate="' + r.plate + '">' + escapeXml(r.error) + '</Error>'
+      );
     }
   });
 
@@ -192,4 +228,8 @@ function formatDate(d) {
   var mm   = String(d.getMonth() + 1).padStart(2, '0');
   var dd   = String(d.getDate()).padStart(2, '0');
   return yyyy + '/' + mm + '/' + dd;
+}
+
+function sleep(ms) {
+  return new Promise(function(resolve) { setTimeout(resolve, ms); });
 }

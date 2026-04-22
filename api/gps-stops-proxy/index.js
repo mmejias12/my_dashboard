@@ -187,7 +187,7 @@ function combineResponses(results, meta) {
         plateBlocks.push('<Plate id="' + r.plate + '" Name="" MobileID="" NoData="true"/>');
       }
     } else {
-      errors.push('<Error plate="' + r.plate + '">' + escapeXml(r.error) + '</e>');
+      errors.push('<Error plate="' + r.plate + '">' + escapeXml(r.error) + '</Error>');
     }
   });
 

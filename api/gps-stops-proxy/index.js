@@ -4,9 +4,9 @@ const querystring = require('querystring');
 const API_HOST = 'web1ws.shareservice.co';
 const API_PATH = '/ws/wsReports.asmx/GetStopsDataRangeByPlate';
 
-// Credenciales por defecto (se pueden sobrescribir con query params)
-const DEFAULT_LOGIN    = 'redtec chile';
-const DEFAULT_PASSWORD = 'redtec2023';
+// Credenciales hardcodeadas para prueba inicial
+const LOGIN    = 'redtec chile';
+const PASSWORD = 'redtec2023';
 
 module.exports = async function (context, req) {
   // CORS preflight
@@ -25,35 +25,24 @@ module.exports = async function (context, req) {
 
   var q = req.query || {};
 
-  // Parametros con fallbacks sensatos
-  var sLogin      = q.login    || DEFAULT_LOGIN;
-  var sPassword   = q.password || DEFAULT_PASSWORD;
-  var sPlate      = q.plate    || '';              // vacio = todas las placas
-  var sStartDate1 = q.desde    || '';              // yyyy/MM/dd HH:mm:ss
-  var sStartDate2 = q.hasta    || '';
-  var iTime       = q.time     || '300';           // 5 min minimo por defecto
-  var sType       = q.type     || '';              // vacio = IDLE + ON-FF
+  // Parametros de consulta
+  var sPlate      = q.plate || '';           // vacio = todas las placas
+  var sStartDate1 = q.desde || '';           // yyyy/MM/dd HH:mm:ss
+  var sStartDate2 = q.hasta || '';
+  var iTime       = q.time  || '300';        // 5 min minimo por defecto
+  var sType       = q.type  || '';           // vacio = IDLE + ON-FF
 
-  // Validaciones minimas
+  // Si no vienen fechas, por defecto usa los ultimos 7 dias
   if (!sStartDate1 || !sStartDate2) {
-    context.res = {
-      status: 400,
-      headers: {
-        'Content-Type':                'application/json',
-        'Access-Control-Allow-Origin': '*'
-      },
-      body: JSON.stringify({
-        error: 'Faltan parametros',
-        detail: 'Se requieren ?desde=yyyy/MM/dd HH:mm:ss&hasta=yyyy/MM/dd HH:mm:ss',
-        ejemplo: '?plate=LS3119&desde=2026/03/01 00:00:00&hasta=2026/03/31 23:59:59&time=300'
-      })
-    };
-    return;
+    var now   = new Date();
+    var prior = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    sStartDate1 = formatDate(prior) + ' 00:00:00';
+    sStartDate2 = formatDate(now)   + ' 23:59:59';
   }
 
   var formBody = querystring.stringify({
-    sLogin:      sLogin,
-    sPassword:   sPassword,
+    sLogin:      LOGIN,
+    sPassword:   PASSWORD,
     sPlate:      sPlate,
     sStartDate1: sStartDate1,
     sStartDate2: sStartDate2,
@@ -68,7 +57,10 @@ module.exports = async function (context, req) {
       headers: {
         'Content-Type':                'application/xml; charset=utf-8',
         'Access-Control-Allow-Origin': '*',
-        'Cache-Control':               'no-cache'
+        'Cache-Control':               'no-cache',
+        'X-Debug-Plate':               sPlate || '(todas)',
+        'X-Debug-Range':               sStartDate1 + ' -> ' + sStartDate2,
+        'X-Debug-Time':                iTime
       },
       body: xmlData
     };
@@ -93,6 +85,13 @@ module.exports = async function (context, req) {
     };
   }
 };
+
+function formatDate(d) {
+  var yyyy = d.getFullYear();
+  var mm   = String(d.getMonth() + 1).padStart(2, '0');
+  var dd   = String(d.getDate()).padStart(2, '0');
+  return yyyy + '/' + mm + '/' + dd;
+}
 
 function postForm(host, path, body) {
   return new Promise(function(resolve, reject) {

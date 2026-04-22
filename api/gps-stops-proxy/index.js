@@ -136,9 +136,10 @@ function queryPlate(plate, sStartDate, sEndDate, iMinStopTime) {
   var qs = 'sLogin='      + encodeURIComponent(LOGIN)
          + '&sPassword='  + encodeURIComponent(PASSWORD)
          + '&sPlate='     + encodeURIComponent(plate)
-         + '&sStartDate=' + encodeURIComponent(sStartDate)
-         + '&sEndDate='   + encodeURIComponent(sEndDate)
-         + '&iMinStopTime=' + encodeURIComponent(iMinStopTime);
+         + '&sStartDate1=' + encodeURIComponent(sStartDate)
+         + '&sStartDate2=' + encodeURIComponent(sEndDate)
+         + '&iTime='       + encodeURIComponent(iMinStopTime)
+         + '&sType=';
 
   return new Promise(function(resolve, reject) {
     var options = {

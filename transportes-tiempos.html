@@ -274,8 +274,7 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
         <label>Fecha fin</label>
         <input type="date" class="dinput" id="ff" />
       </div>
-      <div class="field">
-        <label>Flota</label>
+      <div class="field" style="display:none">
         <select class="sinput" id="sel-flota">
           <option value="all">Todas las placas</option>
         </select>
@@ -440,7 +439,13 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
               <option value="Sala Retail">Sala Retail</option>
               <option value="Cliente">Cliente</option>
               <option value="REDTEC">REDTEC</option>
-              <option value="Otros">Otros</option>
+              <option value="Sin geocerca">Sin geocerca</option>
+            </select>
+            <select class="filter-select" id="filter-semana" onchange="filterDetalle()">
+              <option value="">Todas las semanas</option>
+            </select>
+            <select class="filter-select" id="filter-chofer" onchange="filterDetalle()">
+              <option value="">Todos los choferes</option>
             </select>
             <span class="tag-count" id="detalle-count"></span>
           </div>
@@ -552,8 +557,22 @@ let CFG = {
   usarProxy: true
 };
 
-// Flota (placas + nombres) — se carga desde localStorage
-let PLACAS = [];
+// ── FLOTA PRECARGADA desde Excel real ──────────────
+// Nombres confirmados — si el API los trae en Name= se usan esos,
+// si vienen vacíos se usa este diccionario como fallback.
+const FLOTA_NOMBRES = {
+  'BJCL13': 'ISMAEL CAMPOS',
+  'CCRC36': 'JUAN CARLOS VEGA',
+  'CPVW43': 'CRISTOBAL ECHEVERRIA',
+  'FV2792': 'EMILIO CAULLE',
+  'LS3119': 'ANTONIO VEGA',
+  'NC8771': 'JULIO BULNES',
+  'RW5303': 'GONZALO CAMPOS',
+  'SP3393': 'CESAR ANABALON',
+  'VG1943': 'VICTOR VEGA',
+  'XC9869': 'HUGO NUÑEZ',
+  'YG5106': 'MIGUEL GOMEZ'
+};
 
 // Charts
 let chartTipo = null, chartDona = null, chartChoferes = null;
@@ -570,10 +589,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('ff').value = fmt(hoy);
   
   loadConfig();
-  renderPlacasSelector();
-  renderPlacasTabla();
-  
-  // Demo data si no hay nada
   renderEmptyCharts();
 });
 
@@ -590,48 +605,105 @@ function fmtMins(m){ if(!m&&m!==0) return '—'; const h=Math.floor(m/60); const
 function limpiarNombre(n){
   if(!n) return '';
   return n
-    .replace(/^\s*B\s+/,'')        // Quita " B " al inicio (formato ON-OFF)
-    .replace(/\s+B\s*$/,'')        // Quita " B " al final
-    .replace(/^Pasando\s+Por\s+--+\s*/i,'') // Quita "Pasando Por -- " (formato IDLE)
+    .replace(/^\s*B\s+/,'')               // ON-OFF: " B REDTEC B " → "REDTEC"
+    .replace(/\s+B\s*$/,'')
+    .replace(/^Pasando\s+Por\s+--+\s*/i,'') // IDLE: "Pasando Por -- ZWM11..." → "ZWM11..."
     .replace(/--+/g,' ')
     .replace(/\s+/g,' ')
     .trim();
 }
 
+// ── Puntos exactos del Excel por categoría ──────────────────
+// Usamos lookup exacto primero, luego fallback por patrones
+const LOOKUP_PUNTOS = {
+  // REDTEC / Base
+  'REDTEC':  {tipo:'REDTEC', cat:'REDTEC'},
+  'LIEA':    {tipo:'REDTEC', cat:'REDTEC'},
+  // CD RETAIL (Walmart)
+  'ZWM01 CD WM LO AGUIRRE SECO': {tipo:'CD Retail', cat:'CD RETAIL'},
+  'ZWM02 CD WM QUILICURA FRIO':  {tipo:'CD Retail', cat:'CD RETAIL'},
+  'ZWM08 WM RENTAPACK SANTIAGO': {tipo:'CD Retail', cat:'CD RETAIL'},
+  'ZWM11 CD WM EL PENON':        {tipo:'CD Retail', cat:'CD RETAIL'},
+  // CD RETAIL (otros retailers)
+  'ZCS01 CD CENCOSUD NOVICIADO': {tipo:'CD Retail', cat:'CD RETAIL'},
+  'ZUN01 CD UNIMARC LO AGUIRRE': {tipo:'CD Retail', cat:'CD RETAIL'},
+  'ZUN03 CD UNIMARC CONCEPCION': {tipo:'CD Retail', cat:'CD RETAIL'},
+  'CD TOTTUS LA FARFANA':        {tipo:'CD Retail', cat:'CD RETAIL'},
+  // OTROS CD RETAIL
+  'CD FASA':              {tipo:'CD Retail', cat:'OTROS CD RETAIL'},
+  'CD PRE-UNIC':          {tipo:'CD Retail', cat:'OTROS CD RETAIL'},
+  'CD PRISA':             {tipo:'CD Retail', cat:'OTROS CD RETAIL'},
+  'IFCO SISA':            {tipo:'CD Retail', cat:'OTROS CD RETAIL'},
+  'INTERCARRY CD LO ESPEJO': {tipo:'CD Retail', cat:'OTROS CD RETAIL'},
+  'INTERCARRY CD MACUL':  {tipo:'CD Retail', cat:'OTROS CD RETAIL'},
+  'PRISA PRILOGIC':       {tipo:'CD Retail', cat:'OTROS CD RETAIL'},
+  'ZAL03 CD ALVI AEROPARQUE': {tipo:'CD Retail', cat:'OTROS CD RETAIL'},
+  // SALAS RETAIL — Walmart Hiper
+  '00041 HIPER HUECHURABA':       {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  '00049 HIPER QUILICURA OHIGGINS':{tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  '00058 HIPER VINA 15 NORTE':    {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  '00073 HIPER PUENTE ALTO':      {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  '00083 HIPER SANTA AMALIA':     {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  '00122 HIPER QUILLOTA':         {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  '00602 HIPER LOS ANDES':        {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  '00626 HIPER PPE GALES':        {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  '00671 HIPER QUILICURA MARCOLETA':{tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  '00682 HIPER SAN JOAQUIN':      {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  '00748 HIPER RENCA':            {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  '00983 HIPER LA CALERA':        {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  '00985 HIPER SAN FELIPE':       {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  // SALAS RETAIL — Alvi / Mayorista 10
+  'A3085 ALVI BELLOTO':           {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  'M3007 MAYORISTA 10 BELLOTO':   {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  'M3021 MAYORISTA 10 RANCAGUA I BRASIL 1016':{tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  'M3034 MAYORISTA 10 RENGO':     {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  'M3041 MAYORISTA 10 SAN FELIPE':{tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  'M3068 MAYORISTA 10 RANCAGUA I BRASIL 1064':{tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  'M3069 MAYORISTA 10 SANTA CRUZ':{tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  // SALAS RETAIL — otros
+  'CENCOCAL LA CALERA':           {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  'CENTRAL MAYORISTA RANCAGUA':   {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  'MARGARITA UAUY E HIJOS':       {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  'NABEK LO BLANCO':              {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  'PROVIMARKET LIMACHE':          {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  'RABIE SANTIAGO':               {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  'TEBA GRAN AVENIDA':            {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  'TEBA JJ PEREZ':                {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  'TEBA LO BLANCO':               {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  'TEBA LO VALLEDOR':             {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  'TEBA RANCAGUA':                {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  'ZCU01 CD CUGAT RANCAGUA MALL': {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  'ZR020 AGRICOLA Y FORESTAL EL PEUMO':{tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  'ZSB CD SALCOBRAND':            {tipo:'Sala Retail', cat:'SALAS RETAIL'},
+  'LAF CD RENCA':                 {tipo:'CD Retail', cat:'OTROS CD RETAIL'},
+  'HAMBURGO CD RENCA':            {tipo:'CD Retail', cat:'OTROS CD RETAIL'},
+};
+
 function clasificar(nombre){
-  if(!nombre) return {tipo:'Otros', cat:'Otros'};
-  const n = nombre.toUpperCase();
+  if(!nombre) return {tipo:'Sin geocerca', cat:'Sin geocerca'};
+  const n = nombre.trim().toUpperCase();
 
-  // 1. REDTEC / Base propia
-  if(/REDTEC|RENTAPACK|RED\s*TEC/.test(n))
-    return {tipo:'REDTEC', cat:'Base'};
+  // 1. Lookup exacto (mayor precisión)
+  const key = nombre.trim().toUpperCase();
+  for(const [k, v] of Object.entries(LOOKUP_PUNTOS)){
+    if(k.toUpperCase() === key) return v;
+  }
 
-  // 2. CD Walmart — prefijo ZWM + CD (confirmado: "ZWM11 CD WM EL PENON")
-  if(/^ZWM.*\bCD\b/.test(n))
-    return {tipo:'CD Retail', cat:'CD Walmart'};
+  // 2. Fallback por patrones para puntos nuevos que no estén en el lookup
+  if(/REDTEC|LIEA|RENTAPACK/.test(n))           return {tipo:'REDTEC',     cat:'REDTEC'};
+  if(/^ZWM/.test(n) && /\bCD\b/.test(n))        return {tipo:'CD Retail',  cat:'CD RETAIL'};
+  if(/^ZWM/.test(n))                              return {tipo:'Sala Retail',cat:'SALAS RETAIL'};
+  if(/^Z(CS|UN|AL|CU|SB|R0)/.test(n))            return {tipo:'CD Retail',  cat:'CD RETAIL'};
+  if(/\bHIPER\b/.test(n))                        return {tipo:'Sala Retail',cat:'SALAS RETAIL'};
+  if(/MAYORISTA\s*10|\bALVI\b|\bTEBA\b/.test(n)) return {tipo:'Sala Retail',cat:'SALAS RETAIL'};
+  if(/\bCD\b|INTERCARRY|PRILOGIC|IFCO/.test(n))  return {tipo:'CD Retail',  cat:'OTROS CD RETAIL'};
 
-  // 3. CD Walmart — variantes sin prefijo ZWM
-  if(/\bCD\s*(WM|WALMART|LIDER|JUMBO|EASY|TOTTUS|CENCOSUD)/.test(n))
-    return {tipo:'CD Retail', cat:'CD Walmart'};
+  // 3. Dirección GPS (contiene número + nombre de calle + ciudad) → Sin geocerca
+  if(/\d{4,}.*REGION|REPUBLICA DE CHILE|METROPOLITAN/i.test(nombre))
+    return {tipo:'Sin geocerca', cat:'Sin geocerca'};
 
-  // 4. Rentapack (también base propia)
-  if(/RENTAPACK/.test(n))
-    return {tipo:'REDTEC', cat:'Base'};
-
-  // 5. Sala Walmart — prefijo ZWM sin CD → sala/tienda
-  if(/^ZWM/.test(n))
-    return {tipo:'Sala Retail', cat:'Sala Walmart'};
-
-  // 6. Otras salas retail conocidas
-  if(/\b(LIDER|JUMBO|EASY|TOTTUS|ACUENTA|EKONO|SMU|UNIMARC|RENDIC|ALVI|M10|DISCO|DEVOTO|SANTA\s*ISABEL)\b/.test(n))
-    return {tipo:'Sala Retail', cat:'Sala Retail'};
-
-  // 7. CD de otros clientes (ej: "LAF CD RENCA") — contiene CD pero no ZWM
-  if(/\bCD\b/.test(n) || /CENTRO\s*DE\s*DISTRIBU/.test(n) || /\b(BODEGA|DEPOSITO|ALMACEN)\b/.test(n))
-    return {tipo:'CD Retail', cat:'Otros CD'};
-
-  // 8. Cualquier otro punto = Cliente externo
-  return {tipo:'Cliente', cat:'Cliente'};
+  // 4. Cliente conocido o desconocido
+  return {tipo:'Cliente', cat:'CLIENTES'};
 }
 
 function isoWeek(fechaStr){
@@ -666,7 +738,9 @@ function parseXMLMultiPlaca(xmlStr){
   const plates = doc.querySelectorAll('Plate');
   plates.forEach(plate => {
     const placa  = plate.getAttribute('id') || '';
-    const chofer = plate.getAttribute('Name') || placa;
+    // Usar nombre del API si está disponible, fallback al diccionario precargado
+    const nombreApi = plate.getAttribute('Name') || '';
+    const chofer = nombreApi.trim() || FLOTA_NOMBRES[placa] || placa;
     const noData = plate.getAttribute('NoData') === 'true';
 
     if(noData || !placa) return;
@@ -893,6 +967,7 @@ function renderAll(){
   renderTop15();
   renderPuntos();
   renderChoferes();
+  poblarFiltrosDetalle();
   renderDetalle();
 }
 
@@ -925,8 +1000,8 @@ function renderKPIs(){
 function renderChartTipo(){
   if(chartTipo){ chartTipo.destroy(); }
   
-  const tipos = ['CD Retail','Sala Retail','Cliente','REDTEC','Otros'];
-  const colores = ['#4b8df8','#1ec96a','#f4a836','#2dd4d4','#9b7dfa'];
+  const tipos = ['CD Retail','Sala Retail','Cliente','REDTEC','Sin geocerca'];
+  const colores = ['#4b8df8','#1ec96a','#f4a836','#2dd4d4','#6b7280'];
   
   const vals = tipos.map(t => {
     const rows = DB.filter(r => r.tipo === t);
@@ -1214,17 +1289,42 @@ function renderChartChoferes(){
 //  DETALLE
 // ──────────────────────────────────────────────
 function filterDetalle(){
-  const q = document.getElementById('search-detalle').value.toLowerCase();
-  const tipo = document.getElementById('filter-tipo').value;
-  
+  const q      = document.getElementById('search-detalle').value.toLowerCase();
+  const tipo   = document.getElementById('filter-tipo').value;
+  const semana = document.getElementById('filter-semana')?.value || '';
+  const chofer = document.getElementById('filter-chofer')?.value || '';
+
   DB_FILTERED = DB.filter(r => {
-    const matchTipo = !tipo || r.tipo === tipo;
-    const matchQ = !q || r.punto.toLowerCase().includes(q) || r.placa.toLowerCase().includes(q) || r.chofer.toLowerCase().includes(q);
-    return matchTipo && matchQ;
+    const matchTipo   = !tipo   || r.tipo === tipo;
+    const matchSemana = !semana || String(r.semana) === semana;
+    const matchChofer = !chofer || r.placa === chofer;
+    const matchQ      = !q     || r.punto.toLowerCase().includes(q)
+                                || r.placa.toLowerCase().includes(q)
+                                || r.chofer.toLowerCase().includes(q);
+    return matchTipo && matchSemana && matchChofer && matchQ;
   });
-  
+
   PAG_PAGE = 1;
   renderDetallePag();
+}
+
+function poblarFiltrosDetalle(){
+  // Semanas disponibles
+  const semanas = [...new Set(DB.map(r => r.semana))].sort((a,b) => a-b);
+  const selSem = document.getElementById('filter-semana');
+  if(selSem){
+    selSem.innerHTML = '<option value="">Todas las semanas</option>' +
+      semanas.map(s => `<option value="${s}">Semana ${s}</option>`).join('');
+  }
+  // Choferes disponibles
+  const chofMap = {};
+  DB.forEach(r => { if(!chofMap[r.placa]) chofMap[r.placa] = r.chofer; });
+  const selChof = document.getElementById('filter-chofer');
+  if(selChof){
+    selChof.innerHTML = '<option value="">Todos los choferes</option>' +
+      Object.entries(chofMap).sort((a,b)=>a[1].localeCompare(b[1]))
+        .map(([p,n]) => `<option value="${p}">${n} (${p})</option>`).join('');
+  }
 }
 
 function renderDetalle(){
@@ -1302,13 +1402,10 @@ function loadConfig(){
     if(saved.placas && saved.placas.length){ PLACAS = saved.placas; }
   }catch(e){}
   
-  // Aviso si no hay placas configuradas
-  if(PLACAS.length === 0){
-    setTimeout(() => {
-      setInfo('\u26a0 Sin flota configurada \u2014 ve a Configuraci\u00f3n \u2192 Flota registrada y agrega tus 11 placas', 'amber');
-      setBadge('amber','amber','Sin flota');
-    }, 200);
-  }
+  // Flota siempre lista (precargada en código)
+  setTimeout(() => {
+    setBadge('gris','gris','Listo para cargar');
+  }, 100);
 }
 
 function guardarConfig(){

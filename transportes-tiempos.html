@@ -504,7 +504,7 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
           <div style="background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12px;color:var(--t2)">
             <div style="color:var(--blue);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🗄 Proxy Azure (recomendado)</div>
             <div>Para evitar CORS configura un Azure Function como proxy:</div>
-            <code style="display:block;margin-top:6px;font-family:'DM Mono',monospace;font-size:11px;color:var(--green)">/api/gps-stops-proxy?placa=XX&fi=YYYY-MM-DD&ff=YYYY-MM-DD&minStop=15</code>
+            <code style="display:block;margin-top:6px;font-family:'DM Mono',monospace;font-size:11px;color:var(--green)">/api/gps-stops-proxy?desde=2026/04/21 00:00:00&hasta=2026/04/21 23:59:59&time=60</code>
           </div>
           <div style="display:flex;gap:8px">
             <button class="btn-go" onclick="guardarConfig()">💾 Guardar</button>
@@ -1323,21 +1323,52 @@ async function testApi(){
   const btn = document.querySelector('[onclick="testApi()"]');
   if(btn){ btn.textContent = '⟳ Probando...'; btn.disabled = true; }
   const res = document.getElementById('cfg-result');
-  
+
+  // Fecha de ayer para la prueba
+  const ayer = new Date(); ayer.setDate(ayer.getDate()-1);
+  const fi   = ayer.toISOString().split('T')[0];
+  const desde = fi.replace(/-/g,'/') + ' 00:00:00';
+  const hasta = fi.replace(/-/g,'/') + ' 23:59:59';
+
+  // 1. Probar proxy (formato real: desde= hasta= time=)
+  const urlProxy = `${CFG.proxyBase}?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&time=60`;
+  res.innerHTML = `<span style="color:var(--t2)">⟳ Probando proxy: <code style="font-family:'DM Mono',monospace;font-size:11px">${CFG.proxyBase}</code></span>`;
+
   try{
-    const fi = new Date(); fi.setDate(fi.getDate()-1);
-    const placa = PLACAS[0]?.placa || 'LS3119';
-    const url = `${CFG.url}/GetStopsDataRangeByPlate?sLogin=${encodeURIComponent(CFG.user)}&sPassword=${encodeURIComponent(CFG.pass)}&sPlate=${encodeURIComponent(placa)}&sStartDate=${encodeURIComponent(fi.toISOString().split('T')[0].replace(/-/g,'/')+' 00:00:00')}&sEndDate=${encodeURIComponent(new Date().toISOString().split('T')[0].replace(/-/g,'/')+' 23:59:59')}&iMinStopTime=5`;
-    const r = await fetch(url, {signal:AbortSignal.timeout(10000)});
+    const r = await fetch(urlProxy, {signal: AbortSignal.timeout(40000)});
     const txt = await r.text();
-    if(txt.includes('110')) res.innerHTML = '<span style="color:var(--amber)">⚠ Conexión OK — sin paradas en últimas 24h (normal si no hubo operaciones)</span>';
-    else if(txt.includes('108')) res.innerHTML = '<span style="color:var(--red)">✗ Sin permisos (cod 108). Contacta a WideTech.</span>';
-    else if(txt.length > 100) res.innerHTML = `<span style="color:var(--green)">✓ API respondió correctamente (${txt.length} bytes)</span>`;
-    else res.innerHTML = `<span style="color:var(--amber)">⚠ Respuesta inesperada: ${txt.substring(0,80)}</span>`;
+    const elapsed = r.headers.get('X-Debug-Elapsed-Ms') || '?';
+    const ok      = r.headers.get('X-Debug-Plates-Ok')  || '?';
+    const total   = r.headers.get('X-Debug-Plates-Total')|| '?';
+
+    if(!r.ok){
+      res.innerHTML = `<span style="color:var(--red)">✗ Proxy HTTP ${r.status}: ${txt.substring(0,120)}</span>`;
+    } else if(txt.includes('<Response') || txt.includes('<Plate')){
+      // Contar placas con data
+      const conData  = (txt.match(/NoData="true"/g)||[]).length;
+      const totalPl  = (txt.match(/<Plate /g)||[]).length;
+      const errores  = (txt.match(/<Error /g)||[]).length;
+      const sinData  = conData;
+      const activas  = totalPl - sinData;
+      res.innerHTML  = `<span style="color:var(--green)">✓ Proxy OK</span>
+        <span style="color:var(--t2);font-size:11.5px;margin-left:8px">${elapsed}ms · ${totalPl} placas consultadas · ${activas} con data · ${sinData} sin actividad${errores>0?' · <span style="color:var(--amber)">'+errores+' errores</span>':''}</span>
+        <br><span style="color:var(--t3);font-size:11px">URL: ${urlProxy}</span>`;
+    } else if(txt.includes('110')){
+      res.innerHTML = `<span style="color:var(--amber)">⚠ Proxy OK — sin paradas ayer (tiempo mínimo 60 min, prueba bajar)</span>`;
+    } else {
+      res.innerHTML = `<span style="color:var(--amber)">⚠ Proxy respondió pero formato inesperado (${txt.length} bytes): ${txt.substring(0,100)}</span>`;
+    }
   } catch(e){
-    res.innerHTML = `<span style="color:var(--red)">✗ Error: ${e.message}. Probablemente CORS — usa el proxy Azure.</span>`;
+    const esCors = e.message.includes('fetch') || e.message.includes('network') || e.message.includes('Failed');
+    if(esCors){
+      res.innerHTML = `<span style="color:var(--red)">✗ Proxy no disponible: ${e.message}</span>
+        <br><span style="color:var(--amber);font-size:11.5px">→ El proxy <code style="font-family:'DM Mono',monospace">/api/gps-stops-proxy</code> no está desplegado en Azure todavía.</span>
+        <br><button onclick="window.open('${urlProxy}','_blank')" class="page-btn" style="font-size:11px;margin-top:6px">🔗 Abrir URL del proxy en nueva pestaña</button>`;
+    } else {
+      res.innerHTML = `<span style="color:var(--red)">✗ ${e.message}</span>`;
+    }
   }
-  
+
   if(btn){ btn.textContent = '🔌 Test conexión'; btn.disabled = false; }
 }
 

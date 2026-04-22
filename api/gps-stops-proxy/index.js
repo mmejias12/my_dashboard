@@ -171,23 +171,23 @@ function queryPlate(plate, sStartDate, sEndDate, iMinStopTime) {
 }
 
 function combineResponses(results, meta) {
-  var plateBlocks = [];
-  var errors = [];
-
+  var plateBlocks = []; var errors = [];
   results.forEach(function(r) {
     if (r.ok) {
-      var match = r.xml.match(/<Plate[\s\S]*?<\/Plate>/);
-      if (match) {
-        plateBlocks.push(match[0]);
+      var xml = r.xml || '';
+      // indexOf/lastIndexOf evita el bug del regex lazy con múltiples placas
+      var pStart = xml.indexOf('<Plate ');
+      var pEnd   = xml.lastIndexOf('</Plate>');
+      if (pStart !== -1 && pEnd !== -1) {
+        plateBlocks.push(xml.substring(pStart, pEnd + 8));
+      } else if (pStart !== -1) {
+        // Self-closing: <Plate ... />
+        plateBlocks.push(xml.substring(pStart, xml.indexOf('>', pStart) + 1));
       } else {
-        plateBlocks.push(
-          '<Plate id="' + r.plate + '" Name="" MobileID="" NoData="true" />'
-        );
+        plateBlocks.push('<Plate id="' + r.plate + '" Name="" MobileID="" NoData="true"/>');
       }
     } else {
-      errors.push(
-        '<Error plate="' + r.plate + '">' + escapeXml(r.error) + '</Error>'
-      );
+      errors.push('<Error plate="' + r.plate + '">' + escapeXml(r.error) + '</e>');
     }
   });
 

@@ -583,324 +583,143 @@ function fmtTime(s){ try{ return new Date(s).toLocaleTimeString('es-CL',{hour:'2
 function fmtMins(m){ if(!m&&m!==0) return '—'; const h=Math.floor(m/60); const mm=Math.round(m%60); return h>0?`${h}h ${mm}m`:`${mm}m`; }
 
 // ──────────────────────────────────────────────
-//  CLASIFICACION PUNTOS
+//  NORMALIZACIÓN Y CLASIFICACIÓN DE PUNTOS
+//  Basada en data real del API GPS Condor
 // ──────────────────────────────────────────────
-const REGLAS = [
-  // CD Retail (CDs de distribución)
-  {test: n => /CD\s*(WALMART|LIDER|SMU|UNIMARC|CENCOSUD|JUMBO|EASY|TOTTUS|ACUENTA|EKONO|RENDIC|ALVI|M10)/i.test(n), tipo:'CD Retail', cat:'CD'},
-  {test: n => /\b(CD|C\.D)\b.*\b(RETAIL|DISTRIB)/i.test(n), tipo:'CD Retail', cat:'CD'},
-  {test: n => /CENTRO\s*DE\s*DISTRIBU/i.test(n), tipo:'CD Retail', cat:'CD'},
-  // Salas Retail
-  {test: n => /\b(WALMART|LIDER|JUMBO|EASY|TOTTUS|ACUENTA|EKONO|SMU|UNIMARC|RENDIC|ALVI|M10|DISCO|DEVOTO)\b/i.test(n) && !/^CD\b/i.test(n), tipo:'Sala Retail', cat:'Sala'},
-  {test: n => /\b(SUPERMERCADO|HIPERMERC|MINIMARKET)\b/i.test(n), tipo:'Sala Retail', cat:'Sala'},
-  // REDTEC
-  {test: n => /REDTEC|RENTAPACK|RED\s*TEC/i.test(n), tipo:'REDTEC', cat:'Bodega'},
-  // Otros CD
-  {test: n => /BODEGA|ALMACEN|DEPOSITO/i.test(n), tipo:'CD Retail', cat:'CD'},
-];
+
+function limpiarNombre(n){
+  if(!n) return '';
+  return n
+    .replace(/^\s*B\s+/,'')        // Quita " B " al inicio (formato ON-OFF)
+    .replace(/\s+B\s*$/,'')        // Quita " B " al final
+    .replace(/^Pasando\s+Por\s+--+\s*/i,'') // Quita "Pasando Por -- " (formato IDLE)
+    .replace(/--+/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+}
 
 function clasificar(nombre){
   if(!nombre) return {tipo:'Otros', cat:'Otros'};
   const n = nombre.toUpperCase();
-  for(const r of REGLAS) if(r.test(n)) return {tipo:r.tipo, cat:r.cat};
+
+  // 1. REDTEC / Base propia
+  if(/REDTEC|RENTAPACK|RED\s*TEC/.test(n))
+    return {tipo:'REDTEC', cat:'Base'};
+
+  // 2. CD Walmart — prefijo ZWM + CD (confirmado: "ZWM11 CD WM EL PENON")
+  if(/^ZWM.*\bCD\b/.test(n))
+    return {tipo:'CD Retail', cat:'CD Walmart'};
+
+  // 3. CD Walmart — variantes sin prefijo ZWM
+  if(/\bCD\s*(WM|WALMART|LIDER|JUMBO|EASY|TOTTUS|CENCOSUD)/.test(n))
+    return {tipo:'CD Retail', cat:'CD Walmart'};
+
+  // 4. Rentapack (también base propia)
+  if(/RENTAPACK/.test(n))
+    return {tipo:'REDTEC', cat:'Base'};
+
+  // 5. Sala Walmart — prefijo ZWM sin CD → sala/tienda
+  if(/^ZWM/.test(n))
+    return {tipo:'Sala Retail', cat:'Sala Walmart'};
+
+  // 6. Otras salas retail conocidas
+  if(/\b(LIDER|JUMBO|EASY|TOTTUS|ACUENTA|EKONO|SMU|UNIMARC|RENDIC|ALVI|M10|DISCO|DEVOTO|SANTA\s*ISABEL)\b/.test(n))
+    return {tipo:'Sala Retail', cat:'Sala Retail'};
+
+  // 7. CD de otros clientes (ej: "LAF CD RENCA") — contiene CD pero no ZWM
+  if(/\bCD\b/.test(n) || /CENTRO\s*DE\s*DISTRIBU/.test(n) || /\b(BODEGA|DEPOSITO|ALMACEN)\b/.test(n))
+    return {tipo:'CD Retail', cat:'Otros CD'};
+
+  // 8. Cualquier otro punto = Cliente externo
   return {tipo:'Cliente', cat:'Cliente'};
 }
 
-function isoWeek(fecha){
-  const d = new Date(fecha);
+function isoWeek(fechaStr){
+  const d = new Date(fechaStr + 'T12:00:00');
   const jan4 = new Date(d.getFullYear(), 0, 4);
   const diff = (d - jan4) / 86400000;
   return Math.ceil((diff + jan4.getDay() + 1) / 7);
 }
 
-// ──────────────────────────────────────────────
-//  PARSEO XML GPS CONDOR
-// ──────────────────────────────────────────────
-function parseXML(xmlStr, placa, nombreChofer){
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(xmlStr, 'text/xml');
-  const rows = [];
-  
-  // Intentar distintas estructuras de respuesta
-  const stops = doc.querySelectorAll('Stop, stop, Row, row, item');
-  stops.forEach(s => {
-    const g = k => s.querySelector(k)?.textContent?.trim() || '';
-    
-    const location = limpiarNombre(g('location') || g('Location') || g('LOCATION') || g('name') || g('Name'));
-    const timeIn   = g('time_in') || g('TimeIn') || g('TIME_IN') || g('start') || g('Start');
-    const timeOut  = g('time_out') || g('TimeOut') || g('TIME_OUT') || g('end') || g('End');
-    const dur      = parseFloat(g('duration') || g('Duration') || g('DURATION') || '0');
-    
-    if(!location || location === '---' || !timeIn) return;
-    
-    const minutos = dur > 0 ? dur : calcMins(timeIn, timeOut);
-    if(minutos < 1) return;
-    
-    const fecha = timeIn.split(' ')[0] || timeIn.split('T')[0];
-    const clase = clasificar(location);
-    
-    rows.push({
-      placa,
-      chofer: nombreChofer || placa,
-      punto: location,
-      tipo: clase.tipo,
-      cat: clase.cat,
-      fecha,
-      semana: isoWeek(fecha),
-      dia: new Date(fecha).toLocaleDateString('es-CL',{weekday:'short'}).replace('.',''),
-      llegada: timeIn,
-      salida: timeOut,
-      minutos: Math.round(minutos)
-    });
-  });
-  return rows;
-}
-
-function limpiarNombre(n){
-  if(!n) return '';
-  return n
-    .replace(/\s+B\s+/g, ' ')
-    .replace(/Pasando\s+Por\s+--+/gi, '')
-    .replace(/--+/g, '')
-    .trim();
-}
-
 function calcMins(ti, to){
   try{
-    const a = new Date(ti), b = new Date(to);
+    const a = new Date(ti.replace(/\//g,'-')), b = new Date(to.replace(/\//g,'-'));
     return Math.max(0, (b-a)/60000);
   }catch(e){ return 0; }
 }
 
 // ──────────────────────────────────────────────
-//  CARGA DE DATOS
+//  PARSEO XML MULTI-PLACA (formato proxy real)
+//  <Response><Plate id="XX" Name="CHOFER"><ITEM>...</ITEM></Plate></Response>
 // ──────────────────────────────────────────────
-async function cargarDatos(){
-  const fi = document.getElementById('fi').value;
-  const ff = document.getElementById('ff').value;
-  const minStop = document.getElementById('min-tiempo').value || 15;
-  const flotaSel = document.getElementById('sel-flota').value;
-  
-  if(!fi || !ff){ setInfo('⚠ Selecciona rango de fechas','amber'); return; }
-  
-  setBadge('amber','amber','Cargando...');
-  setInfo('','');
-  
-  const btn = document.getElementById('btn-cargar');
-  btn.disabled = true;
-  document.getElementById('btn-ico').textContent = '⟳';
-  
-  const placasActivas = PLACAS.filter(p => p.activa && (flotaSel === 'all' || p.placa === flotaSel));
-  
-  if(placasActivas.length === 0){
-    setInfo('⚠ No hay placas activas en la flota','amber');
-    btn.disabled = false;
-    document.getElementById('btn-ico').textContent = '▶';
-    setBadge('gris','gris','Sin placas');
-    return;
-  }
-  
-  let allRows = [];
-  let errores = 0;
-  
-  for(const p of placasActivas){
-    try{
-      const rows = await fetchPlaca(p.placa, p.chofer, fi, ff, minStop);
-      allRows = allRows.concat(rows);
-    } catch(e){
-      console.warn('Error placa', p.placa, e);
-      errores++;
-    }
-  }
-  
-  // Consolidar paradas que cruzan medianoche
-  allRows = consolidarMedianoche(allRows);
-  
-  DB = allRows;
-  DB_FILTERED = [...DB];
-  PAG_PAGE = 1;
-  
-  btn.disabled = false;
-  document.getElementById('btn-ico').textContent = '▶';
-  
-  if(DB.length === 0){
-    if(errores === placasActivas.length){
-      // Todas las placas fallaron → CORS o config mal
-      setBadge('rojo','rojo','Error conexión');
-      setInfo('✗ No se pudo conectar al API. Ver diagnóstico abajo ↓','red');
-      mostrarDiagnostico();
-    } else {
-      setBadge('amber','amber','Sin paradas');
-      setInfo(`Sin paradas en el período (mín. ${minStop} min). ${errores>0?errores+' placa(s) con error.':''}  Prueba bajar el tiempo mínimo o ampliar fechas.`,'');
-    }
-    renderEmptyCharts();
-  } else {
-    setBadge('verde','verde',`${DB.length} paradas`);
-    setInfo(`${DB.length} paradas · ${placasActivas.length} placas · ${errores > 0 ? errores+' errores' : 'OK'}`, errores>0?'amber':'');
-    document.getElementById('btn-xls').style.display = '';
-    document.getElementById('diag-panel').style.display = 'none';
-    renderAll();
-  }
-}
+function parseXMLMultiPlaca(xmlStr){
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlStr, 'text/xml');
+  const rows = [];
 
-// ──────────────────────────────────────────────
-//  FETCH CON DIAGNÓSTICO
-// ──────────────────────────────────────────────
-async function fetchPlaca(placa, chofer, fi, ff, minStop){
-  const fiStr = fi.replace(/-/g,'/') + ' 00:00:00';
-  const ffStr = ff.replace(/-/g,'/') + ' 23:59:59';
-  
-  const log = (msg) => { console.log(`[GPS ${placa}]`, msg); };
-  
-  // 1. Intentar proxy Azure
-  try{
-    log('Intentando proxy Azure: ' + CFG.proxyBase);
-    const res = await fetch(`${CFG.proxyBase}?placa=${encodeURIComponent(placa)}&fi=${fi}&ff=${ff}&minStop=${minStop}`, {signal: AbortSignal.timeout(10000)});
-    if(res.ok){
-      const txt = await res.text();
-      log('Proxy OK, bytes=' + txt.length + ', preview=' + txt.substring(0,80));
-      if(txt.includes('<') && txt.length > 100){
-        const rows = parseXML(txt, placa, chofer);
-        log('Proxy → ' + rows.length + ' paradas');
-        return rows;
-      }
-      if(txt.includes('110')){ log('Proxy cod 110: sin paradas'); return []; }
-      if(txt.includes('108')){ throw new Error('Sin permisos (cod 108)'); }
-    } else {
-      log('Proxy HTTP ' + res.status + ' — proxy no existe todavía');
-    }
-  } catch(e){
-    log('Proxy falló: ' + e.message);
+  // Verificar error de parseo
+  if(doc.querySelector('parsererror')){
+    console.warn('[GPS] Error parseando XML:', doc.querySelector('parsererror').textContent.substring(0,200));
+    return rows;
   }
-  
-  // 2. Llamada directa GET (puede fallar por CORS)
-  const urlGet = `${CFG.url}/GetStopsDataRangeByPlate?sLogin=${encodeURIComponent(CFG.user)}&sPassword=${encodeURIComponent(CFG.pass)}&sPlate=${encodeURIComponent(placa)}&sStartDate=${encodeURIComponent(fiStr)}&sEndDate=${encodeURIComponent(ffStr)}&iMinStopTime=${minStop}`;
-  try{
-    log('Intentando GET directo...');
-    const res = await fetch(urlGet, {signal: AbortSignal.timeout(12000)});
-    if(res.ok){
-      const txt = await res.text();
-      log('GET directo OK, bytes=' + txt.length);
-      if(txt.includes('110')){ log('cod 110: sin paradas'); return []; }
-      if(txt.includes('108')){ throw new Error('Sin permisos (cod 108) en GET directo'); }
-      const rows = parseXML(txt, placa, chofer);
-      log('GET directo → ' + rows.length + ' paradas');
-      return rows;
-    }
-  } catch(e){
-    log('GET directo falló: ' + e.message + (e.message.includes('CORS')||e.message.includes('fetch')?'  ← CORS bloqueado':''));
-  }
-  
-  // 3. Llamada SOAP (a veces pasa CORS cuando GET no pasa)
-  const soapEnv = `<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
-  <soap:Body>
-    <GetStopsDataRangeByPlate xmlns="http://tempuri.org/">
-      <sLogin>${CFG.user}</sLogin>
-      <sPassword>${CFG.pass}</sPassword>
-      <sPlate>${placa}</sPlate>
-      <sStartDate>${fiStr}</sStartDate>
-      <sEndDate>${ffStr}</sEndDate>
-      <iMinStopTime>${minStop}</iMinStopTime>
-    </GetStopsDataRangeByPlate>
-  </soap:Body>
-</soap:Envelope>`;
-  try{
-    log('Intentando SOAP POST...');
-    const res = await fetch(CFG.url, {
-      method: 'POST',
-      headers: {'Content-Type':'text/xml; charset=utf-8','SOAPAction':'"http://tempuri.org/GetStopsDataRangeByPlate"'},
-      body: soapEnv,
-      signal: AbortSignal.timeout(12000)
+
+  const plates = doc.querySelectorAll('Plate');
+  plates.forEach(plate => {
+    const placa  = plate.getAttribute('id') || '';
+    const chofer = plate.getAttribute('Name') || placa;
+    const noData = plate.getAttribute('NoData') === 'true';
+
+    if(noData || !placa) return;
+
+    const items = plate.querySelectorAll('ITEM');
+    items.forEach(item => {
+      const g = tag => item.querySelector(tag)?.textContent?.trim() || '';
+
+      const location = limpiarNombre(g('LOCATION'));
+      const start    = g('START');   // formato: "2026/04/21 05:55:22"
+      const end      = g('END');
+      const seconds  = parseInt(g('SECOND') || '0', 10); // campo confiable del API
+
+      if(!location || !start) return;
+
+      // Usar SECOND directamente (más confiable que calcular de START/END)
+      const minutos = seconds > 0 ? Math.round(seconds / 60) : Math.round(calcMins(start, end));
+      if(minutos < 1) return;
+
+      // Normalizar fecha: "2026/04/21 05:55:22" → "2026-04-21"
+      const fechaRaw = start.split(' ')[0];
+      const fecha    = fechaRaw.replace(/\//g, '-');
+
+      const clase = clasificar(location);
+      const diaSemana = (() => {
+        try{ return new Date(fecha + 'T12:00:00').toLocaleDateString('es-CL',{weekday:'short'}).replace('.',''); }
+        catch(e){ return ''; }
+      })();
+
+      rows.push({
+        placa,
+        chofer: chofer || placa,
+        punto:   location,
+        tipo:    clase.tipo,
+        cat:     clase.cat,
+        fecha,
+        semana:  isoWeek(fecha),
+        dia:     diaSemana,
+        llegada: start,
+        salida:  end,
+        minutos
+      });
     });
-    if(res.ok){
-      const txt = await res.text();
-      log('SOAP OK, bytes=' + txt.length);
-      if(txt.includes('110')){ log('SOAP cod 110: sin paradas'); return []; }
-      if(txt.includes('108')){ throw new Error('Sin permisos (cod 108) via SOAP'); }
-      const rows = parseXML(txt, placa, chofer);
-      log('SOAP → ' + rows.length + ' paradas');
-      return rows;
-    }
-  } catch(e){
-    log('SOAP falló: ' + e.message);
-  }
-  
-  // Todos los intentos fallaron
-  throw new Error(`CORS_BLOCK: No se pudo acceder al API para ${placa}. Necesitas el proxy Azure.`);
+  });
+
+  return rows;
 }
 
 // ──────────────────────────────────────────────
-//  PANEL DIAGNÓSTICO
+//  CONSOLIDAR PARADAS QUE CRUZAN MEDIANOCHE
+//  00:00:01 de día N+1 + 23:59:59 de día N → misma parada
 // ──────────────────────────────────────────────
-function mostrarDiagnostico(){
-  let panel = document.getElementById('diag-panel');
-  if(!panel){
-    panel = document.createElement('div');
-    panel.id = 'diag-panel';
-    panel.style.cssText = 'background:#1a0808;border:1px solid rgba(240,86,86,.3);border-radius:10px;padding:16px 18px;margin-top:0;display:flex;flex-direction:column;gap:10px';
-    document.querySelector('.main').insertBefore(panel, document.querySelector('.kpi-row'));
-  }
-  panel.style.display = '';
-  
-  const proxyUrl = window.location.hostname.includes('azurestaticapps') || window.location.hostname.includes('redtec') 
-    ? window.location.origin + '/api/gps-stops-proxy'
-    : '/api/gps-stops-proxy (proxy no detectado en este host)';
-  
-  panel.innerHTML = `
-    <div style="color:var(--red);font-weight:600;font-size:12px;display:flex;align-items:center;gap:7px">
-      <span>⛔</span> Error de conexión al API GPS Condor
-    </div>
-    <div style="font-size:12px;color:#c87070;line-height:1.7">
-      El browser bloquea las llamadas directas a <code style="color:var(--amber);font-family:'DM Mono',monospace">shareservice.co</code> por política CORS.<br>
-      El proxy Azure <code style="color:var(--amber);font-family:'DM Mono',monospace">/api/gps-stops-proxy</code> no está respondiendo todavía.<br>
-      <strong style="color:var(--t1)">Solución:</strong> necesitas el Azure Function proxy desplegado en tu Static Web App.
-    </div>
-    <div style="background:rgba(0,0,0,.3);border-radius:6px;padding:12px;font-size:11.5px;color:#8090a0;display:flex;flex-direction:column;gap:6px">
-      <div style="color:var(--t1);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">📋 Código proxy Azure Function (api/gps-stops-proxy/index.js)</div>
-      <code style="font-family:'DM Mono',monospace;font-size:10.5px;color:#a0d4ff;white-space:pre-wrap">module.exports = async function(context, req) {
-  const {placa,fi,ff,minStop=15} = req.query;
-  const url = \`https://web1ws.shareservice.co/WsReports.asmx/GetStopsDataRangeByPlate?sLogin=redtec%20chile&sPassword=redtec2023&sPlate=\${encodeURIComponent(placa)}&sStartDate=\${fi.replace(/-/g,'/')}%2000%3A00%3A00&sEndDate=\${ff.replace(/-/g,'/')}%2023%3A59%3A59&iMinStopTime=\${minStop}\`;
-  const res = await fetch(url);
-  const txt = await res.text();
-  context.res = {
-    headers:{'Content-Type':'application/xml','Access-Control-Allow-Origin':'*'},
-    body: txt
-  };
-};</code>
-    </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button onclick="probarUrlDirecto()" class="btn-xls" style="font-size:11.5px;padding:6px 12px">🔍 Diagnosticar en consola</button>
-      <button onclick="switchTab('config')" class="page-btn" style="font-size:11.5px">⚙ Ver config</button>
-      <button onclick="document.getElementById('diag-panel').style.display='none'" class="page-btn" style="font-size:11.5px">✕ Cerrar</button>
-    </div>
-  `;
-}
-
-async function probarUrlDirecto(){
-  const fi = document.getElementById('fi').value || new Date().toISOString().split('T')[0];
-  const placa = PLACAS[0]?.placa || 'LS3119';
-  const url = `${CFG.url}/GetStopsDataRangeByPlate?sLogin=${encodeURIComponent(CFG.user)}&sPassword=${encodeURIComponent(CFG.pass)}&sPlate=${encodeURIComponent(placa)}&sStartDate=${encodeURIComponent(fi.replace(/-/g,'/')+' 00:00:00')}&sEndDate=${encodeURIComponent(fi.replace(/-/g,'/')+' 23:59:59')}&iMinStopTime=1`;
-  console.log('%c[DIAGNÓSTICO GPS Condor]', 'color:#4b8df8;font-weight:bold;font-size:13px');
-  console.log('URL directo:', url);
-  console.log('Proxy configurado:', CFG.proxyBase);
-  console.log('Placa de prueba:', placa);
-  try{
-    const r = await fetch(url, {signal:AbortSignal.timeout(8000)});
-    const txt = await r.text();
-    console.log('%c✓ Respuesta directa OK', 'color:#1ec96a');
-    console.log('Status:', r.status, '| Bytes:', txt.length);
-    console.log('Preview:', txt.substring(0,300));
-    alert(`✓ Conexión directa funcionó!\nStatus: ${r.status}\nBytes: ${txt.length}\nVer consola F12 para detalles.`);
-  } catch(e){
-    console.error('%c✗ Conexión directa falló (CORS esperado)', 'color:#f05656', e.message);
-    console.log('%c→ Solución: despliega el proxy Azure Function', 'color:#f4a836;font-weight:bold');
-    alert(`CORS bloqueado (esperado desde el browser).\n\nNecesitas el proxy Azure.\nVer consola F12 y el panel de diagnóstico para el código.`);
-  }
-}
-
 function consolidarMedianoche(rows){
-  // Paradas que termina a las 23:59 y otra empieza a las 00:00 del siguiente día = misma parada
   const sorted = [...rows].sort((a,b) => a.llegada.localeCompare(b.llegada));
   const result = [];
   let i = 0;
@@ -908,11 +727,12 @@ function consolidarMedianoche(rows){
     const r = {...sorted[i]};
     if(i+1 < sorted.length){
       const next = sorted[i+1];
-      const mismoLugar = r.punto === next.punto && r.placa === next.placa;
-      const cruza = r.salida && r.salida.includes('23:5') && next.llegada && next.llegada.includes('00:0');
-      if(mismoLugar && cruza){
-        r.minutos = r.minutos + next.minutos;
-        r.salida = next.salida;
+      const mismoLugar  = r.punto === next.punto && r.placa === next.placa;
+      const cruzan      = r.salida  && (r.salida.includes('23:59') || r.salida.includes('23:58'))
+                       && next.llegada && (next.llegada.includes('00:00') || next.llegada.includes('00:01'));
+      if(mismoLugar && cruzan){
+        r.minutos += next.minutos;
+        r.salida   = next.salida;
         i += 2;
         result.push(r);
         continue;
@@ -922,6 +742,145 @@ function consolidarMedianoche(rows){
     i++;
   }
   return result;
+}
+
+// ──────────────────────────────────────────────
+//  CARGA DE DATOS — usa proxy multi-placa real
+// ──────────────────────────────────────────────
+async function cargarDatos(){
+  const fi      = document.getElementById('fi').value;
+  const ff      = document.getElementById('ff').value;
+  const minStop = document.getElementById('min-tiempo').value || 15;
+
+  if(!fi || !ff){ setInfo('⚠ Selecciona rango de fechas','amber'); return; }
+
+  setBadge('amber','amber','Consultando API...');
+  setInfo('Consultando GPS Condor (' + minStop + ' min mín.) — esto puede tardar ~10s...','');
+
+  const btn = document.getElementById('btn-cargar');
+  btn.disabled = true;
+  document.getElementById('btn-ico').textContent = '⟳';
+
+  try{
+    const allRows = await fetchTodaLaFlota(fi, ff, minStop);
+    const consolidadas = consolidarMedianoche(allRows);
+
+    DB          = consolidadas;
+    DB_FILTERED = [...DB];
+    PAG_PAGE    = 1;
+
+    btn.disabled = false;
+    document.getElementById('btn-ico').textContent = '▶';
+
+    const diagPanel = document.getElementById('diag-panel');
+    if(diagPanel) diagPanel.style.display = 'none';
+
+    if(DB.length === 0){
+      setBadge('amber','amber','Sin paradas');
+      setInfo('Sin paradas para el período. Prueba bajar el tiempo mínimo o ampliar fechas.','');
+      renderEmptyCharts();
+    } else {
+      const nPlacas = new Set(DB.map(r=>r.placa)).size;
+      setBadge('verde','verde', DB.length + ' paradas');
+      setInfo(DB.length + ' paradas · ' + nPlacas + ' placas activas · OK','');
+      document.getElementById('btn-xls').style.display = '';
+      renderAll();
+    }
+
+  } catch(e){
+    btn.disabled = false;
+    document.getElementById('btn-ico').textContent = '▶';
+    setBadge('rojo','rojo','Error');
+    setInfo('✗ ' + e.message,'red');
+    mostrarDiagnostico(e.message);
+    renderEmptyCharts();
+  }
+}
+
+// ──────────────────────────────────────────────
+//  FETCH PROXY MULTI-PLACA
+//  El proxy ya maneja rate-limit (tandas de 2 + delay 800ms)
+//  Una sola llamada devuelve todas las placas
+// ──────────────────────────────────────────────
+async function fetchTodaLaFlota(fi, ff, minStop){
+  // Formato que espera el proxy: "desde=2026/04/21 00:00:00"
+  const desde = fi.replace(/-/g,'/') + ' 00:00:00';
+  const hasta = ff.replace(/-/g,'/') + ' 23:59:59';
+
+  const url = CFG.proxyBase
+    + '?desde=' + encodeURIComponent(desde)
+    + '&hasta=' + encodeURIComponent(hasta)
+    + '&time='  + minStop;
+
+  console.log('[GPS] Llamando proxy:', url);
+  setBadge('amber','amber','Cargando placas...');
+
+  const res = await fetch(url, {signal: AbortSignal.timeout(60000)}); // 60s por el rate-limit del API
+  if(!res.ok){
+    const body = await res.text().catch(()=>'');
+    throw new Error('Proxy HTTP ' + res.status + ': ' + body.substring(0,120));
+  }
+
+  const txt = await res.text();
+  console.log('[GPS] Proxy respondió', txt.length, 'bytes');
+  console.log('[GPS] Preview:', txt.substring(0, 300));
+
+  // Debug headers
+  const elapsed = res.headers.get('X-Debug-Elapsed-Ms');
+  const ok      = res.headers.get('X-Debug-Plates-Ok');
+  const total   = res.headers.get('X-Debug-Plates-Total');
+  if(elapsed) console.log('[GPS] Elapsed:', elapsed + 'ms | Placas OK:', ok + '/' + total);
+
+  const rows = parseXMLMultiPlaca(txt);
+  console.log('[GPS] Filas parseadas:', rows.length);
+
+  // Mostrar errores de placas individuales si los hay
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(txt, 'text/xml');
+  const errors = doc.querySelectorAll('Error');
+  if(errors.length){
+    const errList = [...errors].map(e => e.getAttribute('plate') + ': ' + e.textContent.trim().substring(0,60)).join(' | ');
+    console.warn('[GPS] Errores de placas:', errList);
+    setInfo(rows.length + ' paradas OK — ' + errors.length + ' placa(s) con error (ver consola F12)','amber');
+  }
+
+  return rows;
+}
+
+// ──────────────────────────────────────────────
+//  PANEL DIAGNÓSTICO
+// ──────────────────────────────────────────────
+function mostrarDiagnostico(msgExtra){
+  let panel = document.getElementById('diag-panel');
+  if(!panel){
+    panel = document.createElement('div');
+    panel.id = 'diag-panel';
+    panel.style.cssText = 'background:#1a0808;border:1px solid rgba(240,86,86,.3);border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:10px';
+    const kpi = document.querySelector('.kpi-row');
+    if(kpi) kpi.parentNode.insertBefore(panel, kpi);
+  }
+  panel.style.display = '';
+  const msg = msgExtra || 'Error de conexión';
+
+  panel.innerHTML = `
+    <div style="color:var(--red);font-weight:600;font-size:12px">⛔ Error conectando al proxy GPS Condor</div>
+    <div style="font-size:12px;color:#c87070;line-height:1.7">
+      <strong>Error:</strong> <code style="color:var(--amber);font-family:'DM Mono',monospace">${msg}</code><br>
+      El proxy espera: <code style="color:var(--cyan);font-family:'DM Mono',monospace">/api/gps-stops-proxy?desde=2026/04/21 00:00:00&amp;hasta=2026/04/21 23:59:59&amp;time=60</code>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button onclick="probarProxy()" class="btn-xls" style="font-size:11.5px;padding:6px 12px">🔍 Probar proxy en nueva pestaña</button>
+      <button onclick="switchTab('config')" class="page-btn" style="font-size:11.5px">⚙ Ver config</button>
+      <button onclick="document.getElementById('diag-panel').style.display='none'" class="page-btn" style="font-size:11.5px">✕ Cerrar</button>
+    </div>`;
+}
+
+function probarProxy(){
+  const fi = document.getElementById('fi').value || new Date().toISOString().split('T')[0];
+  const desde = fi.replace(/-/g,'/') + ' 00:00:00';
+  const hasta = fi.replace(/-/g,'/') + ' 23:59:59';
+  const url = CFG.proxyBase + '?desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta) + '&time=60';
+  window.open(url, '_blank');
 }
 
 // ──────────────────────────────────────────────

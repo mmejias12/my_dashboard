@@ -1,22 +1,23 @@
 const https = require('https');
 
 const API_HOST = 'web1ws.shareservice.co';
-// ✅ CORREGIDO: ruta correcta confirmada en pruebas reales
 const API_PATH = '/WsReports.asmx/GetStopsDataRangeByPlate';
 
+// Credenciales hardcodeadas para prueba
 const LOGIN    = 'redtec chile';
 const PASSWORD = 'redtec2023';
 
-// Flota REDTEC - 11 placas (confirmadas)
+// Flota REDTEC - 11 placas
 const FLEET = [
   'BJCL13', 'CCRC36', 'CPVW43', 'FV2792', 'LS3119',
   'NC8771', 'RW5303', 'SP3393', 'VG1943', 'XC9869', 'YG5106'
 ];
 
-const MAX_CONCURRENT = 2;     // WideTech rate-limit: máx 2 simultáneos
-const DELAY_MS       = 800;   // pausa entre tandas
-const RETRY_MAX      = 2;     // reintentos por rate-limit
-const RETRY_DELAY_MS = 2500;
+// Concurrencia y throttle (el API de WideTech rechaza rafagas)
+const MAX_CONCURRENT  = 2;     // maximo 2 requests al mismo tiempo
+const DELAY_MS        = 800;   // pausa entre tandas de requests
+const RETRY_MAX       = 2;     // reintentos si sale rate-limited
+const RETRY_DELAY_MS  = 2500;  // pausa antes de reintentar
 
 module.exports = async function (context, req) {
   // CORS preflight
@@ -35,13 +36,17 @@ module.exports = async function (context, req) {
 
   var q = req.query || {};
 
-  // Decidir qué placas consultar
+  // Decidir que placas consultar
   var plates;
-  if (q.plate)       plates = [q.plate.trim()];
-  else if (q.plates) plates = q.plates.split(',').map(p => p.trim()).filter(Boolean);
-  else               plates = FLEET;
+  if (q.plate) {
+    plates = [q.plate];
+  } else if (q.plates) {
+    plates = q.plates.split(',').map(function(p) { return p.trim(); }).filter(Boolean);
+  } else {
+    plates = FLEET;
+  }
 
-  // Rango de fechas — acepta "desde" y "hasta" (formato proxy actual)
+  // Rango de fechas (default: ultimos 7 dias)
   var sStartDate = q.desde || '';
   var sEndDate   = q.hasta || '';
   if (!sStartDate || !sEndDate) {
@@ -51,17 +56,24 @@ module.exports = async function (context, req) {
     sEndDate   = formatDate(now)   + ' 23:59:59';
   }
 
-  // Tiempo mínimo de parada en minutos (parámetro "time" del proxy)
   var iMinStopTime = q.time || '60';
 
-  var startMs  = Date.now();
-  var results  = await runWithThrottle(plates, plate =>
-    queryPlateWithRetry(plate, sStartDate, sEndDate, iMinStopTime)
-  );
+
+  // Ejecutar las consultas con concurrencia limitada + reintentos
+  var startMs = Date.now();
+  var results = await runWithThrottle(plates, function(plate) {
+    return queryPlateWithRetry(plate, sStartDate, sEndDate, iMinStopTime);
+  });
   var elapsedMs = Date.now() - startMs;
 
-  var combinedXml  = combineResponses(results, { desde: sStartDate, hasta: sEndDate, time: iMinStopTime, elapsedMs });
-  var successCount = results.filter(r => r.ok).length;
+  var combinedXml = combineResponses(results, {
+    desde: sStartDate,
+    hasta: sEndDate,
+    time:  iMinStopTime,
+    elapsedMs: elapsedMs
+  });
+
+  var successCount = results.filter(function(r) { return r.ok; }).length;
   var errorCount   = results.length - successCount;
 
   context.res = {
@@ -79,18 +91,24 @@ module.exports = async function (context, req) {
   };
 };
 
-// ── Throttle: tandas de MAX_CONCURRENT con pausa entre tandas ──────────────
+/**
+ * Ejecuta una funcion async sobre cada item con concurrencia maxima,
+ * separando tandas con un delay para respetar rate limits.
+ */
 async function runWithThrottle(items, asyncFn) {
   var results = [];
   for (var i = 0; i < items.length; i += MAX_CONCURRENT) {
-    var batch       = items.slice(i, i + MAX_CONCURRENT);
-    var batchResult = await Promise.all(batch.map(item =>
-      asyncFn(item)
-        .then(xml  => ({ plate: item, ok: true,  xml }))
-        .catch(err => ({ plate: item, ok: false, error: err.message }))
-    ));
-    results = results.concat(batchResult);
-    if (i + MAX_CONCURRENT < items.length) await sleep(DELAY_MS);
+    var batch = items.slice(i, i + MAX_CONCURRENT);
+    var batchResults = await Promise.all(batch.map(function(item) {
+      return asyncFn(item)
+        .then(function(xml) { return { plate: item, ok: true, xml: xml }; })
+        .catch(function(err) { return { plate: item, ok: false, error: err.message }; });
+    }));
+    results = results.concat(batchResults);
+    // Pausa antes de la siguiente tanda (si queda alguna)
+    if (i + MAX_CONCURRENT < items.length) {
+      await sleep(DELAY_MS);
+    }
   }
   return results;
 }
@@ -102,7 +120,8 @@ async function queryPlateWithRetry(plate, sStartDate, sEndDate, iMinStopTime) {
       return await queryPlate(plate, sStartDate, sEndDate, iMinStopTime);
     } catch (err) {
       lastErr = err;
-      if (err.message.includes('Demasiadas') && attempt < RETRY_MAX) {
+      // Reintentar solo si es rate limit
+      if (err.message.indexOf('Demasiadas solicitudes') !== -1 && attempt < RETRY_MAX) {
         await sleep(RETRY_DELAY_MS);
         continue;
       }
@@ -112,33 +131,26 @@ async function queryPlateWithRetry(plate, sStartDate, sEndDate, iMinStopTime) {
   throw lastErr;
 }
 
-// ── Llamada GET al API (confirmado: funciona con GET, POST con form da 500) ─
-// ✅ CORREGIDO: usar GET con query params (sStartDate / sEndDate)
-//    igual que las pruebas exitosas, NO POST form-encoded con sStartDate1/2
 function queryPlate(plate, sStartDate, sEndDate, iMinStopTime) {
-  var params = new URLSearchParams({
-    sLogin:      LOGIN,
-    sPassword:   PASSWORD,
-    sPlate:      plate,
-    sStartDate:  sStartDate,   // ✅ nombre correcto (no sStartDate1)
-    sEndDate:    sEndDate,     // ✅ nombre correcto (no sStartDate2)
-    iMinStopTime: iMinStopTime // ✅ nombre correcto (no iTime)
-  });
-
-  var path = API_PATH + '?' + params.toString();
+  // GET con query params — confirmado en pruebas reales (POST con sStartDate1 da 500)
+  var qs = 'sLogin='      + encodeURIComponent(LOGIN)
+         + '&sPassword='  + encodeURIComponent(PASSWORD)
+         + '&sPlate='     + encodeURIComponent(plate)
+         + '&sStartDate=' + encodeURIComponent(sStartDate)
+         + '&sEndDate='   + encodeURIComponent(sEndDate)
+         + '&iMinStopTime=' + encodeURIComponent(iMinStopTime);
 
   return new Promise(function(resolve, reject) {
     var options = {
       hostname: API_HOST,
       port:     443,
-      path:     path,
-      method:   'GET',          // ✅ GET (no POST)
+      path:     API_PATH + '?' + qs,
+      method:   'GET',
       headers:  { 'Accept': 'text/xml, application/xml' }
     };
-
     var request = https.request(options, function(res) {
       var chunks = [];
-      res.on('data', chunk => chunks.push(chunk));
+      res.on('data', function(chunk) { chunks.push(chunk); });
       res.on('end', function() {
         var body = Buffer.concat(chunks).toString('utf8');
         if (res.statusCode >= 200 && res.statusCode < 300) {
@@ -148,8 +160,7 @@ function queryPlate(plate, sStartDate, sEndDate, iMinStopTime) {
         }
       });
     });
-
-    request.on('error', e => reject(e));
+    request.on('error', function(e) { reject(e); });
     request.setTimeout(25000, function() {
       request.destroy();
       reject(new Error('Timeout 25s placa ' + plate));
@@ -158,43 +169,39 @@ function queryPlate(plate, sStartDate, sEndDate, iMinStopTime) {
   });
 }
 
-// ── Combinar XMLs de todas las placas en una respuesta unificada ────────────
-// ✅ CORREGIDO: regex greedy por placa para capturar todos los <ITEM> adentro
 function combineResponses(results, meta) {
   var plateBlocks = [];
-  var errors      = [];
+  var errors = [];
 
   results.forEach(function(r) {
     if (r.ok) {
-      // Extraer el bloque <Plate ...>...</Plate> completo
-      // Usamos indexOf/lastIndexOf para evitar problemas con regex greedy/lazy
-      var xml    = r.xml || '';
-      var pStart = xml.indexOf('<Plate ');
-      var pEnd   = xml.lastIndexOf('</Plate>');
-
-      if (pStart !== -1 && pEnd !== -1) {
-        plateBlocks.push(xml.substring(pStart, pEnd + 8)); // 8 = '</Plate>'.length
-      } else if (pStart !== -1 && xml.includes('NoData="true"')) {
-        // Self-closing: <Plate id="X" NoData="true" />
-        var selfClose = xml.indexOf('>', pStart);
-        plateBlocks.push(xml.substring(pStart, selfClose + 1));
+      var match = r.xml.match(/<Plate[\s\S]*?<\/Plate>/);
+      if (match) {
+        plateBlocks.push(match[0]);
       } else {
-        // Sin datos para esta placa
-        plateBlocks.push('<Plate id="' + r.plate + '" Name="" MobileID="" NoData="true"/>');
+        plateBlocks.push(
+          '<Plate id="' + r.plate + '" Name="" MobileID="" NoData="true" />'
+        );
       }
     } else {
-      errors.push('<Error plate="' + r.plate + '">' + escapeXml(r.error) + '</Error>');
+      errors.push(
+        '<Error plate="' + r.plate + '">' + escapeXml(r.error) + '</Error>'
+      );
     }
   });
 
   return '<?xml version="1.0" encoding="utf-8"?>\n' +
     '<space>\n' +
     '  <Response>\n' +
-    '    <Status><code>100</code><description>OK (multi-plate aggregate)</description></Status>\n' +
+    '    <Status>\n' +
+    '      <code>100</code>\n' +
+    '      <description>OK (multi-plate aggregate)</description>\n' +
+    '    </Status>\n' +
     '    <Meta desde="' + meta.desde + '" hasta="' + meta.hasta +
-         '" time="' + meta.time + '" type="all" elapsedMs="' + meta.elapsedMs + '"/>\n' +
-    plateBlocks.map(b => '    ' + b).join('\n') + '\n' +
-    (errors.length ? '    <Errors>\n      ' + errors.join('\n      ') + '\n    </Errors>\n' : '') +
+          '" time="' + meta.time + '" type="' + (meta.type || 'all') +
+          '" elapsedMs="' + meta.elapsedMs + '" />\n' +
+    plateBlocks.join('\n') + '\n' +
+    (errors.length ? '    <Errors>\n' + errors.join('\n') + '\n    </Errors>\n' : '') +
     '  </Response>\n' +
     '</space>';
 }
@@ -215,5 +222,5 @@ function formatDate(d) {
 }
 
 function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise(function(resolve) { setTimeout(resolve, ms); });
 }

@@ -845,28 +845,51 @@ function parseXMLLegacy(xmlStr){
 //  00:00:01 de día N+1 + 23:59:59 de día N → misma parada
 // ──────────────────────────────────────────────
 function consolidarMedianoche(rows){
-  const sorted = [...rows].sort((a,b) => a.llegada.localeCompare(b.llegada));
+  // Ordenar por placa+llegada para agrupar correctamente
+  const sorted = [...rows].sort((a,b) => {
+    if(a.placa !== b.placa) return a.placa.localeCompare(b.placa);
+    return a.llegada.localeCompare(b.llegada);
+  });
+
   const result = [];
   let i = 0;
   while(i < sorted.length){
     const r = {...sorted[i]};
-    if(i+1 < sorted.length){
+
+    // Intentar absorber todos los segmentos consecutivos del mismo punto/placa
+    while(i+1 < sorted.length){
       const next = sorted[i+1];
-      const mismoLugar  = r.punto === next.punto && r.placa === next.placa;
-      const cruzan      = r.salida  && (r.salida.includes('23:59') || r.salida.includes('23:58'))
-                       && next.llegada && (next.llegada.includes('00:00') || next.llegada.includes('00:01'));
-      if(mismoLugar && cruzan){
-        r.minutos += next.minutos;
-        r.salida   = next.salida;
-        i += 2;
-        result.push(r);
-        continue;
+      const mismoLugar = r.punto === next.punto && r.placa === next.placa;
+      // El segmento actual termina cerca de medianoche Y el siguiente empieza al inicio del día siguiente
+      const terminaMedianoche = r.salida && (r.salida.includes('23:59') || r.salida.includes('23:58'));
+      const empiezaDia        = next.llegada && (next.llegada.includes('00:00') || next.llegada.includes('00:01'));
+
+      if(mismoLugar && terminaMedianoche && empiezaDia){
+        // Recalcular minutos desde llegada original hasta salida del segmento siguiente
+        const mins = calcMinsStr(r.llegada, next.salida);
+        r.minutos = mins > 0 ? mins : r.minutos + next.minutos;
+        r.salida  = next.salida;
+        i++; // avanzar al siguiente segmento y seguir buscando más
+      } else {
+        break;
       }
     }
+
     result.push(r);
     i++;
   }
   return result;
+}
+
+function calcMinsStr(llegada, salida){
+  // Calcular minutos entre dos strings "2026/04/21 19:05:00" y "2026/04/23 05:16:00"
+  if(!llegada || !salida) return 0;
+  try{
+    const a = new Date(llegada.replace(/\//g,'-').replace(' ','T'));
+    const b = new Date(salida.replace(/\//g,'-').replace(' ','T'));
+    if(isNaN(a)||isNaN(b)) return 0;
+    return Math.round((b-a)/60000);
+  }catch(e){ return 0; }
 }
 
 // ──────────────────────────────────────────────

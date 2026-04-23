@@ -725,50 +725,60 @@ function calcMins(ti, to){
 //  <Response><Plate id="XX" Name="CHOFER"><ITEM>...</ITEM></Plate></Response>
 // ──────────────────────────────────────────────
 function parseXMLMultiPlaca(xmlStr){
-  const parser = new DOMParser();
-  // Usar text/html — más tolerante con caracteres especiales (ñ, é, &, etc)
-  // Los selectores quedan en minúsculas porque HTML los normaliza
-  const doc = parser.parseFromString(xmlStr, 'text/html');
+  // Usar regex puro por bloques — DOMParser en text/html aplana el árbol
+  // y confunde items de distintas placas. Regex opera sobre texto puro.
   const rows = [];
 
-  const plates = doc.querySelectorAll('plate');
-  plates.forEach(plate => {
-    const placa  = plate.getAttribute('id') || '';
-    // Usar nombre del API si está disponible, fallback al diccionario precargado
-    const nombreApi = plate.getAttribute('name') || '';
+  // Extraer cada bloque <Plate ...>...</Plate> o <Plate ... /> individualmente
+  // Primero separar en bloques por placa usando split en las aperturas
+  const platePattern = /<Plate\s+([^>]+?)(?:\s*\/>|\s*>([\s\S]*?)<\/Plate>)/gi;
+  let m;
+  while((m = platePattern.exec(xmlStr)) !== null){
+    const attrs  = m[1] || '';
+    const inner  = m[2] || '';  // vacío = self-closing = NoData
+
+    // Extraer atributos id y Name
+    const placa     = (attrs.match(/id="([^"]*)"/i)    || [])[1] || '';
+    const nombreApi = (attrs.match(/Name="([^"]*)"/i)  || [])[1] || '';
+    const noData    = /NoData="true"/i.test(attrs);
+
+    if(noData || !placa || !inner.trim()) continue;
+
     const chofer = nombreApi.trim() || FLOTA_NOMBRES[placa] || placa;
-    const noData = plate.getAttribute('nodata') === 'true';
 
-    if(noData || !placa) return;
+    // Extraer cada <ITEM>...</ITEM> dentro de este bloque
+    const itemPattern = /<ITEM>([\s\S]*?)<\/ITEM>/gi;
+    let im;
+    while((im = itemPattern.exec(inner)) !== null){
+      const itemTxt = im[1];
 
-    const items = plate.querySelectorAll('item');
-    items.forEach(item => {
-      const g = tag => item.querySelector(tag)?.textContent?.trim() || '';
+      // Extraer campos con regex de texto
+      const getTag = tag => {
+        const r = new RegExp('<' + tag + '>([\\s\\S]*?)<\/' + tag + '>', 'i');
+        return (itemTxt.match(r) || [])[1]?.trim() || '';
+      };
 
-      const location = limpiarNombre(g('location'));
-      const start    = g('start');   // formato: "2026/04/21 05:55:22"
-      const end      = g('end');
-      const seconds  = parseInt(g('second') || '0', 10); // campo confiable del API
+      const location = limpiarNombre(getTag('LOCATION'));
+      const start    = getTag('START');
+      const end      = getTag('END');
+      const seconds  = parseInt(getTag('SECOND') || '0', 10);
 
-      if(!location || !start) return;
+      if(!location || !start) continue;
 
-      // Usar SECOND directamente (más confiable que calcular de START/END)
       const minutos = seconds > 0 ? Math.round(seconds / 60) : Math.round(calcMins(start, end));
-      if(minutos < 1) return;
+      if(minutos < 1) continue;
 
-      // Normalizar fecha: "2026/04/21 05:55:22" → "2026-04-21"
       const fechaRaw = start.split(' ')[0];
       const fecha    = fechaRaw.replace(/\//g, '-');
+      const clase    = clasificar(location);
 
-      const clase = clasificar(location);
-      const diaSemana = (() => {
-        try{ return new Date(fecha + 'T12:00:00').toLocaleDateString('es-CL',{weekday:'short'}).replace('.',''); }
-        catch(e){ return ''; }
-      })();
+      let diaSemana = '';
+      try{ diaSemana = new Date(fecha + 'T12:00:00').toLocaleDateString('es-CL',{weekday:'short'}).replace('.',''); }
+      catch(e){}
 
       rows.push({
         placa,
-        chofer: chofer || placa,
+        chofer,
         punto:   location,
         tipo:    clase.tipo,
         cat:     clase.cat,
@@ -779,8 +789,8 @@ function parseXMLMultiPlaca(xmlStr){
         salida:  end,
         minutos
       });
-    });
-  });
+    }
+  }
 
   return rows;
 }
@@ -905,11 +915,11 @@ async function fetchTodaLaFlota(fi, ff, minStop){
   console.log('[GPS] Filas parseadas:', rows.length);
 
   // Mostrar errores de placas individuales si los hay
-  const parser2 = new DOMParser();
-  const doc = parser2.parseFromString(txt, 'text/html');
-  const errors = doc.querySelectorAll('error');
+  // Extraer errores con regex (evitar DOMParser que aplana el XML)
+  const errorMatches = txt.match(/<Error plate="([^"]*)">[^<]*<\/Error>/gi) || [];
+  const errors = errorMatches;  // array de strings
   if(errors.length){
-    const errList = [...errors].map(e => e.getAttribute('plate') + ': ' + e.textContent.trim().substring(0,60)).join(' | ');
+    const errList = errors.map(e => { const p=(e.match(/plate="([^"]*)"/)||[])[1]||'?'; const t=(e.match(/>([^<]*)</)||[])[1]||''; return p+': '+t.substring(0,60); }).join(' | ');
     console.warn('[GPS] Errores de placas:', errList);
     setInfo(rows.length + ' paradas OK — ' + errors.length + ' placa(s) con error (ver consola F12)','amber');
   }

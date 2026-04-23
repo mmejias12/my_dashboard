@@ -274,9 +274,21 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
         <label>Fecha fin</label>
         <input type="date" class="dinput" id="ff" />
       </div>
-      <div class="field" style="display:none">
-        <select class="sinput" id="sel-flota">
+      <div class="field">
+        <label>Placa</label>
+        <select class="sinput" id="sel-flota" style="width:220px">
           <option value="all">Todas las placas</option>
+          <option value="BJCL13">BJCL13 — Ismael Campos</option>
+          <option value="CCRC36">CCRC36 — Juan Carlos Vega</option>
+          <option value="CPVW43">CPVW43 — Cristóbal Echeverría</option>
+          <option value="FV2792">FV2792 — Emilio Caulle</option>
+          <option value="LS3119">LS3119 — Antonio Vega</option>
+          <option value="NC8771">NC8771 — Julio Bulnes</option>
+          <option value="RW5303">RW5303 — Gonzalo Campos</option>
+          <option value="SP3393">SP3393 — César Anabálón</option>
+          <option value="VG1943">VG1943 — Víctor Vega</option>
+          <option value="XC9869">XC9869 — Hugo Nuñez</option>
+          <option value="YG5106">YG5106 — Miguel Gómez</option>
         </select>
       </div>
       <div class="field">
@@ -897,10 +909,12 @@ async function fetchTodaLaFlota(fi, ff, minStop){
   const desde = fi.replace(/-/g,'/') + ' 00:00:00';
   const hasta = ff.replace(/-/g,'/') + ' 23:59:59';
 
-  const url = CFG.proxyBase
+  const flotaSel = document.getElementById('sel-flota')?.value || 'all';
+  let url = CFG.proxyBase
     + '?desde=' + encodeURIComponent(desde)
     + '&hasta=' + encodeURIComponent(hasta)
     + '&time='  + minStop;
+  if(flotaSel !== 'all') url += '&plate=' + encodeURIComponent(flotaSel);
 
   console.log('[GPS] Llamando proxy:', url);
   setBadge('amber','amber','Cargando placas...');

@@ -162,9 +162,9 @@ function queryPlate(plate, sStartDate, sEndDate, iMinStopTime) {
       });
     });
     request.on('error', function(e) { reject(e); });
-    request.setTimeout(25000, function() {
+    request.setTimeout(90000, function() {
       request.destroy();
-      reject(new Error('Timeout 25s placa ' + plate));
+      reject(new Error('Timeout 90s placa ' + plate));
     });
     request.end();
   });

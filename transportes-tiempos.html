@@ -256,7 +256,7 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
     </div>
     <div class="sb-sep"></div>
     <div class="sb-label">Sistema</div>
-    <div class="sb-item" data-tab="config" onclick="switchTab('config')">
+    <div class="sb-item" data-tab="config" onclick="switchTab('config')" style="display:none">
       <span class="ico">⚙</span> Conexión
     </div>
   </nav>
@@ -337,7 +337,7 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
       <div class="tab" id="t-puntos" onclick="switchTab('puntos')">Por punto</div>
       <div class="tab" id="t-choferes" onclick="switchTab('choferes')">Por chofer</div>
       <div class="tab" id="t-detalle" onclick="switchTab('detalle')">Detalle completo</div>
-      <div class="tab" id="t-config" onclick="switchTab('config')">Configuración API</div>
+      <div class="tab" id="t-config" onclick="switchTab('config')" style="display:none">Configuración API</div>
     </div>
 
     <!-- ===== TAB: RESUMEN ===== -->
@@ -607,6 +607,21 @@ document.addEventListener('DOMContentLoaded', () => {
 function fmt(d){ return d.toISOString().split('T')[0]; }
 function fmtDate(s){ try{ return new Date(s).toLocaleDateString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit'}); }catch(e){return s||'';} }
 function fmtTime(s){ try{ return new Date(s).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'}); }catch(e){return s||'';} }
+
+function fmtSalida(llegada, salida){
+  if(!salida) return '—';
+  try{
+    const dLleg  = llegada ? llegada.split(' ')[0] : '';
+    const dSal   = salida.split(' ')[0];
+    const hora   = new Date(salida.replace(/\//g,'-')+'T00:00:00').toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
+    // Si la salida es de otro día, mostrar fecha corta + hora
+    if(dSal !== dLleg){
+      const fechaCorta = dSal.replace(/\//g,'-').substring(2); // "26-04-14" → "26-04-14"
+      return fechaCorta + ' ' + hora;
+    }
+    return hora;
+  }catch(e){ return salida||''; }
+}
 function fmtMins(m){ if(!m&&m!==0) return '—'; const h=Math.floor(m/60); const mm=Math.round(m%60); return h>0?`${h}h ${mm}m`:`${mm}m`; }
 
 // ──────────────────────────────────────────────
@@ -1397,7 +1412,7 @@ function renderDetallePag(){
     <td class="mono">S${r.semana}</td>
     <td class="mono" style="text-transform:capitalize">${r.dia}</td>
     <td class="mono">${fmtDate(r.fecha)} ${fmtTime(r.llegada)}</td>
-    <td class="mono" style="color:var(--t3)">${r.salida?fmtTime(r.salida):'—'}</td>
+    <td class="mono" style="color:var(--t3)">${fmtSalida(r.llegada, r.salida)}</td>
     <td class="mono bold">${fmtMins(r.minutos)}</td>
   </tr>`).join('');
 }

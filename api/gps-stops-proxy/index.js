@@ -7,14 +7,14 @@ const PASSWORD = 'redtec2023';
 
 const FLEET = ['BJCL13','CCRC36','CPVW43','FV2792','LS3119','NC8771','RW5303','SP3393','VG1943','XC9869','YG5106'];
 
-const MAX_CONCURRENT  = 2;
-const DELAY_MS        = 800;
-const RETRY_MAX       = 2;
-const RETRY_DELAY_MS  = 2500;
+const MAX_CONCURRENT = 2;
+const DELAY_MS       = 800;
+const RETRY_MAX      = 2;
+const RETRY_DELAY_MS = 2500;
 
 module.exports = async function (context, req) {
   if (req.method === 'OPTIONS') {
-    context.res = { status:200, headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Methods':'GET, OPTIONS','Access-Control-Allow-Headers':'Accept, Content-Type'}, body:'' };
+    context.res = { status:200, headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Methods':'GET,OPTIONS','Access-Control-Allow-Headers':'Accept,Content-Type'}, body:'' };
     return;
   }
 
@@ -60,33 +60,60 @@ module.exports = async function (context, req) {
       'X-Debug-Plates-Error':String(errors.length),
       'X-Debug-Elapsed-Ms':String(elapsedMs)
     },
-    body: JSON.stringify({ok:true, desde:sStartDate1, hasta:sStartDate2, time:iTime, elapsedMs:elapsedMs, total:allItems.length, items:allItems, errors:errors})
+    body: JSON.stringify({
+      ok:true, desde:sStartDate1, hasta:sStartDate2,
+      time:iTime, elapsedMs:elapsedMs,
+      total:allItems.length, items:allItems, errors:errors
+    })
   };
 };
 
 function parsePlateXML(xml, plateId) {
   var result = {plate:plateId, name:'', items:[]};
-  var nameMatch = xml.match(/Name="([^"]*)"/);
-  result.name = nameMatch ? nameMatch[1] : '';
-  if (xml.indexOf('NoData="true"') !== -1) return result;
+
+  // Nombre del chofer desde atributo Name
+  var nameM = xml.match(/Name="([^"]*)"/);
+  if (nameM) result.name = nameM[1];
+
+  // Si no hay items, retornar vacío
   if (xml.indexOf('<ITEM>') === -1) return result;
-  var itemRe = /<ITEM>([\s\S]*?)<\/ITEM>/gi;
-  var m;
-  while ((m = itemRe.exec(xml)) !== null) {
-    var block = m[1];
-    var get = function(tag) {
-      var r = new RegExp('<'+tag+'>([\s\S]*?)</'+tag+'>', 'i');
-      var found = block.match(r);
-      return found ? found[1].trim() : '';
-    };
-    var location = get('LOCATION');
-    var start    = get('START');
-    var end      = get('END');
-    var seconds  = parseInt(get('SECOND')||'0', 10);
+
+  // Dividir por <ITEM> manualmente — más robusto que regex con flags
+  var parts = xml.split('<ITEM>');
+  for (var i = 1; i < parts.length; i++) {
+    var block = parts[i].split('</ITEM>')[0];
+
+    var location = extractTag(block, 'LOCATION');
+    var start    = extractTag(block, 'START');
+    var end      = extractTag(block, 'END');
+    var seconds  = parseInt(extractTag(block, 'SECOND') || '0', 10);
+    var type     = extractTag(block, 'TYPE');
+
     if (!location || !start) continue;
-    result.items.push({plate:plateId, name:result.name, location:location, start:start, end:end, seconds:seconds, type:get('TYPE')});
+
+    result.items.push({
+      plate:    plateId,
+      name:     result.name,
+      location: location,
+      start:    start,
+      end:      end,
+      seconds:  seconds,
+      type:     type
+    });
   }
   return result;
+}
+
+// Extraer texto entre <TAG> y </TAG> — sin regex, solo indexOf
+function extractTag(text, tag) {
+  var open  = '<' + tag + '>';
+  var close = '</' + tag + '>';
+  var s = text.indexOf(open);
+  if (s === -1) return '';
+  s += open.length;
+  var e = text.indexOf(close, s);
+  if (e === -1) return '';
+  return text.substring(s, e).trim();
 }
 
 async function runWithThrottle(items, asyncFn) {
@@ -94,7 +121,9 @@ async function runWithThrottle(items, asyncFn) {
   for (var i = 0; i < items.length; i += MAX_CONCURRENT) {
     var batch = items.slice(i, i+MAX_CONCURRENT);
     var batchResult = await Promise.all(batch.map(function(item){
-      return asyncFn(item).then(function(xml){return{plate:item,ok:true,xml:xml};}).catch(function(err){return{plate:item,ok:false,error:err.message};});
+      return asyncFn(item)
+        .then(function(xml){return{plate:item,ok:true,xml:xml};})
+        .catch(function(err){return{plate:item,ok:false,error:err.message};});
     }));
     results = results.concat(batchResult);
     if (i+MAX_CONCURRENT < items.length) await sleep(DELAY_MS);
@@ -108,7 +137,9 @@ async function queryPlateWithRetry(plate, s1, s2, iTime) {
     try { return await queryPlate(plate, s1, s2, iTime); }
     catch (err) {
       lastErr = err;
-      if (err.message.indexOf('Demasiadas') !== -1 && attempt < RETRY_MAX) { await sleep(RETRY_DELAY_MS); continue; }
+      if (err.message.indexOf('Demasiadas') !== -1 && attempt < RETRY_MAX) {
+        await sleep(RETRY_DELAY_MS); continue;
+      }
       throw err;
     }
   }
@@ -116,25 +147,31 @@ async function queryPlateWithRetry(plate, s1, s2, iTime) {
 }
 
 function queryPlate(plate, s1, s2, iTime) {
-  var qs = 'sLogin='+encodeURIComponent(LOGIN)+'&sPassword='+encodeURIComponent(PASSWORD)+'&sPlate='+encodeURIComponent(plate)+'&sStartDate1='+encodeURIComponent(s1)+'&sStartDate2='+encodeURIComponent(s2)+'&iTime='+encodeURIComponent(iTime)+'&sType=';
+  var qs = 'sLogin='+encodeURIComponent(LOGIN)
+         +'&sPassword='+encodeURIComponent(PASSWORD)
+         +'&sPlate='+encodeURIComponent(plate)
+         +'&sStartDate1='+encodeURIComponent(s1)
+         +'&sStartDate2='+encodeURIComponent(s2)
+         +'&iTime='+encodeURIComponent(iTime)
+         +'&sType=';
   return new Promise(function(resolve, reject) {
-    var options = {hostname:API_HOST, port:443, path:API_PATH+'?'+qs, method:'GET', headers:{'Accept':'text/xml, application/xml'}};
-    var request = https.request(options, function(res) {
+    var opts = {hostname:API_HOST, port:443, path:API_PATH+'?'+qs, method:'GET', headers:{'Accept':'text/xml,application/xml'}};
+    var req = https.request(opts, function(res) {
       var chunks = [];
       res.on('data', function(c){chunks.push(c);});
       res.on('end', function(){
         var body = Buffer.concat(chunks).toString('utf8');
-        if (res.statusCode >= 200 && res.statusCode < 300) { resolve(body); }
-        else { reject(new Error('API '+res.statusCode+': '+body.substring(0,200))); }
+        if (res.statusCode >= 200 && res.statusCode < 300) resolve(body);
+        else reject(new Error('API '+res.statusCode+': '+body.substring(0,200)));
       });
     });
-    request.on('error', function(e){reject(e);});
-    request.setTimeout(90000, function(){request.destroy(); reject(new Error('Timeout 90s placa '+plate));});
-    request.end();
+    req.on('error', function(e){reject(e);});
+    req.setTimeout(90000, function(){req.destroy(); reject(new Error('Timeout 90s '+plate));});
+    req.end();
   });
 }
 
 function formatDate(d) {
   return d.getFullYear()+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+String(d.getDate()).padStart(2,'0');
 }
-function sleep(ms) { return new Promise(function(resolve){setTimeout(resolve,ms);}); }
+function sleep(ms){return new Promise(function(r){setTimeout(r,ms);});}

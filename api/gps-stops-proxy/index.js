@@ -170,27 +170,26 @@ function queryPlate(plate, sStartDate, sEndDate, iMinStopTime) {
   });
 }
 
+function extractPlateBlock(xml, plateId) {
+  var pStart = xml.indexOf('<Plate ');
+  if (pStart === -1) return '<Plate id="' + plateId + '" Name="" MobileID="" NoData="true"/>';
+  var pEnd = xml.lastIndexOf('</Plate>');
+  if (pEnd !== -1) return xml.substring(pStart, pEnd + 8);
+  var selfEnd = xml.indexOf('/>', pStart);
+  if (selfEnd !== -1) return xml.substring(pStart, selfEnd + 2);
+  return '<Plate id="' + plateId + '" Name="" MobileID="" NoData="true"/>';
+}
+
 function combineResponses(results, meta) {
   var plateBlocks = []; var errors = [];
   results.forEach(function(r) {
     if (r.ok) {
-      var xml = r.xml || '';
-      // indexOf/lastIndexOf evita el bug del regex lazy con múltiples placas
-      var pStart = xml.indexOf('<Plate ');
-      var pEnd   = xml.lastIndexOf('</Plate>');
-      if (pStart !== -1 && pEnd !== -1) {
-        plateBlocks.push(xml.substring(pStart, pEnd + 8));
-      } else if (pStart !== -1) {
-        // Self-closing: <Plate ... />
-        plateBlocks.push(xml.substring(pStart, xml.indexOf('>', pStart) + 1));
-      } else {
-        plateBlocks.push('<Plate id="' + r.plate + '" Name="" MobileID="" NoData="true"/>');
-      }
+      plateBlocks.push(extractPlateBlock(r.xml, r.plate));
     } else {
       errors.push('<Error plate="' + r.plate + '">' + escapeXml(r.error) + '</Error>');
     }
   });
-
+  
   return '<?xml version="1.0" encoding="utf-8"?>\n' +
     '<space>\n' +
     '  <Response>\n' +

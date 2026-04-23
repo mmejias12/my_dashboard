@@ -173,10 +173,16 @@ function queryPlate(plate, sStartDate, sEndDate, iMinStopTime) {
 function extractPlateBlock(xml, plateId) {
   var pStart = xml.indexOf('<Plate ');
   if (pStart === -1) return '<Plate id="' + plateId + '" Name="" MobileID="" NoData="true"/>';
+  // Verificar si es self-closing: buscar /> ANTES del primer >
+  var firstClose = xml.indexOf('>', pStart);
+  var firstSelf  = xml.indexOf('/>', pStart);
+  if (firstSelf !== -1 && firstSelf < firstClose) {
+    // Es self-closing: <Plate ... />
+    return xml.substring(pStart, firstSelf + 2);
+  }
+  // Tiene contenido: buscar </Plate> al final
   var pEnd = xml.lastIndexOf('</Plate>');
   if (pEnd !== -1) return xml.substring(pStart, pEnd + 8);
-  var selfEnd = xml.indexOf('/>', pStart);
-  if (selfEnd !== -1) return xml.substring(pStart, selfEnd + 2);
   return '<Plate id="' + plateId + '" Name="" MobileID="" NoData="true"/>';
 }
 

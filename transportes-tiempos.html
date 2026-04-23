@@ -875,6 +875,13 @@ function consolidarMedianoche(rows){
       }
     }
 
+    // Recalcular fecha/semana/dia desde la llegada real (puede haber cambiado al consolidar)
+    if(r.llegada){
+      const fechaReal = r.llegada.split(' ')[0].replace(/\//g,'-');
+      r.fecha  = fechaReal;
+      r.semana = isoWeek(fechaReal);
+      try{ r.dia = new Date(fechaReal+'T12:00:00').toLocaleDateString('es-CL',{weekday:'short'}).replace('.',''); }catch(e){}
+    }
     result.push(r);
     i++;
   }

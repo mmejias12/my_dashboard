@@ -777,9 +777,20 @@ function parseJSONProxy(data){
     if(minutos < 1) return;
 
     const fechaRaw = start.split(' ')[0];
-    const fecha    = fechaRaw.replace(/\//g, '-');
-    const clase    = clasificar(location);
+    let fecha = fechaRaw.replace(/\//g, '-');
 
+    // Segmento que empieza a 00:00 = continuación de parada del día anterior
+    // GPS Condor corta paradas a medianoche — este segmento pertenece al turno anterior
+    const horaStart = start.split(' ')[1] || '';
+    if(horaStart.startsWith('00:00') || horaStart.startsWith('00:01')){
+      try{
+        const d = new Date(fecha + 'T12:00:00');
+        d.setDate(d.getDate() - 1);
+        fecha = d.toISOString().split('T')[0]; // día anterior
+      }catch(e){}
+    }
+
+    const clase = clasificar(location);
     let diaSemana = '';
     try{ diaSemana = new Date(fecha+'T12:00:00').toLocaleDateString('es-CL',{weekday:'short'}).replace('.',''); }catch(e){}
 

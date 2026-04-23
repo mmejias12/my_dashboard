@@ -724,74 +724,84 @@ function calcMins(ti, to){
 //  PARSEO XML MULTI-PLACA (formato proxy real)
 //  <Response><Plate id="XX" Name="CHOFER"><ITEM>...</ITEM></Plate></Response>
 // ──────────────────────────────────────────────
-function parseXMLMultiPlaca(xmlStr){
-  // Usar regex puro por bloques — DOMParser en text/html aplana el árbol
-  // y confunde items de distintas placas. Regex opera sobre texto puro.
+function parseJSONProxy(data){
+  // El proxy ahora devuelve JSON con {ok, items:[{plate,name,location,start,end,seconds,type}]}
   const rows = [];
+  if(!data || !data.ok || !data.items) return rows;
 
-  // Extraer cada bloque <Plate ...>...</Plate> o <Plate ... /> individualmente
-  // Primero separar en bloques por placa usando split en las aperturas
+  data.items.forEach(item => {
+    const placa    = item.plate || '';
+    const chofer   = (item.name||'').trim() || FLOTA_NOMBRES[placa] || placa;
+    const location = limpiarNombre(item.location || '');
+    const start    = item.start || '';
+    const end      = item.end   || '';
+    const seconds  = parseInt(item.seconds || '0', 10);
+
+    if(!location || !start) return;
+    const minutos = seconds > 0 ? Math.round(seconds/60) : Math.round(calcMins(start, end));
+    if(minutos < 1) return;
+
+    const fechaRaw = start.split(' ')[0];
+    const fecha    = fechaRaw.replace(/\//g, '-');
+    const clase    = clasificar(location);
+
+    let diaSemana = '';
+    try{ diaSemana = new Date(fecha+'T12:00:00').toLocaleDateString('es-CL',{weekday:'short'}).replace('.',''); }catch(e){}
+
+    rows.push({
+      placa,
+      chofer,
+      punto:   location,
+      tipo:    clase.tipo,
+      cat:     clase.cat,
+      fecha,
+      semana:  isoWeek(fecha),
+      dia:     diaSemana,
+      llegada: start,
+      salida:  end,
+      minutos
+    });
+  });
+  return rows;
+}
+
+// Mantener compatibilidad — parseXMLMultiPlaca redirige a parseJSONProxy
+function parseXMLMultiPlaca(txt){
+  try{
+    const data = JSON.parse(txt);
+    return parseJSONProxy(data);
+  } catch(e){
+    console.warn('[GPS] Respuesta no es JSON, intentando regex XML legacy:', e.message);
+    return parseXMLLegacy(txt);
+  }
+}
+
+// Parser XML de respaldo (por si el proxy devuelve XML)
+function parseXMLLegacy(xmlStr){
+  const rows = [];
   const platePattern = /<Plate\s+([^>]+?)(?:\s*\/>|\s*>([\s\S]*?)<\/Plate>)/gi;
   let m;
   while((m = platePattern.exec(xmlStr)) !== null){
-    const attrs  = m[1] || '';
-    const inner  = m[2] || '';  // vacío = self-closing = NoData
-
-    // Extraer atributos id y Name
-    const placa     = (attrs.match(/id="([^"]*)"/i)    || [])[1] || '';
-    const nombreApi = (attrs.match(/Name="([^"]*)"/i)  || [])[1] || '';
+    const attrs = m[1]||'', inner = m[2]||'';
+    const placa     = (attrs.match(/id="([^"]*)"/i)||[])[1]||'';
+    const nombreApi = (attrs.match(/Name="([^"]*)"/i)||[])[1]||'';
     const noData    = /NoData="true"/i.test(attrs);
-
-    if(noData || !placa || !inner.trim()) continue;
-
-    const chofer = nombreApi.trim() || FLOTA_NOMBRES[placa] || placa;
-
-    // Extraer cada <ITEM>...</ITEM> dentro de este bloque
+    if(noData||!placa||!inner.trim()) continue;
+    const chofer = nombreApi.trim()||FLOTA_NOMBRES[placa]||placa;
     const itemPattern = /<ITEM>([\s\S]*?)<\/ITEM>/gi;
     let im;
     while((im = itemPattern.exec(inner)) !== null){
       const itemTxt = im[1];
-
-      // Extraer campos con regex de texto
-      const getTag = tag => {
-        const r = new RegExp('<' + tag + '>([\\s\\S]*?)<\/' + tag + '>', 'i');
-        return (itemTxt.match(r) || [])[1]?.trim() || '';
-      };
-
-      const location = limpiarNombre(getTag('LOCATION'));
-      const start    = getTag('START');
-      const end      = getTag('END');
-      const seconds  = parseInt(getTag('SECOND') || '0', 10);
-
-      if(!location || !start) continue;
-
-      const minutos = seconds > 0 ? Math.round(seconds / 60) : Math.round(calcMins(start, end));
-      if(minutos < 1) continue;
-
-      const fechaRaw = start.split(' ')[0];
-      const fecha    = fechaRaw.replace(/\//g, '-');
-      const clase    = clasificar(location);
-
-      let diaSemana = '';
-      try{ diaSemana = new Date(fecha + 'T12:00:00').toLocaleDateString('es-CL',{weekday:'short'}).replace('.',''); }
-      catch(e){}
-
-      rows.push({
-        placa,
-        chofer,
-        punto:   location,
-        tipo:    clase.tipo,
-        cat:     clase.cat,
-        fecha,
-        semana:  isoWeek(fecha),
-        dia:     diaSemana,
-        llegada: start,
-        salida:  end,
-        minutos
-      });
+      const getTag = tag => { const r=new RegExp('<'+tag+'>([\s\S]*?)</'+tag+'>','i'); return (itemTxt.match(r)||[])[1]?.trim()||''; };
+      const location=limpiarNombre(getTag('LOCATION')), start=getTag('START'), end=getTag('END'), seconds=parseInt(getTag('SECOND')||'0',10);
+      if(!location||!start) continue;
+      const minutos=seconds>0?Math.round(seconds/60):Math.round(calcMins(start,end));
+      if(minutos<1) continue;
+      const fecha=start.split(' ')[0].replace(/\//g,'-'), clase=clasificar(location);
+      let dia=''; try{dia=new Date(fecha+'T12:00:00').toLocaleDateString('es-CL',{weekday:'short'}).replace('.','');}catch(e){}
+      rows.push({placa,chofer,punto:location,tipo:clase.tipo,cat:clase.cat,fecha,semana:isoWeek(fecha),dia,llegada:start,salida:end,minutos});
     }
   }
-
   return rows;
 }
 
@@ -911,19 +921,20 @@ async function fetchTodaLaFlota(fi, ff, minStop){
   const total   = res.headers.get('X-Debug-Plates-Total');
   if(elapsed) console.log('[GPS] Elapsed:', elapsed + 'ms | Placas OK:', ok + '/' + total);
 
-  const rows = parseXMLMultiPlaca(txt);
-  console.log('[GPS] Filas parseadas:', rows.length);
-
-  // Mostrar errores de placas individuales si los hay
-  // Extraer errores con regex (evitar DOMParser que aplana el XML)
-  const errorMatches = txt.match(/<Error plate="([^"]*)">[^<]*<\/Error>/gi) || [];
-  const errors = errorMatches;  // array de strings
-  if(errors.length){
-    const errList = errors.map(e => { const p=(e.match(/plate="([^"]*)"/)||[])[1]||'?'; const t=(e.match(/>([^<]*)</)||[])[1]||''; return p+': '+t.substring(0,60); }).join(' | ');
-    console.warn('[GPS] Errores de placas:', errList);
-    setInfo(rows.length + ' paradas OK — ' + errors.length + ' placa(s) con error (ver consola F12)','amber');
+  let rows = [];
+  try{
+    const data = JSON.parse(txt);
+    rows = parseJSONProxy(data);
+    console.log('[GPS] JSON OK:', rows.length, 'filas |', data.errors?.length||0, 'errores');
+    if(data.errors && data.errors.length){
+      console.warn('[GPS] Errores:', data.errors.map(e=>e.plate+':'+e.error).join(' | '));
+      setInfo(rows.length+' paradas — '+data.errors.length+' placa(s) con error','amber');
+    }
+  } catch(e){
+    console.warn('[GPS] No es JSON, usando parser XML legacy');
+    rows = parseXMLMultiPlaca(txt);
   }
-
+  console.log('[GPS] Total filas:', rows.length);
   return rows;
 }
 

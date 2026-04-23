@@ -2,231 +2,139 @@ const https = require('https');
 
 const API_HOST = 'web1ws.shareservice.co';
 const API_PATH = '/WsReports.asmx/GetStopsDataRangeByPlate';
-
-// Credenciales hardcodeadas para prueba
 const LOGIN    = 'redtec chile';
 const PASSWORD = 'redtec2023';
 
-// Flota REDTEC - 11 placas
-const FLEET = [
-  'BJCL13', 'CCRC36', 'CPVW43', 'FV2792', 'LS3119',
-  'NC8771', 'RW5303', 'SP3393', 'VG1943', 'XC9869', 'YG5106'
-];
+const FLEET = ['BJCL13','CCRC36','CPVW43','FV2792','LS3119','NC8771','RW5303','SP3393','VG1943','XC9869','YG5106'];
 
-// Concurrencia y throttle (el API de WideTech rechaza rafagas)
-const MAX_CONCURRENT  = 2;     // maximo 2 requests al mismo tiempo
-const DELAY_MS        = 800;   // pausa entre tandas de requests
-const RETRY_MAX       = 2;     // reintentos si sale rate-limited
-const RETRY_DELAY_MS  = 2500;  // pausa antes de reintentar
+const MAX_CONCURRENT  = 2;
+const DELAY_MS        = 800;
+const RETRY_MAX       = 2;
+const RETRY_DELAY_MS  = 2500;
 
 module.exports = async function (context, req) {
-  // CORS preflight
   if (req.method === 'OPTIONS') {
-    context.res = {
-      status: 200,
-      headers: {
-        'Access-Control-Allow-Origin':  '*',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Accept, Content-Type'
-      },
-      body: ''
-    };
+    context.res = { status:200, headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Methods':'GET, OPTIONS','Access-Control-Allow-Headers':'Accept, Content-Type'}, body:'' };
     return;
   }
 
   var q = req.query || {};
-
-  // Decidir que placas consultar
   var plates;
-  if (q.plate) {
-    plates = [q.plate];
-  } else if (q.plates) {
-    plates = q.plates.split(',').map(function(p) { return p.trim(); }).filter(Boolean);
-  } else {
-    plates = FLEET;
+  if (q.plate)       plates = [q.plate.trim()];
+  else if (q.plates) plates = q.plates.split(',').map(function(p){return p.trim();}).filter(Boolean);
+  else               plates = FLEET;
+
+  var sStartDate1 = q.desde || '';
+  var sStartDate2 = q.hasta || '';
+  if (!sStartDate1 || !sStartDate2) {
+    var now = new Date(); var prior = new Date(now.getTime()-7*24*60*60*1000);
+    sStartDate1 = formatDate(prior)+' 00:00:00';
+    sStartDate2 = formatDate(now)+' 23:59:59';
   }
+  var iTime = q.time || '15';
 
-  // Rango de fechas (default: ultimos 7 dias)
-  var sStartDate = q.desde || '';
-  var sEndDate   = q.hasta || '';
-  if (!sStartDate || !sEndDate) {
-    var now   = new Date();
-    var prior = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    sStartDate = formatDate(prior) + ' 00:00:00';
-    sEndDate   = formatDate(now)   + ' 23:59:59';
-  }
-
-  var iMinStopTime = q.time || '60';
-
-
-  // Ejecutar las consultas con concurrencia limitada + reintentos
   var startMs = Date.now();
-  var results = await runWithThrottle(plates, function(plate) {
-    return queryPlateWithRetry(plate, sStartDate, sEndDate, iMinStopTime);
+  var results = await runWithThrottle(plates, function(plate){
+    return queryPlateWithRetry(plate, sStartDate1, sStartDate2, iTime);
   });
   var elapsedMs = Date.now() - startMs;
 
-  var combinedXml = combineResponses(results, {
-    desde: sStartDate,
-    hasta: sEndDate,
-    time:  iMinStopTime,
-    elapsedMs: elapsedMs
-  });
+  var allItems = [];
+  var errors   = [];
+  var okCount  = 0;
 
-  var successCount = results.filter(function(r) { return r.ok; }).length;
-  var errorCount   = results.length - successCount;
+  results.forEach(function(r) {
+    if (!r.ok) { errors.push({plate:r.plate, error:r.error}); return; }
+    var parsed = parsePlateXML(r.xml, r.plate);
+    if (parsed.items.length > 0) { okCount++; allItems = allItems.concat(parsed.items); }
+  });
 
   context.res = {
     status: 200,
     headers: {
-      'Content-Type':                'application/xml; charset=utf-8',
-      'Access-Control-Allow-Origin': '*',
-      'Cache-Control':               'no-cache',
-      'X-Debug-Plates-Total':        String(results.length),
-      'X-Debug-Plates-Ok':           String(successCount),
-      'X-Debug-Plates-Error':        String(errorCount),
-      'X-Debug-Elapsed-Ms':          String(elapsedMs)
+      'Content-Type':'application/json; charset=utf-8',
+      'Access-Control-Allow-Origin':'*',
+      'Cache-Control':'no-cache',
+      'X-Debug-Plates-Total':String(results.length),
+      'X-Debug-Plates-Ok':String(okCount),
+      'X-Debug-Plates-Error':String(errors.length),
+      'X-Debug-Elapsed-Ms':String(elapsedMs)
     },
-    body: combinedXml
+    body: JSON.stringify({ok:true, desde:sStartDate1, hasta:sStartDate2, time:iTime, elapsedMs:elapsedMs, total:allItems.length, items:allItems, errors:errors})
   };
 };
 
-/**
- * Ejecuta una funcion async sobre cada item con concurrencia maxima,
- * separando tandas con un delay para respetar rate limits.
- */
+function parsePlateXML(xml, plateId) {
+  var result = {plate:plateId, name:'', items:[]};
+  var nameMatch = xml.match(/Name="([^"]*)"/);
+  result.name = nameMatch ? nameMatch[1] : '';
+  if (xml.indexOf('NoData="true"') !== -1) return result;
+  if (xml.indexOf('<ITEM>') === -1) return result;
+  var itemRe = /<ITEM>([\s\S]*?)<\/ITEM>/gi;
+  var m;
+  while ((m = itemRe.exec(xml)) !== null) {
+    var block = m[1];
+    var get = function(tag) {
+      var r = new RegExp('<'+tag+'>([\s\S]*?)</'+tag+'>', 'i');
+      var found = block.match(r);
+      return found ? found[1].trim() : '';
+    };
+    var location = get('LOCATION');
+    var start    = get('START');
+    var end      = get('END');
+    var seconds  = parseInt(get('SECOND')||'0', 10);
+    if (!location || !start) continue;
+    result.items.push({plate:plateId, name:result.name, location:location, start:start, end:end, seconds:seconds, type:get('TYPE')});
+  }
+  return result;
+}
+
 async function runWithThrottle(items, asyncFn) {
   var results = [];
   for (var i = 0; i < items.length; i += MAX_CONCURRENT) {
-    var batch = items.slice(i, i + MAX_CONCURRENT);
-    var batchResults = await Promise.all(batch.map(function(item) {
-      return asyncFn(item)
-        .then(function(xml) { return { plate: item, ok: true, xml: xml }; })
-        .catch(function(err) { return { plate: item, ok: false, error: err.message }; });
+    var batch = items.slice(i, i+MAX_CONCURRENT);
+    var batchResult = await Promise.all(batch.map(function(item){
+      return asyncFn(item).then(function(xml){return{plate:item,ok:true,xml:xml};}).catch(function(err){return{plate:item,ok:false,error:err.message};});
     }));
-    results = results.concat(batchResults);
-    // Pausa antes de la siguiente tanda (si queda alguna)
-    if (i + MAX_CONCURRENT < items.length) {
-      await sleep(DELAY_MS);
-    }
+    results = results.concat(batchResult);
+    if (i+MAX_CONCURRENT < items.length) await sleep(DELAY_MS);
   }
   return results;
 }
 
-async function queryPlateWithRetry(plate, sStartDate, sEndDate, iMinStopTime) {
+async function queryPlateWithRetry(plate, s1, s2, iTime) {
   var lastErr;
   for (var attempt = 0; attempt <= RETRY_MAX; attempt++) {
-    try {
-      return await queryPlate(plate, sStartDate, sEndDate, iMinStopTime);
-    } catch (err) {
+    try { return await queryPlate(plate, s1, s2, iTime); }
+    catch (err) {
       lastErr = err;
-      // Reintentar solo si es rate limit
-      if (err.message.indexOf('Demasiadas solicitudes') !== -1 && attempt < RETRY_MAX) {
-        await sleep(RETRY_DELAY_MS);
-        continue;
-      }
+      if (err.message.indexOf('Demasiadas') !== -1 && attempt < RETRY_MAX) { await sleep(RETRY_DELAY_MS); continue; }
       throw err;
     }
   }
   throw lastErr;
 }
 
-function queryPlate(plate, sStartDate, sEndDate, iMinStopTime) {
-  // GET con query params — confirmado en pruebas reales (POST con sStartDate1 da 500)
-  var qs = 'sLogin='      + encodeURIComponent(LOGIN)
-         + '&sPassword='  + encodeURIComponent(PASSWORD)
-         + '&sPlate='     + encodeURIComponent(plate)
-         + '&sStartDate1=' + encodeURIComponent(sStartDate)
-         + '&sStartDate2=' + encodeURIComponent(sEndDate)
-         + '&iTime='       + encodeURIComponent(iMinStopTime)
-         + '&sType=';
-
+function queryPlate(plate, s1, s2, iTime) {
+  var qs = 'sLogin='+encodeURIComponent(LOGIN)+'&sPassword='+encodeURIComponent(PASSWORD)+'&sPlate='+encodeURIComponent(plate)+'&sStartDate1='+encodeURIComponent(s1)+'&sStartDate2='+encodeURIComponent(s2)+'&iTime='+encodeURIComponent(iTime)+'&sType=';
   return new Promise(function(resolve, reject) {
-    var options = {
-      hostname: API_HOST,
-      port:     443,
-      path:     API_PATH + '?' + qs,
-      method:   'GET',
-      headers:  { 'Accept': 'text/xml, application/xml' }
-    };
+    var options = {hostname:API_HOST, port:443, path:API_PATH+'?'+qs, method:'GET', headers:{'Accept':'text/xml, application/xml'}};
     var request = https.request(options, function(res) {
       var chunks = [];
-      res.on('data', function(chunk) { chunks.push(chunk); });
-      res.on('end', function() {
+      res.on('data', function(c){chunks.push(c);});
+      res.on('end', function(){
         var body = Buffer.concat(chunks).toString('utf8');
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          resolve(body);
-        } else {
-          reject(new Error('API ' + res.statusCode + ': ' + body.substring(0, 200)));
-        }
+        if (res.statusCode >= 200 && res.statusCode < 300) { resolve(body); }
+        else { reject(new Error('API '+res.statusCode+': '+body.substring(0,200))); }
       });
     });
-    request.on('error', function(e) { reject(e); });
-    request.setTimeout(90000, function() {
-      request.destroy();
-      reject(new Error('Timeout 90s placa ' + plate));
-    });
+    request.on('error', function(e){reject(e);});
+    request.setTimeout(90000, function(){request.destroy(); reject(new Error('Timeout 90s placa '+plate));});
     request.end();
   });
 }
 
-function extractPlateBlock(xml, plateId) {
-  var pStart = xml.indexOf('<Plate ');
-  if (pStart === -1) return '<Plate id="' + plateId + '" Name="" MobileID="" NoData="true"/>';
-  // Verificar si es self-closing: buscar /> ANTES del primer >
-  var firstClose = xml.indexOf('>', pStart);
-  var firstSelf  = xml.indexOf('/>', pStart);
-  if (firstSelf !== -1 && firstSelf < firstClose) {
-    // Es self-closing: <Plate ... />
-    return xml.substring(pStart, firstSelf + 2);
-  }
-  // Tiene contenido: buscar </Plate> al final
-  var pEnd = xml.lastIndexOf('</Plate>');
-  if (pEnd !== -1) return xml.substring(pStart, pEnd + 8);
-  return '<Plate id="' + plateId + '" Name="" MobileID="" NoData="true"/>';
-}
-
-function combineResponses(results, meta) {
-  var plateBlocks = []; var errors = [];
-  results.forEach(function(r) {
-    if (r.ok) {
-      plateBlocks.push(extractPlateBlock(r.xml, r.plate));
-    } else {
-      errors.push('<Error plate="' + r.plate + '">' + escapeXml(r.error) + '</Error>');
-    }
-  });
-  
-  return '<?xml version="1.0" encoding="utf-8"?>\n' +
-    '<space>\n' +
-    '  <Response>\n' +
-    '    <Status>\n' +
-    '      <code>100</code>\n' +
-    '      <description>OK (multi-plate aggregate)</description>\n' +
-    '    </Status>\n' +
-    '    <Meta desde="' + meta.desde + '" hasta="' + meta.hasta +
-          '" time="' + meta.time + '" type="' + (meta.type || 'all') +
-          '" elapsedMs="' + meta.elapsedMs + '" />\n' +
-    plateBlocks.join('\n') + '\n' +
-    (errors.length ? '    <Errors>\n' + errors.join('\n') + '\n    </Errors>\n' : '') +
-    '  </Response>\n' +
-    '</space>';
-}
-
-function escapeXml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 function formatDate(d) {
-  var yyyy = d.getFullYear();
-  var mm   = String(d.getMonth() + 1).padStart(2, '0');
-  var dd   = String(d.getDate()).padStart(2, '0');
-  return yyyy + '/' + mm + '/' + dd;
+  return d.getFullYear()+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+String(d.getDate()).padStart(2,'0');
 }
-
-function sleep(ms) {
-  return new Promise(function(resolve) { setTimeout(resolve, ms); });
-}
+function sleep(ms) { return new Promise(function(resolve){setTimeout(resolve,ms);}); }

@@ -611,15 +611,23 @@ function fmtTime(s){ try{ return new Date(s).toLocaleTimeString('es-CL',{hour:'2
 function fmtSalida(llegada, salida){
   if(!salida) return '—';
   try{
-    const dLleg  = llegada ? llegada.split(' ')[0] : '';
-    const dSal   = salida.split(' ')[0];
-    const hora   = new Date(salida.replace(/\//g,'-')+'T00:00:00').toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
-    // Si la salida es de otro día, mostrar fecha corta + hora
-    if(dSal !== dLleg){
-      const fechaCorta = dSal.replace(/\//g,'-').substring(2); // "26-04-14" → "26-04-14"
-      return fechaCorta + ' ' + hora;
+    // Formato API: "2026/04/22 06:41:00" — normalizar a fecha e hora por separado
+    const partes  = salida.replace(/\//g,'-').split(' ');
+    const fechaSal = partes[0];  // "2026-04-22"
+    const horaSal  = partes[1] ? partes[1].substring(0,5) : ''; // "06:41"
+
+    const fechaLleg = llegada ? llegada.replace(/\//g,'-').split(' ')[0] : '';
+
+    // Formatear hora en locale
+    const horaFmt = horaSal || '—';
+
+    if(fechaSal !== fechaLleg){
+      // Salida es de otro día — mostrar fecha corta (sin año) + hora
+      const partesFecha = fechaSal.split('-'); // ["2026","04","22"]
+      const fechaCorta  = partesFecha[2]+'-'+partesFecha[1]; // "22-04"
+      return fechaCorta + ' ' + horaFmt;
     }
-    return hora;
+    return horaFmt;
   }catch(e){ return salida||''; }
 }
 function fmtMins(m){ if(!m&&m!==0) return '—'; const h=Math.floor(m/60); const mm=Math.round(m%60); return h>0?`${h}h ${mm}m`:`${mm}m`; }

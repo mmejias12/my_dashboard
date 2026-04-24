@@ -311,9 +311,9 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
     <!-- KPIs -->
     <div class="kpi-row" id="kpi-row">
       <div class="kpi blue">
-        <div class="kpi-label">Total paradas</div>
+        <div class="kpi-label">Total visitas</div>
         <div class="kpi-val blue" id="k-total">—</div>
-        <div class="kpi-sub">en el período</div>
+        <div class="kpi-sub">visitas consolidadas</div>
       </div>
       <div class="kpi green">
         <div class="kpi-label">Tiempo prom. CD Retail</div>
@@ -1128,23 +1128,30 @@ function renderAll(){
 //  KPIs
 // ──────────────────────────────────────────────
 function renderKPIs(){
-  const total = DB.length;
-  const byTipo = agrupar(DB, 'tipo');
-  
-  const avgMin = (tipo) => {
-    const rows = DB.filter(r => r.tipo === tipo);
-    if(!rows.length) return null;
-    return Math.round(rows.reduce((s,r) => s+r.minutos, 0) / rows.length);
+  // Consolidar visitas (mismo punto+placa+fecha = 1 visita)
+  const visitasMap = {};
+  DB.forEach(r => {
+    const k = r.placa + '|' + r.punto + '|' + r.fecha;
+    if(!visitasMap[k]) visitasMap[k] = {tipo:r.tipo, minutos:0};
+    visitasMap[k].minutos += r.minutos;
+  });
+  const visitas = Object.values(visitasMap);
+  const total = visitas.length;
+
+  const avgVisita = (tipo) => {
+    const vs = visitas.filter(v => v.tipo === tipo);
+    if(!vs.length) return null;
+    return Math.round(vs.reduce((s,v) => s+v.minutos, 0) / vs.length);
   };
-  
+
   document.getElementById('k-total').textContent = total.toLocaleString('es-CL');
-  const tCD = avgMin('CD Retail');
-  const tSala = avgMin('Sala Retail');
-  const tCliente = avgMin('Cliente');
-  document.getElementById('k-tcd').textContent = tCD !== null ? fmtMins(tCD) : '—';
-  document.getElementById('k-tsala').textContent = tSala !== null ? fmtMins(tSala) : '—';
+  const tCD      = avgVisita('CD Retail');
+  const tSala    = avgVisita('Sala Retail');
+  const tCliente = avgVisita('Cliente');
+  document.getElementById('k-tcd').textContent      = tCD      !== null ? fmtMins(tCD)      : '—';
+  document.getElementById('k-tsala').textContent    = tSala    !== null ? fmtMins(tSala)    : '—';
   document.getElementById('k-tcliente').textContent = tCliente !== null ? fmtMins(tCliente) : '—';
-  document.getElementById('k-chof').textContent = new Set(DB.map(r=>r.placa)).size;
+  document.getElementById('k-chof').textContent     = new Set(DB.map(r=>r.placa)).size;
 }
 
 // ──────────────────────────────────────────────
@@ -1723,10 +1730,24 @@ let chartTendCli    = null;
 let tendSemanasActivas = new Set(); // semanas seleccionadas
 
 function tendSelectAll(){ tendSemanasActivas = new Set(tendTodasSemanas); renderTendencias(); }
-function tendClearAll(){  tendSemanasActivas.clear(); renderTendencias(); }
+function tendClearAll(){
+  // Dejar solo la semana más reciente activa
+  if(tendTodasSemanas.length){
+    const ultima = tendTodasSemanas[tendTodasSemanas.length - 1];
+    tendSemanasActivas = new Set([ultima]);
+  } else {
+    tendSemanasActivas.clear();
+  }
+  renderTendencias();
+}
 function tendToggleSem(s){
-  if(tendSemanasActivas.has(s)) tendSemanasActivas.delete(s);
-  else tendSemanasActivas.add(s);
+  if(tendSemanasActivas.has(s)){
+    // No dejar 0 semanas activas — si es la última, no hacer nada
+    if(tendSemanasActivas.size <= 1) return;
+    tendSemanasActivas.delete(s);
+  } else {
+    tendSemanasActivas.add(s);
+  }
   renderTendencias();
 }
 let tendTodasSemanas = [];

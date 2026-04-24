@@ -777,19 +777,7 @@ function parseJSONProxy(data){
     if(minutos < 1) return;
 
     const fechaRaw = start.split(' ')[0];
-    let fecha = fechaRaw.replace(/\//g, '-');
-
-    // Segmento que empieza a 00:00 = continuación de parada del día anterior
-    // GPS Condor corta paradas a medianoche — este segmento pertenece al turno anterior
-    const horaStart = start.split(' ')[1] || '';
-    if(horaStart.startsWith('00:00') || horaStart.startsWith('00:01')){
-      try{
-        const d = new Date(fecha + 'T12:00:00');
-        d.setDate(d.getDate() - 1);
-        fecha = d.toISOString().split('T')[0]; // día anterior
-      }catch(e){}
-    }
-
+    const fecha = fechaRaw.replace(/\//g, '-');
     const clase = clasificar(location);
     let diaSemana = '';
     try{ diaSemana = new Date(fecha+'T12:00:00').toLocaleDateString('es-CL',{weekday:'short'}).replace('.',''); }catch(e){}
@@ -886,9 +874,19 @@ function consolidarMedianoche(rows){
       }
     }
 
-    // Recalcular fecha/semana/dia desde la llegada real (puede haber cambiado al consolidar)
+    // Recalcular fecha/semana/dia desde la llegada real
     if(r.llegada){
-      const fechaReal = r.llegada.split(' ')[0].replace(/\//g,'-');
+      let fechaReal = r.llegada.split(' ')[0].replace(/\//g,'-');
+      // Si el segmento empieza a 00:00 y NO se consolidó con nada (llegada sigue siendo 00:00),
+      // pertenece al turno del día anterior
+      const horaLleg = r.llegada.split(' ')[1] || '';
+      if(horaLleg.startsWith('00:00') || horaLleg.startsWith('00:01')){
+        try{
+          const d = new Date(fechaReal + 'T12:00:00');
+          d.setDate(d.getDate() - 1);
+          fechaReal = d.toISOString().split('T')[0];
+        }catch(e){}
+      }
       r.fecha  = fechaReal;
       r.semana = isoWeek(fechaReal);
       try{ r.dia = new Date(fechaReal+'T12:00:00').toLocaleDateString('es-CL',{weekday:'short'}).replace('.',''); }catch(e){}

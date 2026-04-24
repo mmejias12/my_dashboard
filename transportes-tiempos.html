@@ -256,6 +256,9 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
     </div>
     <div class="sb-sep"></div>
     <div class="sb-label">Sistema</div>
+    <div class="sb-item" data-tab="tendencias" onclick="switchTab('tendencias')">
+      <span class="ico">📈</span> Tendencias
+    </div>
     <div class="sb-item" data-tab="config" onclick="switchTab('config')" style="display:none">
       <span class="ico">⚙</span> Conexión
     </div>
@@ -337,6 +340,7 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
       <div class="tab" id="t-puntos" onclick="switchTab('puntos')">Por punto</div>
       <div class="tab" id="t-choferes" onclick="switchTab('choferes')">Por chofer</div>
       <div class="tab" id="t-detalle" onclick="switchTab('detalle')">Detalle completo</div>
+      <div class="tab" id="t-tendencias" onclick="switchTab('tendencias')">Tendencias</div>
       <div class="tab" id="t-config" onclick="switchTab('config')" style="display:none">Configuración API</div>
     </div>
 
@@ -490,6 +494,43 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
           <span class="page-info" id="pag-info"></span>
           <button class="page-btn" id="pag-next" onclick="paginar(1)">Sig →</button>
         </div>
+      </div>
+    </div>
+
+
+    <!-- ===== TAB: TENDENCIAS ===== -->
+    <div id="view-tendencias" style="display:none">
+      <div style="display:flex;flex-direction:column;gap:14px">
+
+        <!-- Gráfico 1: Retail -->
+        <div class="card">
+          <div class="card-hdr">
+            <div class="card-title">
+              <span class="card-title-dot" style="background:var(--blue)"></span>
+              Tiempo total en Retail por semana
+            </div>
+            <div style="font-size:11px;color:var(--t3)" id="tend-retail-sub">horas acumuladas · 1 visita = mismo punto+placa+día</div>
+          </div>
+          <div style="padding:16px">
+            <div style="position:relative;height:280px"><canvas id="chart-tend-retail"></canvas></div>
+          </div>
+          <div class="legend" id="legend-tend-retail"></div>
+        </div>
+
+        <!-- Gráfico 2: Clientes -->
+        <div class="card">
+          <div class="card-hdr">
+            <div class="card-title">
+              <span class="card-title-dot" style="background:var(--amber)"></span>
+              Tiempo total en Clientes por semana
+            </div>
+            <div style="font-size:11px;color:var(--t3)" id="tend-cli-sub">horas acumuladas</div>
+          </div>
+          <div style="padding:16px">
+            <div style="position:relative;height:260px"><canvas id="chart-tend-cli"></canvas></div>
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -1060,6 +1101,7 @@ function probarProxy(){
 // ──────────────────────────────────────────────
 function renderAll(){
   renderKPIs();
+  renderTendencias();
   renderChartTipo();
   renderChartDona();
   renderTop15();
@@ -1477,8 +1519,9 @@ function paginar(dir){
 // ──────────────────────────────────────────────
 //  TABS
 // ──────────────────────────────────────────────
-const TABS = ['resumen','puntos','choferes','detalle','config'];
+const TABS = ['resumen','puntos','choferes','detalle','tendencias','config'];
 function switchTab(tab){
+  if(tab === 'tendencias' && DB.length) renderTendencias();
   TABS.forEach(t => {
     document.getElementById('view-'+t).style.display = t===tab?'':'none';
     const el = document.getElementById('t-'+t);
@@ -1658,6 +1701,185 @@ function setInfo(txt, tipo){
   el.textContent = txt;
   el.style.color = tipo==='amber' ? 'var(--amber)' : tipo==='red' ? 'var(--red)' : 'var(--t3)';
 }
+
+// ──────────────────────────────────────────────
+//  TENDENCIAS — Tiempo acumulado por semana
+// ──────────────────────────────────────────────
+let chartTendRetail = null;
+let chartTendCli    = null;
+
+function renderTendencias(){
+  if(!DB.length){
+    ['chart-tend-retail','chart-tend-cli'].forEach(id => {
+      const el = document.getElementById(id);
+      if(el && el.chart){ el.chart.destroy(); }
+    });
+    return;
+  }
+
+  // ── PASO 1: Consolidar visitas (mismo punto + placa + fecha = 1 visita) ──
+  const visitaKey = r => r.placa + '|' + r.punto + '|' + r.fecha;
+  const visitasMap = {};
+  DB.forEach(r => {
+    const k = visitaKey(r);
+    if(!visitasMap[k]){
+      visitasMap[k] = { placa:r.placa, punto:r.punto, fecha:r.fecha,
+        semana:r.semana, tipo:r.tipo, cat:r.cat, minutos:0 };
+    }
+    visitasMap[k].minutos += r.minutos;
+  });
+  const visitas = Object.values(visitasMap);
+
+  // ── PASO 2: Agrupar por semana + categoría ──
+  const semanas = [...new Set(visitas.map(v=>v.semana))].sort((a,b)=>a-b);
+
+  const CATS_RETAIL = ['CD Retail', 'Otros CD Retail', 'Sala Retail'];
+  // Normalizar cat para agrupar
+  const normCat = cat => {
+    const u = (cat||'').toUpperCase();
+    if(u.includes('CD RETAIL') && !u.includes('OTROS') && !u.includes('SALAS')) return 'CD Retail';
+    if(u.includes('OTROS CD') || u === 'OTROS CD RETAIL') return 'Otros CD Retail';
+    if(u.includes('SALA') || u.includes('SALAS')) return 'Sala Retail';
+    return null;
+  };
+
+  // Sumar minutos por semana+cat para retail
+  const retailData = {};
+  CATS_RETAIL.forEach(cat => { retailData[cat] = {}; semanas.forEach(s => { retailData[cat][s] = 0; }); });
+
+  visitas.forEach(v => {
+    const cat = normCat(v.cat || v.tipo);
+    if(cat && retailData[cat] && v.semana in retailData[cat]){
+      retailData[cat][v.semana] += v.minutos;
+    }
+  });
+
+  // Sumar minutos por semana para clientes
+  const cliData = {};
+  semanas.forEach(s => { cliData[s] = 0; });
+  visitas.forEach(v => {
+    if(v.tipo === 'Cliente' && v.semana in cliData){
+      cliData[v.semana] += v.minutos;
+    }
+  });
+
+  // ── PASO 3: Renderizar gráficos ──
+  const fmtHrs = mins => {
+    const h = Math.floor(mins/60);
+    const m = Math.round(mins%60);
+    return h > 0 ? h + 'h ' + m + 'm' : m + 'm';
+  };
+
+  const labels = semanas.map(s => 'S' + s);
+  const COLORES = {
+    'CD Retail':       {border:'#4b8df8', bg:'rgba(75,141,248,.15)'},
+    'Otros CD Retail': {border:'#f4a836', bg:'rgba(244,168,54,.15)'},
+    'Sala Retail':     {border:'#1ec96a', bg:'rgba(30,201,106,.15)'}
+  };
+
+  // Gráfico Retail
+  if(chartTendRetail) chartTendRetail.destroy();
+  const ctxR = document.getElementById('chart-tend-retail').getContext('2d');
+  chartTendRetail = new Chart(ctxR, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: CATS_RETAIL.map(cat => ({
+        label: cat,
+        data: semanas.map(s => +(retailData[cat][s]/60).toFixed(2)),
+        borderColor: COLORES[cat].border,
+        backgroundColor: COLORES[cat].bg,
+        borderWidth: 2.5,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        pointBackgroundColor: COLORES[cat].border,
+        tension: 0.3,
+        fill: false
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode:'index', intersect:false },
+      plugins: {
+        legend: { labels:{ color:'#7b82a0', font:{size:11} } },
+        tooltip: {
+          callbacks: {
+            label: ctx => ' ' + ctx.dataset.label + ': ' + fmtHrs(Math.round(ctx.raw*60))
+          }
+        }
+      },
+      scales: {
+        y: {
+          ticks: { color:'#7b82a0', font:{size:11},
+            callback: v => v.toFixed(1) + 'h'
+          },
+          grid: { color:'rgba(255,255,255,.04)' },
+          title: { display:true, text:'Horas', color:'#7b82a0', font:{size:11} }
+        },
+        x: { ticks:{ color:'#7b82a0', font:{size:11} }, grid:{ display:false } }
+      }
+    }
+  });
+
+  // Leyenda
+  const legR = document.getElementById('legend-tend-retail');
+  if(legR) legR.innerHTML = CATS_RETAIL.map(cat => {
+    const totalMins = semanas.reduce((s,sem)=>s+retailData[cat][sem],0);
+    return `<div class="leg-item"><div class="leg-dot" style="background:${COLORES[cat].border}"></div>${cat}: ${fmtHrs(totalMins)} total</div>`;
+  }).join('');
+
+  // Subtítulo semanas
+  const subR = document.getElementById('tend-retail-sub');
+  if(subR) subR.textContent = labels.join(', ') + ' · horas acumuladas';
+
+  // Gráfico Clientes
+  if(chartTendCli) chartTendCli.destroy();
+  const ctxC = document.getElementById('chart-tend-cli').getContext('2d');
+  chartTendCli = new Chart(ctxC, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Clientes',
+        data: semanas.map(s => +(cliData[s]/60).toFixed(2)),
+        borderColor: '#f4a836',
+        backgroundColor: 'rgba(244,168,54,.15)',
+        borderWidth: 2.5,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        pointBackgroundColor: '#f4a836',
+        tension: 0.3,
+        fill: true
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels:{ color:'#7b82a0', font:{size:11} } },
+        tooltip: {
+          callbacks: {
+            label: ctx => ' Clientes: ' + fmtHrs(Math.round(ctx.raw*60))
+          }
+        }
+      },
+      scales: {
+        y: {
+          ticks: { color:'#7b82a0', font:{size:11},
+            callback: v => v.toFixed(1) + 'h'
+          },
+          grid: { color:'rgba(255,255,255,.04)' },
+          title: { display:true, text:'Horas', color:'#7b82a0', font:{size:11} }
+        },
+        x: { ticks:{ color:'#7b82a0', font:{size:11} }, grid:{ display:false } }
+      }
+    }
+  });
+
+  const subC = document.getElementById('tend-cli-sub');
+  const totalCli = semanas.reduce((s,sem)=>s+cliData[sem],0);
+  if(subC) subC.textContent = labels.join(', ') + ' · total: ' + fmtHrs(totalCli);
+}
+
 </script>
 </body>
 </html>

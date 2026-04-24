@@ -1743,23 +1743,28 @@ function renderTendencias(){
     return null;
   };
 
-  // Sumar minutos por semana+cat para retail
+  // Promedio de minutos por visita, por semana+cat para retail
   const retailData = {};
-  CATS_RETAIL.forEach(cat => { retailData[cat] = {}; semanas.forEach(s => { retailData[cat][s] = 0; }); });
+  CATS_RETAIL.forEach(cat => {
+    retailData[cat] = {};
+    semanas.forEach(s => { retailData[cat][s] = {total:0, count:0}; });
+  });
 
   visitas.forEach(v => {
     const cat = normCat(v.cat || v.tipo);
     if(cat && retailData[cat] && v.semana in retailData[cat]){
-      retailData[cat][v.semana] += v.minutos;
+      retailData[cat][v.semana].total += v.minutos;
+      retailData[cat][v.semana].count += 1;
     }
   });
 
-  // Sumar minutos por semana para clientes
+  // Promedio por visita para clientes
   const cliData = {};
-  semanas.forEach(s => { cliData[s] = 0; });
+  semanas.forEach(s => { cliData[s] = {total:0, count:0}; });
   visitas.forEach(v => {
     if(v.tipo === 'Cliente' && v.semana in cliData){
-      cliData[v.semana] += v.minutos;
+      cliData[v.semana].total += v.minutos;
+      cliData[v.semana].count += 1;
     }
   });
 
@@ -1786,7 +1791,10 @@ function renderTendencias(){
       labels,
       datasets: CATS_RETAIL.map(cat => ({
         label: cat,
-        data: semanas.map(s => +(retailData[cat][s]/60).toFixed(2)),
+        data: semanas.map(s => {
+          const d = retailData[cat][s];
+          return d.count > 0 ? +(d.total/d.count/60).toFixed(3) : 0;
+        }),
         borderColor: COLORES[cat].border,
         backgroundColor: COLORES[cat].bg,
         borderWidth: 2.5,
@@ -1804,7 +1812,14 @@ function renderTendencias(){
         legend: { labels:{ color:'#7b82a0', font:{size:11} } },
         tooltip: {
           callbacks: {
-            label: ctx => ' ' + ctx.dataset.label + ': ' + fmtHrs(Math.round(ctx.raw*60))
+            label: ctx => {
+              const mins = Math.round(ctx.raw*60);
+              const sem = semanas[ctx.dataIndex];
+              const cat = ctx.dataset.label;
+              const d = retailData[cat]?.[sem];
+              const visits = d?.count || 0;
+              return ' ' + cat + ': ' + fmtHrs(mins) + ' prom · ' + visits + ' visita' + (visits!==1?'s':'');
+            }
           }
         }
       },
@@ -1824,13 +1839,15 @@ function renderTendencias(){
   // Leyenda
   const legR = document.getElementById('legend-tend-retail');
   if(legR) legR.innerHTML = CATS_RETAIL.map(cat => {
-    const totalMins = semanas.reduce((s,sem)=>s+retailData[cat][sem],0);
-    return `<div class="leg-item"><div class="leg-dot" style="background:${COLORES[cat].border}"></div>${cat}: ${fmtHrs(totalMins)} total</div>`;
+    const totalMins  = semanas.reduce((s,sem)=>s+(retailData[cat][sem]?.total||0),0);
+    const totalCount = semanas.reduce((s,sem)=>s+(retailData[cat][sem]?.count||0),0);
+    const prom = totalCount > 0 ? Math.round(totalMins/totalCount) : 0;
+    return `<div class="leg-item"><div class="leg-dot" style="background:${COLORES[cat].border}"></div>${cat}: ${fmtHrs(prom)} prom · ${totalCount} visitas</div>`;
   }).join('');
 
   // Subtítulo semanas
   const subR = document.getElementById('tend-retail-sub');
-  if(subR) subR.textContent = labels.join(', ') + ' · horas acumuladas';
+  if(subR) subR.textContent = labels.join(', ') + ' · promedio de tiempo por visita (1 visita = mismo punto+placa+día)';
 
   // Gráfico Clientes
   if(chartTendCli) chartTendCli.destroy();
@@ -1841,7 +1858,10 @@ function renderTendencias(){
       labels,
       datasets: [{
         label: 'Clientes',
-        data: semanas.map(s => +(cliData[s]/60).toFixed(2)),
+        data: semanas.map(s => {
+          const d = cliData[s];
+          return d.count > 0 ? +(d.total/d.count/60).toFixed(3) : 0;
+        }),
         borderColor: '#f4a836',
         backgroundColor: 'rgba(244,168,54,.15)',
         borderWidth: 2.5,
@@ -1858,7 +1878,12 @@ function renderTendencias(){
         legend: { labels:{ color:'#7b82a0', font:{size:11} } },
         tooltip: {
           callbacks: {
-            label: ctx => ' Clientes: ' + fmtHrs(Math.round(ctx.raw*60))
+            label: ctx => {
+              const mins = Math.round(ctx.raw*60);
+              const sem = semanas[ctx.dataIndex];
+              const d = cliData[sem];
+              return ' Clientes: ' + fmtHrs(mins) + ' prom · ' + (d?.count||0) + ' visitas';
+            }
           }
         }
       },
@@ -1876,8 +1901,10 @@ function renderTendencias(){
   });
 
   const subC = document.getElementById('tend-cli-sub');
-  const totalCli = semanas.reduce((s,sem)=>s+cliData[sem],0);
-  if(subC) subC.textContent = labels.join(', ') + ' · total: ' + fmtHrs(totalCli);
+  const totalCliMins  = semanas.reduce((s,sem)=>s+(cliData[sem]?.total||0),0);
+  const totalCliCount = semanas.reduce((s,sem)=>s+(cliData[sem]?.count||0),0);
+  const promCli = totalCliCount > 0 ? Math.round(totalCliMins/totalCliCount) : 0;
+  if(subC) subC.textContent = labels.join(', ') + ' · promedio global: ' + fmtHrs(promCli) + ' · ' + totalCliCount + ' visitas';
 }
 
 </script>

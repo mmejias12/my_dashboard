@@ -928,10 +928,15 @@ async function cargarDatos(){
   document.getElementById('btn-ico').textContent = '⟳';
 
   try{
-    const allRows = await fetchTodaLaFlota(fi, ff, minStop);
+    // Pedir al proxy desde -1 día para capturar paradas nocturnas que cruzan medianoche hacia fi
+    const fiMenos1 = new Date(new Date(fi).getTime() - 86400000).toISOString().split('T')[0];
+    const allRows = await fetchTodaLaFlota(fiMenos1, ff, minStop);
     const consolidadas = consolidarMedianoche(allRows);
 
-    DB          = consolidadas;
+    // Filtrar por fecha real de llegada — solo mostrar paradas que pertenecen al rango fi..ff
+    const consolidadasFiltradas = consolidadas.filter(r => r.fecha >= fi && r.fecha <= ff);
+
+    DB          = consolidadasFiltradas;
     DB_FILTERED = [...DB];
     PAG_PAGE    = 1;
 

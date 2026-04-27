@@ -1865,14 +1865,18 @@ async function cargarPlacaExtra(placa, silencioso){
     const rows = parseJSONProxy(data);
     const consolidadas = consolidarMedianoche(rows).filter(r => r.fecha >= fi && r.fecha <= ff);
 
-    DB_PLACAS[placa] = consolidadas; // guardar aunque sea vacío (sin datos en período = [])
-    PLACAS_ACTIVAS.add(placa);
+    DB_PLACAS[placa] = consolidadas; // guardar siempre (vacío = sin datos en período)
+    if(consolidadas.length > 0){
+      PLACAS_ACTIVAS.add(placa);    // solo entra a activas si tiene datos reales
+    } else {
+      PLACAS_ACTIVAS.delete(placa); // sin datos → fuera de activas
+    }
     reconstruirDB();
     DB_FILTERED = [...DB];
     PAG_PAGE = 1;
 
     setBadge('verde','verde', DB.length + ' paradas');
-    setInfo(DB.length + ' paradas · ' + PLACAS_ACTIVAS.size + ' placa(s) activa(s)','');
+    setInfo(DB.length + ' paradas · ' + new Set(DB.map(r=>r.placa)).size + ' placa(s) con datos','');
     setBtnPlaca(placa, consolidadas.length > 0 ? 'on' : 'sindata');
 
     if(!silencioso) renderAll();
@@ -1900,13 +1904,17 @@ async function cargarTodasPlacas(){
 
   for(var i = 0; i < pendientes.length; i++){
     var placa = pendientes[i];
-    await cargarPlacaExtra(placa, true); // silencioso: no renderAll por cada una
-    // Actualizar botones y KPIs progresivamente
+    // Marcar como cargando visualmente ANTES de llamar
+    setBtnPlaca(placa, 'loading');
+    // Esperar a que realmente termine (no silencioso individualmente)
+    await cargarPlacaExtra(placa, true);
+    // Actualizar botones y KPIs después de cada placa exitosa
     renderBotonesPlaca();
     renderKPIs();
-    await new Promise(function(r){ setTimeout(r, 150); });
+    // Pausa para que el usuario vea el resultado antes del siguiente
+    await new Promise(function(r){ setTimeout(r, 600); });
   }
-  // Un solo renderAll completo al terminar todas
+  // Render completo final
   renderAll();
 }
 
@@ -1922,21 +1930,24 @@ function apagarPlaca(placa){
 
 function togglePlacaBtn(placa){
   if(PLACAS_ACTIVAS.has(placa)){
-    // Si es la última activa, no apagar
+    // Apagar — no permitir si es la última con datos
     if(PLACAS_ACTIVAS.size <= 1) return;
     apagarPlaca(placa);
+  } else if(DB_PLACAS[placa] && DB_PLACAS[placa].length > 0){
+    // Ya en caché con datos → encender sin llamar al API
+    PLACAS_ACTIVAS.add(placa);
+    reconstruirDB();
+    DB_FILTERED = [...DB];
+    PAG_PAGE = 1;
+    setBtnPlaca(placa, 'on');
+    renderAll();
+  } else if(DB_PLACAS[placa] && DB_PLACAS[placa].length === 0){
+    // Estaba sin datos → reintentar carga (puede ser error temporal o cambio de fechas)
+    delete DB_PLACAS[placa];
+    cargarPlacaExtra(placa, false);
   } else {
-    // Si ya está en caché, solo encender
-    if(DB_PLACAS[placa] !== undefined){
-      PLACAS_ACTIVAS.add(placa);
-      reconstruirDB();
-      DB_FILTERED = [...DB];
-      PAG_PAGE = 1;
-      setBtnPlaca(placa, 'on');
-      renderAll();
-    } else {
-      cargarPlacaExtra(placa);
-    }
+    // Nunca cargada → cargar
+    cargarPlacaExtra(placa, false);
   }
 }
 

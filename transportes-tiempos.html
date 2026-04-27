@@ -218,6 +218,7 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
 .btn-placa-num.dim{background:var(--s3);border-color:var(--border-md);color:var(--t3);opacity:.6}
 .btn-placa-num.off{background:var(--s2);border-color:var(--border);color:var(--t3);opacity:.4}
 .btn-placa-num.error{background:var(--red-d);border-color:var(--red);color:var(--red)}
+.btn-placa-num.sindata{background:var(--s3);border-color:var(--border-md);color:var(--t3);opacity:.55;border-style:dashed}
 .btn-placa-num.loading,.btn-placa-num.pulsing{background:var(--amber-d);border-color:var(--amber);color:var(--amber);animation:pp 1s infinite}
 .btn-placa-num:hover:not(.loading){opacity:1;border-color:var(--border-hi)}
 .btn-sem{background:var(--s3);border:1px solid var(--border);border-radius:5px;color:var(--t2);padding:4px 10px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s}
@@ -339,8 +340,8 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
       </div>
       <div class="kpi" style="border-top-color:var(--cyan)">
         <div class="kpi-label">Choferes activos</div>
-        <div class="kpi-val" style="color:var(--cyan)" id="k-chof">—</div>
-        <div class="kpi-sub">en el período</div>
+        <div class="kpi-val" style="color:var(--cyan);cursor:pointer" id="k-chof" onclick="mostrarResumenPlacas()" title="Ver detalle de choferes">—</div>
+        <div class="kpi-sub" style="cursor:pointer" onclick="mostrarResumenPlacas()">ver detalle ↗</div>
       </div>
     </div>
 
@@ -1188,7 +1189,19 @@ function renderKPIs(){
   document.getElementById('k-tcd').textContent      = tCD      !== null ? fmtMins(tCD)      : '—';
   document.getElementById('k-tsala').textContent    = tSala    !== null ? fmtMins(tSala)    : '—';
   document.getElementById('k-tcliente').textContent = tCliente !== null ? fmtMins(tCliente) : '—';
-  document.getElementById('k-chof').textContent     = new Set(DB.map(r=>r.placa)).size;
+  const placasConData = new Set(DB.map(r=>r.placa));
+  const sinDataCount  = Object.values(DB_PLACAS).filter(rows=>rows.length===0).length;
+  document.getElementById('k-chof').textContent = placasConData.size;
+  // Agregar indicador si hay placas sin datos
+  const kchof = document.getElementById('k-chof');
+  if(sinDataCount > 0){
+    kchof.style.color = 'var(--cyan)';
+    const subEl = kchof.nextElementSibling;
+    if(subEl) subEl.textContent = sinDataCount + ' sin datos · ver detalle ↗';
+  } else {
+    const subEl = kchof.nextElementSibling;
+    if(subEl) subEl.textContent = 'ver detalle ↗';
+  }
 }
 
 // ──────────────────────────────────────────────
@@ -1764,6 +1777,66 @@ function setInfo(txt, tipo){
 //  GESTIÓN MULTI-PLACA
 // ──────────────────────────────────────────────
 
+
+function mostrarResumenPlacas(){
+  const TODAS = Object.keys(FLOTA_NOMBRES);
+  const conData    = TODAS.filter(p => DB_PLACAS[p] && DB_PLACAS[p].length > 0);
+  const sinData    = TODAS.filter(p => DB_PLACAS[p] && DB_PLACAS[p].length === 0);
+  const noCargadas = TODAS.filter(p => DB_PLACAS[p] === undefined);
+
+  const fila = (p, estado, color) => {
+    const nombre = FLOTA_NOMBRES[p] || p;
+    const visitas = DB_PLACAS[p] ? DB_PLACAS[p].length : '—';
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:7px 12px;font-family:'DM Mono',monospace;font-size:12px;color:var(--t2)">${p}</td>
+      <td style="padding:7px 12px;font-size:12.5px;color:var(--t1)">${nombre}</td>
+      <td style="padding:7px 12px;text-align:center"><span class="badge ${color}">${estado}</span></td>
+      <td style="padding:7px 12px;text-align:right;font-family:'DM Mono',monospace;font-size:12px;color:var(--t2)">${visitas !== '—' ? visitas + ' reg.' : '—'}</td>
+    </tr>`;
+  };
+
+  const rows = [
+    ...conData.map(p    => fila(p, 'Con datos',   'ok')),
+    ...sinData.map(p    => fila(p, 'Sin datos',   'warn')),
+    ...noCargadas.map(p => fila(p, 'No cargado',  'otros')),
+  ].join('');
+
+  // Crear modal
+  let modal = document.getElementById('modal-placas');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.id = 'modal-placas';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+    modal.onclick = e => { if(e.target === modal) modal.remove(); };
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `
+    <div style="background:var(--s2);border:1px solid var(--border-hi);border-radius:12px;width:520px;max-height:80vh;overflow:auto;box-shadow:0 16px 48px rgba(0,0,0,.6)">
+      <div style="padding:16px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:13px;font-weight:600;color:var(--t1)">Resumen de choferes — período consultado</div>
+        <button onclick="document.getElementById('modal-placas').remove()" style="background:none;border:none;color:var(--t2);font-size:18px;cursor:pointer;padding:2px 6px">×</button>
+      </div>
+      <div style="padding:8px 0">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border)">
+              <th style="padding:7px 12px;text-align:left;font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px">Placa</th>
+              <th style="padding:7px 12px;text-align:left;font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px">Chofer</th>
+              <th style="padding:7px 12px;text-align:center;font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px">Estado</th>
+              <th style="padding:7px 12px;text-align:right;font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px">Registros</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div style="padding:12px 18px;border-top:1px solid var(--border);font-size:11px;color:var(--t3);display:flex;gap:16px">
+        <span>✅ ${conData.length} con datos</span>
+        <span>⚠️ ${sinData.length} sin actividad</span>
+        <span>⬜ ${noCargadas.length} no consultadas</span>
+      </div>
+    </div>`;
+}
+
 function reconstruirDB(){
   // Unir todas las placas activas en DB
   DB = [];
@@ -1773,12 +1846,12 @@ function reconstruirDB(){
   DB.sort((a,b) => a.llegada.localeCompare(b.llegada));
 }
 
-async function cargarPlacaExtra(placa){
-  // Cargar una placa adicional usando las fechas actuales del panel
+async function cargarPlacaExtra(placa, silencioso){
+  silencioso = silencioso || false;
   const fi      = document.getElementById('fi').value;
   const ff      = document.getElementById('ff').value;
   const minStop = document.getElementById('min-tiempo').value || 15;
-  if(!fi || !ff) return;
+  if(!fi || !ff) return false;
 
   setBtnPlaca(placa, 'loading');
   try{
@@ -1792,23 +1865,49 @@ async function cargarPlacaExtra(placa){
     const rows = parseJSONProxy(data);
     const consolidadas = consolidarMedianoche(rows).filter(r => r.fecha >= fi && r.fecha <= ff);
 
-    DB_PLACAS[placa] = consolidadas;
+    DB_PLACAS[placa] = consolidadas; // guardar aunque sea vacío (sin datos en período = [])
     PLACAS_ACTIVAS.add(placa);
     reconstruirDB();
     DB_FILTERED = [...DB];
     PAG_PAGE = 1;
 
-    // Actualizar badge info
-    const nPlacas = PLACAS_ACTIVAS.size;
     setBadge('verde','verde', DB.length + ' paradas');
-    setInfo(DB.length + ' paradas · ' + nPlacas + ' placa(s) activa(s)','');
+    setInfo(DB.length + ' paradas · ' + PLACAS_ACTIVAS.size + ' placa(s) activa(s)','');
+    setBtnPlaca(placa, consolidadas.length > 0 ? 'on' : 'sindata');
 
-    setBtnPlaca(placa, 'on');
-    renderAll();
+    if(!silencioso) renderAll();
+    return true;
   } catch(e){
     console.warn('[MultiPlaca] Error cargando', placa, e.message);
     setBtnPlaca(placa, 'error');
+    return false;
   }
+}
+
+async function cargarTodasPlacas(){
+  const TODAS = Object.keys(FLOTA_NOMBRES);
+  const pendientes = TODAS.filter(function(p){ return DB_PLACAS[p] === undefined; });
+
+  if(!pendientes.length){
+    // Todas ya en caché — encender las que tienen datos
+    TODAS.forEach(function(p){ if(DB_PLACAS[p] && DB_PLACAS[p].length) PLACAS_ACTIVAS.add(p); });
+    reconstruirDB();
+    DB_FILTERED = [...DB];
+    PAG_PAGE = 1;
+    renderAll();
+    return;
+  }
+
+  for(var i = 0; i < pendientes.length; i++){
+    var placa = pendientes[i];
+    await cargarPlacaExtra(placa, true); // silencioso: no renderAll por cada una
+    // Actualizar botones y KPIs progresivamente
+    renderBotonesPlaca();
+    renderKPIs();
+    await new Promise(function(r){ setTimeout(r, 150); });
+  }
+  // Un solo renderAll completo al terminar todas
+  renderAll();
 }
 
 function apagarPlaca(placa){
@@ -1873,16 +1972,18 @@ function renderBotonesPlaca(){
   cont.innerHTML = TODAS.map((placa, i) => {
     const nombre = FLOTA_NOMBRES[placa];
     const iniciales = nombre.split(' ').map(p=>p[0]).join('').substring(0,2);
-    const estado = DB_PLACAS[placa] === undefined ? 'off' :
-                   PLACAS_ACTIVAS.has(placa) ? 'on' : 'dim';
-    const sinData = DB_PLACAS[placa] !== undefined && DB_PLACAS[placa].length === 0;
+    var estado;
+    if(DB_PLACAS[placa] === undefined)         estado = 'off';
+    else if(DB_PLACAS[placa].length === 0)     estado = 'sindata';
+    else if(PLACAS_ACTIVAS.has(placa))         estado = 'on';
+    else                                        estado = 'dim';
+    const sinData = estado === 'sindata';
     return `<button
       id="btn-placa-${placa}"
       class="btn-placa-num ${estado}"
       onclick="togglePlacaBtn('${placa}')"
-      title="${nombre} (${placa})${sinData?' · Sin datos en este período':''}"
-    >${i+1}${sinData?'':''}
-    </button>`;
+      title="${nombre} (${placa})${sinData?' — Sin datos en este período':''}${estado==='off'?' — No cargado':''}"
+    >${i+1}</button>`;
   }).join('');
 }
 

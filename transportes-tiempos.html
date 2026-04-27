@@ -213,6 +213,13 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
 .chofer-stat-label{font-size:9.5px;color:var(--t3);margin-top:2px}
 
 /* ── PAGINATION ── */
+.btn-placa-num{width:32px;height:32px;border-radius:50%;border:2px solid var(--border);background:var(--s3);color:var(--t3);font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Mono',monospace;transition:all .2s;display:flex;align-items:center;justify-content:center}
+.btn-placa-num.on{background:var(--blue-d);border-color:var(--blue);color:var(--blue)}
+.btn-placa-num.dim{background:var(--s3);border-color:var(--border-md);color:var(--t3);opacity:.6}
+.btn-placa-num.off{background:var(--s2);border-color:var(--border);color:var(--t3);opacity:.4}
+.btn-placa-num.error{background:var(--red-d);border-color:var(--red);color:var(--red)}
+.btn-placa-num.loading,.btn-placa-num.pulsing{background:var(--amber-d);border-color:var(--amber);color:var(--amber);animation:pp 1s infinite}
+.btn-placa-num:hover:not(.loading){opacity:1;border-color:var(--border-hi)}
 .btn-sem{background:var(--s3);border:1px solid var(--border);border-radius:5px;color:var(--t2);padding:4px 10px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s}
 .btn-sem.active{background:var(--blue-d);border-color:var(--blue);color:var(--blue)}
 .btn-sem:hover:not(.active){background:var(--s4);color:var(--t1)}
@@ -504,6 +511,16 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
     <!-- ===== TAB: TENDENCIAS ===== -->
     <div id="view-tendencias" style="display:none">
 
+      <!-- Botonería de placas/choferes -->
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;padding:10px 14px;background:var(--s2);border:1px solid var(--border);border-radius:var(--radius-lg)">
+        <span style="font-size:11px;color:var(--t2);font-weight:600;text-transform:uppercase;letter-spacing:.5px;min-width:50px">Chofer:</span>
+        <div id="tend-placas-btns" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        <div style="width:1px;height:20px;background:var(--border);margin:0 4px"></div>
+        <button onclick="cargarTodasPlacas()" class="btn-go" style="font-size:11px;padding:5px 12px">⬇ Todas</button>
+        <button onclick="ningunaPlacaTend()" class="page-btn" style="font-size:11px;padding:5px 10px">Ninguna</button>
+        <span style="font-size:10.5px;color:var(--t3)" id="tend-placas-info"></span>
+      </div>
+
       <!-- Botonería de semanas -->
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
         <span style="font-size:11px;color:var(--t2);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Semanas:</span>
@@ -609,7 +626,9 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
 // ──────────────────────────────────────────────
 //  ESTADO GLOBAL
 // ──────────────────────────────────────────────
-let DB = []; // filas procesadas
+let DB = []; // filas procesadas (unión de todas las placas activas)
+let DB_PLACAS = {}; // caché por placa: {placa: [rows]}
+let PLACAS_ACTIVAS = new Set(); // placas cuyos datos están en DB
 let DB_FILTERED = [];
 let PAG_PAGE = 1;
 const PAG_SIZE = 50;
@@ -984,11 +1003,28 @@ async function cargarDatos(){
     const fiMenos1 = new Date(new Date(fi).getTime() - 86400000).toISOString().split('T')[0];
     const allRows = await fetchTodaLaFlota(fiMenos1, ff, minStop);
     const consolidadas = consolidarMedianoche(allRows);
-
-    // Filtrar por fecha real de llegada — solo mostrar paradas que pertenecen al rango fi..ff
     const consolidadasFiltradas = consolidadas.filter(r => r.fecha >= fi && r.fecha <= ff);
 
-    DB          = consolidadasFiltradas;
+    // Guardar en caché por placa y marcar como activa
+    const flotaSel = document.getElementById('sel-flota')?.value || 'all';
+    if(flotaSel !== 'all'){
+      DB_PLACAS[flotaSel] = consolidadasFiltradas;
+      PLACAS_ACTIVAS.add(flotaSel);
+    } else {
+      // Si es "todas", guardar por placa individual
+      const porPlaca = {};
+      consolidadasFiltradas.forEach(r => {
+        if(!porPlaca[r.placa]) porPlaca[r.placa] = [];
+        porPlaca[r.placa].push(r);
+      });
+      Object.entries(porPlaca).forEach(([p, rows]) => {
+        DB_PLACAS[p] = rows;
+        PLACAS_ACTIVAS.add(p);
+      });
+    }
+
+    // Reconstruir DB desde caché
+    reconstruirDB();
     DB_FILTERED = [...DB];
     PAG_PAGE    = 1;
 
@@ -1114,6 +1150,7 @@ function probarProxy(){
 // ──────────────────────────────────────────────
 function renderAll(){
   renderKPIs();
+  renderBotonesPlaca();
   renderTendencias();
   renderChartTipo();
   renderChartDona();
@@ -1541,7 +1578,7 @@ function paginar(dir){
 // ──────────────────────────────────────────────
 const TABS = ['resumen','puntos','choferes','detalle','tendencias','config'];
 function switchTab(tab){
-  if(tab === 'tendencias' && DB.length) renderTendencias();
+  if(tab === 'tendencias'){ renderBotonesPlaca(); if(DB.length) renderTendencias(); }
   TABS.forEach(t => {
     document.getElementById('view-'+t).style.display = t===tab?'':'none';
     const el = document.getElementById('t-'+t);
@@ -1722,6 +1759,144 @@ function setInfo(txt, tipo){
   el.style.color = tipo==='amber' ? 'var(--amber)' : tipo==='red' ? 'var(--red)' : 'var(--t3)';
 }
 
+
+// ──────────────────────────────────────────────
+//  GESTIÓN MULTI-PLACA
+// ──────────────────────────────────────────────
+
+function reconstruirDB(){
+  // Unir todas las placas activas en DB
+  DB = [];
+  PLACAS_ACTIVAS.forEach(placa => {
+    if(DB_PLACAS[placa]) DB = DB.concat(DB_PLACAS[placa]);
+  });
+  DB.sort((a,b) => a.llegada.localeCompare(b.llegada));
+}
+
+async function cargarPlacaExtra(placa){
+  // Cargar una placa adicional usando las fechas actuales del panel
+  const fi      = document.getElementById('fi').value;
+  const ff      = document.getElementById('ff').value;
+  const minStop = document.getElementById('min-tiempo').value || 15;
+  if(!fi || !ff) return;
+
+  setBtnPlaca(placa, 'loading');
+  try{
+    const fiMenos1 = new Date(new Date(fi).getTime() - 86400000).toISOString().split('T')[0];
+    const desde = fiMenos1.replace(/-/g,'/') + ' 00:00:00';
+    const hasta = ff.replace(/-/g,'/') + ' 23:59:59';
+    const url = CFG.proxyBase + '?desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta) + '&time=' + minStop + '&plate=' + encodeURIComponent(placa);
+
+    const res  = await fetch(url, {signal: AbortSignal.timeout(60000)});
+    const data = await res.json();
+    const rows = parseJSONProxy(data);
+    const consolidadas = consolidarMedianoche(rows).filter(r => r.fecha >= fi && r.fecha <= ff);
+
+    DB_PLACAS[placa] = consolidadas;
+    PLACAS_ACTIVAS.add(placa);
+    reconstruirDB();
+    DB_FILTERED = [...DB];
+    PAG_PAGE = 1;
+
+    // Actualizar badge info
+    const nPlacas = PLACAS_ACTIVAS.size;
+    setBadge('verde','verde', DB.length + ' paradas');
+    setInfo(DB.length + ' paradas · ' + nPlacas + ' placa(s) activa(s)','');
+
+    setBtnPlaca(placa, 'on');
+    renderAll();
+  } catch(e){
+    console.warn('[MultiPlaca] Error cargando', placa, e.message);
+    setBtnPlaca(placa, 'error');
+  }
+}
+
+function apagarPlaca(placa){
+  PLACAS_ACTIVAS.delete(placa);
+  reconstruirDB();
+  DB_FILTERED = [...DB];
+  PAG_PAGE = 1;
+  setBtnPlaca(placa, 'off');
+  if(DB.length) renderAll();
+  else renderEmptyCharts();
+}
+
+function togglePlacaBtn(placa){
+  if(PLACAS_ACTIVAS.has(placa)){
+    // Si es la última activa, no apagar
+    if(PLACAS_ACTIVAS.size <= 1) return;
+    apagarPlaca(placa);
+  } else {
+    // Si ya está en caché, solo encender
+    if(DB_PLACAS[placa] !== undefined){
+      PLACAS_ACTIVAS.add(placa);
+      reconstruirDB();
+      DB_FILTERED = [...DB];
+      PAG_PAGE = 1;
+      setBtnPlaca(placa, 'on');
+      renderAll();
+    } else {
+      cargarPlacaExtra(placa);
+    }
+  }
+}
+
+async function cargarTodasPlacas(){
+  const TODAS = Object.keys(FLOTA_NOMBRES);
+  for(const placa of TODAS){
+    if(!PLACAS_ACTIVAS.has(placa)){
+      await cargarPlacaExtra(placa);
+      await new Promise(r => setTimeout(r, 200)); // pequeña pausa visual entre placas
+    }
+  }
+}
+
+function ningunaPlacaTend(){
+  // Apagar todas excepto la del panel principal
+  const placaPrincipal = document.getElementById('sel-flota')?.value;
+  const mantener = placaPrincipal && placaPrincipal !== 'all' ? placaPrincipal : null;
+  [...PLACAS_ACTIVAS].forEach(p => {
+    if(p !== mantener) PLACAS_ACTIVAS.delete(p);
+  });
+  if(!PLACAS_ACTIVAS.size && mantener) PLACAS_ACTIVAS.add(mantener);
+  reconstruirDB();
+  DB_FILTERED = [...DB];
+  PAG_PAGE = 1;
+  renderBotonesPlaca();
+  if(DB.length) renderAll();
+}
+
+function renderBotonesPlaca(){
+  const cont = document.getElementById('tend-placas-btns');
+  if(!cont) return;
+  const TODAS = Object.keys(FLOTA_NOMBRES);
+  cont.innerHTML = TODAS.map((placa, i) => {
+    const nombre = FLOTA_NOMBRES[placa];
+    const iniciales = nombre.split(' ').map(p=>p[0]).join('').substring(0,2);
+    const estado = DB_PLACAS[placa] === undefined ? 'off' :
+                   PLACAS_ACTIVAS.has(placa) ? 'on' : 'dim';
+    const sinData = DB_PLACAS[placa] !== undefined && DB_PLACAS[placa].length === 0;
+    return `<button
+      id="btn-placa-${placa}"
+      class="btn-placa-num ${estado}"
+      onclick="togglePlacaBtn('${placa}')"
+      title="${nombre} (${placa})${sinData?' · Sin datos en este período':''}"
+    >${i+1}${sinData?'':''}
+    </button>`;
+  }).join('');
+}
+
+function setBtnPlaca(placa, estado){
+  const btn = document.getElementById('btn-placa-' + placa);
+  if(!btn) return;
+  btn.className = 'btn-placa-num ' + estado;
+  if(estado === 'loading'){
+    btn.classList.add('pulsing');
+  } else {
+    btn.classList.remove('pulsing');
+  }
+}
+
 // ──────────────────────────────────────────────
 //  TENDENCIAS — Promedio por visita por semana
 // ──────────────────────────────────────────────
@@ -1760,6 +1935,10 @@ function renderTendencias(){
     });
     return;
   }
+
+  // Actualizar info de placas
+  const infoEl = document.getElementById('tend-placas-info');
+  if(infoEl) infoEl.textContent = PLACAS_ACTIVAS.size + ' placa(s) activa(s) · ' + DB.length + ' paradas';
 
   // ── PASO 1: Consolidar visitas (mismo punto + placa + fecha = 1 visita) ──
   const visitaKey = r => r.placa + '|' + r.punto + '|' + r.fecha;

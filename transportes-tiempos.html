@@ -328,14 +328,14 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
         <div class="kpi-val green" id="k-tcd">—</div>
         <div class="kpi-sub">min / visita</div>
       </div>
-      <div class="kpi amber">
+      <div class="kpi purple">
         <div class="kpi-label">Tiempo prom. Sala</div>
         <div class="kpi-val amber" id="k-tsala">—</div>
         <div class="kpi-sub">min / visita</div>
       </div>
-      <div class="kpi amber">
+      <div class="kpi purple">
         <div class="kpi-label">Tiempo prom. Cliente</div>
-        <div class="kpi-val amber" id="k-tcliente">—</div>
+        <div class="kpi-val purple" id="k-tcliente">—</div>
         <div class="kpi-sub">min / visita</div>
       </div>
       <div class="kpi" style="border-top-color:var(--cyan)">
@@ -1956,7 +1956,6 @@ async function cargarTodasPlacas(){
   for(const placa of TODAS){
     if(!PLACAS_ACTIVAS.has(placa)){
       await cargarPlacaExtra(placa);
-      await new Promise(r => setTimeout(r, 200)); // pequeña pausa visual entre placas
     }
   }
 }

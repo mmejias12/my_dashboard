@@ -183,6 +183,101 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}
+
+/* ── MAIN TABS (Resumen general / Resumen mensual) ─────────────────────── */
+.main-tabs { display:flex;gap:4px;border-bottom:1px solid var(--border-md);
+  margin-bottom:1rem;padding-bottom:0; }
+.main-tab { background:transparent;border:none;color:var(--text-sec);
+  font-family:inherit;font-size:12.5px;font-weight:500;padding:9px 16px;
+  cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;
+  display:flex;align-items:center;gap:6px; }
+.main-tab:hover { color:var(--text-pri); }
+.main-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
+.main-tab-icon { font-size:13px; }
+
+/* ── SUB-TABS (3 vistas dentro de Resumen mensual) ─────────────────────── */
+.sub-tabs { display:flex;gap:6px;background:var(--bg-input);
+  padding:4px;border-radius:var(--radius-md);margin-bottom:1rem;
+  width:fit-content; }
+.sub-tab { background:transparent;border:none;color:var(--text-sec);
+  font-family:inherit;font-size:11.5px;font-weight:500;padding:6px 14px;
+  cursor:pointer;border-radius:var(--radius-sm);transition:all .15s; }
+.sub-tab:hover { color:var(--text-pri); }
+.sub-tab.active { background:var(--bg-card);color:var(--text-pri);
+  box-shadow:0 1px 3px rgba(0,0,0,.3); }
+
+/* ── PIVOT MATRIX ──────────────────────────────────────────────────────── */
+.pivot-wrap { overflow-x:auto;background:var(--bg-card);
+  border:1px solid var(--border);border-radius:var(--radius-md); }
+.pivot-table { width:100%;border-collapse:separate;border-spacing:0;
+  font-size:11px;font-family:'Inter',sans-serif; }
+.pivot-table thead th { background:var(--bg-surface);color:var(--text-sec);
+  font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.4px;
+  padding:10px 8px;text-align:right;border-bottom:1px solid var(--border-md);
+  position:sticky;top:0;z-index:5;white-space:nowrap; }
+.pivot-table thead th:first-child { text-align:left;
+  position:sticky;left:0;z-index:6;background:var(--bg-surface); }
+.pivot-table thead th.month-col { min-width:120px; }
+.pivot-table tbody td { padding:8px;border-bottom:1px solid var(--border);
+  text-align:right;vertical-align:top;font-family:'JetBrains Mono',monospace;
+  font-size:10.5px; }
+.pivot-table tbody td:first-child { text-align:left;font-family:'Inter',sans-serif;
+  font-weight:500;color:var(--text-pri);position:sticky;left:0;
+  background:var(--bg-card);z-index:2;font-size:11px; }
+.pivot-table tbody tr:hover td { background:var(--bg-hover); }
+.pivot-table tbody tr:hover td:first-child { background:#262d3a; }
+.pivot-table tbody tr.totals-row td { background:var(--bg-surface);
+  font-weight:600;border-top:2px solid var(--border-md);
+  border-bottom:none;color:var(--text-pri); }
+.pivot-table tbody tr.totals-row td:first-child { background:var(--bg-surface); }
+
+/* Cell con 3 métricas (CLP / UF / N°) */
+.pcell { display:flex;flex-direction:column;gap:2px;line-height:1.25; }
+.pcell-clp { color:var(--text-pri);font-weight:500; }
+.pcell-uf  { color:var(--c-uf);font-size:10px; }
+.pcell-n   { color:var(--text-muted);font-size:9.5px;
+  text-transform:uppercase;letter-spacing:.3px; }
+.pcell-empty { color:var(--text-muted);opacity:.4; }
+
+/* Mes / cliente meta */
+.month-pill { display:inline-block;padding:2px 7px;background:var(--bg-input);
+  border-radius:9px;font-size:9.5px;color:var(--text-sec);
+  text-transform:uppercase;letter-spacing:.4px;font-family:inherit; }
+
+/* Selector de mes */
+.month-selector { display:flex;align-items:center;gap:8px;
+  margin-bottom:.875rem; }
+.month-select { background:var(--bg-input);color:var(--text-pri);
+  border:1px solid var(--border-md);border-radius:var(--radius-sm);
+  padding:6px 10px;font-size:11.5px;font-family:inherit;cursor:pointer;
+  min-width:180px; }
+.month-select:focus { outline:1px solid var(--c-uf); }
+
+/* Vista expandible */
+.exp-row { cursor:pointer;user-select:none; }
+.exp-row td:first-child::before { content:'▶';display:inline-block;
+  margin-right:8px;font-size:9px;color:var(--text-muted);
+  transition:transform .15s; }
+.exp-row.open td:first-child::before { transform:rotate(90deg); }
+.exp-detail { background:var(--bg-input); }
+.exp-detail td { font-size:10px;padding:6px 8px 6px 28px;
+  border-bottom:1px dashed var(--border); }
+.exp-detail.hidden { display:none; }
+.exp-detail td:first-child { background:var(--bg-input);
+  font-weight:400;color:var(--text-sec);font-size:10.5px; }
+.exp-month-label { color:var(--text-pri);font-weight:500; }
+.exp-trans-label { color:var(--text-sec);padding-left:14px; }
+
+/* Search input */
+.pivot-search { background:var(--bg-input);color:var(--text-pri);
+  border:1px solid var(--border-md);border-radius:var(--radius-sm);
+  padding:6px 10px;font-size:11.5px;font-family:inherit;
+  min-width:220px;margin-left:auto; }
+.pivot-search:focus { outline:1px solid var(--accent); }
+
+.pivot-toolbar { display:flex;align-items:center;gap:10px;
+  margin-bottom:.875rem;flex-wrap:wrap; }
+
 </style>
 </head>
 <body>
@@ -248,6 +343,19 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
 
     <!-- CONTENIDO (oculto hasta cargar) -->
     <div id="content" style="display:none">
+
+      <!-- ═══════════ MAIN TABS ═══════════ -->
+      <div class="main-tabs">
+        <button class="main-tab active" onclick="showMainTab('general', this)">
+          <span class="main-tab-icon">📊</span> Resumen general
+        </button>
+        <button class="main-tab" onclick="showMainTab('mensual', this)">
+          <span class="main-tab-icon">📅</span> Resumen mensual
+        </button>
+      </div>
+
+      <!-- ═══════════ TAB: RESUMEN GENERAL ═══════════ -->
+      <div id="tab-general" class="tab-pane">
 
       <!-- BLOQUE 1: FLUJO FINANCIERO -->
       <div class="section-hdr">
@@ -399,6 +507,71 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
         </div>
       </div>
 
+      </div><!-- /tab-general -->
+
+      <!-- ═══════════ TAB: RESUMEN MENSUAL ═══════════ -->
+      <div id="tab-mensual" class="tab-pane" style="display:none">
+
+        <div class="section-hdr">
+          <span class="section-title">Resumen mensual por cliente y transacción</span>
+          <span class="section-badge badge-green">Totales abiertos · CLP / UF / N° ops</span>
+          <span class="section-sub" id="rm-period">—</span>
+        </div>
+
+        <!-- SUB-TABS -->
+        <div class="pivot-toolbar">
+          <div class="sub-tabs">
+            <button class="sub-tab active" onclick="showSubTab('cm', this)">Cliente × Mes</button>
+            <button class="sub-tab" onclick="showSubTab('ct', this)">Cliente × Transacción</button>
+            <button class="sub-tab" onclick="showSubTab('exp', this)">Expandible</button>
+          </div>
+          <input type="text" class="pivot-search" id="pivot-search"
+                 placeholder="Buscar cliente..." oninput="filterPivot()">
+        </div>
+
+        <!-- VISTA 1: CLIENTE × MES -->
+        <div id="sub-cm" class="sub-pane">
+          <div class="pivot-wrap">
+            <table class="pivot-table" id="tbl-cm">
+              <thead id="thead-cm"></thead>
+              <tbody id="tbody-cm"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- VISTA 2: CLIENTE × TRANSACCIÓN (con selector de mes) -->
+        <div id="sub-ct" class="sub-pane" style="display:none">
+          <div class="month-selector">
+            <span class="ctrl-label">Mes</span>
+            <select id="ct-month-select" class="month-select" onchange="renderClienteTrans()"></select>
+          </div>
+          <div class="pivot-wrap">
+            <table class="pivot-table" id="tbl-ct">
+              <thead id="thead-ct"></thead>
+              <tbody id="tbody-ct"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- VISTA 3: EXPANDIBLE -->
+        <div id="sub-exp" class="sub-pane" style="display:none">
+          <div class="pivot-wrap">
+            <table class="pivot-table" id="tbl-exp">
+              <thead>
+                <tr>
+                  <th>Cliente / Mes / Transacción</th>
+                  <th style="text-align:right">Total CLP</th>
+                  <th style="text-align:right">Total UF</th>
+                  <th style="text-align:right">N° ops</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-exp"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div><!-- /tab-mensual -->
+
     </div><!-- /content -->
   </div><!-- /main -->
 </div><!-- /layout -->
@@ -491,6 +664,7 @@ function renderAll(d1, d2) {
   renderTablaClientes(clientes);
   renderAlertas(clientes);
   renderEmisiones(clientes);
+  buildResumenMensual(d1, d2);
 
   document.getElementById('empty-state').innerHTML = '';
   document.getElementById('content').style.display = 'block';
@@ -763,6 +937,349 @@ function renderEmisiones(clientes) {
   });
   document.getElementById('tbody-emisiones').innerHTML = html ||
     '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:1rem">Sin emisiones en el período</td></tr>';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── RESUMEN MENSUAL ────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Estado del módulo mensual
+var RM = {
+  meses: [],          // ['2025-01', '2025-02', ...]
+  trans: [],          // ['ARRIENDO DIAS PALLET', 'EMISION', ...]
+  byClienteMes: {},   // { code: { name, meses:{ 'YYYY-MM': {clp,uf,n} }, total:{clp,uf,n} } }
+  byClienteTrans: {}, // { code: { name, meses:{'YYYY-MM': {trans:{op:{clp,uf,n}}, total:{}}}, totalGlobal:{...} } }
+  filterText: '',
+  currentSubTab: 'cm'
+};
+
+// Lee la fecha del registro probando varios nombres de campo
+function rmFecha(r) {
+  var v = r.fecha || r.Fecha || r.fechaConfirmacion || r.FechaConfirmacion ||
+          r.fechaEmision || r.fechaCartola || r.FechaCartola ||
+          r.fechaDoc || r.FechaDoc || r.fechaContabilizacion;
+  if (!v) return null;
+  // Toma los primeros 10 chars (YYYY-MM-DD) y devuelve YYYY-MM
+  var s = String(v).substring(0,10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s.substring(0,7);
+  // Formato DD-MM-YYYY o DD/MM/YYYY
+  var m = s.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})/);
+  if (m) return m[3]+'-'+m[2];
+  return null;
+}
+
+function buildResumenMensual(d1, d2) {
+  RM.meses = [];
+  RM.trans = [];
+  RM.byClienteMes = {};
+  RM.byClienteTrans = {};
+
+  var mesesSet = {};
+  var transSet = {};
+  var sinFecha = 0;
+  var mesFallback = (d1||'').substring(0,7);
+
+  raw.forEach(function(r){
+    var code = r.cardCode;
+    var name = r.cardName;
+    var op   = (r.operacion||'OTROS').toUpperCase();
+    var clp  = r.netoCLP || 0;
+    var uf   = r.netoUF  || 0;
+    var qty  = 1; // 1 operación por registro
+    var mes  = rmFecha(r);
+    if (!mes) { mes = mesFallback; sinFecha++; }
+
+    mesesSet[mes] = true;
+    transSet[op]  = true;
+
+    // Cliente × Mes
+    if (!RM.byClienteMes[code]) {
+      RM.byClienteMes[code] = { code:code, name:name, meses:{}, total:{clp:0,uf:0,n:0} };
+    }
+    var cm = RM.byClienteMes[code];
+    if (!cm.meses[mes]) cm.meses[mes] = {clp:0,uf:0,n:0};
+    cm.meses[mes].clp += clp;
+    cm.meses[mes].uf  += uf;
+    cm.meses[mes].n   += qty;
+    cm.total.clp += clp; cm.total.uf += uf; cm.total.n += qty;
+
+    // Cliente × Transacción × Mes
+    if (!RM.byClienteTrans[code]) {
+      RM.byClienteTrans[code] = { code:code, name:name, meses:{}, totalGlobal:{clp:0,uf:0,n:0} };
+    }
+    var ct = RM.byClienteTrans[code];
+    if (!ct.meses[mes]) ct.meses[mes] = { trans:{}, total:{clp:0,uf:0,n:0} };
+    if (!ct.meses[mes].trans[op]) ct.meses[mes].trans[op] = {clp:0,uf:0,n:0};
+    ct.meses[mes].trans[op].clp += clp;
+    ct.meses[mes].trans[op].uf  += uf;
+    ct.meses[mes].trans[op].n   += qty;
+    ct.meses[mes].total.clp += clp;
+    ct.meses[mes].total.uf  += uf;
+    ct.meses[mes].total.n   += qty;
+    ct.totalGlobal.clp += clp; ct.totalGlobal.uf += uf; ct.totalGlobal.n += qty;
+  });
+
+  RM.meses = Object.keys(mesesSet).sort();
+  RM.trans = Object.keys(transSet).sort();
+
+  // Indicador en el header
+  var info = RM.meses.length + ' ' + (RM.meses.length===1?'mes':'meses')
+    + ' · ' + Object.keys(RM.byClienteMes).length + ' clientes';
+  if (sinFecha > 0) info += ' · ' + sinFecha + ' regs sin fecha (asignados a '+mesFallback+')';
+  document.getElementById('rm-period').textContent = info;
+
+  // Llenar selector de meses para vista CT
+  var sel = document.getElementById('ct-month-select');
+  sel.innerHTML = RM.meses.map(function(m){
+    return '<option value="'+m+'">'+formatMesLabel(m)+'</option>';
+  }).join('');
+  if (RM.meses.length) sel.value = RM.meses[RM.meses.length-1]; // último mes por defecto
+
+  // Render inicial (la vista activa, default CM)
+  renderClienteMes();
+  renderClienteTrans();
+  renderExpandible();
+}
+
+function formatMesLabel(ym) {
+  var meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  var p = ym.split('-');
+  return meses[parseInt(p[1],10)-1] + ' ' + p[0];
+}
+function formatTransLabel(t) {
+  // Capitalizar primera letra de cada palabra
+  return t.toLowerCase().replace(/\b\w/g, function(c){return c.toUpperCase();});
+}
+
+function pcell(d) {
+  if (!d || (!d.clp && !d.uf && !d.n)) {
+    return '<span class="pcell-empty">—</span>';
+  }
+  return '<div class="pcell">'
+    + '<span class="pcell-clp">'+fmtCLP(d.clp)+'</span>'
+    + (d.uf ? '<span class="pcell-uf">'+fmtUF(d.uf)+' UF</span>' : '')
+    + '<span class="pcell-n">'+d.n+' op'+(d.n!==1?'s':'')+'</span>'
+    + '</div>';
+}
+
+// ── VISTA 1: CLIENTE × MES ─────────────────────────────────────────────────
+function renderClienteMes() {
+  var thead = '<tr><th>Cliente</th>';
+  RM.meses.forEach(function(m){
+    thead += '<th class="month-col">'+formatMesLabel(m)+'</th>';
+  });
+  thead += '<th class="month-col">Total período</th></tr>';
+  document.getElementById('thead-cm').innerHTML = thead;
+
+  var clientes = Object.values(RM.byClienteMes).sort(function(a,b){
+    return b.total.clp - a.total.clp;
+  });
+  if (RM.filterText) {
+    var f = RM.filterText.toLowerCase();
+    clientes = clientes.filter(function(c){
+      return (c.name||'').toLowerCase().includes(f) || (c.code||'').toLowerCase().includes(f);
+    });
+  }
+
+  var html = '';
+  clientes.forEach(function(c){
+    html += '<tr><td title="'+c.code+'">'+c.name+'</td>';
+    RM.meses.forEach(function(m){ html += '<td>'+pcell(c.meses[m])+'</td>'; });
+    html += '<td>'+pcell(c.total)+'</td></tr>';
+  });
+
+  // Fila de totales por mes
+  var totMes = {};
+  RM.meses.forEach(function(m){ totMes[m] = {clp:0,uf:0,n:0}; });
+  var totGlobal = {clp:0,uf:0,n:0};
+  clientes.forEach(function(c){
+    RM.meses.forEach(function(m){
+      if (c.meses[m]) {
+        totMes[m].clp += c.meses[m].clp;
+        totMes[m].uf  += c.meses[m].uf;
+        totMes[m].n   += c.meses[m].n;
+      }
+    });
+    totGlobal.clp += c.total.clp;
+    totGlobal.uf  += c.total.uf;
+    totGlobal.n   += c.total.n;
+  });
+  html += '<tr class="totals-row"><td>TOTAL ('+clientes.length+')</td>';
+  RM.meses.forEach(function(m){ html += '<td>'+pcell(totMes[m])+'</td>'; });
+  html += '<td>'+pcell(totGlobal)+'</td></tr>';
+
+  document.getElementById('tbody-cm').innerHTML = html ||
+    '<tr><td colspan="'+(RM.meses.length+2)+'" style="text-align:center;color:var(--text-muted);padding:1rem">Sin datos</td></tr>';
+}
+
+// ── VISTA 2: CLIENTE × TRANSACCIÓN (mes seleccionado) ──────────────────────
+function renderClienteTrans() {
+  var sel = document.getElementById('ct-month-select');
+  if (!sel || !sel.value) return;
+  var mes = sel.value;
+
+  // Determinar qué transacciones tienen movimiento ese mes
+  var transConDatos = {};
+  Object.values(RM.byClienteTrans).forEach(function(c){
+    if (c.meses[mes]) {
+      Object.keys(c.meses[mes].trans).forEach(function(t){ transConDatos[t]=true; });
+    }
+  });
+  var transList = Object.keys(transConDatos).sort();
+
+  var thead = '<tr><th>Cliente</th>';
+  transList.forEach(function(t){
+    thead += '<th class="month-col">'+formatTransLabel(t)+'</th>';
+  });
+  thead += '<th class="month-col">Total mes</th></tr>';
+  document.getElementById('thead-ct').innerHTML = thead;
+
+  var clientes = Object.values(RM.byClienteTrans)
+    .filter(function(c){ return c.meses[mes]; })
+    .sort(function(a,b){
+      var ta = a.meses[mes] ? a.meses[mes].total.clp : 0;
+      var tb = b.meses[mes] ? b.meses[mes].total.clp : 0;
+      return tb - ta;
+    });
+  if (RM.filterText) {
+    var f = RM.filterText.toLowerCase();
+    clientes = clientes.filter(function(c){
+      return (c.name||'').toLowerCase().includes(f) || (c.code||'').toLowerCase().includes(f);
+    });
+  }
+
+  var html = '';
+  clientes.forEach(function(c){
+    var dataMes = c.meses[mes];
+    html += '<tr><td title="'+c.code+'">'+c.name+'</td>';
+    transList.forEach(function(t){ html += '<td>'+pcell(dataMes.trans[t])+'</td>'; });
+    html += '<td>'+pcell(dataMes.total)+'</td></tr>';
+  });
+
+  // Totales por transacción
+  var totTrans = {};
+  transList.forEach(function(t){ totTrans[t] = {clp:0,uf:0,n:0}; });
+  var totGlobal = {clp:0,uf:0,n:0};
+  clientes.forEach(function(c){
+    var dm = c.meses[mes];
+    transList.forEach(function(t){
+      if (dm.trans[t]) {
+        totTrans[t].clp += dm.trans[t].clp;
+        totTrans[t].uf  += dm.trans[t].uf;
+        totTrans[t].n   += dm.trans[t].n;
+      }
+    });
+    totGlobal.clp += dm.total.clp;
+    totGlobal.uf  += dm.total.uf;
+    totGlobal.n   += dm.total.n;
+  });
+  html += '<tr class="totals-row"><td>TOTAL ('+clientes.length+')</td>';
+  transList.forEach(function(t){ html += '<td>'+pcell(totTrans[t])+'</td>'; });
+  html += '<td>'+pcell(totGlobal)+'</td></tr>';
+
+  document.getElementById('tbody-ct').innerHTML = html ||
+    '<tr><td colspan="'+(transList.length+2)+'" style="text-align:center;color:var(--text-muted);padding:1rem">Sin datos en este mes</td></tr>';
+}
+
+// ── VISTA 3: EXPANDIBLE (Cliente → Mes → Transacción) ─────────────────────
+function renderExpandible() {
+  var clientes = Object.values(RM.byClienteTrans).sort(function(a,b){
+    return b.totalGlobal.clp - a.totalGlobal.clp;
+  });
+  if (RM.filterText) {
+    var f = RM.filterText.toLowerCase();
+    clientes = clientes.filter(function(c){
+      return (c.name||'').toLowerCase().includes(f) || (c.code||'').toLowerCase().includes(f);
+    });
+  }
+
+  var html = '';
+  clientes.forEach(function(c, idx){
+    var rowId = 'exp-c-'+idx;
+    html += '<tr class="exp-row" onclick="toggleExp(\''+rowId+'\', this)">'
+      + '<td title="'+c.code+'">'+c.name+'</td>'
+      + '<td>'+fmtCLP(c.totalGlobal.clp)+'</td>'
+      + '<td style="color:var(--c-uf)">'+fmtUF(c.totalGlobal.uf)+'</td>'
+      + '<td>'+c.totalGlobal.n+'</td>'
+      + '</tr>';
+
+    // Detalle mensual
+    var mesesCli = Object.keys(c.meses).sort();
+    mesesCli.forEach(function(m, mIdx){
+      var mRowId = rowId + '-m'+mIdx;
+      var dm = c.meses[m];
+      html += '<tr class="exp-detail hidden" data-parent="'+rowId+'">'
+        + '<td><span class="exp-month-label" onclick="toggleExp(\''+mRowId+'\', this.parentElement.parentElement); event.stopPropagation();" style="cursor:pointer">▸ '+formatMesLabel(m)+'</span></td>'
+        + '<td>'+fmtCLP(dm.total.clp)+'</td>'
+        + '<td style="color:var(--c-uf)">'+fmtUF(dm.total.uf)+'</td>'
+        + '<td>'+dm.total.n+'</td>'
+        + '</tr>';
+
+      // Detalle por transacción del mes (oculto inicialmente)
+      var transOrdenadas = Object.keys(dm.trans).sort(function(a,b){
+        return dm.trans[b].clp - dm.trans[a].clp;
+      });
+      transOrdenadas.forEach(function(t){
+        var td = dm.trans[t];
+        html += '<tr class="exp-detail hidden" data-parent="'+mRowId+'" data-grandparent="'+rowId+'">'
+          + '<td><span class="exp-trans-label">▫ '+formatTransLabel(t)+'</span></td>'
+          + '<td>'+fmtCLP(td.clp)+'</td>'
+          + '<td style="color:var(--c-uf)">'+fmtUF(td.uf)+'</td>'
+          + '<td>'+td.n+'</td>'
+          + '</tr>';
+      });
+    });
+  });
+
+  document.getElementById('tbody-exp').innerHTML = html ||
+    '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:1rem">Sin datos</td></tr>';
+}
+
+// Toggle expandible: muestra/oculta hijos directos
+function toggleExp(parentId, rowEl) {
+  rowEl.classList.toggle('open');
+  var isOpen = rowEl.classList.contains('open');
+  document.querySelectorAll('tr[data-parent="'+parentId+'"]').forEach(function(tr){
+    if (isOpen) {
+      tr.classList.remove('hidden');
+    } else {
+      tr.classList.add('hidden');
+      // Si tiene hijos abiertos, cerrarlos también
+      var label = tr.querySelector('.exp-month-label');
+      if (label) {
+        var parentRow = tr;
+        // Buscar id del mes (data-parent de sus hijos apunta a mRowId)
+        var allRows = document.querySelectorAll('#tbody-exp tr');
+        allRows.forEach(function(r){
+          if (r.getAttribute('data-grandparent') === parentId) r.classList.add('hidden');
+        });
+      }
+    }
+  });
+}
+
+// ── TAB SWITCHING ──────────────────────────────────────────────────────────
+function showMainTab(tabId, btn) {
+  document.querySelectorAll('.main-tab').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+  document.getElementById('tab-general').style.display = (tabId==='general') ? 'block' : 'none';
+  document.getElementById('tab-mensual').style.display = (tabId==='mensual') ? 'block' : 'none';
+}
+
+function showSubTab(sub, btn) {
+  document.querySelectorAll('.sub-tab').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+  RM.currentSubTab = sub;
+  ['cm','ct','exp'].forEach(function(s){
+    document.getElementById('sub-'+s).style.display = (s===sub) ? 'block' : 'none';
+  });
+}
+
+function filterPivot() {
+  RM.filterText = document.getElementById('pivot-search').value || '';
+  renderClienteMes();
+  renderClienteTrans();
+  renderExpandible();
 }
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────

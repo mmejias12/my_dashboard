@@ -204,6 +204,43 @@
   .obs-box { background:rgba(255,255,255,.03);border-left:2px solid rgba(255,255,255,.1);border-radius:0 6px 6px 0;padding:.5rem .75rem;margin-top:1rem;font-size:11.5px;color:#9da3b4;line-height:1.6; }
   .obs-label { font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:#5a6070;margin-bottom:3px; }
   .preview-note { font-size:10px;color:#5a6070;text-align:center;padding:.625rem;border-top:1px solid rgba(255,255,255,.05);margin-top:1rem;font-style:italic; }
+  /* ── TIMELINE: CAMBIOS DESTACADOS ── */
+  .tl-changes { display:flex;flex-wrap:wrap;gap:6px;margin-top:6px; }
+  .tl-chip { display:inline-flex;align-items:center;gap:5px;font-size:10px;
+    padding:3px 8px;border-radius:10px;background:rgba(96,165,250,.08);
+    border:1px solid rgba(96,165,250,.25);color:#9cc4f5;
+    font-family:'Inter',sans-serif;font-weight:500; }
+  .tl-chip.green  { background:rgba(74,222,128,.08);border-color:rgba(74,222,128,.3);color:#86efac; }
+  .tl-chip.amber  { background:rgba(252,211,77,.08);border-color:rgba(252,211,77,.3);color:#fcd34d; }
+  .tl-chip.red    { background:rgba(248,113,113,.08);border-color:rgba(248,113,113,.3);color:#fca5a5; }
+  .tl-chip.purple { background:rgba(139,92,246,.1);border-color:rgba(139,92,246,.3);color:#c4b5fd; }
+  .tl-chip-icon { font-size:11px;line-height:1; }
+  .tl-chip-arrow { color:#5a6070;font-size:9.5px;font-weight:400; }
+  /* Loading & error states del modal */
+  .modal-loading { display:flex;align-items:center;justify-content:center;
+    gap:10px;padding:2rem;color:#9da3b4;font-size:12px; }
+  .modal-spinner { width:14px;height:14px;border:2px solid rgba(255,255,255,.15);
+    border-top-color:#60a5fa;border-radius:50%;
+    animation:modal-spin .7s linear infinite; }
+  @keyframes modal-spin{to{transform:rotate(360deg)}}
+  .modal-error { background:rgba(248,113,113,.08);
+    border:1px solid rgba(248,113,113,.25);color:#fca5a5;
+    padding:.75rem .875rem;border-radius:8px;font-size:11.5px;
+    margin-top:.5rem;line-height:1.5; }
+  .modal-error-title { font-weight:600;margin-bottom:3px;color:#f87171; }
+  /* Skeleton para mientras carga */
+  .tl-skeleton { padding-left:1.5rem;position:relative; }
+  .tl-skeleton::before { content:'';position:absolute;left:6px;top:8px;bottom:8px;
+    width:1px;background:rgba(255,255,255,.06); }
+  .tl-skel-item { margin-bottom:.875rem;position:relative; }
+  .tl-skel-item::before { content:'';position:absolute;left:-1.5rem;top:3px;
+    width:13px;height:13px;border-radius:50%;
+    background:rgba(255,255,255,.06); }
+  .tl-skel-line { height:9px;background:rgba(255,255,255,.05);
+    border-radius:3px;margin-bottom:5px;animation:pulse-skel 1.4s ease-in-out infinite; }
+  .tl-skel-line.short { width:40%; }
+  .tl-skel-line.med   { width:65%; }
+  @keyframes pulse-skel{0%,100%{opacity:.6}50%{opacity:1}}
   /* ── TOOLTIP EMISIONES POR CIUDAD ── */
 .em-tooltip-wrap {
   position: relative;
@@ -1114,6 +1151,12 @@ function renderTotals() {
 
 /* PAGINACION */
 /* ── MODAL ──────────────────────────────────────────────── */
+
+// Configuración API historial (mismo patrón que cartola/gps proxies)
+var API_HIST_PROXY  = '/api/historial-proxy';
+var API_HIST_DIRECT = 'https://apirdt1.azurewebsites.net/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/HistorialXNroPedido';
+var IS_LOCAL_HIST = location.protocol === 'file:' || ['localhost','127.0.0.1'].includes(location.hostname);
+
 function openModal(idx) {
   var r = filtered[idx];
   if (!r) return;
@@ -1122,7 +1165,7 @@ function openModal(idx) {
 
   var body = '';
 
-  // INFO GRID
+  // INFO GRID (se mantiene tal cual con la data del registro)
   body += '<div class="modal-info-grid">';
   body += infoBlock('Cliente origen',  r.clienteOrigenStr  || '—');
   body += infoBlock('Cliente destino', r.clienteDestinoStr || '—');
@@ -1134,45 +1177,14 @@ function openModal(idx) {
   body += infoBlock('Nro Cita', r.nroCita  || '—', true);
   body += '</div>';
 
-  // TIMELINE
+  // TIMELINE — placeholder con skeleton mientras carga
   body += '<div class="timeline-title">Historial del pedido</div>';
-  body += '<div class="timeline">';
-
-  // Paso 1: Ingreso
-  body += tlItem(
-    'done',
-    'Registro creado',
-    fmtFull(r.horaIngreso),
-    [ {k:'Usuario', v: r.usuario || '—'},
-      {k:'Sol.', v: (r.cantidadSolicitada != null ? r.cantidadSolicitada.toLocaleString('es-CL') : '—'), cls:'blue'},
-      {k:'Operación', v: r.operacion || '—'} ]
-  );
-
-  // Paso 2: Despacho
-  var despDot = r.fechaDespacho ? 'done' : 'pending';
-  var despCant = r.cantidadDespachada != null ? r.cantidadDespachada.toLocaleString('es-CL') : '—';
-  body += tlItem(
-    despDot,
-    'Despacho',
-    r.fechaDespacho ? fmtDate(r.fechaDespacho) : 'Pendiente',
-    [ {k:'Desp.', v: despCant, cls: r.fechaDespacho ? 'amber' : 'red'},
-      {k:'Requerida', v: fmtDate(r.fechaRequerida) || '—'},
-      {k:'Patente', v: r.patente || '—'} ]
-  );
-
-  // Paso 3: Confirmación
-  var confDot = r.fechaConfirmacion ? (r.etapaOperacion && r.etapaOperacion.toLowerCase().includes('anulado') ? 'warn' : 'done') : (r.etapaOperacion && r.etapaOperacion.toLowerCase().includes('confirmar') ? 'active' : 'pending');
-  var confCant = r.cantidadConfirmada != null ? r.cantidadConfirmada.toLocaleString('es-CL') : '—';
-  var pendCant = r.cantidadPendiente  != null ? r.cantidadPendiente.toLocaleString('es-CL')  : '—';
-  body += tlItem(
-    confDot,
-    r.fechaConfirmacion ? 'Confirmado — ' + (r.etapaOperacion || '') : (r.etapaOperacion || 'Pendiente confirmación'),
-    r.fechaConfirmacion ? fmtFull(r.fechaConfirmacion) : '—',
-    [ {k:'Conf.', v: confCant, cls: r.fechaConfirmacion ? 'green' : 'red'},
-      {k:'Pendiente', v: pendCant, cls: (r.cantidadPendiente && r.cantidadPendiente < 0) ? 'amber' : ''},
-      {k:'Nro DTE', v: r.dteNro || '—', mono:true} ]
-  );
-
+  body += '<div id="tl-container">';
+  body += '  <div class="tl-skeleton">';
+  body += '    <div class="tl-skel-item"><div class="tl-skel-line med"></div><div class="tl-skel-line short"></div></div>';
+  body += '    <div class="tl-skel-item"><div class="tl-skel-line med"></div><div class="tl-skel-line short"></div></div>';
+  body += '    <div class="tl-skel-item"><div class="tl-skel-line med"></div><div class="tl-skel-line short"></div></div>';
+  body += '  </div>';
   body += '</div>';
 
   // Observación
@@ -1180,12 +1192,230 @@ function openModal(idx) {
     body += '<div class="obs-box"><div class="obs-label">Observación</div>' + r.observacion + '</div>';
   }
 
-  // Nota preview
-  body += '<div class="preview-note">Vista preliminar · Historial completo disponible próximamente</div>';
-
   document.getElementById('modal-body').innerHTML = body;
   document.getElementById('modal-overlay').style.display = 'flex';
   document.body.style.overflow = 'hidden';
+
+  // Disparar fetch del historial real
+  fetchHistorial(r.nroPedido, r);
+}
+
+function fetchHistorial(nroPedido, registro) {
+  if (!nroPedido) {
+    document.getElementById('tl-container').innerHTML =
+      '<div class="modal-error"><div class="modal-error-title">Sin nro de pedido</div>'+
+      'No se puede consultar el historial.</div>';
+    return;
+  }
+
+  var url = (IS_LOCAL_HIST ? API_HIST_DIRECT : API_HIST_PROXY)
+          + '?nroPedido=' + encodeURIComponent(nroPedido);
+
+  fetch(url, {headers:{'Accept':'application/json'}})
+    .then(function(res){
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    })
+    .then(function(data){
+      var eventos = Array.isArray(data) ? data : [];
+      renderTimelineHistorial(eventos, registro);
+    })
+    .catch(function(err){
+      document.getElementById('tl-container').innerHTML =
+        '<div class="modal-error">'+
+        '<div class="modal-error-title">No se pudo cargar el historial</div>'+
+        (err && err.message ? err.message : 'Error de conexión') +
+        '</div>';
+    });
+}
+
+function renderTimelineHistorial(eventos, registro) {
+  var cont = document.getElementById('tl-container');
+  if (!cont) return;
+
+  if (!eventos.length) {
+    cont.innerHTML = '<div class="modal-error" style="background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.08);color:#9da3b4">'+
+      '<div class="modal-error-title" style="color:#9da3b4">Sin historial</div>'+
+      'No hay eventos registrados para este pedido.</div>';
+    return;
+  }
+
+  // Ordenar cronológicamente
+  eventos.sort(function(a,b){
+    return new Date(a.fechaCreacionHistorial) - new Date(b.fechaCreacionHistorial);
+  });
+
+  // Etapa actual del registro (para marcar el último dot según corresponda)
+  var etapaActual = (registro && registro.etapaOperacion || '').toLowerCase();
+  var esAnulado  = etapaActual.indexOf('anulado') >= 0;
+  var esCerrado  = etapaActual.indexOf('cerrado') >= 0 || etapaActual.indexOf('confirmado') >= 0;
+
+  var html = '<div class="timeline">';
+  for (var i = 0; i < eventos.length; i++) {
+    var ev = eventos[i];
+    var prev = i > 0 ? eventos[i-1] : null;
+    var isLast = (i === eventos.length - 1);
+
+    // Dot color
+    var dotCls;
+    if (isLast) {
+      if (esAnulado) dotCls = 'warn';
+      else if (esCerrado) dotCls = 'done';
+      else dotCls = 'active';
+    } else {
+      dotCls = 'done';
+    }
+
+    // Glosa + etapa
+    var titulo = ev.glosaHistorial || 'Evento';
+    if (ev.etapaOperacion) titulo += ' — ' + ev.etapaOperacion;
+
+    // Detalle base: usuario, dte, etapa
+    var detalles = [];
+    if (ev.usuario) detalles.push({k:'Usuario', v: ev.usuario});
+    if (ev.dteNro && ev.dteNro !== 0) detalles.push({k:'Nro DTE', v: ev.dteNro, mono:true, cls:'blue'});
+
+    // Cantidades del evento (las que tengan valor)
+    if (ev.cantidadSolicitada != null && ev.cantidadSolicitada !== 0) {
+      detalles.push({k:'Sol.', v: ev.cantidadSolicitada.toLocaleString('es-CL'), cls:'blue'});
+    }
+    if (ev.cantidadDespachada != null && ev.cantidadDespachada !== 0) {
+      detalles.push({k:'Desp.', v: ev.cantidadDespachada.toLocaleString('es-CL'), cls:'amber'});
+    }
+    if (ev.cantidadConfirmada != null && ev.cantidadConfirmada !== 0) {
+      detalles.push({k:'Conf.', v: ev.cantidadConfirmada.toLocaleString('es-CL'), cls:'green'});
+    }
+
+    // Cambios destacados respecto al evento anterior
+    var chips = detectarCambios(prev, ev);
+
+    html += tlItemHistorial(
+      dotCls,
+      titulo,
+      fmtFull(ev.fechaCreacionHistorial),
+      detalles,
+      chips
+    );
+  }
+  html += '</div>';
+
+  // Footer informativo
+  html += '<div class="preview-note">' + eventos.length + ' evento' + (eventos.length!==1?'s':'') +
+          ' · Datos de HistorialXNroPedido</div>';
+
+  cont.innerHTML = html;
+}
+
+// Detecta diferencias entre dos eventos consecutivos y devuelve chips
+function detectarCambios(prev, curr) {
+  var chips = [];
+
+  // Primer evento: no hay comparación, pero si trae datos clave los destacamos
+  if (!prev) {
+    if (curr.patente) chips.push({icon:'🚛', txt:'Patente '+curr.patente+(curr.chofer?' · '+curr.chofer:''), cls:'purple'});
+    return chips;
+  }
+
+  // Patente asignada o cambiada
+  if ((curr.patente||'') !== (prev.patente||'')) {
+    if (!prev.patente && curr.patente) {
+      chips.push({icon:'🚛', txt:'Asignó patente '+curr.patente+(curr.chofer?' · '+curr.chofer:''), cls:'purple'});
+    } else if (prev.patente && !curr.patente) {
+      chips.push({icon:'🚛', txt:'Quitó patente', cls:'red'});
+    } else {
+      chips.push({icon:'🚛', txt:'Cambió patente '+prev.patente+' → '+curr.patente, cls:'purple'});
+    }
+  }
+
+  // Chofer (sin cambio de patente)
+  if ((curr.patente||'') === (prev.patente||'') && (curr.chofer||'') !== (prev.chofer||'')) {
+    if (!prev.chofer && curr.chofer) {
+      chips.push({icon:'👤', txt:'Asignó chofer '+curr.chofer, cls:'purple'});
+    }
+  }
+
+  // DTE generado
+  if ((curr.dteNro||0) !== (prev.dteNro||0) && (curr.dteNro||0) !== 0) {
+    chips.push({icon:'📄', txt:'Generó DTE #'+curr.dteNro, cls:'green'});
+  }
+
+  // Etapa
+  if ((curr.etapaOperacion||'') !== (prev.etapaOperacion||'')) {
+    chips.push({icon:'→', txt:(prev.etapaOperacion||'—')+' → '+curr.etapaOperacion, cls:''});
+  }
+
+  // Cantidad despachada
+  if ((curr.cantidadDespachada||0) !== (prev.cantidadDespachada||0)) {
+    var deltaD = (curr.cantidadDespachada||0) - (prev.cantidadDespachada||0);
+    var signoD = deltaD > 0 ? '+' : '';
+    chips.push({icon:'📦', txt:'Despacho '+signoD+deltaD.toLocaleString('es-CL')+' (total '+ (curr.cantidadDespachada||0).toLocaleString('es-CL') +')', cls:'amber'});
+  }
+
+  // Cantidad confirmada
+  if ((curr.cantidadConfirmada||0) !== (prev.cantidadConfirmada||0)) {
+    var deltaC = (curr.cantidadConfirmada||0) - (prev.cantidadConfirmada||0);
+    var signoC = deltaC > 0 ? '+' : '';
+    chips.push({icon:'✓', txt:'Confirmó '+signoC+deltaC.toLocaleString('es-CL'), cls:'green'});
+  }
+
+  // Cantidad solicitada (modificación de pedido)
+  if ((curr.cantidadSolicitada||0) !== (prev.cantidadSolicitada||0)) {
+    chips.push({icon:'✎', txt:'Modificó solicitada '+(prev.cantidadSolicitada||0)+' → '+(curr.cantidadSolicitada||0), cls:'amber'});
+  }
+
+  // Fecha de despacho asignada
+  if (!prev.fechaDespacho && curr.fechaDespacho) {
+    chips.push({icon:'📅', txt:'Programó despacho '+fmtDate(curr.fechaDespacho), cls:''});
+  }
+
+  // Fecha de confirmación
+  if (!prev.fechaConfirmacion && curr.fechaConfirmacion) {
+    chips.push({icon:'🏁', txt:'Confirmado '+fmtDate(curr.fechaConfirmacion), cls:'green'});
+  }
+
+  // Observación cambió
+  if ((curr.observacion||'').trim() !== (prev.observacion||'').trim()) {
+    if ((curr.observacion||'').trim()) {
+      chips.push({icon:'💬', txt:'Editó observación', cls:''});
+    }
+  }
+
+  return chips;
+}
+
+// Renderea un item del timeline con sus chips de cambios
+function tlItemHistorial(dotCls, stage, date, details, chips) {
+  var html = '<div class="tl-item">';
+  html += '<div class="tl-dot '+dotCls+'"></div>';
+  html += '<div class="tl-header">';
+  html += '<span class="tl-stage">'+escapeHtml(stage)+'</span>';
+  html += '<span class="tl-date">'+escapeHtml(date||'—')+'</span>';
+  html += '</div>';
+  if (details && details.length) {
+    html += '<div class="tl-detail">';
+    details.forEach(function(d){
+      html += '<div class="tl-kv"><span class="tl-k">'+escapeHtml(d.k)+'</span>';
+      html += '<span class="tl-v '+(d.cls||'')+(d.mono?' mono':'')+'">'+escapeHtml(String(d.v))+'</span></div>';
+    });
+    html += '</div>';
+  }
+  if (chips && chips.length) {
+    html += '<div class="tl-changes">';
+    chips.forEach(function(c){
+      html += '<span class="tl-chip '+(c.cls||'')+'">';
+      if (c.icon) html += '<span class="tl-chip-icon">'+c.icon+'</span>';
+      html += escapeHtml(c.txt);
+      html += '</span>';
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function infoBlock(label, value, mono) {

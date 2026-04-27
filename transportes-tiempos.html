@@ -1422,21 +1422,30 @@ function renderPuntos(){
 //  CHOFERES
 // ──────────────────────────────────────────────
 function renderChoferes(){
-  const byChofer = {};
+  // Consolidar visitas (mismo punto+placa+fecha = 1 visita) — igual que Tendencias
+  const visitasMap = {};
   DB.forEach(r => {
-    if(!byChofer[r.placa]) byChofer[r.placa] = {chofer:r.chofer, placa:r.placa, mins:[], puntos:new Set()};
-    byChofer[r.placa].mins.push(r.minutos);
-    byChofer[r.placa].puntos.add(r.punto);
+    const k = r.placa + '|' + r.punto + '|' + r.fecha;
+    if(!visitasMap[k]) visitasMap[k] = {placa:r.placa, chofer:r.chofer, punto:r.punto, tipo:r.tipo, minutos:0};
+    visitasMap[k].minutos += r.minutos;
   });
-  
+  const visitas = Object.values(visitasMap);
+
+  // Agrupar visitas consolidadas por chofer
+  const byChofer = {};
+  visitas.forEach(v => {
+    if(!byChofer[v.placa]) byChofer[v.placa] = {chofer:v.chofer, placa:v.placa, totalMins:0, visitas:0, puntos:new Set()};
+    byChofer[v.placa].totalMins += v.minutos;
+    byChofer[v.placa].visitas   += 1;
+    byChofer[v.placa].puntos.add(v.punto);
+  });
+
   const lista = Object.values(byChofer).map(c => ({
     ...c,
-    avg: Math.round(c.mins.reduce((s,v)=>s+v,0)/c.mins.length),
-    total: c.mins.reduce((s,v)=>s+v,0),
-    visitas: c.mins.length,
+    avg:    c.visitas > 0 ? Math.round(c.totalMins / c.visitas) : 0,
     puntos: c.puntos.size
-  })).sort((a,b)=>b.visitas-a.visitas);
-  
+  })).sort((a,b) => b.visitas - a.visitas);
+
   // Chart
   if(chartChoferes) chartChoferes.destroy();
   const ctx = document.getElementById('chart-choferes').getContext('2d');
@@ -1445,28 +1454,35 @@ function renderChoferes(){
     data: {
       labels: lista.map(c => c.placa),
       datasets:[
-        { label:'Visitas', data:lista.map(c=>c.visitas), backgroundColor:'rgba(75,141,248,.7)', borderColor:'#4b8df8', borderWidth:1.5, borderRadius:4, yAxisID:'y' },
-        { label:'T. Promedio (min)', data:lista.map(c=>c.avg), type:'line', borderColor:'#f4a836', borderWidth:2, pointRadius:4, pointBackgroundColor:'#f4a836', tension:.3, yAxisID:'y1' }
+        { label:'Visitas consolidadas', data:lista.map(c=>c.visitas), backgroundColor:'rgba(75,141,248,.7)', borderColor:'#4b8df8', borderWidth:1.5, borderRadius:4, yAxisID:'y' },
+        { label:'T. Prom. por visita (min)', data:lista.map(c=>c.avg), type:'line', borderColor:'#f4a836', borderWidth:2, pointRadius:4, pointBackgroundColor:'#f4a836', tension:.3, yAxisID:'y1' }
       ]
     },
     options: {
       responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{color:'#7b82a0',font:{size:11}} } },
+      plugins:{
+        legend:{ labels:{color:'#7b82a0',font:{size:11}} },
+        tooltip:{
+          callbacks:{
+            label: ctx => ctx.dataset.label + ': ' + (ctx.datasetIndex===1 ? fmtMins(ctx.raw) : ctx.raw)
+          }
+        }
+      },
       scales:{
-        y:{ ticks:{color:'#7b82a0',font:{size:11}}, grid:{color:'rgba(255,255,255,.04)'}, position:'left' },
-        y1:{ ticks:{color:'#f4a836',font:{size:11}, callback:v=>v+'m'}, position:'right', grid:{display:false} },
+        y:{ ticks:{color:'#7b82a0',font:{size:11}}, grid:{color:'rgba(255,255,255,.04)'}, position:'left', title:{display:true,text:'Visitas',color:'#7b82a0',font:{size:11}} },
+        y1:{ ticks:{color:'#f4a836',font:{size:11}, callback:v=>fmtMins(v)}, position:'right', grid:{display:false} },
         x:{ ticks:{color:'#7b82a0',font:{size:11}}, grid:{display:false} }
       }
     }
   });
-  
+
   // Grid cards
   const grid = document.getElementById('chofer-grid');
   if(!lista.length){
     grid.innerHTML = '<div class="empty"><div class="empty-ico">🚚</div><div class="empty-sub">Sin datos de choferes</div></div>';
     return;
   }
-  
+
   grid.innerHTML = lista.map(c => {
     const ini = c.chofer.split(' ').map(p=>p[0]).join('').substring(0,2).toUpperCase();
     return `<div class="chofer-card">
@@ -1730,24 +1746,49 @@ function delPlaca(i){
 // ──────────────────────────────────────────────
 //  EXPORT EXCEL (CSV simple)
 // ──────────────────────────────────────────────
-function exportarExcel(){
+async function exportarExcel(){
+  // Cargar SheetJS si no está disponible
+  if(typeof XLSX === 'undefined'){
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  const fecha = new Date().toISOString().split('T')[0];
+  const wb = XLSX.utils.book_new();
+
+  // ── Hoja 1: Detalle completo ──
   const cols = ['Placa','Chofer','Punto','Tipo','Categoría','Semana','Día','Fecha','Llegada','Salida','Minutos'];
   const rows = DB.map(r => [
     r.placa, r.chofer, r.punto, r.tipo, r.cat,
     'S'+r.semana, r.dia, r.fecha,
-    r.llegada ? new Date(r.llegada).toLocaleTimeString('es-CL') : '',
-    r.salida ? new Date(r.salida).toLocaleTimeString('es-CL') : '',
+    r.llegada ? r.llegada.substring(11,16) : '',
+    r.salida  ? r.salida.substring(11,16)  : '',
     r.minutos
   ]);
-  
-  const csv = [cols, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `tiempos_puntos_${new Date().toISOString().split('T')[0]}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  const ws1 = XLSX.utils.aoa_to_sheet([cols, ...rows]);
+  // Ancho de columnas
+  ws1['!cols'] = [8,20,35,12,15,7,5,10,8,8,8].map(w=>({wch:w}));
+  XLSX.utils.book_append_sheet(wb, ws1, 'Detalle');
+
+  // ── Hoja 2: Resumen por tipo ──
+  const visitasMap = {};
+  DB.forEach(r => {
+    const k = r.placa+'|'+r.punto+'|'+r.fecha;
+    if(!visitasMap[k]) visitasMap[k]={placa:r.placa,chofer:r.chofer,punto:r.punto,tipo:r.tipo,cat:r.cat,semana:r.semana,fecha:r.fecha,minutos:0};
+    visitasMap[k].minutos += r.minutos;
+  });
+  const visitas = Object.values(visitasMap);
+  const colsR = ['Placa','Chofer','Punto','Tipo','Categoría','Semana','Fecha','Total min','Horas'];
+  const rowsR = visitas.map(v=>[v.placa,v.chofer,v.punto,v.tipo,v.cat,'S'+v.semana,v.fecha,v.minutos,+(v.minutos/60).toFixed(2)]);
+  const ws2 = XLSX.utils.aoa_to_sheet([colsR,...rowsR]);
+  ws2['!cols'] = [8,20,35,12,15,7,10,9,7].map(w=>({wch:w}));
+  XLSX.utils.book_append_sheet(wb, ws2, 'Visitas consolidadas');
+
+  XLSX.writeFile(wb, `tiempos_puntos_${fecha}.xlsx`);
 }
 
 // ──────────────────────────────────────────────
@@ -2218,12 +2259,12 @@ function renderTendencias(){
           const d = cliData[s];
           return d.count > 0 ? +(d.total/d.count/60).toFixed(3) : 0;
         }),
-        borderColor: '#f4a836',
-        backgroundColor: 'rgba(244,168,54,.15)',
+        borderColor: '#9b7dfa',
+        backgroundColor: 'rgba(155,125,250,.12)',
         borderWidth: 2.5,
         pointRadius: 5,
         pointHoverRadius: 7,
-        pointBackgroundColor: '#f4a836',
+        pointBackgroundColor: '#9b7dfa',
         tension: 0.3,
         fill: true
       }]

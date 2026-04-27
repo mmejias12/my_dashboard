@@ -1442,7 +1442,11 @@ function renderChoferes(){
 
   const lista = Object.values(byChofer).map(c => ({
     ...c,
-    avg:    c.visitas > 0 ? Math.round(c.totalMins / c.visitas) : 0,
+    // Promedio solo sobre visitas operacionales (excluir REDTEC y Sin geocerca)
+    avg: (() => {
+      const ops = visitas.filter(v => v.placa === c.placa && v.tipo !== 'REDTEC' && v.tipo !== 'Sin geocerca');
+      return ops.length > 0 ? Math.round(ops.reduce((s,v)=>s+v.minutos,0) / ops.length) : 0;
+    })(),
     puntos: c.puntos.size
   })).sort((a,b) => b.visitas - a.visitas);
 
@@ -1495,7 +1499,7 @@ function renderChoferes(){
       </div>
       <div class="chofer-stats">
         <div class="chofer-stat"><div class="chofer-stat-val">${c.visitas}</div><div class="chofer-stat-label">Visitas</div></div>
-        <div class="chofer-stat"><div class="chofer-stat-val">${fmtMins(c.avg)}</div><div class="chofer-stat-label">T. prom</div></div>
+        <div class="chofer-stat"><div class="chofer-stat-val">${fmtMins(c.avg)}</div><div class="chofer-stat-label">T. prom op.</div></div>
         <div class="chofer-stat"><div class="chofer-stat-val">${c.puntos}</div><div class="chofer-stat-label">Puntos únicos</div></div>
       </div>
     </div>`;

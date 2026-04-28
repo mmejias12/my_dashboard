@@ -291,7 +291,7 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
       <div class="field">
         <label>Placa</label>
         <select class="sinput" id="sel-flota" style="width:220px">
-          <option value="all" selected>Todas las placas</option>
+          <option value="all">Todas las placas</option>
           <option value="BJCL13">BJCL13 — Ismael Campos</option>
           <option value="CCRC36">CCRC36 — Juan Carlos Vega</option>
           <option value="CPVW43">CPVW43 — Cristóbal Echeverría</option>
@@ -307,10 +307,10 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
       </div>
       <div class="field">
         <label>Tiempo mín. parada (min)</label>
-        <input type="number" class="dinput" id="min-tiempo" value="5" min="1" max="120" style="width:100px" />
+        <input type="number" class="dinput" id="min-tiempo" value="15" min="1" max="120" style="width:100px" />
       </div>
       <button class="btn-go" id="btn-cargar" onclick="cargarDatos()">
-        <span id="btn-ico">▶</span> <span id="btn-txt">Cargar toda la flota</span>
+        <span id="btn-ico">▶</span> Cargar datos
       </button>
       <button class="btn-xls" id="btn-xls" onclick="exportarExcel()" style="display:none">⬇ Excel</button>
       <span class="config-info" id="config-info"></span>
@@ -593,7 +593,7 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
           <div style="background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12px;color:var(--t2)">
             <div style="color:var(--blue);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🗄 Proxy Azure (recomendado)</div>
             <div>Para evitar CORS configura un Azure Function como proxy:</div>
-            <code style="display:block;margin-top:6px;font-family:'DM Mono',monospace;font-size:11px;color:var(--green)">/api/gps-stops-by-plate-proxy?desde=2026/04/21 00:00:00&hasta=2026/04/21 23:59:59&time=60</code>
+            <code style="display:block;margin-top:6px;font-family:'DM Mono',monospace;font-size:11px;color:var(--green)">/api/gps-stops-proxy?desde=2026/04/21 00:00:00&hasta=2026/04/21 23:59:59&time=60</code>
           </div>
           <div style="display:flex;gap:8px">
             <button class="btn-go" onclick="guardarConfig()">💾 Guardar</button>
@@ -639,7 +639,7 @@ let CFG = {
   url: 'https://web1ws.shareservice.co/WsReports.asmx',
   user: 'redtec chile',
   pass: 'redtec2023',
-  proxyBase: '/api/gps-stops-by-plate-proxy',
+  proxyBase: '/api/gps-stops-proxy',
   usarProxy: true
 };
 
@@ -673,42 +673,10 @@ document.addEventListener('DOMContentLoaded', () => {
   lunes.setDate(hoy.getDate() - ((hoy.getDay()+6)%7));
   document.getElementById('fi').value = fmt(lunes);
   document.getElementById('ff').value = fmt(hoy);
-
+  
   loadConfig();
   renderEmptyCharts();
-
-  // Texto dinámico del botón según selección en el dropdown de placa
-  const selFlota = document.getElementById('sel-flota');
-  const btnTxt   = document.getElementById('btn-txt');
-  if (selFlota && btnTxt) {
-    const actualizarTextoBtn = () => {
-      const v = selFlota.value;
-      btnTxt.textContent = (v === 'all')
-        ? 'Cargar toda la flota'
-        : 'Cargar ' + (selFlota.options[selFlota.selectedIndex]?.text || v);
-    };
-    selFlota.addEventListener('change', actualizarTextoBtn);
-    actualizarTextoBtn();
-  }
-
-  // Auto-cargar la flota completa al abrir el dashboard (1 sola vez)
-  // Guard explícito para evitar dobles disparos por re-renders o eventos múltiples.
-  if (!window._autoLoadDone) {
-    window._autoLoadDone = true;
-    setTimeout(() => {
-      if (selFlota && selFlota.value === 'all' &&
-          document.getElementById('fi').value &&
-          document.getElementById('ff').value) {
-        cargarDatos();
-      }
-    }, 200);
-  }
 });
-
-// Lock global para que cargarDatos no se ejecute en paralelo consigo misma.
-// Si llegan 2 disparos casi simultáneos (auto-load + click, o eventos duplicados),
-// el segundo se ignora silenciosamente.
-let _cargandoDatos = false;
 
 function fmt(d){ return d.toISOString().split('T')[0]; }
 function fmtDate(s){ try{ const d=s.includes('T')?s:s.replace(/\//g,'-')+'T12:00:00'; return new Date(d).toLocaleDateString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit'}); }catch(e){return s||'';} }
@@ -982,7 +950,17 @@ function consolidarMedianoche(rows){
 
     // Recalcular fecha/semana/dia desde la llegada real
     if(r.llegada){
-      const fechaReal = r.llegada.split(' ')[0].replace(/\//g,'-');
+      let fechaReal = r.llegada.split(' ')[0].replace(/\//g,'-');
+      // Si el segmento empieza a 00:00 y NO se consolidó con nada (llegada sigue siendo 00:00),
+      // pertenece al turno del día anterior
+      const horaLleg = r.llegada.split(' ')[1] || '';
+      if(horaLleg.startsWith('00:00') || horaLleg.startsWith('00:01')){
+        try{
+          const d = new Date(fechaReal + 'T12:00:00');
+          d.setDate(d.getDate() - 1);
+          fechaReal = d.toISOString().split('T')[0];
+        }catch(e){}
+      }
       r.fecha  = fechaReal;
       r.semana = isoWeek(fechaReal);
       try{ r.dia = new Date(fechaReal+'T12:00:00').toLocaleDateString('es-CL',{weekday:'short'}).replace('.',''); }catch(e){}
@@ -1008,16 +986,9 @@ function calcMinsStr(llegada, salida){
 //  CARGA DE DATOS — usa proxy multi-placa real
 // ──────────────────────────────────────────────
 async function cargarDatos(){
-  // Lock: si ya hay una carga en curso, ignorar este disparo
-  if (_cargandoDatos) {
-    console.log('[GPS] cargarDatos ya en curso, ignorando disparo duplicado');
-    return;
-  }
-  _cargandoDatos = true;
-
   const fi      = document.getElementById('fi').value;
   const ff      = document.getElementById('ff').value;
-  const minStop = document.getElementById('min-tiempo').value || 5;
+  const minStop = document.getElementById('min-tiempo').value || 15;
 
   if(!fi || !ff){ setInfo('⚠ Selecciona rango de fechas','amber'); return; }
 
@@ -1029,9 +1000,9 @@ async function cargarDatos(){
   document.getElementById('btn-ico').textContent = '⟳';
 
   try{
-    // El proxy ya consulta desde fi-1 internamente para capturar paradas que
-    // cruzan medianoche, así que aquí pedimos directo el rango fi..ff
-    const allRows = await fetchTodaLaFlota(fi, ff, minStop);
+    // Pedir al proxy desde -1 día para capturar paradas nocturnas que cruzan medianoche hacia fi
+    const fiMenos1 = new Date(new Date(fi).getTime() - 86400000).toISOString().split('T')[0];
+    const allRows = await fetchTodaLaFlota(fiMenos1, ff, minStop);
     const consolidadas = consolidarMedianoche(allRows);
     const consolidadasFiltradas = consolidadas.filter(r => r.fecha >= fi && r.fecha <= ff);
 
@@ -1083,8 +1054,6 @@ async function cargarDatos(){
     setInfo('✗ ' + e.message,'red');
     mostrarDiagnostico(e.message);
     renderEmptyCharts();
-  } finally {
-    _cargandoDatos = false;
   }
 }
 
@@ -1160,7 +1129,7 @@ function mostrarDiagnostico(msgExtra){
     <div style="color:var(--red);font-weight:600;font-size:12px">⛔ Error conectando al proxy GPS Condor</div>
     <div style="font-size:12px;color:#c87070;line-height:1.7">
       <strong>Error:</strong> <code style="color:var(--amber);font-family:'DM Mono',monospace">${msg}</code><br>
-      El proxy espera: <code style="color:var(--cyan);font-family:'DM Mono',monospace">/api/gps-stops-by-plate-proxy?desde=2026/04/21 00:00:00&amp;hasta=2026/04/21 23:59:59&amp;time=60</code>
+      El proxy espera: <code style="color:var(--cyan);font-family:'DM Mono',monospace">/api/gps-stops-proxy?desde=2026/04/21 00:00:00&amp;hasta=2026/04/21 23:59:59&amp;time=60</code>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button onclick="probarProxy()" class="btn-xls" style="font-size:11.5px;padding:6px 12px">🔍 Probar proxy en nueva pestaña</button>
@@ -1473,11 +1442,7 @@ function renderChoferes(){
 
   const lista = Object.values(byChofer).map(c => ({
     ...c,
-    // Promedio solo sobre visitas operacionales (excluir REDTEC y Sin geocerca)
-    avg: (() => {
-      const ops = visitas.filter(v => v.placa === c.placa && v.tipo !== 'REDTEC' && v.tipo !== 'Sin geocerca');
-      return ops.length > 0 ? Math.round(ops.reduce((s,v)=>s+v.minutos,0) / ops.length) : 0;
-    })(),
+    avg:    c.visitas > 0 ? Math.round(c.totalMins / c.visitas) : 0,
     puntos: c.puntos.size
   })).sort((a,b) => b.visitas - a.visitas);
 
@@ -1530,7 +1495,7 @@ function renderChoferes(){
       </div>
       <div class="chofer-stats">
         <div class="chofer-stat"><div class="chofer-stat-val">${c.visitas}</div><div class="chofer-stat-label">Visitas</div></div>
-        <div class="chofer-stat"><div class="chofer-stat-val">${fmtMins(c.avg)}</div><div class="chofer-stat-label">T. prom op.</div></div>
+        <div class="chofer-stat"><div class="chofer-stat-val">${fmtMins(c.avg)}</div><div class="chofer-stat-label">T. prom</div></div>
         <div class="chofer-stat"><div class="chofer-stat-val">${c.puntos}</div><div class="chofer-stat-label">Puntos únicos</div></div>
       </div>
     </div>`;
@@ -1721,7 +1686,7 @@ async function testApi(){
     const esCors = e.message.includes('fetch') || e.message.includes('network') || e.message.includes('Failed');
     if(esCors){
       res.innerHTML = `<span style="color:var(--red)">✗ Proxy no disponible: ${e.message}</span>
-        <br><span style="color:var(--amber);font-size:11.5px">→ El proxy <code style="font-family:'DM Mono',monospace">/api/gps-stops-by-plate-proxy</code> no está desplegado en Azure todavía.</span>
+        <br><span style="color:var(--amber);font-size:11.5px">→ El proxy <code style="font-family:'DM Mono',monospace">/api/gps-stops-proxy</code> no está desplegado en Azure todavía.</span>
         <br><button onclick="window.open('${urlProxy}','_blank')" class="page-btn" style="font-size:11px;margin-top:6px">🔗 Abrir URL del proxy en nueva pestaña</button>`;
     } else {
       res.innerHTML = `<span style="color:var(--red)">✗ ${e.message}</span>`;
@@ -1926,13 +1891,13 @@ async function cargarPlacaExtra(placa, silencioso){
   silencioso = silencioso || false;
   const fi      = document.getElementById('fi').value;
   const ff      = document.getElementById('ff').value;
-  const minStop = document.getElementById('min-tiempo').value || 5;
+  const minStop = document.getElementById('min-tiempo').value || 15;
   if(!fi || !ff) return false;
 
   setBtnPlaca(placa, 'loading');
   try{
-    // El proxy ya consulta desde fi-1 internamente — pedimos el rango fi..ff directo
-    const desde = fi.replace(/-/g,'/') + ' 00:00:00';
+    const fiMenos1 = new Date(new Date(fi).getTime() - 86400000).toISOString().split('T')[0];
+    const desde = fiMenos1.replace(/-/g,'/') + ' 00:00:00';
     const hasta = ff.replace(/-/g,'/') + ' 23:59:59';
     const url = CFG.proxyBase + '?desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta) + '&time=' + minStop + '&plate=' + encodeURIComponent(placa);
 
@@ -1965,8 +1930,6 @@ async function cargarPlacaExtra(placa, silencioso){
 }
 
 async function cargarTodasPlacas(){
-  // Usa el endpoint multi-placa (1 sola llamada al proxy → toda la flota de una)
-  // en vez de iterar placa por placa. Si el caché ya tiene todo, solo enciende.
   const TODAS = Object.keys(FLOTA_NOMBRES);
   const pendientes = TODAS.filter(function(p){ return DB_PLACAS[p] === undefined; });
 
@@ -1980,10 +1943,20 @@ async function cargarTodasPlacas(){
     return;
   }
 
-  // Forzar selector a "Todas" y disparar la carga consolidada de un tirón
-  const sel = document.getElementById('sel-flota');
-  if(sel) sel.value = 'all';
-  await cargarDatos();
+  for(var i = 0; i < pendientes.length; i++){
+    var placa = pendientes[i];
+    // Marcar como cargando visualmente ANTES de llamar
+    setBtnPlaca(placa, 'loading');
+    // Esperar a que realmente termine (no silencioso individualmente)
+    await cargarPlacaExtra(placa, true);
+    // Actualizar botones y KPIs después de cada placa exitosa
+    renderBotonesPlaca();
+    renderKPIs();
+    // Pausa para que el usuario vea el resultado antes del siguiente
+    await new Promise(function(r){ setTimeout(r, 2500); });
+  }
+  // Render completo final
+  renderAll();
 }
 
 function apagarPlaca(placa){
@@ -2016,6 +1989,15 @@ function togglePlacaBtn(placa){
   } else {
     // Nunca cargada → cargar
     cargarPlacaExtra(placa, false);
+  }
+}
+
+async function cargarTodasPlacas(){
+  const TODAS = Object.keys(FLOTA_NOMBRES);
+  for(const placa of TODAS){
+    if(!PLACAS_ACTIVAS.has(placa)){
+      await cargarPlacaExtra(placa);
+    }
   }
 }
 

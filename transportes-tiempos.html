@@ -1948,6 +1948,8 @@ async function cargarPlacaExtra(placa, silencioso){
 }
 
 async function cargarTodasPlacas(){
+  // Usa el endpoint multi-placa (1 sola llamada al proxy → toda la flota de una)
+  // en vez de iterar placa por placa. Si el caché ya tiene todo, solo enciende.
   const TODAS = Object.keys(FLOTA_NOMBRES);
   const pendientes = TODAS.filter(function(p){ return DB_PLACAS[p] === undefined; });
 
@@ -1961,20 +1963,10 @@ async function cargarTodasPlacas(){
     return;
   }
 
-  for(var i = 0; i < pendientes.length; i++){
-    var placa = pendientes[i];
-    // Marcar como cargando visualmente ANTES de llamar
-    setBtnPlaca(placa, 'loading');
-    // Esperar a que realmente termine (no silencioso individualmente)
-    await cargarPlacaExtra(placa, true);
-    // Actualizar botones y KPIs después de cada placa exitosa
-    renderBotonesPlaca();
-    renderKPIs();
-    // Pausa para que el usuario vea el resultado antes del siguiente
-    await new Promise(function(r){ setTimeout(r, 2500); });
-  }
-  // Render completo final
-  renderAll();
+  // Forzar selector a "Todas" y disparar la carga consolidada de un tirón
+  const sel = document.getElementById('sel-flota');
+  if(sel) sel.value = 'all';
+  await cargarDatos();
 }
 
 function apagarPlaca(placa){
@@ -2007,15 +1999,6 @@ function togglePlacaBtn(placa){
   } else {
     // Nunca cargada → cargar
     cargarPlacaExtra(placa, false);
-  }
-}
-
-async function cargarTodasPlacas(){
-  const TODAS = Object.keys(FLOTA_NOMBRES);
-  for(const placa of TODAS){
-    if(!PLACAS_ACTIVAS.has(placa)){
-      await cargarPlacaExtra(placa);
-    }
   }
 }
 

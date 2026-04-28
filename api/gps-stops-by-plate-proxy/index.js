@@ -226,19 +226,32 @@ async function fetchStopsForPlate(plateInfo, sStartDate1, sStartDate2, iTime, sT
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /**
- * Procesa la flota completa en batches. Resuelve con array de resultados
- * (uno por placa, en orden de FLEET).
+ * Procesa la flota completa (o solo una placa filtrada) en batches.
+ * Resuelve con array de resultados (uno por placa, en orden de FLEET).
  */
-async function fetchFleetStops(sStartDate1, sStartDate2, iTime, sType, log) {
+async function fetchFleetStops(sStartDate1, sStartDate2, iTime, sType, log, plateFilter) {
+  // Si viene plateFilter, consulta solo esa placa (o vacío si no está en la flota)
+  let fleet = FLEET;
+  if (plateFilter) {
+    const wanted = plateFilter.toUpperCase();
+    fleet = FLEET.filter(p => p.plate.toUpperCase() === wanted);
+    if (!fleet.length) {
+      // Placa solicitada no está en la flota — devolver un placeholder con error
+      // para que el cliente sepa qué pasó en lugar de recibir items vacíos sin contexto.
+      return [{ plate: plateFilter, name: '(desconocida)', items: [],
+                error: 'Placa no registrada en fleet.json' }];
+    }
+  }
+
   const results = [];
-  for (let i = 0; i < FLEET.length; i += BATCH_SIZE) {
-    const batch = FLEET.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < fleet.length; i += BATCH_SIZE) {
+    const batch = fleet.slice(i, i + BATCH_SIZE);
     const settled = await Promise.all(
       batch.map(p => fetchStopsForPlate(p, sStartDate1, sStartDate2, iTime, sType, log))
     );
     results.push(...settled);
     // Delay entre batches (no después del último)
-    if (i + BATCH_SIZE < FLEET.length) {
+    if (i + BATCH_SIZE < fleet.length) {
       await sleep(BATCH_DELAY);
     }
   }
@@ -250,13 +263,24 @@ module.exports = async function (context, req) {
   const t0 = Date.now();
   const q = req.query || {};
 
-  const fi = q.fechainicial;
-  const ff = q.fechafinal;
+  // Acepta dos convenciones de nombres de parámetros para compatibilidad:
+  //   - fechainicial/fechafinal/iTime  (formato 'YYYY-MM-DD', minutos en segundos)
+  //   - desde/hasta/time               (formato 'YYYY/MM/DD HH:MM:SS', minutos)
+  // Esto permite que tanto el dashboard de transportes-tiempos.html como cualquier
+  // otra integración futura funcione sin cambios en el cliente.
+  let fi = q.fechainicial;
+  let ff = q.fechafinal;
+
+  // Si vienen con la convención del dashboard de transportes (desde/hasta con
+  // formato 'YYYY/MM/DD HH:MM:SS'), los normalizamos a 'YYYY-MM-DD'.
+  if (!fi && q.desde) fi = String(q.desde).replace(/\//g, '-').substring(0, 10);
+  if (!ff && q.hasta) ff = String(q.hasta).replace(/\//g, '-').substring(0, 10);
+
   if (!fi || !ff) {
     context.res = {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
-      body: { ok: false, error: 'Faltan parámetros: fechainicial y fechafinal (YYYY-MM-DD)' }
+      body: { ok: false, error: 'Faltan parámetros: fechainicial/fechafinal o desde/hasta' }
     };
     return;
   }
@@ -267,16 +291,31 @@ module.exports = async function (context, req) {
   const sStartDate1 = toSoapDate(fiMenos1, false);
   const sStartDate2 = toSoapDate(ff, true);
 
-  const iTime = Math.max(0, parseInt(q.iTime, 10) || DEFAULT_ITIME);
-  const sType = (q.sType || DEFAULT_STYPE).toUpperCase();
+  // iTime: el dashboard de transportes lo manda en MINUTOS (param 'time'),
+  // los otros consumidores lo mandan en SEGUNDOS (param 'iTime').
+  // Si viene 'time' lo convertimos a segundos.
+  let iTime;
+  if (q.iTime != null && q.iTime !== '') {
+    iTime = parseInt(q.iTime, 10);
+  } else if (q.time != null && q.time !== '') {
+    iTime = parseInt(q.time, 10) * 60;  // minutos → segundos
+  } else {
+    iTime = DEFAULT_ITIME;
+  }
+  iTime = Math.max(0, iTime || DEFAULT_ITIME);
+
+  const sType = (q.sType || q.type || DEFAULT_STYPE).toUpperCase();
+
+  // Filtro opcional por placa específica (cuando el usuario elige una en el dashboard)
+  const plateFilter = (q.plate || '').trim();
 
   context.log('gps-stops-by-plate-proxy: rango=' + sStartDate1 + ' → ' + sStartDate2 +
               ' | iTime=' + iTime + ' | sType=' + (sType||'(both)') +
-              ' | flota=' + FLEET.length);
+              (plateFilter ? ' | plate=' + plateFilter : ' | flota=' + FLEET.length));
 
   let perPlate;
   try {
-    perPlate = await fetchFleetStops(sStartDate1, sStartDate2, iTime, sType, context.log);
+    perPlate = await fetchFleetStops(sStartDate1, sStartDate2, iTime, sType, context.log, plateFilter);
   } catch (err) {
     context.log.error('Fleet fetch fatal: ' + (err && err.message));
     context.res = {
@@ -316,8 +355,9 @@ module.exports = async function (context, req) {
       meta: {
         rangeRequested:  { fechainicial: fi, fechafinal: ff },
         rangeQueried:    { from: sStartDate1, to: sStartDate2 },
-        params:          { iTime: iTime, sType: sType || '' },
+        params:          { iTime: iTime, sType: sType || '', plate: plateFilter || null },
         fleetSize:       FLEET.length,
+        platesQueried:   perPlate.length,
         platesOk:        totalOk,
         platesFailed:    errors.length,
         totalItems:      allItems.length,

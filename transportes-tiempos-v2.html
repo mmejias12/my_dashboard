@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tiempos GPS · REDTEC v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg-pri:#0a0e14; --bg-sec:#0f141d; --bg-card:#141a24; --bg-hover:#1a2030;
+  --bg-input:#1c2230; --border:#1f2632; --border-md:#2a3140;
+  --text-pri:#e2e8f0; --text-sec:#9ca3af; --text-mut:#6b7280;
+  --accent:#60a5fa; --green:#4ade80; --amber:#fbbf24; --red:#f87171;
+  --purple:#a78bfa; --cyan:#22d3ee; --orange:#fb923c;
+  --radius-sm:6px; --radius-md:10px; --radius-lg:14px;
+  --c-cdr:#60a5fa; --c-otroscd:#fb923c; --c-sala:#4ade80;
+  --c-cli:#a78bfa; --c-redtec:#22d3ee; --c-sin:#9ca3af;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg-pri);color:var(--text-pri);font-family:'Inter',-apple-system,sans-serif;font-size:13px;line-height:1.5;min-height:100vh}
+
+/* ── TOPBAR ───────────────────────────────────────── */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 22px;border-bottom:1px solid var(--border);background:var(--bg-sec)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:14px}
+.brand-box{width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,#3b82f6,#06b6d4);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#fff}
+.title-block{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-sec)}
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.4}}
+.topbar-right{display:flex;align-items:center;gap:14px}
+.last-upd{font-size:11px;color:var(--text-mut);font-family:'DM Mono',monospace}
+.back-btn{padding:7px 13px;background:var(--bg-card);border:1px solid var(--border-md);color:var(--text-pri);text-decoration:none;border-radius:var(--radius-sm);font-size:12px;font-weight:500;transition:all .15s}
+.back-btn:hover{background:var(--bg-hover);border-color:var(--accent)}
+
+/* ── LAYOUT ───────────────────────────────────────── */
+.main{padding:18px 22px;max-width:1600px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+
+/* ── TOOLBAR (filtros principales) ────────────────── */
+.toolbar{display:flex;align-items:flex-end;gap:14px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:14px 16px;flex-wrap:wrap}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:10px;color:var(--text-sec);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.dinput,.sinput{background:var(--bg-input);color:var(--text-pri);border:1px solid var(--border-md);border-radius:var(--radius-sm);padding:7px 10px;font-size:12px;font-family:inherit}
+.dinput:focus,.sinput:focus{outline:1px solid var(--accent);border-color:var(--accent)}
+.btn-go{background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;border:none;border-radius:var(--radius-sm);padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .15s;font-family:inherit}
+.btn-go:hover:not(:disabled){background:linear-gradient(135deg,#2563eb,#1d4ed8);transform:translateY(-1px)}
+.btn-go:disabled{opacity:.5;cursor:not-allowed}
+.btn-xls{background:transparent;color:var(--green);border:1px solid var(--green);border-radius:var(--radius-sm);padding:7px 13px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s}
+.btn-xls:hover{background:rgba(74,222,128,.1)}
+.toolbar-info{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:11.5px;color:var(--text-sec)}
+.badge-status{padding:4px 10px;border-radius:10px;font-size:10.5px;font-weight:600}
+.badge-amber{background:rgba(251,191,36,.12);color:var(--amber);border:1px solid rgba(251,191,36,.3)}
+.badge-green{background:rgba(74,222,128,.12);color:var(--green);border:1px solid rgba(74,222,128,.3)}
+.badge-red{background:rgba(248,113,113,.12);color:var(--red);border:1px solid rgba(248,113,113,.3)}
+
+/* ── KPI CARDS ────────────────────────────────────── */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.kpi{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:14px 16px;position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--accent)}
+.kpi.green::before{background:var(--green)}
+.kpi.amber::before{background:var(--amber)}
+.kpi.purple::before{background:var(--purple)}
+.kpi.cyan::before{background:var(--cyan)}
+.kpi-lbl{font-size:10px;color:var(--text-sec);text-transform:uppercase;letter-spacing:.6px;font-weight:600;margin-bottom:8px}
+.kpi-val{font-size:24px;font-weight:700;line-height:1;font-family:'DM Mono',monospace}
+.kpi-sub{font-size:10.5px;color:var(--text-mut);margin-top:6px}
+
+/* ── TABS ─────────────────────────────────────────── */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--border-md)}
+.tab{padding:10px 16px;font-size:12.5px;font-weight:500;color:var(--text-sec);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.tab:hover{color:var(--text-pri)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+.pane{display:none}
+.pane.active{display:block}
+
+/* ── TABLA ────────────────────────────────────────── */
+.tbl-wrap{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);overflow-x:auto}
+.tbl{width:100%;border-collapse:separate;border-spacing:0;font-size:11.5px}
+.tbl thead th{background:var(--bg-sec);color:var(--text-sec);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.4px;padding:10px;text-align:left;border-bottom:1px solid var(--border-md);position:sticky;top:0;z-index:5;white-space:nowrap}
+.tbl thead th.num{text-align:right}
+.tbl tbody td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+.tbl tbody td.num{text-align:right;font-family:'DM Mono',monospace;font-size:11px}
+.tbl tbody tr:hover td{background:var(--bg-hover)}
+.tbl .totals td{background:var(--bg-sec);font-weight:600;border-top:2px solid var(--border-md);border-bottom:none}
+.cat-pill{display:inline-block;padding:2px 8px;border-radius:9px;font-size:10px;font-weight:500;font-family:'Inter',sans-serif}
+.cat-CD-RETAIL{background:rgba(96,165,250,.12);color:var(--c-cdr)}
+.cat-OTROS-CD-RETAIL{background:rgba(251,146,60,.12);color:var(--c-otroscd)}
+.cat-SALAS-RETAIL{background:rgba(74,222,128,.12);color:var(--c-sala)}
+.cat-CLIENTES{background:rgba(167,139,250,.12);color:var(--c-cli)}
+.cat-REDTEC{background:rgba(34,211,238,.12);color:var(--c-redtec)}
+.cat-Sin-geocerca{background:rgba(156,163,175,.12);color:var(--c-sin)}
+
+/* ── FILTROS DE PESTAÑA ───────────────────────────── */
+.pane-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0}
+.pane-filters input,.pane-filters select{background:var(--bg-input);color:var(--text-pri);border:1px solid var(--border-md);border-radius:var(--radius-sm);padding:6px 10px;font-size:11.5px;font-family:inherit}
+.pane-filters input:focus,.pane-filters select:focus{outline:1px solid var(--accent)}
+
+/* ── PAGINACIÓN ───────────────────────────────────── */
+.pag{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--border)}
+.pag-info{font-size:11px;color:var(--text-sec)}
+.pag-btns{display:flex;gap:6px}
+.pag-btn{background:var(--bg-input);color:var(--text-pri);border:1px solid var(--border-md);border-radius:var(--radius-sm);padding:5px 11px;font-size:11px;cursor:pointer;font-family:inherit}
+.pag-btn:hover:not(:disabled){background:var(--bg-hover);border-color:var(--accent)}
+.pag-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── PIVOTE ───────────────────────────────────────── */
+.pivot-toolbar{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.sub-tabs{display:flex;gap:4px;background:var(--bg-input);padding:3px;border-radius:var(--radius-sm);width:fit-content}
+.sub-tab{background:transparent;border:none;color:var(--text-sec);font-family:inherit;font-size:11px;font-weight:500;padding:6px 12px;cursor:pointer;border-radius:4px;transition:all .15s}
+.sub-tab:hover{color:var(--text-pri)}
+.sub-tab.active{background:var(--bg-card);color:var(--text-pri)}
+
+/* ── GRÁFICOS ─────────────────────────────────────── */
+.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:1100px){.charts-row{grid-template-columns:1fr}}
+.chart-box{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:14px}
+.chart-title{font-size:12px;font-weight:600;color:var(--text-pri);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+.chart-canvas{height:280px}
+
+/* ── DIAG/LOADING ────────────────────────────────── */
+.empty-state{text-align:center;padding:40px;color:var(--text-mut);font-size:13px;background:var(--bg-card);border:1px dashed var(--border-md);border-radius:var(--radius-md)}
+.spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.15);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+.diag-panel{background:#1a0808;border:1px solid rgba(248,113,113,.3);border-radius:var(--radius-md);padding:14px 16px;font-size:12px;display:none}
+.diag-title{color:var(--red);font-weight:600;margin-bottom:6px}
+.diag-detail{color:#c87070;line-height:1.6;font-family:'DM Mono',monospace;font-size:11px}
+.diag-btns{margin-top:10px;display:flex;gap:8px}
+
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}
+.muted{color:var(--text-mut)}
+.mono{font-family:'DM Mono',monospace;font-size:11px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-box">R</div>
+    <span>REDTEC</span>
+  </div>
+  <div class="title-block">
+    <div class="live-dot"></div>
+    <span>Tiempos GPS · v2</span>
+  </div>
+  <div class="topbar-right">
+    <span class="last-upd" id="last-upd">—</span>
+    <a href="m3link_dashboard_dark.html" class="back-btn">← Dashboard</a>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- ─── TOOLBAR ─── -->
+  <div class="toolbar">
+    <div class="field">
+      <label>Fecha inicio</label>
+      <input type="date" class="dinput" id="fi">
+    </div>
+    <div class="field">
+      <label>Fecha fin</label>
+      <input type="date" class="dinput" id="ff">
+    </div>
+    <div class="field">
+      <label>Placa</label>
+      <select class="sinput" id="sel-flota" style="width:220px">
+        <option value="all" selected>Todas las placas</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Tiempo mín. (min)</label>
+      <input type="number" class="dinput" id="min-tiempo" value="5" min="1" max="120" style="width:80px">
+    </div>
+    <button class="btn-go" id="btn-cargar" onclick="cargarDatos()">
+      <span id="btn-ico">▶</span> <span id="btn-txt">Cargar toda la flota</span>
+    </button>
+    <button class="btn-xls" id="btn-xls" onclick="exportarExcel()" style="display:none">⬇ Excel</button>
+    <div class="toolbar-info">
+      <span class="badge-status badge-amber" id="status-badge">Sin datos</span>
+      <span id="status-info">Esperando carga…</span>
+    </div>
+  </div>
+
+  <!-- Diag panel (solo si hay error) -->
+  <div class="diag-panel" id="diag-panel">
+    <div class="diag-title">⛔ Error consultando proxy GPS</div>
+    <div class="diag-detail" id="diag-detail"></div>
+    <div class="diag-btns">
+      <button class="pag-btn" onclick="document.getElementById('diag-panel').style.display='none'">✕ Cerrar</button>
+      <button class="pag-btn" onclick="probarProxy()">🔍 Ver respuesta cruda</button>
+    </div>
+  </div>
+
+  <!-- ─── KPIs ─── -->
+  <div class="kpi-row" id="kpi-row">
+    <div class="kpi"><div class="kpi-lbl">Total visitas</div><div class="kpi-val" id="kpi-total">—</div><div class="kpi-sub">paradas consolidadas</div></div>
+    <div class="kpi green"><div class="kpi-lbl">Prom. CD Retail</div><div class="kpi-val" id="kpi-cd" style="color:var(--green)">—</div><div class="kpi-sub">min / visita</div></div>
+    <div class="kpi amber"><div class="kpi-lbl">Prom. Sala Retail</div><div class="kpi-val" id="kpi-sala" style="color:var(--amber)">—</div><div class="kpi-sub">min / visita</div></div>
+    <div class="kpi purple"><div class="kpi-lbl">Prom. Clientes</div><div class="kpi-val" id="kpi-cli" style="color:var(--purple)">—</div><div class="kpi-sub">min / visita</div></div>
+    <div class="kpi cyan"><div class="kpi-lbl">Choferes activos</div><div class="kpi-val" id="kpi-chof" style="color:var(--cyan)">—</div><div class="kpi-sub">con datos</div></div>
+  </div>
+
+  <!-- ─── TABS ─── -->
+  <div class="tabs">
+    <div class="tab active" data-pane="resumen" onclick="switchTab('resumen')">Resumen</div>
+    <div class="tab" data-pane="puntos" onclick="switchTab('puntos')">Por punto</div>
+    <div class="tab" data-pane="choferes" onclick="switchTab('choferes')">Por chofer</div>
+    <div class="tab" data-pane="detalle" onclick="switchTab('detalle')">Detalle completo</div>
+    <div class="tab" data-pane="pivote" onclick="switchTab('pivote')">Pivote</div>
+    <div class="tab" data-pane="tendencias" onclick="switchTab('tendencias')">Tendencias</div>
+  </div>
+
+  <!-- ─── PANE: RESUMEN ─── -->
+  <div class="pane active" id="pane-resumen">
+    <div class="charts-row" style="margin-top:12px">
+      <div class="chart-box">
+        <div class="chart-title">Distribución por categoría <span class="muted mono" id="ch-tipo-info"></span></div>
+        <div class="chart-canvas"><canvas id="ch-tipo"></canvas></div>
+      </div>
+      <div class="chart-box">
+        <div class="chart-title">Tiempo total por categoría</div>
+        <div class="chart-canvas"><canvas id="ch-tiempo"></canvas></div>
+      </div>
+    </div>
+    <div class="tbl-wrap" style="margin-top:12px">
+      <table class="tbl">
+        <thead><tr>
+          <th>Categoría</th><th class="num">Visitas</th><th class="num">Tiempo total</th>
+          <th class="num">Promedio/visita</th><th class="num">Placas</th><th class="num">Puntos únicos</th>
+        </tr></thead>
+        <tbody id="tb-resumen"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ─── PANE: POR PUNTO ─── -->
+  <div class="pane" id="pane-puntos">
+    <div class="pane-filters">
+      <input type="text" id="f-puntos" placeholder="Buscar punto…" oninput="renderPuntos()">
+      <select id="f-puntos-cat" onchange="renderPuntos()">
+        <option value="">Todas las categorías</option>
+      </select>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr>
+          <th>Punto</th><th>Categoría</th><th class="num">Visitas</th>
+          <th class="num">Tiempo total</th><th class="num">Promedio</th><th class="num">Mín / Máx</th>
+        </tr></thead>
+        <tbody id="tb-puntos"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ─── PANE: POR CHOFER ─── -->
+  <div class="pane" id="pane-choferes">
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr>
+          <th>Placa</th><th>Chofer</th><th class="num">Visitas</th>
+          <th class="num">Tiempo total</th><th class="num">CD Retail</th>
+          <th class="num">Sala Retail</th><th class="num">Clientes</th><th class="num">Días activos</th>
+        </tr></thead>
+        <tbody id="tb-choferes"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ─── PANE: DETALLE COMPLETO ─── -->
+  <div class="pane" id="pane-detalle">
+    <div class="pane-filters">
+      <input type="text" id="f-det" placeholder="Buscar (placa, punto, chofer)…" oninput="renderDetalle()">
+      <select id="f-det-cat" onchange="renderDetalle()">
+        <option value="">Todas las categorías</option>
+      </select>
+      <select id="f-det-placa" onchange="renderDetalle()">
+        <option value="">Todas las placas</option>
+      </select>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr>
+          <th>Fecha</th><th>Placa</th><th>Chofer</th><th>Punto</th>
+          <th>Categoría</th><th class="num">Llegada</th><th class="num">Salida</th>
+          <th class="num">Minutos</th>
+        </tr></thead>
+        <tbody id="tb-det"></tbody>
+      </table>
+      <div class="pag">
+        <span class="pag-info" id="pag-info">—</span>
+        <div class="pag-btns">
+          <button class="pag-btn" onclick="paginar(-1)">← Ant</button>
+          <button class="pag-btn" onclick="paginar(1)">Sig →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── PANE: PIVOTE ─── -->
+  <div class="pane" id="pane-pivote">
+    <div class="pivot-toolbar">
+      <div class="sub-tabs">
+        <button class="sub-tab active" onclick="switchPivot('cli-dia', this)">Cliente × Día</button>
+        <button class="sub-tab" onclick="switchPivot('tip-dia', this)">Categoría × Día</button>
+        <button class="sub-tab" onclick="switchPivot('cli-pla', this)">Cliente × Placa</button>
+      </div>
+      <span class="muted mono" id="pivot-info">—</span>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl" id="tb-pivot-table">
+        <thead id="th-pivot"></thead>
+        <tbody id="tb-pivot"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ─── PANE: TENDENCIAS ─── -->
+  <div class="pane" id="pane-tendencias">
+    <div class="charts-row" style="margin-top:12px">
+      <div class="chart-box">
+        <div class="chart-title">Promedio por visita — Retail por semana</div>
+        <div class="chart-canvas"><canvas id="ch-tend-retail"></canvas></div>
+      </div>
+      <div class="chart-box">
+        <div class="chart-title">Promedio por visita — Clientes por semana</div>
+        <div class="chart-canvas"><canvas id="ch-tend-cli"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// ── CONFIGURACIÓN ──────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+const PROXY_URL = '/api/gps-stops-by-plate-proxy';
+const FLOTA_NOMBRES = {
+  'BJCL13':'ISMAEL CAMPOS', 'CCRC36':'JUAN CARLOS VEGA',
+  'CPVW43':'CRISTOBAL ECHEVERRIA', 'FV2792':'EMILIO CAULLE',
+  'LS3119':'ANTONIO VEGA', 'NC8771':'JULIO BULNES',
+  'RW5303':'GONZALO CAMPOS', 'SP3393':'CESAR ANABALON',
+  'VG1943':'VICTOR VEGA', 'XC9869':'HUGO NUÑEZ', 'YG5106':'MIGUEL GOMEZ'
+};
+const PAG_SIZE = 50;
+
+// ── Lookup de puntos (categorías) ──
+const LOOKUP_PUNTOS = {
+  'REDTEC':{tipo:'REDTEC',cat:'REDTEC'},
+  'LIEA':{tipo:'REDTEC',cat:'REDTEC'},
+  'ZWM01 CD WM LO AGUIRRE SECO':{tipo:'CD Retail',cat:'CD RETAIL'},
+  'ZWM02 CD WM QUILICURA FRIO':{tipo:'CD Retail',cat:'CD RETAIL'},
+  'ZWM08 WM RENTAPACK SANTIAGO':{tipo:'CD Retail',cat:'CD RETAIL'},
+  'ZWM11 CD WM EL PENON':{tipo:'CD Retail',cat:'CD RETAIL'},
+  'ZCS01 CD CENCOSUD NOVICIADO':{tipo:'CD Retail',cat:'CD RETAIL'},
+  'ZUN01 CD UNIMARC LO AGUIRRE':{tipo:'CD Retail',cat:'CD RETAIL'},
+  'ZUN03 CD UNIMARC CONCEPCION':{tipo:'CD Retail',cat:'CD RETAIL'},
+  'CD TOTTUS LA FARFANA':{tipo:'CD Retail',cat:'CD RETAIL'},
+  'CD FASA':{tipo:'CD Retail',cat:'OTROS CD RETAIL'},
+  'CD PRE-UNIC':{tipo:'CD Retail',cat:'OTROS CD RETAIL'},
+  'CD PRISA':{tipo:'CD Retail',cat:'OTROS CD RETAIL'},
+  'IFCO SISA':{tipo:'CD Retail',cat:'OTROS CD RETAIL'},
+  'INTERCARRY CD LO ESPEJO':{tipo:'CD Retail',cat:'OTROS CD RETAIL'},
+  'INTERCARRY CD MACUL':{tipo:'CD Retail',cat:'OTROS CD RETAIL'},
+  'PRISA PRILOGIC':{tipo:'CD Retail',cat:'OTROS CD RETAIL'},
+  'ZAL03 CD ALVI AEROPARQUE':{tipo:'CD Retail',cat:'OTROS CD RETAIL'},
+  'LAF CD RENCA':{tipo:'CD Retail',cat:'OTROS CD RETAIL'},
+  'HAMBURGO CD RENCA':{tipo:'CD Retail',cat:'OTROS CD RETAIL'},
+};
+
+// ── Estado ──
+let DB = [];           // todas las paradas crudas del proxy (parseadas)
+let DB_VIEW = [];      // paradas filtradas por la pestaña Detalle
+let PAG_PAGE = 1;
+let PIVOT_VIEW = 'cli-dia';
+let CHARTS = {};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── INIT ───────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  // Llenar dropdown de placas
+  const sel = document.getElementById('sel-flota');
+  Object.entries(FLOTA_NOMBRES).forEach(([p,n]) => {
+    const opt = document.createElement('option');
+    opt.value = p;
+    opt.textContent = p + ' — ' + n;
+    sel.appendChild(opt);
+  });
+
+  // Fechas default: semana actual (lunes a hoy)
+  const hoy = new Date();
+  const lunes = new Date(hoy);
+  lunes.setDate(hoy.getDate() - ((hoy.getDay()+6)%7));
+  document.getElementById('fi').value = ymd(lunes);
+  document.getElementById('ff').value = ymd(hoy);
+
+  // Texto dinámico del botón
+  sel.addEventListener('change', actualizarBtnTxt);
+  actualizarBtnTxt();
+
+  // Auto-cargar 1 vez
+  setTimeout(() => cargarDatos(), 250);
+});
+
+function ymd(d){
+  return d.getFullYear() + '-' +
+         String(d.getMonth()+1).padStart(2,'0') + '-' +
+         String(d.getDate()).padStart(2,'0');
+}
+
+function actualizarBtnTxt(){
+  const sel = document.getElementById('sel-flota');
+  const txt = document.getElementById('btn-txt');
+  txt.textContent = sel.value === 'all'
+    ? 'Cargar toda la flota'
+    : 'Cargar ' + sel.options[sel.selectedIndex].text;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── HELPERS ────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+function setStatus(badge, text, type){
+  const b = document.getElementById('status-badge');
+  const i = document.getElementById('status-info');
+  b.className = 'badge-status badge-' + (type||'amber');
+  b.textContent = badge;
+  if(i) i.textContent = text || '';
+}
+
+function showError(msg){
+  const p = document.getElementById('diag-panel');
+  document.getElementById('diag-detail').textContent = msg;
+  p.style.display = 'block';
+}
+function hideError(){ document.getElementById('diag-panel').style.display = 'none'; }
+
+function fmtMin(min){
+  if(min == null || isNaN(min) || min < 0) return '—';
+  if(min < 60) return Math.round(min) + 'm';
+  const h = Math.floor(min/60);
+  const m = Math.round(min%60);
+  return h + 'h ' + (m ? m+'m' : '');
+}
+
+function fmtFecha(s){
+  // 'YYYY-MM-DD' → 'DD-MM-YY'
+  if(!s) return '—';
+  const p = s.split('-');
+  return p.length === 3 ? p[2]+'-'+p[1]+'-'+p[0].slice(2) : s;
+}
+
+function fmtHora(s){
+  // 'YYYY/MM/DD HH:MM:SS' → 'HH:MM'
+  if(!s) return '—';
+  const p = s.split(' ');
+  return p[1] ? p[1].substring(0,5) : '—';
+}
+
+function limpiarNombre(n){
+  if(!n) return '';
+  return n.replace(/^\s*B\s+/,'').replace(/\s+B\s*$/,'')
+          .replace(/^Pasando\s+Por\s+--+\s*/i,'').replace(/--+/g,' ')
+          .replace(/\s+/g,' ').trim();
+}
+
+function clasificar(nombre){
+  if(!nombre) return {tipo:'Sin geocerca',cat:'Sin geocerca'};
+  const key = nombre.trim().toUpperCase();
+  for(const [k,v] of Object.entries(LOOKUP_PUNTOS)){
+    if(k.toUpperCase() === key) return v;
+  }
+  const n = key;
+  if(/REDTEC|LIEA|RENTAPACK/.test(n)) return {tipo:'REDTEC',cat:'REDTEC'};
+  if(/^ZWM/.test(n) && /\bCD\b/.test(n)) return {tipo:'CD Retail',cat:'CD RETAIL'};
+  if(/^ZWM/.test(n)) return {tipo:'Sala Retail',cat:'SALAS RETAIL'};
+  if(/^Z(CS|UN|AL|CU|SB|R0)/.test(n)) return {tipo:'CD Retail',cat:'CD RETAIL'};
+  if(/\bHIPER\b/.test(n)) return {tipo:'Sala Retail',cat:'SALAS RETAIL'};
+  if(/MAYORISTA\s*10|\bALVI\b|\bTEBA\b/.test(n)) return {tipo:'Sala Retail',cat:'SALAS RETAIL'};
+  if(/\bCD\b|INTERCARRY|PRILOGIC|IFCO/.test(n)) return {tipo:'CD Retail',cat:'OTROS CD RETAIL'};
+  if(/\d{4,}.*REGION|REPUBLICA DE CHILE|METROPOLITAN/i.test(nombre))
+    return {tipo:'Sin geocerca',cat:'Sin geocerca'};
+  return {tipo:'Cliente',cat:'CLIENTES'};
+}
+
+function isoWeek(s){
+  try{
+    const d = new Date(s+'T12:00:00');
+    const target = new Date(d.valueOf());
+    const dayNr = (d.getDay()+6)%7;
+    target.setDate(target.getDate()-dayNr+3);
+    const firstThu = target.valueOf();
+    target.setMonth(0,1);
+    if(target.getDay()!==4) target.setMonth(0,1+((4-target.getDay())+7)%7);
+    return 1+Math.ceil((firstThu-target)/604800000);
+  }catch(e){return 0;}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── CARGA DE DATOS ─────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+let _cargando = false;
+
+async function cargarDatos(){
+  if(_cargando){ console.log('[v2] Carga ya en curso, ignorando'); return; }
+  _cargando = true;
+
+  const fi = document.getElementById('fi').value;
+  const ff = document.getElementById('ff').value;
+  const minStop = document.getElementById('min-tiempo').value || 5;
+  const flotaSel = document.getElementById('sel-flota').value;
+
+  if(!fi || !ff){
+    setStatus('Sin fechas', 'Selecciona rango de fechas', 'amber');
+    _cargando = false;
+    return;
+  }
+
+  hideError();
+  setStatus('Consultando…', 'Llamando proxy GPS Condor — puede tardar ~10s', 'amber');
+  const btn = document.getElementById('btn-cargar');
+  btn.disabled = true;
+  document.getElementById('btn-ico').textContent = '⟳';
+
+  try{
+    const desde = fi.replace(/-/g,'/') + ' 00:00:00';
+    const hasta = ff.replace(/-/g,'/') + ' 23:59:59';
+    let url = PROXY_URL + '?desde=' + encodeURIComponent(desde)
+            + '&hasta=' + encodeURIComponent(hasta)
+            + '&time=' + minStop;
+    if(flotaSel !== 'all') url += '&plate=' + encodeURIComponent(flotaSel);
+
+    console.log('[v2] Fetch:', url);
+    const t0 = Date.now();
+    const res = await fetch(url, {signal: AbortSignal.timeout(60000)});
+    if(!res.ok){
+      const body = await res.text().catch(()=>'');
+      throw new Error('HTTP ' + res.status + ': ' + body.substring(0,160));
+    }
+
+    const data = await res.json();
+    const elapsed = Date.now() - t0;
+    console.log('[v2] Respuesta en', elapsed, 'ms · meta:', data.meta);
+
+    if(!data.ok){
+      throw new Error('Proxy devolvió ok=false: ' + (data.error||'sin detalle'));
+    }
+
+    // Parsear items del proxy directo a estado
+    DB = parseItems(data.items || []);
+    console.log('[v2] DB con', DB.length, 'paradas tras parseo');
+
+    // Errores parciales (placas que fallaron)
+    if(data.meta && data.meta.errors && data.meta.errors.length){
+      const errs = data.meta.errors.map(e => e.plate + ': ' + e.error).join(' · ');
+      console.warn('[v2] Errores parciales:', errs);
+      setStatus(DB.length + ' paradas',
+                DB.length + ' paradas · ' + data.meta.errors.length + ' placa(s) con error · ' + elapsed + 'ms',
+                'amber');
+    } else {
+      const nPlacas = new Set(DB.map(r=>r.placa)).size;
+      setStatus(DB.length + ' paradas',
+                DB.length + ' paradas · ' + nPlacas + ' placa(s) · ' + elapsed + 'ms',
+                DB.length > 0 ? 'green' : 'amber');
+    }
+
+    document.getElementById('last-upd').textContent = 'Act. ' + new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    document.getElementById('btn-xls').style.display = DB.length ? '' : 'none';
+
+    renderAll();
+
+  } catch(e){
+    console.error('[v2] Error:', e);
+    setStatus('Error', e.message, 'red');
+    showError(e.message);
+    DB = [];
+    renderAll();
+  } finally {
+    _cargando = false;
+    btn.disabled = false;
+    document.getElementById('btn-ico').textContent = '▶';
+  }
+}
+
+function parseItems(items){
+  const rows = [];
+  items.forEach(it => {
+    const placa = it.plate || '';
+    const chofer = (it.name||'').trim() || FLOTA_NOMBRES[placa] || placa;
+    const punto = limpiarNombre(it.location || '');
+    const start = it.start || '';
+    const end = it.end || '';
+    const seconds = parseInt(it.seconds||0,10);
+    if(!punto || !start) return;
+    const minutos = seconds > 0 ? Math.round(seconds/60) : 0;
+    if(minutos < 1) return;
+    const fechaRaw = start.split(' ')[0];
+    const fecha = fechaRaw.replace(/\//g,'-');
+    const cls = clasificar(punto);
+    let dia = '';
+    try{ dia = new Date(fecha+'T12:00:00').toLocaleDateString('es-CL',{weekday:'short'}).replace('.',''); }catch(e){}
+    rows.push({
+      placa, chofer, punto,
+      tipo: cls.tipo, cat: cls.cat,
+      fecha, dia, semana: isoWeek(fecha),
+      llegada: start, salida: end, minutos
+    });
+  });
+  // Ordenar por llegada (más reciente arriba)
+  rows.sort((a,b) => b.llegada.localeCompare(a.llegada));
+  return rows;
+}
+
+function probarProxy(){
+  const fi = document.getElementById('fi').value || ymd(new Date());
+  const ff = document.getElementById('ff').value || ymd(new Date());
+  const desde = fi.replace(/-/g,'/') + ' 00:00:00';
+  const hasta = ff.replace(/-/g,'/') + ' 23:59:59';
+  const url = PROXY_URL + '?desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta) + '&time=5';
+  window.open(url, '_blank');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── RENDER GLOBAL ──────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+function renderAll(){
+  renderKpis();
+  renderResumen();
+  renderPuntos();
+  renderChoferes();
+  renderDetalle();
+  renderPivote();
+  renderTendencias();
+  // Llenar selector de placas en filtro Detalle
+  const fp = document.getElementById('f-det-placa');
+  const placas = [...new Set(DB.map(r=>r.placa))].sort();
+  fp.innerHTML = '<option value="">Todas las placas</option>' +
+    placas.map(p => '<option value="'+p+'">'+p+' — '+(FLOTA_NOMBRES[p]||p)+'</option>').join('');
+  // Categorías en filtros
+  const cats = [...new Set(DB.map(r=>r.cat))].sort();
+  const optsCat = '<option value="">Todas las categorías</option>' +
+    cats.map(c => '<option value="'+c+'">'+c+'</option>').join('');
+  document.getElementById('f-puntos-cat').innerHTML = optsCat;
+  document.getElementById('f-det-cat').innerHTML = optsCat;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── KPIs ───────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+function renderKpis(){
+  if(!DB.length){
+    ['kpi-total','kpi-cd','kpi-sala','kpi-cli','kpi-chof'].forEach(id =>
+      document.getElementById(id).textContent = '—');
+    return;
+  }
+  const visitas = DB.length;
+  const promCat = (cat) => {
+    const f = DB.filter(r => r.cat === cat);
+    if(!f.length) return '—';
+    return fmtMin(f.reduce((s,r)=>s+r.minutos,0)/f.length);
+  };
+  document.getElementById('kpi-total').textContent = visitas.toLocaleString('es-CL');
+  document.getElementById('kpi-cd').textContent = promCat('CD RETAIL');
+  document.getElementById('kpi-sala').textContent = promCat('SALAS RETAIL');
+  document.getElementById('kpi-cli').textContent = promCat('CLIENTES');
+  document.getElementById('kpi-chof').textContent = new Set(DB.map(r=>r.placa)).size;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── PESTAÑA RESUMEN ────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+function renderResumen(){
+  const tb = document.getElementById('tb-resumen');
+  if(!DB.length){
+    tb.innerHTML = '<tr><td colspan="6" class="muted" style="text-align:center;padding:20px">Sin datos</td></tr>';
+    renderChartTipo([],[]);
+    renderChartTiempo([],[]);
+    return;
+  }
+  const grupos = {};
+  DB.forEach(r => {
+    if(!grupos[r.cat]) grupos[r.cat] = {visitas:0, total:0, placas:new Set(), puntos:new Set()};
+    grupos[r.cat].visitas++;
+    grupos[r.cat].total += r.minutos;
+    grupos[r.cat].placas.add(r.placa);
+    grupos[r.cat].puntos.add(r.punto);
+  });
+  const ordenCats = ['CD RETAIL','OTROS CD RETAIL','SALAS RETAIL','CLIENTES','REDTEC','Sin geocerca'];
+  const cats = Object.keys(grupos).sort((a,b) => {
+    const ia = ordenCats.indexOf(a); const ib = ordenCats.indexOf(b);
+    return (ia<0?99:ia) - (ib<0?99:ib);
+  });
+  let html = '';
+  cats.forEach(c => {
+    const g = grupos[c];
+    html += '<tr>'
+      + '<td><span class="cat-pill cat-' + c.replace(/\s+/g,'-') + '">'+c+'</span></td>'
+      + '<td class="num">'+g.visitas.toLocaleString('es-CL')+'</td>'
+      + '<td class="num">'+fmtMin(g.total)+'</td>'
+      + '<td class="num">'+fmtMin(g.total/g.visitas)+'</td>'
+      + '<td class="num">'+g.placas.size+'</td>'
+      + '<td class="num">'+g.puntos.size+'</td>'
+      + '</tr>';
+  });
+  // Total
+  const tot = {visitas:DB.length, total:DB.reduce((s,r)=>s+r.minutos,0),
+               placas:new Set(DB.map(r=>r.placa)).size,
+               puntos:new Set(DB.map(r=>r.punto)).size};
+  html += '<tr class="totals"><td>TOTAL</td>'
+       + '<td class="num">'+tot.visitas.toLocaleString('es-CL')+'</td>'
+       + '<td class="num">'+fmtMin(tot.total)+'</td>'
+       + '<td class="num">'+fmtMin(tot.total/tot.visitas)+'</td>'
+       + '<td class="num">'+tot.placas+'</td>'
+       + '<td class="num">'+tot.puntos+'</td></tr>';
+  tb.innerHTML = html;
+
+  // Charts
+  document.getElementById('ch-tipo-info').textContent = cats.length + ' categorías';
+  renderChartTipo(cats, cats.map(c => grupos[c].visitas));
+  renderChartTiempo(cats, cats.map(c => Math.round(grupos[c].total/60))); // en horas
+}
+
+const COL_CAT = {
+  'CD RETAIL':'#60a5fa', 'OTROS CD RETAIL':'#fb923c',
+  'SALAS RETAIL':'#4ade80', 'CLIENTES':'#a78bfa',
+  'REDTEC':'#22d3ee', 'Sin geocerca':'#9ca3af'
+};
+
+function renderChartTipo(labels, data){
+  const ctx = document.getElementById('ch-tipo');
+  if(CHARTS.tipo) CHARTS.tipo.destroy();
+  CHARTS.tipo = new Chart(ctx, {
+    type:'doughnut',
+    data:{ labels, datasets:[{ data, backgroundColor:labels.map(l=>COL_CAT[l]||'#888'), borderWidth:0 }] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'right', labels:{ color:'#9ca3af', font:{size:11} }}}}
+  });
+}
+
+function renderChartTiempo(labels, data){
+  const ctx = document.getElementById('ch-tiempo');
+  if(CHARTS.tiempo) CHARTS.tiempo.destroy();
+  CHARTS.tiempo = new Chart(ctx, {
+    type:'bar',
+    data:{ labels, datasets:[{ label:'Horas totales', data,
+        backgroundColor:labels.map(l=>COL_CAT[l]||'#888'), borderRadius:4 }] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}},
+      scales:{ y:{ ticks:{color:'#9ca3af'}, grid:{color:'rgba(255,255,255,.05)'}},
+               x:{ ticks:{color:'#9ca3af', font:{size:10}}, grid:{display:false}}}}
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── PESTAÑA POR PUNTO ──────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+function renderPuntos(){
+  const tb = document.getElementById('tb-puntos');
+  if(!DB.length){
+    tb.innerHTML = '<tr><td colspan="6" class="muted" style="text-align:center;padding:20px">Sin datos</td></tr>';
+    return;
+  }
+  const fTxt = (document.getElementById('f-puntos').value||'').toLowerCase();
+  const fCat = document.getElementById('f-puntos-cat').value;
+
+  const grupos = {};
+  DB.forEach(r => {
+    if(fCat && r.cat !== fCat) return;
+    if(fTxt && !(r.punto.toLowerCase().includes(fTxt))) return;
+    const k = r.punto;
+    if(!grupos[k]) grupos[k] = {punto:r.punto, cat:r.cat, visitas:0, total:0, min:Infinity, max:0};
+    grupos[k].visitas++;
+    grupos[k].total += r.minutos;
+    if(r.minutos < grupos[k].min) grupos[k].min = r.minutos;
+    if(r.minutos > grupos[k].max) grupos[k].max = r.minutos;
+  });
+  const arr = Object.values(grupos).sort((a,b)=>b.total-a.total);
+  if(!arr.length){
+    tb.innerHTML = '<tr><td colspan="6" class="muted" style="text-align:center;padding:20px">Sin coincidencias</td></tr>';
+    return;
+  }
+  tb.innerHTML = arr.map(g =>
+    '<tr>'
+    + '<td>'+g.punto+'</td>'
+    + '<td><span class="cat-pill cat-' + g.cat.replace(/\s+/g,'-') + '">'+g.cat+'</span></td>'
+    + '<td class="num">'+g.visitas+'</td>'
+    + '<td class="num">'+fmtMin(g.total)+'</td>'
+    + '<td class="num">'+fmtMin(g.total/g.visitas)+'</td>'
+    + '<td class="num">'+fmtMin(g.min)+' / '+fmtMin(g.max)+'</td>'
+    + '</tr>'
+  ).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── PESTAÑA POR CHOFER ─────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+function renderChoferes(){
+  const tb = document.getElementById('tb-choferes');
+  if(!DB.length){
+    tb.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center;padding:20px">Sin datos</td></tr>';
+    return;
+  }
+  const grupos = {};
+  DB.forEach(r => {
+    if(!grupos[r.placa]) grupos[r.placa] = {placa:r.placa, chofer:r.chofer, visitas:0, total:0,
+        cd:0, sala:0, cli:0, dias:new Set()};
+    const g = grupos[r.placa];
+    g.visitas++;
+    g.total += r.minutos;
+    g.dias.add(r.fecha);
+    if(r.cat === 'CD RETAIL' || r.cat === 'OTROS CD RETAIL') g.cd += r.minutos;
+    if(r.cat === 'SALAS RETAIL') g.sala += r.minutos;
+    if(r.cat === 'CLIENTES') g.cli += r.minutos;
+  });
+  const arr = Object.values(grupos).sort((a,b)=>b.visitas-a.visitas);
+  tb.innerHTML = arr.map(g =>
+    '<tr>'
+    + '<td><strong>'+g.placa+'</strong></td>'
+    + '<td>'+g.chofer+'</td>'
+    + '<td class="num">'+g.visitas+'</td>'
+    + '<td class="num">'+fmtMin(g.total)+'</td>'
+    + '<td class="num">'+fmtMin(g.cd)+'</td>'
+    + '<td class="num">'+fmtMin(g.sala)+'</td>'
+    + '<td class="num">'+fmtMin(g.cli)+'</td>'
+    + '<td class="num">'+g.dias.size+'</td>'
+    + '</tr>'
+  ).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── PESTAÑA DETALLE ────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+function renderDetalle(){
+  const fTxt = (document.getElementById('f-det').value||'').toLowerCase();
+  const fCat = document.getElementById('f-det-cat').value;
+  const fPla = document.getElementById('f-det-placa').value;
+
+  DB_VIEW = DB.filter(r => {
+    if(fCat && r.cat !== fCat) return false;
+    if(fPla && r.placa !== fPla) return false;
+    if(fTxt){
+      const blob = (r.placa+' '+r.chofer+' '+r.punto+' '+r.cat).toLowerCase();
+      if(!blob.includes(fTxt)) return false;
+    }
+    return true;
+  });
+  PAG_PAGE = 1;
+  pintarDetalle();
+}
+
+function pintarDetalle(){
+  const tb = document.getElementById('tb-det');
+  const total = DB_VIEW.length;
+  if(!total){
+    tb.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center;padding:20px">Sin coincidencias</td></tr>';
+    document.getElementById('pag-info').textContent = '0 resultados';
+    return;
+  }
+  const totPag = Math.ceil(total/PAG_SIZE);
+  if(PAG_PAGE > totPag) PAG_PAGE = totPag;
+  const start = (PAG_PAGE-1)*PAG_SIZE;
+  const slice = DB_VIEW.slice(start, start+PAG_SIZE);
+
+  tb.innerHTML = slice.map(r =>
+    '<tr>'
+    + '<td>'+fmtFecha(r.fecha)+' <span class="muted mono">'+r.dia+'</span></td>'
+    + '<td><strong>'+r.placa+'</strong></td>'
+    + '<td>'+r.chofer+'</td>'
+    + '<td>'+r.punto+'</td>'
+    + '<td><span class="cat-pill cat-' + r.cat.replace(/\s+/g,'-') + '">'+r.cat+'</span></td>'
+    + '<td class="num">'+fmtHora(r.llegada)+'</td>'
+    + '<td class="num">'+fmtHora(r.salida)+'</td>'
+    + '<td class="num">'+fmtMin(r.minutos)+'</td>'
+    + '</tr>'
+  ).join('');
+
+  document.getElementById('pag-info').textContent =
+    'Mostrando ' + (start+1) + '–' + Math.min(start+PAG_SIZE,total) + ' de ' + total + ' (pág ' + PAG_PAGE + ' / ' + totPag + ')';
+}
+
+function paginar(d){
+  const totPag = Math.ceil(DB_VIEW.length/PAG_SIZE);
+  PAG_PAGE = Math.max(1, Math.min(totPag, PAG_PAGE+d));
+  pintarDetalle();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── PESTAÑA PIVOTE ─────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+function switchPivot(view, btn){
+  PIVOT_VIEW = view;
+  document.querySelectorAll('.sub-tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderPivote();
+}
+
+function renderPivote(){
+  if(!DB.length){
+    document.getElementById('th-pivot').innerHTML = '';
+    document.getElementById('tb-pivot').innerHTML = '<tr><td class="muted" style="text-align:center;padding:20px">Sin datos</td></tr>';
+    document.getElementById('pivot-info').textContent = '—';
+    return;
+  }
+  if(PIVOT_VIEW === 'cli-dia') renderPivCliDia();
+  else if(PIVOT_VIEW === 'tip-dia') renderPivTipDia();
+  else if(PIVOT_VIEW === 'cli-pla') renderPivCliPla();
+}
+
+function renderPivCliDia(){
+  // Filas: punto (cliente). Columnas: fecha. Celdas: minutos.
+  const dias = [...new Set(DB.map(r=>r.fecha))].sort();
+  const puntos = [...new Set(DB.map(r=>r.punto))].sort();
+  const grid = {};
+  DB.forEach(r => {
+    if(!grid[r.punto]) grid[r.punto] = {};
+    grid[r.punto][r.fecha] = (grid[r.punto][r.fecha]||0) + r.minutos;
+  });
+  // Ordenar puntos por total desc
+  const totales = puntos.map(p => ({punto:p, total:Object.values(grid[p]||{}).reduce((s,v)=>s+v,0)}));
+  totales.sort((a,b)=>b.total-a.total);
+
+  let th = '<tr><th>Punto</th>';
+  dias.forEach(d => th += '<th class="num">'+fmtFecha(d)+'</th>');
+  th += '<th class="num">Total</th></tr>';
+  document.getElementById('th-pivot').innerHTML = th;
+
+  let html = '';
+  totales.forEach(({punto, total}) => {
+    html += '<tr><td>'+punto+'</td>';
+    dias.forEach(d => {
+      const v = grid[punto] && grid[punto][d] || 0;
+      html += '<td class="num">' + (v ? fmtMin(v) : '<span class="muted">—</span>') + '</td>';
+    });
+    html += '<td class="num"><strong>'+fmtMin(total)+'</strong></td></tr>';
+  });
+  // Total por día
+  html += '<tr class="totals"><td>TOTAL</td>';
+  let totGen = 0;
+  dias.forEach(d => {
+    const sum = puntos.reduce((s,p) => s + (grid[p]&&grid[p][d]||0), 0);
+    totGen += sum;
+    html += '<td class="num">'+fmtMin(sum)+'</td>';
+  });
+  html += '<td class="num">'+fmtMin(totGen)+'</td></tr>';
+  document.getElementById('tb-pivot').innerHTML = html;
+  document.getElementById('pivot-info').textContent =
+    puntos.length + ' puntos × ' + dias.length + ' días';
+}
+
+function renderPivTipDia(){
+  const dias = [...new Set(DB.map(r=>r.fecha))].sort();
+  const cats = [...new Set(DB.map(r=>r.cat))].sort();
+  const grid = {};
+  DB.forEach(r => {
+    if(!grid[r.cat]) grid[r.cat] = {};
+    grid[r.cat][r.fecha] = (grid[r.cat][r.fecha]||0) + r.minutos;
+  });
+
+  let th = '<tr><th>Categoría</th>';
+  dias.forEach(d => th += '<th class="num">'+fmtFecha(d)+'</th>');
+  th += '<th class="num">Total</th></tr>';
+  document.getElementById('th-pivot').innerHTML = th;
+
+  let html = '';
+  cats.forEach(c => {
+    let total = 0;
+    let row = '<tr><td><span class="cat-pill cat-'+c.replace(/\s+/g,'-')+'">'+c+'</span></td>';
+    dias.forEach(d => {
+      const v = grid[c]&&grid[c][d] || 0; total += v;
+      row += '<td class="num">' + (v ? fmtMin(v) : '<span class="muted">—</span>') + '</td>';
+    });
+    row += '<td class="num"><strong>'+fmtMin(total)+'</strong></td></tr>';
+    html += row;
+  });
+  document.getElementById('tb-pivot').innerHTML = html;
+  document.getElementById('pivot-info').textContent =
+    cats.length + ' categorías × ' + dias.length + ' días';
+}
+
+function renderPivCliPla(){
+  const placas = [...new Set(DB.map(r=>r.placa))].sort();
+  const puntos = [...new Set(DB.map(r=>r.punto))].sort();
+  const grid = {};
+  DB.forEach(r => {
+    if(!grid[r.punto]) grid[r.punto] = {};
+    grid[r.punto][r.placa] = (grid[r.punto][r.placa]||0) + r.minutos;
+  });
+  const totales = puntos.map(p => ({punto:p, total:Object.values(grid[p]||{}).reduce((s,v)=>s+v,0)}));
+  totales.sort((a,b)=>b.total-a.total);
+
+  let th = '<tr><th>Punto</th>';
+  placas.forEach(p => th += '<th class="num">'+p+'</th>');
+  th += '<th class="num">Total</th></tr>';
+  document.getElementById('th-pivot').innerHTML = th;
+
+  let html = '';
+  totales.forEach(({punto, total}) => {
+    html += '<tr><td>'+punto+'</td>';
+    placas.forEach(p => {
+      const v = grid[punto]&&grid[punto][p] || 0;
+      html += '<td class="num">' + (v ? fmtMin(v) : '<span class="muted">—</span>') + '</td>';
+    });
+    html += '<td class="num"><strong>'+fmtMin(total)+'</strong></td></tr>';
+  });
+  document.getElementById('tb-pivot').innerHTML = html;
+  document.getElementById('pivot-info').textContent =
+    puntos.length + ' puntos × ' + placas.length + ' placas';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── PESTAÑA TENDENCIAS ─────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+function renderTendencias(){
+  if(!DB.length){
+    if(CHARTS.tendRetail) CHARTS.tendRetail.destroy();
+    if(CHARTS.tendCli) CHARTS.tendCli.destroy();
+    return;
+  }
+  const semanas = [...new Set(DB.map(r=>r.semana))].sort((a,b)=>a-b);
+  const lblSem = semanas.map(s=>'S'+s);
+
+  // Retail: CD RETAIL, OTROS CD RETAIL, SALAS RETAIL — promedio por visita
+  const calcProm = (cat) => semanas.map(s => {
+    const f = DB.filter(r => r.semana === s && r.cat === cat);
+    return f.length ? f.reduce((sum,r)=>sum+r.minutos,0)/f.length/60 : 0; // horas
+  });
+
+  const ds = [
+    { label:'CD Retail',       data:calcProm('CD RETAIL'),       borderColor:'#60a5fa', backgroundColor:'rgba(96,165,250,.1)', tension:.35, fill:true },
+    { label:'Otros CD Retail', data:calcProm('OTROS CD RETAIL'), borderColor:'#fb923c', backgroundColor:'rgba(251,146,60,.1)',  tension:.35, fill:true },
+    { label:'Sala Retail',     data:calcProm('SALAS RETAIL'),    borderColor:'#4ade80', backgroundColor:'rgba(74,222,128,.1)',  tension:.35, fill:true }
+  ];
+  if(CHARTS.tendRetail) CHARTS.tendRetail.destroy();
+  CHARTS.tendRetail = new Chart(document.getElementById('ch-tend-retail'), {
+    type:'line',
+    data:{ labels:lblSem, datasets:ds },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{position:'top', labels:{color:'#9ca3af',font:{size:11}}}},
+      scales:{ y:{ticks:{color:'#9ca3af',callback:v=>v.toFixed(1)+'h'},grid:{color:'rgba(255,255,255,.05)'}},
+               x:{ticks:{color:'#9ca3af'},grid:{display:false}}}}
+  });
+
+  const dsCli = [{ label:'Clientes', data:calcProm('CLIENTES'),
+    borderColor:'#a78bfa', backgroundColor:'rgba(167,139,250,.15)', tension:.35, fill:true }];
+  if(CHARTS.tendCli) CHARTS.tendCli.destroy();
+  CHARTS.tendCli = new Chart(document.getElementById('ch-tend-cli'), {
+    type:'line',
+    data:{ labels:lblSem, datasets:dsCli },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{position:'top', labels:{color:'#9ca3af',font:{size:11}}}},
+      scales:{ y:{ticks:{color:'#9ca3af',callback:v=>v.toFixed(1)+'h'},grid:{color:'rgba(255,255,255,.05)'}},
+               x:{ticks:{color:'#9ca3af'},grid:{display:false}}}}
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── TABS ───────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.pane === name));
+  document.querySelectorAll('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-'+name));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── EXPORT EXCEL ───────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+function exportarExcel(){
+  if(!DB.length) return;
+  const wb = XLSX.utils.book_new();
+  // Hoja 1: detalle completo
+  const detalle = DB.map(r => ({
+    Fecha: r.fecha, Día: r.dia, Semana: 'S'+r.semana,
+    Placa: r.placa, Chofer: r.chofer,
+    Punto: r.punto, Categoría: r.cat,
+    Llegada: r.llegada, Salida: r.salida,
+    Minutos: r.minutos, Horas: (r.minutos/60).toFixed(2)
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalle), 'Detalle');
+
+  // Hoja 2: resumen por punto
+  const grupos = {};
+  DB.forEach(r => {
+    if(!grupos[r.punto]) grupos[r.punto] = {Punto:r.punto, Categoría:r.cat, Visitas:0, MinutosTot:0};
+    grupos[r.punto].Visitas++;
+    grupos[r.punto].MinutosTot += r.minutos;
+  });
+  const resumenPunto = Object.values(grupos).map(g => ({
+    ...g, HorasTot:(g.MinutosTot/60).toFixed(2),
+    PromedioMin: Math.round(g.MinutosTot/g.Visitas)
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumenPunto), 'Por Punto');
+
+  const fi = document.getElementById('fi').value;
+  const ff = document.getElementById('ff').value;
+  XLSX.writeFile(wb, 'tiempos-gps_' + fi + '_' + ff + '.xlsx');
+}
+</script>
+</body>
+</html>

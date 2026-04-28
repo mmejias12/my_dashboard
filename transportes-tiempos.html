@@ -593,7 +593,7 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
           <div style="background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12px;color:var(--t2)">
             <div style="color:var(--blue);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🗄 Proxy Azure (recomendado)</div>
             <div>Para evitar CORS configura un Azure Function como proxy:</div>
-            <code style="display:block;margin-top:6px;font-family:'DM Mono',monospace;font-size:11px;color:var(--green)">/api/gps-stops-proxy?desde=2026/04/21 00:00:00&hasta=2026/04/21 23:59:59&time=60</code>
+            <code style="display:block;margin-top:6px;font-family:'DM Mono',monospace;font-size:11px;color:var(--green)">/-api/gps-stops-by-plate-proxy?00&hasta=2026/04/21 23:59:59&time=60</code>
           </div>
           <div style="display:flex;gap:8px">
             <button class="btn-go" onclick="guardarConfig()">💾 Guardar</button>
@@ -639,7 +639,7 @@ let CFG = {
   url: 'https://web1ws.shareservice.co/WsReports.asmx',
   user: 'redtec chile',
   pass: 'redtec2023',
-  proxyBase: '/api/gps-stops-proxy',
+  proxyBase: '/api/gps-stops-by-plate-proxy'
   usarProxy: true
 };
 
@@ -1129,7 +1129,7 @@ function mostrarDiagnostico(msgExtra){
     <div style="color:var(--red);font-weight:600;font-size:12px">⛔ Error conectando al proxy GPS Condor</div>
     <div style="font-size:12px;color:#c87070;line-height:1.7">
       <strong>Error:</strong> <code style="color:var(--amber);font-family:'DM Mono',monospace">${msg}</code><br>
-      El proxy espera: <code style="color:var(--cyan);font-family:'DM Mono',monospace">/api/gps-stops-proxy?desde=2026/04/21 00:00:00&amp;hasta=2026/04/21 23:59:59&amp;time=60</code>
+      El proxy espera: <code style="color:var(--cyan);font-family:'DM Mono',monospace">/api/gps-stops-by-plate-proxy?0&amp;hasta=2026/04/21 23:59:59&amp;time=60</code>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button onclick="probarProxy()" class="btn-xls" style="font-size:11.5px;padding:6px 12px">🔍 Probar proxy en nueva pestaña</button>
@@ -1690,7 +1690,7 @@ async function testApi(){
     const esCors = e.message.includes('fetch') || e.message.includes('network') || e.message.includes('Failed');
     if(esCors){
       res.innerHTML = `<span style="color:var(--red)">✗ Proxy no disponible: ${e.message}</span>
-        <br><span style="color:var(--amber);font-size:11.5px">→ El proxy <code style="font-family:'DM Mono',monospace">/api/gps-stops-proxy</code> no está desplegado en Azure todavía.</span>
+        <br><span style="color:var(--amber);font-size:11.5px">→ El proxy <code style="font-family:'DM Mono',monospace">/api/gps-stops-by-plate-proxygado en Azure todavía.</span>
         <br><button onclick="window.open('${urlProxy}','_blank')" class="page-btn" style="font-size:11px;margin-top:6px">🔗 Abrir URL del proxy en nueva pestaña</button>`;
     } else {
       res.innerHTML = `<span style="color:var(--red)">✗ ${e.message}</span>`;

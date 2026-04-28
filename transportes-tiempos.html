@@ -291,7 +291,7 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
       <div class="field">
         <label>Placa</label>
         <select class="sinput" id="sel-flota" style="width:220px">
-          <option value="all">Todas las placas</option>
+          <option value="all" selected>Todas las placas</option>
           <option value="BJCL13">BJCL13 — Ismael Campos</option>
           <option value="CCRC36">CCRC36 — Juan Carlos Vega</option>
           <option value="CPVW43">CPVW43 — Cristóbal Echeverría</option>
@@ -310,7 +310,7 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
         <input type="number" class="dinput" id="min-tiempo" value="5" min="1" max="120" style="width:100px" />
       </div>
       <button class="btn-go" id="btn-cargar" onclick="cargarDatos()">
-        <span id="btn-ico">▶</span> Cargar datos
+        <span id="btn-ico">▶</span> <span id="btn-txt">Cargar toda la flota</span>
       </button>
       <button class="btn-xls" id="btn-xls" onclick="exportarExcel()" style="display:none">⬇ Excel</button>
       <span class="config-info" id="config-info"></span>
@@ -673,9 +673,33 @@ document.addEventListener('DOMContentLoaded', () => {
   lunes.setDate(hoy.getDate() - ((hoy.getDay()+6)%7));
   document.getElementById('fi').value = fmt(lunes);
   document.getElementById('ff').value = fmt(hoy);
-  
+
   loadConfig();
   renderEmptyCharts();
+
+  // Texto dinámico del botón según selección en el dropdown de placa
+  const selFlota = document.getElementById('sel-flota');
+  const btnTxt   = document.getElementById('btn-txt');
+  if (selFlota && btnTxt) {
+    const actualizarTextoBtn = () => {
+      const v = selFlota.value;
+      btnTxt.textContent = (v === 'all')
+        ? 'Cargar toda la flota'
+        : 'Cargar ' + (selFlota.options[selFlota.selectedIndex]?.text || v);
+    };
+    selFlota.addEventListener('change', actualizarTextoBtn);
+    actualizarTextoBtn();
+  }
+
+  // Auto-cargar la flota completa al abrir el dashboard (1 click = 0 clicks)
+  // Pequeño delay para que loadConfig() termine de aplicar la URL del proxy.
+  setTimeout(() => {
+    if (selFlota && selFlota.value === 'all' &&
+        document.getElementById('fi').value &&
+        document.getElementById('ff').value) {
+      cargarDatos();
+    }
+  }, 200);
 });
 
 function fmt(d){ return d.toISOString().split('T')[0]; }

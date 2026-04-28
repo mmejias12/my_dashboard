@@ -691,16 +691,24 @@ document.addEventListener('DOMContentLoaded', () => {
     actualizarTextoBtn();
   }
 
-  // Auto-cargar la flota completa al abrir el dashboard (1 click = 0 clicks)
-  // Pequeño delay para que loadConfig() termine de aplicar la URL del proxy.
-  setTimeout(() => {
-    if (selFlota && selFlota.value === 'all' &&
-        document.getElementById('fi').value &&
-        document.getElementById('ff').value) {
-      cargarDatos();
-    }
-  }, 200);
+  // Auto-cargar la flota completa al abrir el dashboard (1 sola vez)
+  // Guard explícito para evitar dobles disparos por re-renders o eventos múltiples.
+  if (!window._autoLoadDone) {
+    window._autoLoadDone = true;
+    setTimeout(() => {
+      if (selFlota && selFlota.value === 'all' &&
+          document.getElementById('fi').value &&
+          document.getElementById('ff').value) {
+        cargarDatos();
+      }
+    }, 200);
+  }
 });
+
+// Lock global para que cargarDatos no se ejecute en paralelo consigo misma.
+// Si llegan 2 disparos casi simultáneos (auto-load + click, o eventos duplicados),
+// el segundo se ignora silenciosamente.
+let _cargandoDatos = false;
 
 function fmt(d){ return d.toISOString().split('T')[0]; }
 function fmtDate(s){ try{ const d=s.includes('T')?s:s.replace(/\//g,'-')+'T12:00:00'; return new Date(d).toLocaleDateString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit'}); }catch(e){return s||'';} }
@@ -1000,6 +1008,13 @@ function calcMinsStr(llegada, salida){
 //  CARGA DE DATOS — usa proxy multi-placa real
 // ──────────────────────────────────────────────
 async function cargarDatos(){
+  // Lock: si ya hay una carga en curso, ignorar este disparo
+  if (_cargandoDatos) {
+    console.log('[GPS] cargarDatos ya en curso, ignorando disparo duplicado');
+    return;
+  }
+  _cargandoDatos = true;
+
   const fi      = document.getElementById('fi').value;
   const ff      = document.getElementById('ff').value;
   const minStop = document.getElementById('min-tiempo').value || 5;
@@ -1068,6 +1083,8 @@ async function cargarDatos(){
     setInfo('✗ ' + e.message,'red');
     mostrarDiagnostico(e.message);
     renderEmptyCharts();
+  } finally {
+    _cargandoDatos = false;
   }
 }
 

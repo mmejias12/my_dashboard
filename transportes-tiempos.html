@@ -950,17 +950,7 @@ function consolidarMedianoche(rows){
 
     // Recalcular fecha/semana/dia desde la llegada real
     if(r.llegada){
-      let fechaReal = r.llegada.split(' ')[0].replace(/\//g,'-');
-      // Si el segmento empieza a 00:00 y NO se consolidó con nada (llegada sigue siendo 00:00),
-      // pertenece al turno del día anterior
-      const horaLleg = r.llegada.split(' ')[1] || '';
-      if(horaLleg.startsWith('00:00') || horaLleg.startsWith('00:01')){
-        try{
-          const d = new Date(fechaReal + 'T12:00:00');
-          d.setDate(d.getDate() - 1);
-          fechaReal = d.toISOString().split('T')[0];
-        }catch(e){}
-      }
+      const fechaReal = r.llegada.split(' ')[0].replace(/\//g,'-');
       r.fecha  = fechaReal;
       r.semana = isoWeek(fechaReal);
       try{ r.dia = new Date(fechaReal+'T12:00:00').toLocaleDateString('es-CL',{weekday:'short'}).replace('.',''); }catch(e){}
@@ -1000,9 +990,9 @@ async function cargarDatos(){
   document.getElementById('btn-ico').textContent = '⟳';
 
   try{
-    // Pedir al proxy desde -1 día para capturar paradas nocturnas que cruzan medianoche hacia fi
-    const fiMenos1 = new Date(new Date(fi).getTime() - 86400000).toISOString().split('T')[0];
-    const allRows = await fetchTodaLaFlota(fiMenos1, ff, minStop);
+    // El proxy ya consulta desde fi-1 internamente para capturar paradas que
+    // cruzan medianoche, así que aquí pedimos directo el rango fi..ff
+    const allRows = await fetchTodaLaFlota(fi, ff, minStop);
     const consolidadas = consolidarMedianoche(allRows);
     const consolidadasFiltradas = consolidadas.filter(r => r.fecha >= fi && r.fecha <= ff);
 
@@ -1900,8 +1890,8 @@ async function cargarPlacaExtra(placa, silencioso){
 
   setBtnPlaca(placa, 'loading');
   try{
-    const fiMenos1 = new Date(new Date(fi).getTime() - 86400000).toISOString().split('T')[0];
-    const desde = fiMenos1.replace(/-/g,'/') + ' 00:00:00';
+    // El proxy ya consulta desde fi-1 internamente — pedimos el rango fi..ff directo
+    const desde = fi.replace(/-/g,'/') + ' 00:00:00';
     const hasta = ff.replace(/-/g,'/') + ' 23:59:59';
     const url = CFG.proxyBase + '?desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta) + '&time=' + minStop + '&plate=' + encodeURIComponent(placa);
 

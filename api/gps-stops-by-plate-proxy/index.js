@@ -44,9 +44,12 @@ const PASSWORD  = process.env.WIDETECH_PASSWORD || 'redtec1224';
 const DEFAULT_ITIME = 300;   // 5 minutos mínimo de parada
 const DEFAULT_STYPE = '';    // vacío = IDLE + ON-OFF
 
-// Batches: máx 2 placas en paralelo, 800ms entre batches
-const BATCH_SIZE   = 2;
-const BATCH_DELAY  = 800;
+// Procesamiento secuencial: el WS rechaza requests paralelos del mismo usuario
+// con código 109 (mensaje engañoso "20 segundos") pero acepta secuenciales sin
+// problema, incluso cuando vienen muy rápido. Validado empíricamente con
+// 4 consultas seguidas en Postman: todas HTTP 200 código 100, sin esperar.
+// Pequeño gap entre requests por seguridad ante posibles ráfagas de cliente.
+const REQUEST_GAP = 250;  // ms entre cada request secuencial
 
 // Timeout por request individual (ms)
 const REQUEST_TIMEOUT = 25000;
@@ -226,8 +229,10 @@ async function fetchStopsForPlate(plateInfo, sStartDate1, sStartDate2, iTime, sT
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /**
- * Procesa la flota completa (o solo una placa filtrada) en batches.
- * Resuelve con array de resultados (uno por placa, en orden de FLEET).
+ * Procesa la flota completa (o solo una placa filtrada) de forma SECUENCIAL.
+ * El WS de WideTech rechaza requests paralelos del mismo usuario con código
+ * 109. Las requests secuenciales (incluso muy seguidas) son aceptadas
+ * normalmente. Esta validación se hizo empíricamente con Postman.
  */
 async function fetchFleetStops(sStartDate1, sStartDate2, iTime, sType, log, plateFilter) {
   // Si viene plateFilter, consulta solo esa placa (o vacío si no está en la flota)
@@ -236,23 +241,44 @@ async function fetchFleetStops(sStartDate1, sStartDate2, iTime, sType, log, plat
     const wanted = plateFilter.toUpperCase();
     fleet = FLEET.filter(p => p.plate.toUpperCase() === wanted);
     if (!fleet.length) {
-      // Placa solicitada no está en la flota — devolver un placeholder con error
-      // para que el cliente sepa qué pasó en lugar de recibir items vacíos sin contexto.
       return [{ plate: plateFilter, name: '(desconocida)', items: [],
                 error: 'Placa no registrada en fleet.json' }];
     }
   }
 
   const results = [];
-  for (let i = 0; i < fleet.length; i += BATCH_SIZE) {
-    const batch = fleet.slice(i, i + BATCH_SIZE);
-    const settled = await Promise.all(
-      batch.map(p => fetchStopsForPlate(p, sStartDate1, sStartDate2, iTime, sType, log))
+  const RETRY_DELAY = 1500;  // ms a esperar antes de reintentar una placa fallida
+
+  for (let i = 0; i < fleet.length; i++) {
+    const plate = fleet[i];
+    let r = await fetchStopsForPlate(plate, sStartDate1, sStartDate2, iTime, sType, log);
+
+    // Retry si falló con un error potencialmente transitorio:
+    // WS 109 (rate-limit), HTTP 5xx, o errores de red/timeout.
+    const esTransitorio = r.error && (
+      r.wsCode === '109' ||
+      /^HTTP 5\d\d/.test(r.error) ||
+      r.error === 'timeout' ||
+      r.error === 'unknown'
     );
-    results.push(...settled);
-    // Delay entre batches (no después del último)
-    if (i + BATCH_SIZE < fleet.length) {
-      await sleep(BATCH_DELAY);
+
+    if (esTransitorio) {
+      log && log.warn && log.warn('Reintentando ' + plate.plate + ' tras: ' + r.error);
+      await sleep(RETRY_DELAY);
+      const r2 = await fetchStopsForPlate(plate, sStartDate1, sStartDate2, iTime, sType, log);
+      // Si el retry tuvo éxito, lo usamos. Si no, conservamos el primero.
+      if (!r2.error) {
+        r = r2;
+      } else {
+        // Conservamos el resultado original pero anotamos que se intentó 2 veces
+        r.error = r.error + ' (retry: ' + r2.error + ')';
+      }
+    }
+
+    results.push(r);
+    // Pequeño gap entre requests (no después de la última)
+    if (i < fleet.length - 1) {
+      await sleep(REQUEST_GAP);
     }
   }
   return results;

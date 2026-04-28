@@ -307,7 +307,7 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
       </div>
       <div class="field">
         <label>Tiempo mín. parada (min)</label>
-        <input type="number" class="dinput" id="min-tiempo" value="15" min="1" max="120" style="width:100px" />
+        <input type="number" class="dinput" id="min-tiempo" value="5" min="1" max="120" style="width:100px" />
       </div>
       <button class="btn-go" id="btn-cargar" onclick="cargarDatos()">
         <span id="btn-ico">▶</span> Cargar datos
@@ -978,7 +978,7 @@ function calcMinsStr(llegada, salida){
 async function cargarDatos(){
   const fi      = document.getElementById('fi').value;
   const ff      = document.getElementById('ff').value;
-  const minStop = document.getElementById('min-tiempo').value || 15;
+  const minStop = document.getElementById('min-tiempo').value || 5;
 
   if(!fi || !ff){ setInfo('⚠ Selecciona rango de fechas','amber'); return; }
 
@@ -1885,7 +1885,7 @@ async function cargarPlacaExtra(placa, silencioso){
   silencioso = silencioso || false;
   const fi      = document.getElementById('fi').value;
   const ff      = document.getElementById('ff').value;
-  const minStop = document.getElementById('min-tiempo').value || 15;
+  const minStop = document.getElementById('min-tiempo').value || 5;
   if(!fi || !ff) return false;
 
   setBtnPlaca(placa, 'loading');

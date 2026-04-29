@@ -6,6 +6,7 @@
 <title>Cartola Financiera — REDTEC M3LINK</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
 :root {
@@ -268,7 +269,24 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
 .exp-detail td:first-child { background:var(--bg-input);
   font-weight:400;color:var(--text-sec);font-size:10.5px; }
 .exp-month-label { color:var(--text-pri);font-weight:500; }
-.exp-trans-label { color:var(--text-sec);padding-left:14px; }
+.exp-trans-label { color:var(--text-sec); }
+.exp-week-label  { color:var(--c-uf);font-size:10px;padding-left:14px; }
+.exp-week-label-flat { color:var(--text-muted);font-size:10px;padding-left:14px;font-style:italic; }
+.exp-reg-label   { color:var(--text-muted);font-size:9.5px;padding-left:28px;font-family:'JetBrains Mono','DM Mono',monospace; }
+.exp-reg-blank   { color:var(--text-muted);opacity:.4; }
+/* Identación progresiva por nivel en la primera columna */
+.exp-detail.exp-lvl-2 td:first-child { padding-left:28px; }
+.exp-detail.exp-lvl-3 td:first-child { padding-left:48px;background:var(--bg-input); }
+.exp-detail.exp-lvl-4 td:first-child { padding-left:68px;background:#181d27; }
+.exp-detail.exp-lvl-5 td:first-child { padding-left:88px;background:#1c2230; }
+.exp-detail.exp-lvl-3 td { background:var(--bg-input); }
+.exp-detail.exp-lvl-4 td { background:#181d27; }
+.exp-detail.exp-lvl-5 td { background:#1c2230;font-size:9.5px; }
+/* Indicador de "abierto" - rotar el ▸ a ▾ */
+.exp-row.open td:first-child::before { transform:rotate(90deg); }
+.exp-detail.open .exp-month-label::before,
+.exp-detail.open .exp-trans-label::before,
+.exp-detail.open .exp-week-label::before { content:'▾ ';margin-right:-4px; }
 
 /* Search input */
 .pivot-search { background:var(--bg-input);color:var(--text-pri);
@@ -276,6 +294,15 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
   padding:6px 10px;font-size:11.5px;font-family:inherit;
   min-width:220px;margin-left:auto; }
 .pivot-search:focus { outline:1px solid var(--accent); }
+
+.btn-excel-rm { background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;
+  border:none;border-radius:var(--radius-sm);padding:7px 14px;
+  font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;
+  display:inline-flex;align-items:center;gap:6px;transition:all .15s;
+  box-shadow:0 1px 3px rgba(0,0,0,.3); }
+.btn-excel-rm:hover { background:linear-gradient(135deg,#15803d,#166534);
+  transform:translateY(-1px); }
+.btn-excel-rm:disabled { opacity:.4;cursor:not-allowed;transform:none; }
 
 .pivot-toolbar { display:flex;align-items:center;gap:10px;
   margin-bottom:.875rem;flex-wrap:wrap; }
@@ -529,6 +556,9 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
           </div>
           <input type="text" class="pivot-search" id="pivot-search"
                  placeholder="Buscar cliente..." oninput="filterPivot()">
+          <button class="btn-excel-rm" onclick="exportarResumenMensualExcel()" title="Descargar detalle plano del resumen actual">
+            ⬇ Excel
+          </button>
         </div>
 
         <!-- VISTA 1: CLIENTE × MES -->
@@ -962,13 +992,53 @@ function rmFecha(r) {
           r.fechaEmision || r.fechaCartola || r.FechaCartola ||
           r.fechaDoc || r.FechaDoc || r.fechaContabilizacion;
   if (!v) return null;
-  // Toma los primeros 10 chars (YYYY-MM-DD) y devuelve YYYY-MM
   var s = String(v).substring(0,10);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s.substring(0,7);
+  // Formato YYYY-MM-DD (ISO)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    return { fecha: s, mes: s.substring(0,7) };
+  }
   // Formato DD-MM-YYYY o DD/MM/YYYY
   var m = s.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})/);
-  if (m) return m[3]+'-'+m[2];
+  if (m) {
+    var iso = m[3]+'-'+m[2]+'-'+m[1];
+    return { fecha: iso, mes: m[3]+'-'+m[2] };
+  }
   return null;
+}
+
+// Calcula semana ISO de una fecha 'YYYY-MM-DD' → número (1-53).
+// Las semanas ISO empiezan en lunes y la semana 1 es la que contiene el primer jueves del año.
+function rmIsoWeek(fechaISO) {
+  try {
+    var d = new Date(fechaISO + 'T12:00:00');
+    var target = new Date(d.valueOf());
+    var dayNr = (d.getDay() + 6) % 7;  // 0 = lunes
+    target.setDate(target.getDate() - dayNr + 3);
+    var firstThursday = target.valueOf();
+    target.setMonth(0, 1);
+    if (target.getDay() !== 4) {
+      target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+    }
+    return 1 + Math.ceil((firstThursday - target) / 604800000);
+  } catch(e) { return 0; }
+}
+
+// Devuelve el rango de fechas de una semana ISO en formato 'DD MMM' (ej: '14-20 abr')
+function rmRangoSemana(fechaISO) {
+  try {
+    var d = new Date(fechaISO + 'T12:00:00');
+    var dayNr = (d.getDay() + 6) % 7;
+    var lunes = new Date(d.valueOf());
+    lunes.setDate(d.getDate() - dayNr);
+    var domingo = new Date(lunes.valueOf());
+    domingo.setDate(lunes.getDate() + 6);
+    var meses = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    if (lunes.getMonth() === domingo.getMonth()) {
+      return lunes.getDate() + '-' + domingo.getDate() + ' ' + meses[lunes.getMonth()];
+    }
+    return lunes.getDate() + ' ' + meses[lunes.getMonth()] + ' - ' +
+           domingo.getDate() + ' ' + meses[domingo.getMonth()];
+  } catch(e) { return ''; }
 }
 
 function buildResumenMensual(d1, d2) {
@@ -990,8 +1060,18 @@ function buildResumenMensual(d1, d2) {
     var uf   = r.netoUF  || 0;
     var qty  = 1;                    // 1 operación por registro
     var pal  = r.cantidad || 0;      // cantidad de pallets del registro
-    var mes  = rmFecha(r);
-    if (!mes) { mes = mesFallback; sinFecha++; }
+    var fInfo = rmFecha(r);
+    var mes, fechaISO, semana;
+    if (fInfo) {
+      mes = fInfo.mes;
+      fechaISO = fInfo.fecha;
+      semana = rmIsoWeek(fechaISO);
+    } else {
+      mes = mesFallback;
+      fechaISO = mesFallback + '-01';
+      semana = rmIsoWeek(fechaISO);
+      sinFecha++;
+    }
 
     mesesSet[mes] = true;
     transSet[op]  = true;
@@ -1008,17 +1088,35 @@ function buildResumenMensual(d1, d2) {
     cm.meses[mes].pal += pal;
     cm.total.clp += clp; cm.total.uf += uf; cm.total.n += qty; cm.total.pal += pal;
 
-    // Cliente × Transacción × Mes
+    // Cliente × Transacción × Mes (con semanas y registros individuales para vista expandible)
     if (!RM.byClienteTrans[code]) {
       RM.byClienteTrans[code] = { code:code, name:name, meses:{}, totalGlobal:{clp:0,uf:0,n:0,pal:0} };
     }
     var ct = RM.byClienteTrans[code];
     if (!ct.meses[mes]) ct.meses[mes] = { trans:{}, total:{clp:0,uf:0,n:0,pal:0} };
-    if (!ct.meses[mes].trans[op]) ct.meses[mes].trans[op] = {clp:0,uf:0,n:0,pal:0};
-    ct.meses[mes].trans[op].clp += clp;
-    ct.meses[mes].trans[op].uf  += uf;
-    ct.meses[mes].trans[op].n   += qty;
-    ct.meses[mes].trans[op].pal += pal;
+    if (!ct.meses[mes].trans[op]) {
+      ct.meses[mes].trans[op] = {clp:0,uf:0,n:0,pal:0, semanas:{}};
+    }
+    var tr = ct.meses[mes].trans[op];
+    tr.clp += clp; tr.uf += uf; tr.n += qty; tr.pal += pal;
+
+    // Nivel semana dentro de la transacción
+    if (!tr.semanas[semana]) {
+      tr.semanas[semana] = {clp:0,uf:0,n:0,pal:0, fechaRef:fechaISO, regs:[]};
+    }
+    var sw = tr.semanas[semana];
+    sw.clp += clp; sw.uf += uf; sw.n += qty; sw.pal += pal;
+    // Guardar fecha más temprana de la semana como referencia para el rango
+    if (fechaISO < sw.fechaRef) sw.fechaRef = fechaISO;
+
+    // Nivel registro individual: guardamos el dato crudo enriquecido
+    sw.regs.push({
+      fecha: fechaISO,
+      doc: r.nroDoc || r.NroDoc || r.docNum || r.numero || '',
+      clp: clp, uf: uf, pal: pal,
+      detalle: r.detalle || r.Detalle || r.descripcion || ''
+    });
+
     ct.meses[mes].total.clp += clp;
     ct.meses[mes].total.uf  += uf;
     ct.meses[mes].total.n   += qty;
@@ -1193,7 +1291,7 @@ function renderClienteTrans() {
     '<tr><td colspan="'+(transList.length+2)+'" style="text-align:center;color:var(--text-muted);padding:1rem">Sin datos en este mes</td></tr>';
 }
 
-// ── VISTA 3: EXPANDIBLE (Cliente → Mes → Transacción) ─────────────────────
+// ── VISTA 3: EXPANDIBLE (Cliente → Mes → Transacción → Semana → Registros) ──
 function renderExpandible() {
   var clientes = Object.values(RM.byClienteTrans).sort(function(a,b){
     return b.totalGlobal.clp - a.totalGlobal.clp;
@@ -1208,6 +1306,8 @@ function renderExpandible() {
   var html = '';
   clientes.forEach(function(c, idx){
     var rowId = 'exp-c-'+idx;
+
+    // ── Nivel 1: CLIENTE ──
     html += '<tr class="exp-row" onclick="toggleExp(\''+rowId+'\', this)">'
       + '<td title="'+c.code+'">'+c.name+'</td>'
       + '<td>'+fmtCLP(c.totalGlobal.clp)+'</td>'
@@ -1216,32 +1316,76 @@ function renderExpandible() {
       + '<td style="color:#86efac">'+(c.totalGlobal.pal||0).toLocaleString('es-CL')+'</td>'
       + '</tr>';
 
-    // Detalle mensual
+    // ── Nivel 2: MES (oculto inicialmente) ──
     var mesesCli = Object.keys(c.meses).sort();
     mesesCli.forEach(function(m, mIdx){
       var mRowId = rowId + '-m'+mIdx;
       var dm = c.meses[m];
-      html += '<tr class="exp-detail hidden" data-parent="'+rowId+'">'
-        + '<td><span class="exp-month-label" onclick="toggleExp(\''+mRowId+'\', this.parentElement.parentElement); event.stopPropagation();" style="cursor:pointer">▸ '+formatMesLabel(m)+'</span></td>'
+      html += '<tr class="exp-detail exp-lvl-2 hidden" data-parent="'+rowId+'">'
+        + '<td><span class="exp-month-label" onclick="toggleExp(\''+mRowId+'\', this.closest(\'tr\')); event.stopPropagation();" style="cursor:pointer">▸ '+formatMesLabel(m)+'</span></td>'
         + '<td>'+fmtCLP(dm.total.clp)+'</td>'
         + '<td style="color:var(--c-uf)">'+fmtUF(dm.total.uf)+'</td>'
         + '<td>'+dm.total.n+'</td>'
         + '<td style="color:#86efac">'+(dm.total.pal||0).toLocaleString('es-CL')+'</td>'
         + '</tr>';
 
-      // Detalle por transacción del mes (oculto inicialmente)
+      // ── Nivel 3: TRANSACCIÓN del mes (oculto) ──
       var transOrdenadas = Object.keys(dm.trans).sort(function(a,b){
         return dm.trans[b].clp - dm.trans[a].clp;
       });
-      transOrdenadas.forEach(function(t){
+      transOrdenadas.forEach(function(t, tIdx){
+        var tRowId = mRowId + '-t'+tIdx;
         var td = dm.trans[t];
-        html += '<tr class="exp-detail hidden" data-parent="'+mRowId+'" data-grandparent="'+rowId+'">'
-          + '<td><span class="exp-trans-label">▫ '+formatTransLabel(t)+'</span></td>'
+        html += '<tr class="exp-detail exp-lvl-3 hidden" data-parent="'+mRowId+'" data-ancestor="'+rowId+'">'
+          + '<td><span class="exp-trans-label" onclick="toggleExp(\''+tRowId+'\', this.closest(\'tr\')); event.stopPropagation();" style="cursor:pointer">▸ '+formatTransLabel(t)+'</span></td>'
           + '<td>'+fmtCLP(td.clp)+'</td>'
           + '<td style="color:var(--c-uf)">'+fmtUF(td.uf)+'</td>'
           + '<td>'+td.n+'</td>'
           + '<td style="color:#86efac">'+(td.pal||0).toLocaleString('es-CL')+'</td>'
           + '</tr>';
+
+        // ── Nivel 4: SEMANA dentro de la transacción ──
+        var semanas = Object.keys(td.semanas)
+          .map(function(s){ return parseInt(s,10); })
+          .sort(function(a,b){ return a-b; });
+        semanas.forEach(function(sNum, sIdx){
+          var sRowId = tRowId + '-s'+sIdx;
+          var sw = td.semanas[sNum];
+          var rango = rmRangoSemana(sw.fechaRef);
+          var lblSem = 'S'+String(sNum).padStart(2,'0') + (rango ? ' · '+rango : '');
+          // Solo permitir expandir registros si hay al menos 1
+          var expandible = sw.regs && sw.regs.length > 0;
+          var prefijo = expandible
+            ? '<span class="exp-week-label" onclick="toggleExp(\''+sRowId+'\', this.closest(\'tr\')); event.stopPropagation();" style="cursor:pointer">▸ '+lblSem+'</span>'
+            : '<span class="exp-week-label-flat">• '+lblSem+'</span>';
+
+          html += '<tr class="exp-detail exp-lvl-4 hidden" data-parent="'+tRowId+'" data-ancestor="'+rowId+'">'
+            + '<td>'+prefijo+'</td>'
+            + '<td>'+fmtCLP(sw.clp)+'</td>'
+            + '<td style="color:var(--c-uf)">'+fmtUF(sw.uf)+'</td>'
+            + '<td>'+sw.n+'</td>'
+            + '<td style="color:#86efac">'+(sw.pal||0).toLocaleString('es-CL')+'</td>'
+            + '</tr>';
+
+          // ── Nivel 5: REGISTROS INDIVIDUALES (opcional, oculto) ──
+          if (expandible) {
+            var regsOrdenados = sw.regs.slice().sort(function(a,b){
+              return a.fecha.localeCompare(b.fecha);
+            });
+            regsOrdenados.forEach(function(reg){
+              var fechaCorta = reg.fecha.split('-').reverse().join('-'); // DD-MM-YYYY
+              var lblReg = '◦ ' + fechaCorta + (reg.doc ? ' · #'+reg.doc : '');
+              if (reg.detalle) lblReg += ' — ' + (reg.detalle.length > 40 ? reg.detalle.substring(0,40)+'…' : reg.detalle);
+              html += '<tr class="exp-detail exp-lvl-5 hidden" data-parent="'+sRowId+'" data-ancestor="'+rowId+'">'
+                + '<td><span class="exp-reg-label">'+lblReg+'</span></td>'
+                + '<td>'+fmtCLP(reg.clp)+'</td>'
+                + '<td style="color:var(--c-uf)">'+(reg.uf ? fmtUF(reg.uf) : '—')+'</td>'
+                + '<td class="exp-reg-blank">—</td>'
+                + '<td style="color:#86efac">'+(reg.pal ? reg.pal.toLocaleString('es-CL') : '—')+'</td>'
+                + '</tr>';
+            });
+          }
+        });
       });
     });
   });
@@ -1250,24 +1394,37 @@ function renderExpandible() {
     '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:1rem">Sin datos</td></tr>';
 }
 
-// Toggle expandible: muestra/oculta hijos directos
+// Toggle expandible recursivo: muestra/oculta hijos directos.
+// Al colapsar un nivel, oculta también todos sus descendientes (cascada)
+// y los marca como cerrados para que arranquen colapsados al re-expandir.
 function toggleExp(parentId, rowEl) {
   rowEl.classList.toggle('open');
   var isOpen = rowEl.classList.contains('open');
-  document.querySelectorAll('tr[data-parent="'+parentId+'"]').forEach(function(tr){
-    if (isOpen) {
+
+  if (isOpen) {
+    // Mostrar solo hijos directos
+    document.querySelectorAll('tr[data-parent="'+parentId+'"]').forEach(function(tr){
       tr.classList.remove('hidden');
-    } else {
-      tr.classList.add('hidden');
-      // Si tiene hijos abiertos, cerrarlos también
-      var label = tr.querySelector('.exp-month-label');
+    });
+  } else {
+    // Cerrar y cascadear ocultamiento a todos los descendientes
+    ocultarDescendientes(parentId);
+  }
+}
+
+// Oculta recursivamente todas las filas cuyo data-parent coincide con el id dado,
+// y luego sus propios hijos, hasta agotar la jerarquía.
+function ocultarDescendientes(parentId) {
+  document.querySelectorAll('tr[data-parent="'+parentId+'"]').forEach(function(tr){
+    tr.classList.add('hidden');
+    // Si la fila tenía hijos abiertos, también colapsarlos
+    if (tr.classList.contains('open')) {
+      tr.classList.remove('open');
+      // Buscar el id que esta fila usa como padre de sus hijos
+      var label = tr.querySelector('[onclick^="toggleExp"]');
       if (label) {
-        var parentRow = tr;
-        // Buscar id del mes (data-parent de sus hijos apunta a mRowId)
-        var allRows = document.querySelectorAll('#tbody-exp tr');
-        allRows.forEach(function(r){
-          if (r.getAttribute('data-grandparent') === parentId) r.classList.add('hidden');
-        });
+        var match = label.getAttribute('onclick').match(/toggleExp\('([^']+)'/);
+        if (match) ocultarDescendientes(match[1]);
       }
     }
   });
@@ -1295,6 +1452,88 @@ function filterPivot() {
   renderClienteMes();
   renderClienteTrans();
   renderExpandible();
+}
+
+// ── EXPORTAR RESUMEN MENSUAL A EXCEL ──────────────────────────────────────
+// Genera un .xlsx con una hoja "Detalle" que tiene 1 fila por registro crudo
+// del rango cargado, respetando el filtro de buscador activo (RM.filterText).
+function exportarResumenMensualExcel() {
+  if (typeof XLSX === 'undefined') {
+    alert('La librería de Excel aún no terminó de cargar. Intenta de nuevo en unos segundos.');
+    return;
+  }
+  if (!raw || !raw.length) {
+    alert('No hay datos cargados. Carga primero la cartola del período.');
+    return;
+  }
+
+  var filtro = (RM.filterText || '').toLowerCase().trim();
+
+  // Construir filas planas: 1 por registro crudo
+  var filas = [];
+  raw.forEach(function(r){
+    var code = r.cardCode || '';
+    var name = r.cardName || '';
+    // Aplicar mismo filtro que usan las vistas (por nombre o código de cliente)
+    if (filtro) {
+      var blob = (code + ' ' + name).toLowerCase();
+      if (blob.indexOf(filtro) < 0) return;
+    }
+
+    var fInfo = rmFecha(r);
+    var fechaISO = fInfo ? fInfo.fecha : '';
+    var mes      = fInfo ? fInfo.mes   : '';
+    var semana   = fInfo ? rmIsoWeek(fInfo.fecha) : 0;
+    var rangoSem = fInfo ? rmRangoSemana(fInfo.fecha) : '';
+
+    filas.push({
+      'Cliente código':   code,
+      'Cliente nombre':   name,
+      'Fecha':            fechaISO,
+      'Mes':              mes,
+      'Semana ISO':       semana ? 'S'+String(semana).padStart(2,'0') : '',
+      'Rango semana':     rangoSem,
+      'Transacción':      (r.operacion || 'OTROS').toUpperCase(),
+      'Nro documento':    r.nroDoc || r.NroDoc || r.docNum || r.numero || '',
+      'Detalle':          r.detalle || r.Detalle || r.descripcion || '',
+      'Monto CLP':        Math.round(r.netoCLP || 0),
+      'Monto UF':         +(r.netoUF || 0).toFixed(4),
+      'Pallets':          r.cantidad || 0
+    });
+  });
+
+  if (!filas.length) {
+    alert('No hay registros que coincidan con el filtro actual.');
+    return;
+  }
+
+  // Ordenar por fecha ascendente, luego cliente, luego transacción
+  filas.sort(function(a,b){
+    if (a.Fecha !== b.Fecha) return a.Fecha.localeCompare(b.Fecha);
+    if (a['Cliente nombre'] !== b['Cliente nombre']) return a['Cliente nombre'].localeCompare(b['Cliente nombre']);
+    return a['Transacción'].localeCompare(b['Transacción']);
+  });
+
+  // Crear workbook
+  var wb = XLSX.utils.book_new();
+  var ws = XLSX.utils.json_to_sheet(filas);
+
+  // Anchos de columna (en caracteres aprox)
+  ws['!cols'] = [
+    {wch:14}, {wch:32}, {wch:12}, {wch:10}, {wch:11}, {wch:18},
+    {wch:24}, {wch:14}, {wch:36}, {wch:14}, {wch:11}, {wch:9}
+  ];
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Detalle');
+
+  // Nombre del archivo: cartola_resumen_FI_FF.xlsx
+  var fi = document.getElementById('d1') ? document.getElementById('d1').value : '';
+  var ff = document.getElementById('d2') ? document.getElementById('d2').value : '';
+  var nombreBase = 'cartola_resumen';
+  if (fi && ff) nombreBase += '_' + fi + '_' + ff;
+  if (filtro) nombreBase += '_filtro';
+
+  XLSX.writeFile(wb, nombreBase + '.xlsx');
 }
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────

@@ -237,6 +237,8 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
 .pcell-uf  { color:var(--c-uf);font-size:10px; }
 .pcell-n   { color:var(--text-muted);font-size:9.5px;
   text-transform:uppercase;letter-spacing:.3px; }
+.pcell-pal { color:#86efac;font-size:9.5px;font-weight:500;
+  font-family:'Inter',sans-serif; }
 .pcell-empty { color:var(--text-muted);opacity:.4; }
 
 /* Mes / cliente meta */
@@ -563,6 +565,7 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
                   <th style="text-align:right">Total CLP</th>
                   <th style="text-align:right">Total UF</th>
                   <th style="text-align:right">N° ops</th>
+                  <th style="text-align:right">Pallets</th>
                 </tr>
               </thead>
               <tbody id="tbody-exp"></tbody>
@@ -985,7 +988,8 @@ function buildResumenMensual(d1, d2) {
     var op   = (r.operacion||'OTROS').toUpperCase();
     var clp  = r.netoCLP || 0;
     var uf   = r.netoUF  || 0;
-    var qty  = 1; // 1 operación por registro
+    var qty  = 1;                    // 1 operación por registro
+    var pal  = r.cantidad || 0;      // cantidad de pallets del registro
     var mes  = rmFecha(r);
     if (!mes) { mes = mesFallback; sinFecha++; }
 
@@ -994,29 +998,32 @@ function buildResumenMensual(d1, d2) {
 
     // Cliente × Mes
     if (!RM.byClienteMes[code]) {
-      RM.byClienteMes[code] = { code:code, name:name, meses:{}, total:{clp:0,uf:0,n:0} };
+      RM.byClienteMes[code] = { code:code, name:name, meses:{}, total:{clp:0,uf:0,n:0,pal:0} };
     }
     var cm = RM.byClienteMes[code];
-    if (!cm.meses[mes]) cm.meses[mes] = {clp:0,uf:0,n:0};
+    if (!cm.meses[mes]) cm.meses[mes] = {clp:0,uf:0,n:0,pal:0};
     cm.meses[mes].clp += clp;
     cm.meses[mes].uf  += uf;
     cm.meses[mes].n   += qty;
-    cm.total.clp += clp; cm.total.uf += uf; cm.total.n += qty;
+    cm.meses[mes].pal += pal;
+    cm.total.clp += clp; cm.total.uf += uf; cm.total.n += qty; cm.total.pal += pal;
 
     // Cliente × Transacción × Mes
     if (!RM.byClienteTrans[code]) {
-      RM.byClienteTrans[code] = { code:code, name:name, meses:{}, totalGlobal:{clp:0,uf:0,n:0} };
+      RM.byClienteTrans[code] = { code:code, name:name, meses:{}, totalGlobal:{clp:0,uf:0,n:0,pal:0} };
     }
     var ct = RM.byClienteTrans[code];
-    if (!ct.meses[mes]) ct.meses[mes] = { trans:{}, total:{clp:0,uf:0,n:0} };
-    if (!ct.meses[mes].trans[op]) ct.meses[mes].trans[op] = {clp:0,uf:0,n:0};
+    if (!ct.meses[mes]) ct.meses[mes] = { trans:{}, total:{clp:0,uf:0,n:0,pal:0} };
+    if (!ct.meses[mes].trans[op]) ct.meses[mes].trans[op] = {clp:0,uf:0,n:0,pal:0};
     ct.meses[mes].trans[op].clp += clp;
     ct.meses[mes].trans[op].uf  += uf;
     ct.meses[mes].trans[op].n   += qty;
+    ct.meses[mes].trans[op].pal += pal;
     ct.meses[mes].total.clp += clp;
     ct.meses[mes].total.uf  += uf;
     ct.meses[mes].total.n   += qty;
-    ct.totalGlobal.clp += clp; ct.totalGlobal.uf += uf; ct.totalGlobal.n += qty;
+    ct.meses[mes].total.pal += pal;
+    ct.totalGlobal.clp += clp; ct.totalGlobal.uf += uf; ct.totalGlobal.n += qty; ct.totalGlobal.pal += pal;
   });
 
   RM.meses = Object.keys(mesesSet).sort();
@@ -1052,13 +1059,14 @@ function formatTransLabel(t) {
 }
 
 function pcell(d) {
-  if (!d || (!d.clp && !d.uf && !d.n)) {
+  if (!d || (!d.clp && !d.uf && !d.n && !d.pal)) {
     return '<span class="pcell-empty">—</span>';
   }
   return '<div class="pcell">'
     + '<span class="pcell-clp">'+fmtCLP(d.clp)+'</span>'
     + (d.uf ? '<span class="pcell-uf">'+fmtUF(d.uf)+' UF</span>' : '')
     + '<span class="pcell-n">'+d.n+' op'+(d.n!==1?'s':'')+'</span>'
+    + (d.pal ? '<span class="pcell-pal">📦 '+d.pal.toLocaleString('es-CL')+' pallets</span>' : '')
     + '</div>';
 }
 
@@ -1090,19 +1098,21 @@ function renderClienteMes() {
 
   // Fila de totales por mes
   var totMes = {};
-  RM.meses.forEach(function(m){ totMes[m] = {clp:0,uf:0,n:0}; });
-  var totGlobal = {clp:0,uf:0,n:0};
+  RM.meses.forEach(function(m){ totMes[m] = {clp:0,uf:0,n:0,pal:0}; });
+  var totGlobal = {clp:0,uf:0,n:0,pal:0};
   clientes.forEach(function(c){
     RM.meses.forEach(function(m){
       if (c.meses[m]) {
         totMes[m].clp += c.meses[m].clp;
         totMes[m].uf  += c.meses[m].uf;
         totMes[m].n   += c.meses[m].n;
+        totMes[m].pal += c.meses[m].pal;
       }
     });
     totGlobal.clp += c.total.clp;
     totGlobal.uf  += c.total.uf;
     totGlobal.n   += c.total.n;
+    totGlobal.pal += c.total.pal;
   });
   html += '<tr class="totals-row"><td>TOTAL ('+clientes.length+')</td>';
   RM.meses.forEach(function(m){ html += '<td>'+pcell(totMes[m])+'</td>'; });
@@ -1158,8 +1168,8 @@ function renderClienteTrans() {
 
   // Totales por transacción
   var totTrans = {};
-  transList.forEach(function(t){ totTrans[t] = {clp:0,uf:0,n:0}; });
-  var totGlobal = {clp:0,uf:0,n:0};
+  transList.forEach(function(t){ totTrans[t] = {clp:0,uf:0,n:0,pal:0}; });
+  var totGlobal = {clp:0,uf:0,n:0,pal:0};
   clientes.forEach(function(c){
     var dm = c.meses[mes];
     transList.forEach(function(t){
@@ -1167,11 +1177,13 @@ function renderClienteTrans() {
         totTrans[t].clp += dm.trans[t].clp;
         totTrans[t].uf  += dm.trans[t].uf;
         totTrans[t].n   += dm.trans[t].n;
+        totTrans[t].pal += dm.trans[t].pal;
       }
     });
     totGlobal.clp += dm.total.clp;
     totGlobal.uf  += dm.total.uf;
     totGlobal.n   += dm.total.n;
+    totGlobal.pal += dm.total.pal;
   });
   html += '<tr class="totals-row"><td>TOTAL ('+clientes.length+')</td>';
   transList.forEach(function(t){ html += '<td>'+pcell(totTrans[t])+'</td>'; });
@@ -1201,6 +1213,7 @@ function renderExpandible() {
       + '<td>'+fmtCLP(c.totalGlobal.clp)+'</td>'
       + '<td style="color:var(--c-uf)">'+fmtUF(c.totalGlobal.uf)+'</td>'
       + '<td>'+c.totalGlobal.n+'</td>'
+      + '<td style="color:#86efac">'+(c.totalGlobal.pal||0).toLocaleString('es-CL')+'</td>'
       + '</tr>';
 
     // Detalle mensual
@@ -1213,6 +1226,7 @@ function renderExpandible() {
         + '<td>'+fmtCLP(dm.total.clp)+'</td>'
         + '<td style="color:var(--c-uf)">'+fmtUF(dm.total.uf)+'</td>'
         + '<td>'+dm.total.n+'</td>'
+        + '<td style="color:#86efac">'+(dm.total.pal||0).toLocaleString('es-CL')+'</td>'
         + '</tr>';
 
       // Detalle por transacción del mes (oculto inicialmente)
@@ -1226,13 +1240,14 @@ function renderExpandible() {
           + '<td>'+fmtCLP(td.clp)+'</td>'
           + '<td style="color:var(--c-uf)">'+fmtUF(td.uf)+'</td>'
           + '<td>'+td.n+'</td>'
+          + '<td style="color:#86efac">'+(td.pal||0).toLocaleString('es-CL')+'</td>'
           + '</tr>';
       });
     });
   });
 
   document.getElementById('tbody-exp').innerHTML = html ||
-    '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:1rem">Sin datos</td></tr>';
+    '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:1rem">Sin datos</td></tr>';
 }
 
 // Toggle expandible: muestra/oculta hijos directos

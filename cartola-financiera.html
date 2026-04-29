@@ -593,8 +593,6 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
                 <tr>
                   <th>Cliente / Mes / Transacción</th>
                   <th style="text-align:right">Total CLP</th>
-                  <th style="text-align:right">Total UF</th>
-                  <th style="text-align:right">N° ops</th>
                   <th style="text-align:right">Pallets</th>
                 </tr>
               </thead>
@@ -1162,8 +1160,6 @@ function pcell(d) {
   }
   return '<div class="pcell">'
     + '<span class="pcell-clp">'+fmtCLP(d.clp)+'</span>'
-    + (d.uf ? '<span class="pcell-uf">'+fmtUF(d.uf)+' UF</span>' : '')
-    + '<span class="pcell-n">'+d.n+' op'+(d.n!==1?'s':'')+'</span>'
     + (d.pal ? '<span class="pcell-pal">📦 '+d.pal.toLocaleString('es-CL')+' pallets</span>' : '')
     + '</div>';
 }
@@ -1311,8 +1307,6 @@ function renderExpandible() {
     html += '<tr class="exp-row" onclick="toggleExp(\''+rowId+'\', this)">'
       + '<td title="'+c.code+'">'+c.name+'</td>'
       + '<td>'+fmtCLP(c.totalGlobal.clp)+'</td>'
-      + '<td style="color:var(--c-uf)">'+fmtUF(c.totalGlobal.uf)+'</td>'
-      + '<td>'+c.totalGlobal.n+'</td>'
       + '<td style="color:#86efac">'+(c.totalGlobal.pal||0).toLocaleString('es-CL')+'</td>'
       + '</tr>';
 
@@ -1324,8 +1318,6 @@ function renderExpandible() {
       html += '<tr class="exp-detail exp-lvl-2 hidden" data-parent="'+rowId+'">'
         + '<td><span class="exp-month-label" onclick="toggleExp(\''+mRowId+'\', this.closest(\'tr\')); event.stopPropagation();" style="cursor:pointer">▸ '+formatMesLabel(m)+'</span></td>'
         + '<td>'+fmtCLP(dm.total.clp)+'</td>'
-        + '<td style="color:var(--c-uf)">'+fmtUF(dm.total.uf)+'</td>'
-        + '<td>'+dm.total.n+'</td>'
         + '<td style="color:#86efac">'+(dm.total.pal||0).toLocaleString('es-CL')+'</td>'
         + '</tr>';
 
@@ -1339,8 +1331,6 @@ function renderExpandible() {
         html += '<tr class="exp-detail exp-lvl-3 hidden" data-parent="'+mRowId+'" data-ancestor="'+rowId+'">'
           + '<td><span class="exp-trans-label" onclick="toggleExp(\''+tRowId+'\', this.closest(\'tr\')); event.stopPropagation();" style="cursor:pointer">▸ '+formatTransLabel(t)+'</span></td>'
           + '<td>'+fmtCLP(td.clp)+'</td>'
-          + '<td style="color:var(--c-uf)">'+fmtUF(td.uf)+'</td>'
-          + '<td>'+td.n+'</td>'
           + '<td style="color:#86efac">'+(td.pal||0).toLocaleString('es-CL')+'</td>'
           + '</tr>';
 
@@ -1362,8 +1352,6 @@ function renderExpandible() {
           html += '<tr class="exp-detail exp-lvl-4 hidden" data-parent="'+tRowId+'" data-ancestor="'+rowId+'">'
             + '<td>'+prefijo+'</td>'
             + '<td>'+fmtCLP(sw.clp)+'</td>'
-            + '<td style="color:var(--c-uf)">'+fmtUF(sw.uf)+'</td>'
-            + '<td>'+sw.n+'</td>'
             + '<td style="color:#86efac">'+(sw.pal||0).toLocaleString('es-CL')+'</td>'
             + '</tr>';
 
@@ -1379,8 +1367,6 @@ function renderExpandible() {
               html += '<tr class="exp-detail exp-lvl-5 hidden" data-parent="'+sRowId+'" data-ancestor="'+rowId+'">'
                 + '<td><span class="exp-reg-label">'+lblReg+'</span></td>'
                 + '<td>'+fmtCLP(reg.clp)+'</td>'
-                + '<td style="color:var(--c-uf)">'+(reg.uf ? fmtUF(reg.uf) : '—')+'</td>'
-                + '<td class="exp-reg-blank">—</td>'
                 + '<td style="color:#86efac">'+(reg.pal ? reg.pal.toLocaleString('es-CL') : '—')+'</td>'
                 + '</tr>';
             });
@@ -1391,7 +1377,7 @@ function renderExpandible() {
   });
 
   document.getElementById('tbody-exp').innerHTML = html ||
-    '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:1rem">Sin datos</td></tr>';
+    '<tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:1rem">Sin datos</td></tr>';
 }
 
 // Toggle expandible recursivo: muestra/oculta hijos directos.

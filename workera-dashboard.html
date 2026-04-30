@@ -329,11 +329,11 @@ async function cargar() {
 async function cargarTrabajadores() {
   var suc = $('sucursal').value;
   var dep = $('depto').value;
- 
-if () {
-  setStatus('err', '⚠️ Debes seleccionar una sucursal para cargar trabajadores');
-  return;
-}
+  
+  if (!suc) {
+    setStatus('err', '⚠️ Debes seleccionar una sucursal para cargar trabajadores');
+    return;
+  }
 
   setStatus('load', 'Cargando trabajadores de ' + suc + '/' + dep + '...');
   var data = await apiFetch('/employee', { branchOffice: suc, department: dep, page: 1 });

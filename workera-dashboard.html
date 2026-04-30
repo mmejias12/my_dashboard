@@ -70,6 +70,17 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 .card{background:var(--s2);border:1px solid var(--br);border-radius:10px;padding:14px;margin-bottom:11px}
 .ct{font-size:11.5px;font-weight:600;color:var(--t2);margin-bottom:3px}
 .cs{font-size:10.5px;color:var(--t3);margin-bottom:11px}
+.emp-banner{background:rgba(34,211,238,.07);border:1px solid rgba(34,211,238,.3);
+  border-radius:6px;padding:10px 14px;margin:8px 0 14px;font-size:11.5px;
+  color:var(--t2);line-height:1.55}
+.emp-banner code{background:var(--s2);padding:1px 6px;border-radius:3px;
+  font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--cyan)}
+.emp-banner strong{color:var(--t1)}
+/* Cuando la pestaña Trabajadores está activa, ocultar filtros que no aplican */
+body.tab-emp .ctrl-sel-suc,
+body.tab-emp .ctrl-sel-dep,
+body.tab-emp .ctrl-lbl-suc,
+body.tab-emp .ctrl-lbl-dep{display:none}
 
 /* TABLA */
 .tw{overflow:auto;max-height:500px}
@@ -114,10 +125,10 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
     <option value="TRANSPORTES">TRANSPORTES RT SPA</option>
     <option value="REDTEC">REDTEC S.A.</option>
   </select>
-  <span class="ctrl-lbl">Sucursal:</span>
-  <select id="sucursal" class="ctrl-sel"><option value="">Todas</option></select>
-  <span class="ctrl-lbl">Depto:</span>
-  <select id="depto" class="ctrl-sel"><option value="">Todos</option></select>
+  <span class="ctrl-lbl ctrl-lbl-suc">Sucursal:</span>
+  <select id="sucursal" class="ctrl-sel ctrl-sel-suc"><option value="">Todas</option></select>
+  <span class="ctrl-lbl ctrl-lbl-dep">Depto:</span>
+  <select id="depto" class="ctrl-sel ctrl-sel-dep"><option value="">Todos</option></select>
   <span class="ctrl-lbl">Desde:</span>
   <input type="date" id="d1" class="ctrl-inp">
   <span class="ctrl-lbl">Hasta:</span>
@@ -150,7 +161,20 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
     </div>
     <div class="card">
       <div class="ct">Listado de trabajadores</div>
-      <div class="cs">Endpoint: /employee · filtra por sucursal + departamento</div>
+      <div class="cs">
+        Endpoint: /employee · API consulta MATRIZ+INICIAL (modelo Workera);
+        filtro de sucursal/depto se aplica localmente sobre los datos operativos de cada empleado.
+        <button onclick="recargarEmpleados()" style="margin-left:10px;padding:3px 10px;font-size:11px;background:var(--bg-input);color:var(--text-pri);border:1px solid var(--border);border-radius:4px;cursor:pointer;">↻ Recargar desde API</button>
+      </div>
+      <div class="emp-banner">
+        <strong>ℹ Nota sobre el modelo de datos Workera:</strong>
+        El API devuelve todos los empleados con sucursal administrativa <code>MATRIZ</code>
+        y departamento <code>INICIAL</code>. La asignación operativa (REPARADORES,
+        ADMINISTRATIVOS, etc.) que ves en la UI de Workera <strong>no está disponible vía API</strong>,
+        por lo que los filtros de sucursal/depto se ocultan en esta pestaña.
+        En las demás pestañas (Marcaciones, Permisos, Turnos) sí se pueden usar los filtros porque
+        el API los soporta para esos endpoints.
+      </div>
       <div class="tw">
         <table class="tbl" id="tbl-emp">
           <thead><tr><th>Código</th><th>RUT</th><th>Nombre</th><th>Apellidos</th><th>Cargo</th><th>Departamento</th><th>Sucursal</th><th>Estado</th></tr></thead>
@@ -229,6 +253,15 @@ var PROXY = '/api/workera-proxy';
 var tabActivo = 'emp';
 var cacheSucursales = [];
 
+// Cache de empleados cargados (todos vienen como MATRIZ+INICIAL en el API,
+// el filtro por sucursal/departamento operativo se hace en JS sobre estos datos).
+var cacheEmpleados = [];
+
+// Constantes del modelo Workera: la única combinación que devuelve datos
+// reales en el API es MATRIZ + INICIAL. Las otras sucursales son operativas.
+var WORKERA_API_BRANCH = 'MATRIZ';
+var WORKERA_API_DEPT   = 'INICIAL';
+
 // Inicializar fechas: hoy - 7 días
 var hoy = new Date();
 var hace7 = new Date(hoy); hace7.setDate(hace7.getDate() - 7);
@@ -243,6 +276,9 @@ function tab(t) {
   document.querySelectorAll('.view').forEach(function(el) { el.classList.remove('on'); });
   event.target.classList.add('on');
   $('v-' + t).classList.add('on');
+  // Marcar pestaña activa en el body para CSS condicional (oculta filtros que no aplican)
+  document.body.className = document.body.className.replace(/\btab-\w+\b/g, '').trim();
+  document.body.classList.add('tab-' + t);
 }
 
 function setStatus(tipo, msg) {
@@ -281,13 +317,23 @@ async function cargarSucursales() {
 }
 
 function actualizarFiltros() {
+  // Las sucursales del dropdown vienen del endpoint /branchOffice y se usan
+  // para los filtros de Marcaciones, Permisos y Turnos (donde el API sí filtra
+  // por sucursal correctamente). En la pestaña Trabajadores estos filtros se
+  // ocultan porque el API no expone sucursal/depto operativo del empleado.
   var sel = $('sucursal');
+  var valorPrevio = sel.value;
   sel.innerHTML = '<option value="">Todas</option>';
   cacheSucursales.forEach(function(s) {
     var code = s.code || s.codigo || s.codigoSucursal || '';
     var name = s.name || s.nombre || s.descripcion || code;
     sel.innerHTML += '<option value="' + code + '">' + name + '</option>';
   });
+  if (valorPrevio) sel.value = valorPrevio;
+
+  // Departamento queda con "Todos" como única opción (no hay endpoint de depts).
+  // Si el usuario quiere filtrar por dept, lo hará por nombre conocido.
+  $('depto').innerHTML = '<option value="">Todos</option>';
 }
 
 function renderSucursales() {
@@ -326,42 +372,103 @@ async function cargar() {
   }
 }
 
-async function cargarTrabajadores() {
-  var suc = $('sucursal').value;
-  var dep = $('depto').value;
-  
-  if (!suc) {
-    setStatus('err', '⚠️ Debes seleccionar una sucursal para cargar trabajadores');
-    return;
-  }
+// Limpia el cache y vuelve a traer todos los empleados desde el API.
+// Útil si se agregaron empleados en Workera o cambió el tenant (selector de empresa).
+async function recargarEmpleados() {
+  cacheEmpleados = [];
+  await cargarTrabajadores();
+}
 
-  setStatus('load', 'Cargando trabajadores de ' + suc + '/' + dep + '...');
-  var data = await apiFetch('/employee', { branchOffice: suc, department: dep, page: 1 });
-  var lista = Array.isArray(data) ? data : (data.results || data.data || []);
-  renderTrabajadores(lista);
-  setStatus('ok', 'Trabajadores: ' + lista.length);
+async function cargarTrabajadores() {
+  // El API de Workera SOLO devuelve datos con MATRIZ+INICIAL (modelo administrativo).
+  // No expone la sucursal/departamento operativo del empleado, así que los filtros
+  // de sucursal/depto están ocultos en esta pestaña (banner explica el motivo).
+  if (!cacheEmpleados.length) {
+    setStatus('load', 'Cargando empleados desde API (MATRIZ + INICIAL)...');
+    cacheEmpleados = await fetchTodosLosEmpleados();
+    setStatus('ok', cacheEmpleados.length + ' empleados cargados');
+  }
+  renderTrabajadores(cacheEmpleados);
+}
+
+// Pagina hasta agotar resultados. La API devuelve totalPages en cada respuesta,
+// por lo que sabemos exactamente cuántas páginas pedir.
+async function fetchTodosLosEmpleados() {
+  var todos = [];
+  var page = 1;
+  var totalPages = 1;
+  var maxPages = 100;  // Tope de seguridad
+
+  while (page <= totalPages && page <= maxPages) {
+    var data = await apiFetch('/employee', {
+      branchOffice: WORKERA_API_BRANCH,
+      department:   WORKERA_API_DEPT,
+      page: page
+    });
+
+    // Estructura típica de Workera: { page, totalPages, pageResult, totalResult, data: [...] }
+    var lista = Array.isArray(data) ? data : (data.data || data.results || []);
+    if (data.totalPages) totalPages = data.totalPages;
+
+    if (!lista.length) break;
+    todos = todos.concat(lista);
+
+    setStatus('load', 'Cargando empleados... página ' + page + '/' + totalPages +
+                      ' (' + todos.length + ' acumulados)');
+    page++;
+  }
+  return todos;
+}
+
+// Helpers para extraer datos del empleado usando los nombres reales de la API Workera.
+// IMPORTANTE: el API NO expone sucursal/departamento operativo (lo que el usuario ve
+// en la UI de Workera). Solo devuelve la asignación administrativa que para SURTEC
+// es siempre MATRIZ + INICIAL. Por eso los filtros de sucursal/depto están ocultos
+// en la pestaña Trabajadores.
+function empSucursal(emp) {
+  return emp.branchOfficeName || emp.branchOfficeCode || '—';
+}
+
+function empDepartamento(emp) {
+  return emp.departmentName || emp.departmentCode || '—';
+}
+
+function empActivo(emp) {
+  // employeeStatus viene como string "ACTIVO" / "INACTIVO" (no booleano)
+  return (emp.employeeStatus || '').toUpperCase() === 'ACTIVO';
+}
+
+function empNombreCompleto(emp) {
+  var partes = [emp.name, emp.secondName, emp.lastName, emp.secondLastName]
+    .filter(function(p) { return p; });
+  return partes.join(' ');
 }
 
 function renderTrabajadores(lista) {
   $('k-emp-total').textContent = lista.length.toLocaleString('es-CL');
-  var act = lista.filter(function(e) { return e.active !== false && e.enabled !== false; }).length;
+  var act = lista.filter(empActivo).length;
   $('k-emp-act').textContent = act.toLocaleString('es-CL');
   $('k-emp-ina').textContent = (lista.length - act).toLocaleString('es-CL');
-  $('k-emp-suc').textContent = new Set(lista.map(function(e) { return e.branchOffice || e.sucursal; })).size;
-  $('k-emp-dep').textContent = new Set(lista.map(function(e) { return e.department || e.departamento; })).size;
+  $('k-emp-suc').textContent = new Set(lista.map(empSucursal).filter(function(s) { return s !== '—'; })).size;
+  $('k-emp-dep').textContent = new Set(lista.map(empDepartamento).filter(function(d) { return d !== '—'; })).size;
 
   var tb = $('tbody-emp');
-  if (!lista.length) { tb.innerHTML = '<tr><td colspan="8"><div class="empty">Sin trabajadores</div></td></tr>'; return; }
+  if (!lista.length) {
+    tb.innerHTML = '<tr><td colspan="8"><div class="empty">Sin trabajadores</div></td></tr>';
+    return;
+  }
   tb.innerHTML = lista.map(function(e) {
+    var apellidos = ((e.lastName || '') + ' ' + (e.secondLastName || '')).trim();
+    var activo = empActivo(e);
     return '<tr>' +
-      '<td><strong>' + (e.code || e.codigo || '—') + '</strong></td>' +
-      '<td>' + (e.identification || e.rut || '—') + '</td>' +
-      '<td>' + (e.name || e.nombre || '—') + '</td>' +
-      '<td>' + ((e.lastName || '') + ' ' + (e.secondLastName || '')).trim() + '</td>' +
+      '<td><strong>' + (e.code || '—') + '</strong></td>' +
+      '<td>' + (e.identification || '—') + '</td>' +
+      '<td>' + (e.name || '—') + (e.secondName ? ' ' + e.secondName : '') + '</td>' +
+      '<td>' + (apellidos || '—') + '</td>' +
       '<td>' + (e.position || e.cargo || '—') + '</td>' +
-      '<td>' + (e.department || e.departamento || '—') + '</td>' +
-      '<td>' + (e.branchOffice || e.sucursal || '—') + '</td>' +
-      '<td><span class="badge ' + (e.active !== false ? 'bg">Activo' : 'br">Inactivo') + '</span></td>' +
+      '<td>' + empDepartamento(e) + '</td>' +
+      '<td>' + empSucursal(e) + '</td>' +
+      '<td><span class="badge ' + (activo ? 'bg">Activo' : 'br">Inactivo') + '</span></td>' +
     '</tr>';
   }).join('');
 }
@@ -382,27 +489,44 @@ async function cargarMarcaciones() {
 
 function renderMarcaciones(lista) {
   $('k-ast-total').textContent = lista.length.toLocaleString('es-CL');
-  var ins  = lista.filter(function(m) { return (m.type||'').toLowerCase().indexOf('in') >= 0 && (m.type||'').toLowerCase().indexOf('out') < 0; }).length;
-  var outs = lista.filter(function(m) { return (m.type||'').toLowerCase().indexOf('out') >= 0; }).length;
+  var ins  = lista.filter(function(m) {
+    var t = (m.type||'').toUpperCase();
+    return t.indexOf('IN') >= 0 && t.indexOf('OUT') < 0;
+  }).length;
+  var outs = lista.filter(function(m) {
+    return (m.type||'').toUpperCase().indexOf('OUT') >= 0;
+  }).length;
   $('k-ast-in').textContent = ins.toLocaleString('es-CL');
   $('k-ast-out').textContent = outs.toLocaleString('es-CL');
-  $('k-ast-peo').textContent = new Set(lista.map(function(m) { return m.employee && m.employee.code; })).size;
-  $('k-ast-dias').textContent = new Set(lista.map(function(m) { return (m.date||m.fecha||'').substring(0,10); })).size;
+  $('k-ast-peo').textContent = new Set(lista.map(function(m) {
+    return (m.employee && (m.employee.code || m.employee.identification)) || m.employeeCode;
+  }).filter(Boolean)).size;
+  $('k-ast-dias').textContent = new Set(lista.map(function(m) {
+    return (m.date || m.fecha || m.dateTime || '').substring(0,10);
+  }).filter(Boolean)).size;
 
   var tb = $('tbody-ast');
-  if (!lista.length) { tb.innerHTML = '<tr><td colspan="7"><div class="empty">Sin marcaciones en el período</div></td></tr>'; return; }
+  if (!lista.length) {
+    tb.innerHTML = '<tr><td colspan="7"><div class="empty">Sin marcaciones en el período</div></td></tr>';
+    return;
+  }
   tb.innerHTML = lista.map(function(m) {
-    var fecha = (m.date || m.fecha || '').substring(0,10);
-    var hora  = (m.time || m.hora || m.date || '').substring(11,19);
+    var dt = m.date || m.fecha || m.dateTime || '';
+    var fecha = dt.substring(0,10);
+    var hora  = m.time || m.hora || dt.substring(11,19);
     var emp = m.employee || {};
+    var nombre = empNombreCompleto(emp) || '—';
+    var t = (m.type||'').toUpperCase();
+    var esEntrada = t.indexOf('IN') >= 0 && t.indexOf('OUT') < 0;
+    var sucursal = m.branchOfficeName || m.branchOfficeCode || m.branchOffice || '—';
     return '<tr>' +
-      '<td>' + fecha + '</td>' +
-      '<td><strong>' + hora + '</strong></td>' +
-      '<td>' + (emp.name || '—') + ' ' + (emp.lastName || '') + '</td>' +
+      '<td>' + (fecha || '—') + '</td>' +
+      '<td><strong>' + (hora || '—') + '</strong></td>' +
+      '<td>' + nombre + '</td>' +
       '<td>' + (emp.identification || '—') + '</td>' +
-      '<td><span class="badge ' + ((m.type||'').toLowerCase().indexOf('in') >= 0 && (m.type||'').toLowerCase().indexOf('out') < 0 ? 'bg">ENTRADA' : 'ba">SALIDA') + '</span></td>' +
-      '<td>' + (m.device || m.dispositivo || '—') + '</td>' +
-      '<td>' + (m.branchOffice || '—') + '</td>' +
+      '<td><span class="badge ' + (esEntrada ? 'bg">ENTRADA' : 'ba">SALIDA') + '</span></td>' +
+      '<td>' + (m.deviceName || m.device || m.dispositivo || '—') + '</td>' +
+      '<td>' + sucursal + '</td>' +
     '</tr>';
   }).join('');
 }
@@ -413,13 +537,14 @@ async function cargarPermisos() {
   var data = await apiFetch('/permission', { start: d1, end: d2, page: 1 });
   var lista = Array.isArray(data) ? data : (data.results || data.data || []);
   var tb = $('tbody-per');
-  if (!lista.length) { tb.innerHTML = '<tr><td colspan="6"><div class="empty">Sin permisos en el período</div></td></tr>'; }
-  else {
+  if (!lista.length) {
+    tb.innerHTML = '<tr><td colspan="6"><div class="empty">Sin permisos en el período</div></td></tr>';
+  } else {
     tb.innerHTML = lista.map(function(p) {
       var emp = p.employee || {};
       return '<tr>' +
-        '<td>' + (p.id || '—') + '</td>' +
-        '<td>' + (emp.name || '—') + ' ' + (emp.lastName || '') + '</td>' +
+        '<td>' + (p.id || p.permissionId || '—') + '</td>' +
+        '<td>' + (empNombreCompleto(emp) || '—') + '</td>' +
         '<td>' + (p.permissionType || p.type || '—') + '</td>' +
         '<td>' + (p.startDate || p.start || '—') + '</td>' +
         '<td>' + (p.endDate || p.end || '—') + '</td>' +
@@ -435,13 +560,14 @@ async function cargarTurnos() {
   var data = await apiFetch('/workshift/assign', { page: 1 });
   var lista = Array.isArray(data) ? data : (data.results || data.data || []);
   var tb = $('tbody-tur');
-  if (!lista.length) { tb.innerHTML = '<tr><td colspan="4"><div class="empty">Sin asignaciones</div></td></tr>'; }
-  else {
+  if (!lista.length) {
+    tb.innerHTML = '<tr><td colspan="4"><div class="empty">Sin asignaciones</div></td></tr>';
+  } else {
     tb.innerHTML = lista.map(function(t) {
       var emp = t.employee || {};
       return '<tr>' +
-        '<td>' + (emp.name || '—') + ' ' + (emp.lastName || '') + '</td>' +
-        '<td>' + (t.workshift || t.turno || '—') + '</td>' +
+        '<td>' + (empNombreCompleto(emp) || '—') + '</td>' +
+        '<td>' + (t.workshiftName || t.workshift || t.turno || '—') + '</td>' +
         '<td>' + (t.startDate || '—') + '</td>' +
         '<td>' + (t.endDate || '—') + '</td>' +
       '</tr>';
@@ -473,7 +599,16 @@ function mostrarErrorSetup(msg) {
 
 // Al cargar la página, cargar sucursales
 window.addEventListener('DOMContentLoaded', function() {
+  document.body.classList.add('tab-emp');  // pestaña por defecto = Trabajadores
   cargarSucursales();
+
+  // Si cambia el tenant (empresa), limpiar caches y recargar sucursales del nuevo tenant
+  $('empresa').addEventListener('change', function() {
+    cacheEmpleados = [];
+    cacheSucursales = [];
+    setStatus('load', 'Cambio de empresa: ' + $('empresa').value + '. Recargando sucursales...');
+    cargarSucursales();
+  });
 });
 </script>
 

@@ -329,10 +329,12 @@ async function cargar() {
 async function cargarTrabajadores() {
   var suc = $('sucursal').value;
   var dep = $('depto').value;
-  if (!suc || !dep) {
-    setStatus('err', '⚠️ Trabajadores requiere sucursal Y departamento (limitación del API Workera)');
-    return;
-  }
+ 
+if () {
+  setStatus('err', '⚠️ Debes seleccionar una sucursal para cargar trabajadores');
+  return;
+}
+
   setStatus('load', 'Cargando trabajadores de ' + suc + '/' + dep + '...');
   var data = await apiFetch('/employee', { branchOffice: suc, department: dep, page: 1 });
   var lista = Array.isArray(data) ? data : (data.results || data.data || []);

@@ -14,7 +14,7 @@
 
 const https = require('https');
 
-const WORKERA_HOST = 'api.workera.com';
+const WORKERA_HOST = 'workera.com';
 const WORKERA_BASE = '/apiClient/v1';
 
 module.exports = async function (context, req) {

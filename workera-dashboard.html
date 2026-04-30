@@ -111,6 +111,7 @@ body.tab-emp .ctrl-lbl-dep{display:none}
 .br{background:rgba(245,96,96,.15);color:var(--red)}
 .ba{background:rgba(245,166,35,.15);color:var(--amber)}
 .bb{background:rgba(79,142,247,.15);color:var(--blue)}
+.bn{background:rgba(168,180,200,.15);color:var(--t3)}
 
 .empty{text-align:center;padding:40px;color:var(--t3);font-size:12px}
 .err-panel{background:rgba(245,96,96,.05);border:1px solid rgba(245,96,96,.15);border-radius:8px;padding:16px;margin:14px 0;color:var(--t2);font-size:12px;line-height:1.6}
@@ -185,13 +186,13 @@ body.tab-emp .ctrl-lbl-dep{display:none}
         <button onclick="recargarEmpleados()" style="margin-left:10px;padding:3px 10px;font-size:11px;background:var(--bg-input);color:var(--text-pri);border:1px solid var(--border);border-radius:4px;cursor:pointer;">↻ Recargar desde API</button>
       </div>
       <div class="emp-banner">
-        <strong>ℹ Nota sobre el modelo de datos Workera:</strong>
-        El API devuelve todos los empleados con sucursal administrativa <code>MATRIZ</code>
-        y departamento <code>INICIAL</code>. La asignación operativa (REPARADORES,
-        ADMINISTRATIVOS, etc.) que ves en la UI de Workera <strong>no está disponible vía API</strong>,
-        por lo que los filtros de sucursal/depto se ocultan en esta pestaña.
-        En las demás pestañas (Marcaciones, Permisos, Turnos) sí se pueden usar los filtros porque
-        el API los soporta para esos endpoints.
+        <strong>ℹ Sobre las sucursales mostradas:</strong>
+        El endpoint <code>/employee</code> devuelve a todos los empleados con sucursal administrativa
+        <code>MATRIZ</code> (modelo Workera). Para mostrar la <strong>sucursal operativa real</strong>
+        (PLANTA TALCA, REPARADORES, etc.), el dashboard cruza cada empleado con sus marcaciones recientes
+        del endpoint <code>/attendanceData</code>. Las sucursales en <span style="color:var(--cyan)">cyan</span>
+        son operativas (inferidas de la última marca); las en <span style="color:var(--t3)">gris</span>
+        son administrativas (sin marcas recientes en últimos 30 días).
       </div>
       <div class="tw">
         <table class="tbl" id="tbl-emp">
@@ -225,13 +226,20 @@ body.tab-emp .ctrl-lbl-dep{display:none}
 
   <!-- PERMISOS -->
   <div id="v-per" class="view">
+    <div class="krow">
+      <div class="kpi cyan"><div class="kl">Total permisos</div><div class="kv" id="k-per-total">—</div><div class="ks">En período</div></div>
+      <div class="kpi red"><div class="kl">Lic. médicas</div><div class="kv" id="k-per-lic">—</div><div class="ks">LICENCIA_MEDICA</div></div>
+      <div class="kpi blue"><div class="kl">Vacaciones</div><div class="kv" id="k-per-vac">—</div><div class="ks">VACACIONES</div></div>
+      <div class="kpi green"><div class="kl">Trabajo en horario</div><div class="kv" id="k-per-trh">—</div><div class="ks">TRABAJADO_EN_HORARIO</div></div>
+      <div class="kpi purple"><div class="kl">Personas únicas</div><div class="kv" id="k-per-peo">—</div><div class="ks">Con al menos 1 permiso</div></div>
+    </div>
     <div class="card">
       <div class="ct">Permisos especiales</div>
-      <div class="cs">Endpoint: /permission · Salidas especiales en el período</div>
+      <div class="cs">Endpoint: /permission · Licencias médicas, vacaciones y otros permisos en el período</div>
       <div class="tw">
         <table class="tbl" id="tbl-per">
-          <thead><tr><th>ID</th><th>Trabajador</th><th>Tipo</th><th>Inicio</th><th>Fin</th><th>Comentario</th></tr></thead>
-          <tbody id="tbody-per"><tr><td colspan="6"><div class="empty">Presiona "Cargar datos" para consultar</div></td></tr></tbody>
+          <thead><tr><th>ID</th><th>Trabajador</th><th>Sucursal</th><th>Tipo</th><th>Período</th><th>Días</th><th>Vigencia</th></tr></thead>
+          <tbody id="tbody-per"><tr><td colspan="7"><div class="empty">Presiona "Cargar datos" para consultar</div></td></tr></tbody>
         </table>
       </div>
     </div>
@@ -399,14 +407,84 @@ async function recargarEmpleados() {
 
 async function cargarTrabajadores() {
   // El API de Workera SOLO devuelve datos con MATRIZ+INICIAL (modelo administrativo).
-  // No expone la sucursal/departamento operativo del empleado, así que los filtros
-  // de sucursal/depto están ocultos en esta pestaña (banner explica el motivo).
+  // No expone la sucursal/departamento operativo del empleado en /employee, pero
+  // SÍ la expone en /attendanceData (cada marca trae la sucursal del dispositivo).
+  // Por eso, después de cargar empleados, los enriquecemos cruzando con las
+  // últimas marcaciones para tener la sucursal operativa real.
   if (!cacheEmpleados.length) {
     setStatus('load', 'Cargando empleados desde API (MATRIZ + INICIAL)...');
     cacheEmpleados = await fetchTodosLosEmpleados();
-    setStatus('ok', cacheEmpleados.length + ' empleados cargados');
+    setStatus('ok', cacheEmpleados.length + ' empleados cargados, enriqueciendo con marcaciones...');
+
+    // Enriquecer con sucursal operativa (en background, sin bloquear la primera renderización)
+    try {
+      await enriquecerConMarcaciones();
+    } catch (e) {
+      console.warn('[Workera] No se pudo enriquecer con marcaciones:', e.message);
+    }
   }
   renderTrabajadores(cacheEmpleados);
+}
+
+// Cruza empleados con marcaciones recientes para inferir su sucursal operativa real.
+// Esto compensa que /employee solo devuelve la sucursal administrativa (siempre MATRIZ).
+async function enriquecerConMarcaciones() {
+  // Calcular rango de los últimos 30 días para tener buena cobertura
+  var hoy = new Date();
+  var hace30 = new Date(hoy); hace30.setDate(hace30.getDate() - 30);
+  var fmt = function(d) { return d.toISOString().substring(0,10); };
+  var d1 = fmt(hace30), d2 = fmt(hoy);
+
+  setStatus('load', 'Enriqueciendo con marcaciones (' + d1 + ' → ' + d2 + ')...');
+
+  // Traer las marcaciones paginando hasta 5 páginas (100 registros) como tope
+  // razonable. Buscamos la sucursal donde marcó CADA empleado por última vez,
+  // y con 100 marcaciones recientes de 38 personas, alcanza para cubrir a la
+  // mayoría de los activos.
+  var marcaciones = [];
+  var maxPaginas = 5;
+  for (var p = 1; p <= maxPaginas; p++) {
+    var data = await apiFetch('/attendanceData', {
+      startDate: d1, endDate: d2, start: d1, end: d2, page: p
+    });
+    var lista = extraerLista(data);
+    if (!lista.length) break;
+    marcaciones = marcaciones.concat(lista);
+    if (data.totalPages && p >= data.totalPages) break;
+  }
+
+  // Construir mapa: code -> { sucursal, ultimaMarca }
+  // Si un empleado tiene varias marcas, nos quedamos con la MÁS RECIENTE
+  // (la primera que aparece, asumiendo que el API devuelve ordenado descendente,
+  // pero por seguridad comparamos la fecha).
+  var mapa = {};
+  marcaciones.forEach(function(m) {
+    var emp = m.employee || {};
+    var code = emp.code;
+    if (!code) return;
+    var fecha = m.attendanceDate || '';
+    var sucursal = emp.branchOffice || '';
+    if (!sucursal) return;
+    if (!mapa[code] || fecha > mapa[code].ultimaMarca) {
+      mapa[code] = { sucursal: sucursal, ultimaMarca: fecha };
+    }
+  });
+
+  // Aplicar al cache de empleados: agregar campos enriquecidos
+  cacheEmpleados.forEach(function(emp) {
+    var info = mapa[emp.code];
+    if (info) {
+      emp._sucursalOperativa = info.sucursal;
+      emp._ultimaMarca = info.ultimaMarca;
+    } else {
+      emp._sucursalOperativa = null;  // sin marcas en últimos 30 días
+      emp._ultimaMarca = null;
+    }
+  });
+
+  var enriquecidos = cacheEmpleados.filter(function(e) { return e._sucursalOperativa; }).length;
+  setStatus('ok', cacheEmpleados.length + ' empleados · ' + enriquecidos +
+                  ' con sucursal operativa identificada (vía marcaciones últimos 30 días)');
 }
 
 // Pagina hasta agotar resultados. La API devuelve totalPages en cada respuesta,
@@ -439,11 +517,18 @@ async function fetchTodosLosEmpleados() {
 }
 
 // Helpers para extraer datos del empleado usando los nombres reales de la API Workera.
-// IMPORTANTE: el API NO expone sucursal/departamento operativo (lo que el usuario ve
-// en la UI de Workera). Solo devuelve la asignación administrativa que para SURTEC
-// es siempre MATRIZ + INICIAL. Por eso los filtros de sucursal/depto están ocultos
-// en la pestaña Trabajadores.
+// IMPORTANTE: el API de /employee NO expone sucursal/departamento operativo. Solo
+// devuelve la asignación administrativa (siempre MATRIZ + INICIAL). Pero podemos
+// enriquecer cruzando con /attendanceData (donde la sucursal del dispositivo
+// donde marcó el empleado es la operativa real). Esa data se guarda en
+// emp._sucursalOperativa cuando se ejecuta enriquecerConMarcaciones().
 function empSucursal(emp) {
+  // Preferir sucursal operativa enriquecida (de marcaciones) sobre la administrativa
+  if (emp._sucursalOperativa) return emp._sucursalOperativa;
+  return emp.branchOfficeName || emp.branchOfficeCode || '—';
+}
+
+function empSucursalAdmin(emp) {
   return emp.branchOfficeName || emp.branchOfficeCode || '—';
 }
 
@@ -459,7 +544,7 @@ function empActivo(emp) {
 function empNombreCompleto(emp) {
   var partes = [emp.name, emp.secondName, emp.lastName, emp.secondLastName]
     .filter(function(p) { return p; });
-  return partes.join(' ');
+  return partes.join(' ').replace(/\s+/g, ' ').trim();
 }
 
 function renderTrabajadores(lista) {
@@ -478,6 +563,16 @@ function renderTrabajadores(lista) {
   tb.innerHTML = lista.map(function(e) {
     var apellidos = ((e.lastName || '') + ' ' + (e.secondLastName || '')).trim();
     var activo = empActivo(e);
+    // Sucursal con tag visual: si tenemos la operativa real (de marcaciones) la mostramos
+    // en cyan, si solo tenemos la administrativa (MATRIZ) la mostramos en gris.
+    var sucCell = '';
+    if (e._sucursalOperativa) {
+      sucCell = '<span style="color:var(--cyan);font-weight:500" title="Sucursal operativa real (inferida de última marca: ' + (e._ultimaMarca || '').substring(0,10) + ')">' +
+                e._sucursalOperativa + '</span>';
+    } else {
+      sucCell = '<span style="color:var(--t3)" title="Sucursal administrativa (no se encontraron marcaciones recientes)">' +
+                empSucursalAdmin(e) + '</span>';
+    }
     return '<tr>' +
       '<td><strong>' + (e.code || '—') + '</strong></td>' +
       '<td>' + (e.identification || '—') + '</td>' +
@@ -485,7 +580,7 @@ function renderTrabajadores(lista) {
       '<td>' + (apellidos || '—') + '</td>' +
       '<td>' + (e.nationality || '—') + '</td>' +
       '<td>' + empDepartamento(e) + '</td>' +
-      '<td>' + empSucursal(e) + '</td>' +
+      '<td>' + sucCell + '</td>' +
       '<td><span class="badge ' + (activo ? 'bg">Activo' : 'br">Inactivo') + '</span></td>' +
     '</tr>';
   }).join('');
@@ -494,30 +589,78 @@ function renderTrabajadores(lista) {
 // Cache de la última respuesta cruda de cada endpoint, para diagnóstico
 var ultimaRespuesta = {};
 
+// Cache de marcaciones acumuladas (para "Cargar más" sin perder lo cargado)
+var cacheMarcaciones = {
+  items: [],          // Todas las marcaciones acumuladas hasta ahora
+  paginaActual: 0,    // Última página cargada exitosamente
+  totalPages: 0,      // Total de páginas reportado por el API
+  totalResult: 0,     // Total de registros reportado por el API
+  rangoCargado: ''    // Identificador del rango cargado (para resetear si cambia)
+};
+
 async function cargarMarcaciones() {
   var d1 = $('d1').value, d2 = $('d2').value;
-  var suc = $('sucursal').value, dep = $('depto').value;
+  var rango = d1 + '|' + d2;
 
-  // El API de Workera puede usar nombres distintos para los parámetros de fecha.
-  // Intentamos primero con los típicos (start/end). Si llega vacío, probamos
-  // otros nombres como fallback.
-  var params = { startDate: d1, endDate: d2, start: d1, end: d2, page: 1 };
-  if (suc) params.branchOffice = suc;
-  if (dep) params.department = dep;
+  // Si cambió el rango respecto al cache, resetear
+  if (cacheMarcaciones.rangoCargado !== rango) {
+    cacheMarcaciones = {
+      items: [], paginaActual: 0, totalPages: 0, totalResult: 0,
+      rangoCargado: rango
+    };
+  }
 
-  setStatus('load', 'Cargando marcaciones ' + d1 + '→' + d2 + ' (puede tardar)...');
-  var data = await apiFetch('/attendanceData', params);
+  // Cargar siguiente página (si ya hay 1 cargada, esta función la usa "Cargar más")
+  await cargarMarcacionesPagina(cacheMarcaciones.paginaActual + 1);
+}
+
+async function cargarMarcacionesPagina(numPagina) {
+  var d1 = $('d1').value, d2 = $('d2').value;
+
+  setStatus('load', 'Cargando marcaciones página ' + numPagina + '...');
+
+  var data = await apiFetch('/attendanceData', {
+    startDate: d1, endDate: d2,
+    start: d1, end: d2,
+    page: numPagina
+  });
   ultimaRespuesta.attendanceData = data;
 
   var lista = extraerLista(data);
-  renderMarcaciones(lista, data);
 
-  if (lista.length) {
-    setStatus('ok', 'Marcaciones: ' + lista.length +
-              (data.totalResult ? ' de ' + data.totalResult + ' total' : '') +
-              (data.totalPages ? ' · pág ' + (data.page || 1) + '/' + data.totalPages : ''));
-  } else {
-    setStatus('warn', 'Marcaciones vacías. Revisa el panel de diagnóstico abajo.');
+  // Acumular en cache
+  cacheMarcaciones.items = cacheMarcaciones.items.concat(lista);
+  cacheMarcaciones.paginaActual = numPagina;
+  cacheMarcaciones.totalPages   = data.totalPages || 0;
+  cacheMarcaciones.totalResult  = data.totalResult || cacheMarcaciones.items.length;
+
+  if (!cacheMarcaciones.items.length) {
+    var tb = $('tbody-ast');
+    var diag = renderDiagnostico('attendanceData', data);
+    tb.innerHTML = '<tr><td colspan="7" style="padding:0">' + diag + '</td></tr>';
+    setStatus('warn', 'Sin marcaciones en el período ' + d1 + ' → ' + d2);
+    return;
+  }
+
+  renderMarcaciones(cacheMarcaciones.items);
+
+  var msg = 'Marcaciones: ' + cacheMarcaciones.items.length;
+  if (cacheMarcaciones.totalResult > cacheMarcaciones.items.length) {
+    msg += ' de ' + cacheMarcaciones.totalResult + ' total · página ' +
+           cacheMarcaciones.paginaActual + '/' + cacheMarcaciones.totalPages;
+  }
+  setStatus('ok', msg);
+}
+
+// Función para botón "Cargar más"
+async function cargarMasMarcaciones() {
+  if (cacheMarcaciones.paginaActual >= cacheMarcaciones.totalPages) return;
+  var btn = $('btn-mas-ast');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Cargando...'; }
+  try {
+    await cargarMarcacionesPagina(cacheMarcaciones.paginaActual + 1);
+  } catch (e) {
+    setStatus('err', 'Error al cargar más: ' + e.message);
   }
 }
 
@@ -528,50 +671,94 @@ function extraerLista(data) {
   return data.data || data.results || data.items || [];
 }
 
-function renderMarcaciones(lista, dataRaw) {
+function renderMarcaciones(lista) {
   $('k-ast-total').textContent = lista.length.toLocaleString('es-CL');
-  var ins  = lista.filter(function(m) {
-    var t = (m.type||'').toUpperCase();
-    return t.indexOf('IN') >= 0 && t.indexOf('OUT') < 0;
-  }).length;
-  var outs = lista.filter(function(m) {
-    return (m.type||'').toUpperCase().indexOf('OUT') >= 0;
-  }).length;
+
+  // attendanceType es un número. Aún no sabemos qué significa cada valor,
+  // por eso contamos las apariciones de cada tipo y mostramos todas.
+  // Hipótesis tentativa: 0=ENTRADA, 1=SALIDA pero hay que confirmarlo en UI Workera.
+  var tiposCount = {};
+  lista.forEach(function(m) {
+    var t = (typeof m.attendanceType !== 'undefined') ? String(m.attendanceType) : '?';
+    tiposCount[t] = (tiposCount[t] || 0) + 1;
+  });
+  // Si solo hay tipo 0 y 1, asumimos provisionalmente: 0=entrada, 1=salida
+  // hasta que se confirme. Si hay otros tipos, los mostramos en KPIs como "Otros".
+  var ins  = (tiposCount['0'] || 0);
+  var outs = (tiposCount['1'] || 0);
   $('k-ast-in').textContent = ins.toLocaleString('es-CL');
   $('k-ast-out').textContent = outs.toLocaleString('es-CL');
+
   $('k-ast-peo').textContent = new Set(lista.map(function(m) {
     return (m.employee && (m.employee.code || m.employee.identification)) || m.employeeCode;
   }).filter(Boolean)).size;
   $('k-ast-dias').textContent = new Set(lista.map(function(m) {
-    return (m.date || m.fecha || m.dateTime || '').substring(0,10);
+    return (m.attendanceDate || m.date || m.fecha || '').substring(0,10);
   }).filter(Boolean)).size;
 
   var tb = $('tbody-ast');
-  if (!lista.length) {
-    // Panel de diagnóstico: mostrar la respuesta cruda del API para entender qué pasa
-    var diag = renderDiagnostico('attendanceData', dataRaw);
-    tb.innerHTML = '<tr><td colspan="7" style="padding:0">' + diag + '</td></tr>';
-    return;
-  }
+
   tb.innerHTML = lista.map(function(m) {
-    var dt = m.date || m.fecha || m.dateTime || '';
+    // Campo real del JSON: attendanceDate con formato "2026-04-01T06:13:04"
+    var dt = m.attendanceDate || m.date || m.dateTime || m.fecha || '';
     var fecha = dt.substring(0,10);
-    var hora  = m.time || m.hora || dt.substring(11,19);
+    var hora  = dt.substring(11,19);
+
     var emp = m.employee || {};
     var nombre = empNombreCompleto(emp) || '—';
-    var t = (m.type||'').toUpperCase();
-    var esEntrada = t.indexOf('IN') >= 0 && t.indexOf('OUT') < 0;
-    var sucursal = m.branchOfficeName || m.branchOfficeCode || m.branchOffice || '—';
+
+    // Etiqueta del tipo: provisional hasta confirmar semántica
+    var tipoNum = m.attendanceType;
+    var etiqueta, badgeClass;
+    if (tipoNum === 0 || tipoNum === '0') {
+      etiqueta = 'TIPO 0';  // Provisional — confirmar si es ENTRADA
+      badgeClass = 'bg';    // verde
+    } else if (tipoNum === 1 || tipoNum === '1') {
+      etiqueta = 'TIPO 1';  // Provisional — confirmar si es SALIDA
+      badgeClass = 'ba';    // amber
+    } else {
+      etiqueta = 'TIPO ' + (tipoNum != null ? tipoNum : '?');
+      badgeClass = 'br';    // rojo (desconocido)
+    }
+
+    // Sucursal: en /attendanceData viene la OPERATIVA real (Sucursal Matriz, PLANTA TALCA, etc.)
+    var sucursal = (emp.branchOffice) ||
+                   m.branchOfficeName || m.branchOfficeCode || '—';
+
     return '<tr>' +
       '<td>' + (fecha || '—') + '</td>' +
       '<td><strong>' + (hora || '—') + '</strong></td>' +
       '<td>' + nombre + '</td>' +
       '<td>' + (emp.identification || '—') + '</td>' +
-      '<td><span class="badge ' + (esEntrada ? 'bg">ENTRADA' : 'ba">SALIDA') + '</span></td>' +
-      '<td>' + (m.deviceName || m.device || m.dispositivo || '—') + '</td>' +
+      '<td><span class="badge ' + badgeClass + '">' + etiqueta + '</span></td>' +
+      '<td>' + (m.deviceName || m.device || '—') + '</td>' +
       '<td>' + sucursal + '</td>' +
     '</tr>';
   }).join('');
+
+  // Botón "Cargar más" si hay páginas pendientes
+  if (cacheMarcaciones.paginaActual < cacheMarcaciones.totalPages) {
+    var faltan = cacheMarcaciones.totalResult - cacheMarcaciones.items.length;
+    tb.innerHTML += '<tr><td colspan="7" style="padding:14px;text-align:center;background:rgba(34,211,238,.04);border-top:1px solid var(--brm)">' +
+      '<button id="btn-mas-ast" onclick="cargarMasMarcaciones()" style="padding:8px 18px;background:var(--cyan);color:#0c1117;border:none;border-radius:5px;font-weight:600;cursor:pointer;font-size:11.5px">' +
+      '↓ Cargar más (' + faltan + ' marcaciones restantes · página ' +
+      (cacheMarcaciones.paginaActual + 1) + '/' + cacheMarcaciones.totalPages + ')' +
+      '</button></td></tr>';
+  } else if (cacheMarcaciones.items.length > 20) {
+    // Aviso de fin de paginación (solo si se cargó más de 1 página)
+    tb.innerHTML += '<tr><td colspan="7" style="padding:10px;text-align:center;color:var(--t3);font-size:11px;background:rgba(34,197,94,.04)">' +
+      '✓ Todas las marcaciones cargadas (' + cacheMarcaciones.items.length + ')' +
+      '</td></tr>';
+  }
+
+  // Si hay tipos detectados que no son 0 ni 1, mostrar aviso para confirmar semántica
+  var tiposExtras = Object.keys(tiposCount).filter(function(t) { return t !== '0' && t !== '1' && t !== '?'; });
+  if (tiposExtras.length) {
+    var tiposStr = tiposExtras.map(function(t) { return 'Tipo ' + t + ' (' + tiposCount[t] + ')'; }).join(', ');
+    setTimeout(function() {
+      console.log('[Workera] Tipos detectados: ', tiposCount);
+    }, 0);
+  }
 }
 
 // Renderiza un panel de diagnóstico amigable cuando un endpoint devuelve vacío.
@@ -619,34 +806,113 @@ function renderDiagnostico(endpoint, dataRaw) {
 async function cargarPermisos() {
   var d1 = $('d1').value, d2 = $('d2').value;
   setStatus('load', 'Cargando permisos...');
-  // Probamos varios nombres de parámetros típicos del API Workera
   var data = await apiFetch('/permission', {
     startDate: d1, endDate: d2, start: d1, end: d2, page: 1
   });
   ultimaRespuesta.permission = data;
 
   var lista = extraerLista(data);
+  renderPermisos(lista, data);
+
+  if (lista.length) {
+    setStatus('ok', 'Permisos: ' + lista.length);
+  } else {
+    setStatus('warn', 'Sin permisos en el período ' + d1 + ' → ' + d2);
+  }
+}
+
+function renderPermisos(lista, dataRaw) {
+  // KPIs
+  $('k-per-total').textContent = lista.length.toLocaleString('es-CL');
+  $('k-per-lic').textContent   = lista.filter(function(p) {
+    return (p.permissionType || '').toUpperCase() === 'LICENCIA_MEDICA';
+  }).length.toLocaleString('es-CL');
+  $('k-per-vac').textContent   = lista.filter(function(p) {
+    return (p.permissionType || '').toUpperCase() === 'VACACIONES';
+  }).length.toLocaleString('es-CL');
+  $('k-per-trh').textContent   = lista.filter(function(p) {
+    return (p.permissionType || '').toUpperCase() === 'TRABAJADO_EN_HORARIO';
+  }).length.toLocaleString('es-CL');
+  $('k-per-peo').textContent   = new Set(lista.map(function(p) {
+    return (p.employee && (p.employee.code || p.employee.identification)) || '';
+  }).filter(Boolean)).size.toLocaleString('es-CL');
+
   var tb = $('tbody-per');
 
   if (!lista.length) {
-    var diag = renderDiagnostico('permission', data);
-    tb.innerHTML = '<tr><td colspan="6" style="padding:0">' + diag + '</td></tr>';
-    setStatus('warn', 'Permisos vacíos. Revisa el panel de diagnóstico.');
+    var diag = renderDiagnostico('permission', dataRaw);
+    tb.innerHTML = '<tr><td colspan="7" style="padding:0">' + diag + '</td></tr>';
     return;
   }
 
-  tb.innerHTML = lista.map(function(p) {
+  // Ordenar por fecha de inicio descendente (más reciente primero)
+  var ordenados = lista.slice().sort(function(a, b) {
+    return (b.start || '').localeCompare(a.start || '');
+  });
+
+  var hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+
+  tb.innerHTML = ordenados.map(function(p) {
     var emp = p.employee || {};
+    var sucursal = emp.branchOffice || '—';
+
+    // Formato chileno DD-MM-YYYY a partir del ISO
+    var inicio = formatearFechaCL(p.start);
+    var fin    = formatearFechaCL(p.end);
+    var periodo = (p.start || p.end)
+      ? inicio + ' → ' + fin
+      : '—';
+
+    // Cálculo de días (incluyendo ambos extremos)
+    var dias = '—';
+    if (p.start && p.end) {
+      var d1 = new Date(p.start.substring(0,10));
+      var d2 = new Date(p.end.substring(0,10));
+      dias = Math.round((d2 - d1) / 86400000) + 1;
+    }
+
+    // Vigencia: ¿el permiso está activo HOY?
+    var vigencia = '';
+    if (p.start && p.end) {
+      var inicioD = new Date(p.start.substring(0,10));
+      var finD    = new Date(p.end.substring(0,10));
+      if (hoy >= inicioD && hoy <= finD) {
+        vigencia = '<span class="badge bg" title="El permiso incluye hoy">🟢 EN CURSO</span>';
+      } else if (hoy > finD) {
+        vigencia = '<span class="badge bn" title="Período ya finalizado">○ FINALIZADO</span>';
+      } else {
+        vigencia = '<span class="badge ba" title="Permiso futuro">→ PENDIENTE</span>';
+      }
+    }
+
+    // Badge según tipo de permiso
+    var tipo = p.permissionType || '—';
+    var nombreTipo = p.permissionName || tipo;
+    var tipoBadgeClass = 'bn';
+    if (tipo === 'LICENCIA_MEDICA') tipoBadgeClass = 'br';
+    else if (tipo === 'VACACIONES') tipoBadgeClass = 'bb';
+    else if (tipo === 'TRABAJADO_EN_HORARIO') tipoBadgeClass = 'bg';
+
     return '<tr>' +
       '<td>' + (p.id || p.permissionId || '—') + '</td>' +
       '<td>' + (empNombreCompleto(emp) || '—') + '</td>' +
-      '<td>' + (p.permissionType || p.type || '—') + '</td>' +
-      '<td>' + (p.startDate || p.start || '—') + '</td>' +
-      '<td>' + (p.endDate || p.end || '—') + '</td>' +
-      '<td>' + (p.comment || '—') + '</td>' +
+      '<td>' + sucursal + '</td>' +
+      '<td><span class="badge ' + tipoBadgeClass + '">' + nombreTipo + '</span></td>' +
+      '<td>' + periodo + '</td>' +
+      '<td style="text-align:center"><strong>' + dias + '</strong></td>' +
+      '<td>' + vigencia + '</td>' +
     '</tr>';
   }).join('');
-  setStatus('ok', 'Permisos: ' + lista.length);
+}
+
+// Formatea una fecha ISO ('2026-04-08T00:00:00') a formato chileno '08-04-2026'
+function formatearFechaCL(iso) {
+  if (!iso) return '—';
+  var s = String(iso).substring(0, 10);
+  var p = s.split('-');
+  if (p.length !== 3) return s;
+  return p[2] + '-' + p[1] + '-' + p[0];
 }
 
 async function cargarTurnos() {

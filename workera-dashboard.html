@@ -77,10 +77,9 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
   font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--cyan)}
 .emp-banner strong{color:var(--t1)}
 /* Cuando la pestaña Trabajadores está activa, ocultar filtros que no aplican */
-body.tab-emp .ctrl-sel-suc,
-body.tab-emp .ctrl-sel-dep,
-body.tab-emp .ctrl-lbl-suc,
-body.tab-emp .ctrl-lbl-dep{display:none}
+/* Antes ocultábamos los filtros sucursal/depto en Trabajadores porque el API
+   no exponía la sucursal operativa. Ahora que los enriquecemos cruzando con
+   marcaciones, los filtros vuelven a tener sentido y se mantienen visibles. */
 
 /* Panel de diagnóstico cuando un endpoint devuelve vacío */
 .diag-panel{padding:18px 22px;text-align:left;background:rgba(245,158,11,.04);
@@ -99,6 +98,64 @@ body.tab-emp .ctrl-lbl-dep{display:none}
 .diag-json{background:var(--s1);padding:10px;border-radius:4px;font-size:10.5px;
   font-family:'JetBrains Mono',monospace;color:var(--t2);max-height:280px;
   overflow:auto;margin:6px 0 0;line-height:1.5;white-space:pre-wrap;word-break:break-all}
+
+/* Link del código del empleado en la tabla — abre modal */
+.emp-link{font-weight:600;color:var(--cyan);cursor:pointer;text-decoration:none;
+  border-bottom:1px dashed transparent;transition:border-color .15s}
+.emp-link:hover{border-bottom-color:var(--cyan)}
+
+/* Modal del trabajador */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;
+  display:none;align-items:flex-start;justify-content:center;padding:30px 20px;
+  overflow-y:auto;backdrop-filter:blur(3px)}
+.modal-bg.on{display:flex}
+.modal-box{background:var(--s1);border:1px solid var(--brm);border-radius:10px;
+  width:100%;max-width:1100px;max-height:calc(100vh - 60px);overflow:auto;
+  box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.modal-hdr{padding:18px 24px;border-bottom:1px solid var(--brm);
+  display:flex;justify-content:space-between;align-items:flex-start;
+  position:sticky;top:0;background:var(--s1);z-index:1}
+.modal-hdr h2{margin:0;font-size:18px;color:var(--t1);font-weight:600}
+.modal-hdr .modal-sub{font-size:11px;color:var(--t3);margin-top:3px;letter-spacing:.4px}
+.modal-close{background:transparent;border:1px solid var(--brm);color:var(--t2);
+  width:32px;height:32px;border-radius:6px;cursor:pointer;font-size:18px;
+  display:flex;align-items:center;justify-content:center}
+.modal-close:hover{background:var(--s2);color:var(--red)}
+.modal-body{padding:18px 24px}
+.modal-section{margin-bottom:20px}
+.modal-section h3{margin:0 0 10px;font-size:11.5px;color:var(--cyan);
+  text-transform:uppercase;letter-spacing:.6px;font-weight:600;
+  border-bottom:1px solid var(--brm);padding-bottom:6px}
+.modal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 18px}
+.modal-field{display:flex;flex-direction:column;gap:2px}
+.modal-field-lbl{font-size:9.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.4px}
+.modal-field-val{font-size:12px;color:var(--t1);font-weight:500;word-break:break-word}
+.modal-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.modal-kpi{background:var(--s2);border:1px solid var(--brm);border-radius:6px;
+  padding:10px 14px}
+.modal-kpi-lbl{font-size:9.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.4px}
+.modal-kpi-val{font-size:22px;font-weight:600;color:var(--t1);margin-top:4px}
+.modal-kpi-val.cyan{color:var(--cyan)}.modal-kpi-val.green{color:var(--green)}
+.modal-kpi-val.amber{color:var(--amber)}.modal-kpi-val.red{color:var(--red)}
+.modal-kpi-val.blue{color:var(--blue)}
+.modal-suc-bar{display:flex;height:24px;border-radius:4px;overflow:hidden;
+  margin-top:6px;background:var(--s2)}
+.modal-suc-segment{display:flex;align-items:center;justify-content:center;
+  font-size:10px;color:#fff;font-weight:500}
+.modal-suc-list{margin-top:8px;font-size:11px;color:var(--t2);line-height:1.7}
+.modal-suc-list span.dot{display:inline-block;width:8px;height:8px;border-radius:50%;
+  margin-right:6px;vertical-align:middle}
+.modal-timeline{font-family:'JetBrains Mono',monospace;font-size:10.5px;
+  background:var(--s2);border-radius:6px;padding:10px;max-height:280px;overflow-y:auto;
+  border:1px solid var(--brm);line-height:1.55}
+.modal-timeline .day{margin-bottom:5px;display:grid;grid-template-columns:90px 1fr;gap:10px}
+.modal-timeline .day-date{color:var(--t3);font-weight:500}
+.modal-timeline .day-events{color:var(--t2)}
+.modal-timeline .ev-in{color:var(--green)}
+.modal-timeline .ev-out{color:var(--amber)}
+.modal-timeline .ev-perm{color:var(--blue)}
+.modal-timeline .ev-none{color:var(--t3);opacity:.5}
+.modal-loading{text-align:center;padding:18px;color:var(--t3);font-size:11px}
 
 /* TABLA */
 .tw{overflow:auto;max-height:500px}
@@ -193,6 +250,7 @@ body.tab-emp .ctrl-lbl-dep{display:none}
         del endpoint <code>/attendanceData</code>. Las sucursales en <span style="color:var(--cyan)">cyan</span>
         son operativas (inferidas de la última marca); las en <span style="color:var(--t3)">gris</span>
         son administrativas (sin marcas recientes en últimos 30 días).
+        <strong>El filtro de sucursal arriba</strong> ahora funciona sobre la sucursal real (operativa cuando existe).
       </div>
       <div class="tw">
         <table class="tbl" id="tbl-emp">
@@ -279,6 +337,13 @@ var PROXY = '/api/workera-proxy';
 var tabActivo = 'emp';
 var cacheSucursales = [];
 
+// Mapas auxiliares de sucursales para cruzar nombres con códigos.
+// La API tiene este patrón: /branchOffice devuelve {code: 'MATRIZ', name: 'Sucursal Matriz'},
+// pero /attendanceData y /permission traen "branchOffice" con el NOMBRE (no el código).
+// Estos mapas permiten convertir entre ambos.
+var sucursalesPorCodigo = {};   // {'MATRIZ': {code, name, address, ...}}
+var sucursalesPorNombre = {};   // {'Sucursal Matriz': {code, name, ...}}
+
 // Cache de empleados cargados (todos vienen como MATRIZ+INICIAL en el API,
 // el filtro por sucursal/departamento operativo se hace en JS sobre estos datos).
 var cacheEmpleados = [];
@@ -333,6 +398,17 @@ async function cargarSucursales() {
     setStatus('load', 'Cargando sucursales...');
     var data = await apiFetch('/branchOffice');
     cacheSucursales = Array.isArray(data) ? data : (data.results || data.data || []);
+
+    // Construir mapas bidireccionales código ↔ nombre
+    sucursalesPorCodigo = {};
+    sucursalesPorNombre = {};
+    cacheSucursales.forEach(function(s) {
+      var code = s.code || s.codigo || s.codigoSucursal || '';
+      var name = s.name || s.nombre || s.descripcion || code;
+      if (code) sucursalesPorCodigo[code] = s;
+      if (name) sucursalesPorNombre[name] = s;
+    });
+
     renderSucursales();
     actualizarFiltros();
     setStatus('ok', 'Sucursales cargadas: ' + cacheSucursales.length);
@@ -340,6 +416,13 @@ async function cargarSucursales() {
     setStatus('err', 'Error sucursales: ' + e.message);
     mostrarErrorSetup(e.message);
   }
+}
+
+// Devuelve el código de sucursal a partir del nombre (o el código si no encuentra match)
+function codigoSucursalDesdeNombre(nombre) {
+  if (!nombre) return '';
+  var s = sucursalesPorNombre[nombre];
+  return s ? (s.code || nombre) : nombre;
 }
 
 function actualizarFiltros() {
@@ -408,26 +491,102 @@ async function recargarEmpleados() {
 async function cargarTrabajadores() {
   // El API de Workera SOLO devuelve datos con MATRIZ+INICIAL (modelo administrativo).
   // No expone la sucursal/departamento operativo del empleado en /employee, pero
-  // SÍ la expone en /attendanceData (cada marca trae la sucursal del dispositivo).
-  // Por eso, después de cargar empleados, los enriquecemos cruzando con las
-  // últimas marcaciones para tener la sucursal operativa real.
+  // SÍ la expone en /attendanceData. Por eso, después de cargar empleados, los
+  // enriquecemos cruzando con marcaciones EN BACKGROUND (no bloqueamos el render).
   if (!cacheEmpleados.length) {
     setStatus('load', 'Cargando empleados desde API (MATRIZ + INICIAL)...');
     cacheEmpleados = await fetchTodosLosEmpleados();
-    setStatus('ok', cacheEmpleados.length + ' empleados cargados, enriqueciendo con marcaciones...');
+    setStatus('ok', cacheEmpleados.length + ' empleados · enriqueciendo en segundo plano...');
 
-    // Enriquecer con sucursal operativa (en background, sin bloquear la primera renderización)
-    try {
-      await enriquecerConMarcaciones();
-    } catch (e) {
+    // Mostrar la tabla YA con datos administrativos. El enriquecimiento corre
+    // en background y refresca la tabla cuando termina (sin bloquear).
+    renderTrabajadores(cacheEmpleados);
+
+    // Disparar enriquecimiento async sin await
+    enriquecerConMarcaciones().then(function() {
+      // Cuando termina, refrescar dropdowns y tabla con sucursales reales
+      actualizarFiltrosTrabajadores();
+      aplicarFiltrosYRender();
+    }).catch(function(e) {
       console.warn('[Workera] No se pudo enriquecer con marcaciones:', e.message);
-    }
+      setStatus('ok', cacheEmpleados.length + ' empleados (sin enriquecimiento)');
+    });
+
+    return;  // No bloqueamos: la primera renderización ya se hizo
   }
-  renderTrabajadores(cacheEmpleados);
+
+  // Si ya tenemos cache, aplicar filtros y renderizar
+  aplicarFiltrosYRender();
+}
+
+// Aplica los filtros sucursal/depto sobre el cache de empleados y renderiza
+function aplicarFiltrosYRender() {
+  var sucFiltro = $('sucursal').value;
+  var depFiltro = $('depto').value;
+  var lista = cacheEmpleados.slice();
+
+  if (sucFiltro) {
+    lista = lista.filter(function(e) {
+      var suc = e._sucursalOperativa || empSucursalAdmin(e);
+      return suc === sucFiltro;
+    });
+  }
+  if (depFiltro) {
+    lista = lista.filter(function(e) {
+      return empDepartamento(e) === depFiltro;
+    });
+  }
+
+  renderTrabajadores(lista);
+
+  var msg = 'Mostrando ' + lista.length + ' de ' + cacheEmpleados.length + ' empleados';
+  if (sucFiltro || depFiltro) msg += ' (filtros aplicados)';
+  setStatus('ok', msg);
+}
+
+// Llena el dropdown de Sucursal en pestaña Trabajadores con las sucursales
+// operativas que efectivamente tienen empleados (después del enriquecimiento).
+// Esto reemplaza/complementa al dropdown poblado por actualizarFiltros() (que
+// usa /branchOffice). Aquí mostramos solo sucursales con personal real.
+function actualizarFiltrosTrabajadores() {
+  var sucs = {};
+  cacheEmpleados.forEach(function(e) {
+    var s = e._sucursalOperativa || empSucursalAdmin(e);
+    if (s && s !== '—') sucs[s] = (sucs[s] || 0) + 1;
+  });
+
+  var deps = {};
+  cacheEmpleados.forEach(function(e) {
+    var d = empDepartamento(e);
+    if (d && d !== '—') deps[d] = (deps[d] || 0) + 1;
+  });
+
+  var sel = $('sucursal');
+  var prev = sel.value;
+  sel.innerHTML = '<option value="">Todas las sucursales</option>';
+  Object.keys(sucs).sort().forEach(function(s) {
+    sel.innerHTML += '<option value="' + s + '">' + s + ' (' + sucs[s] + ')</option>';
+  });
+  if (prev && sucs[prev]) sel.value = prev;
+
+  var selDep = $('depto');
+  var prevDep = selDep.value;
+  selDep.innerHTML = '<option value="">Todos los deptos</option>';
+  Object.keys(deps).sort().forEach(function(d) {
+    selDep.innerHTML += '<option value="' + d + '">' + d + ' (' + deps[d] + ')</option>';
+  });
+  if (prevDep && deps[prevDep]) selDep.value = prevDep;
+
+  // Listeners para filtrar al cambiar
+  sel.onchange = function() { cargarTrabajadores(); };
+  selDep.onchange = function() { cargarTrabajadores(); };
 }
 
 // Cruza empleados con marcaciones recientes para inferir su sucursal operativa real.
 // Esto compensa que /employee solo devuelve la sucursal administrativa (siempre MATRIZ).
+// Cache global de marcaciones del último enriquecimiento (para reutilizar en modal)
+var cacheMarcacionesEnriquecimiento = [];
+
 async function enriquecerConMarcaciones() {
   // Calcular rango de los últimos 30 días para tener buena cobertura
   var hoy = new Date();
@@ -444,19 +603,17 @@ async function enriquecerConMarcaciones() {
   var marcaciones = [];
   var maxPaginas = 5;
   for (var p = 1; p <= maxPaginas; p++) {
-    var data = await apiFetch('/attendanceData', {
-      startDate: d1, endDate: d2, start: d1, end: d2, page: p
-    });
+    var data = await apiFetchMarcaciones(d1, d2, p);
     var lista = extraerLista(data);
     if (!lista.length) break;
     marcaciones = marcaciones.concat(lista);
     if (data.totalPages && p >= data.totalPages) break;
   }
 
-  // Construir mapa: code -> { sucursal, ultimaMarca }
-  // Si un empleado tiene varias marcas, nos quedamos con la MÁS RECIENTE
-  // (la primera que aparece, asumiendo que el API devuelve ordenado descendente,
-  // pero por seguridad comparamos la fecha).
+  // Guardar todas las marcaciones para reutilizarlas en el modal
+  cacheMarcacionesEnriquecimiento = marcaciones;
+
+  // Construir mapa: code -> { sucursal, ultimaMarca, distribucion }
   var mapa = {};
   marcaciones.forEach(function(m) {
     var emp = m.employee || {};
@@ -465,9 +622,15 @@ async function enriquecerConMarcaciones() {
     var fecha = m.attendanceDate || '';
     var sucursal = emp.branchOffice || '';
     if (!sucursal) return;
-    if (!mapa[code] || fecha > mapa[code].ultimaMarca) {
-      mapa[code] = { sucursal: sucursal, ultimaMarca: fecha };
+    if (!mapa[code]) {
+      mapa[code] = { sucursal: sucursal, ultimaMarca: fecha, distribucion: {} };
     }
+    if (fecha > mapa[code].ultimaMarca) {
+      mapa[code].sucursal = sucursal;
+      mapa[code].ultimaMarca = fecha;
+    }
+    // Distribución: cuántas marcas hizo en cada sucursal (para mostrar % en modal)
+    mapa[code].distribucion[sucursal] = (mapa[code].distribucion[sucursal] || 0) + 1;
   });
 
   // Aplicar al cache de empleados: agregar campos enriquecidos
@@ -476,15 +639,28 @@ async function enriquecerConMarcaciones() {
     if (info) {
       emp._sucursalOperativa = info.sucursal;
       emp._ultimaMarca = info.ultimaMarca;
+      emp._distribucionSucursales = info.distribucion;
     } else {
-      emp._sucursalOperativa = null;  // sin marcas en últimos 30 días
+      emp._sucursalOperativa = null;
       emp._ultimaMarca = null;
+      emp._distribucionSucursales = null;
     }
   });
 
   var enriquecidos = cacheEmpleados.filter(function(e) { return e._sucursalOperativa; }).length;
   setStatus('ok', cacheEmpleados.length + ' empleados · ' + enriquecidos +
-                  ' con sucursal operativa identificada (vía marcaciones últimos 30 días)');
+                  ' con sucursal operativa (vía marcaciones últimos 30d)');
+}
+
+// Wrapper que prueba múltiples formatos de fecha para /attendanceData
+// (la API parece sensible al formato según el rango de fechas).
+async function apiFetchMarcaciones(d1, d2, page) {
+  return await apiFetch('/attendanceData', {
+    startDate: d1 + 'T00:00:00',
+    endDate:   d2 + 'T23:59:59',
+    start: d1, end: d2,
+    page: page
+  });
 }
 
 // Pagina hasta agotar resultados. La API devuelve totalPages en cada respuesta,
@@ -574,7 +750,7 @@ function renderTrabajadores(lista) {
                 empSucursalAdmin(e) + '</span>';
     }
     return '<tr>' +
-      '<td><strong>' + (e.code || '—') + '</strong></td>' +
+      '<td><a class="emp-link" onclick="abrirModalTrabajador(\'' + (e.code || '') + '\')">' + (e.code || '—') + '</a></td>' +
       '<td>' + (e.identification || '—') + '</td>' +
       '<td>' + (e.name || '—') + (e.secondName ? ' ' + e.secondName : '') + '</td>' +
       '<td>' + (apellidos || '—') + '</td>' +
@@ -619,11 +795,7 @@ async function cargarMarcacionesPagina(numPagina) {
 
   setStatus('load', 'Cargando marcaciones página ' + numPagina + '...');
 
-  var data = await apiFetch('/attendanceData', {
-    startDate: d1, endDate: d2,
-    start: d1, end: d2,
-    page: numPagina
-  });
+  var data = await apiFetchMarcaciones(d1, d2, numPagina);
   ultimaRespuesta.attendanceData = data;
 
   var lista = extraerLista(data);
@@ -963,6 +1135,284 @@ function mostrarErrorSetup(msg) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// MODAL DE DETALLE DEL TRABAJADOR
+// ─────────────────────────────────────────────────────────────────────────
+
+function abrirModalTrabajador(code) {
+  if (!code) return;
+  var emp = cacheEmpleados.find(function(e) { return String(e.code) === String(code); });
+  if (!emp) {
+    alert('No se encontró el empleado ' + code);
+    return;
+  }
+
+  // Header
+  $('modal-emp-nombre').textContent = empNombreCompleto(emp);
+  $('modal-emp-sub').textContent = 'CÓDIGO: ' + emp.code + ' · RUT: ' + (emp.identification || '—');
+
+  // Cuerpo: render inicial con lo que tenemos en cache (datos personales + marcas + sucursales)
+  $('modal-emp-body').innerHTML = renderModalEmpleado(emp, null);
+
+  // Mostrar modal
+  $('modal-emp').classList.add('on');
+  document.body.style.overflow = 'hidden';
+
+  // Cargar permisos del empleado en el rango actual (async)
+  cargarPermisosEmpleado(emp).then(function(permisos) {
+    // Cuando vuelven, refrescar la sección de permisos del modal
+    var section = document.getElementById('modal-emp-permisos');
+    if (section) {
+      section.innerHTML = renderSeccionPermisos(emp, permisos);
+    }
+  }).catch(function(e) {
+    console.warn('[Workera] Error cargando permisos del empleado:', e.message);
+    var section = document.getElementById('modal-emp-permisos');
+    if (section) {
+      section.innerHTML = '<div class="modal-loading" style="color:var(--red)">Error al cargar permisos: ' + e.message + '</div>';
+    }
+  });
+}
+
+function cerrarModalTrabajador(ev) {
+  if (ev && ev.target && !ev.target.classList.contains('modal-bg') && ev.target.id !== 'modal-emp') {
+    return;  // Click dentro del modal-box, ignorar
+  }
+  $('modal-emp').classList.remove('on');
+  document.body.style.overflow = '';
+}
+
+// Render inicial del cuerpo del modal (datos personales + KPIs + timeline + sucursales)
+function renderModalEmpleado(emp, permisos) {
+  var d1 = $('d1').value, d2 = $('d2').value;
+
+  // Filtrar las marcaciones cacheadas para este empleado
+  var marcasEmp = cacheMarcacionesEnriquecimiento.filter(function(m) {
+    return m.employee && String(m.employee.code) === String(emp.code);
+  });
+
+  // KPIs del período
+  var diasMarcados = new Set(marcasEmp.map(function(m) {
+    return (m.attendanceDate || '').substring(0, 10);
+  })).size;
+  var totalMarcas = marcasEmp.length;
+  var entradas = marcasEmp.filter(function(m) { return m.attendanceType === 0 || m.attendanceType === '0'; }).length;
+  var salidas = marcasEmp.filter(function(m) { return m.attendanceType === 1 || m.attendanceType === '1'; }).length;
+
+  // Edad calculada
+  var edad = '—';
+  if (emp.birthDate) {
+    try {
+      var nac = new Date(emp.birthDate);
+      var ahora = new Date();
+      var aniosE = ahora.getFullYear() - nac.getFullYear();
+      var m = ahora.getMonth() - nac.getMonth();
+      if (m < 0 || (m === 0 && ahora.getDate() < nac.getDate())) aniosE--;
+      edad = aniosE + ' años';
+    } catch (e) {}
+  }
+
+  // Calcular distribución de sucursales (porcentajes)
+  var dist = emp._distribucionSucursales || {};
+  var totalDist = Object.values(dist).reduce(function(a, b) { return a + b; }, 0);
+  var sucsOrdenadas = Object.keys(dist)
+    .map(function(s) { return { suc: s, n: dist[s], pct: totalDist ? (dist[s] / totalDist * 100) : 0 }; })
+    .sort(function(a, b) { return b.n - a.n; });
+
+  var html = '';
+
+  // ── SECCIÓN 1: Datos personales ─────────────────────
+  html += '<div class="modal-section">';
+  html += '<h3>Datos personales</h3>';
+  html += '<div class="modal-grid">';
+  html += campoModal('Nombre completo', empNombreCompleto(emp));
+  html += campoModal('RUT', emp.identification);
+  html += campoModal('Fecha de nacimiento', emp.birthDate ? formatearFechaCL(emp.birthDate) + ' (' + edad + ')' : '—');
+  html += campoModal('Género', emp.genre);
+  html += campoModal('Estado civil', emp.civilStatus);
+  html += campoModal('Nacionalidad', emp.nationality);
+  html += campoModal('Estado', empActivo(emp) ? '🟢 Activo' : '🔴 Inactivo');
+  html += campoModal('Dirección', emp.address);
+  html += campoModal('Teléfono personal', emp.personalPhone);
+  html += campoModal('Email personal', emp.personalMail);
+  html += campoModal('Email corporativo', emp.corporateMail || '—');
+  html += campoModal('Teléfono corporativo', emp.corporatePhone || '—');
+  html += '</div></div>';
+
+  // ── SECCIÓN 2: KPIs del período ─────────────────────
+  html += '<div class="modal-section">';
+  html += '<h3>Actividad en el período (' + d1 + ' → ' + d2 + ')</h3>';
+  html += '<div class="modal-kpis">';
+  html += '<div class="modal-kpi"><div class="modal-kpi-lbl">Días con marcas</div><div class="modal-kpi-val cyan">' + diasMarcados + '</div></div>';
+  html += '<div class="modal-kpi"><div class="modal-kpi-lbl">Total marcas</div><div class="modal-kpi-val">' + totalMarcas + '</div></div>';
+  html += '<div class="modal-kpi"><div class="modal-kpi-lbl">Entradas (Tipo 0)</div><div class="modal-kpi-val green">' + entradas + '</div></div>';
+  html += '<div class="modal-kpi"><div class="modal-kpi-lbl">Salidas (Tipo 1)</div><div class="modal-kpi-val amber">' + salidas + '</div></div>';
+  html += '<div class="modal-kpi"><div class="modal-kpi-lbl">Última marca</div><div class="modal-kpi-val cyan" style="font-size:14px">' + (emp._ultimaMarca ? formatearFechaCL(emp._ultimaMarca) : '—') + '</div></div>';
+  html += '</div></div>';
+
+  // ── SECCIÓN 3: Distribución de sucursales ─────────
+  if (sucsOrdenadas.length) {
+    var colores = ['#22d4fa', '#22d47a', '#f5a623', '#f56060', '#a78bfa', '#4f8ef7'];
+    html += '<div class="modal-section">';
+    html += '<h3>Sucursales donde marca (últimos 30 días)</h3>';
+    html += '<div class="modal-suc-bar">';
+    sucsOrdenadas.forEach(function(s, i) {
+      var color = colores[i % colores.length];
+      html += '<div class="modal-suc-segment" style="background:' + color +
+              ';width:' + s.pct.toFixed(1) + '%" title="' + s.suc + ': ' + s.pct.toFixed(1) + '%">' +
+              (s.pct > 8 ? s.pct.toFixed(0) + '%' : '') +
+              '</div>';
+    });
+    html += '</div>';
+    html += '<div class="modal-suc-list">';
+    sucsOrdenadas.forEach(function(s, i) {
+      var color = colores[i % colores.length];
+      html += '<div><span class="dot" style="background:' + color + '"></span>' +
+              '<strong>' + s.suc + '</strong> · ' + s.n + ' marcas (' + s.pct.toFixed(1) + '%)</div>';
+    });
+    html += '</div></div>';
+  }
+
+  // ── SECCIÓN 4: Timeline día a día ─────────────────
+  html += '<div class="modal-section">';
+  html += '<h3>Timeline del período</h3>';
+  html += '<div class="modal-timeline">' + renderTimelineEmpleado(emp, marcasEmp, d1, d2) + '</div>';
+  html += '</div>';
+
+  // ── SECCIÓN 5: Permisos (placeholder con loading) ─
+  html += '<div class="modal-section">';
+  html += '<h3>Permisos del período</h3>';
+  html += '<div id="modal-emp-permisos"><div class="modal-loading">Cargando permisos...</div></div>';
+  html += '</div>';
+
+  return html;
+}
+
+function campoModal(label, value) {
+  return '<div class="modal-field">' +
+    '<div class="modal-field-lbl">' + label + '</div>' +
+    '<div class="modal-field-val">' + (value != null && value !== '' ? value : '—') + '</div>' +
+    '</div>';
+}
+
+// Genera el timeline día a día con marcas (in/out) y permisos
+function renderTimelineEmpleado(emp, marcas, d1, d2) {
+  if (!d1 || !d2) return '<em>Selecciona fechas</em>';
+
+  // Construir mapa día → marcas
+  var porDia = {};
+  marcas.forEach(function(m) {
+    var dia = (m.attendanceDate || '').substring(0, 10);
+    var hora = (m.attendanceDate || '').substring(11, 19);
+    if (!dia) return;
+    if (!porDia[dia]) porDia[dia] = [];
+    porDia[dia].push({ hora: hora, type: m.attendanceType });
+  });
+
+  // Generar lista de días en el rango
+  var inicio = new Date(d1 + 'T12:00:00');
+  var fin    = new Date(d2 + 'T12:00:00');
+  var dias = [];
+  for (var t = inicio.getTime(); t <= fin.getTime(); t += 86400000) {
+    var d = new Date(t);
+    var iso = d.toISOString().substring(0, 10);
+    dias.push({ iso: iso, fecha: d });
+  }
+
+  if (dias.length > 60) {
+    return '<em>Rango muy amplio (' + dias.length + ' días). Acotá el rango para ver el timeline.</em>';
+  }
+
+  var diasNombre = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
+  return dias.reverse().map(function(d) {
+    var marks = porDia[d.iso] || [];
+    var dn = diasNombre[d.fecha.getDay()];
+    var lblFecha = '<span class="day-date">' + dn + ' ' + formatearFechaCL(d.iso) + '</span>';
+
+    var eventos;
+    if (!marks.length) {
+      eventos = '<span class="ev-none">— sin marcas —</span>';
+    } else {
+      marks.sort(function(a, b) { return a.hora.localeCompare(b.hora); });
+      eventos = marks.map(function(m) {
+        var clase = (m.type === 0 || m.type === '0') ? 'ev-in' : 'ev-out';
+        var label = (m.type === 0 || m.type === '0') ? 'IN ' : 'OUT';
+        return '<span class="' + clase + '">' + label + ' ' + m.hora + '</span>';
+      }).join(' · ');
+    }
+
+    return '<div class="day">' + lblFecha + '<span class="day-events">' + eventos + '</span></div>';
+  }).join('');
+}
+
+// Carga los permisos del empleado en el rango actual
+async function cargarPermisosEmpleado(emp) {
+  var d1 = $('d1').value, d2 = $('d2').value;
+  var data = await apiFetch('/permission', {
+    startDate: d1, endDate: d2, start: d1, end: d2, page: 1
+  });
+  var lista = extraerLista(data);
+  // Filtrar solo los del empleado
+  return lista.filter(function(p) {
+    return p.employee && String(p.employee.code) === String(emp.code);
+  });
+}
+
+// Render de la sección de permisos del modal
+function renderSeccionPermisos(emp, permisos) {
+  if (!permisos.length) {
+    return '<div class="modal-loading">Sin permisos en el período seleccionado</div>';
+  }
+
+  var hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+
+  return '<table class="tbl"><thead><tr>' +
+    '<th>Tipo</th><th>Inicio</th><th>Fin</th><th>Días</th><th>Vigencia</th>' +
+    '</tr></thead><tbody>' +
+    permisos.map(function(p) {
+      var inicio = formatearFechaCL(p.start);
+      var fin = formatearFechaCL(p.end);
+      var dias = '—';
+      var vigencia = '';
+      if (p.start && p.end) {
+        var d1 = new Date(p.start.substring(0,10));
+        var d2 = new Date(p.end.substring(0,10));
+        dias = Math.round((d2 - d1) / 86400000) + 1;
+        // Comparación con fin del día (incluyente)
+        var d2End = new Date(d2); d2End.setHours(23,59,59,999);
+        if (hoy >= d1 && hoy <= d2End) {
+          vigencia = '<span class="badge bg">🟢 EN CURSO</span>';
+        } else if (hoy > d2End) {
+          vigencia = '<span class="badge bn">○ FINALIZADO</span>';
+        } else {
+          vigencia = '<span class="badge ba">→ PENDIENTE</span>';
+        }
+      }
+      var tipo = p.permissionType || '—';
+      var nombreTipo = p.permissionName || tipo;
+      var tipoBadgeClass = 'bn';
+      if (tipo === 'LICENCIA_MEDICA') tipoBadgeClass = 'br';
+      else if (tipo === 'VACACIONES') tipoBadgeClass = 'bb';
+      else if (tipo === 'TRABAJADO_EN_HORARIO') tipoBadgeClass = 'bg';
+
+      return '<tr>' +
+        '<td><span class="badge ' + tipoBadgeClass + '">' + nombreTipo + '</span></td>' +
+        '<td>' + inicio + '</td>' +
+        '<td>' + fin + '</td>' +
+        '<td style="text-align:center"><strong>' + dias + '</strong></td>' +
+        '<td>' + vigencia + '</td>' +
+        '</tr>';
+    }).join('') + '</tbody></table>';
+}
+
+// Cerrar modal con ESC
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') cerrarModalTrabajador();
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+
 // Al cargar la página, cargar sucursales
 window.addEventListener('DOMContentLoaded', function() {
   document.body.classList.add('tab-emp');  // pestaña por defecto = Trabajadores
@@ -977,6 +1427,20 @@ window.addEventListener('DOMContentLoaded', function() {
   });
 });
 </script>
+
+<!-- MODAL DE DETALLE DEL TRABAJADOR -->
+<div id="modal-emp" class="modal-bg" onclick="cerrarModalTrabajador(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-hdr">
+      <div>
+        <h2 id="modal-emp-nombre">—</h2>
+        <div class="modal-sub" id="modal-emp-sub">—</div>
+      </div>
+      <button class="modal-close" onclick="cerrarModalTrabajador()" title="Cerrar (Esc)">×</button>
+    </div>
+    <div class="modal-body" id="modal-emp-body"></div>
+  </div>
+</div>
 
 </body>
 </html>

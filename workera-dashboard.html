@@ -42,7 +42,7 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 /* STATUS */
 .status-bar{background:var(--s1);border-bottom:1px solid var(--br);padding:7px 20px;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--t3)}
 .sdot{width:7px;height:7px;border-radius:50%;background:var(--t3);flex-shrink:0}
-.sdot.ok{background:var(--green)}.sdot.load{background:var(--amber);animation:pulse 1s infinite}.sdot.err{background:var(--red)}
+.sdot.ok{background:var(--green)}.sdot.load{background:var(--amber);animation:pulse 1s infinite}.sdot.err{background:var(--red)}.sdot.warn{background:var(--amber)}
 
 /* TABS */
 .tabs{display:flex;background:var(--s1);border-bottom:1px solid var(--br);padding:0 20px;overflow-x:auto}
@@ -81,6 +81,24 @@ body.tab-emp .ctrl-sel-suc,
 body.tab-emp .ctrl-sel-dep,
 body.tab-emp .ctrl-lbl-suc,
 body.tab-emp .ctrl-lbl-dep{display:none}
+
+/* Panel de diagnóstico cuando un endpoint devuelve vacío */
+.diag-panel{padding:18px 22px;text-align:left;background:rgba(245,158,11,.04);
+  border-left:3px solid var(--amber);}
+.diag-title{font-size:13px;font-weight:600;color:var(--amber);margin-bottom:6px}
+.diag-text{font-size:11.5px;color:var(--t2);line-height:1.55;margin-bottom:12px}
+.diag-text code{background:var(--s2);padding:1px 6px;border-radius:3px;
+  font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--cyan)}
+.diag-text strong{color:var(--t1)}
+.diag-actions{display:flex;flex-direction:column;gap:8px}
+.diag-actions details{background:var(--s2);border:1px solid var(--brm);
+  border-radius:5px;padding:6px 10px;font-size:11px;color:var(--t2)}
+.diag-actions summary{cursor:pointer;padding:3px 0;color:var(--t1);font-weight:500;
+  outline:none}
+.diag-actions summary:hover{color:var(--cyan)}
+.diag-json{background:var(--s1);padding:10px;border-radius:4px;font-size:10.5px;
+  font-family:'JetBrains Mono',monospace;color:var(--t2);max-height:280px;
+  overflow:auto;margin:6px 0 0;line-height:1.5;white-space:pre-wrap;word-break:break-all}
 
 /* TABLA */
 .tw{overflow:auto;max-height:500px}
@@ -177,7 +195,7 @@ body.tab-emp .ctrl-lbl-dep{display:none}
       </div>
       <div class="tw">
         <table class="tbl" id="tbl-emp">
-          <thead><tr><th>Código</th><th>RUT</th><th>Nombre</th><th>Apellidos</th><th>Cargo</th><th>Departamento</th><th>Sucursal</th><th>Estado</th></tr></thead>
+          <thead><tr><th>Código</th><th>RUT</th><th>Nombre</th><th>Apellidos</th><th>Nacionalidad</th><th>Departamento</th><th>Sucursal</th><th>Estado</th></tr></thead>
           <tbody id="tbody-emp"><tr><td colspan="8"><div class="empty">Presiona "Cargar datos" para consultar</div></td></tr></tbody>
         </table>
       </div>
@@ -465,7 +483,7 @@ function renderTrabajadores(lista) {
       '<td>' + (e.identification || '—') + '</td>' +
       '<td>' + (e.name || '—') + (e.secondName ? ' ' + e.secondName : '') + '</td>' +
       '<td>' + (apellidos || '—') + '</td>' +
-      '<td>' + (e.position || e.cargo || '—') + '</td>' +
+      '<td>' + (e.nationality || '—') + '</td>' +
       '<td>' + empDepartamento(e) + '</td>' +
       '<td>' + empSucursal(e) + '</td>' +
       '<td><span class="badge ' + (activo ? 'bg">Activo' : 'br">Inactivo') + '</span></td>' +
@@ -473,21 +491,44 @@ function renderTrabajadores(lista) {
   }).join('');
 }
 
+// Cache de la última respuesta cruda de cada endpoint, para diagnóstico
+var ultimaRespuesta = {};
+
 async function cargarMarcaciones() {
   var d1 = $('d1').value, d2 = $('d2').value;
   var suc = $('sucursal').value, dep = $('depto').value;
-  var params = { start: d1, end: d2, page: 1 };
+
+  // El API de Workera puede usar nombres distintos para los parámetros de fecha.
+  // Intentamos primero con los típicos (start/end). Si llega vacío, probamos
+  // otros nombres como fallback.
+  var params = { startDate: d1, endDate: d2, start: d1, end: d2, page: 1 };
   if (suc) params.branchOffice = suc;
   if (dep) params.department = dep;
 
   setStatus('load', 'Cargando marcaciones ' + d1 + '→' + d2 + ' (puede tardar)...');
   var data = await apiFetch('/attendanceData', params);
-  var lista = Array.isArray(data) ? data : (data.results || data.data || []);
-  renderMarcaciones(lista);
-  setStatus('ok', 'Marcaciones: ' + lista.length + ' (pág 1)');
+  ultimaRespuesta.attendanceData = data;
+
+  var lista = extraerLista(data);
+  renderMarcaciones(lista, data);
+
+  if (lista.length) {
+    setStatus('ok', 'Marcaciones: ' + lista.length +
+              (data.totalResult ? ' de ' + data.totalResult + ' total' : '') +
+              (data.totalPages ? ' · pág ' + (data.page || 1) + '/' + data.totalPages : ''));
+  } else {
+    setStatus('warn', 'Marcaciones vacías. Revisa el panel de diagnóstico abajo.');
+  }
 }
 
-function renderMarcaciones(lista) {
+// Extrae la lista de items de cualquier estructura típica del API Workera
+function extraerLista(data) {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  return data.data || data.results || data.items || [];
+}
+
+function renderMarcaciones(lista, dataRaw) {
   $('k-ast-total').textContent = lista.length.toLocaleString('es-CL');
   var ins  = lista.filter(function(m) {
     var t = (m.type||'').toUpperCase();
@@ -507,7 +548,9 @@ function renderMarcaciones(lista) {
 
   var tb = $('tbody-ast');
   if (!lista.length) {
-    tb.innerHTML = '<tr><td colspan="7"><div class="empty">Sin marcaciones en el período</div></td></tr>';
+    // Panel de diagnóstico: mostrar la respuesta cruda del API para entender qué pasa
+    var diag = renderDiagnostico('attendanceData', dataRaw);
+    tb.innerHTML = '<tr><td colspan="7" style="padding:0">' + diag + '</td></tr>';
     return;
   }
   tb.innerHTML = lista.map(function(m) {
@@ -531,48 +574,105 @@ function renderMarcaciones(lista) {
   }).join('');
 }
 
+// Renderiza un panel de diagnóstico amigable cuando un endpoint devuelve vacío.
+// Muestra: status, qué se pidió, qué respondió, y JSON crudo en un <details>.
+function renderDiagnostico(endpoint, dataRaw) {
+  var pretty = '';
+  try { pretty = JSON.stringify(dataRaw || {}, null, 2); }
+  catch(e) { pretty = String(dataRaw); }
+
+  var tieneAlgo = dataRaw && (dataRaw.totalResult || dataRaw.totalPages);
+  var diagnostico = '';
+  if (tieneAlgo) {
+    diagnostico = '<strong>El API respondió OK</strong> con metadatos (totalResult: ' +
+                  (dataRaw.totalResult || 'n/a') + ', totalPages: ' + (dataRaw.totalPages || 'n/a') +
+                  ') pero <code>data: []</code> está vacío.<br>' +
+                  '<strong>Causa probable:</strong> no hay registros para los parámetros enviados.';
+  } else if (Array.isArray(dataRaw)) {
+    diagnostico = '<strong>El API devolvió un array vacío</strong>. ' +
+                  'Probablemente no hay registros en el período/filtros seleccionados.';
+  } else if (dataRaw && Object.keys(dataRaw).length === 0) {
+    diagnostico = '<strong>El API devolvió un objeto vacío</strong>. ' +
+                  'Puede ser un problema de credenciales o parámetros incorrectos.';
+  } else {
+    diagnostico = '<strong>El API devolvió una estructura no esperada.</strong> ' +
+                  'Mira el JSON crudo abajo para ver qué llegó.';
+  }
+
+  return '<div class="diag-panel">' +
+    '<div class="diag-title">⚠ Sin datos para mostrar</div>' +
+    '<div class="diag-text">' + diagnostico + '</div>' +
+    '<div class="diag-actions">' +
+      '<details><summary>Ver respuesta cruda del API</summary>' +
+      '<pre class="diag-json">' + pretty.replace(/</g,'&lt;') + '</pre>' +
+      '</details>' +
+      '<details><summary>Ver parámetros enviados</summary>' +
+      '<pre class="diag-json">endpoint: /' + endpoint + '\n' +
+      'fecha: ' + ($('d1').value || '?') + ' → ' + ($('d2').value || '?') + '\n' +
+      'sucursal: ' + ($('sucursal').value || '(todas)') + '\n' +
+      'depto: ' + ($('depto').value || '(todos)') +
+      '</pre></details>' +
+    '</div>' +
+  '</div>';
+}
+
 async function cargarPermisos() {
   var d1 = $('d1').value, d2 = $('d2').value;
   setStatus('load', 'Cargando permisos...');
-  var data = await apiFetch('/permission', { start: d1, end: d2, page: 1 });
-  var lista = Array.isArray(data) ? data : (data.results || data.data || []);
+  // Probamos varios nombres de parámetros típicos del API Workera
+  var data = await apiFetch('/permission', {
+    startDate: d1, endDate: d2, start: d1, end: d2, page: 1
+  });
+  ultimaRespuesta.permission = data;
+
+  var lista = extraerLista(data);
   var tb = $('tbody-per');
+
   if (!lista.length) {
-    tb.innerHTML = '<tr><td colspan="6"><div class="empty">Sin permisos en el período</div></td></tr>';
-  } else {
-    tb.innerHTML = lista.map(function(p) {
-      var emp = p.employee || {};
-      return '<tr>' +
-        '<td>' + (p.id || p.permissionId || '—') + '</td>' +
-        '<td>' + (empNombreCompleto(emp) || '—') + '</td>' +
-        '<td>' + (p.permissionType || p.type || '—') + '</td>' +
-        '<td>' + (p.startDate || p.start || '—') + '</td>' +
-        '<td>' + (p.endDate || p.end || '—') + '</td>' +
-        '<td>' + (p.comment || '—') + '</td>' +
-      '</tr>';
-    }).join('');
+    var diag = renderDiagnostico('permission', data);
+    tb.innerHTML = '<tr><td colspan="6" style="padding:0">' + diag + '</td></tr>';
+    setStatus('warn', 'Permisos vacíos. Revisa el panel de diagnóstico.');
+    return;
   }
+
+  tb.innerHTML = lista.map(function(p) {
+    var emp = p.employee || {};
+    return '<tr>' +
+      '<td>' + (p.id || p.permissionId || '—') + '</td>' +
+      '<td>' + (empNombreCompleto(emp) || '—') + '</td>' +
+      '<td>' + (p.permissionType || p.type || '—') + '</td>' +
+      '<td>' + (p.startDate || p.start || '—') + '</td>' +
+      '<td>' + (p.endDate || p.end || '—') + '</td>' +
+      '<td>' + (p.comment || '—') + '</td>' +
+    '</tr>';
+  }).join('');
   setStatus('ok', 'Permisos: ' + lista.length);
 }
 
 async function cargarTurnos() {
   setStatus('load', 'Cargando asignaciones de turnos...');
   var data = await apiFetch('/workshift/assign', { page: 1 });
-  var lista = Array.isArray(data) ? data : (data.results || data.data || []);
+  ultimaRespuesta.workshiftAssign = data;
+
+  var lista = extraerLista(data);
   var tb = $('tbody-tur');
+
   if (!lista.length) {
-    tb.innerHTML = '<tr><td colspan="4"><div class="empty">Sin asignaciones</div></td></tr>';
-  } else {
-    tb.innerHTML = lista.map(function(t) {
-      var emp = t.employee || {};
-      return '<tr>' +
-        '<td>' + (empNombreCompleto(emp) || '—') + '</td>' +
-        '<td>' + (t.workshiftName || t.workshift || t.turno || '—') + '</td>' +
-        '<td>' + (t.startDate || '—') + '</td>' +
-        '<td>' + (t.endDate || '—') + '</td>' +
-      '</tr>';
-    }).join('');
+    var diag = renderDiagnostico('workshift/assign', data);
+    tb.innerHTML = '<tr><td colspan="4" style="padding:0">' + diag + '</td></tr>';
+    setStatus('warn', 'Turnos vacíos. Revisa el panel de diagnóstico.');
+    return;
   }
+
+  tb.innerHTML = lista.map(function(t) {
+    var emp = t.employee || {};
+    return '<tr>' +
+      '<td>' + (empNombreCompleto(emp) || '—') + '</td>' +
+      '<td>' + (t.workshiftName || t.workshift || t.turno || '—') + '</td>' +
+      '<td>' + (t.startDate || '—') + '</td>' +
+      '<td>' + (t.endDate || '—') + '</td>' +
+    '</tr>';
+  }).join('');
   setStatus('ok', 'Turnos: ' + lista.length);
 }
 

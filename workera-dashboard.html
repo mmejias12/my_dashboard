@@ -121,6 +121,11 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
   width:32px;height:32px;border-radius:6px;cursor:pointer;font-size:18px;
   display:flex;align-items:center;justify-content:center}
 .modal-close:hover{background:var(--s2);color:var(--red)}
+.modal-pdf-btn{background:rgba(245,96,96,.12);border:1px solid var(--red);color:var(--red);
+  height:32px;padding:0 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:500;
+  display:flex;align-items:center;gap:5px;font-family:inherit}
+.modal-pdf-btn:hover{background:var(--red);color:#fff}
+.modal-pdf-btn:disabled{opacity:.5;cursor:not-allowed}
 .modal-body{padding:18px 24px}
 .modal-section{margin-bottom:20px}
 .modal-section h3{margin:0 0 10px;font-size:11.5px;color:var(--cyan);
@@ -196,6 +201,10 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 .hint{font-size:10.5px;color:var(--t3);margin-top:6px}
 .hint code{background:var(--s3);padding:1px 5px;border-radius:3px;color:var(--cyan);font-family:'DM Mono',monospace}
 </style>
+<!-- Librerías para exportar Excel y PDF -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
 
@@ -294,6 +303,7 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
       <div class="cs">
         Endpoint: /attendanceData · 20 por página · cache automático en localStorage
         <button onclick="cacheLimpiar()" style="margin-left:10px;padding:3px 10px;font-size:11px;background:var(--bg-input);color:var(--text-pri);border:1px solid var(--border);border-radius:4px;cursor:pointer;" title="Borrar todas las marcaciones cacheadas">🗑 Limpiar cache</button>
+        <button onclick="exportarMarcacionesExcel()" style="margin-left:6px;padding:3px 10px;font-size:11px;background:rgba(34,212,122,.12);color:var(--green);border:1px solid var(--green);border-radius:4px;cursor:pointer;font-weight:500" title="Descargar todas las marcaciones cargadas/filtradas en Excel">📊 Excel</button>
         <span id="cache-info" style="margin-left:10px;font-size:11px;color:var(--cyan)"></span>
       </div>
       <div class="tw">
@@ -358,6 +368,7 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 <script>
 var PROXY = '/api/workera-proxy';
 var tabActivo = 'emp';
+var modalEmpleadoActual = null;  // empleado mostrado en modal (para PDF)
 
 // ─────────────────────────────────────────────────────────────────────────
 // CACHE PERSISTENTE DE MARCACIONES (localStorage)
@@ -419,6 +430,108 @@ function cacheLimpiar() {
     var tb = $('tbody-ast');
     if (tb) tb.innerHTML = '<tr><td colspan="7"><div class="empty">Cache limpiado. Presiona "Cargar datos" para recargar.</div></td></tr>';
   }
+}
+
+// Exporta a Excel las marcaciones actualmente filtradas (o todas si no hay filtro).
+// Una marca por fila, con columnas legibles + tipo entrada/salida calculado.
+function exportarMarcacionesExcel() {
+  if (typeof XLSX === 'undefined') {
+    alert('La librería SheetJS no está cargada. Verifica la conexión a internet.');
+    return;
+  }
+
+  var lista = (marcacionesFiltradas && marcacionesFiltradas.length)
+    ? marcacionesFiltradas
+    : cacheMarcacionesEnriquecimiento;
+
+  if (!lista.length) {
+    alert('No hay marcaciones cargadas para exportar. Primero carga datos en la pestaña Marcaciones.');
+    return;
+  }
+
+  setStatus('load', 'Generando Excel con ' + lista.length + ' marcaciones...');
+
+  // Clasificar por orden temporal para tener entrada/salida correcta
+  var clasif = clasificarEntradasSalidas(lista);
+
+  // Ordenar por fecha+hora ascendente para que el Excel quede cronológico
+  var ordenadas = lista.slice().sort(function(a, b) {
+    return (a.attendanceDate || '').localeCompare(b.attendanceDate || '');
+  });
+
+  // Mapear a filas con columnas legibles
+  var filas = ordenadas.map(function(m) {
+    var emp = m.employee || {};
+    var dt = m.attendanceDate || '';
+    var fechaIso = dt.substring(0, 10);
+    var hora = dt.substring(11, 19);
+    var diasNombre = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
+    var diaSem = '';
+    try {
+      diaSem = diasNombre[new Date(fechaIso + 'T12:00:00').getDay()];
+    } catch (e) {}
+    var clase = clasif[idMarca(m)] || '?';
+    return {
+      'Fecha':       formatearFechaCL(fechaIso),
+      'Día':         diaSem,
+      'Hora':        hora,
+      'Tipo':        clase,
+      'Código':      emp.code || '',
+      'RUT':         emp.identification || '',
+      'Nombre':      empNombreCompleto(emp),
+      'Sucursal':    emp.branchOffice || '',
+      'Departamento':emp.department || '',
+      'Estado emp.': emp.employeeStatus || '',
+      'Dispositivo': m.deviceName || '',
+      'Origen':      m.origin || '',
+      'Móvil':       m.isMobile ? 'Sí' : 'No'
+    };
+  });
+
+  var ws = XLSX.utils.json_to_sheet(filas);
+
+  // Anchos de columna razonables
+  ws['!cols'] = [
+    { wch: 12 }, { wch: 5 }, { wch: 9 }, { wch: 10 }, { wch: 11 }, { wch: 14 },
+    { wch: 32 }, { wch: 22 }, { wch: 22 }, { wch: 12 }, { wch: 35 }, { wch: 30 }, { wch: 7 }
+  ];
+
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Marcaciones');
+
+  // Hoja resumen con KPIs y filtros aplicados
+  var totalEntradas = filas.filter(function(r) { return r.Tipo === 'ENTRADA'; }).length;
+  var totalSalidas  = filas.filter(function(r) { return r.Tipo === 'SALIDA'; }).length;
+  var personasUnicas = new Set(filas.map(function(r) { return r.Código; })).size;
+  var diasCubiertos = new Set(filas.map(function(r) { return r.Fecha; })).size;
+
+  var resumen = [
+    { Concepto: 'Reporte de marcaciones · Workera',  Valor: '' },
+    { Concepto: 'Generado',                            Valor: new Date().toLocaleString('es-CL') },
+    { Concepto: 'Período consultado',                  Valor: ($('d1').value || '') + ' → ' + ($('d2').value || '') },
+    { Concepto: 'Total marcaciones exportadas',        Valor: filas.length },
+    { Concepto: 'Entradas',                            Valor: totalEntradas },
+    { Concepto: 'Salidas',                             Valor: totalSalidas },
+    { Concepto: 'Personas únicas',                     Valor: personasUnicas },
+    { Concepto: 'Días con marcas',                     Valor: diasCubiertos },
+    { Concepto: '',                                    Valor: '' },
+    { Concepto: 'Filtros activos:',                    Valor: '' },
+    { Concepto: '  · Búsqueda',                        Valor: ($('mrc-busca') ? $('mrc-busca').value || '(ninguna)' : '(ninguna)') },
+    { Concepto: '  · Sucursal',                        Valor: ($('mrc-suc') ? $('mrc-suc').value || '(todas)' : '(todas)') },
+    { Concepto: '  · Tipo',                            Valor: ($('mrc-tipo') ? $('mrc-tipo').value || '(todos)' : '(todos)') }
+  ];
+  var wsR = XLSX.utils.json_to_sheet(resumen);
+  wsR['!cols'] = [{ wch: 35 }, { wch: 35 }];
+  XLSX.utils.book_append_sheet(wb, wsR, 'Resumen', 0);  // primera hoja al abrir
+  // Reordenar para que Resumen quede primera (XLSX las inserta por orden)
+  wb.SheetNames = ['Resumen', 'Marcaciones'];
+
+  var d1 = $('d1').value || 'inicio';
+  var d2 = $('d2').value || 'fin';
+  var nombre = 'marcaciones_workera_' + d1 + '_' + d2 + '.xlsx';
+  XLSX.writeFile(wb, nombre);
+
+  setStatus('ok', '✓ Excel descargado: ' + nombre + ' (' + filas.length + ' filas)');
 }
 
 // Devuelve qué fechas del rango YA están cacheadas
@@ -1670,8 +1783,345 @@ function mostrarErrorSetup(msg) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// MODAL DE DETALLE DEL TRABAJADOR
+// EXPORTAR REPORTE DEL TRABAJADOR A PDF
 // ─────────────────────────────────────────────────────────────────────────
+// Genera un PDF con membrete REDTEC, datos personales, KPIs, distribución
+// de sucursales, timeline día a día y permisos del período. Usado para:
+// - Reuniones uno-a-uno con el trabajador
+// - Auditorías de RRHH
+// - Imprimir y archivar firmado
+// Usa jsPDF dibujando texto manualmente (no html2canvas) para mejor calidad.
+async function exportarTrabajadorPDF() {
+  if (typeof jspdf === 'undefined' || !jspdf.jsPDF) {
+    alert('La librería jsPDF no está cargada. Verifica la conexión a internet.');
+    return;
+  }
+  if (!modalEmpleadoActual) {
+    alert('No hay un trabajador seleccionado.');
+    return;
+  }
+
+  var btn = $('btn-pdf-emp');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Generando...'; }
+
+  try {
+    var emp = modalEmpleadoActual;
+    var d1 = $('d1').value, d2 = $('d2').value;
+
+    // Cargar permisos del empleado para el período (si no se cargaron aún)
+    var permisos = [];
+    try { permisos = await cargarPermisosEmpleado(emp); } catch(e) {}
+
+    // Filtrar marcaciones del empleado
+    var marcasEmp = cacheMarcacionesEnriquecimiento.filter(function(m) {
+      return m.employee && String(m.employee.code) === String(emp.code);
+    });
+    var clasif = clasificarEntradasSalidas(marcasEmp);
+
+    // Cálculos
+    var diasMarcados = new Set(marcasEmp.map(function(m) {
+      return (m.attendanceDate || '').substring(0, 10);
+    })).size;
+    var entradas = 0, salidas = 0;
+    marcasEmp.forEach(function(m) {
+      var c = clasif[idMarca(m)];
+      if (c === 'ENTRADA') entradas++;
+      else if (c === 'SALIDA') salidas++;
+    });
+
+    var edad = '—';
+    if (emp.birthDate) {
+      try {
+        var nac = new Date(emp.birthDate);
+        var ahora = new Date();
+        var aniosE = ahora.getFullYear() - nac.getFullYear();
+        var mDif = ahora.getMonth() - nac.getMonth();
+        if (mDif < 0 || (mDif === 0 && ahora.getDate() < nac.getDate())) aniosE--;
+        edad = aniosE + ' años';
+      } catch (e) {}
+    }
+
+    // Construir el PDF: A4 portrait, milímetros
+    var doc = new jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+    var pageW = 210, pageH = 297;
+    var margin = 15;
+    var y = margin;
+
+    // Helpers de dibujo
+    function setH1() { doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(20,20,20); }
+    function setH2() { doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(40,40,40); }
+    function setH3() { doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(80,80,80); }
+    function setBody() { doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(40,40,40); }
+    function setSmall() { doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(120,120,120); }
+    function linea(y) { doc.setDrawColor(200); doc.setLineWidth(0.2); doc.line(margin, y, pageW - margin, y); }
+
+    function checkPageBreak(needed) {
+      if (y + needed > pageH - margin - 10) {
+        doc.addPage();
+        y = margin;
+        return true;
+      }
+      return false;
+    }
+
+    // ── MEMBRETE ──────────────────────────────────────────────
+    // Logo ficticio: rectángulo con "REDTEC" en grande
+    doc.setFillColor(230, 60, 60);
+    doc.rect(margin, y, 22, 14, 'F');
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(12);
+    doc.setTextColor(255,255,255);
+    doc.text('R', margin + 8, y + 9);
+
+    setH1();
+    doc.text('REDTEC', margin + 26, y + 7);
+    setSmall();
+    doc.text('Reporte de asistencia · Workera', margin + 26, y + 12);
+
+    // Lado derecho: fecha de generación
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(8);
+    doc.setTextColor(120,120,120);
+    var ahoraStr = new Date().toLocaleString('es-CL', { dateStyle:'short', timeStyle:'short' });
+    doc.text('Generado: ' + ahoraStr, pageW - margin, y + 7, { align: 'right' });
+    doc.text('Período: ' + (d1 || '?') + ' → ' + (d2 || '?'), pageW - margin, y + 12, { align: 'right' });
+
+    y += 20;
+    linea(y);
+    y += 6;
+
+    // ── NOMBRE DEL TRABAJADOR ─────────────────────────────────
+    setH1();
+    var nombreCompleto = empNombreCompleto(emp);
+    doc.text(nombreCompleto, margin, y);
+    y += 6;
+    setBody();
+    doc.setTextColor(80,80,80);
+    doc.text('RUT: ' + (emp.identification || '—') + '   ·   Código: ' + (emp.code || '—'), margin, y);
+    y += 8;
+
+    // ── DATOS PERSONALES ──────────────────────────────────────
+    setH2();
+    doc.text('Datos personales', margin, y);
+    y += 4;
+    linea(y);
+    y += 5;
+
+    // 2 columnas
+    setBody();
+    var col1X = margin;
+    var col2X = pageW / 2;
+    var lineH = 5;
+
+    function campoPdf(x, y, label, value) {
+      setH3();
+      doc.text(label.toUpperCase(), x, y);
+      setBody();
+      doc.text(String(value || '—').substring(0, 50), x, y + 4);
+    }
+
+    campoPdf(col1X, y, 'Nacionalidad', emp.nationality);
+    campoPdf(col2X, y, 'Fecha de nacimiento', emp.birthDate ? formatearFechaCL(emp.birthDate) + ' (' + edad + ')' : '—');
+    y += lineH * 2 + 1;
+
+    campoPdf(col1X, y, 'Género', emp.genre);
+    campoPdf(col2X, y, 'Estado civil', emp.civilStatus);
+    y += lineH * 2 + 1;
+
+    campoPdf(col1X, y, 'Estado en Workera', emp.employeeStatus);
+    campoPdf(col2X, y, 'Última marca', emp._ultimaMarca ? formatearFechaCL(emp._ultimaMarca) : '—');
+    y += lineH * 2 + 1;
+
+    campoPdf(col1X, y, 'Dirección', emp.address);
+    y += lineH * 2 + 1;
+
+    campoPdf(col1X, y, 'Teléfono personal', emp.personalPhone);
+    campoPdf(col2X, y, 'Email personal', emp.personalMail);
+    y += lineH * 2 + 1;
+
+    campoPdf(col1X, y, 'Email corporativo', emp.corporateMail || '—');
+    campoPdf(col2X, y, 'Teléfono corporativo', emp.corporatePhone || '—');
+    y += lineH * 2 + 4;
+
+    // ── RESUMEN DEL PERÍODO ───────────────────────────────────
+    checkPageBreak(40);
+    setH2();
+    doc.text('Resumen del período', margin, y);
+    y += 4;
+    linea(y);
+    y += 6;
+
+    // 4 mini-cajas con KPIs
+    var boxW = (pageW - margin * 2 - 6) / 4;
+    var boxH = 16;
+    var kpis = [
+      { lbl: 'DÍAS', val: diasMarcados },
+      { lbl: 'MARCAS', val: marcasEmp.length },
+      { lbl: 'ENTRADAS', val: entradas },
+      { lbl: 'SALIDAS', val: salidas }
+    ];
+    kpis.forEach(function(k, i) {
+      var bx = margin + i * (boxW + 2);
+      doc.setDrawColor(200);
+      doc.setFillColor(248,248,248);
+      doc.roundedRect(bx, y, boxW, boxH, 1.5, 1.5, 'FD');
+      setH3();
+      doc.text(k.lbl, bx + boxW/2, y + 5, { align: 'center' });
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(14);
+      doc.setTextColor(40,40,40);
+      doc.text(String(k.val), bx + boxW/2, y + 13, { align: 'center' });
+    });
+    y += boxH + 6;
+
+    // ── DISTRIBUCIÓN DE SUCURSALES ────────────────────────────
+    var dist = emp._distribucionSucursales || {};
+    var totalDist = Object.values(dist).reduce(function(a, b) { return a + b; }, 0);
+    if (totalDist > 0) {
+      checkPageBreak(20);
+      setH2();
+      doc.text('Sucursales donde marcó', margin, y);
+      y += 4;
+      linea(y);
+      y += 5;
+
+      var sucsOrdenadas = Object.keys(dist)
+        .map(function(s) { return { suc: s, n: dist[s], pct: (dist[s] / totalDist * 100) }; })
+        .sort(function(a, b) { return b.n - a.n; });
+
+      setBody();
+      sucsOrdenadas.forEach(function(s) {
+        // Barra: rectángulo proporcional al %
+        var barW = (pageW - margin * 2 - 80) * (s.pct / 100);
+        doc.setFillColor(180, 180, 180);
+        doc.rect(margin, y - 3, barW, 3.5, 'F');
+        doc.setTextColor(40,40,40);
+        doc.text(s.suc + ' — ' + s.n + ' marcas (' + s.pct.toFixed(1) + '%)', margin + 90, y);
+        y += 6;
+      });
+      y += 3;
+    }
+
+    // ── TIMELINE DÍA A DÍA ────────────────────────────────────
+    checkPageBreak(20);
+    setH2();
+    doc.text('Detalle día a día', margin, y);
+    y += 4;
+    linea(y);
+    y += 5;
+
+    // Construir mapa día → marcas
+    var porDia = {};
+    marcasEmp.forEach(function(m) {
+      var dia = (m.attendanceDate || '').substring(0, 10);
+      var hora = (m.attendanceDate || '').substring(11, 19);
+      if (!dia) return;
+      if (!porDia[dia]) porDia[dia] = [];
+      porDia[dia].push({ hora: hora, clase: clasif[idMarca(m)] || '?' });
+    });
+
+    var inicio = new Date(d1 + 'T12:00:00');
+    var fin    = new Date(d2 + 'T12:00:00');
+    var diasNombre = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
+    var diasArr = [];
+    for (var t = inicio.getTime(); t <= fin.getTime(); t += 86400000) {
+      var dt = new Date(t);
+      diasArr.push({ iso: dt.toISOString().substring(0, 10), fecha: dt });
+    }
+
+    setBody();
+    doc.setFontSize(9);
+    diasArr.forEach(function(d) {
+      checkPageBreak(6);
+      var marks = porDia[d.iso] || [];
+      var dn = diasNombre[d.fecha.getDay()];
+      doc.setTextColor(120,120,120);
+      doc.text(dn + ' ' + formatearFechaCL(d.iso), margin, y);
+
+      if (!marks.length) {
+        doc.setTextColor(180,180,180);
+        doc.setFont('helvetica','italic');
+        doc.text('— sin marcas —', margin + 30, y);
+        doc.setFont('helvetica','normal');
+      } else {
+        marks.sort(function(a, b) { return a.hora.localeCompare(b.hora); });
+        var lblTexto = marks.map(function(m) {
+          var lbl = m.clase === 'ENTRADA' ? 'IN' : (m.clase === 'SALIDA' ? 'OUT' : '?');
+          return lbl + ' ' + m.hora;
+        }).join('   ·   ');
+        doc.setTextColor(40,40,40);
+        doc.text(lblTexto, margin + 30, y);
+      }
+      y += 5;
+    });
+    y += 3;
+
+    // ── PERMISOS DEL PERÍODO ──────────────────────────────────
+    if (permisos.length) {
+      checkPageBreak(20);
+      setH2();
+      doc.text('Permisos del período', margin, y);
+      y += 4;
+      linea(y);
+      y += 5;
+
+      setBody();
+      doc.setFontSize(9);
+      permisos.forEach(function(p) {
+        checkPageBreak(7);
+        var dias = '—';
+        if (p.start && p.end) {
+          var pd1 = new Date(p.start.substring(0,10));
+          var pd2 = new Date(p.end.substring(0,10));
+          dias = Math.round((pd2 - pd1) / 86400000) + 1;
+        }
+        doc.setTextColor(40,40,40);
+        doc.text(p.permissionName || p.permissionType || '—', margin, y);
+        doc.setTextColor(80,80,80);
+        doc.text(formatearFechaCL(p.start) + ' → ' + formatearFechaCL(p.end) + '   (' + dias + ' días)',
+                 margin + 50, y);
+        y += 5;
+      });
+    }
+
+    // ── FIRMAS ───────────────────────────────────────────────
+    checkPageBreak(35);
+    y = pageH - margin - 28;
+    linea(y);
+    y += 8;
+    setBody();
+    doc.setFontSize(9);
+    doc.setTextColor(120,120,120);
+    var firmaW = (pageW - margin * 2 - 10) / 2;
+    doc.text('________________________________', margin, y + 12);
+    doc.text('Firma del trabajador', margin + firmaW/2, y + 18, { align: 'center' });
+    doc.text('________________________________', margin + firmaW + 10, y + 12);
+    doc.text('Firma del supervisor', margin + firmaW * 1.5 + 10, y + 18, { align: 'center' });
+
+    // ── PIE DE PÁGINA con número en todas las páginas ─────────
+    var totalPaginas = doc.internal.getNumberOfPages();
+    for (var i = 1; i <= totalPaginas; i++) {
+      doc.setPage(i);
+      doc.setFont('helvetica','normal');
+      doc.setFontSize(7);
+      doc.setTextColor(150,150,150);
+      doc.text('Página ' + i + ' de ' + totalPaginas, pageW - margin, pageH - 8, { align: 'right' });
+      doc.text('Reporte generado por dashboard Workera · REDTEC', margin, pageH - 8);
+    }
+
+    // Descargar
+    var nombreArchivo = 'reporte_' + (emp.code || 'emp') + '_' + (emp.lastName || '').replace(/\s+/g,'_') + '_' + d1 + '_' + d2 + '.pdf';
+    doc.save(nombreArchivo);
+
+    setStatus('ok', '✓ PDF descargado: ' + nombreArchivo);
+  } catch (e) {
+    console.error('[Workera] Error generando PDF:', e);
+    alert('Error generando PDF: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '📄 PDF'; }
+  }
+}
+
 
 function abrirModalTrabajador(code) {
   if (!code) return;
@@ -1680,6 +2130,7 @@ function abrirModalTrabajador(code) {
     alert('No se encontró el empleado ' + code);
     return;
   }
+  modalEmpleadoActual = emp;
 
   // Header
   $('modal-emp-nombre').textContent = empNombreCompleto(emp);
@@ -1994,7 +2445,10 @@ window.addEventListener('DOMContentLoaded', function() {
         <h2 id="modal-emp-nombre">—</h2>
         <div class="modal-sub" id="modal-emp-sub">—</div>
       </div>
-      <button class="modal-close" onclick="cerrarModalTrabajador()" title="Cerrar (Esc)">×</button>
+      <div style="display:flex;gap:8px;align-items:flex-start">
+        <button id="btn-pdf-emp" onclick="exportarTrabajadorPDF()" class="modal-pdf-btn" title="Descargar reporte en PDF">📄 PDF</button>
+        <button class="modal-close" onclick="cerrarModalTrabajador()" title="Cerrar (Esc)">×</button>
+      </div>
     </div>
     <div class="modal-body" id="modal-emp-body"></div>
   </div>

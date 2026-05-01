@@ -157,6 +157,25 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 .modal-timeline .ev-none{color:var(--t3);opacity:.5}
 .modal-loading{text-align:center;padding:18px;color:var(--t3);font-size:11px}
 
+/* Filtros locales encima de tablas (Marcaciones, Permisos) */
+.mrc-filtros{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding:10px;
+  background:var(--s2);border:1px solid var(--brm);border-radius:6px}
+.mrc-filtros input[type="text"], .mrc-filtros input:not([type]),
+.mrc-filtros select{background:var(--s1);border:1px solid var(--brm);
+  color:var(--t1);padding:6px 10px;border-radius:5px;font-size:11.5px;
+  font-family:inherit;outline:none}
+.mrc-filtros input{min-width:280px;flex:1}
+.mrc-filtros input:focus, .mrc-filtros select:focus{border-color:var(--cyan)}
+
+/* Paginador local */
+.paginador-btn{background:var(--s1);border:1px solid var(--brm);color:var(--t1);
+  padding:5px 12px;border-radius:5px;font-size:11.5px;cursor:pointer;
+  margin:0 3px;font-family:inherit;transition:all .15s}
+.paginador-btn:hover:not(:disabled){background:var(--cyan);color:#0c1117;border-color:var(--cyan)}
+.paginador-btn:disabled{opacity:.35;cursor:not-allowed}
+.paginador-info{color:var(--t2);font-size:11.5px;margin:0 14px}
+.paginador-info strong{color:var(--cyan)}
+
 /* TABLA */
 .tw{overflow:auto;max-height:500px}
 .tbl{width:100%;border-collapse:collapse;font-size:11.5px}
@@ -264,11 +283,11 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
   <!-- MARCACIONES -->
   <div id="v-ast" class="view">
     <div class="krow">
-      <div class="kpi cyan"><div class="kl">Total marcaciones</div><div class="kv" id="k-ast-total">—</div><div class="ks">En período</div></div>
-      <div class="kpi green"><div class="kl">Entradas</div><div class="kv" id="k-ast-in">—</div><div class="ks">Tipo IN</div></div>
-      <div class="kpi amber"><div class="kl">Salidas</div><div class="kv" id="k-ast-out">—</div><div class="ks">Tipo OUT</div></div>
-      <div class="kpi blue"><div class="kl">Personas únicas</div><div class="kv" id="k-ast-peo">—</div><div class="ks">Con marca</div></div>
-      <div class="kpi purple"><div class="kl">Días cubiertos</div><div class="kv" id="k-ast-dias">—</div><div class="ks">Con actividad</div></div>
+      <div class="kpi cyan"><div class="kl">Total marcaciones</div><div class="kv" id="k-ast-total">—</div><div class="ks">En el período cargado</div></div>
+      <div class="kpi green"><div class="kl">Tipo 0</div><div class="kv" id="k-ast-in">—</div><div class="ks">Provisional: ENTRADA</div></div>
+      <div class="kpi amber"><div class="kl">Tipo 1</div><div class="kv" id="k-ast-out">—</div><div class="ks">Provisional: SALIDA</div></div>
+      <div class="kpi blue"><div class="kl">Personas únicas</div><div class="kv" id="k-ast-peo">—</div><div class="ks">Que marcaron al menos 1 vez</div></div>
+      <div class="kpi purple"><div class="kl">Días con marcas</div><div class="kv" id="k-ast-dias">—</div><div class="ks">Días distintos del período</div></div>
     </div>
     <div class="card">
       <div class="ct">Registros de asistencia</div>
@@ -489,40 +508,43 @@ async function recargarEmpleados() {
 }
 
 async function cargarTrabajadores() {
-  // El API de Workera SOLO devuelve datos con MATRIZ+INICIAL (modelo administrativo).
-  // No expone la sucursal/departamento operativo del empleado en /employee, pero
-  // SÍ la expone en /attendanceData. Por eso, después de cargar empleados, los
-  // enriquecemos cruzando con marcaciones EN BACKGROUND (no bloqueamos el render).
   if (!cacheEmpleados.length) {
     setStatus('load', 'Cargando empleados desde API (MATRIZ + INICIAL)...');
     cacheEmpleados = await fetchTodosLosEmpleados();
-    setStatus('ok', cacheEmpleados.length + ' empleados · enriqueciendo en segundo plano...');
+    setStatus('ok', cacheEmpleados.length + ' empleados · cargando marcaciones para enriquecer en background...');
 
-    // Mostrar la tabla YA con datos administrativos. El enriquecimiento corre
-    // en background y refresca la tabla cuando termina (sin bloquear).
+    // Render inmediato con datos administrativos (no bloquea)
     renderTrabajadores(cacheEmpleados);
 
-    // Disparar enriquecimiento async sin await
-    enriquecerConMarcaciones().then(function() {
-      // Cuando termina, refrescar dropdowns y tabla con sucursales reales
+    // Enriquecimiento en background — usa el cache completo del período
+    enriquecerEmpleadosConSucursalReal().then(function() {
+      var enriquecidos = cacheEmpleados.filter(function(e) { return e._sucursalOperativa; }).length;
+      setStatus('ok', cacheEmpleados.length + ' empleados · ' + enriquecidos +
+                      ' con sucursal operativa identificada (vía marcaciones del período)');
       actualizarFiltrosTrabajadores();
       aplicarFiltrosYRender();
     }).catch(function(e) {
-      console.warn('[Workera] No se pudo enriquecer con marcaciones:', e.message);
+      console.warn('[Workera] No se pudo enriquecer:', e.message);
       setStatus('ok', cacheEmpleados.length + ' empleados (sin enriquecimiento)');
     });
 
-    return;  // No bloqueamos: la primera renderización ya se hizo
+    return;
   }
 
-  // Si ya tenemos cache, aplicar filtros y renderizar
   aplicarFiltrosYRender();
 }
 
 // Aplica los filtros sucursal/depto sobre el cache de empleados y renderiza
 function aplicarFiltrosYRender() {
+  // Asegurar que el buscador local esté inicializado
+  if (!document.getElementById('emp-busca-init')) {
+    inicializarBuscadorTrabajadores();
+  }
+
   var sucFiltro = $('sucursal').value;
   var depFiltro = $('depto').value;
+  var qBusca = ($('emp-busca') ? $('emp-busca').value : '').toLowerCase().trim();
+  var estadoFiltro = ($('emp-estado') ? $('emp-estado').value : '');
   var lista = cacheEmpleados.slice();
 
   if (sucFiltro) {
@@ -536,12 +558,53 @@ function aplicarFiltrosYRender() {
       return empDepartamento(e) === depFiltro;
     });
   }
+  if (estadoFiltro === 'ACTIVO') {
+    lista = lista.filter(empActivo);
+  } else if (estadoFiltro === 'INACTIVO') {
+    lista = lista.filter(function(e) { return !empActivo(e); });
+  }
+  if (qBusca) {
+    lista = lista.filter(function(e) {
+      var nombre = empNombreCompleto(e).toLowerCase();
+      var rut = (e.identification || '').toLowerCase();
+      var code = (e.code || '').toLowerCase();
+      return nombre.indexOf(qBusca) >= 0 || rut.indexOf(qBusca) >= 0 || code.indexOf(qBusca) >= 0;
+    });
+  }
 
   renderTrabajadores(lista);
 
   var msg = 'Mostrando ' + lista.length + ' de ' + cacheEmpleados.length + ' empleados';
-  if (sucFiltro || depFiltro) msg += ' (filtros aplicados)';
+  if (sucFiltro || depFiltro || qBusca || estadoFiltro) msg += ' (filtros aplicados)';
   setStatus('ok', msg);
+}
+
+// Inserta la fila de búsqueda local sobre la tabla de Trabajadores (una sola vez)
+function inicializarBuscadorTrabajadores() {
+  var card = document.querySelector('#v-emp .card');
+  if (!card) return;
+  var tw = card.querySelector('.tw');
+  if (!tw) return;
+
+  var html = '<div id="emp-busca-init" class="mrc-filtros">' +
+    '<input id="emp-busca" placeholder="🔍 Buscar por nombre, RUT o código..." oninput="aplicarFiltrosYRender()">' +
+    '<select id="emp-estado" onchange="aplicarFiltrosYRender()">' +
+      '<option value="">Todos los estados</option>' +
+      '<option value="ACTIVO">Solo activos</option>' +
+      '<option value="INACTIVO">Solo inactivos</option>' +
+    '</select>' +
+    '<button onclick="limpiarFiltrosEmp()" class="paginador-btn">Limpiar</button>' +
+  '</div>';
+
+  tw.insertAdjacentHTML('beforebegin', html);
+}
+
+function limpiarFiltrosEmp() {
+  if ($('emp-busca')) $('emp-busca').value = '';
+  if ($('emp-estado')) $('emp-estado').value = '';
+  if ($('sucursal')) $('sucursal').value = '';
+  if ($('depto')) $('depto').value = '';
+  aplicarFiltrosYRender();
 }
 
 // Llena el dropdown de Sucursal en pestaña Trabajadores con las sucursales
@@ -584,36 +647,66 @@ function actualizarFiltrosTrabajadores() {
 
 // Cruza empleados con marcaciones recientes para inferir su sucursal operativa real.
 // Esto compensa que /employee solo devuelve la sucursal administrativa (siempre MATRIZ).
-// Cache global de marcaciones del último enriquecimiento (para reutilizar en modal)
+// Cache global de TODAS las marcaciones del período seleccionado.
+// Se usa como única fuente de verdad para: pestaña Marcaciones, modal del
+// trabajador, y enriquecimiento de la columna sucursal en Trabajadores.
 var cacheMarcacionesEnriquecimiento = [];
+var cacheMarcacionesRango = '';  // identificador del rango cargado
 
-async function enriquecerConMarcaciones() {
-  // Calcular rango de los últimos 30 días para tener buena cobertura
-  var hoy = new Date();
-  var hace30 = new Date(hoy); hace30.setDate(hace30.getDate() - 30);
-  var fmt = function(d) { return d.toISOString().substring(0,10); };
-  var d1 = fmt(hace30), d2 = fmt(hoy);
+// Carga TODAS las marcaciones del período en bloque, paginando hasta agotar.
+// Hace 5 requests en paralelo para acelerar (típicamente baja de 70s a 15s).
+async function cargarTodasMarcacionesPeriodo() {
+  var d1 = $('d1').value, d2 = $('d2').value;
+  var rango = d1 + '|' + d2;
 
-  setStatus('load', 'Enriqueciendo con marcaciones (' + d1 + ' → ' + d2 + ')...');
-
-  // Traer las marcaciones paginando hasta 5 páginas (100 registros) como tope
-  // razonable. Buscamos la sucursal donde marcó CADA empleado por última vez,
-  // y con 100 marcaciones recientes de 38 personas, alcanza para cubrir a la
-  // mayoría de los activos.
-  var marcaciones = [];
-  var maxPaginas = 5;
-  for (var p = 1; p <= maxPaginas; p++) {
-    var data = await apiFetchMarcaciones(d1, d2, p);
-    var lista = extraerLista(data);
-    if (!lista.length) break;
-    marcaciones = marcaciones.concat(lista);
-    if (data.totalPages && p >= data.totalPages) break;
+  // Si ya está cargado para este mismo rango, no recargar
+  if (cacheMarcacionesRango === rango && cacheMarcacionesEnriquecimiento.length) {
+    return cacheMarcacionesEnriquecimiento;
   }
 
-  // Guardar todas las marcaciones para reutilizarlas en el modal
-  cacheMarcacionesEnriquecimiento = marcaciones;
+  setStatus('load', 'Cargando marcaciones del período (' + d1 + ' → ' + d2 + ')...');
 
-  // Construir mapa: code -> { sucursal, ultimaMarca, distribucion }
+  // Primer request para conocer totalPages
+  var data1 = await apiFetchMarcaciones(d1, d2, 1);
+  var primera = extraerLista(data1);
+  var totalPages = data1.totalPages || 1;
+  var totalResult = data1.totalResult || primera.length;
+
+  var todas = primera.slice();
+
+  if (totalPages > 1) {
+    // Cargar las páginas restantes en lotes paralelos de 5 para acelerar
+    var BATCH = 5;
+    for (var pagBase = 2; pagBase <= totalPages; pagBase += BATCH) {
+      var lote = [];
+      for (var k = 0; k < BATCH && (pagBase + k) <= totalPages; k++) {
+        lote.push(apiFetchMarcaciones(d1, d2, pagBase + k));
+      }
+      var resultados = await Promise.all(lote);
+      resultados.forEach(function(r) {
+        todas = todas.concat(extraerLista(r));
+      });
+
+      // Actualizar progreso visible
+      var paginaActual = Math.min(pagBase + BATCH - 1, totalPages);
+      var pct = Math.round((paginaActual / totalPages) * 100);
+      setStatus('load', 'Cargando marcaciones... ' + pct + '% (' +
+                todas.length + '/' + totalResult + ')');
+    }
+  }
+
+  cacheMarcacionesEnriquecimiento = todas;
+  cacheMarcacionesRango = rango;
+  setStatus('ok', 'Marcaciones cargadas: ' + todas.length + ' en ' + totalPages + ' páginas');
+  return todas;
+}
+
+// Reemplaza al viejo "enriquecerConMarcaciones": ahora aprovecha el cache
+// completo del período para inferir la sucursal operativa real de cada empleado.
+async function enriquecerEmpleadosConSucursalReal() {
+  var marcaciones = await cargarTodasMarcacionesPeriodo();
+
+  // Construir mapa: code -> { sucursal preferida, ultimaMarca, distribución }
   var mapa = {};
   marcaciones.forEach(function(m) {
     var emp = m.employee || {};
@@ -629,11 +722,9 @@ async function enriquecerConMarcaciones() {
       mapa[code].sucursal = sucursal;
       mapa[code].ultimaMarca = fecha;
     }
-    // Distribución: cuántas marcas hizo en cada sucursal (para mostrar % en modal)
     mapa[code].distribucion[sucursal] = (mapa[code].distribucion[sucursal] || 0) + 1;
   });
 
-  // Aplicar al cache de empleados: agregar campos enriquecidos
   cacheEmpleados.forEach(function(emp) {
     var info = mapa[emp.code];
     if (info) {
@@ -646,14 +737,9 @@ async function enriquecerConMarcaciones() {
       emp._distribucionSucursales = null;
     }
   });
-
-  var enriquecidos = cacheEmpleados.filter(function(e) { return e._sucursalOperativa; }).length;
-  setStatus('ok', cacheEmpleados.length + ' empleados · ' + enriquecidos +
-                  ' con sucursal operativa (vía marcaciones últimos 30d)');
 }
 
 // Wrapper que prueba múltiples formatos de fecha para /attendanceData
-// (la API parece sensible al formato según el rango de fechas).
 async function apiFetchMarcaciones(d1, d2, page) {
   return await apiFetch('/attendanceData', {
     startDate: d1 + 'T00:00:00',
@@ -765,75 +851,21 @@ function renderTrabajadores(lista) {
 // Cache de la última respuesta cruda de cada endpoint, para diagnóstico
 var ultimaRespuesta = {};
 
-// Cache de marcaciones acumuladas (para "Cargar más" sin perder lo cargado)
-var cacheMarcaciones = {
-  items: [],          // Todas las marcaciones acumuladas hasta ahora
-  paginaActual: 0,    // Última página cargada exitosamente
-  totalPages: 0,      // Total de páginas reportado por el API
-  totalResult: 0,     // Total de registros reportado por el API
-  rangoCargado: ''    // Identificador del rango cargado (para resetear si cambia)
-};
-
+// Pestaña Marcaciones: ahora usa el cache global cacheMarcacionesEnriquecimiento
+// (que ya tiene TODAS las marcaciones del período, no solo 20).
 async function cargarMarcaciones() {
-  var d1 = $('d1').value, d2 = $('d2').value;
-  var rango = d1 + '|' + d2;
+  var marcaciones = await cargarTodasMarcacionesPeriodo();
 
-  // Si cambió el rango respecto al cache, resetear
-  if (cacheMarcaciones.rangoCargado !== rango) {
-    cacheMarcaciones = {
-      items: [], paginaActual: 0, totalPages: 0, totalResult: 0,
-      rangoCargado: rango
-    };
-  }
-
-  // Cargar siguiente página (si ya hay 1 cargada, esta función la usa "Cargar más")
-  await cargarMarcacionesPagina(cacheMarcaciones.paginaActual + 1);
-}
-
-async function cargarMarcacionesPagina(numPagina) {
-  var d1 = $('d1').value, d2 = $('d2').value;
-
-  setStatus('load', 'Cargando marcaciones página ' + numPagina + '...');
-
-  var data = await apiFetchMarcaciones(d1, d2, numPagina);
-  ultimaRespuesta.attendanceData = data;
-
-  var lista = extraerLista(data);
-
-  // Acumular en cache
-  cacheMarcaciones.items = cacheMarcaciones.items.concat(lista);
-  cacheMarcaciones.paginaActual = numPagina;
-  cacheMarcaciones.totalPages   = data.totalPages || 0;
-  cacheMarcaciones.totalResult  = data.totalResult || cacheMarcaciones.items.length;
-
-  if (!cacheMarcaciones.items.length) {
+  if (!marcaciones.length) {
     var tb = $('tbody-ast');
-    var diag = renderDiagnostico('attendanceData', data);
+    var d1 = $('d1').value, d2 = $('d2').value;
+    var diag = renderDiagnostico('attendanceData', { totalResult: 0, data: [] });
     tb.innerHTML = '<tr><td colspan="7" style="padding:0">' + diag + '</td></tr>';
     setStatus('warn', 'Sin marcaciones en el período ' + d1 + ' → ' + d2);
     return;
   }
 
-  renderMarcaciones(cacheMarcaciones.items);
-
-  var msg = 'Marcaciones: ' + cacheMarcaciones.items.length;
-  if (cacheMarcaciones.totalResult > cacheMarcaciones.items.length) {
-    msg += ' de ' + cacheMarcaciones.totalResult + ' total · página ' +
-           cacheMarcaciones.paginaActual + '/' + cacheMarcaciones.totalPages;
-  }
-  setStatus('ok', msg);
-}
-
-// Función para botón "Cargar más"
-async function cargarMasMarcaciones() {
-  if (cacheMarcaciones.paginaActual >= cacheMarcaciones.totalPages) return;
-  var btn = $('btn-mas-ast');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Cargando...'; }
-  try {
-    await cargarMarcacionesPagina(cacheMarcaciones.paginaActual + 1);
-  } catch (e) {
-    setStatus('err', 'Error al cargar más: ' + e.message);
-  }
+  renderMarcaciones(marcaciones);
 }
 
 // Extrae la lista de items de cualquier estructura típica del API Workera
@@ -843,94 +875,166 @@ function extraerLista(data) {
   return data.data || data.results || data.items || [];
 }
 
-function renderMarcaciones(lista) {
-  $('k-ast-total').textContent = lista.length.toLocaleString('es-CL');
+// Estado de paginación visual local en la pestaña Marcaciones
+var marcacionesPaginaUI = 0;
+var marcacionesPorPagina = 50;
+var marcacionesFiltradas = [];
 
-  // attendanceType es un número. Aún no sabemos qué significa cada valor,
-  // por eso contamos las apariciones de cada tipo y mostramos todas.
-  // Hipótesis tentativa: 0=ENTRADA, 1=SALIDA pero hay que confirmarlo en UI Workera.
+function renderMarcaciones(lista) {
+  // Inicializar filtros UI si es la primera vez
+  if (!document.getElementById('mrc-filtros-init')) {
+    inicializarFiltrosMarcaciones();
+  }
+
+  // Aplicar filtros locales (búsqueda + sucursal)
+  marcacionesFiltradas = filtrarMarcacionesLocal(lista);
+
+  // KPIs sobre la lista filtrada (refleja exactamente lo que se está mostrando)
+  $('k-ast-total').textContent = marcacionesFiltradas.length.toLocaleString('es-CL');
+
   var tiposCount = {};
-  lista.forEach(function(m) {
+  marcacionesFiltradas.forEach(function(m) {
     var t = (typeof m.attendanceType !== 'undefined') ? String(m.attendanceType) : '?';
     tiposCount[t] = (tiposCount[t] || 0) + 1;
   });
-  // Si solo hay tipo 0 y 1, asumimos provisionalmente: 0=entrada, 1=salida
-  // hasta que se confirme. Si hay otros tipos, los mostramos en KPIs como "Otros".
-  var ins  = (tiposCount['0'] || 0);
-  var outs = (tiposCount['1'] || 0);
-  $('k-ast-in').textContent = ins.toLocaleString('es-CL');
-  $('k-ast-out').textContent = outs.toLocaleString('es-CL');
+  $('k-ast-in').textContent  = (tiposCount['0'] || 0).toLocaleString('es-CL');
+  $('k-ast-out').textContent = (tiposCount['1'] || 0).toLocaleString('es-CL');
 
-  $('k-ast-peo').textContent = new Set(lista.map(function(m) {
+  $('k-ast-peo').textContent = new Set(marcacionesFiltradas.map(function(m) {
     return (m.employee && (m.employee.code || m.employee.identification)) || m.employeeCode;
   }).filter(Boolean)).size;
-  $('k-ast-dias').textContent = new Set(lista.map(function(m) {
-    return (m.attendanceDate || m.date || m.fecha || '').substring(0,10);
+  $('k-ast-dias').textContent = new Set(marcacionesFiltradas.map(function(m) {
+    return (m.attendanceDate || '').substring(0,10);
   }).filter(Boolean)).size;
 
-  var tb = $('tbody-ast');
+  // Render de la página actual
+  renderPaginaMarcaciones();
+}
 
-  tb.innerHTML = lista.map(function(m) {
-    // Campo real del JSON: attendanceDate con formato "2026-04-01T06:13:04"
-    var dt = m.attendanceDate || m.date || m.dateTime || m.fecha || '';
+function filtrarMarcacionesLocal(lista) {
+  var q = ($('mrc-busca') ? $('mrc-busca').value : '').toLowerCase().trim();
+  var sucF = ($('mrc-suc') ? $('mrc-suc').value : '');
+  var tipoF = ($('mrc-tipo') ? $('mrc-tipo').value : '');
+
+  return lista.filter(function(m) {
+    var emp = m.employee || {};
+    if (sucF && emp.branchOffice !== sucF) return false;
+    if (tipoF !== '' && String(m.attendanceType) !== tipoF) return false;
+    if (q) {
+      var nombre = empNombreCompleto(emp).toLowerCase();
+      var rut = (emp.identification || '').toLowerCase();
+      var code = (emp.code || '').toLowerCase();
+      if (nombre.indexOf(q) < 0 && rut.indexOf(q) < 0 && code.indexOf(q) < 0) return false;
+    }
+    return true;
+  });
+}
+
+function renderPaginaMarcaciones() {
+  var lista = marcacionesFiltradas;
+  var total = lista.length;
+  var totalPaginas = Math.ceil(total / marcacionesPorPagina) || 1;
+  if (marcacionesPaginaUI >= totalPaginas) marcacionesPaginaUI = totalPaginas - 1;
+  if (marcacionesPaginaUI < 0) marcacionesPaginaUI = 0;
+
+  var inicio = marcacionesPaginaUI * marcacionesPorPagina;
+  var fin    = Math.min(inicio + marcacionesPorPagina, total);
+  var slice  = lista.slice(inicio, fin);
+
+  var tb = $('tbody-ast');
+  if (!total) {
+    tb.innerHTML = '<tr><td colspan="7"><div class="empty">Sin resultados con los filtros actuales</div></td></tr>';
+    return;
+  }
+
+  tb.innerHTML = slice.map(function(m) {
+    var dt = m.attendanceDate || '';
     var fecha = dt.substring(0,10);
     var hora  = dt.substring(11,19);
-
     var emp = m.employee || {};
     var nombre = empNombreCompleto(emp) || '—';
-
-    // Etiqueta del tipo: provisional hasta confirmar semántica
     var tipoNum = m.attendanceType;
     var etiqueta, badgeClass;
     if (tipoNum === 0 || tipoNum === '0') {
-      etiqueta = 'TIPO 0';  // Provisional — confirmar si es ENTRADA
-      badgeClass = 'bg';    // verde
+      etiqueta = 'TIPO 0'; badgeClass = 'bg';
     } else if (tipoNum === 1 || tipoNum === '1') {
-      etiqueta = 'TIPO 1';  // Provisional — confirmar si es SALIDA
-      badgeClass = 'ba';    // amber
+      etiqueta = 'TIPO 1'; badgeClass = 'ba';
     } else {
       etiqueta = 'TIPO ' + (tipoNum != null ? tipoNum : '?');
-      badgeClass = 'br';    // rojo (desconocido)
+      badgeClass = 'br';
     }
-
-    // Sucursal: en /attendanceData viene la OPERATIVA real (Sucursal Matriz, PLANTA TALCA, etc.)
-    var sucursal = (emp.branchOffice) ||
-                   m.branchOfficeName || m.branchOfficeCode || '—';
+    var sucursal = emp.branchOffice || '—';
 
     return '<tr>' +
       '<td>' + (fecha || '—') + '</td>' +
       '<td><strong>' + (hora || '—') + '</strong></td>' +
-      '<td>' + nombre + '</td>' +
+      '<td><a class="emp-link" onclick="abrirModalTrabajador(\'' + (emp.code || '') + '\')">' + nombre + '</a></td>' +
       '<td>' + (emp.identification || '—') + '</td>' +
       '<td><span class="badge ' + badgeClass + '">' + etiqueta + '</span></td>' +
-      '<td>' + (m.deviceName || m.device || '—') + '</td>' +
+      '<td>' + (m.deviceName || '—') + '</td>' +
       '<td>' + sucursal + '</td>' +
     '</tr>';
   }).join('');
 
-  // Botón "Cargar más" si hay páginas pendientes
-  if (cacheMarcaciones.paginaActual < cacheMarcaciones.totalPages) {
-    var faltan = cacheMarcaciones.totalResult - cacheMarcaciones.items.length;
-    tb.innerHTML += '<tr><td colspan="7" style="padding:14px;text-align:center;background:rgba(34,211,238,.04);border-top:1px solid var(--brm)">' +
-      '<button id="btn-mas-ast" onclick="cargarMasMarcaciones()" style="padding:8px 18px;background:var(--cyan);color:#0c1117;border:none;border-radius:5px;font-weight:600;cursor:pointer;font-size:11.5px">' +
-      '↓ Cargar más (' + faltan + ' marcaciones restantes · página ' +
-      (cacheMarcaciones.paginaActual + 1) + '/' + cacheMarcaciones.totalPages + ')' +
-      '</button></td></tr>';
-  } else if (cacheMarcaciones.items.length > 20) {
-    // Aviso de fin de paginación (solo si se cargó más de 1 página)
-    tb.innerHTML += '<tr><td colspan="7" style="padding:10px;text-align:center;color:var(--t3);font-size:11px;background:rgba(34,197,94,.04)">' +
-      '✓ Todas las marcaciones cargadas (' + cacheMarcaciones.items.length + ')' +
-      '</td></tr>';
-  }
+  // Barra de paginación al final
+  var paginaActual = marcacionesPaginaUI + 1;
+  var totalPaginasMostrar = Math.ceil(total / marcacionesPorPagina);
+  tb.innerHTML += '<tr><td colspan="7" style="padding:12px;text-align:center;background:var(--s2);border-top:1px solid var(--brm)">' +
+    '<button class="paginador-btn" onclick="marcacionesPaginaUI=0;renderPaginaMarcaciones()" ' +
+    (marcacionesPaginaUI === 0 ? 'disabled' : '') + ' title="Primera">«</button>' +
+    '<button class="paginador-btn" onclick="marcacionesPaginaUI--;renderPaginaMarcaciones()" ' +
+    (marcacionesPaginaUI === 0 ? 'disabled' : '') + ' title="Anterior">‹</button>' +
+    '<span class="paginador-info">Página <strong>' + paginaActual + '</strong> de ' + totalPaginasMostrar +
+    ' · Mostrando ' + (inicio+1) + '–' + fin + ' de ' + total + '</span>' +
+    '<button class="paginador-btn" onclick="marcacionesPaginaUI++;renderPaginaMarcaciones()" ' +
+    (marcacionesPaginaUI >= totalPaginasMostrar - 1 ? 'disabled' : '') + ' title="Siguiente">›</button>' +
+    '<button class="paginador-btn" onclick="marcacionesPaginaUI=' + (totalPaginasMostrar - 1) + ';renderPaginaMarcaciones()" ' +
+    (marcacionesPaginaUI >= totalPaginasMostrar - 1 ? 'disabled' : '') + ' title="Última">»</button>' +
+  '</td></tr>';
+}
 
-  // Si hay tipos detectados que no son 0 ni 1, mostrar aviso para confirmar semántica
-  var tiposExtras = Object.keys(tiposCount).filter(function(t) { return t !== '0' && t !== '1' && t !== '?'; });
-  if (tiposExtras.length) {
-    var tiposStr = tiposExtras.map(function(t) { return 'Tipo ' + t + ' (' + tiposCount[t] + ')'; }).join(', ');
-    setTimeout(function() {
-      console.log('[Workera] Tipos detectados: ', tiposCount);
-    }, 0);
-  }
+// Crea los inputs de búsqueda y filtros sobre la tabla de Marcaciones (una sola vez)
+function inicializarFiltrosMarcaciones() {
+  var card = document.querySelector('#v-ast .card');
+  if (!card) return;
+  var tw = card.querySelector('.tw');
+  if (!tw) return;
+
+  var sucsUnicas = {};
+  cacheMarcacionesEnriquecimiento.forEach(function(m) {
+    var s = (m.employee || {}).branchOffice;
+    if (s) sucsUnicas[s] = (sucsUnicas[s] || 0) + 1;
+  });
+
+  var filtrosHtml = '<div id="mrc-filtros-init" class="mrc-filtros">' +
+    '<input id="mrc-busca" placeholder="🔍 Buscar por nombre, RUT o código..." oninput="onCambioFiltroMarc()">' +
+    '<select id="mrc-suc" onchange="onCambioFiltroMarc()">' +
+      '<option value="">Todas las sucursales</option>' +
+      Object.keys(sucsUnicas).sort().map(function(s) {
+        return '<option value="' + s + '">' + s + ' (' + sucsUnicas[s] + ')</option>';
+      }).join('') +
+    '</select>' +
+    '<select id="mrc-tipo" onchange="onCambioFiltroMarc()">' +
+      '<option value="">Todos los tipos</option>' +
+      '<option value="0">Tipo 0</option>' +
+      '<option value="1">Tipo 1</option>' +
+    '</select>' +
+    '<button onclick="limpiarFiltrosMarc()" class="paginador-btn">Limpiar</button>' +
+  '</div>';
+
+  tw.insertAdjacentHTML('beforebegin', filtrosHtml);
+}
+
+function onCambioFiltroMarc() {
+  marcacionesPaginaUI = 0;
+  renderMarcaciones(cacheMarcacionesEnriquecimiento);
+}
+
+function limpiarFiltrosMarc() {
+  if ($('mrc-busca')) $('mrc-busca').value = '';
+  if ($('mrc-suc'))   $('mrc-suc').value = '';
+  if ($('mrc-tipo'))  $('mrc-tipo').value = '';
+  onCambioFiltroMarc();
 }
 
 // Renderiza un panel de diagnóstico amigable cuando un endpoint devuelve vacío.
@@ -993,62 +1097,101 @@ async function cargarPermisos() {
   }
 }
 
+// Estado de orden y filtros locales en pestaña Permisos
+var permisosCache = [];
+var permisosOrden = 'fecha_desc'; // fecha_desc | trabajador | tipo
+
 function renderPermisos(lista, dataRaw) {
-  // KPIs
-  $('k-per-total').textContent = lista.length.toLocaleString('es-CL');
-  $('k-per-lic').textContent   = lista.filter(function(p) {
+  permisosCache = lista || [];
+
+  // Inicializar filtros UI una sola vez
+  if (!document.getElementById('per-filtros-init')) {
+    inicializarFiltrosPermisos();
+  }
+
+  // Aplicar filtros locales
+  var listaFiltrada = filtrarPermisosLocal(permisosCache);
+
+  // KPIs sobre la lista filtrada (refleja exactamente lo visible)
+  $('k-per-total').textContent = listaFiltrada.length.toLocaleString('es-CL');
+  $('k-per-lic').textContent   = listaFiltrada.filter(function(p) {
     return (p.permissionType || '').toUpperCase() === 'LICENCIA_MEDICA';
   }).length.toLocaleString('es-CL');
-  $('k-per-vac').textContent   = lista.filter(function(p) {
+  $('k-per-vac').textContent   = listaFiltrada.filter(function(p) {
     return (p.permissionType || '').toUpperCase() === 'VACACIONES';
   }).length.toLocaleString('es-CL');
-  $('k-per-trh').textContent   = lista.filter(function(p) {
+  $('k-per-trh').textContent   = listaFiltrada.filter(function(p) {
     return (p.permissionType || '').toUpperCase() === 'TRABAJADO_EN_HORARIO';
   }).length.toLocaleString('es-CL');
-  $('k-per-peo').textContent   = new Set(lista.map(function(p) {
+  $('k-per-peo').textContent   = new Set(listaFiltrada.map(function(p) {
     return (p.employee && (p.employee.code || p.employee.identification)) || '';
   }).filter(Boolean)).size.toLocaleString('es-CL');
 
   var tb = $('tbody-per');
 
-  if (!lista.length) {
-    var diag = renderDiagnostico('permission', dataRaw);
-    tb.innerHTML = '<tr><td colspan="7" style="padding:0">' + diag + '</td></tr>';
+  if (!listaFiltrada.length) {
+    if (!permisosCache.length) {
+      var diag = renderDiagnostico('permission', dataRaw);
+      tb.innerHTML = '<tr><td colspan="7" style="padding:0">' + diag + '</td></tr>';
+    } else {
+      tb.innerHTML = '<tr><td colspan="7"><div class="empty">Sin resultados con los filtros actuales</div></td></tr>';
+    }
     return;
   }
 
-  // Ordenar por fecha de inicio descendente (más reciente primero)
-  var ordenados = lista.slice().sort(function(a, b) {
-    return (b.start || '').localeCompare(a.start || '');
-  });
+  // Ordenar
+  var ordenados = listaFiltrada.slice();
+  if (permisosOrden === 'trabajador') {
+    ordenados.sort(function(a, b) {
+      var na = empNombreCompleto(a.employee || {});
+      var nb = empNombreCompleto(b.employee || {});
+      return na.localeCompare(nb);
+    });
+  } else if (permisosOrden === 'tipo') {
+    ordenados.sort(function(a, b) {
+      var ta = a.permissionType || '';
+      var tb_ = b.permissionType || '';
+      if (ta !== tb_) return ta.localeCompare(tb_);
+      // mismo tipo: ordenar por trabajador
+      return empNombreCompleto(a.employee || {}).localeCompare(empNombreCompleto(b.employee || {}));
+    });
+  } else {
+    // fecha_desc (default)
+    ordenados.sort(function(a, b) {
+      return (b.start || '').localeCompare(a.start || '');
+    });
+  }
 
   var hoy = new Date();
   hoy.setHours(0, 0, 0, 0);
 
-  tb.innerHTML = ordenados.map(function(p) {
+  // Acumulador para fila de totales (suma de días por tipo)
+  var totalDiasPorTipo = {};
+  var totalDiasGlobal = 0;
+
+  var filas = ordenados.map(function(p) {
     var emp = p.employee || {};
     var sucursal = emp.branchOffice || '—';
 
-    // Formato chileno DD-MM-YYYY a partir del ISO
     var inicio = formatearFechaCL(p.start);
     var fin    = formatearFechaCL(p.end);
-    var periodo = (p.start || p.end)
-      ? inicio + ' → ' + fin
-      : '—';
+    var periodo = (p.start || p.end) ? inicio + ' → ' + fin : '—';
 
-    // Cálculo de días (incluyendo ambos extremos)
     var dias = '—';
     if (p.start && p.end) {
       var d1 = new Date(p.start.substring(0,10));
       var d2 = new Date(p.end.substring(0,10));
       dias = Math.round((d2 - d1) / 86400000) + 1;
+      totalDiasGlobal += dias;
+      var t = p.permissionType || 'OTROS';
+      totalDiasPorTipo[t] = (totalDiasPorTipo[t] || 0) + dias;
     }
 
-    // Vigencia: ¿el permiso está activo HOY?
     var vigencia = '';
     if (p.start && p.end) {
       var inicioD = new Date(p.start.substring(0,10));
       var finD    = new Date(p.end.substring(0,10));
+      finD.setHours(23,59,59,999);  // incluyente al final del día
       if (hoy >= inicioD && hoy <= finD) {
         vigencia = '<span class="badge bg" title="El permiso incluye hoy">🟢 EN CURSO</span>';
       } else if (hoy > finD) {
@@ -1058,7 +1201,6 @@ function renderPermisos(lista, dataRaw) {
       }
     }
 
-    // Badge según tipo de permiso
     var tipo = p.permissionType || '—';
     var nombreTipo = p.permissionName || tipo;
     var tipoBadgeClass = 'bn';
@@ -1068,7 +1210,7 @@ function renderPermisos(lista, dataRaw) {
 
     return '<tr>' +
       '<td>' + (p.id || p.permissionId || '—') + '</td>' +
-      '<td>' + (empNombreCompleto(emp) || '—') + '</td>' +
+      '<td><a class="emp-link" onclick="abrirModalTrabajador(\'' + (emp.code || '') + '\')">' + (empNombreCompleto(emp) || '—') + '</a></td>' +
       '<td>' + sucursal + '</td>' +
       '<td><span class="badge ' + tipoBadgeClass + '">' + nombreTipo + '</span></td>' +
       '<td>' + periodo + '</td>' +
@@ -1076,6 +1218,110 @@ function renderPermisos(lista, dataRaw) {
       '<td>' + vigencia + '</td>' +
     '</tr>';
   }).join('');
+
+  // Fila de totales al final (suma general de días)
+  var tiposVisibles = Object.keys(totalDiasPorTipo).map(function(t) {
+    return t + ': ' + totalDiasPorTipo[t] + 'd';
+  }).join(' · ');
+
+  filas += '<tr style="background:rgba(34,211,238,.06);border-top:2px solid var(--cyan)">' +
+    '<td colspan="5" style="padding:10px;font-size:11.5px"><strong>TOTAL ' + ordenados.length + ' permisos</strong>' +
+    (tiposVisibles ? ' · ' + tiposVisibles : '') + '</td>' +
+    '<td style="text-align:center;padding:10px"><strong style="color:var(--cyan);font-size:13px">' + totalDiasGlobal + 'd</strong></td>' +
+    '<td></td>' +
+  '</tr>';
+
+  tb.innerHTML = filas;
+}
+
+function filtrarPermisosLocal(lista) {
+  var q = ($('per-busca') ? $('per-busca').value : '').toLowerCase().trim();
+  var tipoF = ($('per-tipo') ? $('per-tipo').value : '');
+  var sucF  = ($('per-suc')  ? $('per-suc').value  : '');
+  var vigF  = ($('per-vig')  ? $('per-vig').value  : '');
+
+  var hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+
+  return lista.filter(function(p) {
+    var emp = p.employee || {};
+    if (tipoF && p.permissionType !== tipoF) return false;
+    if (sucF && emp.branchOffice !== sucF) return false;
+    if (q) {
+      var nombre = empNombreCompleto(emp).toLowerCase();
+      var rut = (emp.identification || '').toLowerCase();
+      if (nombre.indexOf(q) < 0 && rut.indexOf(q) < 0) return false;
+    }
+    if (vigF) {
+      var d1 = new Date(p.start.substring(0,10));
+      var d2 = new Date(p.end.substring(0,10));
+      d2.setHours(23,59,59,999);
+      var estado;
+      if (hoy >= d1 && hoy <= d2) estado = 'EN_CURSO';
+      else if (hoy > d2) estado = 'FINALIZADO';
+      else estado = 'PENDIENTE';
+      if (estado !== vigF) return false;
+    }
+    return true;
+  });
+}
+
+function inicializarFiltrosPermisos() {
+  var card = document.querySelector('#v-per .card');
+  if (!card) return;
+  var tw = card.querySelector('.tw');
+  if (!tw) return;
+
+  // Construir lista de tipos y sucursales únicos del cache
+  var tipos = {}, sucs = {};
+  permisosCache.forEach(function(p) {
+    var t = p.permissionType || '';
+    if (t) tipos[t] = (p.permissionName || t);
+    var s = (p.employee || {}).branchOffice || '';
+    if (s) sucs[s] = (sucs[s] || 0) + 1;
+  });
+
+  var html = '<div id="per-filtros-init" class="mrc-filtros">' +
+    '<input id="per-busca" placeholder="🔍 Buscar trabajador o RUT..." oninput="onCambioFiltroPer()">' +
+    '<select id="per-tipo" onchange="onCambioFiltroPer()">' +
+      '<option value="">Todos los tipos</option>' +
+      Object.keys(tipos).sort().map(function(t) {
+        return '<option value="' + t + '">' + tipos[t] + '</option>';
+      }).join('') +
+    '</select>' +
+    '<select id="per-suc" onchange="onCambioFiltroPer()">' +
+      '<option value="">Todas las sucursales</option>' +
+      Object.keys(sucs).sort().map(function(s) {
+        return '<option value="' + s + '">' + s + ' (' + sucs[s] + ')</option>';
+      }).join('') +
+    '</select>' +
+    '<select id="per-vig" onchange="onCambioFiltroPer()">' +
+      '<option value="">Todas las vigencias</option>' +
+      '<option value="EN_CURSO">🟢 En curso (hoy)</option>' +
+      '<option value="PENDIENTE">→ Pendientes</option>' +
+      '<option value="FINALIZADO">○ Finalizados</option>' +
+    '</select>' +
+    '<select id="per-orden" onchange="permisosOrden=this.value;onCambioFiltroPer()">' +
+      '<option value="fecha_desc">↓ Por fecha (recientes primero)</option>' +
+      '<option value="trabajador">A→Z Por trabajador</option>' +
+      '<option value="tipo">A→Z Por tipo</option>' +
+    '</select>' +
+    '<button onclick="limpiarFiltrosPer()" class="paginador-btn">Limpiar</button>' +
+  '</div>';
+
+  tw.insertAdjacentHTML('beforebegin', html);
+}
+
+function onCambioFiltroPer() {
+  renderPermisos(permisosCache, null);
+}
+
+function limpiarFiltrosPer() {
+  ['per-busca','per-tipo','per-suc','per-vig'].forEach(function(id) {
+    if ($(id)) $(id).value = '';
+  });
+  if ($('per-orden')) { $('per-orden').value = 'fecha_desc'; permisosOrden = 'fecha_desc'; }
+  onCambioFiltroPer();
 }
 
 // Formatea una fecha ISO ('2026-04-08T00:00:00') a formato chileno '08-04-2026'

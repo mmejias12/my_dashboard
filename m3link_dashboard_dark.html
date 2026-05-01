@@ -62,6 +62,9 @@
   .s-item { display:block;padding:.35rem 1rem .35rem 1.5rem;font-size:11.5px;color:var(--text-secondary);cursor:pointer;border-left:2px solid transparent;transition:all .12s; }
   .s-item:hover { background:var(--bg-hover);color:var(--text-primary); }
   .s-item.active { color:var(--accent);border-left-color:var(--accent);background:var(--bg-active);font-weight:500; }
+  .s-item-soon { color:var(--text-muted)!important;cursor:default;font-style:italic;display:flex;justify-content:space-between;align-items:center;padding-right:1rem; }
+  .s-item-soon:hover { background:transparent!important;color:var(--text-muted)!important; }
+  .soon-tag { font-size:9px;color:var(--text-muted);background:var(--bg-hover);padding:1px 6px;border-radius:8px;font-style:normal;letter-spacing:.3px; }
   .s-divider { height:1px;background:var(--border);margin:.5rem 1rem; }
 
   /* MAIN */
@@ -399,17 +402,17 @@
 <div class="layout">
   <div class="sidebar">
     <div class="s-label">Comercial</div>
-    <div class="s-hdr open" onclick="tog('g1',this)">Listados x fecha <span class="s-chevron">›</span></div>
+    <div class="s-hdr open" onclick="tog('g1',this)">Reportes operacionales <span class="s-chevron">›</span></div>
     <div class="s-sub" id="g1">
-      <div class="s-item active" onclick="act(this)">Ops x rango fechas</div>
-      <div class="s-item" onclick="act(this)">Transacciones x cliente</div>
-      <div class="s-item" onclick="act(this)">Transferencias x cliente</div>
+      <div class="s-item active" onclick="setVista(this,'ops')">Ops x rango fechas</div>
+      <div class="s-item" onclick="setVista(this,'trans')">Transacciones x cliente</div>
+      <div class="s-item" onclick="setVista(this,'transf')">Transferencias x cliente</div>
     </div>
     <div class="s-hdr" onclick="tog('g2',this)">Gráficos transferencias <span class="s-chevron">›</span></div>
     <div class="s-sub" id="g2" style="max-height:0">
-      <div class="s-item" onclick="act(this)">Transferencias clientes</div>
-      <div class="s-item" onclick="act(this)">Emisiones vs transferencias</div>
-      <div class="s-item" onclick="act(this)">Flujo operacional</div>
+      <div class="s-item s-item-soon">Transferencias clientes <span class="soon-tag">próx.</span></div>
+      <div class="s-item s-item-soon">Emisiones vs transferencias <span class="soon-tag">próx.</span></div>
+      <div class="s-item s-item-soon">Flujo operacional <span class="soon-tag">próx.</span></div>
     </div>
     <div class="s-divider"></div>
     <div class="s-hdr" onclick="tog('g3',this)">Emisiones retiros dev. <span class="s-chevron">›</span></div>
@@ -421,8 +424,8 @@
     <div class="s-hdr" onclick="tog('g4',this)">KPIs y reportes <span class="s-chevron">›</span></div>
     <div class="s-sub" id="g4" style="max-height:0">
       <a href="kpi-diario.html" class="s-item">KPI diario</a>
-      <div class="s-item" onclick="act(this)">Pedidos recientes</div>
-      <div class="s-item" onclick="act(this)">Gráficos semanales</div>
+      <div class="s-item s-item-soon">Pedidos recientes <span class="soon-tag">próx.</span></div>
+      <div class="s-item s-item-soon">Gráficos semanales <span class="soon-tag">próx.</span></div>
       <a href="mapa-retiros.html" class="s-item">🗺 Mapa de retiros</a>
       <a href="cartola-financiera.html" class="s-item">💰 Cartola financiera</a>
     </div>
@@ -433,7 +436,7 @@
     <div class="s-hdr open" onclick="tog('g-rrhh',this)">Gestión RRHH <span class="s-chevron">›</span></div>
     <div class="s-sub" id="g-rrhh">
       <a href="rrhh-dashboard.html" class="s-item">👥 Personas y dotación</a>
-      <div class="s-item" style="color:var(--text-muted);cursor:default;font-size:10.5px;font-style:italic">Más módulos próx.</div>
+      <a href="workera-dashboard.html" class="s-item">🕐 Asistencia Workera</a>
     </div>
 
     <div class="s-divider"></div>
@@ -450,7 +453,7 @@
     <div class="page-header">
       <div>
         <div class="page-title">Operaciones x rango de fechas</div>
-        <div class="breadcrumb">Comercial › Listados x fecha requerida — datos en tiempo real</div>
+        <div class="breadcrumb">Comercial › Reportes operacionales › Ops x rango fechas — datos en tiempo real</div>
       </div>
       <div class="last-upd" id="last-upd"></div>
     </div>
@@ -661,6 +664,32 @@ function act(el) {
   var items = document.querySelectorAll('.s-item');
   for (var i=0;i<items.length;i++) items[i].classList.remove('active');
   el.classList.add('active');
+}
+
+// Cambia la vista del listado según el item del menú clickeado.
+// Ajusta filtro de tipo de operación, breadcrumb y orden visual de la tabla.
+function setVista(el, modo) {
+  act(el);  // marcar item activo
+
+  var bc = document.querySelector('.breadcrumb');
+  var sel = document.getElementById('op-filter');
+
+  if (modo === 'ops') {
+    if (sel) sel.value = '';
+    if (bc) bc.textContent = 'Comercial › Reportes operacionales › Ops x rango fechas — datos en tiempo real';
+  } else if (modo === 'trans') {
+    if (sel) sel.value = '';
+    if (bc) bc.textContent = 'Comercial › Reportes operacionales › Transacciones x cliente — todas las operaciones agrupables por cliente';
+  } else if (modo === 'transf') {
+    if (sel) sel.value = 'transfer';
+    if (bc) bc.textContent = 'Comercial › Reportes operacionales › Transferencias x cliente — solo operaciones de transferencia';
+  }
+
+  // Si ya hay datos cargados, re-aplicar filtros para refrescar la tabla
+  if (typeof applyFilters === 'function' && document.getElementById('stats') &&
+      document.getElementById('stats').style.display !== 'none') {
+    applyFilters();
+  }
 }
 window.addEventListener('DOMContentLoaded', function() {
   var g = document.getElementById('g1');

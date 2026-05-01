@@ -284,14 +284,18 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
   <div id="v-ast" class="view">
     <div class="krow">
       <div class="kpi cyan"><div class="kl">Total marcaciones</div><div class="kv" id="k-ast-total">—</div><div class="ks">En el período cargado</div></div>
-      <div class="kpi green"><div class="kl">Tipo 0</div><div class="kv" id="k-ast-in">—</div><div class="ks">Provisional: ENTRADA</div></div>
-      <div class="kpi amber"><div class="kl">Tipo 1</div><div class="kv" id="k-ast-out">—</div><div class="ks">Provisional: SALIDA</div></div>
+      <div class="kpi green"><div class="kl">Entradas</div><div class="kv" id="k-ast-in">—</div><div class="ks">1ª, 3ª... marca del día</div></div>
+      <div class="kpi amber"><div class="kl">Salidas</div><div class="kv" id="k-ast-out">—</div><div class="ks">2ª, 4ª... marca del día</div></div>
       <div class="kpi blue"><div class="kl">Personas únicas</div><div class="kv" id="k-ast-peo">—</div><div class="ks">Que marcaron al menos 1 vez</div></div>
       <div class="kpi purple"><div class="kl">Días con marcas</div><div class="kv" id="k-ast-dias">—</div><div class="ks">Días distintos del período</div></div>
     </div>
     <div class="card">
       <div class="ct">Registros de asistencia</div>
-      <div class="cs">Endpoint: /attendanceData · 20 por página · puede tardar varios minutos en rangos amplios</div>
+      <div class="cs">
+        Endpoint: /attendanceData · 20 por página · cache automático en localStorage
+        <button onclick="cacheLimpiar()" style="margin-left:10px;padding:3px 10px;font-size:11px;background:var(--bg-input);color:var(--text-pri);border:1px solid var(--border);border-radius:4px;cursor:pointer;" title="Borrar todas las marcaciones cacheadas">🗑 Limpiar cache</button>
+        <span id="cache-info" style="margin-left:10px;font-size:11px;color:var(--cyan)"></span>
+      </div>
       <div class="tw">
         <table class="tbl" id="tbl-ast">
           <thead><tr><th>Fecha</th><th>Hora</th><th>Trabajador</th><th>RUT</th><th>Tipo</th><th>Dispositivo</th><th>Sucursal</th></tr></thead>
@@ -354,6 +358,110 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 <script>
 var PROXY = '/api/workera-proxy';
 var tabActivo = 'emp';
+
+// ─────────────────────────────────────────────────────────────────────────
+// CACHE PERSISTENTE DE MARCACIONES (localStorage)
+// ─────────────────────────────────────────────────────────────────────────
+// Las marcaciones del pasado son inmutables: una marca del 1-abril-2026 nunca
+// va a cambiar. Por eso las cacheamos en localStorage del navegador y solo
+// pedimos al API las fechas que NO tenemos.
+//
+// Estructura del cache:
+//   localStorage['workera_marcas_v1'] = JSON con:
+//     {
+//       'YYYY-MM-DD': [marca1, marca2, ...],   ← marcas agrupadas por día
+//       ...
+//     }
+//
+// Una marca pesa ~500 bytes. localStorage permite ~5MB → cabe ~10000 marcas.
+// 1432 marcas/mes = ~700KB → caben varios meses sin problema.
+// ─────────────────────────────────────────────────────────────────────────
+
+var CACHE_KEY = 'workera_marcas_v1';
+var cacheMarcasPorDia = {};  // { 'YYYY-MM-DD': [marcas...] }
+
+function cacheCargarDeDisco() {
+  try {
+    var raw = localStorage.getItem(CACHE_KEY);
+    if (raw) {
+      cacheMarcasPorDia = JSON.parse(raw);
+      var dias = Object.keys(cacheMarcasPorDia).length;
+      var totalMarcas = Object.values(cacheMarcasPorDia).reduce(function(a, b) { return a + b.length; }, 0);
+      console.log('[Workera] Cache cargado: ' + dias + ' días, ' + totalMarcas + ' marcas');
+      return { dias: dias, marcas: totalMarcas };
+    }
+  } catch (e) {
+    console.warn('[Workera] Cache corrupto, se ignora:', e.message);
+    cacheMarcasPorDia = {};
+  }
+  return { dias: 0, marcas: 0 };
+}
+
+function cacheGuardarEnDisco() {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(cacheMarcasPorDia));
+  } catch (e) {
+    console.warn('[Workera] No se pudo guardar cache (¿lleno?):', e.message);
+    setStatus('warn', '⚠ Cache lleno, no se pueden guardar más marcas. Limpia el cache.');
+  }
+}
+
+// Limpia totalmente el cache
+function cacheLimpiar() {
+  if (!confirm('¿Borrar TODAS las marcaciones cacheadas? Esto fuerza recargar desde la API la próxima vez.')) return;
+  cacheMarcasPorDia = {};
+  cacheMarcacionesEnriquecimiento = [];
+  cacheMarcacionesRango = '';
+  cargaIncremental = { paginasPedidas: 0, totalPages: 0, totalResult: 0, enProgreso: false };
+  try { localStorage.removeItem(CACHE_KEY); } catch(e) {}
+  setStatus('ok', 'Cache de marcaciones limpiado');
+  if (tabActivo === 'ast') {
+    var tb = $('tbody-ast');
+    if (tb) tb.innerHTML = '<tr><td colspan="7"><div class="empty">Cache limpiado. Presiona "Cargar datos" para recargar.</div></td></tr>';
+  }
+}
+
+// Devuelve qué fechas del rango YA están cacheadas
+function cacheFechasEnRango(d1, d2) {
+  var fechas = [];
+  var inicio = new Date(d1 + 'T12:00:00');
+  var fin    = new Date(d2 + 'T12:00:00');
+  for (var t = inicio.getTime(); t <= fin.getTime(); t += 86400000) {
+    var iso = new Date(t).toISOString().substring(0, 10);
+    if (cacheMarcasPorDia[iso]) fechas.push(iso);
+  }
+  return fechas;
+}
+
+// Devuelve TODAS las marcas cacheadas en el rango (concatenadas)
+function cacheMarcasDelRango(d1, d2) {
+  var resultado = [];
+  var inicio = new Date(d1 + 'T12:00:00');
+  var fin    = new Date(d2 + 'T12:00:00');
+  for (var t = inicio.getTime(); t <= fin.getTime(); t += 86400000) {
+    var iso = new Date(t).toISOString().substring(0, 10);
+    if (cacheMarcasPorDia[iso]) resultado = resultado.concat(cacheMarcasPorDia[iso]);
+  }
+  return resultado;
+}
+
+// Guarda un lote de marcas en el cache, agrupándolas por día
+function cacheGuardarMarcas(marcas) {
+  marcas.forEach(function(m) {
+    var dia = (m.attendanceDate || '').substring(0, 10);
+    if (!dia) return;
+    if (!cacheMarcasPorDia[dia]) cacheMarcasPorDia[dia] = [];
+    // Evitar duplicados por checksum (si existe)
+    if (m.checksum) {
+      var existe = cacheMarcasPorDia[dia].some(function(x) { return x.checksum === m.checksum; });
+      if (existe) return;
+    }
+    cacheMarcasPorDia[dia].push(m);
+  });
+  cacheGuardarEnDisco();
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 var cacheSucursales = [];
 
 // Mapas auxiliares de sucursales para cruzar nombres con códigos.
@@ -666,16 +774,32 @@ var cargaIncremental = {
 var BLOQUE_PAGINAS = 5;
 
 // Carga el SIGUIENTE bloque de páginas (5 más) y las acumula en el cache global.
-// Si no hay cache aún, parte desde página 1.
+// ANTES de pedir al API, revisa qué fechas ya están cacheadas en localStorage.
 async function cargarSiguienteBloque() {
   var d1 = $('d1').value, d2 = $('d2').value;
   var rango = d1 + '|' + d2;
 
-  // Si cambió el rango, resetear cache
+  // Si cambió el rango, resetear estado de paginación y resembrar desde cache
   if (cacheMarcacionesRango !== rango) {
-    cacheMarcacionesEnriquecimiento = [];
+    cacheMarcacionesEnriquecimiento = cacheMarcasDelRango(d1, d2);
     cacheMarcacionesRango = rango;
     cargaIncremental = { paginasPedidas: 0, totalPages: 0, totalResult: 0, enProgreso: false };
+
+    // Si el cache cubre todo el rango (todos los días tienen marcas), usar solo cache
+    var fechasCacheadas = cacheFechasEnRango(d1, d2);
+    var fechasTotal = diasEnRango(d1, d2);
+    if (cacheMarcacionesEnriquecimiento.length > 0 && fechasCacheadas.length === fechasTotal.length) {
+      setStatus('ok', '✓ ' + cacheMarcacionesEnriquecimiento.length + ' marcas desde cache (sin API)');
+      cargaIncremental.totalPages = 1;  // Marca completo
+      cargaIncremental.paginasPedidas = 1;
+      cargaIncremental.totalResult = cacheMarcacionesEnriquecimiento.length;
+      return cacheMarcacionesEnriquecimiento;
+    }
+
+    if (cacheMarcacionesEnriquecimiento.length > 0) {
+      setStatus('load', 'Cache: ' + cacheMarcacionesEnriquecimiento.length + ' marcas en ' +
+                fechasCacheadas.length + '/' + fechasTotal.length + ' días. Pidiendo días faltantes al API...');
+    }
   }
 
   if (cargaIncremental.enProgreso) return cacheMarcacionesEnriquecimiento;
@@ -690,47 +814,85 @@ async function cargarSiguienteBloque() {
       var primera = extraerLista(data1);
       cargaIncremental.totalPages = data1.totalPages || 1;
       cargaIncremental.totalResult = data1.totalResult || primera.length;
-      cacheMarcacionesEnriquecimiento = cacheMarcacionesEnriquecimiento.concat(primera);
+
+      // Sumar al cache global y guardar en disco las que no estaban
+      mergearMarcasNuevas(primera);
       cargaIncremental.paginasPedidas = 1;
       primerPagina = 2;
 
-      setStatus('load', 'Cargando bloque 1: 1/' + cargaIncremental.totalPages +
-                ' (' + primera.length + ' marcas)');
+      setStatus('load', 'API página 1/' + cargaIncremental.totalPages +
+                ' · Total: ' + cacheMarcacionesEnriquecimiento.length + ' marcas');
     }
 
     var totalPages = cargaIncremental.totalPages;
     var ultimaPagina = Math.min(primerPagina + BLOQUE_PAGINAS - 2, totalPages);
 
     if (primerPagina <= ultimaPagina) {
-      // Pedir las páginas restantes del bloque en paralelo
       var lote = [];
       for (var p = primerPagina; p <= ultimaPagina; p++) {
         lote.push(apiFetchMarcaciones(d1, d2, p));
       }
       var resultados = await Promise.all(lote);
       resultados.forEach(function(r) {
-        cacheMarcacionesEnriquecimiento = cacheMarcacionesEnriquecimiento.concat(extraerLista(r));
+        mergearMarcasNuevas(extraerLista(r));
       });
       cargaIncremental.paginasPedidas = ultimaPagina;
 
       var pct = Math.round((cargaIncremental.paginasPedidas / totalPages) * 100);
       setStatus('load', 'Cargado ' + pct + '%: ' +
                 cargaIncremental.paginasPedidas + '/' + totalPages + ' páginas · ' +
-                cacheMarcacionesEnriquecimiento.length + '/' + cargaIncremental.totalResult + ' marcas');
+                cacheMarcacionesEnriquecimiento.length + ' marcas (cacheadas)');
     }
 
     var faltan = cargaIncremental.totalPages - cargaIncremental.paginasPedidas;
     if (faltan > 0) {
-      setStatus('ok', 'Cargadas ' + cacheMarcacionesEnriquecimiento.length + '/' +
-                cargaIncremental.totalResult + ' marcas · click "Cargar más" para continuar');
+      setStatus('ok', cacheMarcacionesEnriquecimiento.length + ' marcas (cache + API). Falta cargar ' + faltan + ' páginas');
     } else {
-      setStatus('ok', '✓ Todas las marcaciones cargadas: ' + cacheMarcacionesEnriquecimiento.length);
+      setStatus('ok', '✓ ' + cacheMarcacionesEnriquecimiento.length + ' marcas cargadas + cacheadas en disco');
     }
 
     return cacheMarcacionesEnriquecimiento;
   } finally {
     cargaIncremental.enProgreso = false;
   }
+}
+
+// Agrega marcas nuevas al cache global (en memoria) y al cache persistente (disco),
+// evitando duplicados por checksum.
+function mergearMarcasNuevas(nuevas) {
+  if (!nuevas || !nuevas.length) return;
+
+  // Set de checksums ya presentes en cache para detectar duplicados rápido
+  var checksumsExistentes = {};
+  cacheMarcacionesEnriquecimiento.forEach(function(m) {
+    if (m.checksum) checksumsExistentes[m.checksum] = true;
+  });
+
+  var nuevasUnicas = nuevas.filter(function(m) {
+    return !m.checksum || !checksumsExistentes[m.checksum];
+  });
+
+  cacheMarcacionesEnriquecimiento = cacheMarcacionesEnriquecimiento.concat(nuevasUnicas);
+  cacheGuardarMarcas(nuevasUnicas);  // persistir en localStorage
+
+  // Actualizar el indicador visible del cache
+  var el = document.getElementById('cache-info');
+  if (el) {
+    var totalCache = Object.values(cacheMarcasPorDia).reduce(function(a, b) { return a + b.length; }, 0);
+    var totalDias = Object.keys(cacheMarcasPorDia).length;
+    el.textContent = '· 💾 ' + totalCache.toLocaleString('es-CL') + ' marcas en cache (' + totalDias + ' días)';
+  }
+}
+
+// Devuelve un array con todas las fechas (YYYY-MM-DD) entre d1 y d2 inclusive
+function diasEnRango(d1, d2) {
+  var fechas = [];
+  var inicio = new Date(d1 + 'T12:00:00');
+  var fin    = new Date(d2 + 'T12:00:00');
+  for (var t = inicio.getTime(); t <= fin.getTime(); t += 86400000) {
+    fechas.push(new Date(t).toISOString().substring(0, 10));
+  }
+  return fechas;
 }
 
 // Alias compatible con código viejo (otros lugares que llaman cargarTodasMarcacionesPeriodo).
@@ -778,6 +940,45 @@ async function enriquecerEmpleadosConSucursalReal() {
       emp._distribucionSucursales = null;
     }
   });
+}
+
+// Clasifica las marcaciones del día como ENTRADA/SALIDA según orden temporal.
+// Como Workera devuelve attendanceType: 0 para todas, no podemos usarlo. En su
+// lugar aplicamos lógica par/impar: la 1ª marca del día = entrada, la 2ª = salida,
+// la 3ª = entrada (post-almuerzo), la 4ª = salida final, etc.
+//
+// Devuelve un mapa { checksum_o_fecha: 'ENTRADA' | 'SALIDA' } para clasificar.
+function clasificarEntradasSalidas(marcas) {
+  // Agrupar marcas por empleado y día
+  var porEmpleadoYDia = {};
+  marcas.forEach(function(m) {
+    var emp = (m.employee || {}).code || '?';
+    var dia = (m.attendanceDate || '').substring(0, 10);
+    var key = emp + '|' + dia;
+    if (!porEmpleadoYDia[key]) porEmpleadoYDia[key] = [];
+    porEmpleadoYDia[key].push(m);
+  });
+
+  // Para cada grupo, ordenar por hora y alternar ENTRADA/SALIDA
+  var clasificacion = {};
+  Object.keys(porEmpleadoYDia).forEach(function(key) {
+    var grupo = porEmpleadoYDia[key];
+    grupo.sort(function(a, b) {
+      return (a.attendanceDate || '').localeCompare(b.attendanceDate || '');
+    });
+    grupo.forEach(function(m, idx) {
+      var id = m.checksum || (m.attendanceDate + '_' + ((m.employee || {}).code || ''));
+      // Posición par (0, 2, 4...) = ENTRADA, impar (1, 3, 5...) = SALIDA
+      clasificacion[id] = (idx % 2 === 0) ? 'ENTRADA' : 'SALIDA';
+    });
+  });
+
+  return clasificacion;
+}
+
+// Helper para obtener el id único de una marca (para lookup en clasificación)
+function idMarca(m) {
+  return m.checksum || (m.attendanceDate + '_' + ((m.employee || {}).code || ''));
 }
 
 // Wrapper que prueba múltiples formatos de fecha para /attendanceData
@@ -934,25 +1135,33 @@ var marcacionesPaginaUI = 0;
 var marcacionesPorPagina = 50;
 var marcacionesFiltradas = [];
 
+// Variable global para la clasificación entrada/salida del último render
+var clasificacionMarcas = {};
+
 function renderMarcaciones(lista) {
   // Inicializar filtros UI si es la primera vez
   if (!document.getElementById('mrc-filtros-init')) {
     inicializarFiltrosMarcaciones();
   }
 
-  // Aplicar filtros locales (búsqueda + sucursal)
+  // PASO 1: Clasificar TODAS las marcas de la lista (entrada/salida por orden temporal)
+  // Esto se hace ANTES del filtro de tipo para que el filtro pueda aplicarse sobre la clasificación.
+  clasificacionMarcas = clasificarEntradasSalidas(lista);
+
+  // PASO 2: Aplicar filtros locales (búsqueda + sucursal + entrada/salida)
   marcacionesFiltradas = filtrarMarcacionesLocal(lista);
 
   // KPIs sobre la lista filtrada (refleja exactamente lo que se está mostrando)
   $('k-ast-total').textContent = marcacionesFiltradas.length.toLocaleString('es-CL');
 
-  var tiposCount = {};
+  var entradas = 0, salidas = 0;
   marcacionesFiltradas.forEach(function(m) {
-    var t = (typeof m.attendanceType !== 'undefined') ? String(m.attendanceType) : '?';
-    tiposCount[t] = (tiposCount[t] || 0) + 1;
+    var clase = clasificacionMarcas[idMarca(m)];
+    if (clase === 'ENTRADA') entradas++;
+    else if (clase === 'SALIDA') salidas++;
   });
-  $('k-ast-in').textContent  = (tiposCount['0'] || 0).toLocaleString('es-CL');
-  $('k-ast-out').textContent = (tiposCount['1'] || 0).toLocaleString('es-CL');
+  $('k-ast-in').textContent  = entradas.toLocaleString('es-CL');
+  $('k-ast-out').textContent = salidas.toLocaleString('es-CL');
 
   $('k-ast-peo').textContent = new Set(marcacionesFiltradas.map(function(m) {
     return (m.employee && (m.employee.code || m.employee.identification)) || m.employeeCode;
@@ -973,7 +1182,11 @@ function filtrarMarcacionesLocal(lista) {
   return lista.filter(function(m) {
     var emp = m.employee || {};
     if (sucF && emp.branchOffice !== sucF) return false;
-    if (tipoF !== '' && String(m.attendanceType) !== tipoF) return false;
+    // Filtro por entrada/salida usando la clasificación temporal
+    if (tipoF) {
+      var clase = clasificacionMarcas[idMarca(m)];
+      if (clase !== tipoF) return false;
+    }
     if (q) {
       var nombre = empNombreCompleto(emp).toLowerCase();
       var rut = (emp.identification || '').toLowerCase();
@@ -1007,15 +1220,16 @@ function renderPaginaMarcaciones() {
     var hora  = dt.substring(11,19);
     var emp = m.employee || {};
     var nombre = empNombreCompleto(emp) || '—';
-    var tipoNum = m.attendanceType;
+
+    // Clasificación entrada/salida basada en orden temporal del día (no en attendanceType)
+    var clase = clasificacionMarcas[idMarca(m)] || '?';
     var etiqueta, badgeClass;
-    if (tipoNum === 0 || tipoNum === '0') {
-      etiqueta = 'TIPO 0'; badgeClass = 'bg';
-    } else if (tipoNum === 1 || tipoNum === '1') {
-      etiqueta = 'TIPO 1'; badgeClass = 'ba';
+    if (clase === 'ENTRADA') {
+      etiqueta = 'ENTRADA'; badgeClass = 'bg';
+    } else if (clase === 'SALIDA') {
+      etiqueta = 'SALIDA'; badgeClass = 'ba';
     } else {
-      etiqueta = 'TIPO ' + (tipoNum != null ? tipoNum : '?');
-      badgeClass = 'br';
+      etiqueta = '?'; badgeClass = 'bn';
     }
     var sucursal = emp.branchOffice || '—';
 
@@ -1089,9 +1303,9 @@ function inicializarFiltrosMarcaciones() {
       }).join('') +
     '</select>' +
     '<select id="mrc-tipo" onchange="onCambioFiltroMarc()">' +
-      '<option value="">Todos los tipos</option>' +
-      '<option value="0">Tipo 0</option>' +
-      '<option value="1">Tipo 1</option>' +
+      '<option value="">Todas (entrada+salida)</option>' +
+      '<option value="ENTRADA">Solo entradas</option>' +
+      '<option value="SALIDA">Solo salidas</option>' +
     '</select>' +
     '<button onclick="limpiarFiltrosMarc()" class="paginador-btn">Limpiar</button>' +
   '</div>';
@@ -1516,8 +1730,14 @@ function renderModalEmpleado(emp, permisos) {
     return (m.attendanceDate || '').substring(0, 10);
   })).size;
   var totalMarcas = marcasEmp.length;
-  var entradas = marcasEmp.filter(function(m) { return m.attendanceType === 0 || m.attendanceType === '0'; }).length;
-  var salidas = marcasEmp.filter(function(m) { return m.attendanceType === 1 || m.attendanceType === '1'; }).length;
+  // Clasificación entrada/salida por orden temporal del propio empleado
+  var clasifEmp = clasificarEntradasSalidas(marcasEmp);
+  var entradas = 0, salidas = 0;
+  marcasEmp.forEach(function(m) {
+    var c = clasifEmp[idMarca(m)];
+    if (c === 'ENTRADA') entradas++;
+    else if (c === 'SALIDA') salidas++;
+  });
 
   // Edad calculada
   var edad = '—';
@@ -1565,8 +1785,8 @@ function renderModalEmpleado(emp, permisos) {
   html += '<div class="modal-kpis">';
   html += '<div class="modal-kpi"><div class="modal-kpi-lbl">Días con marcas</div><div class="modal-kpi-val cyan">' + diasMarcados + '</div></div>';
   html += '<div class="modal-kpi"><div class="modal-kpi-lbl">Total marcas</div><div class="modal-kpi-val">' + totalMarcas + '</div></div>';
-  html += '<div class="modal-kpi"><div class="modal-kpi-lbl">Entradas (Tipo 0)</div><div class="modal-kpi-val green">' + entradas + '</div></div>';
-  html += '<div class="modal-kpi"><div class="modal-kpi-lbl">Salidas (Tipo 1)</div><div class="modal-kpi-val amber">' + salidas + '</div></div>';
+  html += '<div class="modal-kpi"><div class="modal-kpi-lbl">Entradas</div><div class="modal-kpi-val green">' + entradas + '</div></div>';
+  html += '<div class="modal-kpi"><div class="modal-kpi-lbl">Salidas</div><div class="modal-kpi-val amber">' + salidas + '</div></div>';
   html += '<div class="modal-kpi"><div class="modal-kpi-lbl">Última marca</div><div class="modal-kpi-val cyan" style="font-size:14px">' + (emp._ultimaMarca ? formatearFechaCL(emp._ultimaMarca) : '—') + '</div></div>';
   html += '</div></div>';
 
@@ -1619,14 +1839,20 @@ function campoModal(label, value) {
 function renderTimelineEmpleado(emp, marcas, d1, d2) {
   if (!d1 || !d2) return '<em>Selecciona fechas</em>';
 
-  // Construir mapa día → marcas
+  // Clasificar entradas/salidas del empleado por orden temporal
+  var clasif = clasificarEntradasSalidas(marcas);
+
+  // Construir mapa día → marcas (con la clase ya calculada)
   var porDia = {};
   marcas.forEach(function(m) {
     var dia = (m.attendanceDate || '').substring(0, 10);
     var hora = (m.attendanceDate || '').substring(11, 19);
     if (!dia) return;
     if (!porDia[dia]) porDia[dia] = [];
-    porDia[dia].push({ hora: hora, type: m.attendanceType });
+    porDia[dia].push({
+      hora: hora,
+      clase: clasif[idMarca(m)] || '?'
+    });
   });
 
   // Generar lista de días en el rango
@@ -1655,9 +1881,9 @@ function renderTimelineEmpleado(emp, marcas, d1, d2) {
     } else {
       marks.sort(function(a, b) { return a.hora.localeCompare(b.hora); });
       eventos = marks.map(function(m) {
-        var clase = (m.type === 0 || m.type === '0') ? 'ev-in' : 'ev-out';
-        var label = (m.type === 0 || m.type === '0') ? 'IN ' : 'OUT';
-        return '<span class="' + clase + '">' + label + ' ' + m.hora + '</span>';
+        var cssClass = m.clase === 'ENTRADA' ? 'ev-in' : (m.clase === 'SALIDA' ? 'ev-out' : 'ev-none');
+        var label = m.clase === 'ENTRADA' ? 'IN ' : (m.clase === 'SALIDA' ? 'OUT' : '? ');
+        return '<span class="' + cssClass + '">' + label + ' ' + m.hora + '</span>';
       }).join(' · ');
     }
 
@@ -1736,12 +1962,24 @@ document.addEventListener('keydown', function(e) {
 // Al cargar la página, cargar sucursales
 window.addEventListener('DOMContentLoaded', function() {
   document.body.classList.add('tab-emp');  // pestaña por defecto = Trabajadores
+
+  // Cargar cache de marcaciones desde localStorage (si existe)
+  var info = cacheCargarDeDisco();
+  if (info.marcas > 0) {
+    console.log('[Workera] Cache restaurado: ' + info.dias + ' días, ' + info.marcas + ' marcas');
+    setTimeout(function() {
+      var el = document.getElementById('cache-info');
+      if (el) el.textContent = '· 💾 ' + info.marcas.toLocaleString('es-CL') + ' marcas en cache (' + info.dias + ' días)';
+    }, 100);
+  }
+
   cargarSucursales();
 
   // Si cambia el tenant (empresa), limpiar caches y recargar sucursales del nuevo tenant
   $('empresa').addEventListener('change', function() {
     cacheEmpleados = [];
     cacheSucursales = [];
+    // NO limpiamos el cache de marcas porque puede ser útil entre empresas
     setStatus('load', 'Cambio de empresa: ' + $('empresa').value + '. Recargando sucursales...');
     cargarSucursales();
   });

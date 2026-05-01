@@ -249,7 +249,9 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
   <button class="tab on" onclick="tab('emp')">Trabajadores</button>
   <button class="tab" onclick="tab('ast')">Marcaciones</button>
   <button class="tab" onclick="tab('per')">Permisos</button>
-  <button class="tab" onclick="tab('tur')">Turnos</button>
+  <!-- Pestaña Turnos oculta: el endpoint /workshift/assign siempre devuelve vacío.
+       Para reactivarla cuando Workera habilite la funcionalidad, descomentar la línea siguiente: -->
+  <!-- <button class="tab" onclick="tab('tur')">Turnos</button> -->
   <button class="tab" onclick="tab('suc')">Sucursales</button>
 </div>
 
@@ -1865,7 +1867,7 @@ async function exportarTrabajadorPDF() {
     }
 
     // ── MEMBRETE ──────────────────────────────────────────────
-    // Logo ficticio: rectángulo con "REDTEC" en grande
+    // Logo: rectángulo rojo con "R"
     doc.setFillColor(230, 60, 60);
     doc.rect(margin, y, 22, 14, 'F');
     doc.setFont('helvetica','bold');
@@ -1876,19 +1878,23 @@ async function exportarTrabajadorPDF() {
     setH1();
     doc.text('REDTEC', margin + 26, y + 7);
     setSmall();
-    doc.text('Reporte de asistencia · Workera', margin + 26, y + 12);
+    doc.text('Reporte de asistencia - Workera', margin + 26, y + 12);
 
-    // Lado derecho: fecha de generación
+    // Lado derecho: fecha de generación + período
+    // Uso formato chileno DD-MM-YYYY que es más corto que ISO + flecha ASCII
     doc.setFont('helvetica','normal');
     doc.setFontSize(8);
     doc.setTextColor(120,120,120);
-    var ahoraStr = new Date().toLocaleString('es-CL', { dateStyle:'short', timeStyle:'short' });
+    var ahora = new Date();
+    var ahoraStr = ahora.toLocaleDateString('es-CL', { day:'2-digit', month:'2-digit', year:'numeric' }) +
+                   ' ' + ahora.toLocaleTimeString('es-CL', { hour:'2-digit', minute:'2-digit', hour12: false });
     doc.text('Generado: ' + ahoraStr, pageW - margin, y + 7, { align: 'right' });
-    doc.text('Período: ' + (d1 || '?') + ' → ' + (d2 || '?'), pageW - margin, y + 12, { align: 'right' });
+    var periodoStr = 'Periodo: ' + formatearFechaCL(d1 || '') + '  a  ' + formatearFechaCL(d2 || '');
+    doc.text(periodoStr, pageW - margin, y + 12, { align: 'right' });
 
     y += 20;
     linea(y);
-    y += 6;
+    y += 8;  // un poco más de aire antes del nombre del trabajador
 
     // ── NOMBRE DEL TRABAJADOR ─────────────────────────────────
     setH1();
@@ -1897,7 +1903,7 @@ async function exportarTrabajadorPDF() {
     y += 6;
     setBody();
     doc.setTextColor(80,80,80);
-    doc.text('RUT: ' + (emp.identification || '—') + '   ·   Código: ' + (emp.code || '—'), margin, y);
+    doc.text('RUT: ' + (emp.identification || '-') + '   -   Codigo: ' + (emp.code || '-'), margin, y);
     y += 8;
 
     // ── DATOS PERSONALES ──────────────────────────────────────
@@ -1991,12 +1997,28 @@ async function exportarTrabajadorPDF() {
 
       setBody();
       sucsOrdenadas.forEach(function(s) {
-        // Barra: rectángulo proporcional al %
-        var barW = (pageW - margin * 2 - 80) * (s.pct / 100);
-        doc.setFillColor(180, 180, 180);
-        doc.rect(margin, y - 3, barW, 3.5, 'F');
-        doc.setTextColor(40,40,40);
-        doc.text(s.suc + ' — ' + s.n + ' marcas (' + s.pct.toFixed(1) + '%)', margin + 90, y);
+        // Layout: [barra fondo gris claro] [barra gris] [espacio] [texto]
+        var barX = margin;
+        var barTotalW = 60;  // ancho total de la zona de barra (fija)
+        var barH = 4;
+        var barFillW = barTotalW * (s.pct / 100);
+        var barY = y - 3;
+
+        // Fondo claro de la barra (para visualizar el 100%)
+        doc.setFillColor(235, 235, 235);
+        doc.rect(barX, barY, barTotalW, barH, 'F');
+        // Relleno proporcional
+        doc.setFillColor(120, 120, 120);
+        doc.rect(barX, barY, barFillW, barH, 'F');
+
+        // Texto al lado, separado por aire suficiente
+        doc.setTextColor(40, 40, 40);
+        var textoX = barX + barTotalW + 6;
+        var textoSuc = s.suc + ' - ' + s.n + ' marcas (' + s.pct.toFixed(1) + '%)';
+        // Truncar si es demasiado largo para no salirse
+        var maxTxtW = pageW - margin - textoX;
+        var lines = doc.splitTextToSize(textoSuc, maxTxtW);
+        doc.text(lines, textoX, y);
         y += 6;
       });
       y += 3;
@@ -2048,7 +2070,7 @@ async function exportarTrabajadorPDF() {
         var lblTexto = marks.map(function(m) {
           var lbl = m.clase === 'ENTRADA' ? 'IN' : (m.clase === 'SALIDA' ? 'OUT' : '?');
           return lbl + ' ' + m.hora;
-        }).join('   ·   ');
+        }).join('   |   ');
         doc.setTextColor(40,40,40);
         doc.text(lblTexto, margin + 30, y);
       }
@@ -2060,7 +2082,7 @@ async function exportarTrabajadorPDF() {
     if (permisos.length) {
       checkPageBreak(20);
       setH2();
-      doc.text('Permisos del período', margin, y);
+      doc.text('Permisos del periodo', margin, y);
       y += 4;
       linea(y);
       y += 5;
@@ -2069,16 +2091,16 @@ async function exportarTrabajadorPDF() {
       doc.setFontSize(9);
       permisos.forEach(function(p) {
         checkPageBreak(7);
-        var dias = '—';
+        var dias = '-';
         if (p.start && p.end) {
           var pd1 = new Date(p.start.substring(0,10));
           var pd2 = new Date(p.end.substring(0,10));
           dias = Math.round((pd2 - pd1) / 86400000) + 1;
         }
         doc.setTextColor(40,40,40);
-        doc.text(p.permissionName || p.permissionType || '—', margin, y);
+        doc.text(p.permissionName || p.permissionType || '-', margin, y);
         doc.setTextColor(80,80,80);
-        doc.text(formatearFechaCL(p.start) + ' → ' + formatearFechaCL(p.end) + '   (' + dias + ' días)',
+        doc.text(formatearFechaCL(p.start) + '  a  ' + formatearFechaCL(p.end) + '   (' + dias + ' dias)',
                  margin + 50, y);
         y += 5;
       });

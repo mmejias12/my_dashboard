@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Análisis Emisiones vs Transferencias · m3link</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg-page:       #0f1117;
+    --bg-surface:    #181b23;
+    --bg-card:       #1e222d;
+    --bg-input:      #252932;
+    --bg-hover:      #252d3a;
+    --bg-active:     #1a2a1f;
+    --border:        rgba(255,255,255,0.07);
+    --border-md:     rgba(255,255,255,0.12);
+    --border-accent: rgba(74,222,128,0.35);
+    --text-primary:  #e8eaf0;
+    --text-secondary:#9da3b4;
+    --text-muted:    #5a6070;
+    --accent:        #4ade80;
+    --accent-dim:    rgba(74,222,128,0.15);
+    --red-logo:      #C0170C;
+    --c-emi: #60a5fa;
+    --c-tra: #4ade80;
+    --c-dif: #fcd34d;
+    --c-pal: #c4b5fd;
+    --radius-sm:6px; --radius-md:9px; --radius-lg:13px;
+  }
+  html,body { height:100%; font-family:'Inter',-apple-system,sans-serif; font-size:13px; background:var(--bg-page); color:var(--text-primary); -webkit-font-smoothing:antialiased; }
+
+  /* TOPBAR */
+  .topbar { position:fixed;top:0;left:0;right:0;z-index:100;height:50px;background:var(--bg-surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1.25rem;gap:12px; }
+  .logo { display:flex;align-items:center;gap:9px;text-decoration:none;color:inherit; }
+  .logo-box { width:27px;height:27px;border-radius:6px;background:var(--red-logo);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:12px; }
+  .logo-name { font-weight:600;font-size:13.5px;color:var(--text-primary); }
+  .logo-sep { width:1px;height:18px;background:var(--border-md);margin:0 6px; }
+  .topbar-title { font-size:12.5px;color:var(--text-secondary);display:flex;align-items:center;gap:7px; }
+  .live-dot { width:7px;height:7px;background:var(--accent);border-radius:50%;animation:pulse 2.5s ease-in-out infinite;box-shadow:0 0 6px var(--accent); }
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .topbar-right { margin-left:auto;display:flex;align-items:center;gap:10px; }
+  .back-btn { font-size:11.5px;color:var(--text-secondary);text-decoration:none;padding:5px 11px;border:1px solid var(--border-md);border-radius:6px;transition:all .15s; }
+  .back-btn:hover { color:var(--text-primary);background:var(--bg-hover); }
+
+  /* MAIN */
+  .main { padding: 70px 1.5rem 2rem; max-width: 1500px; margin: 0 auto; }
+
+  .page-header { display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1rem;gap:12px;flex-wrap:wrap; }
+  .page-title { font-size:18px;font-weight:600;color:var(--text-primary); }
+  .breadcrumb { font-size:11.5px;color:var(--text-muted);margin-top:4px; }
+
+  /* PANEL DE FILTROS */
+  .filters-card { background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:14px; }
+  .filters-row { display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:8px; }
+  .filters-row:last-child { margin-bottom:0; }
+  .filter-lbl { font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;font-weight:500;margin-right:4px; }
+  .ctrl-date, .ctrl-sel { background:var(--bg-input);border:1px solid var(--border-md);color:var(--text-primary);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit;outline:none; }
+  .ctrl-date:focus, .ctrl-sel:focus { border-color:var(--accent); }
+  .ctrl-sel { min-width:200px; }
+
+  .btn { background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);padding:6px 16px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .15s; }
+  .btn:hover:not(:disabled) { background:var(--accent);color:#0f1117; }
+  .btn:disabled { opacity:.5;cursor:not-allowed; }
+  .btn-sec { background:var(--bg-input);border:1px solid var(--border-md);color:var(--text-secondary); }
+  .btn-sec:hover { background:var(--bg-hover);color:var(--text-primary); }
+
+  /* SEGMENTED CONTROLS (botones de métrica y agrupador) */
+  .seg { display:inline-flex;background:var(--bg-input);border:1px solid var(--border-md);border-radius:7px;padding:2px;gap:2px; }
+  .seg-btn { background:transparent;border:none;color:var(--text-secondary);padding:6px 14px;font-size:11.5px;font-weight:500;cursor:pointer;border-radius:5px;font-family:inherit;transition:all .15s;white-space:nowrap; }
+  .seg-btn:hover { color:var(--text-primary); }
+  .seg-btn.on { background:var(--accent);color:#0f1117;font-weight:600; }
+
+  /* KPIs */
+  .kpis { display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:14px; }
+  .kpi { background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:14px 16px; }
+  .kpi-lbl { font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px; }
+  .kpi-val { font-size:22px;font-weight:600;color:var(--text-primary); }
+  .kpi-val.emi { color:var(--c-emi); }
+  .kpi-val.tra { color:var(--c-tra); }
+  .kpi-val.dif { color:var(--c-dif); }
+  .kpi-val.pal { color:var(--c-pal); }
+  .kpi-sub { font-size:10.5px;color:var(--text-muted);margin-top:3px; }
+
+  /* CHART CARD */
+  .chart-card { background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:18px;margin-bottom:14px; }
+  .chart-hdr { display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px; }
+  .chart-title { font-size:14px;font-weight:600;color:var(--text-primary); }
+  .chart-wrap { position:relative;height:420px; }
+
+  /* STATE MESSAGES */
+  .state-msg { text-align:center;padding:40px 20px;color:var(--text-muted);font-size:12px; }
+  .state-msg .spinner { display:inline-block;width:14px;height:14px;border:2px solid var(--accent);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle;margin-right:8px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .err-msg { color:#fca5a5;font-size:12px;text-align:center;padding:30px 20px; }
+
+  /* TABLA RESUMEN */
+  .table-wrap { background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);overflow:auto;max-height:400px; }
+  table { width:100%;border-collapse:collapse;font-size:12px; }
+  thead { position:sticky;top:0;background:var(--bg-card);z-index:1; }
+  th { text-align:left;padding:10px 12px;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);border-bottom:1px solid var(--border);font-weight:500;white-space:nowrap; }
+  td { padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text-primary); }
+  tbody tr:hover { background:var(--bg-hover); }
+  td.num { text-align:right;font-family:'JetBrains Mono',monospace; }
+  th.num { text-align:right; }
+
+  /* status */
+  .status { font-size:11.5px;color:var(--text-muted);margin-bottom:10px; }
+  .status .dot { display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--text-muted);margin-right:6px;vertical-align:middle; }
+  .status.ok .dot { background:var(--accent); }
+  .status.load .dot { background:var(--c-dif);animation:pulse 1s infinite; }
+  .status.err .dot { background:#f87171; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="logo" href="m3link_dashboard_dark.html">
+    <div class="logo-box">R</div>
+    <div class="logo-name">REDTEC</div>
+  </a>
+  <div class="logo-sep"></div>
+  <div class="topbar-title"><span class="live-dot"></span>m3link · Análisis Emisiones vs Transferencias</div>
+  <div class="topbar-right">
+    <a class="back-btn" href="m3link_dashboard_dark.html">← Volver al panel</a>
+  </div>
+</div>
+
+<div class="main">
+
+  <div class="page-header">
+    <div>
+      <div class="page-title">Análisis Emisiones vs Transferencias</div>
+      <div class="breadcrumb">Comercial › Gráficos transferencias › Análisis unificado</div>
+    </div>
+  </div>
+
+  <!-- PANEL DE FILTROS -->
+  <div class="filters-card">
+    <div class="filters-row">
+      <span class="filter-lbl">Período:</span>
+      <input type="date" id="d1" class="ctrl-date">
+      <input type="date" id="d2" class="ctrl-date">
+
+      <span class="filter-lbl" style="margin-left:14px">Cliente:</span>
+      <select id="cliente-filter" class="ctrl-sel">
+        <option value="">Todos los clientes</option>
+      </select>
+
+      <button id="btn-load" class="btn" onclick="cargarDatos()">Cargar datos</button>
+      <button class="btn btn-sec" onclick="exportarExcel()">↓ Excel</button>
+    </div>
+    <div class="filters-row">
+      <span class="filter-lbl">Métrica:</span>
+      <div class="seg" id="seg-metrica">
+        <button class="seg-btn on" data-m="emi-vs-tra">Emi vs Tra</button>
+        <button class="seg-btn" data-m="diferencia">Diferencia</button>
+        <button class="seg-btn" data-m="porcentual">% Diferencia</button>
+        <button class="seg-btn" data-m="pallets">Pallets transferidos</button>
+      </div>
+
+      <span class="filter-lbl" style="margin-left:14px">Agrupar por:</span>
+      <div class="seg" id="seg-agrupar">
+        <button class="seg-btn" data-a="dia">Día</button>
+        <button class="seg-btn" data-a="sem">Semana</button>
+        <button class="seg-btn on" data-a="mes">Mes</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="status" class="status"><span class="dot"></span><span id="status-txt">Selecciona el rango y presiona "Cargar datos".</span></div>
+
+  <!-- KPIs -->
+  <div class="kpis" id="kpis" style="display:none">
+    <div class="kpi"><div class="kpi-lbl">Total Emisiones</div><div class="kpi-val emi" id="k-emi">—</div><div class="kpi-sub">Confirmadas en el período</div></div>
+    <div class="kpi"><div class="kpi-lbl">Total Transferencias</div><div class="kpi-val tra" id="k-tra">—</div><div class="kpi-sub">Confirmadas en el período</div></div>
+    <div class="kpi"><div class="kpi-lbl">Diferencia (Emi − Tra)</div><div class="kpi-val dif" id="k-dif">—</div><div class="kpi-sub" id="k-dif-sub">—</div></div>
+    <div class="kpi"><div class="kpi-lbl">% Diferencia</div><div class="kpi-val dif" id="k-pct">—</div><div class="kpi-sub">Diferencia / Emisiones</div></div>
+    <div class="kpi"><div class="kpi-lbl">Pallets transferidos</div><div class="kpi-val pal" id="k-pal">—</div><div class="kpi-sub">Cantidad confirmada</div></div>
+  </div>
+
+  <!-- CHART -->
+  <div class="chart-card" id="chart-card" style="display:none">
+    <div class="chart-hdr">
+      <div class="chart-title" id="chart-title">Emisiones vs Transferencias por mes</div>
+      <span class="kpi-sub" id="chart-sub">Mostrando datos confirmados del período</span>
+    </div>
+    <div class="chart-wrap"><canvas id="canvas"></canvas></div>
+  </div>
+
+  <!-- TABLA RESUMEN -->
+  <div id="tabla-card" style="display:none">
+    <div class="chart-hdr" style="padding:0 4px 8px">
+      <div class="chart-title">Detalle por período</div>
+    </div>
+    <div class="table-wrap">
+      <table id="tabla">
+        <thead id="thead"></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+// ─────────────────────────────────────────────────────────────────────────
+// CONFIGURACIÓN API (mismo endpoint que m3link)
+// ─────────────────────────────────────────────────────────────────────────
+var isLocal  = (window.location.protocol === 'file:');
+var isDev    = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+var API_DIRECT = 'https://apirdt1.azurewebsites.net/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRangoFechas';
+var API_PROXY  = '/proxy/ops';
+
+// Estado
+var raw = [];
+var metricaActiva  = 'emi-vs-tra';
+var agrupadorActivo = 'mes';
+var clienteFiltro = '';
+var chartInstance = null;
+
+// ─────────────────────────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────────────────────────
+var $ = function(id) { return document.getElementById(id); };
+
+function setStatus(tipo, msg) {
+  var el = $('status');
+  el.className = 'status ' + tipo;
+  $('status-txt').textContent = msg;
+}
+
+function fmtNum(n) {
+  if (n == null || isNaN(n)) return '—';
+  return Math.round(n).toLocaleString('es-CL');
+}
+
+function fmtPct(n) {
+  if (n == null || isNaN(n)) return '—';
+  return (n * 100).toFixed(2).replace('.', ',') + ' %';
+}
+
+// Devuelve clave de agrupamiento según agrupadorActivo
+// 'dia' → '2026-04-15'
+// 'sem' → '2026-W15' (ISO week)
+// 'mes' → '2026-04'
+function claveAgrupada(fechaStr) {
+  if (!fechaStr) return '';
+  var iso = fechaStr.substring(0, 10);
+  if (agrupadorActivo === 'dia') return iso;
+  if (agrupadorActivo === 'mes') return iso.substring(0, 7);
+  if (agrupadorActivo === 'sem') {
+    // ISO week
+    var d = new Date(iso + 'T12:00:00');
+    var target = new Date(d.valueOf());
+    var dayNr = (d.getDay() + 6) % 7;
+    target.setDate(target.getDate() - dayNr + 3);
+    var firstThursday = target.valueOf();
+    target.setMonth(0, 1);
+    if (target.getDay() !== 4) {
+      target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+    }
+    var weekNum = 1 + Math.ceil((firstThursday - target) / (7 * 86400000));
+    return d.getFullYear() + '-W' + String(weekNum).padStart(2, '0');
+  }
+  return iso;
+}
+
+// Formatea la clave de agrupamiento para mostrarla en el eje X
+function formatearClave(clave) {
+  if (agrupadorActivo === 'dia') {
+    var p = clave.split('-');
+    return p[2] + '-' + p[1] + '-' + p[0].substring(2);  // DD-MM-YY
+  }
+  if (agrupadorActivo === 'sem') {
+    return clave;  // 2026-W15
+  }
+  if (agrupadorActivo === 'mes') {
+    var p = clave.split('-');
+    var meses = ['ene','feb','mar','abr','may','jun','jul','ago','sept','oct','nov','dic'];
+    return meses[parseInt(p[1],10) - 1] + ' ' + p[0];
+  }
+  return clave;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// CARGA DE DATOS
+// ─────────────────────────────────────────────────────────────────────────
+async function cargarDatos() {
+  var d1 = $('d1').value, d2 = $('d2').value;
+  if (!d1 || !d2) { alert('Selecciona ambas fechas'); return; }
+  if (d1 > d2)   { alert('La fecha "Desde" debe ser anterior a la "Hasta"'); return; }
+
+  if (isLocal) {
+    setStatus('err', 'Abrí esta página desde el sitio publicado en Azure, no desde archivo local.');
+    return;
+  }
+
+  var btn = $('btn-load');
+  btn.disabled = true; btn.textContent = 'Cargando...';
+  setStatus('load', 'Consultando API para ' + d1 + ' → ' + d2 + '...');
+
+  try {
+    var url = (isDev ? API_DIRECT : API_PROXY) + '?fechaInicio=' + d1 + '&fechaFin=' + d2;
+    var res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + res.statusText);
+    var data = await res.json();
+    raw = Array.isArray(data) ? data : [data];
+
+    if (!raw.length) {
+      setStatus('err', 'Sin registros para el rango seleccionado');
+      btn.disabled = false; btn.textContent = 'Cargar datos';
+      return;
+    }
+
+    setStatus('ok', raw.length.toLocaleString('es-CL') + ' operaciones cargadas · ' + d1 + ' → ' + d2);
+
+    actualizarFiltroClientes();
+    redibujar();
+
+    $('kpis').style.display = 'grid';
+    $('chart-card').style.display = 'block';
+    $('tabla-card').style.display = 'block';
+  } catch (e) {
+    console.error('[m3link]', e);
+    setStatus('err', 'Error: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Cargar datos';
+  }
+}
+
+// Llena el dropdown de clientes a partir de los datos cargados
+function actualizarFiltroClientes() {
+  var clientes = {};
+  raw.forEach(function(r) {
+    [r.clienteOrigenStr, r.clienteDestinoStr].forEach(function(c) {
+      if (c && c.trim()) clientes[c.trim()] = (clientes[c.trim()] || 0) + 1;
+    });
+  });
+
+  var sel = $('cliente-filter');
+  var prev = sel.value;
+  sel.innerHTML = '<option value="">Todos los clientes (' + Object.keys(clientes).length + ')</option>';
+  Object.keys(clientes).sort().forEach(function(c) {
+    sel.innerHTML += '<option value="' + c + '">' + c + ' (' + clientes[c] + ')</option>';
+  });
+  if (prev && clientes[prev]) sel.value = prev;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PROCESAMIENTO Y DIBUJO
+// ─────────────────────────────────────────────────────────────────────────
+
+// Filtra raw por cliente y devuelve registros aplicables
+function filtrarRaw() {
+  if (!clienteFiltro) return raw;
+  return raw.filter(function(r) {
+    return r.clienteOrigenStr === clienteFiltro || r.clienteDestinoStr === clienteFiltro;
+  });
+}
+
+// Devuelve un mapa { clave: { emi, tra, transferencias_pallets } } a partir
+// de los datos filtrados, agrupados según agrupadorActivo.
+function agruparDatos() {
+  var datos = filtrarRaw();
+  var mapa = {};
+
+  datos.forEach(function(r) {
+    var op = (r.operacion || '').toLowerCase();
+    var fecha = r.fechaConfirmacion || r.fechaSolicitud || '';
+    if (!fecha) return;
+    var conf = r.cantidadConfirmada || 0;
+
+    var clave = claveAgrupada(fecha);
+    if (!mapa[clave]) mapa[clave] = { emi: 0, tra: 0, traPallets: 0 };
+
+    if (op.indexOf('emision') >= 0) {
+      mapa[clave].emi += conf;
+    }
+    if (op.indexOf('transfer') >= 0 || op.indexOf('trans diferenciada') >= 0) {
+      mapa[clave].tra += conf;
+      mapa[clave].traPallets += conf;
+    }
+  });
+
+  return mapa;
+}
+
+// Calcula KPIs totales del período
+function calcularKPIs() {
+  var datos = filtrarRaw();
+  var totalEmi = 0, totalTra = 0;
+  datos.forEach(function(r) {
+    var op = (r.operacion || '').toLowerCase();
+    var conf = r.cantidadConfirmada || 0;
+    if (op.indexOf('emision') >= 0) totalEmi += conf;
+    if (op.indexOf('transfer') >= 0 || op.indexOf('trans diferenciada') >= 0) totalTra += conf;
+  });
+  var dif = totalEmi - totalTra;
+  var pct = totalEmi > 0 ? dif / totalEmi : 0;
+  return { totalEmi: totalEmi, totalTra: totalTra, dif: dif, pct: pct };
+}
+
+function actualizarKPIs() {
+  var k = calcularKPIs();
+  $('k-emi').textContent = fmtNum(k.totalEmi);
+  $('k-tra').textContent = fmtNum(k.totalTra);
+  $('k-dif').textContent = fmtNum(k.dif);
+  $('k-dif-sub').textContent = (k.dif > 0 ? 'Excedente emisiones' : (k.dif < 0 ? 'Excedente transferencias' : 'Equilibrado'));
+  $('k-pct').textContent = fmtPct(k.pct);
+  $('k-pal').textContent = fmtNum(k.totalTra);  // Pallets transferidos = total confirmado
+}
+
+// Dibuja el gráfico según métrica activa
+function dibujarChart() {
+  var mapa = agruparDatos();
+  var claves = Object.keys(mapa).sort();
+  var labels = claves.map(formatearClave);
+
+  var datasets, titulo;
+  if (metricaActiva === 'emi-vs-tra') {
+    titulo = 'Emisiones vs Transferencias por ' + nombreAgrupador();
+    datasets = [
+      { label: 'Emisiones',     data: claves.map(function(k) { return mapa[k].emi; }), backgroundColor: '#60a5fa' },
+      { label: 'Transferencias', data: claves.map(function(k) { return mapa[k].tra; }), backgroundColor: '#4ade80' }
+    ];
+    renderBarChart(labels, datasets, titulo);
+  } else if (metricaActiva === 'diferencia') {
+    titulo = 'Diferencia Emisiones − Transferencias por ' + nombreAgrupador();
+    datasets = [{
+      label: 'Diferencia (Emi − Tra)',
+      data: claves.map(function(k) { return mapa[k].emi - mapa[k].tra; }),
+      backgroundColor: claves.map(function(k) {
+        var d = mapa[k].emi - mapa[k].tra;
+        return d >= 0 ? '#fcd34d' : '#f87171';
+      })
+    }];
+    renderBarChart(labels, datasets, titulo);
+  } else if (metricaActiva === 'porcentual') {
+    titulo = '% Diferencia (Emi − Tra) / Emi por ' + nombreAgrupador();
+    var data = claves.map(function(k) {
+      var emi = mapa[k].emi, tra = mapa[k].tra;
+      return emi > 0 ? ((emi - tra) / emi) * 100 : 0;
+    });
+    datasets = [{
+      label: '% Diferencia',
+      data: data,
+      borderColor: '#fcd34d',
+      backgroundColor: 'rgba(252,211,77,0.15)',
+      tension: 0.25,
+      fill: true,
+      pointRadius: 3,
+      pointBackgroundColor: '#fcd34d'
+    }];
+    renderLineChart(labels, datasets, titulo, true);
+  } else if (metricaActiva === 'pallets') {
+    titulo = 'Pallets transferidos por ' + nombreAgrupador();
+    datasets = [{
+      label: 'Pallets',
+      data: claves.map(function(k) { return mapa[k].traPallets; }),
+      backgroundColor: '#c4b5fd'
+    }];
+    renderBarChart(labels, datasets, titulo);
+  }
+
+  $('chart-title').textContent = titulo;
+  $('chart-sub').textContent = labels.length + ' ' + nombreAgrupador() + (labels.length === 1 ? '' : 's') +
+    (clienteFiltro ? ' · cliente: ' + clienteFiltro : ' · todos los clientes');
+
+  // Tabla resumen
+  renderTabla(claves, mapa);
+}
+
+function nombreAgrupador() {
+  return agrupadorActivo === 'dia' ? 'día' : (agrupadorActivo === 'sem' ? 'semana' : 'mes');
+}
+
+function renderBarChart(labels, datasets, titulo) {
+  if (chartInstance) chartInstance.destroy();
+  var ctx = $('canvas').getContext('2d');
+  chartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: labels, datasets: datasets },
+    options: chartOptions(false)
+  });
+}
+
+function renderLineChart(labels, datasets, titulo, isPct) {
+  if (chartInstance) chartInstance.destroy();
+  var ctx = $('canvas').getContext('2d');
+  chartInstance = new Chart(ctx, {
+    type: 'line',
+    data: { labels: labels, datasets: datasets },
+    options: chartOptions(isPct)
+  });
+}
+
+function chartOptions(isPct) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: '#9da3b4', font: { size: 11 } } },
+      tooltip: {
+        callbacks: {
+          label: function(ctx) {
+            var v = ctx.parsed.y;
+            return ctx.dataset.label + ': ' + (isPct ? v.toFixed(2) + ' %' : Math.round(v).toLocaleString('es-CL'));
+          }
+        }
+      }
+    },
+    scales: {
+      x: { ticks: { color: '#9da3b4', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+      y: {
+        ticks: {
+          color: '#9da3b4',
+          font: { size: 10 },
+          callback: function(v) { return isPct ? v.toFixed(0) + '%' : v.toLocaleString('es-CL'); }
+        },
+        grid: { color: 'rgba(255,255,255,0.04)' }
+      }
+    }
+  };
+}
+
+// Tabla con detalle de cada período
+function renderTabla(claves, mapa) {
+  var thead = $('thead');
+  var tbody = $('tbody');
+
+  thead.innerHTML = '<tr>' +
+    '<th>' + nombreAgrupador().charAt(0).toUpperCase() + nombreAgrupador().slice(1) + '</th>' +
+    '<th class="num">Emisiones</th>' +
+    '<th class="num">Transferencias</th>' +
+    '<th class="num">Diferencia</th>' +
+    '<th class="num">% Diferencia</th>' +
+    '<th class="num">Pallets</th>' +
+  '</tr>';
+
+  if (!claves.length) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="state-msg">Sin datos para los filtros actuales</div></td></tr>';
+    return;
+  }
+
+  // Ordenar descendente para mostrar los más recientes arriba
+  var ordenadas = claves.slice().sort(function(a, b) { return b.localeCompare(a); });
+
+  tbody.innerHTML = ordenadas.map(function(k) {
+    var r = mapa[k];
+    var dif = r.emi - r.tra;
+    var pct = r.emi > 0 ? (dif / r.emi) * 100 : 0;
+    return '<tr>' +
+      '<td><strong>' + formatearClave(k) + '</strong></td>' +
+      '<td class="num" style="color:var(--c-emi)">' + fmtNum(r.emi) + '</td>' +
+      '<td class="num" style="color:var(--c-tra)">' + fmtNum(r.tra) + '</td>' +
+      '<td class="num" style="color:' + (dif >= 0 ? 'var(--c-dif)' : '#f87171') + '">' + fmtNum(dif) + '</td>' +
+      '<td class="num" style="color:var(--text-secondary)">' + pct.toFixed(2).replace('.',',') + ' %</td>' +
+      '<td class="num" style="color:var(--c-pal)">' + fmtNum(r.traPallets) + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+// Punto único de redibujo: KPIs + chart + tabla
+function redibujar() {
+  if (!raw.length) return;
+  actualizarKPIs();
+  dibujarChart();
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// EXPORTAR EXCEL
+// ─────────────────────────────────────────────────────────────────────────
+function exportarExcel() {
+  if (!raw.length) {
+    alert('Primero carga datos.');
+    return;
+  }
+  if (typeof XLSX === 'undefined') {
+    alert('Librería SheetJS no disponible. Verifica tu conexión.');
+    return;
+  }
+
+  var mapa = agruparDatos();
+  var claves = Object.keys(mapa).sort();
+
+  // Hoja 1: detalle por período
+  var detalle = claves.map(function(k) {
+    var r = mapa[k];
+    var dif = r.emi - r.tra;
+    var pct = r.emi > 0 ? (dif / r.emi) * 100 : 0;
+    return {
+      'Período':       formatearClave(k),
+      'Emisiones':     r.emi,
+      'Transferencias':r.tra,
+      'Diferencia':    dif,
+      '% Diferencia':  pct.toFixed(2) + ' %',
+      'Pallets':       r.traPallets
+    };
+  });
+
+  // Hoja 2: resumen KPIs
+  var k = calcularKPIs();
+  var resumen = [
+    { Concepto: 'Reporte Análisis Emi vs Tra · m3link',  Valor: '' },
+    { Concepto: 'Generado',                              Valor: new Date().toLocaleString('es-CL') },
+    { Concepto: 'Período',                               Valor: $('d1').value + ' → ' + $('d2').value },
+    { Concepto: 'Cliente',                               Valor: clienteFiltro || '(todos)' },
+    { Concepto: 'Agrupado por',                          Valor: nombreAgrupador() },
+    { Concepto: '',                                      Valor: '' },
+    { Concepto: 'Total Emisiones',                       Valor: k.totalEmi },
+    { Concepto: 'Total Transferencias',                  Valor: k.totalTra },
+    { Concepto: 'Diferencia (Emi − Tra)',                Valor: k.dif },
+    { Concepto: '% Diferencia',                          Valor: (k.pct * 100).toFixed(2) + ' %' },
+    { Concepto: 'Pallets transferidos',                  Valor: k.totalTra }
+  ];
+
+  var wb = XLSX.utils.book_new();
+  var wsR = XLSX.utils.json_to_sheet(resumen);
+  wsR['!cols'] = [{ wch: 30 }, { wch: 20 }];
+  XLSX.utils.book_append_sheet(wb, wsR, 'Resumen');
+
+  var wsD = XLSX.utils.json_to_sheet(detalle);
+  wsD['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
+  XLSX.utils.book_append_sheet(wb, wsD, 'Detalle');
+
+  var nombre = 'analisis_emi_vs_tra_' + $('d1').value + '_' + $('d2').value +
+               (clienteFiltro ? '_' + clienteFiltro.replace(/\s+/g,'_').substring(0,20) : '') + '.xlsx';
+  XLSX.writeFile(wb, nombre);
+  setStatus('ok', '✓ Excel descargado: ' + nombre);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// EVENT LISTENERS
+// ─────────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', function() {
+  // Fecha por defecto: primer día del mes hasta hoy
+  var hoy = new Date();
+  var yyyy = hoy.getFullYear();
+  var mm   = String(hoy.getMonth() + 1).padStart(2, '0');
+  var dd   = String(hoy.getDate()).padStart(2, '0');
+  $('d2').value = yyyy + '-' + mm + '-' + dd;
+  $('d1').value = yyyy + '-' + mm + '-01';
+
+  // Botones de métrica (segmented control)
+  document.querySelectorAll('#seg-metrica .seg-btn').forEach(function(b) {
+    b.addEventListener('click', function() {
+      document.querySelectorAll('#seg-metrica .seg-btn').forEach(function(x) { x.classList.remove('on'); });
+      b.classList.add('on');
+      metricaActiva = b.getAttribute('data-m');
+      redibujar();
+    });
+  });
+
+  // Botones de agrupador
+  document.querySelectorAll('#seg-agrupar .seg-btn').forEach(function(b) {
+    b.addEventListener('click', function() {
+      document.querySelectorAll('#seg-agrupar .seg-btn').forEach(function(x) { x.classList.remove('on'); });
+      b.classList.add('on');
+      agrupadorActivo = b.getAttribute('data-a');
+      redibujar();
+    });
+  });
+
+  // Cambio de cliente
+  $('cliente-filter').addEventListener('change', function() {
+    clienteFiltro = this.value;
+    redibujar();
+  });
+});
+</script>
+
+</body>
+</html>

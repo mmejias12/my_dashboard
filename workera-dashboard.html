@@ -2149,7 +2149,34 @@ function abrirModalTrabajador(code) {
   if (!code) return;
   var emp = cacheEmpleados.find(function(e) { return String(e.code) === String(code); });
   if (!emp) {
-    alert('No se encontró el empleado ' + code);
+    // Empleado NO está en el cache de la empresa actual (típicamente porque pertenece
+    // a otra empresa de Workera). Buscamos sus datos en las marcaciones cacheadas
+    // para mostrar un mensaje informativo con nombre real y empresa.
+    var marcaEmpleado = cacheMarcacionesEnriquecimiento.find(function(m) {
+      return m.employee && String(m.employee.code) === String(code);
+    });
+    var nombre = marcaEmpleado ? empNombreCompleto(marcaEmpleado.employee) : '';
+    var rut = marcaEmpleado ? marcaEmpleado.employee.identification : '';
+    var empresa = marcaEmpleado ? marcaEmpleado.employee.companyName : '';
+    var sucursal = marcaEmpleado ? marcaEmpleado.employee.branchOffice : '';
+
+    var msg = '';
+    if (nombre) {
+      msg = nombre + ' (RUT ' + (rut || code) + ') no está en el listado actual de Trabajadores.\n\n';
+      if (empresa && empresa !== ($('empresa') ? $('empresa').value : '')) {
+        msg += 'Pertenece a la empresa: ' + empresa + '\n';
+      }
+      if (sucursal) {
+        msg += 'Sucursal donde marca: ' + sucursal + '\n';
+      }
+      msg += '\nPara ver su detalle completo, cambiá el selector de Empresa arriba a la empresa correspondiente.';
+    } else {
+      msg = 'No se encontró el empleado con código ' + code + ' en los datos cargados.\n\n' +
+            'Posibles causas:\n' +
+            ' · Pertenece a otra empresa de Workera (cambia el selector arriba)\n' +
+            ' · Los datos del empleado aún no se cargaron (refrescá Trabajadores)';
+    }
+    alert(msg);
     return;
   }
   modalEmpleadoActual = emp;

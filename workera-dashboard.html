@@ -653,52 +653,93 @@ function actualizarFiltrosTrabajadores() {
 var cacheMarcacionesEnriquecimiento = [];
 var cacheMarcacionesRango = '';  // identificador del rango cargado
 
-// Carga TODAS las marcaciones del período en bloque, paginando hasta agotar.
-// Hace 5 requests en paralelo para acelerar (típicamente baja de 70s a 15s).
-async function cargarTodasMarcacionesPeriodo() {
+// Estado de carga incremental: cuántas páginas ya tenemos y cuántas faltan
+var cargaIncremental = {
+  paginasPedidas: 0,    // Hasta qué página llegamos (1-based)
+  totalPages: 0,        // Total reportado por API
+  totalResult: 0,       // Total de marcaciones reportado
+  enProgreso: false     // Para evitar doble-click en botón
+};
+
+// Cantidad de páginas que se cargan en cada bloque. 5 páginas × 20 marcas = 100
+// marcas por bloque. Lotes paralelos de 5 casi nunca exceden 30s en Azure SWA.
+var BLOQUE_PAGINAS = 5;
+
+// Carga el SIGUIENTE bloque de páginas (5 más) y las acumula en el cache global.
+// Si no hay cache aún, parte desde página 1.
+async function cargarSiguienteBloque() {
   var d1 = $('d1').value, d2 = $('d2').value;
   var rango = d1 + '|' + d2;
 
-  // Si ya está cargado para este mismo rango, no recargar
-  if (cacheMarcacionesRango === rango && cacheMarcacionesEnriquecimiento.length) {
-    return cacheMarcacionesEnriquecimiento;
+  // Si cambió el rango, resetear cache
+  if (cacheMarcacionesRango !== rango) {
+    cacheMarcacionesEnriquecimiento = [];
+    cacheMarcacionesRango = rango;
+    cargaIncremental = { paginasPedidas: 0, totalPages: 0, totalResult: 0, enProgreso: false };
   }
 
-  setStatus('load', 'Cargando marcaciones del período (' + d1 + ' → ' + d2 + ')...');
+  if (cargaIncremental.enProgreso) return cacheMarcacionesEnriquecimiento;
 
-  // Primer request para conocer totalPages
-  var data1 = await apiFetchMarcaciones(d1, d2, 1);
-  var primera = extraerLista(data1);
-  var totalPages = data1.totalPages || 1;
-  var totalResult = data1.totalResult || primera.length;
+  cargaIncremental.enProgreso = true;
+  try {
+    var primerPagina = cargaIncremental.paginasPedidas + 1;
 
-  var todas = primera.slice();
+    // Si es la primera vez, hacemos el primer request solo para conocer totalPages
+    if (primerPagina === 1) {
+      var data1 = await apiFetchMarcaciones(d1, d2, 1);
+      var primera = extraerLista(data1);
+      cargaIncremental.totalPages = data1.totalPages || 1;
+      cargaIncremental.totalResult = data1.totalResult || primera.length;
+      cacheMarcacionesEnriquecimiento = cacheMarcacionesEnriquecimiento.concat(primera);
+      cargaIncremental.paginasPedidas = 1;
+      primerPagina = 2;
 
-  if (totalPages > 1) {
-    // Cargar las páginas restantes en lotes paralelos de 5 para acelerar
-    var BATCH = 5;
-    for (var pagBase = 2; pagBase <= totalPages; pagBase += BATCH) {
+      setStatus('load', 'Cargando bloque 1: 1/' + cargaIncremental.totalPages +
+                ' (' + primera.length + ' marcas)');
+    }
+
+    var totalPages = cargaIncremental.totalPages;
+    var ultimaPagina = Math.min(primerPagina + BLOQUE_PAGINAS - 2, totalPages);
+
+    if (primerPagina <= ultimaPagina) {
+      // Pedir las páginas restantes del bloque en paralelo
       var lote = [];
-      for (var k = 0; k < BATCH && (pagBase + k) <= totalPages; k++) {
-        lote.push(apiFetchMarcaciones(d1, d2, pagBase + k));
+      for (var p = primerPagina; p <= ultimaPagina; p++) {
+        lote.push(apiFetchMarcaciones(d1, d2, p));
       }
       var resultados = await Promise.all(lote);
       resultados.forEach(function(r) {
-        todas = todas.concat(extraerLista(r));
+        cacheMarcacionesEnriquecimiento = cacheMarcacionesEnriquecimiento.concat(extraerLista(r));
       });
+      cargaIncremental.paginasPedidas = ultimaPagina;
 
-      // Actualizar progreso visible
-      var paginaActual = Math.min(pagBase + BATCH - 1, totalPages);
-      var pct = Math.round((paginaActual / totalPages) * 100);
-      setStatus('load', 'Cargando marcaciones... ' + pct + '% (' +
-                todas.length + '/' + totalResult + ')');
+      var pct = Math.round((cargaIncremental.paginasPedidas / totalPages) * 100);
+      setStatus('load', 'Cargado ' + pct + '%: ' +
+                cargaIncremental.paginasPedidas + '/' + totalPages + ' páginas · ' +
+                cacheMarcacionesEnriquecimiento.length + '/' + cargaIncremental.totalResult + ' marcas');
     }
-  }
 
-  cacheMarcacionesEnriquecimiento = todas;
-  cacheMarcacionesRango = rango;
-  setStatus('ok', 'Marcaciones cargadas: ' + todas.length + ' en ' + totalPages + ' páginas');
-  return todas;
+    var faltan = cargaIncremental.totalPages - cargaIncremental.paginasPedidas;
+    if (faltan > 0) {
+      setStatus('ok', 'Cargadas ' + cacheMarcacionesEnriquecimiento.length + '/' +
+                cargaIncremental.totalResult + ' marcas · click "Cargar más" para continuar');
+    } else {
+      setStatus('ok', '✓ Todas las marcaciones cargadas: ' + cacheMarcacionesEnriquecimiento.length);
+    }
+
+    return cacheMarcacionesEnriquecimiento;
+  } finally {
+    cargaIncremental.enProgreso = false;
+  }
+}
+
+// Alias compatible con código viejo (otros lugares que llaman cargarTodasMarcacionesPeriodo).
+// Devuelve el cache actual; carga el primer bloque si no hay nada.
+async function cargarTodasMarcacionesPeriodo() {
+  if (!cacheMarcacionesEnriquecimiento.length || cacheMarcacionesRango !== ($('d1').value + '|' + $('d2').value)) {
+    await cargarSiguienteBloque();
+  }
+  return cacheMarcacionesEnriquecimiento;
 }
 
 // Reemplaza al viejo "enriquecerConMarcaciones": ahora aprovecha el cache
@@ -851,12 +892,12 @@ function renderTrabajadores(lista) {
 // Cache de la última respuesta cruda de cada endpoint, para diagnóstico
 var ultimaRespuesta = {};
 
-// Pestaña Marcaciones: ahora usa el cache global cacheMarcacionesEnriquecimiento
-// (que ya tiene TODAS las marcaciones del período, no solo 20).
+// Pestaña Marcaciones: carga el primer bloque (5 páginas ~100 marcas) y muestra
+// botón "Cargar más" si hay páginas pendientes. Esto evita timeouts del proxy.
 async function cargarMarcaciones() {
-  var marcaciones = await cargarTodasMarcacionesPeriodo();
+  await cargarSiguienteBloque();
 
-  if (!marcaciones.length) {
+  if (!cacheMarcacionesEnriquecimiento.length) {
     var tb = $('tbody-ast');
     var d1 = $('d1').value, d2 = $('d2').value;
     var diag = renderDiagnostico('attendanceData', { totalResult: 0, data: [] });
@@ -865,7 +906,20 @@ async function cargarMarcaciones() {
     return;
   }
 
-  renderMarcaciones(marcaciones);
+  renderMarcaciones(cacheMarcacionesEnriquecimiento);
+}
+
+// Cargar el siguiente bloque al hacer click en el botón
+async function cargarMasMarcaciones() {
+  var btn = $('btn-mas-marcaciones');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Cargando bloque...'; }
+  try {
+    await cargarSiguienteBloque();
+    renderMarcaciones(cacheMarcacionesEnriquecimiento);
+  } catch (e) {
+    setStatus('err', 'Error al cargar más: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = '↓ Cargar más marcaciones'; }
+  }
 }
 
 // Extrae la lista de items de cualquier estructura típica del API Workera
@@ -991,6 +1045,26 @@ function renderPaginaMarcaciones() {
     '<button class="paginador-btn" onclick="marcacionesPaginaUI=' + (totalPaginasMostrar - 1) + ';renderPaginaMarcaciones()" ' +
     (marcacionesPaginaUI >= totalPaginasMostrar - 1 ? 'disabled' : '') + ' title="Última">»</button>' +
   '</td></tr>';
+
+  // Si la API tiene más páginas que aún no descargamos, mostrar botón "Cargar más"
+  var faltanApi = cargaIncremental.totalPages - cargaIncremental.paginasPedidas;
+  if (faltanApi > 0) {
+    var marcasFaltantes = cargaIncremental.totalResult - cacheMarcacionesEnriquecimiento.length;
+    tb.innerHTML += '<tr><td colspan="7" style="padding:14px;text-align:center;background:rgba(34,211,238,.05);border-top:1px solid var(--brm)">' +
+      '<button id="btn-mas-marcaciones" onclick="cargarMasMarcaciones()" ' +
+      'style="padding:9px 22px;background:var(--cyan);color:#0c1117;border:none;' +
+      'border-radius:6px;font-weight:600;cursor:pointer;font-size:12px">' +
+      '↓ Cargar más marcaciones (faltan ~' + marcasFaltantes + ' en ' + faltanApi + ' páginas)' +
+      '</button>' +
+      '<div style="font-size:10.5px;color:var(--t3);margin-top:6px">' +
+      'Cargado: ' + cacheMarcacionesEnriquecimiento.length + ' de ' + cargaIncremental.totalResult +
+      ' marcas · cada bloque trae ~' + (BLOQUE_PAGINAS * 20) + ' marcas en ~6s' +
+      '</div></td></tr>';
+  } else if (cargaIncremental.totalPages > 1) {
+    tb.innerHTML += '<tr><td colspan="7" style="padding:10px;text-align:center;color:var(--green);font-size:11px;background:rgba(34,197,94,.06)">' +
+      '✓ Todas las marcaciones del período cargadas (' + cacheMarcacionesEnriquecimiento.length + ')' +
+      '</td></tr>';
+  }
 }
 
 // Crea los inputs de búsqueda y filtros sobre la tabla de Marcaciones (una sola vez)

@@ -186,7 +186,7 @@
     <strong style="color:var(--text-primary)">ℹ Lógica del análisis:</strong>
     los <strong>gráficos</strong> de Emi vs Tra, Diferencia y % comparan emisiones con transferencias <strong style="color:var(--c-tra)">solicitadas</strong> (planificación del período).
     Los <strong>KPIs</strong> de arriba muestran las transferencias <strong>confirmadas</strong> (lo realmente cumplido).
-    El <strong>agrupador</strong> usa <code style="background:var(--bg-input);padding:1px 5px;border-radius:3px;color:var(--c-emi)">fechaSolicitud</code>, así una transferencia de marzo confirmada en abril aparece en marzo.
+    El <strong>agrupador</strong> usa <code style="background:var(--bg-input);padding:1px 5px;border-radius:3px;color:var(--c-emi)">fechaRequerida</code>, así una transferencia de marzo confirmada en abril aparece en marzo.
   </div>
 
   <!-- CHART -->
@@ -376,10 +376,13 @@ function filtrarRaw() {
 // de los datos filtrados, agrupados según agrupadorActivo.
 //
 // Lógica de agrupamiento:
-// - Las operaciones se agrupan por fechaSolicitud (cuando se planificó/solicitó),
+// - Las operaciones se agrupan por fechaRequerida (cuando se programó/solicitó),
 //   NO por fechaConfirmacion. Esto permite que una solicitud de marzo aparezca
 //   en marzo aunque se haya confirmado en abril (es lo que el negocio considera
 //   "transferencia de marzo" desde la planificación).
+// - fechaRequerida siempre existe en el API; las otras (despacho/confirmación)
+//   son nullable y solo se usan como fallback si por algún motivo faltara la
+//   requerida (caso edge raro).
 //
 // Lógica de cantidad:
 // - Para emisiones se cuenta lo CONFIRMADO (lo que realmente se emitió).
@@ -393,8 +396,11 @@ function agruparDatos() {
   datos.forEach(function(r) {
     var op = (r.operacion || '').toLowerCase();
 
-    // Fecha base = solicitud (cuando se planificó). Fallback a confirmación si no hay.
-    var fecha = r.fechaSolicitud || r.fechaConfirmacion || '';
+    // Fecha base = requerida (cuando se programó originalmente la operación).
+    // La API entrega: fechaRequerida (siempre), fechaDespacho (nullable),
+    // fechaConfirmacion (nullable). Usamos fechaRequerida porque siempre existe
+    // y representa la planificación/solicitud que el usuario está consultando.
+    var fecha = r.fechaRequerida || r.fechaConfirmacion || '';
     if (!fecha) return;
 
     var conf = r.cantidadConfirmada || 0;

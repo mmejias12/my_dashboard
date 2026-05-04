@@ -175,10 +175,18 @@
   <!-- KPIs -->
   <div class="kpis" id="kpis" style="display:none">
     <div class="kpi"><div class="kpi-lbl">Total Emisiones</div><div class="kpi-val emi" id="k-emi">—</div><div class="kpi-sub">Confirmadas en el período</div></div>
-    <div class="kpi"><div class="kpi-lbl">Total Transferencias</div><div class="kpi-val tra" id="k-tra">—</div><div class="kpi-sub">Confirmadas en el período</div></div>
-    <div class="kpi"><div class="kpi-lbl">Diferencia (Emi − Tra)</div><div class="kpi-val dif" id="k-dif">—</div><div class="kpi-sub" id="k-dif-sub">—</div></div>
+    <div class="kpi"><div class="kpi-lbl">Tra. confirmadas</div><div class="kpi-val tra" id="k-tra">—</div><div class="kpi-sub">Lo realmente cumplido</div></div>
+    <div class="kpi"><div class="kpi-lbl">Diferencia (Emi − Tra conf.)</div><div class="kpi-val dif" id="k-dif">—</div><div class="kpi-sub" id="k-dif-sub">—</div></div>
     <div class="kpi"><div class="kpi-lbl">% Diferencia</div><div class="kpi-val dif" id="k-pct">—</div><div class="kpi-sub">Diferencia / Emisiones</div></div>
     <div class="kpi"><div class="kpi-lbl">Pallets transferidos</div><div class="kpi-val pal" id="k-pal">—</div><div class="kpi-sub">Cantidad confirmada</div></div>
+  </div>
+
+  <!-- Nota explicativa de la lógica -->
+  <div id="info-logica" style="display:none;background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.25);border-radius:9px;padding:10px 14px;margin-bottom:14px;font-size:11.5px;color:var(--text-secondary);line-height:1.55">
+    <strong style="color:var(--text-primary)">ℹ Lógica del análisis:</strong>
+    los <strong>gráficos</strong> de Emi vs Tra, Diferencia y % comparan emisiones con transferencias <strong style="color:var(--c-tra)">solicitadas</strong> (planificación del período).
+    Los <strong>KPIs</strong> de arriba muestran las transferencias <strong>confirmadas</strong> (lo realmente cumplido).
+    El <strong>agrupador</strong> usa <code style="background:var(--bg-input);padding:1px 5px;border-radius:3px;color:var(--c-emi)">fechaSolicitud</code>, así una transferencia de marzo confirmada en abril aparece en marzo.
   </div>
 
   <!-- CHART -->
@@ -323,6 +331,7 @@ async function cargarDatos() {
     redibujar();
 
     $('kpis').style.display = 'grid';
+    $('info-logica').style.display = 'block';
     $('chart-card').style.display = 'block';
     $('tabla-card').style.display = 'block';
   } catch (e) {
@@ -363,46 +372,66 @@ function filtrarRaw() {
   });
 }
 
-// Devuelve un mapa { clave: { emi, tra, transferencias_pallets } } a partir
+// Devuelve un mapa { clave: { emi, traSol, traConf, traPallets } } a partir
 // de los datos filtrados, agrupados según agrupadorActivo.
+//
+// Lógica de agrupamiento:
+// - Las operaciones se agrupan por fechaSolicitud (cuando se planificó/solicitó),
+//   NO por fechaConfirmacion. Esto permite que una solicitud de marzo aparezca
+//   en marzo aunque se haya confirmado en abril (es lo que el negocio considera
+//   "transferencia de marzo" desde la planificación).
+//
+// Lógica de cantidad:
+// - Para emisiones se cuenta lo CONFIRMADO (lo que realmente se emitió).
+// - Para transferencias se acumulan DOS valores:
+//   - traSol: cantidadSolicitada (lo planificado, eje principal del gráfico Emi vs Tra)
+//   - traConf: cantidadConfirmada (lo realmente cumplido, usado en KPIs y métrica Pallets)
 function agruparDatos() {
   var datos = filtrarRaw();
   var mapa = {};
 
   datos.forEach(function(r) {
     var op = (r.operacion || '').toLowerCase();
-    var fecha = r.fechaConfirmacion || r.fechaSolicitud || '';
+
+    // Fecha base = solicitud (cuando se planificó). Fallback a confirmación si no hay.
+    var fecha = r.fechaSolicitud || r.fechaConfirmacion || '';
     if (!fecha) return;
+
     var conf = r.cantidadConfirmada || 0;
+    var sol  = r.cantidadSolicitada || 0;
 
     var clave = claveAgrupada(fecha);
-    if (!mapa[clave]) mapa[clave] = { emi: 0, tra: 0, traPallets: 0 };
+    if (!mapa[clave]) mapa[clave] = { emi: 0, traSol: 0, traConf: 0, traPallets: 0 };
 
     if (op.indexOf('emision') >= 0) {
       mapa[clave].emi += conf;
     }
     if (op.indexOf('transfer') >= 0 || op.indexOf('trans diferenciada') >= 0) {
-      mapa[clave].tra += conf;
-      mapa[clave].traPallets += conf;
+      mapa[clave].traSol  += sol;   // para gráfico Emi vs Tra (planificado)
+      mapa[clave].traConf += conf;  // para KPIs (cumplido)
+      mapa[clave].traPallets += conf;  // pallets transferidos = lo confirmado
     }
   });
 
   return mapa;
 }
 
-// Calcula KPIs totales del período
+// Calcula KPIs totales del período.
+// Los KPIs muestran TODOS los valores como CONFIRMADOS (lo realmente cumplido).
+// El gráfico de Emi vs Tra usa "solicitada" porque mide planificación;
+// los KPIs miden ejecución, por eso usan "confirmada".
 function calcularKPIs() {
   var datos = filtrarRaw();
-  var totalEmi = 0, totalTra = 0;
+  var totalEmi = 0, totalTraConf = 0;
   datos.forEach(function(r) {
     var op = (r.operacion || '').toLowerCase();
     var conf = r.cantidadConfirmada || 0;
     if (op.indexOf('emision') >= 0) totalEmi += conf;
-    if (op.indexOf('transfer') >= 0 || op.indexOf('trans diferenciada') >= 0) totalTra += conf;
+    if (op.indexOf('transfer') >= 0 || op.indexOf('trans diferenciada') >= 0) totalTraConf += conf;
   });
-  var dif = totalEmi - totalTra;
+  var dif = totalEmi - totalTraConf;
   var pct = totalEmi > 0 ? dif / totalEmi : 0;
-  return { totalEmi: totalEmi, totalTra: totalTra, dif: dif, pct: pct };
+  return { totalEmi: totalEmi, totalTra: totalTraConf, dif: dif, pct: pct };
 }
 
 function actualizarKPIs() {
@@ -415,7 +444,11 @@ function actualizarKPIs() {
   $('k-pal').textContent = fmtNum(k.totalTra);  // Pallets transferidos = total confirmado
 }
 
-// Dibuja el gráfico según métrica activa
+// Dibuja el gráfico según métrica activa.
+// IMPORTANTE — semántica de las métricas:
+//   - "Emi vs Tra": emisión confirmada vs transferencia SOLICITADA (planificación).
+//   - "Diferencia" y "% Diferencia": calculados sobre solicitada (mismo criterio).
+//   - "Pallets transferidos": transferencia CONFIRMADA (lo realmente cumplido).
 function dibujarChart() {
   var mapa = agruparDatos();
   var claves = Object.keys(mapa).sort();
@@ -423,27 +456,27 @@ function dibujarChart() {
 
   var datasets, titulo;
   if (metricaActiva === 'emi-vs-tra') {
-    titulo = 'Emisiones vs Transferencias por ' + nombreAgrupador();
+    titulo = 'Emisiones vs Transferencias solicitadas por ' + nombreAgrupador();
     datasets = [
-      { label: 'Emisiones',     data: claves.map(function(k) { return mapa[k].emi; }), backgroundColor: '#60a5fa' },
-      { label: 'Transferencias', data: claves.map(function(k) { return mapa[k].tra; }), backgroundColor: '#4ade80' }
+      { label: 'Emisiones',                data: claves.map(function(k) { return mapa[k].emi;    }), backgroundColor: '#60a5fa' },
+      { label: 'Transferencias solicitadas', data: claves.map(function(k) { return mapa[k].traSol; }), backgroundColor: '#4ade80' }
     ];
     renderBarChart(labels, datasets, titulo);
   } else if (metricaActiva === 'diferencia') {
-    titulo = 'Diferencia Emisiones − Transferencias por ' + nombreAgrupador();
+    titulo = 'Diferencia (Emi − Tra solicitada) por ' + nombreAgrupador();
     datasets = [{
-      label: 'Diferencia (Emi − Tra)',
-      data: claves.map(function(k) { return mapa[k].emi - mapa[k].tra; }),
+      label: 'Diferencia (Emi − Tra solic.)',
+      data: claves.map(function(k) { return mapa[k].emi - mapa[k].traSol; }),
       backgroundColor: claves.map(function(k) {
-        var d = mapa[k].emi - mapa[k].tra;
+        var d = mapa[k].emi - mapa[k].traSol;
         return d >= 0 ? '#fcd34d' : '#f87171';
       })
     }];
     renderBarChart(labels, datasets, titulo);
   } else if (metricaActiva === 'porcentual') {
-    titulo = '% Diferencia (Emi − Tra) / Emi por ' + nombreAgrupador();
+    titulo = '% Diferencia (Emi − Tra solic.) / Emi por ' + nombreAgrupador();
     var data = claves.map(function(k) {
-      var emi = mapa[k].emi, tra = mapa[k].tra;
+      var emi = mapa[k].emi, tra = mapa[k].traSol;
       return emi > 0 ? ((emi - tra) / emi) * 100 : 0;
     });
     datasets = [{
@@ -458,9 +491,9 @@ function dibujarChart() {
     }];
     renderLineChart(labels, datasets, titulo, true);
   } else if (metricaActiva === 'pallets') {
-    titulo = 'Pallets transferidos por ' + nombreAgrupador();
+    titulo = 'Pallets transferidos (confirmados) por ' + nombreAgrupador();
     datasets = [{
-      label: 'Pallets',
+      label: 'Pallets confirmados',
       data: claves.map(function(k) { return mapa[k].traPallets; }),
       backgroundColor: '#c4b5fd'
     }];
@@ -528,7 +561,9 @@ function chartOptions(isPct) {
   };
 }
 
-// Tabla con detalle de cada período
+// Tabla con detalle de cada período.
+// Muestra AMBOS valores de transferencia (solicitada y confirmada) para
+// que el usuario pueda comparar planificación vs ejecución de un vistazo.
 function renderTabla(claves, mapa) {
   var thead = $('thead');
   var tbody = $('tbody');
@@ -536,14 +571,15 @@ function renderTabla(claves, mapa) {
   thead.innerHTML = '<tr>' +
     '<th>' + nombreAgrupador().charAt(0).toUpperCase() + nombreAgrupador().slice(1) + '</th>' +
     '<th class="num">Emisiones</th>' +
-    '<th class="num">Transferencias</th>' +
-    '<th class="num">Diferencia</th>' +
-    '<th class="num">% Diferencia</th>' +
-    '<th class="num">Pallets</th>' +
+    '<th class="num">Tra. solicitada</th>' +
+    '<th class="num">Tra. confirmada</th>' +
+    '<th class="num">Dif. (Emi−Tra sol.)</th>' +
+    '<th class="num">% Dif.</th>' +
+    '<th class="num">Cumplimiento</th>' +
   '</tr>';
 
   if (!claves.length) {
-    tbody.innerHTML = '<tr><td colspan="6"><div class="state-msg">Sin datos para los filtros actuales</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7"><div class="state-msg">Sin datos para los filtros actuales</div></td></tr>';
     return;
   }
 
@@ -552,15 +588,21 @@ function renderTabla(claves, mapa) {
 
   tbody.innerHTML = ordenadas.map(function(k) {
     var r = mapa[k];
-    var dif = r.emi - r.tra;
+    var dif = r.emi - r.traSol;
     var pct = r.emi > 0 ? (dif / r.emi) * 100 : 0;
+    // Cumplimiento = qué % de lo solicitado se confirmó (0-100)
+    var cumplimiento = r.traSol > 0 ? (r.traConf / r.traSol) * 100 : 0;
+    var cumpColor = cumplimiento >= 95 ? 'var(--c-tra)'
+                  : cumplimiento >= 80 ? 'var(--c-dif)'
+                  : '#f87171';
     return '<tr>' +
       '<td><strong>' + formatearClave(k) + '</strong></td>' +
       '<td class="num" style="color:var(--c-emi)">' + fmtNum(r.emi) + '</td>' +
-      '<td class="num" style="color:var(--c-tra)">' + fmtNum(r.tra) + '</td>' +
+      '<td class="num" style="color:var(--c-tra)">' + fmtNum(r.traSol) + '</td>' +
+      '<td class="num" style="color:var(--text-secondary)">' + fmtNum(r.traConf) + '</td>' +
       '<td class="num" style="color:' + (dif >= 0 ? 'var(--c-dif)' : '#f87171') + '">' + fmtNum(dif) + '</td>' +
       '<td class="num" style="color:var(--text-secondary)">' + pct.toFixed(2).replace('.',',') + ' %</td>' +
-      '<td class="num" style="color:var(--c-pal)">' + fmtNum(r.traPallets) + '</td>' +
+      '<td class="num" style="color:' + cumpColor + '">' + (r.traSol > 0 ? cumplimiento.toFixed(1).replace('.',',') + ' %' : '—') + '</td>' +
     '</tr>';
   }).join('');
 }
@@ -591,15 +633,18 @@ function exportarExcel() {
   // Hoja 1: detalle por período
   var detalle = claves.map(function(k) {
     var r = mapa[k];
-    var dif = r.emi - r.tra;
+    var dif = r.emi - r.traSol;
     var pct = r.emi > 0 ? (dif / r.emi) * 100 : 0;
+    var cumplimiento = r.traSol > 0 ? (r.traConf / r.traSol) * 100 : 0;
     return {
-      'Período':       formatearClave(k),
-      'Emisiones':     r.emi,
-      'Transferencias':r.tra,
-      'Diferencia':    dif,
-      '% Diferencia':  pct.toFixed(2) + ' %',
-      'Pallets':       r.traPallets
+      'Período':              formatearClave(k),
+      'Emisiones':            r.emi,
+      'Tra. solicitada':      r.traSol,
+      'Tra. confirmada':      r.traConf,
+      'Diferencia (Emi-TraSol)': dif,
+      '% Diferencia':         pct.toFixed(2) + ' %',
+      '% Cumplimiento':       (r.traSol > 0 ? cumplimiento.toFixed(2) + ' %' : 'N/A'),
+      'Pallets confirmados':  r.traPallets
     };
   });
 

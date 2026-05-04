@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Transferencias x Cliente · m3link</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg-page:       #0f1117;
+    --bg-surface:    #181b23;
+    --bg-card:       #1e222d;
+    --bg-input:      #252932;
+    --bg-hover:      #252d3a;
+    --bg-active:     #1a2a1f;
+    --border:        rgba(255,255,255,0.07);
+    --border-md:     rgba(255,255,255,0.12);
+    --border-accent: rgba(74,222,128,0.35);
+    --text-primary:  #e8eaf0;
+    --text-secondary:#9da3b4;
+    --text-muted:    #5a6070;
+    --accent:        #4ade80;
+    --accent-dim:    rgba(74,222,128,0.15);
+    --red-logo:      #C0170C;
+    /* Estados de operación */
+    --st-conf:  #4ade80;  --st-conf-bg: rgba(74,222,128,0.12);
+    --st-pend:  #9da3b4;  --st-pend-bg: rgba(157,163,180,0.10);
+    --st-rgo:   #fb923c;  --st-rgo-bg:  rgba(251,146,60,0.15);
+    --st-rev:   #f87171;  --st-rev-bg:  rgba(248,113,113,0.15);
+    --st-ndesp: #c4b5fd;  --st-ndesp-bg:rgba(196,181,253,0.12);
+    --c-emi: #60a5fa;
+    --radius-sm:6px; --radius-md:9px; --radius-lg:13px;
+  }
+  html,body { height:100%; font-family:'Inter',-apple-system,sans-serif; font-size:13px; background:var(--bg-page); color:var(--text-primary); -webkit-font-smoothing:antialiased; }
+
+  /* TOPBAR */
+  .topbar { position:fixed;top:0;left:0;right:0;z-index:100;height:50px;background:var(--bg-surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1.25rem;gap:12px; }
+  .logo { display:flex;align-items:center;gap:9px;text-decoration:none;color:inherit; }
+  .logo-box { width:27px;height:27px;border-radius:6px;background:var(--red-logo);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:12px; }
+  .logo-name { font-weight:600;font-size:13.5px;color:var(--text-primary); }
+  .logo-sep { width:1px;height:18px;background:var(--border-md);margin:0 6px; }
+  .topbar-title { font-size:12.5px;color:var(--text-secondary);display:flex;align-items:center;gap:7px; }
+  .live-dot { width:7px;height:7px;background:var(--accent);border-radius:50%;animation:pulse 2.5s ease-in-out infinite;box-shadow:0 0 6px var(--accent); }
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .topbar-right { margin-left:auto;display:flex;align-items:center;gap:10px; }
+  .back-btn { font-size:11.5px;color:var(--text-secondary);text-decoration:none;padding:5px 11px;border:1px solid var(--border-md);border-radius:6px;transition:all .15s; }
+  .back-btn:hover { color:var(--text-primary);background:var(--bg-hover); }
+
+  /* MAIN */
+  .main { padding: 70px 1.5rem 2rem; max-width: 1500px; margin: 0 auto; }
+
+  .page-header { display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1rem;gap:12px;flex-wrap:wrap; }
+  .page-title { font-size:18px;font-weight:600;color:var(--text-primary); }
+  .page-title .alert-icon { color:#fb923c;margin-right:4px; }
+  .breadcrumb { font-size:11.5px;color:var(--text-muted);margin-top:4px; }
+
+  /* PANEL DE FILTROS */
+  .filters-card { background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:14px; }
+  .filters-row { display:flex;flex-wrap:wrap;gap:10px;align-items:center; }
+  .filter-lbl { font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;font-weight:500;margin-right:4px; }
+  .ctrl-num, .ctrl-sel { background:var(--bg-input);border:1px solid var(--border-md);color:var(--text-primary);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit;outline:none; }
+  .ctrl-num { width:80px; }
+  .ctrl-sel { min-width:200px; }
+  .ctrl-num:focus, .ctrl-sel:focus { border-color:var(--accent); }
+
+  .btn { background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);padding:6px 16px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .15s; }
+  .btn:hover:not(:disabled) { background:var(--accent);color:#0f1117; }
+  .btn:disabled { opacity:.5;cursor:not-allowed; }
+  .btn-sec { background:var(--bg-input);border:1px solid var(--border-md);color:var(--text-secondary); }
+  .btn-sec:hover { background:var(--bg-hover);color:var(--text-primary); }
+
+  .seg { display:inline-flex;background:var(--bg-input);border:1px solid var(--border-md);border-radius:7px;padding:2px;gap:2px; }
+  .seg-btn { background:transparent;border:none;color:var(--text-secondary);padding:6px 14px;font-size:11.5px;font-weight:500;cursor:pointer;border-radius:5px;font-family:inherit;transition:all .15s;white-space:nowrap; }
+  .seg-btn:hover { color:var(--text-primary); }
+  .seg-btn.on { background:var(--accent);color:#0f1117;font-weight:600; }
+
+  /* BANNER OPERATIVO (alertas) */
+  .alerts-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:14px; }
+  .alert-card { background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:14px 16px;position:relative;overflow:hidden; }
+  .alert-card.rev { border-color:rgba(248,113,113,0.4);background:linear-gradient(135deg,rgba(248,113,113,0.08),var(--bg-surface)); }
+  .alert-card.rgo { border-color:rgba(251,146,60,0.4);background:linear-gradient(135deg,rgba(251,146,60,0.08),var(--bg-surface)); }
+  .alert-card.pend { border-color:rgba(157,163,180,0.25); }
+  .alert-card.ndesp { border-color:rgba(196,181,253,0.3);background:linear-gradient(135deg,rgba(196,181,253,0.06),var(--bg-surface)); }
+  .alert-lbl { font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px;display:flex;align-items:center;gap:5px; }
+  .alert-val { font-size:24px;font-weight:600;line-height:1.1; }
+  .alert-val.rev { color:var(--st-rev); }
+  .alert-val.rgo { color:var(--st-rgo); }
+  .alert-val.pend { color:var(--text-primary); }
+  .alert-val.ndesp { color:var(--st-ndesp); }
+  .alert-sub { font-size:11px;color:var(--text-muted);margin-top:4px; }
+  .alert-detail { font-size:10.5px;color:var(--text-secondary);margin-top:6px;font-family:'JetBrains Mono',monospace; }
+
+  /* STATE MESSAGES */
+  .status { font-size:11.5px;color:var(--text-muted);margin-bottom:10px; }
+  .status .dot { display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--text-muted);margin-right:6px;vertical-align:middle; }
+  .status.ok .dot { background:var(--accent); }
+  .status.load .dot { background:#fcd34d;animation:pulse 1s infinite; }
+  .status.err .dot { background:#f87171; }
+  .state-msg { text-align:center;padding:40px 20px;color:var(--text-muted);font-size:12px; }
+  .state-msg .spinner { display:inline-block;width:14px;height:14px;border:2px solid var(--accent);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle;margin-right:8px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* TABLA */
+  .section-title { font-size:13px;font-weight:600;color:var(--text-primary);margin:18px 0 10px;display:flex;align-items:center;gap:7px; }
+  .section-title .badge { background:var(--bg-input);color:var(--text-secondary);font-size:10px;padding:2px 8px;border-radius:10px;font-weight:500;letter-spacing:.3px;font-family:inherit; }
+  .table-wrap { background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);overflow:auto;max-height:500px; }
+  table { width:100%;border-collapse:collapse;font-size:12px; }
+  thead { position:sticky;top:0;background:var(--bg-card);z-index:1; }
+  th { text-align:left;padding:10px 12px;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);border-bottom:1px solid var(--border);font-weight:500;white-space:nowrap; }
+  th.num { text-align:right; }
+  td { padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text-primary); }
+  tbody tr:hover { background:var(--bg-hover);cursor:pointer; }
+  td.num { text-align:right;font-family:'JetBrains Mono',monospace; }
+  td.num-strong { font-weight:600; }
+
+  /* Estado pills */
+  .st-pill { display:inline-block;padding:2px 10px;border-radius:12px;font-size:10.5px;font-weight:500;letter-spacing:.3px;white-space:nowrap; }
+  .st-pill.conf  { background:var(--st-conf-bg); color:var(--st-conf); }
+  .st-pill.pend  { background:var(--st-pend-bg); color:var(--st-pend); }
+  .st-pill.rgo   { background:var(--st-rgo-bg);  color:var(--st-rgo); }
+  .st-pill.rev   { background:var(--st-rev-bg);  color:var(--st-rev); }
+  .st-pill.ndesp { background:var(--st-ndesp-bg);color:var(--st-ndesp); }
+
+  .row-rev   td { background:rgba(248,113,113,0.04); }
+  .row-rgo   td { background:rgba(251,146,60,0.03); }
+  .row-ndesp td { background:rgba(196,181,253,0.03); }
+
+  /* MODAL */
+  .modal-bg { position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;display:none;align-items:flex-start;justify-content:center;padding:50px 20px;overflow-y:auto; }
+  .modal-bg.on { display:flex; }
+  .modal-box { background:var(--bg-surface);border:1px solid var(--border-md);border-radius:var(--radius-lg);width:100%;max-width:1100px;max-height:calc(100vh - 100px);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5); }
+  .modal-hdr { padding:18px 24px;border-bottom:1px solid var(--border-md);display:flex;justify-content:space-between;align-items:flex-start;gap:14px; }
+  .modal-hdr h2 { margin:0;font-size:18px;color:var(--text-primary);font-weight:600; }
+  .modal-sub { font-size:11px;color:var(--text-muted);margin-top:3px;letter-spacing:.4px; }
+  .modal-close { background:transparent;border:1px solid var(--border-md);color:var(--text-secondary);width:32px;height:32px;border-radius:6px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center; }
+  .modal-close:hover { background:var(--bg-hover);color:var(--st-rev); }
+  .modal-body { flex:1;overflow-y:auto;padding:18px 24px; }
+  .modal-kpis { display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:18px; }
+  .modal-kpi { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px; }
+  .modal-kpi-lbl { font-size:9.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px; }
+  .modal-kpi-val { font-size:18px;font-weight:600;color:var(--text-primary);margin-top:3px; }
+  .modal-kpi-val.rev { color:var(--st-rev); }
+  .modal-kpi-val.rgo { color:var(--st-rgo); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="logo" href="m3link_dashboard_dark.html">
+    <div class="logo-box">R</div>
+    <div class="logo-name">REDTEC</div>
+  </a>
+  <div class="logo-sep"></div>
+  <div class="topbar-title"><span class="live-dot"></span>m3link · Transferencias x Cliente</div>
+  <div class="topbar-right">
+    <a class="back-btn" href="m3link_dashboard_dark.html">← Volver al panel</a>
+  </div>
+</div>
+
+<div class="main">
+
+  <div class="page-header">
+    <div>
+      <div class="page-title"><span class="alert-icon">⚠</span> Panel operativo · Transferencias por Cliente</div>
+      <div class="breadcrumb">Comercial › Gráficos transferencias › Transferencias clientes — gestión de los 30 días</div>
+    </div>
+  </div>
+
+  <!-- FILTROS -->
+  <div class="filters-card">
+    <div class="filters-row">
+      <span class="filter-lbl">Buscar últimos:</span>
+      <input type="number" id="dias-back" class="ctrl-num" value="60" min="30" max="365" step="15">
+      <span style="font-size:11.5px;color:var(--text-secondary)">días</span>
+
+      <span class="filter-lbl" style="margin-left:14px">Cliente:</span>
+      <select id="cliente-filter" class="ctrl-sel">
+        <option value="">Todos los clientes</option>
+      </select>
+
+      <span class="filter-lbl" style="margin-left:14px">Mostrar:</span>
+      <div class="seg" id="seg-modo">
+        <button class="seg-btn on" data-m="todos">Todos</button>
+        <button class="seg-btn" data-m="criticos">Solo críticos 🔴🟠</button>
+      </div>
+
+      <button id="btn-load" class="btn" onclick="cargarDatos()">🔄 Cargar / refrescar</button>
+      <button class="btn btn-sec" onclick="exportarExcel()">↓ Excel</button>
+    </div>
+  </div>
+
+  <div id="status" class="status"><span class="dot"></span><span id="status-txt">Presiona "Cargar / refrescar" para traer las operaciones de los últimos 60 días.</span></div>
+
+  <!-- BANNER DE ALERTAS OPERATIVAS -->
+  <div class="alerts-grid" id="alerts-grid" style="display:none">
+    <div class="alert-card rev">
+      <div class="alert-lbl">🔴 EN REVERSA</div>
+      <div class="alert-val rev" id="a-rev">—</div>
+      <div class="alert-sub">+30 días sin confirmar</div>
+      <div class="alert-detail" id="a-rev-det">— pallets · — clientes</div>
+    </div>
+    <div class="alert-card rgo">
+      <div class="alert-lbl">🟠 EN RIESGO</div>
+      <div class="alert-val rgo" id="a-rgo">—</div>
+      <div class="alert-sub">25-29 días sin confirmar</div>
+      <div class="alert-detail" id="a-rgo-det">— pallets · — clientes</div>
+    </div>
+    <div class="alert-card pend">
+      <div class="alert-lbl">⚪ PENDIENTES</div>
+      <div class="alert-val pend" id="a-pend">—</div>
+      <div class="alert-sub">&lt;25 días sin confirmar</div>
+      <div class="alert-detail" id="a-pend-det">— pallets · — clientes</div>
+    </div>
+    <div class="alert-card ndesp">
+      <div class="alert-lbl">🟣 SIN DESPACHO</div>
+      <div class="alert-val ndesp" id="a-ndesp">—</div>
+      <div class="alert-sub">requeridas no despachadas</div>
+      <div class="alert-detail" id="a-ndesp-det">— pallets · — clientes</div>
+    </div>
+  </div>
+
+  <!-- TABLA POR CLIENTE -->
+  <div id="seccion-clientes" style="display:none">
+    <div class="section-title">
+      Resumen por cliente
+      <span class="badge" id="badge-clientes">—</span>
+    </div>
+    <div class="table-wrap">
+      <table id="tabla-clientes">
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th class="num">Solicitada</th>
+            <th class="num">Despachada</th>
+            <th class="num">Confirmada</th>
+            <th class="num">⚪ Pend.</th>
+            <th class="num">🟠 Riesgo</th>
+            <th class="num">🔴 Reversa</th>
+            <th class="num">% Cumpl.</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-clientes"></tbody>
+      </table>
+    </div>
+    <div style="font-size:10.5px;color:var(--text-muted);margin-top:6px;text-align:center">
+      Click en una fila para ver detalle de operaciones del cliente.
+    </div>
+  </div>
+
+</div>
+
+<!-- MODAL DETALLE CLIENTE -->
+<div id="modal-cli" class="modal-bg" onclick="cerrarModal(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-hdr">
+      <div>
+        <h2 id="modal-cli-nombre">—</h2>
+        <div class="modal-sub" id="modal-cli-sub">—</div>
+      </div>
+      <button class="modal-close" onclick="cerrarModal()" title="Cerrar (Esc)">×</button>
+    </div>
+    <div class="modal-body" id="modal-cli-body"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+// ─────────────────────────────────────────────────────────────────────────
+// CONFIGURACIÓN API (mismo endpoint que m3link)
+// ─────────────────────────────────────────────────────────────────────────
+var isLocal  = (window.location.protocol === 'file:');
+var isDev    = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+var API_DIRECT = 'https://apirdt1.azurewebsites.net/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRangoFechas';
+var API_PROXY  = '/proxy/ops';
+
+// ─────────────────────────────────────────────────────────────────────────
+// REGLA DE NEGOCIO: 30 DÍAS
+// ─────────────────────────────────────────────────────────────────────────
+// - Se cuentan desde fechaDespacho (cuando sale del CD).
+// - Hoy = fecha actual del navegador.
+// - Una operación está:
+//     CONFIRMADA  → tiene fechaConfirmacion (cerrada, sin acción)
+//     PENDIENTE   → despachada, sin confirmar, <25 días desde despacho
+//     EN RIESGO   → despachada, sin confirmar, 25-29 días desde despacho
+//     EN REVERSA  → despachada, sin confirmar, +30 días desde despacho
+//     SIN DESPACHAR → tiene fechaRequerida pero no fechaDespacho (problema operativo distinto)
+// ─────────────────────────────────────────────────────────────────────────
+var ESTADOS = {
+  CONFIRMADA: 'CONFIRMADA',
+  PENDIENTE:  'PENDIENTE',
+  RIESGO:     'RIESGO',
+  REVERSA:    'REVERSA',
+  SIN_DESP:   'SIN_DESPACHAR'
+};
+
+// Estado y filtros
+var raw = [];
+var clienteFiltro = '';
+var modoMostrar   = 'todos';  // 'todos' | 'criticos'
+var resumenClientes = [];     // resultado calculado
+
+// Helpers
+var $ = function(id) { return document.getElementById(id); };
+
+function setStatus(tipo, msg) {
+  $('status').className = 'status ' + tipo;
+  $('status-txt').textContent = msg;
+}
+function fmtNum(n) {
+  if (n == null || isNaN(n)) return '—';
+  return Math.round(n).toLocaleString('es-CL');
+}
+function fmtFecha(s) {
+  if (!s) return '—';
+  var p = s.substring(0, 10).split('-');
+  return p[2] + '-' + p[1] + '-' + p[0];
+}
+// Días entre una fecha ISO y ahora
+function diasDesde(fechaIso) {
+  if (!fechaIso) return null;
+  var d = new Date(fechaIso.substring(0, 10) + 'T12:00:00');
+  var hoy = new Date();
+  hoy.setHours(12, 0, 0, 0);
+  return Math.floor((hoy - d) / 86400000);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// CARGA DE DATOS
+// ─────────────────────────────────────────────────────────────────────────
+async function cargarDatos() {
+  if (isLocal) {
+    setStatus('err', 'Abrí esta página desde el sitio publicado en Azure, no desde archivo local.');
+    return;
+  }
+
+  var diasBack = parseInt($('dias-back').value, 10) || 60;
+  if (diasBack < 30) { alert('Mínimo 30 días para cubrir el ciclo de reversa.'); return; }
+
+  // Calcular rango: últimos N días desde hoy
+  var hoy = new Date();
+  var atras = new Date(hoy.getTime() - diasBack * 86400000);
+  var d2 = hoy.toISOString().substring(0, 10);
+  var d1 = atras.toISOString().substring(0, 10);
+
+  var btn = $('btn-load');
+  btn.disabled = true; btn.textContent = 'Cargando...';
+  setStatus('load', 'Consultando últimos ' + diasBack + ' días (' + d1 + ' → ' + d2 + ')...');
+
+  try {
+    var url = (isDev ? API_DIRECT : API_PROXY) + '?fechaInicio=' + d1 + '&fechaFin=' + d2;
+    var res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + res.statusText);
+    var data = await res.json();
+    raw = Array.isArray(data) ? data : [data];
+
+    if (!raw.length) {
+      setStatus('err', 'Sin operaciones en los últimos ' + diasBack + ' días');
+      btn.disabled = false; btn.textContent = '🔄 Cargar / refrescar';
+      return;
+    }
+
+    setStatus('ok', raw.length.toLocaleString('es-CL') + ' operaciones cargadas · ' + d1 + ' → ' + d2 + ' · actualizado ' + new Date().toLocaleTimeString('es-CL'));
+
+    actualizarFiltroClientes();
+    procesarYRender();
+
+    $('alerts-grid').style.display = 'grid';
+    $('seccion-clientes').style.display = 'block';
+  } catch (e) {
+    console.error('[m3link]', e);
+    setStatus('err', 'Error: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '🔄 Cargar / refrescar';
+  }
+}
+
+function actualizarFiltroClientes() {
+  // Solo nos interesan clientes que aparecen como ORIGEN en transferencias
+  // (porque el flujo es: cliente pide transferir desde su stock al retail)
+  var clientes = {};
+  raw.forEach(function(r) {
+    var op = (r.operacion || '').toLowerCase();
+    if (op.indexOf('transfer') < 0) return;
+    var c = r.clienteOrigenStr;
+    if (c && c.trim()) clientes[c.trim()] = (clientes[c.trim()] || 0) + 1;
+  });
+
+  var sel = $('cliente-filter');
+  var prev = sel.value;
+  sel.innerHTML = '<option value="">Todos los clientes (' + Object.keys(clientes).length + ')</option>';
+  Object.keys(clientes).sort().forEach(function(c) {
+    sel.innerHTML += '<option value="' + c + '">' + c + ' (' + clientes[c] + ')</option>';
+  });
+  if (prev && clientes[prev]) sel.value = prev;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PROCESAMIENTO: clasificar cada op, agrupar por cliente
+// ─────────────────────────────────────────────────────────────────────────
+
+// Clasifica una operación según el estado de su confirmación
+function clasificarOp(r) {
+  // Si tiene confirmación → cerrada
+  if (r.fechaConfirmacion) return ESTADOS.CONFIRMADA;
+
+  // Si no tiene despacho → problema operativo de despacho
+  if (!r.fechaDespacho) return ESTADOS.SIN_DESP;
+
+  // Tiene despacho pero no confirmación: calcular días
+  var dias = diasDesde(r.fechaDespacho);
+  if (dias == null) return ESTADOS.PENDIENTE;
+  if (dias >= 30) return ESTADOS.REVERSA;
+  if (dias >= 25) return ESTADOS.RIESGO;
+  return ESTADOS.PENDIENTE;
+}
+
+// Solo operaciones de transferencia (excluye emisiones, retiros, devoluciones, etc.)
+function esTransferencia(r) {
+  var op = (r.operacion || '').toLowerCase();
+  return op.indexOf('transfer') >= 0 || op.indexOf('trans diferenciada') >= 0;
+}
+
+// Devuelve registros de transferencia filtrados por cliente
+function transferenciasFiltradas() {
+  return raw.filter(function(r) {
+    if (!esTransferencia(r)) return false;
+    if (clienteFiltro && (r.clienteOrigenStr || '').trim() !== clienteFiltro) return false;
+    return true;
+  });
+}
+
+// Agrupa transferencias por cliente y calcula totales por estado
+function agruparPorCliente() {
+  var datos = transferenciasFiltradas();
+  var mapa = {};
+  datos.forEach(function(r) {
+    var cli = (r.clienteOrigenStr || '').trim() || '(sin cliente)';
+    if (!mapa[cli]) {
+      mapa[cli] = {
+        cliente: cli,
+        sol: 0, desp: 0, conf: 0,
+        pend: 0, rgo: 0, rev: 0, ndesp: 0,
+        opsPend: 0, opsRgo: 0, opsRev: 0, opsNdesp: 0,
+        totalOps: 0,
+        ops: []
+      };
+    }
+    var c = mapa[cli];
+    var sol  = r.cantidadSolicitada || 0;
+    var desp = r.cantidadDespachada  || 0;
+    var conf = r.cantidadConfirmada  || 0;
+    c.sol += sol; c.desp += desp; c.conf += conf;
+    c.totalOps++;
+    c.ops.push(r);
+
+    var estado = clasificarOp(r);
+    // Cantidad "en juego" para alertas: usamos la solicitada/despachada según haya
+    var cantidad = desp || sol;
+    if (estado === ESTADOS.PENDIENTE) { c.pend += cantidad; c.opsPend++; }
+    else if (estado === ESTADOS.RIESGO)   { c.rgo  += cantidad; c.opsRgo++; }
+    else if (estado === ESTADOS.REVERSA)  { c.rev  += cantidad; c.opsRev++; }
+    else if (estado === ESTADOS.SIN_DESP) { c.ndesp += cantidad; c.opsNdesp++; }
+  });
+  return Object.values(mapa);
+}
+
+function calcularAlertasGlobales() {
+  // KPIs operativos: cuento ops y pallets en cada estado, sumando todos los clientes
+  var totalRev = { ops: 0, pallets: 0, clientes: new Set() };
+  var totalRgo = { ops: 0, pallets: 0, clientes: new Set() };
+  var totalPnd = { ops: 0, pallets: 0, clientes: new Set() };
+  var totalNDp = { ops: 0, pallets: 0, clientes: new Set() };
+
+  resumenClientes.forEach(function(c) {
+    if (c.opsRev > 0) { totalRev.ops += c.opsRev; totalRev.pallets += c.rev; totalRev.clientes.add(c.cliente); }
+    if (c.opsRgo > 0) { totalRgo.ops += c.opsRgo; totalRgo.pallets += c.rgo; totalRgo.clientes.add(c.cliente); }
+    if (c.opsPend > 0){ totalPnd.ops += c.opsPend;totalPnd.pallets += c.pend;totalPnd.clientes.add(c.cliente); }
+    if (c.opsNdesp> 0){ totalNDp.ops += c.opsNdesp;totalNDp.pallets += c.ndesp;totalNDp.clientes.add(c.cliente); }
+  });
+
+  $('a-rev').textContent = totalRev.ops;
+  $('a-rev-det').textContent = fmtNum(totalRev.pallets) + ' pallets · ' + totalRev.clientes.size + ' clientes';
+  $('a-rgo').textContent = totalRgo.ops;
+  $('a-rgo-det').textContent = fmtNum(totalRgo.pallets) + ' pallets · ' + totalRgo.clientes.size + ' clientes';
+  $('a-pend').textContent = totalPnd.ops;
+  $('a-pend-det').textContent = fmtNum(totalPnd.pallets) + ' pallets · ' + totalPnd.clientes.size + ' clientes';
+  $('a-ndesp').textContent = totalNDp.ops;
+  $('a-ndesp-det').textContent = fmtNum(totalNDp.pallets) + ' pallets · ' + totalNDp.clientes.size + ' clientes';
+}
+
+function renderTablaClientes() {
+  var tb = $('tbody-clientes');
+  // Filtro modo: si "criticos", solo clientes con riesgo o reversa
+  var lista = resumenClientes.filter(function(c) {
+    if (modoMostrar === 'criticos') return c.opsRgo > 0 || c.opsRev > 0;
+    return true;
+  });
+
+  // Ordenar: primero los más críticos, luego por volumen
+  lista.sort(function(a, b) {
+    if (b.opsRev !== a.opsRev) return b.opsRev - a.opsRev;
+    if (b.opsRgo !== a.opsRgo) return b.opsRgo - a.opsRgo;
+    return b.sol - a.sol;
+  });
+
+  $('badge-clientes').textContent = lista.length + ' cliente' + (lista.length === 1 ? '' : 's');
+
+  if (!lista.length) {
+    tb.innerHTML = '<tr><td colspan="8"><div class="state-msg">Sin clientes que coincidan con el filtro actual</div></td></tr>';
+    return;
+  }
+
+  tb.innerHTML = lista.map(function(c) {
+    var cumpl = c.sol > 0 ? (c.conf / c.sol * 100) : 0;
+    var cumplColor = cumpl >= 95 ? 'var(--st-conf)' : (cumpl >= 80 ? 'var(--st-rgo)' : 'var(--st-rev)');
+    var rowClass = c.opsRev > 0 ? 'row-rev' : (c.opsRgo > 0 ? 'row-rgo' : (c.opsNdesp > 0 ? 'row-ndesp' : ''));
+    return '<tr class="' + rowClass + '" onclick="abrirModalCliente(\'' + c.cliente.replace(/'/g, "\\'") + '\')">' +
+      '<td><strong>' + c.cliente + '</strong>' +
+        '<div style="font-size:10px;color:var(--text-muted)">' + c.totalOps + ' operaciones</div></td>' +
+      '<td class="num">' + fmtNum(c.sol) + '</td>' +
+      '<td class="num">' + fmtNum(c.desp) + '</td>' +
+      '<td class="num" style="color:var(--st-conf)">' + fmtNum(c.conf) + '</td>' +
+      '<td class="num" style="color:' + (c.opsPend ? 'var(--st-pend)' : 'var(--text-muted)') + '">' +
+        (c.opsPend ? c.opsPend + ' op · ' + fmtNum(c.pend) : '—') + '</td>' +
+      '<td class="num" style="color:' + (c.opsRgo ? 'var(--st-rgo)' : 'var(--text-muted)') + ';font-weight:' + (c.opsRgo?'600':'400') + '">' +
+        (c.opsRgo ? c.opsRgo + ' op · ' + fmtNum(c.rgo) : '—') + '</td>' +
+      '<td class="num" style="color:' + (c.opsRev ? 'var(--st-rev)' : 'var(--text-muted)') + ';font-weight:' + (c.opsRev?'600':'400') + '">' +
+        (c.opsRev ? c.opsRev + ' op · ' + fmtNum(c.rev) : '—') + '</td>' +
+      '<td class="num" style="color:' + cumplColor + '">' + cumpl.toFixed(1).replace('.', ',') + ' %</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function procesarYRender() {
+  resumenClientes = agruparPorCliente();
+  calcularAlertasGlobales();
+  renderTablaClientes();
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// MODAL: detalle por cliente
+// ─────────────────────────────────────────────────────────────────────────
+function abrirModalCliente(cli) {
+  var c = resumenClientes.find(function(x) { return x.cliente === cli; });
+  if (!c) return;
+
+  $('modal-cli-nombre').textContent = cli;
+  $('modal-cli-sub').textContent = c.totalOps + ' operaciones · ' +
+    fmtNum(c.sol) + ' solicitados · ' + fmtNum(c.conf) + ' confirmados';
+
+  // Separar ops por estado
+  var pendientes = [];  // pend + rgo + rev + ndesp (necesitan acción)
+  var confirmadas = [];
+
+  c.ops.forEach(function(r) {
+    var estado = clasificarOp(r);
+    if (estado === ESTADOS.CONFIRMADA) confirmadas.push(r);
+    else pendientes.push({ op: r, estado: estado });
+  });
+
+  // Ordenar pendientes: más críticos arriba (más días sin confirmar)
+  pendientes.sort(function(a, b) {
+    var orden = { REVERSA: 4, RIESGO: 3, PENDIENTE: 2, SIN_DESPACHAR: 1 };
+    if (orden[a.estado] !== orden[b.estado]) return orden[b.estado] - orden[a.estado];
+    var da = diasDesde(a.op.fechaDespacho || a.op.fechaRequerida) || 0;
+    var db = diasDesde(b.op.fechaDespacho || b.op.fechaRequerida) || 0;
+    return db - da;
+  });
+
+  // Ordenar confirmadas: más recientes arriba, máx 10
+  confirmadas.sort(function(a, b) {
+    return (b.fechaConfirmacion || '').localeCompare(a.fechaConfirmacion || '');
+  });
+  confirmadas = confirmadas.slice(0, 10);
+
+  // KPIs del modal
+  var html = '<div class="modal-kpis">' +
+    '<div class="modal-kpi"><div class="modal-kpi-lbl">🔴 En reversa</div><div class="modal-kpi-val rev">' + c.opsRev + '</div></div>' +
+    '<div class="modal-kpi"><div class="modal-kpi-lbl">🟠 En riesgo</div><div class="modal-kpi-val rgo">' + c.opsRgo + '</div></div>' +
+    '<div class="modal-kpi"><div class="modal-kpi-lbl">⚪ Pendientes</div><div class="modal-kpi-val">' + c.opsPend + '</div></div>' +
+    '<div class="modal-kpi"><div class="modal-kpi-lbl">🟣 Sin despacho</div><div class="modal-kpi-val">' + c.opsNdesp + '</div></div>' +
+    '<div class="modal-kpi"><div class="modal-kpi-lbl">✓ Confirmadas</div><div class="modal-kpi-val">' + (c.totalOps - pendientes.length) + '</div></div>' +
+  '</div>';
+
+  // Tabla operaciones que requieren acción
+  if (pendientes.length) {
+    html += '<div class="section-title" style="margin-top:10px">⚠ Operaciones que requieren acción <span class="badge">' + pendientes.length + '</span></div>';
+    html += '<div class="table-wrap" style="max-height:300px"><table><thead><tr>' +
+      '<th>F. Requerida</th><th>F. Despacho</th><th>Días sin conf.</th>' +
+      '<th class="num">Solic.</th><th class="num">Desp.</th>' +
+      '<th>Destino</th><th>Estado</th>' +
+    '</tr></thead><tbody>';
+    pendientes.forEach(function(p) {
+      var r = p.op;
+      var dias = r.fechaDespacho ? diasDesde(r.fechaDespacho) : null;
+      var pillClass = p.estado === 'REVERSA' ? 'rev' : (p.estado === 'RIESGO' ? 'rgo' : (p.estado === 'SIN_DESPACHAR' ? 'ndesp' : 'pend'));
+      var pillTxt = p.estado === 'REVERSA' ? '🔴 EN REVERSA' :
+                    p.estado === 'RIESGO'  ? '🟠 EN RIESGO' :
+                    p.estado === 'SIN_DESPACHAR' ? '🟣 SIN DESPACHO' : '⚪ PENDIENTE';
+      html += '<tr>' +
+        '<td>' + fmtFecha(r.fechaRequerida) + '</td>' +
+        '<td>' + fmtFecha(r.fechaDespacho) + '</td>' +
+        '<td class="num"' + (dias != null && dias >= 25 ? ' style="color:var(--st-rev);font-weight:600"' : '') + '>' +
+          (dias != null ? dias + ' días' : '—') + '</td>' +
+        '<td class="num">' + fmtNum(r.cantidadSolicitada) + '</td>' +
+        '<td class="num">' + fmtNum(r.cantidadDespachada) + '</td>' +
+        '<td>' + (r.clienteDestinoStr || '—') + '</td>' +
+        '<td><span class="st-pill ' + pillClass + '">' + pillTxt + '</span></td>' +
+      '</tr>';
+    });
+    html += '</tbody></table></div>';
+  } else {
+    html += '<div style="background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.3);border-radius:9px;padding:14px;text-align:center;color:var(--st-conf);margin-top:10px">' +
+      '✓ No hay operaciones que requieran acción para este cliente.</div>';
+  }
+
+  // Mini histórico: últimas 10 confirmadas
+  if (confirmadas.length) {
+    html += '<div class="section-title" style="margin-top:18px">Últimas ' + confirmadas.length + ' transferencias confirmadas</div>';
+    html += '<div class="table-wrap" style="max-height:300px"><table><thead><tr>' +
+      '<th>F. Requerida</th><th>F. Despacho</th><th>F. Confirmada</th>' +
+      '<th class="num">Solic.</th><th class="num">Desp.</th><th class="num">Conf.</th>' +
+      '<th>Destino</th>' +
+    '</tr></thead><tbody>';
+    confirmadas.forEach(function(r) {
+      html += '<tr>' +
+        '<td>' + fmtFecha(r.fechaRequerida) + '</td>' +
+        '<td>' + fmtFecha(r.fechaDespacho) + '</td>' +
+        '<td>' + fmtFecha(r.fechaConfirmacion) + '</td>' +
+        '<td class="num">' + fmtNum(r.cantidadSolicitada) + '</td>' +
+        '<td class="num">' + fmtNum(r.cantidadDespachada) + '</td>' +
+        '<td class="num" style="color:var(--st-conf)">' + fmtNum(r.cantidadConfirmada) + '</td>' +
+        '<td>' + (r.clienteDestinoStr || '—') + '</td>' +
+      '</tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+
+  $('modal-cli-body').innerHTML = html;
+  $('modal-cli').classList.add('on');
+}
+
+function cerrarModal(ev) {
+  if (ev && ev.target.id !== 'modal-cli' && ev.type === 'click') return;
+  $('modal-cli').classList.remove('on');
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') cerrarModal();
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// EXCEL
+// ─────────────────────────────────────────────────────────────────────────
+function exportarExcel() {
+  if (!resumenClientes.length) { alert('Primero carga datos'); return; }
+  if (typeof XLSX === 'undefined') { alert('SheetJS no cargado'); return; }
+
+  var resumen = resumenClientes.map(function(c) {
+    var cumpl = c.sol > 0 ? (c.conf / c.sol * 100) : 0;
+    return {
+      'Cliente':         c.cliente,
+      'Total ops':       c.totalOps,
+      'Solicitada':      c.sol,
+      'Despachada':      c.desp,
+      'Confirmada':      c.conf,
+      'Pend. ops':       c.opsPend,
+      'Pend. pallets':   c.pend,
+      'Riesgo ops':      c.opsRgo,
+      'Riesgo pallets':  c.rgo,
+      'Reversa ops':     c.opsRev,
+      'Reversa pallets': c.rev,
+      'SinDesp ops':     c.opsNdesp,
+      'SinDesp pallets': c.ndesp,
+      '% Cumplimiento':  cumpl.toFixed(2) + ' %'
+    };
+  });
+
+  // Detalle de TODAS las operaciones que requieren acción
+  var detalle = [];
+  resumenClientes.forEach(function(c) {
+    c.ops.forEach(function(r) {
+      var estado = clasificarOp(r);
+      if (estado === ESTADOS.CONFIRMADA) return;
+      var dias = r.fechaDespacho ? diasDesde(r.fechaDespacho) : null;
+      detalle.push({
+        'Cliente':       c.cliente,
+        'F. Requerida':  fmtFecha(r.fechaRequerida),
+        'F. Despacho':   fmtFecha(r.fechaDespacho),
+        'F. Confirmación': fmtFecha(r.fechaConfirmacion),
+        'Días sin conf.': dias != null ? dias : '',
+        'Solicitada':    r.cantidadSolicitada || 0,
+        'Despachada':    r.cantidadDespachada || 0,
+        'Confirmada':    r.cantidadConfirmada || 0,
+        'Destino':       r.clienteDestinoStr || '',
+        'Operación':     r.operacion || '',
+        'Estado':        estado
+      });
+    });
+  });
+
+  var wb = XLSX.utils.book_new();
+  var wsR = XLSX.utils.json_to_sheet(resumen);
+  wsR['!cols'] = [{wch:30},{wch:10},{wch:13},{wch:13},{wch:13},{wch:11},{wch:13},{wch:11},{wch:13},{wch:11},{wch:13},{wch:11},{wch:13},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, wsR, 'Resumen clientes');
+
+  if (detalle.length) {
+    var wsD = XLSX.utils.json_to_sheet(detalle);
+    wsD['!cols'] = [{wch:30},{wch:13},{wch:13},{wch:13},{wch:13},{wch:11},{wch:11},{wch:11},{wch:30},{wch:25},{wch:14}];
+    XLSX.utils.book_append_sheet(wb, wsD, 'Operaciones pendientes');
+  }
+
+  var fechaStr = new Date().toISOString().substring(0, 10);
+  XLSX.writeFile(wb, 'transferencias_clientes_' + fechaStr + '.xlsx');
+  setStatus('ok', '✓ Excel descargado');
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// EVENT LISTENERS
+// ─────────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', function() {
+  // Botones de modo
+  document.querySelectorAll('#seg-modo .seg-btn').forEach(function(b) {
+    b.addEventListener('click', function() {
+      document.querySelectorAll('#seg-modo .seg-btn').forEach(function(x) { x.classList.remove('on'); });
+      b.classList.add('on');
+      modoMostrar = b.getAttribute('data-m');
+      if (raw.length) renderTablaClientes();
+    });
+  });
+
+  // Cambio de cliente
+  $('cliente-filter').addEventListener('change', function() {
+    clienteFiltro = this.value;
+    if (raw.length) procesarYRender();
+  });
+});
+</script>
+
+</body>
+</html>

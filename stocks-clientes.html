@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stocks · m3link</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg-page:       #0f1117;
+    --bg-surface:    #181b23;
+    --bg-card:       #1e222d;
+    --bg-input:      #252932;
+    --bg-hover:      #252d3a;
+    --bg-active:     #1a2a1f;
+    --bg-row-alt:    #1a1d25;
+    --border:        rgba(255,255,255,0.07);
+    --border-md:     rgba(255,255,255,0.12);
+    --text-primary:  #e8eaf0;
+    --text-secondary:#9da3b4;
+    --text-muted:    #5a6070;
+    --accent:        #4ade80;
+    --accent-dim:    rgba(74,222,128,0.15);
+    --red-logo:      #C0170C;
+    --c-cli: #60a5fa;
+    --c-ret: #c4b5fd;
+    --c-pos: #4ade80;
+    --c-neg: #f87171;
+    --c-warn: #fcd34d;
+    --radius-sm:6px; --radius-md:9px; --radius-lg:13px;
+  }
+  html,body { height:100%; font-family:'Inter',-apple-system,sans-serif; font-size:13px; background:var(--bg-page); color:var(--text-primary); -webkit-font-smoothing:antialiased; }
+
+  /* TOPBAR */
+  .topbar { position:fixed;top:0;left:0;right:0;z-index:100;height:50px;background:var(--bg-surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1.25rem;gap:12px; }
+  .logo { display:flex;align-items:center;gap:9px;text-decoration:none;color:inherit; }
+  .logo-box { width:27px;height:27px;border-radius:6px;background:var(--red-logo);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:12px; }
+  .logo-name { font-weight:600;font-size:13.5px;color:var(--text-primary); }
+  .logo-sep { width:1px;height:18px;background:var(--border-md);margin:0 6px; }
+  .topbar-title { font-size:12.5px;color:var(--text-secondary);display:flex;align-items:center;gap:7px; }
+  .live-dot { width:7px;height:7px;background:var(--accent);border-radius:50%;animation:pulse 2.5s ease-in-out infinite;box-shadow:0 0 6px var(--accent); }
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .topbar-right { margin-left:auto;display:flex;align-items:center;gap:10px; }
+  .back-btn { font-size:11.5px;color:var(--text-secondary);text-decoration:none;padding:5px 11px;border:1px solid var(--border-md);border-radius:6px;transition:all .15s; }
+  .back-btn:hover { color:var(--text-primary);background:var(--bg-hover); }
+
+  /* MAIN */
+  .main { padding: 70px 1.5rem 2rem; max-width: 1500px; margin: 0 auto; }
+  .page-header { display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1rem;gap:12px;flex-wrap:wrap; }
+  .page-title { font-size:18px;font-weight:600;color:var(--text-primary); }
+  .breadcrumb { font-size:11.5px;color:var(--text-muted);margin-top:4px; }
+
+  /* FILTROS */
+  .filters-card { background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:14px; }
+  .filters-row { display:flex;flex-wrap:wrap;gap:10px;align-items:center; }
+  .filter-lbl { font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;font-weight:500;margin-right:4px; }
+  .ctrl-text, .ctrl-sel { background:var(--bg-input);border:1px solid var(--border-md);color:var(--text-primary);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit;outline:none; }
+  .ctrl-text { min-width:200px; }
+  .ctrl-sel  { min-width:180px; }
+  .ctrl-text:focus, .ctrl-sel:focus { border-color:var(--accent); }
+
+  .btn { background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);padding:6px 16px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .15s; }
+  .btn:hover:not(:disabled) { background:var(--accent);color:#0f1117; }
+  .btn:disabled { opacity:.5;cursor:not-allowed; }
+  .btn-sec { background:var(--bg-input);border:1px solid var(--border-md);color:var(--text-secondary); }
+  .btn-sec:hover { background:var(--bg-hover);color:var(--text-primary); }
+
+  .seg { display:inline-flex;background:var(--bg-input);border:1px solid var(--border-md);border-radius:7px;padding:2px;gap:2px; }
+  .seg-btn { background:transparent;border:none;color:var(--text-secondary);padding:6px 14px;font-size:11.5px;font-weight:500;cursor:pointer;border-radius:5px;font-family:inherit;transition:all .15s;white-space:nowrap; }
+  .seg-btn:hover { color:var(--text-primary); }
+  .seg-btn.on { background:var(--accent);color:#0f1117;font-weight:600; }
+  .seg-btn.cli.on { background:var(--c-cli);color:#0f1117; }
+  .seg-btn.ret.on { background:var(--c-ret);color:#0f1117; }
+
+  /* STATUS */
+  .status { font-size:11.5px;color:var(--text-muted);margin-bottom:10px; }
+  .status .dot { display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--text-muted);margin-right:6px;vertical-align:middle; }
+  .status.ok .dot { background:var(--accent); }
+  .status.load .dot { background:#fcd34d;animation:pulse 1s infinite; }
+  .status.err .dot { background:#f87171; }
+  .status.cache .dot { background:var(--c-cli); }
+  .state-msg { text-align:center;padding:40px 20px;color:var(--text-muted);font-size:12px; }
+  .state-msg .spinner { display:inline-block;width:14px;height:14px;border:2px solid var(--accent);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle;margin-right:8px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* KPIs */
+  .kpis { display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:14px; }
+  .kpi { background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:14px 16px; }
+  .kpi-lbl { font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px; }
+  .kpi-val { font-size:24px;font-weight:600;color:var(--text-primary); }
+  .kpi-val.cli { color:var(--c-cli); }
+  .kpi-val.ret { color:var(--c-ret); }
+  .kpi-val.pos { color:var(--c-pos); }
+  .kpi-sub { font-size:10.5px;color:var(--text-muted);margin-top:3px; }
+
+  /* TABLA EXPANDIBLE */
+  .section-title { font-size:13px;font-weight:600;color:var(--text-primary);margin:18px 0 10px;display:flex;align-items:center;gap:7px; }
+  .section-title .badge { background:var(--bg-input);color:var(--text-secondary);font-size:10px;padding:2px 8px;border-radius:10px;font-weight:500;letter-spacing:.3px; }
+  .table-wrap { background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);overflow:auto;max-height:600px; }
+  table { width:100%;border-collapse:collapse;font-size:12px; }
+  thead { position:sticky;top:0;background:var(--bg-card);z-index:1; }
+  th { text-align:left;padding:10px 12px;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);border-bottom:1px solid var(--border);font-weight:500;white-space:nowrap;cursor:pointer;user-select:none; }
+  th.num { text-align:right; }
+  th:hover { color:var(--text-primary); }
+  td { padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text-primary); }
+  td.num { text-align:right;font-family:'JetBrains Mono',monospace; }
+  tbody tr:hover { background:var(--bg-hover); }
+
+  /* Filas grupo (cliente padre) */
+  tr.row-cli { background:var(--bg-card);cursor:pointer; }
+  tr.row-cli td { font-weight:600;color:var(--text-primary); }
+  tr.row-cli td:first-child { padding-left:8px; }
+  tr.row-cli .caret { display:inline-block;width:14px;color:var(--text-muted);transition:transform .15s; }
+  tr.row-cli.open .caret { transform:rotate(90deg);color:var(--accent); }
+
+  /* Filas hijas (bodega/producto) */
+  tr.row-bod td { padding-left:32px;color:var(--text-secondary);font-size:11.5px;background:var(--bg-row-alt); }
+  tr.row-bod td:first-child { color:var(--text-secondary); }
+  tr.row-bod.hidden { display:none; }
+
+  /* Sort indicators */
+  .sort-asc::after  { content:' ↑';color:var(--accent); }
+  .sort-desc::after { content:' ↓';color:var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="logo" href="m3link_dashboard_dark.html">
+    <div class="logo-box">R</div>
+    <div class="logo-name">REDTEC</div>
+  </a>
+  <div class="logo-sep"></div>
+  <div class="topbar-title"><span class="live-dot"></span>m3link · Stocks</div>
+  <div class="topbar-right">
+    <a class="back-btn" href="m3link_dashboard_dark.html">← Volver al panel</a>
+  </div>
+</div>
+
+<div class="main">
+
+  <div class="page-header">
+    <div>
+      <div class="page-title">📦 Stock actual por cliente y retail</div>
+      <div class="breadcrumb">Comercial › Stocks SAP › Stock actual — calculado desde STOCKHISTCLIENTE</div>
+    </div>
+  </div>
+
+  <!-- FILTROS -->
+  <div class="filters-card">
+    <div class="filters-row">
+      <span class="filter-lbl">Vista:</span>
+      <div class="seg" id="seg-tipo">
+        <button class="seg-btn cli on" data-t="CLIENTES">🏭 Clientes</button>
+        <button class="seg-btn ret"    data-t="RETAIL">🏪 Retail</button>
+      </div>
+
+      <span class="filter-lbl" style="margin-left:14px">Buscar:</span>
+      <input type="text" id="busca" class="ctrl-text" placeholder="Nombre cliente, bodega, producto...">
+
+      <button id="btn-load" class="btn" onclick="cargarDatos(false)">🔄 Cargar</button>
+      <button class="btn btn-sec" onclick="cargarDatos(true)" title="Forzar recarga ignorando cache">↻ Refrescar</button>
+      <button class="btn btn-sec" onclick="exportarExcel()">↓ Excel</button>
+    </div>
+  </div>
+
+  <div id="status" class="status"><span class="dot"></span><span id="status-txt">Presiona "Cargar" para obtener stock actual desde SAP. La primera carga puede tardar 20-30 seg (calcula desde 2023). Luego queda en cache 24h.</span></div>
+
+  <!-- KPIs -->
+  <div class="kpis" id="kpis" style="display:none">
+    <div class="kpi"><div class="kpi-lbl">Total pallets stock</div><div class="kpi-val pos" id="k-total">—</div><div class="kpi-sub" id="k-total-sub">—</div></div>
+    <div class="kpi"><div class="kpi-lbl">Clientes/Retails únicos</div><div class="kpi-val" id="k-unicos">—</div><div class="kpi-sub" id="k-unicos-sub">Con stock en bodegas</div></div>
+    <div class="kpi"><div class="kpi-lbl">Bodegas con stock</div><div class="kpi-val" id="k-bodegas">—</div><div class="kpi-sub">Ubicaciones distintas</div></div>
+    <div class="kpi"><div class="kpi-lbl">Combinaciones cli/bod/prod</div><div class="kpi-val" id="k-combos">—</div><div class="kpi-sub">Filas con stock != 0</div></div>
+  </div>
+
+  <!-- TABLA -->
+  <div id="seccion-tabla" style="display:none">
+    <div class="section-title">
+      <span id="tabla-titulo">Detalle por cliente</span>
+      <span class="badge" id="badge-tabla">—</span>
+    </div>
+    <div class="table-wrap">
+      <table id="tabla">
+        <thead>
+          <tr>
+            <th data-sort="nombre"  style="min-width:280px">Cliente</th>
+            <th class="num" data-sort="stock">Pallets stock</th>
+            <th class="num" data-sort="bodegas"># Bodegas</th>
+            <th class="num" data-sort="entradas">Total entradas</th>
+            <th class="num" data-sort="salidas">Total salidas</th>
+            <th class="num" data-sort="movs"># Movimientos</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div style="font-size:10.5px;color:var(--text-muted);margin-top:6px;text-align:center">
+      Click en una fila para expandir el detalle de bodegas y productos.
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+// ─────────────────────────────────────────────────────────────────────────
+// CONFIGURACIÓN
+// ─────────────────────────────────────────────────────────────────────────
+var isLocal  = (window.location.protocol === 'file:');
+var API_PROXY = '/api/sap-stock-proxy';
+
+// Cache localStorage: stock actual se considera válido 24 horas
+var CACHE_KEY = 'sap_stock_actual_v1';
+var CACHE_TTL_MS = 24 * 3600 * 1000;
+
+// Estado
+var raw = [];           // todas las filas crudas del backend (todas las combinaciones con stock != 0)
+var tipoActivo = 'CLIENTES';   // 'CLIENTES' | 'RETAIL'
+var sortKey = 'stock';
+var sortDir = 'desc';
+
+// Helpers
+var $ = function(id) { return document.getElementById(id); };
+
+function setStatus(tipo, msg) {
+  $('status').className = 'status ' + tipo;
+  $('status-txt').textContent = msg;
+}
+function fmtNum(n) {
+  if (n == null || isNaN(n)) return '—';
+  return Math.round(n).toLocaleString('es-CL');
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// CACHE en localStorage
+// ─────────────────────────────────────────────────────────────────────────
+function cacheGet() {
+  try {
+    var s = localStorage.getItem(CACHE_KEY);
+    if (!s) return null;
+    var obj = JSON.parse(s);
+    if (!obj.savedAt || Date.now() - obj.savedAt > CACHE_TTL_MS) return null;
+    return obj;
+  } catch (e) { return null; }
+}
+function cacheSet(items) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+      savedAt: Date.now(),
+      items: items
+    }));
+  } catch (e) {
+    console.warn('[Stocks] Cache lleno:', e.message);
+  }
+}
+function cacheClear() {
+  try { localStorage.removeItem(CACHE_KEY); } catch (e) {}
+}
+function fmtTimeAgo(ts) {
+  var diff = Date.now() - ts;
+  var min = Math.floor(diff / 60000);
+  if (min < 1) return 'recién';
+  if (min < 60) return 'hace ' + min + ' min';
+  var hr = Math.floor(min / 60);
+  if (hr < 24) return 'hace ' + hr + ' h';
+  return 'hace ' + Math.floor(hr / 24) + ' días';
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// CARGA DE DATOS
+// ─────────────────────────────────────────────────────────────────────────
+async function cargarDatos(forzarRefresh) {
+  if (isLocal) {
+    setStatus('err', 'Abrí esta página desde el sitio publicado, no desde archivo local.');
+    return;
+  }
+
+  // Si hay cache válido y no forzaron refresh → usar cache
+  if (!forzarRefresh) {
+    var cache = cacheGet();
+    if (cache) {
+      raw = cache.items;
+      setStatus('cache', '✓ ' + raw.length + ' combinaciones desde cache (' + fmtTimeAgo(cache.savedAt) + '). Click "↻ Refrescar" para actualizar.');
+      procesarYRender();
+      return;
+    }
+  }
+
+  var btn = $('btn-load');
+  btn.disabled = true; btn.textContent = 'Cargando...';
+  setStatus('load', 'Consultando SAP (puede tardar 20-30 seg, calcula stock desde 2023)...');
+
+  try {
+    var url = API_PROXY + '?modo=actual';
+    var res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    var data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Error desconocido del proxy');
+
+    raw = data.items || [];
+    cacheSet(raw);
+
+    var seg = Math.round((data.tomo_ms || 0) / 1000);
+    setStatus('ok', '✓ ' + raw.length + ' combinaciones cargadas · ' + (data.movimientos_procesados || 0).toLocaleString('es-CL') + ' movimientos procesados · ' + seg + ' seg');
+
+    procesarYRender();
+  } catch (e) {
+    console.error('[Stocks]', e);
+    setStatus('err', 'Error: ' + (e.message || e));
+  } finally {
+    btn.disabled = false; btn.textContent = '🔄 Cargar';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PROCESAMIENTO Y RENDER
+// ─────────────────────────────────────────────────────────────────────────
+
+// Filtra raw por tipo (CLIENTES/RETAIL) y búsqueda
+function filtrarRaw() {
+  var q = ($('busca').value || '').toLowerCase().trim();
+  return raw.filter(function(r) {
+    if (r.cliente !== tipoActivo) return false;
+    if (q) {
+      var blob = ((r.nombre || '') + ' ' + (r.bodega || '') + ' ' + (r.descripcion || '') + ' ' + (r.producto || '')).toLowerCase();
+      if (blob.indexOf(q) < 0) return false;
+    }
+    return true;
+  });
+}
+
+// Agrupa por cliente y devuelve array {nombre, stock, bodegas:[], ...}
+function agruparPorCliente(filas) {
+  var mapa = {};
+  filas.forEach(function(r) {
+    var cli = r.nombre || '(sin nombre)';
+    if (!mapa[cli]) {
+      mapa[cli] = {
+        nombre: cli,
+        stock: 0,
+        entradas: 0,
+        salidas: 0,
+        movs: 0,
+        bodegasMap: {},  // bodega → { stock, entradas, salidas, productos: [] }
+      };
+    }
+    mapa[cli].stock += r.stock;
+    mapa[cli].entradas += r.entradas;
+    mapa[cli].salidas += r.salidas;
+    mapa[cli].movs += r.movimientos;
+
+    // Sub-agrupación por bodega
+    var keyBod = r.bodega + '||' + r.descripcion;
+    if (!mapa[cli].bodegasMap[keyBod]) {
+      mapa[cli].bodegasMap[keyBod] = {
+        bodega: r.bodega,
+        descripcion: r.descripcion,
+        stock: 0,
+        entradas: 0,
+        salidas: 0,
+        movs: 0,
+        productos: []
+      };
+    }
+    mapa[cli].bodegasMap[keyBod].stock    += r.stock;
+    mapa[cli].bodegasMap[keyBod].entradas += r.entradas;
+    mapa[cli].bodegasMap[keyBod].salidas  += r.salidas;
+    mapa[cli].bodegasMap[keyBod].movs     += r.movimientos;
+    mapa[cli].bodegasMap[keyBod].productos.push({
+      producto: r.producto,
+      stock: r.stock,
+      entradas: r.entradas,
+      salidas: r.salidas,
+      movs: r.movimientos
+    });
+  });
+
+  // Convertir bodegasMap a array y ordenar
+  var resultado = Object.values(mapa).map(function(c) {
+    var bodegas = Object.values(c.bodegasMap);
+    bodegas.sort(function(a, b) { return b.stock - a.stock; });
+    bodegas.forEach(function(b) {
+      b.productos.sort(function(a, b) { return b.stock - a.stock; });
+    });
+    return {
+      nombre: c.nombre,
+      stock: c.stock,
+      entradas: c.entradas,
+      salidas: c.salidas,
+      movs: c.movs,
+      bodegas: bodegas,
+      bodegasCount: bodegas.length
+    };
+  });
+
+  return resultado;
+}
+
+function calcularKPIs(filas, agrupado) {
+  var totalStock = 0, totalEntradas = 0, totalSalidas = 0;
+  filas.forEach(function(r) {
+    totalStock += r.stock;
+    totalEntradas += r.entradas;
+    totalSalidas += r.salidas;
+  });
+  var bodegasUnicas = new Set();
+  filas.forEach(function(r) { bodegasUnicas.add(r.bodega); });
+
+  $('k-total').textContent = fmtNum(totalStock);
+  $('k-total-sub').textContent = 'Σ entradas - Σ salidas históricas';
+  $('k-unicos').textContent = agrupado.length;
+  $('k-unicos-sub').textContent = (tipoActivo === 'CLIENTES' ? 'Clientes' : 'Retails') + ' con stock vigente';
+  $('k-bodegas').textContent = bodegasUnicas.size;
+  $('k-combos').textContent = filas.length;
+}
+
+function renderTabla(agrupado) {
+  $('tabla-titulo').textContent = (tipoActivo === 'CLIENTES' ? 'Detalle por cliente' : 'Detalle por retail');
+  $('badge-tabla').textContent = agrupado.length + (tipoActivo === 'CLIENTES' ? ' clientes' : ' retails');
+
+  // Ordenar
+  agrupado.sort(function(a, b) {
+    var av = a[sortKey], bv = b[sortKey];
+    if (sortKey === 'nombre') {
+      return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+    }
+    if (sortKey === 'bodegas') { av = a.bodegasCount; bv = b.bodegasCount; }
+    return sortDir === 'asc' ? av - bv : bv - av;
+  });
+
+  // Render
+  var tb = $('tbody');
+  if (!agrupado.length) {
+    tb.innerHTML = '<tr><td colspan="6"><div class="state-msg">Sin datos para los filtros aplicados</div></td></tr>';
+    return;
+  }
+
+  var html = '';
+  agrupado.forEach(function(c, idx) {
+    var rowId = 'cli-' + idx;
+    html += '<tr class="row-cli" id="row-' + rowId + '" onclick="toggleExp(\'' + rowId + '\')">' +
+      '<td><span class="caret">▶</span> ' + c.nombre + '</td>' +
+      '<td class="num"><strong>' + fmtNum(c.stock) + '</strong></td>' +
+      '<td class="num">' + c.bodegasCount + '</td>' +
+      '<td class="num">' + fmtNum(c.entradas) + '</td>' +
+      '<td class="num">' + fmtNum(c.salidas) + '</td>' +
+      '<td class="num">' + c.movs.toLocaleString('es-CL') + '</td>' +
+    '</tr>';
+
+    // Filas hijas (bodegas)
+    c.bodegas.forEach(function(b, bidx) {
+      var bRowId = rowId + '-b' + bidx;
+      html += '<tr class="row-bod hidden" data-parent="' + rowId + '">' +
+        '<td>📦 ' + b.bodega + (b.descripcion && b.descripcion !== b.bodega ? ' — ' + b.descripcion : '') +
+          ' <span style="color:var(--text-muted);font-size:10px">(' + b.productos.length + ' producto' + (b.productos.length===1?'':'s') + ')</span></td>' +
+        '<td class="num">' + fmtNum(b.stock) + '</td>' +
+        '<td class="num">—</td>' +
+        '<td class="num">' + fmtNum(b.entradas) + '</td>' +
+        '<td class="num">' + fmtNum(b.salidas) + '</td>' +
+        '<td class="num">' + b.movs.toLocaleString('es-CL') + '</td>' +
+      '</tr>';
+    });
+  });
+  tb.innerHTML = html;
+
+  // Sort indicators
+  document.querySelectorAll('th[data-sort]').forEach(function(th) {
+    th.classList.remove('sort-asc', 'sort-desc');
+    if (th.getAttribute('data-sort') === sortKey) {
+      th.classList.add(sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+    }
+  });
+}
+
+function toggleExp(rowId) {
+  var row = $('row-' + rowId);
+  if (!row) return;
+  row.classList.toggle('open');
+  var isOpen = row.classList.contains('open');
+  document.querySelectorAll('tr.row-bod[data-parent="' + rowId + '"]').forEach(function(r) {
+    if (isOpen) r.classList.remove('hidden');
+    else r.classList.add('hidden');
+  });
+}
+
+function procesarYRender() {
+  var filas = filtrarRaw();
+  var agrupado = agruparPorCliente(filas);
+  calcularKPIs(filas, agrupado);
+  renderTabla(agrupado);
+  $('kpis').style.display = 'grid';
+  $('seccion-tabla').style.display = 'block';
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// EXCEL EXPORT
+// ─────────────────────────────────────────────────────────────────────────
+function exportarExcel() {
+  if (!raw.length) { alert('Primero carga datos.'); return; }
+  if (typeof XLSX === 'undefined') { alert('SheetJS no cargado.'); return; }
+
+  var filas = filtrarRaw();
+  var agrupado = agruparPorCliente(filas);
+
+  // Hoja 1: Resumen por cliente/retail
+  var resumen = agrupado.map(function(c) {
+    return {
+      'Cliente/Retail': c.nombre,
+      'Pallets stock':  c.stock,
+      'Bodegas':        c.bodegasCount,
+      'Total entradas': c.entradas,
+      'Total salidas':  c.salidas,
+      'Movimientos':    c.movs
+    };
+  });
+
+  // Hoja 2: Detalle (1 fila por combinación cliente+bodega+producto)
+  var detalle = filas.map(function(r) {
+    return {
+      'Tipo':         r.cliente,
+      'Cliente':      r.nombre,
+      'Bodega':       r.bodega,
+      'Descripción':  r.descripcion,
+      'Producto':     r.producto,
+      'Stock pallets':r.stock,
+      'Entradas':     r.entradas,
+      'Salidas':      r.salidas,
+      'Movimientos':  r.movimientos
+    };
+  });
+
+  var wb = XLSX.utils.book_new();
+
+  var wsR = XLSX.utils.json_to_sheet(resumen);
+  wsR['!cols'] = [{wch:35},{wch:14},{wch:10},{wch:14},{wch:14},{wch:13}];
+  XLSX.utils.book_append_sheet(wb, wsR, 'Resumen');
+
+  var wsD = XLSX.utils.json_to_sheet(detalle);
+  wsD['!cols'] = [{wch:10},{wch:25},{wch:25},{wch:30},{wch:18},{wch:13},{wch:13},{wch:13},{wch:13}];
+  XLSX.utils.book_append_sheet(wb, wsD, 'Detalle');
+
+  var fechaStr = new Date().toISOString().substring(0, 10);
+  var nombreArchivo = 'stocks_' + tipoActivo.toLowerCase() + '_' + fechaStr + '.xlsx';
+  XLSX.writeFile(wb, nombreArchivo);
+  setStatus('ok', '✓ Excel descargado: ' + nombreArchivo);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// EVENT LISTENERS
+// ─────────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', function() {
+  // Botones tipo (Clientes vs Retail)
+  document.querySelectorAll('#seg-tipo .seg-btn').forEach(function(b) {
+    b.addEventListener('click', function() {
+      document.querySelectorAll('#seg-tipo .seg-btn').forEach(function(x) { x.classList.remove('on'); });
+      b.classList.add('on');
+      tipoActivo = b.getAttribute('data-t');
+      if (raw.length) procesarYRender();
+    });
+  });
+
+  // Buscador (debounce 200ms)
+  var buscaTimer = null;
+  $('busca').addEventListener('input', function() {
+    clearTimeout(buscaTimer);
+    buscaTimer = setTimeout(function() {
+      if (raw.length) procesarYRender();
+    }, 200);
+  });
+
+  // Sort de columnas
+  document.querySelectorAll('th[data-sort]').forEach(function(th) {
+    th.addEventListener('click', function() {
+      var k = th.getAttribute('data-sort');
+      if (sortKey === k) sortDir = (sortDir === 'asc' ? 'desc' : 'asc');
+      else { sortKey = k; sortDir = (k === 'nombre' ? 'asc' : 'desc'); }
+      if (raw.length) procesarYRender();
+    });
+  });
+
+  // Auto-cargar si hay cache válido
+  var cache = cacheGet();
+  if (cache) {
+    raw = cache.items;
+    setStatus('cache', '✓ ' + raw.length + ' combinaciones desde cache (' + fmtTimeAgo(cache.savedAt) + '). Click "↻ Refrescar" para actualizar.');
+    procesarYRender();
+  }
+});
+
+// Exponer toggleExp globalmente para el onclick inline
+window.toggleExp = toggleExp;
+</script>
+
+</body>
+</html>

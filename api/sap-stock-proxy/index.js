@@ -2,46 +2,39 @@
 // SAP-STOCK-PROXY · Azure Function (Node.js 18+)
 // ─────────────────────────────────────────────────────────────────────────
 // Proxy entre el dashboard m3link y SAP B1 Service Layer.
+// Vista usada: STOCKHISTCLIENTE (movimientos históricos por cliente/bodega/producto)
 //
-// Maneja:
-//   1. Login a SAP B1 → obtiene B1SESSION cookie
-//   2. Cacheo de la sesión (válida ~30 min, se reutiliza entre requests)
-//   3. Re-login automático si la sesión expiró (HTTP 401)
-//   4. Query a STOCKHISTCLIENTE con filtros opcionales
-//   5. Paginación de OData (@odata.nextLink) para traer todos los registros
-//   6. Manejo de SSL autofirmado (común en SAP B1 instalaciones internas)
+// 3 MODOS DE OPERACIÓN:
+//   ?modo=actual                            → Stock acumulado por (cliente, bodega, producto).
+//                                              Suma entradas - salidas desde el inicio del rango,
+//                                              devuelve solo las filas con stock != 0.
+//   ?modo=movimientos&desde=&hasta=         → Movimientos crudos en el rango (raw data).
+//   ?modo=stockxfecha&granularidad=         → Serie temporal con stock acumulado por
+//                                              día/semana/mes (granularidades disponibles).
+//   ?test=1                                 → Valida login a SAP, no consulta data.
 //
-// Configuración requerida (Application Settings de la Function App):
-//   SAP_USER       = virtualdv\red.sistemas
-//   SAP_PASS       = (password)
-//   SAP_DB         = CLPRDREDTEC
-//   SAP_LOGIN_URL  = https://hwvdvc02sbo01.virtualdv.cloud:50000/b1s/v2/Login
-//   SAP_DATA_URL   = https://hwvdvc02sbo01.virtualdv.cloud:50000/b1s/v1/sml.svc/STOCKHISTCLIENTE
+// Filtros opcionales en todos los modos:
+//   &cliente=XXX         → filtra por SL1Code (nombre del cliente/retail)
+//   &whsCode=CLIENTES    → filtra por WhsCode ('CLIENTES' o 'RETAIL')
+//   &desde=YYYY-MM-DD    → fecha inicio
+//   &hasta=YYYY-MM-DD    → fecha fin
 //
-// Endpoints expuestos:
-//   GET /api/sap-stock-proxy?test=1            → valida login, sin consultar data
-//   GET /api/sap-stock-proxy?cliente=XXX       → filtra por WhsCode (cliente)
-//   GET /api/sap-stock-proxy?desde=YYYY-MM-DD&hasta=YYYY-MM-DD
-//   GET /api/sap-stock-proxy                   → trae todo (cuidado: muy grande)
+// Configuración requerida (Application Settings):
+//   SAP_USER, SAP_PASS, SAP_DB, SAP_LOGIN_URL, SAP_DATA_URL
 // ─────────────────────────────────────────────────────────────────────────
 
 const https = require('https');
 const { URL } = require('url');
 
 // SAP B1 usa cert autofirmado en instalaciones internas → ignorar verificación.
-// Solo aplica a conexiones a SAP, no afecta otros HTTPS.
 const sapAgent = new https.Agent({ rejectUnauthorized: false });
 
-// Cache en memoria de la sesión SAP. Las sesiones duran ~30 min en SAP B1.
-let cachedSession = {
-  id: null,
-  routeId: null,
-  expiresAt: 0
-};
-const SESSION_TTL_MS = 25 * 60 * 1000;  // 25 min con margen seguro
+// Cache en memoria de la sesión SAP (~30 min en SAP B1).
+let cachedSession = { id: null, routeId: null, expiresAt: 0 };
+const SESSION_TTL_MS = 25 * 60 * 1000;
 
 // ─────────────────────────────────────────────────────────────────────────
-// HELPER: HTTPS request con agente SAP (acepta cert autofirmado)
+// HELPERS HTTP
 // ─────────────────────────────────────────────────────────────────────────
 function sapRequest(method, urlStr, headers, body) {
   return new Promise((resolve, reject) => {
@@ -53,7 +46,7 @@ function sapRequest(method, urlStr, headers, body) {
       path: u.pathname + u.search,
       headers: headers || {},
       agent: sapAgent,
-      timeout: 30000
+      timeout: 35000  // 35 seg por request individual (SWA timeout es 45 seg total)
     };
 
     if (body) {
@@ -74,7 +67,7 @@ function sapRequest(method, urlStr, headers, body) {
     });
 
     req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('Timeout (30s) conectando a SAP')); });
+    req.on('timeout', () => { req.destroy(); reject(new Error('Timeout (35s) conectando a SAP')); });
 
     if (body) req.write(typeof body === 'string' ? body : JSON.stringify(body));
     req.end();
@@ -82,7 +75,7 @@ function sapRequest(method, urlStr, headers, body) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// LOGIN a SAP B1
+// LOGIN A SAP B1
 // ─────────────────────────────────────────────────────────────────────────
 async function loginSAP(context) {
   const loginUrl = process.env.SAP_LOGIN_URL;
@@ -103,7 +96,6 @@ async function loginSAP(context) {
     throw new Error('Login SAP falló (HTTP ' + res.status + '): ' + (res.body || '').substring(0, 500));
   }
 
-  // Cookies vienen en headers['set-cookie'] como array
   const setCookies = res.headers['set-cookie'] || [];
   let sessionId = null, routeId = null;
   setCookies.forEach(c => {
@@ -112,19 +104,11 @@ async function loginSAP(context) {
     if (sm) sessionId = sm[1];
     if (rm) routeId = rm[1];
   });
-
-  // Fallback: algunas versiones devuelven SessionId en el body
   if (!sessionId && res.json && res.json.SessionId) sessionId = res.json.SessionId;
 
-  if (!sessionId) {
-    throw new Error('Login OK pero no se obtuvo B1SESSION. Body: ' + (res.body || '').substring(0, 300));
-  }
+  if (!sessionId) throw new Error('Login OK pero no se obtuvo B1SESSION. Body: ' + (res.body || '').substring(0, 300));
 
-  cachedSession = {
-    id: sessionId,
-    routeId: routeId,
-    expiresAt: Date.now() + SESSION_TTL_MS
-  };
+  cachedSession = { id: sessionId, routeId: routeId, expiresAt: Date.now() + SESSION_TTL_MS };
   context.log('[SAP] Login OK · sesión válida por ' + (SESSION_TTL_MS / 60000) + ' min');
   return cachedSession;
 }
@@ -138,16 +122,18 @@ async function getSession(context, forceNew) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// QUERY a STOCKHISTCLIENTE (con paginación OData)
+// FETCH RAW: trae movimientos crudos desde SAP (con paginación OData)
 // ─────────────────────────────────────────────────────────────────────────
-async function fetchStock(context, filtros) {
+async function fetchRaw(context, filtros) {
   const baseUrl = process.env.SAP_DATA_URL;
   if (!baseUrl) throw new Error('Falta SAP_DATA_URL en Application Settings');
 
+  // Construir filtros OData
   const odataFilters = [];
-  if (filtros.cliente) odataFilters.push("WhsCode eq '" + filtros.cliente.replace(/'/g, "''") + "'");
-  if (filtros.desde)   odataFilters.push("DocDate ge '" + filtros.desde + "'");
-  if (filtros.hasta)   odataFilters.push("DocDate le '" + filtros.hasta + "'");
+  if (filtros.cliente)  odataFilters.push("SL1Code eq '" + filtros.cliente.replace(/'/g, "''") + "'");
+  if (filtros.whsCode)  odataFilters.push("WhsCode eq '" + filtros.whsCode.replace(/'/g, "''") + "'");
+  if (filtros.desde)    odataFilters.push("DocDate ge '" + filtros.desde + "'");
+  if (filtros.hasta)    odataFilters.push("DocDate le '" + filtros.hasta + "'");
 
   let queryUrl = baseUrl;
   if (odataFilters.length) {
@@ -164,7 +150,6 @@ async function fetchStock(context, filtros) {
   while (nextUrl && pageCount < 50) {
     pageCount++;
 
-    // Hasta 2 intentos por página (re-login si 401)
     let res;
     for (let attempt = 1; attempt <= 2; attempt++) {
       const cookieVal = 'B1SESSION=' + session.id + (session.routeId ? '; ROUTEID=' + session.routeId : '');
@@ -189,9 +174,8 @@ async function fetchStock(context, filtros) {
     const data = res.json || {};
     const rows = data.value || [];
     allRows = allRows.concat(rows);
-    context.log('[SAP] Página ' + pageCount + ': +' + rows.length + ' filas (acumulado: ' + allRows.length + ')');
+    context.log('[SAP] Página ' + pageCount + ': +' + rows.length + ' (acumulado: ' + allRows.length + ')');
 
-    // Paginación OData
     nextUrl = data['@odata.nextLink'] || null;
     if (nextUrl && !nextUrl.startsWith('http')) {
       const base = new URL(baseUrl);
@@ -202,11 +186,132 @@ async function fetchStock(context, filtros) {
   return allRows;
 }
 
+// Mapea fila cruda de SAP a estructura legible
+function mapRow(r) {
+  return {
+    cliente:     r.WhsCode,            // 'CLIENTES' o 'RETAIL'
+    nombre:      r.SL1Code,            // PUNTOAZUL, WALMART, etc
+    bodega:      r.BinCode,            // código de bodega (AGRICOLALOPINTO-001)
+    descripcion: r.Descr,              // nombre legible de la bodega
+    producto:    r.ItemCode,
+    fecha:       r.DocDate,
+    entrada:     Number(r.Entrada || 0),
+    salida:      Number(r.Salida || 0),
+    id:          r.id__
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// MODO 'ACTUAL': stock acumulado por (whsCode, nombre, bodega, producto)
+// ─────────────────────────────────────────────────────────────────────────
+function calcularStockActual(rows) {
+  const mapa = {};
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const whs = r.WhsCode || '';
+    const nom = r.SL1Code || '';
+    const bod = r.BinCode || '';
+    const prd = r.ItemCode || '';
+    const desc = r.Descr || '';
+    const ent = Number(r.Entrada || 0);
+    const sal = Number(r.Salida || 0);
+
+    const key = whs + '|' + nom + '|' + bod + '|' + prd;
+    if (!mapa[key]) {
+      mapa[key] = {
+        cliente:     whs,        // 'CLIENTES' o 'RETAIL'
+        nombre:      nom,
+        bodega:      bod,
+        descripcion: desc,
+        producto:    prd,
+        stock:       0,
+        entradas:    0,
+        salidas:     0,
+        movimientos: 0
+      };
+    }
+    mapa[key].entradas += ent;
+    mapa[key].salidas  += sal;
+    mapa[key].stock    += (ent - sal);
+    mapa[key].movimientos++;
+  }
+
+  // Devolver solo combinaciones con stock distinto de cero (filtro útil para UI)
+  return Object.values(mapa).filter(x => x.stock !== 0);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// MODO 'STOCKXFECHA': serie temporal de stock acumulado
+// granularidad: 'diario' | 'semanal' | 'mensual' (default semanal)
+// Devuelve por (clave_grupo, fecha) el stock acumulado al final de ese período.
+// ─────────────────────────────────────────────────────────────────────────
+
+// Devuelve clave del período según granularidad
+// 'diario'   → 'YYYY-MM-DD'
+// 'semanal'  → 'YYYY-Www' (ISO week)
+// 'mensual'  → 'YYYY-MM'
+function periodoClave(fechaIso, granularidad) {
+  if (!fechaIso) return '';
+  const iso = fechaIso.substring(0, 10);
+  if (granularidad === 'diario')  return iso;
+  if (granularidad === 'mensual') return iso.substring(0, 7);
+  // ISO week
+  const d = new Date(iso + 'T12:00:00Z');
+  const target = new Date(d.valueOf());
+  const dayNr = (d.getUTCDay() + 6) % 7;
+  target.setUTCDate(target.getUTCDate() - dayNr + 3);
+  const firstThursday = target.valueOf();
+  target.setUTCMonth(0, 1);
+  if (target.getUTCDay() !== 4) {
+    target.setUTCMonth(0, 1 + ((4 - target.getUTCDay()) + 7) % 7);
+  }
+  const weekNum = 1 + Math.ceil((firstThursday - target) / (7 * 86400000));
+  return d.getUTCFullYear() + '-W' + String(weekNum).padStart(2, '0');
+}
+
+function calcularStockXFecha(rows, granularidad) {
+  // Paso 1: agrupar movimientos por (combinación, período)
+  // movimientos[claveGrupo][periodo] = { entradas, salidas }
+  const movimientos = {};
+  rows.forEach(r => {
+    const grupo = (r.WhsCode || '') + '|' + (r.SL1Code || '');  // por cliente
+    const periodo = periodoClave(r.DocDate, granularidad);
+    if (!periodo) return;
+    if (!movimientos[grupo]) movimientos[grupo] = {};
+    if (!movimientos[grupo][periodo]) movimientos[grupo][periodo] = { e: 0, s: 0 };
+    movimientos[grupo][periodo].e += Number(r.Entrada || 0);
+    movimientos[grupo][periodo].s += Number(r.Salida || 0);
+  });
+
+  // Paso 2: acumular cronológicamente para obtener "stock al cierre del período"
+  const resultado = [];
+  Object.keys(movimientos).forEach(grupo => {
+    const partes = grupo.split('|');
+    const whsCode = partes[0];
+    const nombre = partes[1];
+    const periodos = Object.keys(movimientos[grupo]).sort();
+    let acumulado = 0;
+    periodos.forEach(p => {
+      const m = movimientos[grupo][p];
+      acumulado += m.e - m.s;
+      resultado.push({
+        cliente:  whsCode,        // CLIENTES o RETAIL
+        nombre:   nombre,
+        periodo:  p,
+        entradas: m.e,
+        salidas:  m.s,
+        stock:    acumulado       // stock acumulado al cierre de ese período
+      });
+    });
+  });
+
+  return resultado;
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // HANDLER PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────
 module.exports = async function (context, req) {
-  // CORS preflight
   if (req.method === 'OPTIONS') {
     context.res = { status: 204, headers: corsHeaders() };
     return;
@@ -216,9 +321,9 @@ module.exports = async function (context, req) {
   const params = req.query || {};
 
   try {
-    // Modo TEST: solo valida login, no consulta data
+    // Modo TEST
     if (params.test === '1') {
-      const sess = await getSession(context, true);  // forzar login fresco
+      const sess = await getSession(context, true);
       context.res = {
         status: 200,
         headers: corsHeaders(),
@@ -239,32 +344,97 @@ module.exports = async function (context, req) {
       return;
     }
 
-    // Query normal
+    // Filtros comunes
     const filtros = {
       cliente: params.cliente || null,
+      whsCode: params.whsCode || null,
       desde:   params.desde   || null,
       hasta:   params.hasta   || null
     };
-    const rows = await fetchStock(context, filtros);
 
-    // Mapear columnas con nombres legibles (igual al script Python original)
-    const mapped = rows.map(r => ({
-      cliente:     r.WhsCode,
-      nombre:      r.SL1Code,
-      bodega:      r.BinCode,
-      descripcion: r.Descr,
-      producto:    r.ItemCode,
-      fecha:       r.DocDate,
-      entrada:     Number(r.Entrada || 0),
-      salida:      Number(r.Salida || 0),
-      id:          r.id__
-    }));
+    // Detectar modo. Default 'movimientos' para mantener compatibilidad con la primera versión.
+    const modo = (params.modo || 'movimientos').toLowerCase();
+
+    // MODO ACTUAL: trae todo el histórico (o desde 'desde' si se especifica), agrupa, suma
+    if (modo === 'actual') {
+      // Si no se especifica desde/hasta, partir desde 2023 (data más antigua disponible)
+      if (!filtros.desde) filtros.desde = '2023-01-01';
+      if (!filtros.hasta) filtros.hasta = new Date().toISOString().substring(0, 10);
+
+      const rows = await fetchRaw(context, filtros);
+      const stockActual = calcularStockActual(rows);
+
+      context.log('[SAP] Stock actual: ' + stockActual.length + ' combinaciones (de ' + rows.length + ' movimientos)');
+
+      // Totales por WhsCode (CLIENTES vs RETAIL) para KPIs rápidos
+      const totalesPorTipo = {};
+      stockActual.forEach(r => {
+        if (!totalesPorTipo[r.cliente]) totalesPorTipo[r.cliente] = { combinaciones: 0, total_pallets: 0, clientes_unicos: new Set() };
+        totalesPorTipo[r.cliente].combinaciones++;
+        totalesPorTipo[r.cliente].total_pallets += r.stock;
+        totalesPorTipo[r.cliente].clientes_unicos.add(r.nombre);
+      });
+      // Convertir Set a número para serializar
+      Object.keys(totalesPorTipo).forEach(k => {
+        totalesPorTipo[k].clientes_unicos = totalesPorTipo[k].clientes_unicos.size;
+      });
+
+      context.res = {
+        status: 200,
+        headers: corsHeaders(),
+        body: {
+          ok: true,
+          modo: 'actual',
+          total: stockActual.length,
+          movimientos_procesados: rows.length,
+          filtros: filtros,
+          totales_por_tipo: totalesPorTipo,
+          tomo_ms: Date.now() - t0,
+          items: stockActual
+        }
+      };
+      return;
+    }
+
+    // MODO STOCKXFECHA: serie temporal con stock acumulado por período
+    if (modo === 'stockxfecha') {
+      const granularidad = (params.granularidad || 'semanal').toLowerCase();
+      if (['diario', 'semanal', 'mensual'].indexOf(granularidad) < 0) {
+        throw new Error("granularidad inválida: usa 'diario', 'semanal' o 'mensual'");
+      }
+      if (!filtros.desde) filtros.desde = '2023-01-01';
+      if (!filtros.hasta) filtros.hasta = new Date().toISOString().substring(0, 10);
+
+      const rows = await fetchRaw(context, filtros);
+      const serie = calcularStockXFecha(rows, granularidad);
+
+      context.res = {
+        status: 200,
+        headers: corsHeaders(),
+        body: {
+          ok: true,
+          modo: 'stockxfecha',
+          granularidad: granularidad,
+          total: serie.length,
+          movimientos_procesados: rows.length,
+          filtros: filtros,
+          tomo_ms: Date.now() - t0,
+          items: serie
+        }
+      };
+      return;
+    }
+
+    // MODO MOVIMIENTOS (default): raw data sin procesar
+    const rows = await fetchRaw(context, filtros);
+    const mapped = rows.map(mapRow);
 
     context.res = {
       status: 200,
       headers: corsHeaders(),
       body: {
         ok: true,
+        modo: 'movimientos',
         total: mapped.length,
         filtros: filtros,
         tomo_ms: Date.now() - t0,

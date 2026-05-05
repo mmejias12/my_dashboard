@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stock x Fecha · m3link</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg-page:       #0f1117;
+    --bg-surface:    #181b23;
+    --bg-card:       #1e222d;
+    --bg-input:      #252932;
+    --bg-hover:      #252d3a;
+    --bg-active:     #1a2a1f;
+    --bg-row-alt:    #1a1d25;
+    --border:        rgba(255,255,255,0.07);
+    --border-md:     rgba(255,255,255,0.12);
+    --text-primary:  #e8eaf0;
+    --text-secondary:#9da3b4;
+    --text-muted:    #5a6070;
+    --accent:        #4ade80;
+    --accent-dim:    rgba(74,222,128,0.15);
+    --red-logo:      #C0170C;
+    --c-cli: #60a5fa;
+    --c-ret: #c4b5fd;
+    --c-pos: #4ade80;
+    --c-neg: #f87171;
+    --c-warn: #fcd34d;
+    --radius-sm:6px; --radius-md:9px; --radius-lg:13px;
+  }
+  html,body { height:100%; font-family:'Inter',-apple-system,sans-serif; font-size:13px; background:var(--bg-page); color:var(--text-primary); -webkit-font-smoothing:antialiased; }
+
+  /* TOPBAR */
+  .topbar { position:fixed;top:0;left:0;right:0;z-index:100;height:50px;background:var(--bg-surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1.25rem;gap:12px; }
+  .logo { display:flex;align-items:center;gap:9px;text-decoration:none;color:inherit; }
+  .logo-box { width:27px;height:27px;border-radius:6px;background:var(--red-logo);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:12px; }
+  .logo-name { font-weight:600;font-size:13.5px;color:var(--text-primary); }
+  .logo-sep { width:1px;height:18px;background:var(--border-md);margin:0 6px; }
+  .topbar-title { font-size:12.5px;color:var(--text-secondary);display:flex;align-items:center;gap:7px; }
+  .live-dot { width:7px;height:7px;background:var(--accent);border-radius:50%;animation:pulse 2.5s ease-in-out infinite;box-shadow:0 0 6px var(--accent); }
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .topbar-right { margin-left:auto;display:flex;align-items:center;gap:10px; }
+  .back-btn { font-size:11.5px;color:var(--text-secondary);text-decoration:none;padding:5px 11px;border:1px solid var(--border-md);border-radius:6px;transition:all .15s; }
+  .back-btn:hover { color:var(--text-primary);background:var(--bg-hover); }
+
+  /* MAIN */
+  .main { padding: 70px 1.5rem 2rem; max-width: 1500px; margin: 0 auto; }
+  .page-header { display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1rem;gap:12px;flex-wrap:wrap; }
+  .page-title { font-size:18px;font-weight:600;color:var(--text-primary); }
+  .breadcrumb { font-size:11.5px;color:var(--text-muted);margin-top:4px; }
+
+  /* FILTROS */
+  .filters-card { background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:14px; }
+  .filters-row { display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:8px; }
+  .filters-row:last-child { margin-bottom:0; }
+  .filter-lbl { font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;font-weight:500;margin-right:4px; }
+  .ctrl-text, .ctrl-sel { background:var(--bg-input);border:1px solid var(--border-md);color:var(--text-primary);padding:6px 10px;border-radius:6px;font-size:12px;font-family:inherit;outline:none; }
+  .ctrl-text { min-width:220px; }
+  .ctrl-sel  { min-width:180px; }
+  .ctrl-text:focus, .ctrl-sel:focus { border-color:var(--accent); }
+
+  /* SELECTOR MÚLTIPLE DE CLIENTES (con tags) */
+  .cli-selector { position:relative;flex:1;min-width:250px;max-width:600px; }
+  .cli-input-box { background:var(--bg-input);border:1px solid var(--border-md);border-radius:6px;padding:5px 8px;display:flex;flex-wrap:wrap;gap:4px;min-height:32px;align-items:center; }
+  .cli-input-box:focus-within { border-color:var(--accent); }
+  .cli-tag { display:inline-flex;align-items:center;gap:5px;background:rgba(96,165,250,.15);border:1px solid rgba(96,165,250,.4);color:var(--c-cli);padding:2px 6px 2px 8px;border-radius:4px;font-size:11px; }
+  .cli-tag.ret { background:rgba(196,181,253,.15);border-color:rgba(196,181,253,.4);color:var(--c-ret); }
+  .cli-tag .x { cursor:pointer;font-size:13px;line-height:1;color:inherit;opacity:.6; }
+  .cli-tag .x:hover { opacity:1; }
+  .cli-input { flex:1;min-width:120px;background:transparent;border:none;color:var(--text-primary);padding:3px 4px;font-size:12px;font-family:inherit;outline:none; }
+  .cli-dropdown { position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--bg-card);border:1px solid var(--border-md);border-radius:6px;max-height:240px;overflow-y:auto;z-index:50;display:none;box-shadow:0 10px 30px rgba(0,0,0,.4); }
+  .cli-dropdown.on { display:block; }
+  .cli-opt { padding:7px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:8px; }
+  .cli-opt:hover, .cli-opt.hover { background:var(--bg-hover); }
+  .cli-opt-name { color:var(--text-primary); }
+  .cli-opt-meta { font-size:10px;color:var(--text-muted);font-family:'JetBrains Mono',monospace; }
+
+  .btn { background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);padding:6px 16px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .15s; }
+  .btn:hover:not(:disabled) { background:var(--accent);color:#0f1117; }
+  .btn:disabled { opacity:.5;cursor:not-allowed; }
+  .btn-sec { background:var(--bg-input);border:1px solid var(--border-md);color:var(--text-secondary); }
+  .btn-sec:hover { background:var(--bg-hover);color:var(--text-primary); }
+
+  .seg { display:inline-flex;background:var(--bg-input);border:1px solid var(--border-md);border-radius:7px;padding:2px;gap:2px; }
+  .seg-btn { background:transparent;border:none;color:var(--text-secondary);padding:6px 14px;font-size:11.5px;font-weight:500;cursor:pointer;border-radius:5px;font-family:inherit;transition:all .15s;white-space:nowrap; }
+  .seg-btn:hover { color:var(--text-primary); }
+  .seg-btn.on { background:var(--accent);color:#0f1117;font-weight:600; }
+
+  /* STATUS */
+  .status { font-size:11.5px;color:var(--text-muted);margin-bottom:10px; }
+  .status .dot { display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--text-muted);margin-right:6px;vertical-align:middle; }
+  .status.ok .dot { background:var(--accent); }
+  .status.load .dot { background:#fcd34d;animation:pulse 1s infinite; }
+  .status.err .dot { background:#f87171; }
+  .state-msg { text-align:center;padding:40px 20px;color:var(--text-muted);font-size:12px; }
+
+  /* KPIs */
+  .kpis { display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:14px; }
+  .kpi { background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:14px 16px; }
+  .kpi-lbl { font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px; }
+  .kpi-val { font-size:22px;font-weight:600;color:var(--text-primary); }
+  .kpi-val.cli { color:var(--c-cli); }
+  .kpi-val.ret { color:var(--c-ret); }
+  .kpi-val.pos { color:var(--c-pos); }
+  .kpi-val.neg { color:var(--c-neg); }
+  .kpi-val.warn { color:var(--c-warn); }
+  .kpi-sub { font-size:10.5px;color:var(--text-muted);margin-top:3px; }
+
+  /* CHART */
+  .chart-card { background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:18px;margin-bottom:14px; }
+  .chart-hdr { display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px; }
+  .chart-title { font-size:14px;font-weight:600;color:var(--text-primary); }
+  .chart-wrap { position:relative;height:420px; }
+
+  /* TABLA */
+  .section-title { font-size:13px;font-weight:600;color:var(--text-primary);margin:18px 0 10px;display:flex;align-items:center;gap:7px; }
+  .section-title .badge { background:var(--bg-input);color:var(--text-secondary);font-size:10px;padding:2px 8px;border-radius:10px;font-weight:500;letter-spacing:.3px; }
+  .table-wrap { background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);overflow:auto;max-height:500px; }
+  table { width:100%;border-collapse:collapse;font-size:12px; }
+  thead { position:sticky;top:0;background:var(--bg-card);z-index:1; }
+  th { text-align:left;padding:10px 12px;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);border-bottom:1px solid var(--border);font-weight:500;white-space:nowrap; }
+  th.num { text-align:right; }
+  td { padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text-primary); }
+  td.num { text-align:right;font-family:'JetBrains Mono',monospace; }
+  tbody tr:hover { background:var(--bg-hover); }
+
+  /* BANNER INFORMATIVO */
+  .info-banner { background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.25);border-radius:9px;padding:10px 14px;margin-bottom:14px;font-size:11.5px;color:var(--text-secondary);line-height:1.55; }
+  .info-banner code { background:var(--bg-input);padding:1px 5px;border-radius:3px;color:var(--c-cli); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="logo" href="m3link_dashboard_dark.html">
+    <div class="logo-box">R</div>
+    <div class="logo-name">REDTEC</div>
+  </a>
+  <div class="logo-sep"></div>
+  <div class="topbar-title"><span class="live-dot"></span>m3link · Stock x Fecha</div>
+  <div class="topbar-right">
+    <a class="back-btn" href="stocks-clientes.html">← Stock actual</a>
+    <a class="back-btn" href="m3link_dashboard_dark.html">← Panel</a>
+  </div>
+</div>
+
+<div class="main">
+
+  <div class="page-header">
+    <div>
+      <div class="page-title">📈 Evolución de stock por cliente</div>
+      <div class="breadcrumb">Comercial › Stocks SAP › Stock x Fecha — serie temporal</div>
+    </div>
+  </div>
+
+  <!-- FILTROS -->
+  <div class="filters-card">
+    <div class="filters-row">
+      <span class="filter-lbl">Clientes:</span>
+      <div class="cli-selector">
+        <div class="cli-input-box" id="cli-box">
+          <input type="text" id="cli-input" class="cli-input" placeholder="Tipea nombre del cliente o retail...">
+        </div>
+        <div class="cli-dropdown" id="cli-dropdown"></div>
+      </div>
+      <button class="btn btn-sec" onclick="limpiarClientes()" title="Quitar todos los clientes seleccionados">✕ Limpiar</button>
+    </div>
+    <div class="filters-row">
+      <span class="filter-lbl">Vista:</span>
+      <div class="seg" id="seg-stockTipo">
+        <button class="seg-btn on" data-st="acumulado">📊 Stock acumulado</button>
+        <button class="seg-btn"    data-st="periodo">📈 Movimiento del período</button>
+      </div>
+
+      <span class="filter-lbl" style="margin-left:14px">Granularidad:</span>
+      <div class="seg" id="seg-gran">
+        <button class="seg-btn"    data-g="diario">Día</button>
+        <button class="seg-btn"    data-g="semanal">Semana</button>
+        <button class="seg-btn on" data-g="mensual">Mes</button>
+      </div>
+
+      <button id="btn-load" class="btn" onclick="cargarSeleccionados()">📥 Cargar evolución</button>
+      <button class="btn btn-sec" onclick="exportarExcel()">↓ Excel</button>
+    </div>
+  </div>
+
+  <div id="status" class="status"><span class="dot"></span><span id="status-txt">Tipea o seleccioná uno o más clientes/retails. Después presiona "Cargar evolución".</span></div>
+
+  <div class="info-banner" id="banner-info" style="display:none">
+    <strong style="color:var(--text-primary)">ℹ Lógica:</strong>
+    <span id="banner-text">—</span>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpis" id="kpis" style="display:none">
+    <div class="kpi"><div class="kpi-lbl">Stock máximo</div><div class="kpi-val pos" id="k-max">—</div><div class="kpi-sub" id="k-max-sub">—</div></div>
+    <div class="kpi"><div class="kpi-lbl">Stock mínimo</div><div class="kpi-val warn" id="k-min">—</div><div class="kpi-sub" id="k-min-sub">—</div></div>
+    <div class="kpi"><div class="kpi-lbl">Promedio</div><div class="kpi-val" id="k-avg">—</div><div class="kpi-sub">Promedio en el período</div></div>
+    <div class="kpi"><div class="kpi-lbl">Último valor</div><div class="kpi-val cli" id="k-last">—</div><div class="kpi-sub" id="k-last-sub">—</div></div>
+    <div class="kpi"><div class="kpi-lbl">Variación período</div><div class="kpi-val" id="k-var">—</div><div class="kpi-sub" id="k-var-sub">Último vs primero</div></div>
+  </div>
+
+  <!-- CHART -->
+  <div class="chart-card" id="chart-card" style="display:none">
+    <div class="chart-hdr">
+      <div class="chart-title" id="chart-title">Evolución de stock</div>
+      <span class="kpi-sub" id="chart-sub">—</span>
+    </div>
+    <div class="chart-wrap"><canvas id="canvas"></canvas></div>
+  </div>
+
+  <!-- TABLA -->
+  <div id="tabla-card" style="display:none">
+    <div class="section-title">
+      Detalle por período
+      <span class="badge" id="badge-tabla">—</span>
+    </div>
+    <div class="table-wrap">
+      <table id="tabla">
+        <thead>
+          <tr>
+            <th>Tipo</th>
+            <th>Nombre</th>
+            <th>Período</th>
+            <th class="num">Entradas</th>
+            <th class="num">Salidas</th>
+            <th class="num">Stock</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+// ─────────────────────────────────────────────────────────────────────────
+// CONFIGURACIÓN
+// ─────────────────────────────────────────────────────────────────────────
+var isLocal  = (window.location.protocol === 'file:');
+var API_PROXY = '/api/sap-stock-proxy';
+
+// Cache localStorage de stocks-clientes (para autocomplete)
+var CACHE_STOCK_ACTUAL = 'sap_stock_actual_v1';
+
+// Estado
+var clientesSeleccionados = [];   // [{ nombre, tipos: ['CLIENTES','RETAIL'] }]
+var seriesData = {};              // { 'CLIENTES|WALMART': [{periodo, entradas, salidas, stock}], ... }
+var stockTipo  = 'acumulado';     // 'acumulado' | 'periodo'
+var granularidad = 'mensual';
+var listaClientesAutocomp = [];   // [{ nombre, tipos: ['CLIENTES','RETAIL'], stock: 1234 }]
+var chartInstance = null;
+
+// Paleta de colores para series
+var PALETA = ['#60a5fa','#4ade80','#c4b5fd','#fcd34d','#f87171','#fb923c','#22d3ee','#a78bfa','#34d399','#f472b6'];
+
+// ─────────────────────────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────────────────────────
+var $ = function(id) { return document.getElementById(id); };
+
+function setStatus(tipo, msg) {
+  $('status').className = 'status ' + tipo;
+  $('status-txt').textContent = msg;
+}
+function fmtNum(n) {
+  if (n == null || isNaN(n)) return '—';
+  return Math.round(n).toLocaleString('es-CL');
+}
+function fmtPeriodoLabel(p) {
+  if (!p) return '';
+  // 'YYYY-MM' → 'mmm yyyy'
+  if (p.length === 7) {
+    var meses = ['ene','feb','mar','abr','may','jun','jul','ago','sept','oct','nov','dic'];
+    var ps = p.split('-');
+    return meses[parseInt(ps[1],10)-1] + ' ' + ps[0];
+  }
+  // 'YYYY-Www' → 'Wxx YYYY' simple
+  if (p.indexOf('-W') > 0) return p.replace('-', ' ');
+  // 'YYYY-MM-DD' → 'DD-MM-YY'
+  if (p.length === 10) {
+    var pp = p.split('-');
+    return pp[2] + '-' + pp[1] + '-' + pp[0].substring(2);
+  }
+  return p;
+}
+function keySerie(tipo, nombre) { return tipo + '|' + nombre; }
+
+// ─────────────────────────────────────────────────────────────────────────
+// CARGAR LISTA DE CLIENTES PARA AUTOCOMPLETE (desde cache de stocks-clientes)
+// ─────────────────────────────────────────────────────────────────────────
+function cargarListaClientesDesdeCache() {
+  try {
+    var raw = localStorage.getItem(CACHE_STOCK_ACTUAL);
+    if (!raw) return;
+    var obj = JSON.parse(raw);
+    if (!obj.items) return;
+
+    // Agrupar por nombre y registrar qué tipos (CLIENTES/RETAIL) tiene
+    var mapa = {};
+    obj.items.forEach(function(r) {
+      var nom = r.nombre || '';
+      if (!nom) return;
+      if (!mapa[nom]) mapa[nom] = { nombre: nom, tipos: {}, stock: 0 };
+      mapa[nom].tipos[r.cliente] = true;
+      mapa[nom].stock += r.stock || 0;
+    });
+    listaClientesAutocomp = Object.values(mapa).map(function(c) {
+      return { nombre: c.nombre, tipos: Object.keys(c.tipos), stock: c.stock };
+    }).sort(function(a, b) { return b.stock - a.stock; });
+
+    console.log('[Stocks-x-fecha] Autocomplete: ' + listaClientesAutocomp.length + ' nombres');
+  } catch (e) {
+    console.warn('[Stocks-x-fecha] No se pudo leer cache de stocks-clientes:', e.message);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// AUTOCOMPLETE / SELECTOR DE CLIENTES
+// ─────────────────────────────────────────────────────────────────────────
+var hoverIdx = -1;
+
+function abrirDropdown() {
+  var q = $('cli-input').value.toLowerCase().trim();
+  var dd = $('cli-dropdown');
+
+  if (!listaClientesAutocomp.length) {
+    dd.innerHTML = '<div class="cli-opt" style="cursor:default"><span style="color:var(--text-muted)">' +
+      'Sin lista cacheada. Andá primero a <a href="stocks-clientes.html" style="color:var(--accent)">Stock actual</a> para cargar la lista de clientes.' +
+      '</span></div>';
+    dd.classList.add('on');
+    return;
+  }
+
+  // Filtrar excluyendo ya seleccionados
+  var seleccionadosNombres = clientesSeleccionados.map(function(c) { return c.nombre; });
+  var resultados = listaClientesAutocomp.filter(function(c) {
+    if (seleccionadosNombres.indexOf(c.nombre) >= 0) return false;
+    if (q && c.nombre.toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  }).slice(0, 30);  // máx 30 resultados
+
+  if (!resultados.length) {
+    dd.innerHTML = '<div class="cli-opt" style="cursor:default;color:var(--text-muted)">Sin resultados</div>';
+    dd.classList.add('on');
+    return;
+  }
+
+  dd.innerHTML = resultados.map(function(c, idx) {
+    var tipos = c.tipos.join(' + ');
+    return '<div class="cli-opt' + (idx === hoverIdx ? ' hover' : '') + '" onclick="agregarCliente(\'' + c.nombre.replace(/'/g, "\\'") + '\')">' +
+      '<span class="cli-opt-name">' + c.nombre + '</span>' +
+      '<span class="cli-opt-meta">' + tipos + ' · ' + fmtNum(c.stock) + ' pall</span>' +
+    '</div>';
+  }).join('');
+  dd.classList.add('on');
+}
+
+function cerrarDropdown() {
+  setTimeout(function() {
+    $('cli-dropdown').classList.remove('on');
+    hoverIdx = -1;
+  }, 150);  // delay para permitir click
+}
+
+function agregarCliente(nombre) {
+  if (!nombre) return;
+  if (clientesSeleccionados.some(function(c) { return c.nombre === nombre; })) return;
+  if (clientesSeleccionados.length >= 8) {
+    alert('Máximo 8 clientes a la vez. Quitá alguno antes de agregar otro.');
+    return;
+  }
+
+  // Buscar info en autocomplete para saber qué tipos tiene
+  var info = listaClientesAutocomp.find(function(c) { return c.nombre === nombre; });
+  var tipos = info ? info.tipos : ['CLIENTES','RETAIL'];
+
+  clientesSeleccionados.push({ nombre: nombre, tipos: tipos });
+  $('cli-input').value = '';
+  hoverIdx = -1;
+  renderTags();
+  $('cli-dropdown').classList.remove('on');
+  $('cli-input').focus();
+}
+
+function quitarCliente(nombre) {
+  clientesSeleccionados = clientesSeleccionados.filter(function(c) { return c.nombre !== nombre; });
+
+  // Limpiar series del cliente quitado
+  Object.keys(seriesData).forEach(function(k) {
+    if (k.split('|')[1] === nombre) delete seriesData[k];
+  });
+
+  renderTags();
+  if (Object.keys(seriesData).length) renderTodo();
+  else { ocultarTodo(); }
+}
+
+function limpiarClientes() {
+  clientesSeleccionados = [];
+  seriesData = {};
+  renderTags();
+  ocultarTodo();
+  setStatus('', 'Selección limpiada. Tipea o seleccioná clientes para empezar.');
+}
+
+function renderTags() {
+  var box = $('cli-box');
+  // Quitar tags existentes (no el input)
+  Array.from(box.querySelectorAll('.cli-tag')).forEach(function(t) { t.remove(); });
+
+  // Agregar tags antes del input
+  var input = $('cli-input');
+  clientesSeleccionados.forEach(function(c, idx) {
+    var tag = document.createElement('span');
+    tag.className = 'cli-tag' + (c.tipos.length === 1 && c.tipos[0] === 'RETAIL' ? ' ret' : '');
+    tag.innerHTML = c.nombre + '<span class="x" onclick="quitarCliente(\'' + c.nombre.replace(/'/g, "\\'") + '\')">×</span>';
+    box.insertBefore(tag, input);
+  });
+}
+
+function ocultarTodo() {
+  $('kpis').style.display = 'none';
+  $('chart-card').style.display = 'none';
+  $('tabla-card').style.display = 'none';
+  $('banner-info').style.display = 'none';
+  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// FETCH DATOS DEL PROXY (1 cliente = 1 llamada, en paralelo)
+// ─────────────────────────────────────────────────────────────────────────
+async function cargarSeleccionados() {
+  if (isLocal) {
+    setStatus('err', 'Abrí esta página desde el sitio publicado, no desde archivo local.');
+    return;
+  }
+  if (!clientesSeleccionados.length) {
+    setStatus('err', 'Seleccioná al menos un cliente o retail.');
+    return;
+  }
+
+  var btn = $('btn-load');
+  btn.disabled = true; btn.textContent = 'Cargando...';
+  setStatus('load', 'Consultando SAP para ' + clientesSeleccionados.length + ' selección(es)...');
+
+  try {
+    // Hacer las llamadas en paralelo (1 por cliente seleccionado)
+    var promesas = clientesSeleccionados.map(function(c) {
+      var url = API_PROXY +
+        '?modo=stockxfecha' +
+        '&granularidad=' + encodeURIComponent(granularidad) +
+        '&stockTipo=' + encodeURIComponent(stockTipo) +
+        '&cliente=' + encodeURIComponent(c.nombre);
+      return fetch(url, { headers: { 'Accept': 'application/json' } })
+        .then(function(r) { return r.json(); })
+        .then(function(j) { return { cliente: c, data: j }; });
+    });
+
+    var resultados = await Promise.all(promesas);
+
+    // Procesar respuestas: agrupar items por (tipo, nombre)
+    seriesData = {};
+    var totalItems = 0;
+    resultados.forEach(function(r) {
+      if (!r.data.ok) {
+        console.warn('[Stocks-x-fecha] Error para ' + r.cliente.nombre + ':', r.data.error);
+        return;
+      }
+      (r.data.items || []).forEach(function(it) {
+        var k = keySerie(it.cliente, it.nombre);
+        if (!seriesData[k]) seriesData[k] = [];
+        seriesData[k].push(it);
+      });
+      totalItems += (r.data.items || []).length;
+    });
+
+    if (!totalItems) {
+      setStatus('err', 'Sin datos para los clientes seleccionados.');
+      ocultarTodo();
+      return;
+    }
+
+    setStatus('ok', '✓ ' + totalItems + ' puntos cargados de ' + Object.keys(seriesData).length + ' series · ' + clientesSeleccionados.length + ' selección(es)');
+
+    renderTodo();
+  } catch (e) {
+    console.error('[Stocks-x-fecha]', e);
+    setStatus('err', 'Error: ' + (e.message || e));
+  } finally {
+    btn.disabled = false; btn.textContent = '📥 Cargar evolución';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// RENDER PRINCIPAL: KPIs + gráfico + tabla
+// ─────────────────────────────────────────────────────────────────────────
+function renderTodo() {
+  var keys = Object.keys(seriesData).sort();
+  if (!keys.length) { ocultarTodo(); return; }
+
+  // Banner explicativo según stockTipo
+  $('banner-info').style.display = 'block';
+  if (stockTipo === 'acumulado') {
+    $('banner-text').innerHTML =
+      'El gráfico muestra el <strong>stock acumulado</strong> al cierre de cada ' + granularidadLabel() + '. ' +
+      'El cálculo arranca desde 2023 (inicio de la data) para que cada punto refleje el stock real total.';
+  } else {
+    $('banner-text').innerHTML =
+      'El gráfico muestra el <strong>movimiento neto</strong> de cada ' + granularidadLabel() + ' (entradas − salidas). ' +
+      'Valores positivos = el stock creció, negativos = decreció.';
+  }
+
+  renderKPIs(keys);
+  renderChart(keys);
+  renderTabla(keys);
+
+  $('kpis').style.display = 'grid';
+  $('chart-card').style.display = 'block';
+  $('tabla-card').style.display = 'block';
+}
+
+function granularidadLabel() {
+  return granularidad === 'diario' ? 'día' : (granularidad === 'semanal' ? 'semana' : 'mes');
+}
+
+// KPIs sobre la serie ACTIVA principal (la primera, o todas combinadas si querés)
+// Decisión: mostrar KPIs SUMANDO todas las series para los seleccionados
+function renderKPIs(keys) {
+  // Combinar todas las series por período (suma de stock por período)
+  var combinado = {};
+  keys.forEach(function(k) {
+    seriesData[k].forEach(function(it) {
+      if (!combinado[it.periodo]) combinado[it.periodo] = 0;
+      combinado[it.periodo] += it.stock;
+    });
+  });
+
+  var periodos = Object.keys(combinado).sort();
+  if (!periodos.length) return;
+
+  var valores = periodos.map(function(p) { return combinado[p]; });
+  var maxV = Math.max.apply(null, valores);
+  var minV = Math.min.apply(null, valores);
+  var avgV = valores.reduce(function(a,b){return a+b;}, 0) / valores.length;
+  var primero = valores[0];
+  var ultimo = valores[valores.length - 1];
+  var variacion = ultimo - primero;
+  var variacionPct = primero !== 0 ? (variacion / Math.abs(primero) * 100) : 0;
+
+  var maxIdx = valores.indexOf(maxV);
+  var minIdx = valores.indexOf(minV);
+
+  $('k-max').textContent = fmtNum(maxV);
+  $('k-max-sub').textContent = 'En ' + fmtPeriodoLabel(periodos[maxIdx]);
+  $('k-min').textContent = fmtNum(minV);
+  $('k-min-sub').textContent = 'En ' + fmtPeriodoLabel(periodos[minIdx]);
+  $('k-avg').textContent = fmtNum(avgV);
+  $('k-last').textContent = fmtNum(ultimo);
+  $('k-last-sub').textContent = fmtPeriodoLabel(periodos[periodos.length - 1]);
+
+  var varEl = $('k-var');
+  varEl.textContent = (variacion >= 0 ? '+' : '') + fmtNum(variacion);
+  varEl.className = 'kpi-val ' + (variacion >= 0 ? 'pos' : 'neg');
+  $('k-var-sub').textContent = (variacionPct >= 0 ? '+' : '') + variacionPct.toFixed(1).replace('.',',') + '% (' + fmtPeriodoLabel(periodos[0]) + ' → ' + fmtPeriodoLabel(periodos[periodos.length-1]) + ')';
+}
+
+function renderChart(keys) {
+  // Unir todos los períodos posibles para tener un eje X común
+  var todosPeriodos = {};
+  keys.forEach(function(k) {
+    seriesData[k].forEach(function(it) { todosPeriodos[it.periodo] = true; });
+  });
+  var labels = Object.keys(todosPeriodos).sort();
+
+  // Crear datasets, uno por (tipo, nombre)
+  var datasets = keys.map(function(k, idx) {
+    var partes = k.split('|');
+    var tipo = partes[0], nombre = partes[1];
+    var color = PALETA[idx % PALETA.length];
+
+    // Mapear cada período al stock correspondiente
+    var pts = seriesData[k];
+    var ptsMap = {};
+    pts.forEach(function(p) { ptsMap[p.periodo] = p.stock; });
+    var data = labels.map(function(lab) { return ptsMap[lab] != null ? ptsMap[lab] : null; });
+
+    return {
+      label: nombre + ' (' + tipo + ')',
+      data: data,
+      borderColor: color,
+      backgroundColor: color + '22',  // alpha al 13%
+      tension: 0.25,
+      fill: false,
+      pointRadius: 2,
+      pointBackgroundColor: color,
+      borderWidth: 2,
+      spanGaps: true
+    };
+  });
+
+  $('chart-title').textContent = stockTipo === 'acumulado'
+    ? 'Stock acumulado por ' + granularidadLabel()
+    : 'Movimiento neto por ' + granularidadLabel();
+  $('chart-sub').textContent = labels.length + ' ' + granularidadLabel() + (labels.length===1?'':'s') + ' · ' + datasets.length + ' serie' + (datasets.length===1?'':'s');
+
+  if (chartInstance) chartInstance.destroy();
+  var ctx = $('canvas').getContext('2d');
+  chartInstance = new Chart(ctx, {
+    type: 'line',
+    data: { labels: labels.map(fmtPeriodoLabel), datasets: datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#9da3b4', font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              var v = ctx.parsed.y;
+              return ctx.dataset.label + ': ' + Math.round(v).toLocaleString('es-CL');
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#9da3b4', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+        y: {
+          ticks: { color: '#9da3b4', font: { size: 10 }, callback: function(v) { return v.toLocaleString('es-CL'); } },
+          grid: { color: 'rgba(255,255,255,0.04)' }
+        }
+      }
+    }
+  });
+}
+
+function renderTabla(keys) {
+  var rows = [];
+  keys.forEach(function(k) {
+    seriesData[k].forEach(function(it) { rows.push(it); });
+  });
+  // Ordenar por nombre, tipo, período (descendente)
+  rows.sort(function(a, b) {
+    if (a.nombre !== b.nombre) return a.nombre.localeCompare(b.nombre);
+    if (a.cliente !== b.cliente) return a.cliente.localeCompare(b.cliente);
+    return b.periodo.localeCompare(a.periodo);
+  });
+
+  $('badge-tabla').textContent = rows.length + ' fila' + (rows.length===1?'':'s');
+
+  var tb = $('tbody');
+  if (!rows.length) {
+    tb.innerHTML = '<tr><td colspan="6"><div class="state-msg">Sin datos</div></td></tr>';
+    return;
+  }
+  tb.innerHTML = rows.map(function(r) {
+    var tipoColor = r.cliente === 'CLIENTES' ? 'var(--c-cli)' : 'var(--c-ret)';
+    return '<tr>' +
+      '<td><span style="color:' + tipoColor + ';font-weight:500">' + r.cliente + '</span></td>' +
+      '<td>' + r.nombre + '</td>' +
+      '<td>' + fmtPeriodoLabel(r.periodo) + '</td>' +
+      '<td class="num">' + fmtNum(r.entradas) + '</td>' +
+      '<td class="num">' + fmtNum(r.salidas) + '</td>' +
+      '<td class="num"><strong>' + fmtNum(r.stock) + '</strong></td>' +
+    '</tr>';
+  }).join('');
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// EXCEL
+// ─────────────────────────────────────────────────────────────────────────
+function exportarExcel() {
+  if (!Object.keys(seriesData).length) { alert('Primero carga datos.'); return; }
+  if (typeof XLSX === 'undefined') { alert('SheetJS no cargado.'); return; }
+
+  var rows = [];
+  Object.keys(seriesData).forEach(function(k) {
+    seriesData[k].forEach(function(it) {
+      rows.push({
+        'Tipo':     it.cliente,
+        'Nombre':   it.nombre,
+        'Período':  it.periodo,
+        'Entradas': it.entradas,
+        'Salidas':  it.salidas,
+        'Stock':    it.stock
+      });
+    });
+  });
+  rows.sort(function(a,b) {
+    if (a.Nombre !== b.Nombre) return a.Nombre.localeCompare(b.Nombre);
+    if (a.Tipo !== b.Tipo) return a.Tipo.localeCompare(b.Tipo);
+    return a['Período'].localeCompare(b['Período']);
+  });
+
+  var wb = XLSX.utils.book_new();
+  var ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [{wch:10},{wch:30},{wch:12},{wch:12},{wch:12},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Stock x fecha');
+
+  var fechaStr = new Date().toISOString().substring(0, 10);
+  XLSX.writeFile(wb, 'stocks_x_fecha_' + stockTipo + '_' + granularidad + '_' + fechaStr + '.xlsx');
+  setStatus('ok', '✓ Excel descargado');
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// EVENT LISTENERS
+// ─────────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', function() {
+  cargarListaClientesDesdeCache();
+
+  // Si la URL tiene ?cliente=XXX, agregarlo automáticamente
+  var urlParams = new URLSearchParams(window.location.search);
+  var cliFromUrl = urlParams.get('cliente');
+  if (cliFromUrl) {
+    agregarCliente(cliFromUrl);
+    setStatus('', 'Cliente "' + cliFromUrl + '" agregado. Presiona "Cargar evolución".');
+  }
+
+  // Input autocomplete
+  $('cli-input').addEventListener('focus', abrirDropdown);
+  $('cli-input').addEventListener('input', abrirDropdown);
+  $('cli-input').addEventListener('blur', cerrarDropdown);
+
+  // Navegación con teclado
+  $('cli-input').addEventListener('keydown', function(e) {
+    var dd = $('cli-dropdown');
+    var opts = dd.querySelectorAll('.cli-opt[onclick]');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      hoverIdx = Math.min(hoverIdx + 1, opts.length - 1);
+      abrirDropdown();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      hoverIdx = Math.max(hoverIdx - 1, 0);
+      abrirDropdown();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (hoverIdx >= 0 && opts[hoverIdx]) opts[hoverIdx].click();
+      else if (opts.length === 1) opts[0].click();
+    } else if (e.key === 'Backspace' && !$('cli-input').value && clientesSeleccionados.length) {
+      // Quitar el último tag con backspace
+      quitarCliente(clientesSeleccionados[clientesSeleccionados.length-1].nombre);
+    }
+  });
+
+  // Botones segmented
+  document.querySelectorAll('#seg-stockTipo .seg-btn').forEach(function(b) {
+    b.addEventListener('click', function() {
+      document.querySelectorAll('#seg-stockTipo .seg-btn').forEach(function(x) { x.classList.remove('on'); });
+      b.classList.add('on');
+      stockTipo = b.getAttribute('data-st');
+      // Si ya hay datos cargados, recargar (cambia el cálculo)
+      if (Object.keys(seriesData).length) cargarSeleccionados();
+    });
+  });
+  document.querySelectorAll('#seg-gran .seg-btn').forEach(function(b) {
+    b.addEventListener('click', function() {
+      document.querySelectorAll('#seg-gran .seg-btn').forEach(function(x) { x.classList.remove('on'); });
+      b.classList.add('on');
+      granularidad = b.getAttribute('data-g');
+      if (Object.keys(seriesData).length) cargarSeleccionados();
+    });
+  });
+});
+
+// Exponer funciones globales para onclick inline
+window.agregarCliente = agregarCliente;
+window.quitarCliente = quitarCliente;
+window.limpiarClientes = limpiarClientes;
+</script>
+
+</body>
+</html>

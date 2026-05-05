@@ -241,9 +241,11 @@ function calcularStockActual(rows) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// MODO 'STOCKXFECHA': serie temporal de stock acumulado
+// MODO 'STOCKXFECHA': serie temporal de stock
 // granularidad: 'diario' | 'semanal' | 'mensual' (default semanal)
-// Devuelve por (clave_grupo, fecha) el stock acumulado al final de ese período.
+// stockTipo:
+//   'acumulado' (default) → stock al cierre de cada período (acumulado desde el inicio)
+//   'periodo'             → solo movimiento neto de cada período (entradas - salidas)
 // ─────────────────────────────────────────────────────────────────────────
 
 // Devuelve clave del período según granularidad
@@ -269,7 +271,7 @@ function periodoClave(fechaIso, granularidad) {
   return d.getUTCFullYear() + '-W' + String(weekNum).padStart(2, '0');
 }
 
-function calcularStockXFecha(rows, granularidad) {
+function calcularStockXFecha(rows, granularidad, stockTipo) {
   // Paso 1: agrupar movimientos por (combinación, período)
   // movimientos[claveGrupo][periodo] = { entradas, salidas }
   const movimientos = {};
@@ -283,7 +285,9 @@ function calcularStockXFecha(rows, granularidad) {
     movimientos[grupo][periodo].s += Number(r.Salida || 0);
   });
 
-  // Paso 2: acumular cronológicamente para obtener "stock al cierre del período"
+  // Paso 2:
+  //   - acumulado: cronológicamente vamos sumando (stock al cierre)
+  //   - periodo: solo el neto del período (entradas - salidas)
   const resultado = [];
   Object.keys(movimientos).forEach(grupo => {
     const partes = grupo.split('|');
@@ -293,14 +297,18 @@ function calcularStockXFecha(rows, granularidad) {
     let acumulado = 0;
     periodos.forEach(p => {
       const m = movimientos[grupo][p];
-      acumulado += m.e - m.s;
+      const neto = m.e - m.s;
+      acumulado += neto;
       resultado.push({
         cliente:  whsCode,        // CLIENTES o RETAIL
         nombre:   nombre,
         periodo:  p,
         entradas: m.e,
         salidas:  m.s,
-        stock:    acumulado       // stock acumulado al cierre de ese período
+        // 'stock' depende de stockTipo:
+        //   acumulado → al cierre del período (stock real)
+        //   periodo   → solo el movimiento neto del período (puede ser negativo)
+        stock:    stockTipo === 'periodo' ? neto : acumulado
       });
     });
   });
@@ -396,17 +404,28 @@ module.exports = async function (context, req) {
       return;
     }
 
-    // MODO STOCKXFECHA: serie temporal con stock acumulado por período
+    // MODO STOCKXFECHA: serie temporal con stock acumulado o por período
     if (modo === 'stockxfecha') {
       const granularidad = (params.granularidad || 'semanal').toLowerCase();
       if (['diario', 'semanal', 'mensual'].indexOf(granularidad) < 0) {
         throw new Error("granularidad inválida: usa 'diario', 'semanal' o 'mensual'");
       }
-      if (!filtros.desde) filtros.desde = '2023-01-01';
-      if (!filtros.hasta) filtros.hasta = new Date().toISOString().substring(0, 10);
+      const stockTipo = (params.stockTipo || 'acumulado').toLowerCase();
+      if (['acumulado', 'periodo'].indexOf(stockTipo) < 0) {
+        throw new Error("stockTipo inválido: usa 'acumulado' o 'periodo'");
+      }
+      // Para 'acumulado' siempre arrancamos desde 2023 para que el cálculo sea correcto.
+      // Para 'periodo' respetamos el rango pedido por el usuario.
+      if (stockTipo === 'acumulado') {
+        if (!filtros.desde) filtros.desde = '2023-01-01';
+        if (!filtros.hasta) filtros.hasta = new Date().toISOString().substring(0, 10);
+      } else {
+        if (!filtros.desde) filtros.desde = '2023-01-01';
+        if (!filtros.hasta) filtros.hasta = new Date().toISOString().substring(0, 10);
+      }
 
       const rows = await fetchRaw(context, filtros);
-      const serie = calcularStockXFecha(rows, granularidad);
+      const serie = calcularStockXFecha(rows, granularidad, stockTipo);
 
       context.res = {
         status: 200,
@@ -415,6 +434,7 @@ module.exports = async function (context, req) {
           ok: true,
           modo: 'stockxfecha',
           granularidad: granularidad,
+          stockTipo: stockTipo,
           total: serie.length,
           movimientos_procesados: rows.length,
           filtros: filtros,

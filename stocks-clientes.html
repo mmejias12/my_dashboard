@@ -293,12 +293,20 @@ async function cargarDatos(forzarRefresh) {
 
   var btn = $('btn-load');
   btn.disabled = true; btn.textContent = 'Cargando...';
-  setStatus('load', 'Consultando SAP (puede tardar 20-30 seg, calcula stock desde 2023)...');
+  setStatus('load', 'Consultando SAP (puede tardar 25-40 seg en primera carga del día, después es instantáneo)...');
 
   try {
-    var url = API_PROXY + '?modo=actual';
+    // Si forzaron refresh, pasar también al proxy para que ignore su cache de 1h
+    var url = API_PROXY + '?modo=actual' + (forzarRefresh ? '&forceRefresh=1' : '');
     var res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (!res.ok) {
+      // Mensajes amigables para errores comunes
+      var errMsg = 'HTTP ' + res.status;
+      if (res.status === 500 || res.status === 504) {
+        errMsg = 'Timeout: SAP tardó demasiado. Reintentá en 30 seg (sesión SAP se está calentando).';
+      }
+      throw new Error(errMsg);
+    }
     var data = await res.json();
     if (!data.ok) throw new Error(data.error || 'Error desconocido del proxy');
 
@@ -306,7 +314,8 @@ async function cargarDatos(forzarRefresh) {
     cacheSet(raw);
 
     var seg = Math.round((data.tomo_ms || 0) / 1000);
-    setStatus('ok', '✓ ' + raw.length + ' combinaciones cargadas · ' + (data.movimientos_procesados || 0).toLocaleString('es-CL') + ' movimientos procesados · ' + seg + ' seg');
+    var cacheNote = data.cache_hit ? ' · ✨ servidor cache hit (edad ' + data.cache_age_seconds + 's)' : '';
+    setStatus('ok', '✓ ' + raw.length + ' combinaciones cargadas · ' + (data.movimientos_procesados || 0).toLocaleString('es-CL') + ' movimientos · ' + seg + ' seg' + cacheNote);
 
     procesarYRender();
   } catch (e) {

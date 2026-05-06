@@ -33,6 +33,12 @@ const sapAgent = new https.Agent({ rejectUnauthorized: false });
 let cachedSession = { id: null, routeId: null, expiresAt: 0 };
 const SESSION_TTL_MS = 25 * 60 * 1000;
 
+// Cache en memoria del resultado del modo 'actual'.
+// Key incluye los filtros para no mezclar respuestas de queries distintas.
+// TTL: 1 hora. Si Azure recrea el container, se pierde (es esperado).
+const stockActualCache = new Map();
+const STOCK_CACHE_TTL_MS = 60 * 60 * 1000;  // 1 hora
+
 // ─────────────────────────────────────────────────────────────────────────
 // HELPERS HTTP
 // ─────────────────────────────────────────────────────────────────────────
@@ -46,7 +52,7 @@ function sapRequest(method, urlStr, headers, body) {
       path: u.pathname + u.search,
       headers: headers || {},
       agent: sapAgent,
-      timeout: 35000  // 35 seg por request individual (SWA timeout es 45 seg total)
+      timeout: 60000  // 60 seg por request a SAP. Usado solo para modo 'actual'
     };
 
     if (body) {
@@ -67,7 +73,7 @@ function sapRequest(method, urlStr, headers, body) {
     });
 
     req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('Timeout (35s) conectando a SAP')); });
+    req.on('timeout', () => { req.destroy(); reject(new Error('Timeout (60s) conectando a SAP')); });
 
     if (body) req.write(typeof body === 'string' ? body : JSON.stringify(body));
     req.end();
@@ -369,6 +375,31 @@ module.exports = async function (context, req) {
       if (!filtros.desde) filtros.desde = '2023-01-01';
       if (!filtros.hasta) filtros.hasta = new Date().toISOString().substring(0, 10);
 
+      // Cache key por filtros (cliente, whsCode, desde, hasta)
+      const cacheKey = JSON.stringify(filtros);
+      const forceRefresh = params.forceRefresh === '1' || params.refresh === '1';
+
+      // Verificar cache (a menos que se haya pedido forceRefresh)
+      if (!forceRefresh) {
+        const cached = stockActualCache.get(cacheKey);
+        if (cached && Date.now() < cached.expiresAt) {
+          const ageMs = Date.now() - cached.savedAt;
+          context.log('[SAP] CACHE HIT modo actual · edad ' + Math.round(ageMs/1000) + 's · ' + cached.payload.total + ' combinaciones');
+          context.res = {
+            status: 200,
+            headers: corsHeaders(),
+            body: Object.assign({}, cached.payload, {
+              cache_hit: true,
+              cache_age_seconds: Math.round(ageMs / 1000),
+              tomo_ms: Date.now() - t0
+            })
+          };
+          return;
+        }
+      }
+
+      // CACHE MISS: query fresca a SAP
+      context.log('[SAP] CACHE MISS modo actual · pidiendo a SAP...');
       const rows = await fetchRaw(context, filtros);
       const stockActual = calcularStockActual(rows);
 
@@ -382,24 +413,35 @@ module.exports = async function (context, req) {
         totalesPorTipo[r.cliente].total_pallets += r.stock;
         totalesPorTipo[r.cliente].clientes_unicos.add(r.nombre);
       });
-      // Convertir Set a número para serializar
       Object.keys(totalesPorTipo).forEach(k => {
         totalesPorTipo[k].clientes_unicos = totalesPorTipo[k].clientes_unicos.size;
       });
 
+      const payload = {
+        ok: true,
+        modo: 'actual',
+        total: stockActual.length,
+        movimientos_procesados: rows.length,
+        filtros: filtros,
+        totales_por_tipo: totalesPorTipo,
+        items: stockActual
+      };
+
+      // Guardar en cache
+      stockActualCache.set(cacheKey, {
+        savedAt: Date.now(),
+        expiresAt: Date.now() + STOCK_CACHE_TTL_MS,
+        payload: payload
+      });
+      context.log('[SAP] Cache guardado · TTL ' + (STOCK_CACHE_TTL_MS/60000) + ' min');
+
       context.res = {
         status: 200,
         headers: corsHeaders(),
-        body: {
-          ok: true,
-          modo: 'actual',
-          total: stockActual.length,
-          movimientos_procesados: rows.length,
-          filtros: filtros,
-          totales_por_tipo: totalesPorTipo,
-          tomo_ms: Date.now() - t0,
-          items: stockActual
-        }
+        body: Object.assign({}, payload, {
+          cache_hit: false,
+          tomo_ms: Date.now() - t0
+        })
       };
       return;
     }

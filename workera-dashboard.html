@@ -5,15 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Asistencia Workera · REDTEC</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#09090f;--s1:#0f1018;--s2:#14151f;--s3:#1a1b28;
-  --br:rgba(255,255,255,.06);--brm:rgba(255,255,255,.1);
-  --t1:#f0f1f5;--t2:#8b90a8;--t3:#4a4f66;
+  --bg:#09090f;--s1:#0f1018;--s2:#14151f;--s3:#1a1b28;--s4:#22243a;
+  --br:rgba(255,255,255,.06);--brm:rgba(255,255,255,.1);--brh:rgba(255,255,255,.18);
+  --t1:#f0f1f5;--t2:#8b90a8;--t3:#4a4f66;--t4:#2c3045;
   --green:#22d47a;--blue:#4f8ef7;--amber:#f5a623;--red:#f56060;
   --purple:#a78bfa;--cyan:#22d4d4;--pink:#f472b6;
+  --green-bg:rgba(34,212,122,.12);--blue-bg:rgba(79,142,247,.12);
+  --amber-bg:rgba(245,166,35,.12);--red-bg:rgba(245,96,96,.12);
+  --purple-bg:rgba(167,139,250,.12);--cyan-bg:rgba(34,212,212,.12);
 }
 html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;background:var(--bg);color:var(--t1);-webkit-font-smoothing:antialiased}
 
@@ -23,7 +27,7 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 .hdr-title{font-size:13px;font-weight:600}
 .hdr-sub{font-size:11px;color:var(--t3)}
 .sep{width:1px;height:18px;background:var(--brm)}
-.pill{display:flex;align-items:center;gap:5px;background:rgba(34,212,212,.1);border:1px solid rgba(34,212,212,.25);border-radius:20px;padding:3px 10px;font-size:10.5px;color:var(--cyan);font-weight:500}
+.pill{display:flex;align-items:center;gap:5px;background:var(--cyan-bg);border:1px solid rgba(34,212,212,.25);border-radius:20px;padding:3px 10px;font-size:10.5px;color:var(--cyan);font-weight:500}
 .pill-dot{width:6px;height:6px;background:var(--cyan);border-radius:50%;animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 .hdr-r{margin-left:auto;display:flex;align-items:center;gap:8px}
@@ -38,180 +42,160 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 .load-btn{font-size:12px;padding:6px 16px;background:var(--cyan);color:#09090f;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-family:'DM Sans',sans-serif;transition:opacity .15s}
 .load-btn:hover{opacity:.88}
 .load-btn:disabled{opacity:.4;cursor:not-allowed}
+.tol-inp{width:48px;text-align:center}
 
 /* STATUS */
 .status-bar{background:var(--s1);border-bottom:1px solid var(--br);padding:7px 20px;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--t3)}
 .sdot{width:7px;height:7px;border-radius:50%;background:var(--t3);flex-shrink:0}
-.sdot.ok{background:var(--green)}.sdot.load{background:var(--amber);animation:pulse 1s infinite}.sdot.err{background:var(--red)}.sdot.warn{background:var(--amber)}
+.sdot.ok{background:var(--green)}.sdot.load{background:var(--amber);animation:pulse 1s infinite}
+.sdot.err{background:var(--red)}.sdot.warn{background:var(--amber)}
 
 /* TABS */
 .tabs{display:flex;background:var(--s1);border-bottom:1px solid var(--br);padding:0 20px;overflow-x:auto}
-.tab{font-size:12px;padding:10px 16px;color:var(--t3);cursor:pointer;border:none;background:none;font-family:'DM Sans',sans-serif;border-bottom:2px solid transparent;transition:all .13s;white-space:nowrap}
+.tab{font-size:12px;padding:10px 16px;color:var(--t3);cursor:pointer;border:none;background:none;font-family:'DM Sans',sans-serif;border-bottom:2px solid transparent;transition:all .13s;white-space:nowrap;display:flex;align-items:center;gap:6px}
 .tab:hover{color:var(--t2)}
 .tab.on{color:var(--t1);border-bottom-color:var(--cyan);font-weight:500}
+.tab-badge{display:inline-block;min-width:18px;padding:1px 6px;font-size:10px;font-weight:600;border-radius:9px;background:var(--red);color:#fff;font-family:'DM Mono',monospace;line-height:1.4}
+.tab-badge.amber{background:var(--amber);color:#09090f}
+.tab-badge.cyan{background:var(--cyan);color:#09090f}
 
 /* MAIN */
-.main{padding:16px 20px;max-width:1600px}
+.main{padding:16px 20px;max-width:1700px}
 .view{display:none}
 .view.on{display:block}
 
 /* KPI STRIP */
-.krow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin-bottom:13px}
-@media(max-width:1100px){.krow{grid-template-columns:repeat(3,1fr)}}
-.kpi{background:var(--s2);border:1px solid var(--br);border-radius:10px;padding:11px 14px;position:relative;overflow:hidden}
+.krow{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;margin-bottom:13px}
+@media(max-width:1300px){.krow{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:700px){.krow{grid-template-columns:repeat(2,1fr)}}
+.kpi{background:var(--s2);border:1px solid var(--br);border-radius:10px;padding:11px 14px;position:relative;overflow:hidden;transition:transform .15s,border-color .15s;cursor:default}
+.kpi.clickable{cursor:pointer}
+.kpi.clickable:hover{transform:translateY(-1px);border-color:var(--brh)}
 .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:currentColor;opacity:.75}
 .kpi.blue{color:var(--blue)}.kpi.green{color:var(--green)}.kpi.amber{color:var(--amber)}
 .kpi.red{color:var(--red)}.kpi.purple{color:var(--purple)}.kpi.cyan{color:var(--cyan)}
+.kpi.pink{color:var(--pink)}
 .kl{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--t3);margin-bottom:5px;font-weight:500}
 .kv{font-size:22px;font-weight:600;line-height:1;font-family:'DM Mono',monospace;color:currentColor}
 .ks{font-size:10px;color:var(--t3);margin-top:4px}
 
 /* CARD */
 .card{background:var(--s2);border:1px solid var(--br);border-radius:10px;padding:14px;margin-bottom:11px}
-.ct{font-size:11.5px;font-weight:600;color:var(--t2);margin-bottom:3px}
+.ct{font-size:11.5px;font-weight:600;color:var(--t2);margin-bottom:3px;display:flex;align-items:center;gap:8px}
 .cs{font-size:10.5px;color:var(--t3);margin-bottom:11px}
+.card-actions{margin-left:auto;display:flex;gap:6px;align-items:center}
+
+/* FILTRO LOCAL */
+.local-filters{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;padding:8px 0;border-bottom:1px dashed var(--br)}
+.local-filters input,.local-filters select{background:var(--s3);border:1px solid var(--brm);color:var(--t1);padding:4px 8px;border-radius:5px;font-size:11.5px;font-family:inherit;outline:none}
+.local-filters input:focus,.local-filters select:focus{border-color:var(--cyan)}
+.btn-mini{font-size:11px;padding:3px 10px;background:var(--s3);color:var(--t2);border:1px solid var(--brm);border-radius:5px;cursor:pointer;font-family:inherit;transition:all .15s}
+.btn-mini:hover{color:var(--t1);border-color:var(--brh)}
+.btn-mini.green{background:var(--green-bg);color:var(--green);border-color:rgba(34,212,122,.3)}
+.btn-mini.green:hover{background:rgba(34,212,122,.18)}
+.btn-mini.cyan{background:var(--cyan-bg);color:var(--cyan);border-color:rgba(34,212,212,.3)}
+.btn-mini.cyan:hover{background:rgba(34,212,212,.18)}
+
+/* TABLA */
+.tw{overflow-x:auto;border-radius:6px;border:1px solid var(--br)}
+.tbl{width:100%;border-collapse:collapse;font-size:12px;min-width:700px}
+.tbl th{background:var(--s3);color:var(--t2);font-weight:500;text-align:left;padding:8px 10px;border-bottom:1px solid var(--br);font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;position:sticky;top:0;z-index:1}
+.tbl th.sortable{cursor:pointer;user-select:none}
+.tbl th.sortable:hover{color:var(--t1)}
+.tbl th.sorted-asc::after{content:'↑';margin-left:4px;color:var(--cyan)}
+.tbl th.sorted-desc::after{content:'↓';margin-left:4px;color:var(--cyan)}
+.tbl td{padding:7px 10px;border-bottom:1px solid var(--br);color:var(--t1);font-size:11.5px}
+.tbl tr:hover td{background:rgba(255,255,255,.02)}
+.tbl tr.row-alert td{background:rgba(245,96,96,.04)}
+.tbl tr.row-alert:hover td{background:rgba(245,96,96,.08)}
+.tbl tr.row-warn td{background:rgba(245,166,35,.04)}
+.tbl tr.row-warn:hover td{background:rgba(245,166,35,.08)}
+.tbl .num{font-family:'DM Mono',monospace;font-size:11px}
+
+/* Estado pills */
+.s-pill{display:inline-block;padding:1.5px 7px;border-radius:10px;font-size:10px;font-weight:500;font-family:'DM Mono',monospace}
+.s-pill.act{background:var(--green-bg);color:var(--green)}
+.s-pill.ina{background:var(--red-bg);color:var(--red)}
+.s-pill.atraso{background:var(--red-bg);color:var(--red)}
+.s-pill.warn{background:var(--amber-bg);color:var(--amber)}
+.s-pill.ok{background:var(--green-bg);color:var(--green)}
+.s-pill.extra{background:var(--purple-bg);color:var(--purple)}
+.s-pill.permiso{background:var(--blue-bg);color:var(--blue)}
+.s-pill.no-marca{background:var(--red-bg);color:var(--red);border:1px solid rgba(245,96,96,.4)}
+
+/* Empleado link */
+.emp-link{color:var(--cyan);cursor:pointer;text-decoration:none;font-weight:500}
+.emp-link:hover{text-decoration:underline}
+
+/* Empty / Loading state */
+.empty{padding:30px;text-align:center;color:var(--t3);font-size:11.5px}
+.loading-shim{padding:30px;text-align:center;color:var(--amber);font-size:11.5px}
+
+/* EMPLEADO BANNER */
 .emp-banner{background:rgba(34,211,238,.07);border:1px solid rgba(34,211,238,.3);
   border-radius:6px;padding:10px 14px;margin:8px 0 14px;font-size:11.5px;
   color:var(--t2);line-height:1.55}
 .emp-banner code{background:var(--s2);padding:1px 6px;border-radius:3px;
-  font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--cyan)}
+  font-family:'DM Mono',monospace;font-size:10.5px;color:var(--cyan)}
 .emp-banner strong{color:var(--t1)}
-/* Cuando la pestaña Trabajadores está activa, ocultar filtros que no aplican */
-/* Antes ocultábamos los filtros sucursal/depto en Trabajadores porque el API
-   no exponía la sucursal operativa. Ahora que los enriquecemos cruzando con
-   marcaciones, los filtros vuelven a tener sentido y se mantienen visibles. */
 
-/* Panel de diagnóstico cuando un endpoint devuelve vacío */
-.diag-panel{padding:18px 22px;text-align:left;background:rgba(245,158,11,.04);
-  border-left:3px solid var(--amber);}
-.diag-title{font-size:13px;font-weight:600;color:var(--amber);margin-bottom:6px}
-.diag-text{font-size:11.5px;color:var(--t2);line-height:1.55;margin-bottom:12px}
-.diag-text code{background:var(--s2);padding:1px 6px;border-radius:3px;
-  font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--cyan)}
-.diag-text strong{color:var(--t1)}
-.diag-actions{display:flex;flex-direction:column;gap:8px}
-.diag-actions details{background:var(--s2);border:1px solid var(--brm);
-  border-radius:5px;padding:6px 10px;font-size:11px;color:var(--t2)}
-.diag-actions summary{cursor:pointer;padding:3px 0;color:var(--t1);font-weight:500;
-  outline:none}
-.diag-actions summary:hover{color:var(--cyan)}
-.diag-json{background:var(--s1);padding:10px;border-radius:4px;font-size:10.5px;
-  font-family:'JetBrains Mono',monospace;color:var(--t2);max-height:280px;
-  overflow:auto;margin:6px 0 0;line-height:1.5;white-space:pre-wrap;word-break:break-all}
-
-/* Link del código del empleado en la tabla — abre modal */
-.emp-link{font-weight:600;color:var(--cyan);cursor:pointer;text-decoration:none;
-  border-bottom:1px dashed transparent;transition:border-color .15s}
-.emp-link:hover{border-bottom-color:var(--cyan)}
-
-/* Modal del trabajador */
-.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;
-  display:none;align-items:flex-start;justify-content:center;padding:30px 20px;
-  overflow-y:auto;backdrop-filter:blur(3px)}
+/* MODAL */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;display:none;align-items:flex-start;justify-content:center;overflow-y:auto;padding:30px 20px}
 .modal-bg.on{display:flex}
-.modal-box{background:var(--s1);border:1px solid var(--brm);border-radius:10px;
-  width:100%;max-width:1100px;max-height:calc(100vh - 60px);overflow:auto;
-  box-shadow:0 10px 40px rgba(0,0,0,.5)}
-.modal-hdr{padding:18px 24px;border-bottom:1px solid var(--brm);
-  display:flex;justify-content:space-between;align-items:flex-start;
-  position:sticky;top:0;background:var(--s1);z-index:1}
-.modal-hdr h2{margin:0;font-size:18px;color:var(--t1);font-weight:600}
-.modal-hdr .modal-sub{font-size:11px;color:var(--t3);margin-top:3px;letter-spacing:.4px}
-.modal-close{background:transparent;border:1px solid var(--brm);color:var(--t2);
-  width:32px;height:32px;border-radius:6px;cursor:pointer;font-size:18px;
-  display:flex;align-items:center;justify-content:center}
-.modal-close:hover{background:var(--s2);color:var(--red)}
-.modal-pdf-btn{background:rgba(245,96,96,.12);border:1px solid var(--red);color:var(--red);
-  height:32px;padding:0 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:500;
-  display:flex;align-items:center;gap:5px;font-family:inherit}
-.modal-pdf-btn:hover{background:var(--red);color:#fff}
-.modal-pdf-btn:disabled{opacity:.5;cursor:not-allowed}
-.modal-body{padding:18px 24px}
-.modal-section{margin-bottom:20px}
-.modal-section h3{margin:0 0 10px;font-size:11.5px;color:var(--cyan);
-  text-transform:uppercase;letter-spacing:.6px;font-weight:600;
-  border-bottom:1px solid var(--brm);padding-bottom:6px}
-.modal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 18px}
-.modal-field{display:flex;flex-direction:column;gap:2px}
-.modal-field-lbl{font-size:9.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.4px}
-.modal-field-val{font-size:12px;color:var(--t1);font-weight:500;word-break:break-word}
-.modal-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
-.modal-kpi{background:var(--s2);border:1px solid var(--brm);border-radius:6px;
-  padding:10px 14px}
-.modal-kpi-lbl{font-size:9.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.4px}
-.modal-kpi-val{font-size:22px;font-weight:600;color:var(--t1);margin-top:4px}
-.modal-kpi-val.cyan{color:var(--cyan)}.modal-kpi-val.green{color:var(--green)}
-.modal-kpi-val.amber{color:var(--amber)}.modal-kpi-val.red{color:var(--red)}
-.modal-kpi-val.blue{color:var(--blue)}
-.modal-suc-bar{display:flex;height:24px;border-radius:4px;overflow:hidden;
-  margin-top:6px;background:var(--s2)}
-.modal-suc-segment{display:flex;align-items:center;justify-content:center;
-  font-size:10px;color:#fff;font-weight:500}
-.modal-suc-list{margin-top:8px;font-size:11px;color:var(--t2);line-height:1.7}
-.modal-suc-list span.dot{display:inline-block;width:8px;height:8px;border-radius:50%;
-  margin-right:6px;vertical-align:middle}
-.modal-timeline{font-family:'JetBrains Mono',monospace;font-size:10.5px;
-  background:var(--s2);border-radius:6px;padding:10px;max-height:280px;overflow-y:auto;
-  border:1px solid var(--brm);line-height:1.55}
-.modal-timeline .day{margin-bottom:5px;display:grid;grid-template-columns:90px 1fr;gap:10px}
-.modal-timeline .day-date{color:var(--t3);font-weight:500}
-.modal-timeline .day-events{color:var(--t2)}
-.modal-timeline .ev-in{color:var(--green)}
-.modal-timeline .ev-out{color:var(--amber)}
-.modal-timeline .ev-perm{color:var(--blue)}
-.modal-timeline .ev-none{color:var(--t3);opacity:.5}
-.modal-loading{text-align:center;padding:18px;color:var(--t3);font-size:11px}
+.modal{background:var(--s2);border:1px solid var(--brm);border-radius:12px;width:100%;max-width:900px;padding:24px;position:relative;max-height:calc(100vh - 60px);overflow-y:auto}
+.modal-close{position:absolute;top:14px;right:14px;background:none;border:none;color:var(--t2);font-size:20px;cursor:pointer;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:all .15s}
+.modal-close:hover{background:var(--s3);color:var(--t1)}
+.modal h2{font-size:18px;margin-bottom:4px;color:var(--t1)}
+.modal h3{font-size:11.5px;margin:0 0 10px;color:var(--cyan);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.modal-sub{font-size:11.5px;color:var(--t2);margin-bottom:20px}
+.modal-section{margin-bottom:22px}
+.modal-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px 16px}
+.modal-grid .lbl{color:var(--t3);font-size:10px;text-transform:uppercase;letter-spacing:.4px}
+.modal-grid .val{color:var(--t1);font-size:12.5px;margin-bottom:6px;font-family:'DM Mono',monospace}
 
-/* Filtros locales encima de tablas (Marcaciones, Permisos) */
-.mrc-filtros{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding:10px;
-  background:var(--s2);border:1px solid var(--brm);border-radius:6px}
-.mrc-filtros input[type="text"], .mrc-filtros input:not([type]),
-.mrc-filtros select{background:var(--s1);border:1px solid var(--brm);
-  color:var(--t1);padding:6px 10px;border-radius:5px;font-size:11.5px;
-  font-family:inherit;outline:none}
-.mrc-filtros input{min-width:280px;flex:1}
-.mrc-filtros input:focus, .mrc-filtros select:focus{border-color:var(--cyan)}
+/* ALERTA BOX */
+.alert-box{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:6px;margin-bottom:8px;font-size:11.5px;line-height:1.5}
+.alert-box.danger{background:var(--red-bg);border-left:3px solid var(--red);color:var(--t1)}
+.alert-box.warn{background:var(--amber-bg);border-left:3px solid var(--amber);color:var(--t1)}
+.alert-box.info{background:var(--cyan-bg);border-left:3px solid var(--cyan);color:var(--t1)}
+.alert-box.success{background:var(--green-bg);border-left:3px solid var(--green);color:var(--t1)}
+.alert-icon{font-size:14px;line-height:1}
 
-/* Paginador local */
-.paginador-btn{background:var(--s1);border:1px solid var(--brm);color:var(--t1);
-  padding:5px 12px;border-radius:5px;font-size:11.5px;cursor:pointer;
-  margin:0 3px;font-family:inherit;transition:all .15s}
-.paginador-btn:hover:not(:disabled){background:var(--cyan);color:#0c1117;border-color:var(--cyan)}
-.paginador-btn:disabled{opacity:.35;cursor:not-allowed}
-.paginador-info{color:var(--t2);font-size:11.5px;margin:0 14px}
-.paginador-info strong{color:var(--cyan)}
+/* HOY / DASHBOARD HOY */
+.hoy-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:11px;margin-bottom:13px}
+.hoy-card{background:var(--s2);border:1px solid var(--br);border-radius:10px;padding:14px}
+.hoy-card-title{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--t3);margin-bottom:8px;font-weight:500;display:flex;align-items:center;justify-content:space-between}
+.hoy-list{max-height:300px;overflow-y:auto;margin:0 -6px;padding:0 6px}
+.hoy-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--br);font-size:11.5px}
+.hoy-row:last-child{border-bottom:none}
+.hoy-row .name{flex:1;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hoy-row .meta{color:var(--t3);font-family:'DM Mono',monospace;font-size:10.5px;flex-shrink:0}
+.hoy-row.alert{color:var(--red)}
+.hoy-row.alert .name{color:var(--t1)}
 
-/* TABLA */
-.tw{overflow:auto;max-height:500px}
-.tbl{width:100%;border-collapse:collapse;font-size:11.5px}
-.tbl th{position:sticky;top:0;background:var(--s1);padding:6px 10px;text-align:left;font-size:9px;font-weight:600;color:var(--t3);border-bottom:1px solid var(--brm);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
-.tbl td{padding:7px 10px;border-bottom:1px solid var(--br);color:var(--t2);white-space:nowrap}
-.tbl tr:hover td{background:var(--s3)}
-.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:500}
-.bg{background:rgba(34,212,122,.15);color:var(--green)}
-.br{background:rgba(245,96,96,.15);color:var(--red)}
-.ba{background:rgba(245,166,35,.15);color:var(--amber)}
-.bb{background:rgba(79,142,247,.15);color:var(--blue)}
-.bn{background:rgba(168,180,200,.15);color:var(--t3)}
+/* SCROLLBAR personalizado */
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:var(--s1)}
+::-webkit-scrollbar-thumb{background:var(--s4);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:var(--brh)}
 
-.empty{text-align:center;padding:40px;color:var(--t3);font-size:12px}
-.err-panel{background:rgba(245,96,96,.05);border:1px solid rgba(245,96,96,.15);border-radius:8px;padding:16px;margin:14px 0;color:var(--t2);font-size:12px;line-height:1.6}
-.err-panel code{background:var(--s3);padding:2px 6px;border-radius:3px;color:var(--amber);font-family:'DM Mono',monospace;font-size:11px}
+/* Tooltips simples */
+[title]{cursor:help}
 
-.hint{font-size:10.5px;color:var(--t3);margin-top:6px}
-.hint code{background:var(--s3);padding:1px 5px;border-radius:3px;color:var(--cyan);font-family:'DM Mono',monospace}
+/* Print */
+@media print{
+  .hdr,.ctrls,.status-bar,.tabs,.local-filters,.modal-close,.card-actions{display:none!important}
+  .modal-bg{position:static;background:#fff;padding:0}
+  .modal{max-width:100%;max-height:none;border:none;color:#000;background:#fff}
+  body{background:#fff;color:#000}
+}
 </style>
-<!-- Librerías para exportar Excel y PDF -->
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
-
 <header class="hdr">
-  <a href="index.html" class="logo">R</a>
+  <a href="index.html" class="logo">RT</a>
   <div>
-    <div class="hdr-title">Asistencia Workera</div>
+    <div class="hdr-title">Workera Dashboard</div>
     <div class="hdr-sub">Control de asistencia · REDTEC</div>
   </div>
   <div class="sep"></div>
@@ -237,6 +221,8 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
   <input type="date" id="d1" class="ctrl-inp">
   <span class="ctrl-lbl">Hasta:</span>
   <input type="date" id="d2" class="ctrl-inp">
+  <span class="ctrl-lbl" title="Tolerancia en minutos antes de marcar atraso">Tol(min):</span>
+  <input type="number" id="tolerancia" class="ctrl-inp tol-inp" value="0" min="0" max="60">
   <button id="btn-load" class="load-btn" onclick="cargar()">🔄 Cargar datos</button>
 </div>
 
@@ -246,152 +232,459 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 </div>
 
 <div class="tabs">
-  <button class="tab on" onclick="tab('emp')">Trabajadores</button>
+  <button class="tab on" onclick="tab('hoy')">📊 Hoy</button>
+  <button class="tab" onclick="tab('emp')">Trabajadores</button>
   <button class="tab" onclick="tab('ast')">Marcaciones</button>
+  <button class="tab" onclick="tab('ano')">Anomalías <span id="badge-ano" class="tab-badge" style="display:none">0</span></button>
+  <button class="tab" onclick="tab('tur')">Turnos &amp; Horarios</button>
   <button class="tab" onclick="tab('per')">Permisos</button>
-  <!-- Pestaña Turnos oculta: el endpoint /workshift/assign siempre devuelve vacío.
-       Para reactivarla cuando Workera habilite la funcionalidad, descomentar la línea siguiente: -->
-  <!-- <button class="tab" onclick="tab('tur')">Turnos</button> -->
   <button class="tab" onclick="tab('suc')">Sucursales</button>
+  <button class="tab" onclick="tab('dep')">Departamentos</button>
 </div>
 
 <div class="main">
-  <!-- TRABAJADORES -->
-  <div id="v-emp" class="view on">
+  <!-- ============================== HOY ============================== -->
+  <div id="v-hoy" class="view on">
+    <div class="krow">
+      <div class="kpi cyan"><div class="kl">Trabajadores activos</div><div class="kv" id="hoy-k-act">—</div><div class="ks" id="hoy-k-act-sub">—</div></div>
+      <div class="kpi green"><div class="kl">Marcaron hoy</div><div class="kv" id="hoy-k-marc">—</div><div class="ks" id="hoy-k-marc-sub">—</div></div>
+      <div class="kpi red"><div class="kl">No marcaron</div><div class="kv" id="hoy-k-nomarc">—</div><div class="ks" id="hoy-k-nomarc-sub">Con turno asignado</div></div>
+      <div class="kpi amber"><div class="kl">Atrasos hoy</div><div class="kv" id="hoy-k-atra">—</div><div class="ks" id="hoy-k-atra-sub">—</div></div>
+      <div class="kpi purple"><div class="kl">Horas extra hoy</div><div class="kv" id="hoy-k-ext">—</div><div class="ks">Acumulado del día</div></div>
+      <div class="kpi blue"><div class="kl">Permisos hoy</div><div class="kv" id="hoy-k-per">—</div><div class="ks">Vigentes hoy</div></div>
+    </div>
+
+    <div id="hoy-alerts"></div>
+
+    <div class="hoy-grid">
+      <div class="hoy-card">
+        <div class="hoy-card-title">
+          <span>⚠️ No han marcado entrada</span>
+          <button class="btn-mini" onclick="exportarHoy('nomarc')">📤</button>
+        </div>
+        <div id="hoy-nomarc-list" class="hoy-list">
+          <div class="empty">—</div>
+        </div>
+      </div>
+      <div class="hoy-card">
+        <div class="hoy-card-title">
+          <span>🕐 Atrasos hoy</span>
+          <button class="btn-mini" onclick="exportarHoy('atrasos')">📤</button>
+        </div>
+        <div id="hoy-atra-list" class="hoy-list">
+          <div class="empty">—</div>
+        </div>
+      </div>
+      <div class="hoy-card">
+        <div class="hoy-card-title">
+          <span>✅ Marcaciones del día</span>
+          <button class="btn-mini" onclick="exportarHoy('marcaron')">📤</button>
+        </div>
+        <div id="hoy-marc-list" class="hoy-list">
+          <div class="empty">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ct">
+        <span>📋 Resumen operativo del día</span>
+        <span class="card-actions">
+          <button class="btn-mini" onclick="actualizarHoy()">↻ Actualizar</button>
+        </span>
+      </div>
+      <div class="cs">Estado actual de cada trabajador con turno asignado: si marcó, hora teórica vs hora real, atraso en minutos.</div>
+      <div class="local-filters">
+        <span class="ctrl-lbl">Filtro:</span>
+        <select id="hoy-filtro" class="ctrl-sel" onchange="renderHoy()">
+          <option value="">Todos</option>
+          <option value="atraso">Solo con atraso</option>
+          <option value="nomarca">Solo no marcaron</option>
+          <option value="ok">Solo a tiempo</option>
+        </select>
+        <input id="hoy-busca" placeholder="Buscar por nombre o RUT..." oninput="renderHoy()" style="flex:1;min-width:200px">
+        <button class="btn-mini green" onclick="exportarHoyExcel()">📊 Excel</button>
+      </div>
+      <div class="tw">
+        <table class="tbl" id="tbl-hoy">
+          <thead><tr>
+            <th>Trabajador</th><th>RUT</th><th>Turno</th>
+            <th>Entrada teórica</th><th>Entrada real</th>
+            <th>Salida teórica</th><th>Salida real</th>
+            <th>Atraso</th><th>HH.EE.</th><th>Estado</th>
+          </tr></thead>
+          <tbody id="tbody-hoy"><tr><td colspan="10"><div class="empty">Presiona "Cargar datos" para ver el resumen del día</div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================== TRABAJADORES ============================== -->
+  <div id="v-emp" class="view">
     <div class="krow">
       <div class="kpi cyan"><div class="kl">Total trabajadores</div><div class="kv" id="k-emp-total">—</div><div class="ks">En resultado</div></div>
       <div class="kpi green"><div class="kl">Activos</div><div class="kv" id="k-emp-act">—</div><div class="ks">Estado activo</div></div>
       <div class="kpi red"><div class="kl">Inactivos</div><div class="kv" id="k-emp-ina">—</div><div class="ks">Desvinculados</div></div>
       <div class="kpi blue"><div class="kl">Sucursales</div><div class="kv" id="k-emp-suc">—</div><div class="ks">Con personal</div></div>
       <div class="kpi purple"><div class="kl">Departamentos</div><div class="kv" id="k-emp-dep">—</div><div class="ks">Únicos</div></div>
+      <div class="kpi amber"><div class="kl">Con turno asignado</div><div class="kv" id="k-emp-tur">—</div><div class="ks">Activos con turno</div></div>
     </div>
     <div class="card">
-      <div class="ct">Listado de trabajadores</div>
-      <div class="cs">
-        Endpoint: /employee · API consulta MATRIZ+INICIAL (modelo Workera);
-        filtro de sucursal/depto se aplica localmente sobre los datos operativos de cada empleado.
-        <button onclick="recargarEmpleados()" style="margin-left:10px;padding:3px 10px;font-size:11px;background:var(--bg-input);color:var(--text-pri);border:1px solid var(--border);border-radius:4px;cursor:pointer;">↻ Recargar desde API</button>
+      <div class="ct">
+        <span>👥 Listado de trabajadores</span>
+        <span class="card-actions">
+          <button class="btn-mini" onclick="recargarEmpleados()">↻ Recargar API</button>
+          <button class="btn-mini green" onclick="exportarTrabajadoresExcel()">📊 Excel</button>
+        </span>
       </div>
-      <div class="emp-banner">
-        <strong>ℹ Sobre las sucursales mostradas:</strong>
-        El endpoint <code>/employee</code> devuelve a todos los empleados con sucursal administrativa
-        <code>MATRIZ</code> (modelo Workera). Para mostrar la <strong>sucursal operativa real</strong>
-        (PLANTA TALCA, REPARADORES, etc.), el dashboard cruza cada empleado con sus marcaciones recientes
-        del endpoint <code>/attendanceData</code>. Las sucursales en <span style="color:var(--cyan)">cyan</span>
-        son operativas (inferidas de la última marca); las en <span style="color:var(--t3)">gris</span>
-        son administrativas (sin marcas recientes en últimos 30 días).
-        <strong>El filtro de sucursal arriba</strong> ahora funciona sobre la sucursal real (operativa cuando existe).
+      <div class="cs">
+        Endpoints combinados: <code style="color:var(--cyan)">/employee</code> + <code style="color:var(--cyan)">/workshift/assign</code> +
+        <code style="color:var(--cyan)">/branchOffice</code> + <code style="color:var(--cyan)">/department</code>.
+      </div>
+      <div class="local-filters">
+        <input id="emp-busca" placeholder="Buscar por nombre, RUT o código..." oninput="aplicarFiltrosYRender()" style="flex:1;min-width:200px">
+        <select id="emp-estado" class="ctrl-sel" onchange="aplicarFiltrosYRender()">
+          <option value="">Todos los estados</option>
+          <option value="ACTIVO">Solo activos</option>
+          <option value="INACTIVO">Solo inactivos</option>
+        </select>
       </div>
       <div class="tw">
         <table class="tbl" id="tbl-emp">
-          <thead><tr><th>Código</th><th>RUT</th><th>Nombre</th><th>Apellidos</th><th>Nacionalidad</th><th>Departamento</th><th>Sucursal</th><th>Estado</th></tr></thead>
-          <tbody id="tbody-emp"><tr><td colspan="8"><div class="empty">Presiona "Cargar datos" para consultar</div></td></tr></tbody>
+          <thead><tr><th>Código</th><th>Nombre</th><th>RUT</th><th>Sucursal</th><th>Depto.</th><th>Turno actual</th><th>Estado</th></tr></thead>
+          <tbody id="tbody-emp"><tr><td colspan="7"><div class="empty">Presiona "Cargar datos"</div></td></tr></tbody>
         </table>
       </div>
     </div>
   </div>
 
-  <!-- MARCACIONES -->
+  <!-- ============================== MARCACIONES ============================== -->
   <div id="v-ast" class="view">
     <div class="krow">
-      <div class="kpi cyan"><div class="kl">Total marcaciones</div><div class="kv" id="k-ast-total">—</div><div class="ks">En el período cargado</div></div>
-      <div class="kpi green"><div class="kl">Entradas</div><div class="kv" id="k-ast-in">—</div><div class="ks">1ª, 3ª... marca del día</div></div>
-      <div class="kpi amber"><div class="kl">Salidas</div><div class="kv" id="k-ast-out">—</div><div class="ks">2ª, 4ª... marca del día</div></div>
-      <div class="kpi blue"><div class="kl">Personas únicas</div><div class="kv" id="k-ast-peo">—</div><div class="ks">Que marcaron al menos 1 vez</div></div>
-      <div class="kpi purple"><div class="kl">Días con marcas</div><div class="kv" id="k-ast-dias">—</div><div class="ks">Días distintos del período</div></div>
+      <div class="kpi cyan"><div class="kl">Total marcaciones</div><div class="kv" id="k-ast-total">—</div><div class="ks" id="k-ast-rango">—</div></div>
+      <div class="kpi green"><div class="kl">Días con marca</div><div class="kv" id="k-ast-dias">—</div><div class="ks">Distintos</div></div>
+      <div class="kpi blue"><div class="kl">Trabajadores</div><div class="kv" id="k-ast-trab">—</div><div class="ks">Con marcación</div></div>
+      <div class="kpi amber"><div class="kl">Atrasos</div><div class="kv" id="k-ast-atra">—</div><div class="ks" id="k-ast-atra-sub">En el período</div></div>
+      <div class="kpi purple"><div class="kl">Horas extra</div><div class="kv" id="k-ast-ext">—</div><div class="ks">Total horas</div></div>
+      <div class="kpi red"><div class="kl">Salidas tempranas</div><div class="kv" id="k-ast-temp">—</div><div class="ks">Antes de hora</div></div>
     </div>
     <div class="card">
-      <div class="ct">Registros de asistencia</div>
+      <div class="ct">
+        <span>🕒 Marcaciones del período</span>
+        <span class="card-actions">
+          <button class="btn-mini" onclick="cacheLimpiar()">🗑 Limpiar cache</button>
+          <button class="btn-mini cyan" onclick="cargarSiguienteBloque()">▶ Cargar más</button>
+          <button class="btn-mini green" onclick="exportarMarcacionesExcel()">📊 Excel</button>
+        </span>
+      </div>
       <div class="cs">
-        Endpoint: /attendanceData · 20 por página · cache automático en localStorage
-        <button onclick="cacheLimpiar()" style="margin-left:10px;padding:3px 10px;font-size:11px;background:var(--bg-input);color:var(--text-pri);border:1px solid var(--border);border-radius:4px;cursor:pointer;" title="Borrar todas las marcaciones cacheadas">🗑 Limpiar cache</button>
-        <button onclick="exportarMarcacionesExcel()" style="margin-left:6px;padding:3px 10px;font-size:11px;background:rgba(34,212,122,.12);color:var(--green);border:1px solid var(--green);border-radius:4px;cursor:pointer;font-weight:500" title="Descargar todas las marcaciones cargadas/filtradas en Excel">📊 Excel</button>
-        <span id="cache-info" style="margin-left:10px;font-size:11px;color:var(--cyan)"></span>
+        Endpoint: <code style="color:var(--cyan)">/attendanceData</code>. Cada marca se cruza con el horario teórico
+        (<code style="color:var(--cyan)">/workshift/schedules</code>) para detectar atrasos y horas extra.
+      </div>
+      <div class="local-filters">
+        <input id="ast-busca" placeholder="Buscar por nombre o RUT..." oninput="renderMarcaciones()" style="flex:1;min-width:200px">
+        <select id="ast-tipo" class="ctrl-sel" onchange="renderMarcaciones()">
+          <option value="">Todos los tipos</option>
+          <option value="entrada">Solo entradas</option>
+          <option value="salida">Solo salidas</option>
+        </select>
+        <select id="ast-anomalia" class="ctrl-sel" onchange="renderMarcaciones()">
+          <option value="">Sin filtro de anomalía</option>
+          <option value="atraso">Solo con atraso</option>
+          <option value="extra">Con horas extra</option>
+          <option value="temp">Salida temprana</option>
+        </select>
       </div>
       <div class="tw">
         <table class="tbl" id="tbl-ast">
-          <thead><tr><th>Fecha</th><th>Hora</th><th>Trabajador</th><th>RUT</th><th>Tipo</th><th>Dispositivo</th><th>Sucursal</th></tr></thead>
-          <tbody id="tbody-ast"><tr><td colspan="7"><div class="empty">Presiona "Cargar datos" para consultar</div></td></tr></tbody>
+          <thead><tr>
+            <th>Fecha</th><th>Hora real</th><th>Trabajador</th><th>RUT</th>
+            <th>Tipo</th><th>Hora teórica</th><th>Δ min</th><th>Sucursal</th>
+          </tr></thead>
+          <tbody id="tbody-ast"><tr><td colspan="8"><div class="empty">Presiona "Cargar datos"</div></td></tr></tbody>
         </table>
       </div>
     </div>
   </div>
 
-  <!-- PERMISOS -->
+  <!-- ============================== ANOMALÍAS ============================== -->
+  <div id="v-ano" class="view">
+    <div class="krow">
+      <div class="kpi red"><div class="kl">Atrasos</div><div class="kv" id="k-ano-atra">—</div><div class="ks">Total eventos</div></div>
+      <div class="kpi amber"><div class="kl">Salidas tempranas</div><div class="kv" id="k-ano-temp">—</div><div class="ks">Total eventos</div></div>
+      <div class="kpi purple"><div class="kl">Horas extra (h)</div><div class="kv" id="k-ano-ext">—</div><div class="ks">Suma del período</div></div>
+      <div class="kpi pink"><div class="kl">No marcaron</div><div class="kv" id="k-ano-nomarc">—</div><div class="ks">Días sin marcar</div></div>
+      <div class="kpi blue"><div class="kl">Trabajadores afect.</div><div class="kv" id="k-ano-trab">—</div><div class="ks">Con anomalías</div></div>
+      <div class="kpi cyan"><div class="kl">Min. atraso prom.</div><div class="kv" id="k-ano-prom">—</div><div class="ks">Por evento</div></div>
+    </div>
+    <div class="card">
+      <div class="ct">
+        <span>🚨 Anomalías detectadas</span>
+        <span class="card-actions">
+          <button class="btn-mini green" onclick="exportarAnomaliasExcel()">📊 Excel</button>
+        </span>
+      </div>
+      <div class="cs">
+        Cruce automático: marcaciones reales vs horario teórico asignado por día. Tolerancia configurable arriba.
+      </div>
+      <div class="local-filters">
+        <input id="ano-busca" placeholder="Buscar por nombre o RUT..." oninput="renderAnomalias()" style="flex:1;min-width:200px">
+        <select id="ano-tipo" class="ctrl-sel" onchange="renderAnomalias()">
+          <option value="">Todos los tipos</option>
+          <option value="atraso">Atrasos</option>
+          <option value="temp">Salida temprana</option>
+          <option value="extra">Horas extra</option>
+          <option value="nomarca">No marcó</option>
+        </select>
+        <select id="ano-orden" class="ctrl-sel" onchange="renderAnomalias()">
+          <option value="fecha">Ordenar por fecha</option>
+          <option value="trab">Ordenar por trabajador</option>
+          <option value="min">Ordenar por minutos (mayor)</option>
+        </select>
+      </div>
+      <div class="tw">
+        <table class="tbl" id="tbl-ano">
+          <thead><tr>
+            <th>Fecha</th><th>Trabajador</th><th>RUT</th><th>Turno</th>
+            <th>Tipo</th><th>Teórica</th><th>Real</th><th>Diferencia</th><th>Severidad</th>
+          </tr></thead>
+          <tbody id="tbody-ano"><tr><td colspan="9"><div class="empty">Presiona "Cargar datos"</div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================== TURNOS & HORARIOS ============================== -->
+  <div id="v-tur" class="view">
+    <div class="krow">
+      <div class="kpi cyan"><div class="kl">Asignaciones</div><div class="kv" id="k-tur-asig">—</div><div class="ks">Activas</div></div>
+      <div class="kpi green"><div class="kl">Turnos únicos</div><div class="kv" id="k-tur-unic">—</div><div class="ks">En uso</div></div>
+      <div class="kpi blue"><div class="kl">Trabajadores con turno</div><div class="kv" id="k-tur-trab">—</div><div class="ks">—</div></div>
+      <div class="kpi amber"><div class="kl">Días en rango</div><div class="kv" id="k-tur-dias">—</div><div class="ks">Cobertura</div></div>
+      <div class="kpi purple"><div class="kl">Horarios diarios</div><div class="kv" id="k-tur-hor">—</div><div class="ks">Total programado</div></div>
+      <div class="kpi pink"><div class="kl">Sin turno</div><div class="kv" id="k-tur-sin">—</div><div class="ks">Activos sin asignación</div></div>
+    </div>
+    <div class="card">
+      <div class="ct">
+        <span>📅 Asignación de turnos</span>
+        <span class="card-actions">
+          <button class="btn-mini green" onclick="exportarTurnosExcel()">📊 Excel</button>
+        </span>
+      </div>
+      <div class="cs">
+        Endpoint: <code style="color:var(--cyan)">/workshift/assign</code>. Muestra qué turno tiene cada trabajador y por cuánto tiempo.
+      </div>
+      <div class="local-filters">
+        <input id="tur-busca" placeholder="Buscar trabajador o turno..." oninput="renderTurnos()" style="flex:1;min-width:200px">
+        <select id="tur-period" class="ctrl-sel" onchange="renderTurnos()">
+          <option value="">Todos los períodos</option>
+          <option value="DIARIO">Diario</option>
+          <option value="SEMANAL">Semanal</option>
+          <option value="MENSUAL">Mensual</option>
+        </select>
+      </div>
+      <div class="tw">
+        <table class="tbl" id="tbl-tur">
+          <thead><tr><th>Trabajador</th><th>RUT</th><th>Turno</th><th>Período</th><th>Inicio</th><th>Término</th><th>Estado</th></tr></thead>
+          <tbody id="tbody-tur"><tr><td colspan="7"><div class="empty">Presiona "Cargar datos"</div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ct">
+        <span>🗓 Horarios programados (día por día)</span>
+        <span class="card-actions">
+          <button class="btn-mini green" onclick="exportarHorariosExcel()">📊 Excel</button>
+        </span>
+      </div>
+      <div class="cs">
+        Endpoint: <code style="color:var(--cyan)">/workshift/schedules</code>. Detalle de entrada y salida programada por trabajador y fecha (máximo 60 días por consulta).
+      </div>
+      <div class="local-filters">
+        <input id="hor-busca" placeholder="Buscar trabajador..." oninput="renderHorarios()" style="flex:1;min-width:200px">
+      </div>
+      <div class="tw">
+        <table class="tbl" id="tbl-hor">
+          <thead><tr><th>Fecha</th><th>Día</th><th>Trabajador</th><th>RUT</th><th>Turno</th><th>Horario</th><th>Entrada</th><th>Salida</th><th>Horas</th></tr></thead>
+          <tbody id="tbody-hor"><tr><td colspan="9"><div class="empty">Presiona "Cargar datos"</div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================== PERMISOS ============================== -->
   <div id="v-per" class="view">
     <div class="krow">
       <div class="kpi cyan"><div class="kl">Total permisos</div><div class="kv" id="k-per-total">—</div><div class="ks">En período</div></div>
-      <div class="kpi red"><div class="kl">Lic. médicas</div><div class="kv" id="k-per-lic">—</div><div class="ks">LICENCIA_MEDICA</div></div>
-      <div class="kpi blue"><div class="kl">Vacaciones</div><div class="kv" id="k-per-vac">—</div><div class="ks">VACACIONES</div></div>
-      <div class="kpi green"><div class="kl">Trabajo en horario</div><div class="kv" id="k-per-trh">—</div><div class="ks">TRABAJADO_EN_HORARIO</div></div>
-      <div class="kpi purple"><div class="kl">Personas únicas</div><div class="kv" id="k-per-peo">—</div><div class="ks">Con al menos 1 permiso</div></div>
+      <div class="kpi green"><div class="kl">Trabajadores</div><div class="kv" id="k-per-trab">—</div><div class="ks">Con permiso</div></div>
+      <div class="kpi amber"><div class="kl">Vigentes hoy</div><div class="kv" id="k-per-hoy">—</div><div class="ks">Día actual</div></div>
+      <div class="kpi purple"><div class="kl">Tipos únicos</div><div class="kv" id="k-per-tipos">—</div><div class="ks">Categorías</div></div>
+      <div class="kpi blue"><div class="kl">Días totales</div><div class="kv" id="k-per-dias">—</div><div class="ks">Suma de duraciones</div></div>
+      <div class="kpi pink"><div class="kl">Próximos a vencer</div><div class="kv" id="k-per-proxi">—</div><div class="ks">Próximos 7 días</div></div>
     </div>
     <div class="card">
-      <div class="ct">Permisos especiales</div>
-      <div class="cs">Endpoint: /permission · Licencias médicas, vacaciones y otros permisos en el período</div>
+      <div class="ct">
+        <span>📝 Permisos del período</span>
+        <span class="card-actions"><button class="btn-mini green" onclick="exportarPermisosExcel()">📊 Excel</button></span>
+      </div>
+      <div class="cs">Endpoint: <code style="color:var(--cyan)">/permission</code>.</div>
+      <div class="local-filters">
+        <input id="per-busca" placeholder="Buscar..." oninput="renderPermisos()" style="flex:1;min-width:200px">
+      </div>
       <div class="tw">
         <table class="tbl" id="tbl-per">
-          <thead><tr><th>ID</th><th>Trabajador</th><th>Sucursal</th><th>Tipo</th><th>Período</th><th>Días</th><th>Vigencia</th></tr></thead>
-          <tbody id="tbody-per"><tr><td colspan="7"><div class="empty">Presiona "Cargar datos" para consultar</div></td></tr></tbody>
+          <thead><tr><th>Trabajador</th><th>RUT</th><th>Tipo</th><th>Inicio</th><th>Término</th><th>Días</th><th>Vigencia</th></tr></thead>
+          <tbody id="tbody-per"><tr><td colspan="7"><div class="empty">Presiona "Cargar datos"</div></td></tr></tbody>
         </table>
       </div>
     </div>
   </div>
 
-  <!-- TURNOS -->
-  <div id="v-tur" class="view">
-    <div class="card">
-      <div class="ct">Asignación de turnos</div>
-      <div class="cs">Endpoint: /workshift/assign</div>
-      <div class="tw">
-        <table class="tbl" id="tbl-tur">
-          <thead><tr><th>Trabajador</th><th>Turno</th><th>Desde</th><th>Hasta</th></tr></thead>
-          <tbody id="tbody-tur"><tr><td colspan="4"><div class="empty">Presiona "Cargar datos" para consultar</div></td></tr></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- SUCURSALES -->
+  <!-- ============================== SUCURSALES ============================== -->
   <div id="v-suc" class="view">
     <div class="card">
-      <div class="ct">Sucursales registradas</div>
-      <div class="cs">Endpoint: /branchOffice · Se cargan automáticamente al abrir</div>
+      <div class="ct">🏢 Sucursales</div>
+      <div class="cs">Endpoint: <code style="color:var(--cyan)">/branchOffice</code>.</div>
       <div class="tw">
         <table class="tbl" id="tbl-suc">
-          <thead><tr><th>Código</th><th>Nombre</th><th>Dirección</th><th>Zona horaria</th><th>Estado</th></tr></thead>
-          <tbody id="tbody-suc"><tr><td colspan="5"><div class="empty">Se cargará automáticamente</div></td></tr></tbody>
+          <thead><tr><th>Código</th><th>Nombre</th><th>Trabajadores</th><th>Estado</th></tr></thead>
+          <tbody id="tbody-suc"><tr><td colspan="4"><div class="empty">Se cargará automáticamente</div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================== DEPARTAMENTOS ============================== -->
+  <div id="v-dep" class="view">
+    <div class="card">
+      <div class="ct">🏛 Departamentos</div>
+      <div class="cs">Endpoint: <code style="color:var(--cyan)">/department</code>.</div>
+      <div class="tw">
+        <table class="tbl" id="tbl-dep">
+          <thead><tr><th>Código</th><th>Nombre</th><th>Trabajadores</th><th>Por defecto</th><th>Estado</th></tr></thead>
+          <tbody id="tbody-dep"><tr><td colspan="5"><div class="empty">Se cargará automáticamente</div></td></tr></tbody>
         </table>
       </div>
     </div>
   </div>
 </div>
 
+<!-- MODAL DETALLE TRABAJADOR -->
+<div id="modal-bg" class="modal-bg" onclick="if(event.target===this)cerrarModal()">
+  <div class="modal" id="modal-content">
+    <button class="modal-close" onclick="cerrarModal()">×</button>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
 <script>
+/* ─── ESTADO GLOBAL ─── */
 var PROXY = '/api/workera-proxy';
-var tabActivo = 'emp';
-var modalEmpleadoActual = null;  // empleado mostrado en modal (para PDF)
+var tabActivo = 'hoy';
+var modalEmpleadoActual = null;
 
-// ─────────────────────────────────────────────────────────────────────────
-// CACHE PERSISTENTE DE MARCACIONES (localStorage)
-// ─────────────────────────────────────────────────────────────────────────
-// Las marcaciones del pasado son inmutables: una marca del 1-abril-2026 nunca
-// va a cambiar. Por eso las cacheamos en localStorage del navegador y solo
-// pedimos al API las fechas que NO tenemos.
-//
-// Estructura del cache:
-//   localStorage['workera_marcas_v1'] = JSON con:
-//     {
-//       'YYYY-MM-DD': [marca1, marca2, ...],   ← marcas agrupadas por día
-//       ...
-//     }
-//
-// Una marca pesa ~500 bytes. localStorage permite ~5MB → cabe ~10000 marcas.
-// 1432 marcas/mes = ~700KB → caben varios meses sin problema.
-// ─────────────────────────────────────────────────────────────────────────
+// Caches
+var cacheEmpleados = [];
+var cacheSucursales = [];
+var cacheDepartamentos = [];
+var cacheAsignaciones = [];      // /workshift/assign
+var cacheHorarios = [];          // /workshift/schedules (uno por empleado-día)
+var cachePermisos = [];
+var cacheMarcacionesEnriquecimiento = [];
+var cacheMarcacionesRango = '';
+var cargaIncremental = { paginasPedidas: 0, totalPages: 0, totalResult: 0, enProgreso: false };
 
+// Cache persistente
 var CACHE_KEY = 'workera_marcas_v1';
-var cacheMarcasPorDia = {};  // { 'YYYY-MM-DD': [marcas...] }
+var cacheMarcasPorDia = {};
+var BLOQUE_PAGINAS = 5;
+
+/* ─── HELPERS ─── */
+function $(id) { return document.getElementById(id); }
+function pad(n) { return n < 10 ? '0' + n : '' + n; }
+function fmtFecha(d) {
+  if (!d) return '—';
+  if (typeof d === 'string') {
+    // Tomar solo "YYYY-MM-DD" si viene con tiempo
+    var s = d.substring(0, 10);
+    var parts = s.split('-');
+    if (parts.length === 3) return parts[2] + '-' + parts[1] + '-' + parts[0];
+    return d;
+  }
+  return pad(d.getDate()) + '-' + pad(d.getMonth()+1) + '-' + d.getFullYear();
+}
+function fmtHora(d) {
+  if (!d) return '—';
+  if (typeof d === 'string') {
+    if (d.indexOf('T') > 0) return d.substring(11, 16);
+    return d.substring(0, 5);
+  }
+  return pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+function diaSemana(fecha) {
+  var dias = ['DOM','LUN','MAR','MIE','JUE','VIE','SAB'];
+  var d = new Date(fecha + 'T12:00:00');
+  return dias[d.getDay()];
+}
+function parsearHHMMSS(s) {
+  // "08:00:00" o "08:00" → minutos desde medianoche
+  if (!s) return null;
+  var p = s.split(':');
+  return parseInt(p[0],10)*60 + parseInt(p[1]||0,10);
+}
+function parseFechaHora(s) {
+  // ISO o "yyyy-MM-dd HH:mm:ss"
+  if (!s) return null;
+  var iso = s.replace(' ', 'T');
+  var d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d;
+}
+function diffMin(a, b) {
+  // a-b en minutos (a, b: Date)
+  if (!a || !b) return 0;
+  return Math.round((a.getTime() - b.getTime()) / 60000);
+}
+function hoy() {
+  var d = new Date();
+  return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+}
+function setStatus(level, msg) {
+  var dot = $('sdot'), txt = $('status-txt');
+  if (dot) dot.className = 'sdot ' + (level || '');
+  if (txt) txt.innerHTML = msg;
+}
+function tab(t) {
+  tabActivo = t;
+  document.querySelectorAll('.tab').forEach(function(el) { el.classList.remove('on'); });
+  event.currentTarget.classList.add('on');
+  document.querySelectorAll('.view').forEach(function(el) { el.classList.remove('on'); });
+  $('v-' + t).classList.add('on');
+  document.body.classList.remove('tab-hoy','tab-emp','tab-ast','tab-ano','tab-tur','tab-per','tab-suc','tab-dep');
+  document.body.classList.add('tab-' + t);
+  // Render diferido por pestaña
+  if (t === 'hoy') renderHoy();
+  if (t === 'emp') aplicarFiltrosYRender();
+  if (t === 'ast') renderMarcaciones();
+  if (t === 'ano') renderAnomalias();
+  if (t === 'tur') { renderTurnos(); renderHorarios(); }
+  if (t === 'per') renderPermisos();
+  if (t === 'suc') renderSucursales();
+  if (t === 'dep') renderDepartamentos();
+}
+
+function empNombreCompleto(e) {
+  var p = e.name || '';
+  if (e.lastName) p += ' ' + e.lastName;
+  if (e.secondLastName && (!e.lastName || e.lastName.indexOf(e.secondLastName) < 0))
+    p += ' ' + e.secondLastName;
+  return p.trim().replace(/\s+/g, ' ');
+}
+function empActivo(e) {
+  return (e.employeeStatus || '').toUpperCase() === 'ACTIVO';
+}
+function empSucursalAdmin(e) { return e.branchOfficeName || e.branchOffice || '—'; }
+function empDepartamento(e) { return e.departmentName || e.department || '—'; }
 
 function cacheCargarDeDisco() {
   try {
@@ -399,2109 +692,1435 @@ function cacheCargarDeDisco() {
     if (raw) {
       cacheMarcasPorDia = JSON.parse(raw);
       var dias = Object.keys(cacheMarcasPorDia).length;
-      var totalMarcas = Object.values(cacheMarcasPorDia).reduce(function(a, b) { return a + b.length; }, 0);
-      console.log('[Workera] Cache cargado: ' + dias + ' días, ' + totalMarcas + ' marcas');
-      return { dias: dias, marcas: totalMarcas };
+      var total = Object.values(cacheMarcasPorDia).reduce(function(a, b) { return a + b.length; }, 0);
+      console.log('[Workera] Cache: ' + dias + ' días, ' + total + ' marcas');
+      return { dias: dias, marcas: total };
     }
-  } catch (e) {
-    console.warn('[Workera] Cache corrupto, se ignora:', e.message);
-    cacheMarcasPorDia = {};
-  }
+  } catch (e) { cacheMarcasPorDia = {}; }
   return { dias: 0, marcas: 0 };
 }
-
 function cacheGuardarEnDisco() {
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(cacheMarcasPorDia));
-  } catch (e) {
-    console.warn('[Workera] No se pudo guardar cache (¿lleno?):', e.message);
-    setStatus('warn', '⚠ Cache lleno, no se pueden guardar más marcas. Limpia el cache.');
-  }
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(cacheMarcasPorDia)); }
+  catch (e) { setStatus('warn', '⚠ Cache lleno'); }
 }
-
-// Limpia totalmente el cache
 function cacheLimpiar() {
-  if (!confirm('¿Borrar TODAS las marcaciones cacheadas? Esto fuerza recargar desde la API la próxima vez.')) return;
+  if (!confirm('¿Borrar TODAS las marcaciones cacheadas?')) return;
   cacheMarcasPorDia = {};
   cacheMarcacionesEnriquecimiento = [];
   cacheMarcacionesRango = '';
   cargaIncremental = { paginasPedidas: 0, totalPages: 0, totalResult: 0, enProgreso: false };
   try { localStorage.removeItem(CACHE_KEY); } catch(e) {}
-  setStatus('ok', 'Cache de marcaciones limpiado');
-  if (tabActivo === 'ast') {
-    var tb = $('tbody-ast');
-    if (tb) tb.innerHTML = '<tr><td colspan="7"><div class="empty">Cache limpiado. Presiona "Cargar datos" para recargar.</div></td></tr>';
-  }
+  setStatus('ok', 'Cache limpiado');
+  renderMarcaciones();
 }
-
-// Exporta a Excel las marcaciones actualmente filtradas (o todas si no hay filtro).
-// Una marca por fila, con columnas legibles + tipo entrada/salida calculado.
-function exportarMarcacionesExcel() {
-  if (typeof XLSX === 'undefined') {
-    alert('La librería SheetJS no está cargada. Verifica la conexión a internet.');
-    return;
-  }
-
-  var lista = (marcacionesFiltradas && marcacionesFiltradas.length)
-    ? marcacionesFiltradas
-    : cacheMarcacionesEnriquecimiento;
-
-  if (!lista.length) {
-    alert('No hay marcaciones cargadas para exportar. Primero carga datos en la pestaña Marcaciones.');
-    return;
-  }
-
-  setStatus('load', 'Generando Excel con ' + lista.length + ' marcaciones...');
-
-  // Clasificar por orden temporal para tener entrada/salida correcta
-  var clasif = clasificarEntradasSalidas(lista);
-
-  // Ordenar por fecha+hora ascendente para que el Excel quede cronológico
-  var ordenadas = lista.slice().sort(function(a, b) {
-    return (a.attendanceDate || '').localeCompare(b.attendanceDate || '');
+function cacheMarcasDelRango(d1, d2) {
+  var fechas = diasEnRango(d1, d2);
+  var marcas = [];
+  fechas.forEach(function(f) {
+    if (cacheMarcasPorDia[f]) marcas = marcas.concat(cacheMarcasPorDia[f]);
   });
-
-  // Mapear a filas con columnas legibles
-  var filas = ordenadas.map(function(m) {
-    var emp = m.employee || {};
-    var dt = m.attendanceDate || '';
-    var fechaIso = dt.substring(0, 10);
-    var hora = dt.substring(11, 19);
-    var diasNombre = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
-    var diaSem = '';
-    try {
-      diaSem = diasNombre[new Date(fechaIso + 'T12:00:00').getDay()];
-    } catch (e) {}
-    var clase = clasif[idMarca(m)] || '?';
-    return {
-      'Fecha':       formatearFechaCL(fechaIso),
-      'Día':         diaSem,
-      'Hora':        hora,
-      'Tipo':        clase,
-      'Código':      emp.code || '',
-      'RUT':         emp.identification || '',
-      'Nombre':      empNombreCompleto(emp),
-      'Sucursal':    emp.branchOffice || '',
-      'Departamento':emp.department || '',
-      'Estado emp.': emp.employeeStatus || '',
-      'Dispositivo': m.deviceName || '',
-      'Origen':      m.origin || '',
-      'Móvil':       m.isMobile ? 'Sí' : 'No'
-    };
-  });
-
-  var ws = XLSX.utils.json_to_sheet(filas);
-
-  // Anchos de columna razonables
-  ws['!cols'] = [
-    { wch: 12 }, { wch: 5 }, { wch: 9 }, { wch: 10 }, { wch: 11 }, { wch: 14 },
-    { wch: 32 }, { wch: 22 }, { wch: 22 }, { wch: 12 }, { wch: 35 }, { wch: 30 }, { wch: 7 }
-  ];
-
-  var wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Marcaciones');
-
-  // Hoja resumen con KPIs y filtros aplicados
-  var totalEntradas = filas.filter(function(r) { return r.Tipo === 'ENTRADA'; }).length;
-  var totalSalidas  = filas.filter(function(r) { return r.Tipo === 'SALIDA'; }).length;
-  var personasUnicas = new Set(filas.map(function(r) { return r.Código; })).size;
-  var diasCubiertos = new Set(filas.map(function(r) { return r.Fecha; })).size;
-
-  var resumen = [
-    { Concepto: 'Reporte de marcaciones · Workera',  Valor: '' },
-    { Concepto: 'Generado',                            Valor: new Date().toLocaleString('es-CL') },
-    { Concepto: 'Período consultado',                  Valor: ($('d1').value || '') + ' → ' + ($('d2').value || '') },
-    { Concepto: 'Total marcaciones exportadas',        Valor: filas.length },
-    { Concepto: 'Entradas',                            Valor: totalEntradas },
-    { Concepto: 'Salidas',                             Valor: totalSalidas },
-    { Concepto: 'Personas únicas',                     Valor: personasUnicas },
-    { Concepto: 'Días con marcas',                     Valor: diasCubiertos },
-    { Concepto: '',                                    Valor: '' },
-    { Concepto: 'Filtros activos:',                    Valor: '' },
-    { Concepto: '  · Búsqueda',                        Valor: ($('mrc-busca') ? $('mrc-busca').value || '(ninguna)' : '(ninguna)') },
-    { Concepto: '  · Sucursal',                        Valor: ($('mrc-suc') ? $('mrc-suc').value || '(todas)' : '(todas)') },
-    { Concepto: '  · Tipo',                            Valor: ($('mrc-tipo') ? $('mrc-tipo').value || '(todos)' : '(todos)') }
-  ];
-  var wsR = XLSX.utils.json_to_sheet(resumen);
-  wsR['!cols'] = [{ wch: 35 }, { wch: 35 }];
-  XLSX.utils.book_append_sheet(wb, wsR, 'Resumen', 0);  // primera hoja al abrir
-  // Reordenar para que Resumen quede primera (XLSX las inserta por orden)
-  wb.SheetNames = ['Resumen', 'Marcaciones'];
-
-  var d1 = $('d1').value || 'inicio';
-  var d2 = $('d2').value || 'fin';
-  var nombre = 'marcaciones_workera_' + d1 + '_' + d2 + '.xlsx';
-  XLSX.writeFile(wb, nombre);
-
-  setStatus('ok', '✓ Excel descargado: ' + nombre + ' (' + filas.length + ' filas)');
+  return marcas;
 }
-
-// Devuelve qué fechas del rango YA están cacheadas
 function cacheFechasEnRango(d1, d2) {
+  var fechas = diasEnRango(d1, d2);
+  return fechas.filter(function(f) { return cacheMarcasPorDia[f] && cacheMarcasPorDia[f].length > 0; });
+}
+function diasEnRango(d1, d2) {
   var fechas = [];
-  var inicio = new Date(d1 + 'T12:00:00');
-  var fin    = new Date(d2 + 'T12:00:00');
-  for (var t = inicio.getTime(); t <= fin.getTime(); t += 86400000) {
-    var iso = new Date(t).toISOString().substring(0, 10);
-    if (cacheMarcasPorDia[iso]) fechas.push(iso);
+  var ini = new Date(d1 + 'T00:00:00'), fin = new Date(d2 + 'T00:00:00');
+  while (ini <= fin) {
+    fechas.push(ini.getFullYear() + '-' + pad(ini.getMonth()+1) + '-' + pad(ini.getDate()));
+    ini.setDate(ini.getDate() + 1);
   }
   return fechas;
 }
 
-// Devuelve TODAS las marcas cacheadas en el rango (concatenadas)
-function cacheMarcasDelRango(d1, d2) {
-  var resultado = [];
-  var inicio = new Date(d1 + 'T12:00:00');
-  var fin    = new Date(d2 + 'T12:00:00');
-  for (var t = inicio.getTime(); t <= fin.getTime(); t += 86400000) {
-    var iso = new Date(t).toISOString().substring(0, 10);
-    if (cacheMarcasPorDia[iso]) resultado = resultado.concat(cacheMarcasPorDia[iso]);
+/* ─── INICIALIZACIÓN ─── */
+window.addEventListener('DOMContentLoaded', function() {
+  // Fechas por defecto: últimos 7 días incluyendo hoy
+  var d = new Date();
+  $('d2').value = hoy();
+  d.setDate(d.getDate() - 6);
+  $('d1').value = d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+  cacheCargarDeDisco();
+  document.body.classList.add('tab-hoy');
+
+  // Auto-cargar al iniciar
+  setTimeout(cargar, 200);
+});
+
+/* ═══════════════════════════════════════════════════════════════════════
+   API CALLS — vía proxy /api/workera-proxy
+   ═══════════════════════════════════════════════════════════════════════ */
+async function apiCall(endpoint, params) {
+  var qs = 'endpoint=' + encodeURIComponent(endpoint);
+  if (params) {
+    Object.keys(params).forEach(function(k) {
+      if (params[k] !== undefined && params[k] !== null && params[k] !== '')
+        qs += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+    });
   }
-  return resultado;
-}
-
-// Guarda un lote de marcas en el cache, agrupándolas por día
-function cacheGuardarMarcas(marcas) {
-  marcas.forEach(function(m) {
-    var dia = (m.attendanceDate || '').substring(0, 10);
-    if (!dia) return;
-    if (!cacheMarcasPorDia[dia]) cacheMarcasPorDia[dia] = [];
-    // Evitar duplicados por checksum (si existe)
-    if (m.checksum) {
-      var existe = cacheMarcasPorDia[dia].some(function(x) { return x.checksum === m.checksum; });
-      if (existe) return;
-    }
-    cacheMarcasPorDia[dia].push(m);
-  });
-  cacheGuardarEnDisco();
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-var cacheSucursales = [];
-
-// Mapas auxiliares de sucursales para cruzar nombres con códigos.
-// La API tiene este patrón: /branchOffice devuelve {code: 'MATRIZ', name: 'Sucursal Matriz'},
-// pero /attendanceData y /permission traen "branchOffice" con el NOMBRE (no el código).
-// Estos mapas permiten convertir entre ambos.
-var sucursalesPorCodigo = {};   // {'MATRIZ': {code, name, address, ...}}
-var sucursalesPorNombre = {};   // {'Sucursal Matriz': {code, name, ...}}
-
-// Cache de empleados cargados (todos vienen como MATRIZ+INICIAL en el API,
-// el filtro por sucursal/departamento operativo se hace en JS sobre estos datos).
-var cacheEmpleados = [];
-
-// Constantes del modelo Workera: la única combinación que devuelve datos
-// reales en el API es MATRIZ + INICIAL. Las otras sucursales son operativas.
-var WORKERA_API_BRANCH = 'MATRIZ';
-var WORKERA_API_DEPT   = 'INICIAL';
-
-// Inicializar fechas: hoy - 7 días
-var hoy = new Date();
-var hace7 = new Date(hoy); hace7.setDate(hace7.getDate() - 7);
-document.getElementById('d1').value = hace7.toISOString().substring(0,10);
-document.getElementById('d2').value = hoy.toISOString().substring(0,10);
-
-function $(id) { return document.getElementById(id); }
-
-function tab(t) {
-  tabActivo = t;
-  document.querySelectorAll('.tab').forEach(function(el) { el.classList.remove('on'); });
-  document.querySelectorAll('.view').forEach(function(el) { el.classList.remove('on'); });
-  event.target.classList.add('on');
-  $('v-' + t).classList.add('on');
-  // Marcar pestaña activa en el body para CSS condicional (oculta filtros que no aplican)
-  document.body.className = document.body.className.replace(/\btab-\w+\b/g, '').trim();
-  document.body.classList.add('tab-' + t);
-}
-
-function setStatus(tipo, msg) {
-  var dot = $('sdot');
-  dot.className = 'sdot ' + tipo;
-  $('status-txt').innerHTML = msg;
-}
-
-async function apiFetch(endpoint, params) {
-  var qs = new URLSearchParams(Object.assign({ endpoint: endpoint }, params || {})).toString();
   var url = PROXY + '?' + qs;
   var r = await fetch(url, { headers: { 'Accept': 'application/json' } });
-  var txt = await r.text();
   if (!r.ok) {
-    var detalle = '';
-    try { detalle = ' — ' + (JSON.parse(txt).detalle || JSON.parse(txt).error || txt.substring(0,100)); }
-    catch (e) { detalle = ' — ' + txt.substring(0,100); }
-    throw new Error('HTTP ' + r.status + detalle);
+    var txt = await r.text();
+    throw new Error('HTTP ' + r.status + ': ' + txt.substring(0, 200));
   }
-  return txt ? JSON.parse(txt) : {};
+  return r.json();
+}
+function extraerLista(resp) {
+  if (!resp) return [];
+  if (Array.isArray(resp)) return resp;
+  if (Array.isArray(resp.data)) return resp.data;
+  return [];
 }
 
-// Cargar sucursales al abrir
-async function cargarSucursales() {
-  try {
-    setStatus('load', 'Cargando sucursales...');
-    var data = await apiFetch('/branchOffice');
-    cacheSucursales = Array.isArray(data) ? data : (data.results || data.data || []);
-
-    // Construir mapas bidireccionales código ↔ nombre
-    sucursalesPorCodigo = {};
-    sucursalesPorNombre = {};
-    cacheSucursales.forEach(function(s) {
-      var code = s.code || s.codigo || s.codigoSucursal || '';
-      var name = s.name || s.nombre || s.descripcion || code;
-      if (code) sucursalesPorCodigo[code] = s;
-      if (name) sucursalesPorNombre[name] = s;
-    });
-
-    renderSucursales();
-    actualizarFiltros();
-    setStatus('ok', 'Sucursales cargadas: ' + cacheSucursales.length);
-  } catch (e) {
-    setStatus('err', 'Error sucursales: ' + e.message);
-    mostrarErrorSetup(e.message);
+async function fetchTodasLasPaginas(endpoint, paramsBase, maxPages) {
+  // Pide pagina 1, mira totalPages, y pide el resto en paralelo (de a 5)
+  maxPages = maxPages || 50;
+  var p1 = await apiCall(endpoint, Object.assign({page:1}, paramsBase));
+  var resultados = extraerLista(p1);
+  var total = Math.min(p1.totalPages || 1, maxPages);
+  if (total > 1) {
+    for (var p = 2; p <= total; p += 5) {
+      var lote = [];
+      for (var k = p; k < p + 5 && k <= total; k++) {
+        lote.push(apiCall(endpoint, Object.assign({page:k}, paramsBase)));
+      }
+      var rs = await Promise.all(lote);
+      rs.forEach(function(r) { resultados = resultados.concat(extraerLista(r)); });
+    }
   }
+  return resultados;
 }
 
-// Devuelve el código de sucursal a partir del nombre (o el código si no encuentra match)
-function codigoSucursalDesdeNombre(nombre) {
-  if (!nombre) return '';
-  var s = sucursalesPorNombre[nombre];
-  return s ? (s.code || nombre) : nombre;
-}
-
-function actualizarFiltros() {
-  // Las sucursales del dropdown vienen del endpoint /branchOffice y se usan
-  // para los filtros de Marcaciones, Permisos y Turnos (donde el API sí filtra
-  // por sucursal correctamente). En la pestaña Trabajadores estos filtros se
-  // ocultan porque el API no expone sucursal/depto operativo del empleado.
-  var sel = $('sucursal');
-  var valorPrevio = sel.value;
-  sel.innerHTML = '<option value="">Todas</option>';
-  cacheSucursales.forEach(function(s) {
-    var code = s.code || s.codigo || s.codigoSucursal || '';
-    var name = s.name || s.nombre || s.descripcion || code;
-    sel.innerHTML += '<option value="' + code + '">' + name + '</option>';
-  });
-  if (valorPrevio) sel.value = valorPrevio;
-
-  // Departamento queda con "Todos" como única opción (no hay endpoint de depts).
-  // Si el usuario quiere filtrar por dept, lo hará por nombre conocido.
-  $('depto').innerHTML = '<option value="">Todos</option>';
-}
-
-function renderSucursales() {
-  var tb = $('tbody-suc');
-  if (!cacheSucursales.length) {
-    tb.innerHTML = '<tr><td colspan="5"><div class="empty">Sin sucursales</div></td></tr>';
-    return;
-  }
-  tb.innerHTML = cacheSucursales.map(function(s) {
-    return '<tr>' +
-      '<td><strong>' + (s.code || s.codigo || '—') + '</strong></td>' +
-      '<td>' + (s.name || s.nombre || '—') + '</td>' +
-      '<td>' + (s.address || s.direccion || '—') + '</td>' +
-      '<td>' + (s.timezone || s.zonaHoraria || '—') + '</td>' +
-      '<td><span class="badge ' + (s.enabled !== false ? 'bg">Activa' : 'br">Inactiva') + '</span></td>' +
-    '</tr>';
-  }).join('');
-}
-
+/* ═══════════════════════════════════════════════════════════════════════
+   CARGA PRINCIPAL — orquesta todos los endpoints
+   ═══════════════════════════════════════════════════════════════════════ */
 async function cargar() {
-  var btn = $('btn-load');
-  btn.disabled = true; btn.textContent = '⏳ Cargando...';
-
+  $('btn-load').disabled = true;
   try {
-    if (tabActivo === 'emp')      await cargarTrabajadores();
-    else if (tabActivo === 'ast') await cargarMarcaciones();
-    else if (tabActivo === 'per') await cargarPermisos();
-    else if (tabActivo === 'tur') await cargarTurnos();
-    else if (tabActivo === 'suc') await cargarSucursales();
+    setStatus('load', 'Cargando sucursales y departamentos...');
+    await Promise.all([cargarSucursales(), cargarDepartamentos()]);
+
+    setStatus('load', 'Cargando trabajadores...');
+    await cargarTrabajadores();
+
+    var d1 = $('d1').value, d2 = $('d2').value;
+
+    setStatus('load', 'Cargando turnos asignados...');
+    await cargarAsignaciones(d1, d2);
+
+    setStatus('load', 'Cargando horarios programados (' + d1 + ' al ' + d2 + ')...');
+    await cargarHorarios(d1, d2);
+
+    setStatus('load', 'Cargando marcaciones...');
+    await cargarSiguienteBloque();
+
+    setStatus('load', 'Cargando permisos...');
+    await cargarPermisos(d1, d2);
+
+    setStatus('ok', '✓ Datos cargados · ' + cacheEmpleados.length + ' empleados · ' +
+              cacheAsignaciones.length + ' asignaciones · ' +
+              cacheHorarios.length + ' horarios · ' +
+              cacheMarcacionesEnriquecimiento.length + ' marcas · ' +
+              cachePermisos.length + ' permisos');
+
+    // Render de la pestaña activa
+    if (tabActivo === 'hoy') renderHoy();
+    else if (tabActivo === 'emp') aplicarFiltrosYRender();
+    else if (tabActivo === 'ast') renderMarcaciones();
+    else if (tabActivo === 'ano') renderAnomalias();
+    else if (tabActivo === 'tur') { renderTurnos(); renderHorarios(); }
+    else if (tabActivo === 'per') renderPermisos();
+    else if (tabActivo === 'suc') renderSucursales();
+    else if (tabActivo === 'dep') renderDepartamentos();
+
+    // Actualizar siempre KPIs de Hoy
+    actualizarKPIsHoy();
+    actualizarBadgeAnomalias();
   } catch (e) {
-    setStatus('err', 'Error: ' + e.message);
-    mostrarErrorSetup(e.message);
+    console.error(e);
+    setStatus('err', '⚠ Error: ' + e.message);
   } finally {
-    btn.disabled = false;
-    btn.textContent = '🔄 Cargar datos';
+    $('btn-load').disabled = false;
   }
 }
 
-// Limpia el cache y vuelve a traer todos los empleados desde el API.
-// Útil si se agregaron empleados en Workera o cambió el tenant (selector de empresa).
-async function recargarEmpleados() {
-  cacheEmpleados = [];
-  await cargarTrabajadores();
+async function cargarSucursales() {
+  if (cacheSucursales.length) return cacheSucursales;
+  var lista = await fetchTodasLasPaginas('/branchOffice');
+  cacheSucursales = lista;
+  // Poblar select
+  var sel = $('sucursal');
+  sel.innerHTML = '<option value="">Todas</option>';
+  lista.forEach(function(s) {
+    var opt = document.createElement('option');
+    opt.value = s.code || s.name;
+    opt.textContent = s.name || s.code;
+    sel.appendChild(opt);
+  });
+  return lista;
+}
+
+async function cargarDepartamentos() {
+  if (cacheDepartamentos.length) return cacheDepartamentos;
+  var lista = await fetchTodasLasPaginas('/department');
+  cacheDepartamentos = lista;
+  var sel = $('depto');
+  sel.innerHTML = '<option value="">Todos</option>';
+  lista.forEach(function(d) {
+    var opt = document.createElement('option');
+    opt.value = d.code || d.name;
+    opt.textContent = d.name || d.code;
+    sel.appendChild(opt);
+  });
+  return lista;
 }
 
 async function cargarTrabajadores() {
-  if (!cacheEmpleados.length) {
-    setStatus('load', 'Cargando empleados desde API (MATRIZ + INICIAL)...');
-    cacheEmpleados = await fetchTodosLosEmpleados();
-    setStatus('ok', cacheEmpleados.length + ' empleados · cargando marcaciones para enriquecer en background...');
-
-    // Render inmediato con datos administrativos (no bloquea)
-    renderTrabajadores(cacheEmpleados);
-
-    // Enriquecimiento en background — usa el cache completo del período
-    enriquecerEmpleadosConSucursalReal().then(function() {
-      var enriquecidos = cacheEmpleados.filter(function(e) { return e._sucursalOperativa; }).length;
-      setStatus('ok', cacheEmpleados.length + ' empleados · ' + enriquecidos +
-                      ' con sucursal operativa identificada (vía marcaciones del período)');
-      actualizarFiltrosTrabajadores();
-      aplicarFiltrosYRender();
-    }).catch(function(e) {
-      console.warn('[Workera] No se pudo enriquecer:', e.message);
-      setStatus('ok', cacheEmpleados.length + ' empleados (sin enriquecimiento)');
-    });
-
-    return;
-  }
-
+  // Paginar /employee con branchOffice y department obligatorios:
+  // pero el endpoint también funciona sin filtros si se pide por defecto MATRIZ+INICIAL.
+  // Mejor estrategia: pedir SIN filtros y ver si responde con todos.
+  // Workera devuelve 43 empleados sin filtros, así que NO necesitamos branchOffice/department aquí.
+  cacheEmpleados = await fetchTodasLasPaginas('/employee');
+  return cacheEmpleados;
+}
+async function recargarEmpleados() {
+  cacheEmpleados = [];
+  await cargarTrabajadores();
   aplicarFiltrosYRender();
 }
 
-// Aplica los filtros sucursal/depto sobre el cache de empleados y renderiza
-function aplicarFiltrosYRender() {
-  // Asegurar que el buscador local esté inicializado
-  if (!document.getElementById('emp-busca-init')) {
-    inicializarBuscadorTrabajadores();
+async function cargarAsignaciones(d1, d2) {
+  // /workshift/assign requiere branchOffice + department obligatoriamente
+  // Iteramos por TODAS las sucursales y departamentos y agregamos resultados
+  cacheAsignaciones = [];
+  var combinaciones = [];
+  for (var i = 0; i < cacheSucursales.length; i++) {
+    var sCode = cacheSucursales[i].code;
+    for (var j = 0; j < cacheDepartamentos.length; j++) {
+      combinaciones.push({ branchOffice: sCode, department: cacheDepartamentos[j].code });
+    }
   }
+  // Si no hay sucursales/departamentos cargados, intentar con MATRIZ/INICIAL
+  if (combinaciones.length === 0) {
+    combinaciones = [{ branchOffice: 'MATRIZ', department: 'INICIAL' }];
+  }
+  for (var c = 0; c < combinaciones.length; c++) {
+    try {
+      var lista = await fetchTodasLasPaginas('/workshift/assign', {
+        start: d1, end: d2,
+        branchOffice: combinaciones[c].branchOffice,
+        department: combinaciones[c].department
+      });
+      cacheAsignaciones = cacheAsignaciones.concat(lista);
+    } catch(e) {
+      console.warn('[asignaciones]', combinaciones[c], e.message);
+    }
+  }
+  // Eliminar duplicados por id
+  var seen = {};
+  cacheAsignaciones = cacheAsignaciones.filter(function(a) {
+    if (seen[a.id]) return false; seen[a.id] = true; return true;
+  });
+  return cacheAsignaciones;
+}
 
-  var sucFiltro = $('sucursal').value;
-  var depFiltro = $('depto').value;
-  var qBusca = ($('emp-busca') ? $('emp-busca').value : '').toLowerCase().trim();
-  var estadoFiltro = ($('emp-estado') ? $('emp-estado').value : '');
-  var lista = cacheEmpleados.slice();
+async function cargarHorarios(d1, d2) {
+  // /workshift/schedules: máximo 60 días por consulta. Si el rango es más largo, partirlo
+  cacheHorarios = [];
+  var bloques = bloques60Dias(d1, d2);
+  for (var i = 0; i < bloques.length; i++) {
+    for (var s = 0; s < cacheSucursales.length; s++) {
+      var sCode = cacheSucursales[s].code;
+      for (var dp = 0; dp < cacheDepartamentos.length; dp++) {
+        try {
+          var resp = await fetchTodasLasPaginas('/workshift/schedules', {
+            start: bloques[i].d1, end: bloques[i].d2,
+            branchOffice: sCode,
+            department: cacheDepartamentos[dp].code
+          });
+          // Cada elem es { employee, schedules: [...] }. Aplanamos.
+          resp.forEach(function(r) {
+            if (r.schedules && r.schedules.length) {
+              r.schedules.forEach(function(sch) {
+                cacheHorarios.push({
+                  employeeCode: r.employee.code,
+                  employeeName: r.employee.name + ' ' + r.employee.lastName,
+                  rut: r.employee.identification,
+                  date: sch.date,
+                  workshiftCode: sch.workshiftCode,
+                  workshiftName: sch.workshiftName,
+                  scheduleName: sch.scheduleName,
+                  start: sch.start,
+                  end: sch.end
+                });
+              });
+            }
+          });
+        } catch(e) { console.warn('[horarios]', e.message); }
+      }
+    }
+  }
+  return cacheHorarios;
+}
 
-  if (sucFiltro) {
-    lista = lista.filter(function(e) {
-      var suc = e._sucursalOperativa || empSucursalAdmin(e);
-      return suc === sucFiltro;
+function bloques60Dias(d1, d2) {
+  var bloques = [];
+  var ini = new Date(d1 + 'T00:00:00');
+  var fin = new Date(d2 + 'T00:00:00');
+  while (ini <= fin) {
+    var bloqFin = new Date(ini);
+    bloqFin.setDate(bloqFin.getDate() + 59);
+    if (bloqFin > fin) bloqFin = fin;
+    bloques.push({
+      d1: ini.getFullYear() + '-' + pad(ini.getMonth()+1) + '-' + pad(ini.getDate()),
+      d2: bloqFin.getFullYear() + '-' + pad(bloqFin.getMonth()+1) + '-' + pad(bloqFin.getDate())
     });
+    ini = new Date(bloqFin);
+    ini.setDate(ini.getDate() + 1);
   }
-  if (depFiltro) {
-    lista = lista.filter(function(e) {
-      return empDepartamento(e) === depFiltro;
-    });
-  }
-  if (estadoFiltro === 'ACTIVO') {
-    lista = lista.filter(empActivo);
-  } else if (estadoFiltro === 'INACTIVO') {
-    lista = lista.filter(function(e) { return !empActivo(e); });
-  }
-  if (qBusca) {
-    lista = lista.filter(function(e) {
-      var nombre = empNombreCompleto(e).toLowerCase();
-      var rut = (e.identification || '').toLowerCase();
-      var code = (e.code || '').toLowerCase();
-      return nombre.indexOf(qBusca) >= 0 || rut.indexOf(qBusca) >= 0 || code.indexOf(qBusca) >= 0;
-    });
-  }
-
-  renderTrabajadores(lista);
-
-  var msg = 'Mostrando ' + lista.length + ' de ' + cacheEmpleados.length + ' empleados';
-  if (sucFiltro || depFiltro || qBusca || estadoFiltro) msg += ' (filtros aplicados)';
-  setStatus('ok', msg);
+  return bloques;
 }
 
-// Inserta la fila de búsqueda local sobre la tabla de Trabajadores (una sola vez)
-function inicializarBuscadorTrabajadores() {
-  var card = document.querySelector('#v-emp .card');
-  if (!card) return;
-  var tw = card.querySelector('.tw');
-  if (!tw) return;
-
-  var html = '<div id="emp-busca-init" class="mrc-filtros">' +
-    '<input id="emp-busca" placeholder="🔍 Buscar por nombre, RUT o código..." oninput="aplicarFiltrosYRender()">' +
-    '<select id="emp-estado" onchange="aplicarFiltrosYRender()">' +
-      '<option value="">Todos los estados</option>' +
-      '<option value="ACTIVO">Solo activos</option>' +
-      '<option value="INACTIVO">Solo inactivos</option>' +
-    '</select>' +
-    '<button onclick="limpiarFiltrosEmp()" class="paginador-btn">Limpiar</button>' +
-  '</div>';
-
-  tw.insertAdjacentHTML('beforebegin', html);
+async function cargarPermisos(d1, d2) {
+  try {
+    cachePermisos = await fetchTodasLasPaginas('/permission', { start: d1, end: d2 });
+  } catch(e) {
+    console.warn('[permisos]', e.message);
+    cachePermisos = [];
+  }
+  return cachePermisos;
 }
 
-function limpiarFiltrosEmp() {
-  if ($('emp-busca')) $('emp-busca').value = '';
-  if ($('emp-estado')) $('emp-estado').value = '';
-  if ($('sucursal')) $('sucursal').value = '';
-  if ($('depto')) $('depto').value = '';
-  aplicarFiltrosYRender();
+/* ═══════════════════════════════════════════════════════════════════════
+   MARCACIONES — carga incremental con cache persistente (preservada)
+   ═══════════════════════════════════════════════════════════════════════ */
+async function apiFetchMarcaciones(d1, d2, page) {
+  return apiCall('/attendanceData', { start: d1, end: d2, page: page });
 }
-
-// Llena el dropdown de Sucursal en pestaña Trabajadores con las sucursales
-// operativas que efectivamente tienen empleados (después del enriquecimiento).
-// Esto reemplaza/complementa al dropdown poblado por actualizarFiltros() (que
-// usa /branchOffice). Aquí mostramos solo sucursales con personal real.
-function actualizarFiltrosTrabajadores() {
-  var sucs = {};
-  cacheEmpleados.forEach(function(e) {
-    var s = e._sucursalOperativa || empSucursalAdmin(e);
-    if (s && s !== '—') sucs[s] = (sucs[s] || 0) + 1;
-  });
-
-  var deps = {};
-  cacheEmpleados.forEach(function(e) {
-    var d = empDepartamento(e);
-    if (d && d !== '—') deps[d] = (deps[d] || 0) + 1;
-  });
-
-  var sel = $('sucursal');
-  var prev = sel.value;
-  sel.innerHTML = '<option value="">Todas las sucursales</option>';
-  Object.keys(sucs).sort().forEach(function(s) {
-    sel.innerHTML += '<option value="' + s + '">' + s + ' (' + sucs[s] + ')</option>';
-  });
-  if (prev && sucs[prev]) sel.value = prev;
-
-  var selDep = $('depto');
-  var prevDep = selDep.value;
-  selDep.innerHTML = '<option value="">Todos los deptos</option>';
-  Object.keys(deps).sort().forEach(function(d) {
-    selDep.innerHTML += '<option value="' + d + '">' + d + ' (' + deps[d] + ')</option>';
-  });
-  if (prevDep && deps[prevDep]) selDep.value = prevDep;
-
-  // Listeners para filtrar al cambiar
-  sel.onchange = function() { cargarTrabajadores(); };
-  selDep.onchange = function() { cargarTrabajadores(); };
-}
-
-// Cruza empleados con marcaciones recientes para inferir su sucursal operativa real.
-// Esto compensa que /employee solo devuelve la sucursal administrativa (siempre MATRIZ).
-// Cache global de TODAS las marcaciones del período seleccionado.
-// Se usa como única fuente de verdad para: pestaña Marcaciones, modal del
-// trabajador, y enriquecimiento de la columna sucursal en Trabajadores.
-var cacheMarcacionesEnriquecimiento = [];
-var cacheMarcacionesRango = '';  // identificador del rango cargado
-
-// Estado de carga incremental: cuántas páginas ya tenemos y cuántas faltan
-var cargaIncremental = {
-  paginasPedidas: 0,    // Hasta qué página llegamos (1-based)
-  totalPages: 0,        // Total reportado por API
-  totalResult: 0,       // Total de marcaciones reportado
-  enProgreso: false     // Para evitar doble-click en botón
-};
-
-// Cantidad de páginas que se cargan en cada bloque. 5 páginas × 20 marcas = 100
-// marcas por bloque. Lotes paralelos de 5 casi nunca exceden 30s en Azure SWA.
-var BLOQUE_PAGINAS = 5;
-
-// Carga el SIGUIENTE bloque de páginas (5 más) y las acumula en el cache global.
-// ANTES de pedir al API, revisa qué fechas ya están cacheadas en localStorage.
 async function cargarSiguienteBloque() {
   var d1 = $('d1').value, d2 = $('d2').value;
   var rango = d1 + '|' + d2;
-
-  // Si cambió el rango, resetear estado de paginación y resembrar desde cache
   if (cacheMarcacionesRango !== rango) {
     cacheMarcacionesEnriquecimiento = cacheMarcasDelRango(d1, d2);
     cacheMarcacionesRango = rango;
     cargaIncremental = { paginasPedidas: 0, totalPages: 0, totalResult: 0, enProgreso: false };
 
-    // Si el cache cubre todo el rango (todos los días tienen marcas), usar solo cache
     var fechasCacheadas = cacheFechasEnRango(d1, d2);
     var fechasTotal = diasEnRango(d1, d2);
     if (cacheMarcacionesEnriquecimiento.length > 0 && fechasCacheadas.length === fechasTotal.length) {
-      setStatus('ok', '✓ ' + cacheMarcacionesEnriquecimiento.length + ' marcas desde cache (sin API)');
-      cargaIncremental.totalPages = 1;  // Marca completo
+      cargaIncremental.totalPages = 1;
       cargaIncremental.paginasPedidas = 1;
-      cargaIncremental.totalResult = cacheMarcacionesEnriquecimiento.length;
       return cacheMarcacionesEnriquecimiento;
     }
-
-    if (cacheMarcacionesEnriquecimiento.length > 0) {
-      setStatus('load', 'Cache: ' + cacheMarcacionesEnriquecimiento.length + ' marcas en ' +
-                fechasCacheadas.length + '/' + fechasTotal.length + ' días. Pidiendo días faltantes al API...');
-    }
   }
-
   if (cargaIncremental.enProgreso) return cacheMarcacionesEnriquecimiento;
-
   cargaIncremental.enProgreso = true;
   try {
     var primerPagina = cargaIncremental.paginasPedidas + 1;
-
-    // Si es la primera vez, hacemos el primer request solo para conocer totalPages
     if (primerPagina === 1) {
       var data1 = await apiFetchMarcaciones(d1, d2, 1);
       var primera = extraerLista(data1);
       cargaIncremental.totalPages = data1.totalPages || 1;
       cargaIncremental.totalResult = data1.totalResult || primera.length;
-
-      // Sumar al cache global y guardar en disco las que no estaban
       mergearMarcasNuevas(primera);
       cargaIncremental.paginasPedidas = 1;
       primerPagina = 2;
-
-      setStatus('load', 'API página 1/' + cargaIncremental.totalPages +
-                ' · Total: ' + cacheMarcacionesEnriquecimiento.length + ' marcas');
     }
-
     var totalPages = cargaIncremental.totalPages;
     var ultimaPagina = Math.min(primerPagina + BLOQUE_PAGINAS - 2, totalPages);
-
     if (primerPagina <= ultimaPagina) {
       var lote = [];
       for (var p = primerPagina; p <= ultimaPagina; p++) {
         lote.push(apiFetchMarcaciones(d1, d2, p));
       }
       var resultados = await Promise.all(lote);
-      resultados.forEach(function(r) {
-        mergearMarcasNuevas(extraerLista(r));
-      });
+      resultados.forEach(function(r) { mergearMarcasNuevas(extraerLista(r)); });
       cargaIncremental.paginasPedidas = ultimaPagina;
-
-      var pct = Math.round((cargaIncremental.paginasPedidas / totalPages) * 100);
-      setStatus('load', 'Cargado ' + pct + '%: ' +
-                cargaIncremental.paginasPedidas + '/' + totalPages + ' páginas · ' +
-                cacheMarcacionesEnriquecimiento.length + ' marcas (cacheadas)');
     }
-
     var faltan = cargaIncremental.totalPages - cargaIncremental.paginasPedidas;
     if (faltan > 0) {
-      setStatus('ok', cacheMarcacionesEnriquecimiento.length + ' marcas (cache + API). Falta cargar ' + faltan + ' páginas');
-    } else {
-      setStatus('ok', '✓ ' + cacheMarcacionesEnriquecimiento.length + ' marcas cargadas + cacheadas en disco');
+      // Disparar carga del resto en background, sin await
+      setTimeout(cargarSiguienteBloque, 100);
     }
-
     return cacheMarcacionesEnriquecimiento;
   } finally {
     cargaIncremental.enProgreso = false;
   }
 }
-
-// Agrega marcas nuevas al cache global (en memoria) y al cache persistente (disco),
-// evitando duplicados por checksum.
 function mergearMarcasNuevas(nuevas) {
   if (!nuevas || !nuevas.length) return;
-
-  // Set de checksums ya presentes en cache para detectar duplicados rápido
-  var checksumsExistentes = {};
-  cacheMarcacionesEnriquecimiento.forEach(function(m) {
-    if (m.checksum) checksumsExistentes[m.checksum] = true;
-  });
-
-  var nuevasUnicas = nuevas.filter(function(m) {
-    return !m.checksum || !checksumsExistentes[m.checksum];
-  });
-
+  var checksums = {};
+  cacheMarcacionesEnriquecimiento.forEach(function(m) { if (m.checksum) checksums[m.checksum] = true; });
+  var nuevasUnicas = nuevas.filter(function(m) { return !m.checksum || !checksums[m.checksum]; });
   cacheMarcacionesEnriquecimiento = cacheMarcacionesEnriquecimiento.concat(nuevasUnicas);
-  cacheGuardarMarcas(nuevasUnicas);  // persistir en localStorage
-
-  // Actualizar el indicador visible del cache
-  var el = document.getElementById('cache-info');
-  if (el) {
-    var totalCache = Object.values(cacheMarcasPorDia).reduce(function(a, b) { return a + b.length; }, 0);
-    var totalDias = Object.keys(cacheMarcasPorDia).length;
-    el.textContent = '· 💾 ' + totalCache.toLocaleString('es-CL') + ' marcas en cache (' + totalDias + ' días)';
-  }
+  // Persistir agrupadas por día
+  nuevasUnicas.forEach(function(m) {
+    var fecha = (m.date || m.markDate || '').substring(0, 10);
+    if (!fecha) return;
+    if (!cacheMarcasPorDia[fecha]) cacheMarcasPorDia[fecha] = [];
+    cacheMarcasPorDia[fecha].push(m);
+  });
+  cacheGuardarEnDisco();
 }
 
-// Devuelve un array con todas las fechas (YYYY-MM-DD) entre d1 y d2 inclusive
-function diasEnRango(d1, d2) {
-  var fechas = [];
-  var inicio = new Date(d1 + 'T12:00:00');
-  var fin    = new Date(d2 + 'T12:00:00');
-  for (var t = inicio.getTime(); t <= fin.getTime(); t += 86400000) {
-    fechas.push(new Date(t).toISOString().substring(0, 10));
-  }
-  return fechas;
+/* ═══════════════════════════════════════════════════════════════════════
+   ANÁLISIS / CRUCE: marcaciones reales vs horario teórico
+   ═══════════════════════════════════════════════════════════════════════ */
+function getTolerancia() { return parseInt($('tolerancia').value || 0, 10) || 0; }
+
+function indexHorariosPorEmpDia() {
+  // { 'CODE_EMP|YYYY-MM-DD': horario }
+  var idx = {};
+  cacheHorarios.forEach(function(h) {
+    idx[h.employeeCode + '|' + h.date] = h;
+  });
+  return idx;
+}
+function indexMarcasPorEmpDia() {
+  // { 'CODE|YYYY-MM-DD': [marcas...] }
+  var idx = {};
+  cacheMarcacionesEnriquecimiento.forEach(function(m) {
+    var emp = m.employeeCode || m.code || m.deviceCode;
+    var fecha = (m.date || m.markDate || '').substring(0, 10);
+    if (!emp || !fecha) return;
+    var k = emp + '|' + fecha;
+    if (!idx[k]) idx[k] = [];
+    idx[k].push(m);
+  });
+  return idx;
 }
 
-// Alias compatible con código viejo (otros lugares que llaman cargarTodasMarcacionesPeriodo).
-// Devuelve el cache actual; carga el primer bloque si no hay nada.
-async function cargarTodasMarcacionesPeriodo() {
-  if (!cacheMarcacionesEnriquecimiento.length || cacheMarcacionesRango !== ($('d1').value + '|' + $('d2').value)) {
-    await cargarSiguienteBloque();
-  }
-  return cacheMarcacionesEnriquecimiento;
-}
-
-// Reemplaza al viejo "enriquecerConMarcaciones": ahora aprovecha el cache
-// completo del período para inferir la sucursal operativa real de cada empleado.
-async function enriquecerEmpleadosConSucursalReal() {
-  var marcaciones = await cargarTodasMarcacionesPeriodo();
-
-  // Construir mapa: code -> { sucursal preferida, ultimaMarca, distribución }
-  var mapa = {};
-  marcaciones.forEach(function(m) {
-    var emp = m.employee || {};
-    var code = emp.code;
-    if (!code) return;
-    var fecha = m.attendanceDate || '';
-    var sucursal = emp.branchOffice || '';
-    if (!sucursal) return;
-    if (!mapa[code]) {
-      mapa[code] = { sucursal: sucursal, ultimaMarca: fecha, distribucion: {} };
+function calcularResumenDia(empleadoCode, fecha) {
+  // Devuelve { horario, primeraEntrada, ultimaSalida, atrasoMin, hhEEMin, salidaTempMin, sinMarca, tipo }
+  var horario = null;
+  for (var i = 0; i < cacheHorarios.length; i++) {
+    if (cacheHorarios[i].employeeCode === empleadoCode && cacheHorarios[i].date === fecha) {
+      horario = cacheHorarios[i]; break;
     }
-    if (fecha > mapa[code].ultimaMarca) {
-      mapa[code].sucursal = sucursal;
-      mapa[code].ultimaMarca = fecha;
-    }
-    mapa[code].distribucion[sucursal] = (mapa[code].distribucion[sucursal] || 0) + 1;
-  });
-
-  cacheEmpleados.forEach(function(emp) {
-    var info = mapa[emp.code];
-    if (info) {
-      emp._sucursalOperativa = info.sucursal;
-      emp._ultimaMarca = info.ultimaMarca;
-      emp._distribucionSucursales = info.distribucion;
-    } else {
-      emp._sucursalOperativa = null;
-      emp._ultimaMarca = null;
-      emp._distribucionSucursales = null;
-    }
-  });
-}
-
-// Clasifica las marcaciones del día como ENTRADA/SALIDA según orden temporal.
-// Como Workera devuelve attendanceType: 0 para todas, no podemos usarlo. En su
-// lugar aplicamos lógica par/impar: la 1ª marca del día = entrada, la 2ª = salida,
-// la 3ª = entrada (post-almuerzo), la 4ª = salida final, etc.
-//
-// Devuelve un mapa { checksum_o_fecha: 'ENTRADA' | 'SALIDA' } para clasificar.
-function clasificarEntradasSalidas(marcas) {
-  // Agrupar marcas por empleado y día
-  var porEmpleadoYDia = {};
-  marcas.forEach(function(m) {
-    var emp = (m.employee || {}).code || '?';
-    var dia = (m.attendanceDate || '').substring(0, 10);
-    var key = emp + '|' + dia;
-    if (!porEmpleadoYDia[key]) porEmpleadoYDia[key] = [];
-    porEmpleadoYDia[key].push(m);
-  });
-
-  // Para cada grupo, ordenar por hora y alternar ENTRADA/SALIDA
-  var clasificacion = {};
-  Object.keys(porEmpleadoYDia).forEach(function(key) {
-    var grupo = porEmpleadoYDia[key];
-    grupo.sort(function(a, b) {
-      return (a.attendanceDate || '').localeCompare(b.attendanceDate || '');
-    });
-    grupo.forEach(function(m, idx) {
-      var id = m.checksum || (m.attendanceDate + '_' + ((m.employee || {}).code || ''));
-      // Posición par (0, 2, 4...) = ENTRADA, impar (1, 3, 5...) = SALIDA
-      clasificacion[id] = (idx % 2 === 0) ? 'ENTRADA' : 'SALIDA';
-    });
-  });
-
-  return clasificacion;
-}
-
-// Helper para obtener el id único de una marca (para lookup en clasificación)
-function idMarca(m) {
-  return m.checksum || (m.attendanceDate + '_' + ((m.employee || {}).code || ''));
-}
-
-// Wrapper que prueba múltiples formatos de fecha para /attendanceData
-async function apiFetchMarcaciones(d1, d2, page) {
-  return await apiFetch('/attendanceData', {
-    startDate: d1 + 'T00:00:00',
-    endDate:   d2 + 'T23:59:59',
-    start: d1, end: d2,
-    page: page
-  });
-}
-
-// Pagina hasta agotar resultados. La API devuelve totalPages en cada respuesta,
-// por lo que sabemos exactamente cuántas páginas pedir.
-async function fetchTodosLosEmpleados() {
-  var todos = [];
-  var page = 1;
-  var totalPages = 1;
-  var maxPages = 100;  // Tope de seguridad
-
-  while (page <= totalPages && page <= maxPages) {
-    var data = await apiFetch('/employee', {
-      branchOffice: WORKERA_API_BRANCH,
-      department:   WORKERA_API_DEPT,
-      page: page
-    });
-
-    // Estructura típica de Workera: { page, totalPages, pageResult, totalResult, data: [...] }
-    var lista = Array.isArray(data) ? data : (data.data || data.results || []);
-    if (data.totalPages) totalPages = data.totalPages;
-
-    if (!lista.length) break;
-    todos = todos.concat(lista);
-
-    setStatus('load', 'Cargando empleados... página ' + page + '/' + totalPages +
-                      ' (' + todos.length + ' acumulados)');
-    page++;
   }
-  return todos;
+
+  var marcasDelDia = cacheMarcacionesEnriquecimiento.filter(function(m) {
+    var emp = m.employeeCode || m.code || m.deviceCode;
+    var f = (m.date || m.markDate || '').substring(0, 10);
+    return emp == empleadoCode && f === fecha;
+  });
+
+  // Ordenar marcas por hora real
+  marcasDelDia.sort(function(a, b) {
+    var ha = a.markTime || a.time || a.hour || '';
+    var hb = b.markTime || b.time || b.hour || '';
+    return ha.localeCompare(hb);
+  });
+
+  var primera = marcasDelDia[0] || null;
+  var ultima = marcasDelDia[marcasDelDia.length - 1] || null;
+  // Si solo hay una marca, primera === ultima
+
+  var primeraDt = primera ? parseFechaHora(getFullMarcaDate(primera, fecha)) : null;
+  var ultimaDt  = ultima  ? parseFechaHora(getFullMarcaDate(ultima, fecha))  : null;
+
+  var entradaTeoDt = horario ? parseFechaHora(horario.start) : null;
+  var salidaTeoDt  = horario ? parseFechaHora(horario.end)   : null;
+
+  var tol = getTolerancia();
+
+  var atrasoMin = 0, hhEEMin = 0, salidaTempMin = 0, hhEEEntradaMin = 0;
+  if (horario && primeraDt && entradaTeoDt) {
+    var d = diffMin(primeraDt, entradaTeoDt);
+    if (d > tol) atrasoMin = d;
+    else if (d < -tol) hhEEEntradaMin = -d;  // entró antes
+  }
+  if (horario && ultimaDt && salidaTeoDt && marcasDelDia.length >= 2) {
+    var d2 = diffMin(ultimaDt, salidaTeoDt);
+    if (d2 > tol) hhEEMin = d2;
+    else if (d2 < -tol) salidaTempMin = -d2;
+  }
+
+  return {
+    horario: horario,
+    primera: primera, ultima: ultima,
+    primeraDt: primeraDt, ultimaDt: ultimaDt,
+    entradaTeoDt: entradaTeoDt, salidaTeoDt: salidaTeoDt,
+    atrasoMin: atrasoMin,
+    hhEEMin: hhEEMin + hhEEEntradaMin,
+    salidaTempMin: salidaTempMin,
+    sinMarca: !primera && !!horario,
+    marcasCount: marcasDelDia.length
+  };
 }
 
-// Helpers para extraer datos del empleado usando los nombres reales de la API Workera.
-// IMPORTANTE: el API de /employee NO expone sucursal/departamento operativo. Solo
-// devuelve la asignación administrativa (siempre MATRIZ + INICIAL). Pero podemos
-// enriquecer cruzando con /attendanceData (donde la sucursal del dispositivo
-// donde marcó el empleado es la operativa real). Esa data se guarda en
-// emp._sucursalOperativa cuando se ejecuta enriquecerConMarcaciones().
-function empSucursal(emp) {
-  // Preferir sucursal operativa enriquecida (de marcaciones) sobre la administrativa
-  if (emp._sucursalOperativa) return emp._sucursalOperativa;
-  return emp.branchOfficeName || emp.branchOfficeCode || '—';
+function getFullMarcaDate(m, fechaFallback) {
+  // Construye una Date a partir de campos comunes en la respuesta de Workera
+  if (m.markDate) {
+    var s = m.markDate;
+    if (s.indexOf('T') > 0) return s;
+    if (m.markTime) return s.substring(0,10) + 'T' + m.markTime;
+    return s;
+  }
+  if (m.date) {
+    if (m.date.indexOf('T') > 0) return m.date;
+    var hr = m.markTime || m.time || m.hour;
+    return m.date.substring(0,10) + (hr ? 'T' + hr : '');
+  }
+  if (fechaFallback && (m.markTime || m.time)) {
+    return fechaFallback + 'T' + (m.markTime || m.time);
+  }
+  return null;
 }
 
-function empSucursalAdmin(emp) {
-  return emp.branchOfficeName || emp.branchOfficeCode || '—';
+function detectarTipoMarca(m, fecha, empleadoCode) {
+  // ¿Es entrada o salida? Lo deducimos: la primera marca del día es entrada, la última salida.
+  var hora = m.markTime || m.time || (m.date && m.date.indexOf('T') > 0 ? m.date.substring(11,19) : '');
+  var marcas = cacheMarcacionesEnriquecimiento.filter(function(x) {
+    var e = x.employeeCode || x.code || x.deviceCode;
+    var f = (x.date || x.markDate || '').substring(0, 10);
+    return e == empleadoCode && f === fecha;
+  });
+  if (marcas.length === 0) return '—';
+  var horas = marcas.map(function(x) { return x.markTime || x.time || ''; }).sort();
+  if (hora === horas[0]) return 'ENTRADA';
+  if (hora === horas[horas.length-1]) return 'SALIDA';
+  return 'INTERMEDIA';
 }
 
-function empDepartamento(emp) {
-  return emp.departmentName || emp.departmentCode || '—';
+/* ═══════════════════════════════════════════════════════════════════════
+   VISTA HOY — el corazón del dashboard según RRHH
+   ═══════════════════════════════════════════════════════════════════════ */
+function actualizarKPIsHoy() {
+  var fechaHoy = hoy();
+  var activos = cacheEmpleados.filter(empActivo);
+  var asignacionesHoy = cacheAsignaciones.filter(function(a) {
+    return a.start <= fechaHoy && a.end >= fechaHoy && a.employee && empActivo(a.employee);
+  });
+  var conTurno = {};
+  asignacionesHoy.forEach(function(a) { conTurno[a.employee.code] = true; });
+
+  var resumenes = activos.map(function(e) {
+    return { emp: e, tieneAsignacion: !!conTurno[e.code], r: calcularResumenDia(e.code, fechaHoy) };
+  });
+
+  var marcaron = resumenes.filter(function(x) { return x.r.primera; });
+  var noMarcaron = resumenes.filter(function(x) { return x.tieneAsignacion && !x.r.primera; });
+  var atrasos = resumenes.filter(function(x) { return x.r.atrasoMin > 0; });
+  var hhEE = resumenes.reduce(function(a, x) { return a + (x.r.hhEEMin || 0); }, 0);
+  var permHoy = cachePermisos.filter(function(p) {
+    var ini = (p.start || p.startDate || '').substring(0, 10);
+    var fin = (p.end || p.endDate || '').substring(0, 10);
+    return ini && fin && ini <= fechaHoy && fin >= fechaHoy;
+  });
+
+  $('hoy-k-act').textContent = activos.length;
+  $('hoy-k-act-sub').textContent = Object.keys(conTurno).length + ' con turno hoy';
+  $('hoy-k-marc').textContent = marcaron.length;
+  $('hoy-k-marc-sub').textContent = activos.length ? Math.round(marcaron.length/activos.length*100) + '% del personal' : '—';
+  $('hoy-k-nomarc').textContent = noMarcaron.length;
+  $('hoy-k-atra').textContent = atrasos.length;
+  var sumAtra = atrasos.reduce(function(a, x) { return a + x.r.atrasoMin; }, 0);
+  $('hoy-k-atra-sub').textContent = sumAtra ? sumAtra + ' min totales' : '—';
+  $('hoy-k-ext').textContent = (hhEE / 60).toFixed(1) + ' h';
+  $('hoy-k-per').textContent = permHoy.length;
+
+  // Guardar para listas
+  window._hoyData = { resumenes: resumenes, marcaron: marcaron, noMarcaron: noMarcaron, atrasos: atrasos, permHoy: permHoy };
 }
 
-function empActivo(emp) {
-  // employeeStatus viene como string "ACTIVO" / "INACTIVO" (no booleano)
-  return (emp.employeeStatus || '').toUpperCase() === 'ACTIVO';
+function renderHoy() {
+  actualizarKPIsHoy();
+  if (!window._hoyData) return;
+  var d = window._hoyData;
+
+  // Listas resumen
+  renderHoyList('hoy-nomarc-list', d.noMarcaron, function(x) {
+    var horaTeo = x.r.horario ? fmtHora(x.r.horario.start) : '—';
+    return '<div class="hoy-row alert"><span class="name">' + empNombreCompleto(x.emp) + '</span>' +
+           '<span class="meta">esperaba ' + horaTeo + '</span></div>';
+  });
+  renderHoyList('hoy-atra-list', d.atrasos.sort(function(a,b){return b.r.atrasoMin - a.r.atrasoMin}), function(x) {
+    return '<div class="hoy-row"><span class="name">' + empNombreCompleto(x.emp) + '</span>' +
+           '<span class="meta" style="color:var(--red)">+' + x.r.atrasoMin + ' min</span></div>';
+  });
+  renderHoyList('hoy-marc-list', d.marcaron, function(x) {
+    var hora = x.r.primeraDt ? fmtHora(x.r.primeraDt) : '—';
+    return '<div class="hoy-row"><span class="name">' + empNombreCompleto(x.emp) + '</span>' +
+           '<span class="meta" style="color:var(--green)">' + hora + '</span></div>';
+  });
+
+  // Alertas top
+  var alertsHtml = '';
+  if (d.noMarcaron.length > 0) {
+    alertsHtml += '<div class="alert-box danger"><span class="alert-icon">🚨</span><div>' +
+      '<strong>' + d.noMarcaron.length + ' trabajadores no marcaron entrada hoy.</strong> ' +
+      'Revisa la columna "No han marcado" para ver quiénes y a qué hora se esperaban.</div></div>';
+  }
+  if (d.atrasos.length > 0) {
+    alertsHtml += '<div class="alert-box warn"><span class="alert-icon">⚠️</span><div>' +
+      '<strong>' + d.atrasos.length + ' atrasos detectados hoy.</strong> ' +
+      'Tolerancia configurada: ' + getTolerancia() + ' min.</div></div>';
+  }
+  if (d.noMarcaron.length === 0 && d.atrasos.length === 0 && d.marcaron.length > 0) {
+    alertsHtml += '<div class="alert-box success"><span class="alert-icon">✅</span><div>' +
+      '<strong>Día sin alertas.</strong> Todos los trabajadores con turno asignado marcaron a tiempo.</div></div>';
+  }
+  $('hoy-alerts').innerHTML = alertsHtml;
+
+  // Tabla detalle
+  renderTablaHoy(d.resumenes);
 }
 
-function empNombreCompleto(emp) {
-  var partes = [emp.name, emp.secondName, emp.lastName, emp.secondLastName]
-    .filter(function(p) { return p; });
-  return partes.join(' ').replace(/\s+/g, ' ').trim();
+function renderHoyList(id, items, fnRow) {
+  var el = $(id);
+  if (!el) return;
+  if (items.length === 0) {
+    el.innerHTML = '<div class="empty">— Ninguno —</div>';
+    return;
+  }
+  el.innerHTML = items.slice(0, 50).map(fnRow).join('');
 }
 
-function renderTrabajadores(lista) {
-  $('k-emp-total').textContent = lista.length.toLocaleString('es-CL');
+function renderTablaHoy(resumenes) {
+  var filtro = $('hoy-filtro').value;
+  var q = ($('hoy-busca').value || '').toLowerCase();
+  var lista = resumenes.slice();
+
+  if (filtro === 'atraso') lista = lista.filter(function(x) { return x.r.atrasoMin > 0; });
+  if (filtro === 'nomarca') lista = lista.filter(function(x) { return x.tieneAsignacion && !x.r.primera; });
+  if (filtro === 'ok') lista = lista.filter(function(x) { return x.r.primera && x.r.atrasoMin === 0; });
+  if (q) {
+    lista = lista.filter(function(x) {
+      return empNombreCompleto(x.emp).toLowerCase().indexOf(q) >= 0 ||
+             (x.emp.identification || '').toLowerCase().indexOf(q) >= 0;
+    });
+  }
+
+  var tb = $('tbody-hoy');
+  if (lista.length === 0) {
+    tb.innerHTML = '<tr><td colspan="10"><div class="empty">— Sin datos —</div></td></tr>';
+    return;
+  }
+
+  tb.innerHTML = lista.map(function(x) {
+    var r = x.r;
+    var entradaTeo = r.horario ? fmtHora(r.horario.start) : '—';
+    var salidaTeo = r.horario ? fmtHora(r.horario.end) : '—';
+    var entradaReal = r.primeraDt ? fmtHora(r.primeraDt) : '<span class="s-pill no-marca">NO MARCÓ</span>';
+    var salidaReal = (r.ultimaDt && r.marcasCount >= 2) ? fmtHora(r.ultimaDt) : '—';
+    var atraso = r.atrasoMin > 0 ? '<span class="s-pill atraso">+' + r.atrasoMin + ' min</span>' : '—';
+    var hhEE = r.hhEEMin > 0 ? '<span class="s-pill extra">' + (r.hhEEMin/60).toFixed(1) + ' h</span>' : '—';
+    var estado;
+    if (!x.tieneAsignacion) estado = '<span class="s-pill" style="background:var(--s4);color:var(--t3)">SIN TURNO</span>';
+    else if (!r.primera) estado = '<span class="s-pill no-marca">NO MARCÓ</span>';
+    else if (r.atrasoMin > 0) estado = '<span class="s-pill atraso">ATRASO</span>';
+    else estado = '<span class="s-pill ok">A TIEMPO</span>';
+
+    var rowClass = '';
+    if (!r.primera && x.tieneAsignacion) rowClass = 'row-alert';
+    else if (r.atrasoMin > 0) rowClass = 'row-warn';
+
+    return '<tr class="' + rowClass + '">' +
+      '<td><a class="emp-link" onclick="abrirModalEmpleado(\'' + x.emp.code + '\')">' + empNombreCompleto(x.emp) + '</a></td>' +
+      '<td class="num">' + (x.emp.identification || '—') + '</td>' +
+      '<td>' + (r.horario ? r.horario.workshiftName : '—') + '</td>' +
+      '<td class="num">' + entradaTeo + '</td>' +
+      '<td class="num">' + entradaReal + '</td>' +
+      '<td class="num">' + salidaTeo + '</td>' +
+      '<td class="num">' + salidaReal + '</td>' +
+      '<td>' + atraso + '</td>' +
+      '<td>' + hhEE + '</td>' +
+      '<td>' + estado + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function actualizarHoy() {
+  // Recargar solo lo del día de hoy (rápido)
+  setStatus('load', 'Actualizando datos del día...');
+  cargar();
+}
+
+function actualizarBadgeAnomalias() {
+  // Contar anomalías totales en el período cargado
+  var anomalias = generarAnomalias();
+  var b = $('badge-ano');
+  if (anomalias.length > 0) {
+    b.textContent = anomalias.length;
+    b.style.display = '';
+  } else {
+    b.style.display = 'none';
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   VISTA TRABAJADORES
+   ═══════════════════════════════════════════════════════════════════════ */
+function aplicarFiltrosYRender() {
+  var sucFiltro = $('sucursal').value;
+  var depFiltro = $('depto').value;
+  var qBusca = ($('emp-busca') ? $('emp-busca').value : '').toLowerCase().trim();
+  var estadoFiltro = ($('emp-estado') ? $('emp-estado').value : '');
+  var lista = cacheEmpleados.slice();
+
+  if (sucFiltro) lista = lista.filter(function(e) { return e.branchOfficeCode === sucFiltro; });
+  if (depFiltro) lista = lista.filter(function(e) { return e.departmentCode === depFiltro; });
+  if (estadoFiltro === 'ACTIVO') lista = lista.filter(empActivo);
+  else if (estadoFiltro === 'INACTIVO') lista = lista.filter(function(e) { return !empActivo(e); });
+  if (qBusca) {
+    lista = lista.filter(function(e) {
+      var n = empNombreCompleto(e).toLowerCase();
+      var r = (e.identification || '').toLowerCase();
+      var c = (e.code || '').toLowerCase();
+      return n.indexOf(qBusca) >= 0 || r.indexOf(qBusca) >= 0 || c.indexOf(qBusca) >= 0;
+    });
+  }
+
+  // KPIs
   var act = lista.filter(empActivo).length;
-  $('k-emp-act').textContent = act.toLocaleString('es-CL');
-  $('k-emp-ina').textContent = (lista.length - act).toLocaleString('es-CL');
-  $('k-emp-suc').textContent = new Set(lista.map(empSucursal).filter(function(s) { return s !== '—'; })).size;
-  $('k-emp-dep').textContent = new Set(lista.map(empDepartamento).filter(function(d) { return d !== '—'; })).size;
+  var ina = lista.length - act;
+  var sucs = {}, deps = {}, conTur = 0;
+  var asigSet = {};
+  cacheAsignaciones.forEach(function(a) { if (a.employee) asigSet[a.employee.code] = true; });
+  lista.forEach(function(e) {
+    sucs[empSucursalAdmin(e)] = true;
+    deps[empDepartamento(e)] = true;
+    if (asigSet[e.code]) conTur++;
+  });
+  $('k-emp-total').textContent = lista.length;
+  $('k-emp-act').textContent = act;
+  $('k-emp-ina').textContent = ina;
+  $('k-emp-suc').textContent = Object.keys(sucs).length;
+  $('k-emp-dep').textContent = Object.keys(deps).length;
+  $('k-emp-tur').textContent = conTur;
+
+  // Tabla
+  var asigPorEmp = {};
+  cacheAsignaciones.forEach(function(a) {
+    if (a.employee) asigPorEmp[a.employee.code] = a;
+  });
 
   var tb = $('tbody-emp');
-  if (!lista.length) {
-    tb.innerHTML = '<tr><td colspan="8"><div class="empty">Sin trabajadores</div></td></tr>';
+  if (lista.length === 0) {
+    tb.innerHTML = '<tr><td colspan="7"><div class="empty">— Sin resultados —</div></td></tr>';
     return;
   }
   tb.innerHTML = lista.map(function(e) {
-    var apellidos = ((e.lastName || '') + ' ' + (e.secondLastName || '')).trim();
-    var activo = empActivo(e);
-    // Sucursal con tag visual: si tenemos la operativa real (de marcaciones) la mostramos
-    // en cyan, si solo tenemos la administrativa (MATRIZ) la mostramos en gris.
-    var sucCell = '';
-    if (e._sucursalOperativa) {
-      sucCell = '<span style="color:var(--cyan);font-weight:500" title="Sucursal operativa real (inferida de última marca: ' + (e._ultimaMarca || '').substring(0,10) + ')">' +
-                e._sucursalOperativa + '</span>';
-    } else {
-      sucCell = '<span style="color:var(--t3)" title="Sucursal administrativa (no se encontraron marcaciones recientes)">' +
-                empSucursalAdmin(e) + '</span>';
-    }
+    var asg = asigPorEmp[e.code];
+    var turno = asg ? (asg.workshiftName + ' (' + asg.period + ')') : '—';
+    var estado = empActivo(e)
+      ? '<span class="s-pill act">ACTIVO</span>'
+      : '<span class="s-pill ina">INACTIVO</span>';
     return '<tr>' +
-      '<td><a class="emp-link" onclick="abrirModalTrabajador(\'' + (e.code || '') + '\')">' + (e.code || '—') + '</a></td>' +
-      '<td>' + (e.identification || '—') + '</td>' +
-      '<td>' + (e.name || '—') + (e.secondName ? ' ' + e.secondName : '') + '</td>' +
-      '<td>' + (apellidos || '—') + '</td>' +
-      '<td>' + (e.nationality || '—') + '</td>' +
+      '<td class="num">' + (e.code || '—') + '</td>' +
+      '<td><a class="emp-link" onclick="abrirModalEmpleado(\'' + e.code + '\')">' + empNombreCompleto(e) + '</a></td>' +
+      '<td class="num">' + (e.identification || '—') + '</td>' +
+      '<td>' + empSucursalAdmin(e) + '</td>' +
       '<td>' + empDepartamento(e) + '</td>' +
-      '<td>' + sucCell + '</td>' +
-      '<td><span class="badge ' + (activo ? 'bg">Activo' : 'br">Inactivo') + '</span></td>' +
+      '<td>' + turno + '</td>' +
+      '<td>' + estado + '</td>' +
     '</tr>';
   }).join('');
 }
 
-// Cache de la última respuesta cruda de cada endpoint, para diagnóstico
-var ultimaRespuesta = {};
+/* ═══════════════════════════════════════════════════════════════════════
+   VISTA MARCACIONES
+   ═══════════════════════════════════════════════════════════════════════ */
+function renderMarcaciones() {
+  var q = ($('ast-busca').value || '').toLowerCase();
+  var tipoFil = $('ast-tipo').value;
+  var anoFil = $('ast-anomalia').value;
 
-// Pestaña Marcaciones: carga el primer bloque (5 páginas ~100 marcas) y muestra
-// botón "Cargar más" si hay páginas pendientes. Esto evita timeouts del proxy.
-async function cargarMarcaciones() {
-  await cargarSiguienteBloque();
+  // Enriquecer marcas con datos del empleado y horario teórico
+  var empByCode = {};
+  cacheEmpleados.forEach(function(e) { empByCode[e.code] = e; });
+  var horarioByEmpDia = indexHorariosPorEmpDia();
 
-  if (!cacheMarcacionesEnriquecimiento.length) {
-    var tb = $('tbody-ast');
-    var d1 = $('d1').value, d2 = $('d2').value;
-    var diag = renderDiagnostico('attendanceData', { totalResult: 0, data: [] });
-    tb.innerHTML = '<tr><td colspan="7" style="padding:0">' + diag + '</td></tr>';
-    setStatus('warn', 'Sin marcaciones en el período ' + d1 + ' → ' + d2);
-    return;
-  }
-
-  renderMarcaciones(cacheMarcacionesEnriquecimiento);
-}
-
-// Cargar el siguiente bloque al hacer click en el botón
-async function cargarMasMarcaciones() {
-  var btn = $('btn-mas-marcaciones');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Cargando bloque...'; }
-  try {
-    await cargarSiguienteBloque();
-    renderMarcaciones(cacheMarcacionesEnriquecimiento);
-  } catch (e) {
-    setStatus('err', 'Error al cargar más: ' + e.message);
-    if (btn) { btn.disabled = false; btn.textContent = '↓ Cargar más marcaciones'; }
-  }
-}
-
-// Extrae la lista de items de cualquier estructura típica del API Workera
-function extraerLista(data) {
-  if (!data) return [];
-  if (Array.isArray(data)) return data;
-  return data.data || data.results || data.items || [];
-}
-
-// Estado de paginación visual local en la pestaña Marcaciones
-var marcacionesPaginaUI = 0;
-var marcacionesPorPagina = 50;
-var marcacionesFiltradas = [];
-
-// Variable global para la clasificación entrada/salida del último render
-var clasificacionMarcas = {};
-
-function renderMarcaciones(lista) {
-  // Inicializar filtros UI si es la primera vez
-  if (!document.getElementById('mrc-filtros-init')) {
-    inicializarFiltrosMarcaciones();
-  }
-
-  // PASO 1: Clasificar TODAS las marcas de la lista (entrada/salida por orden temporal)
-  // Esto se hace ANTES del filtro de tipo para que el filtro pueda aplicarse sobre la clasificación.
-  clasificacionMarcas = clasificarEntradasSalidas(lista);
-
-  // PASO 2: Aplicar filtros locales (búsqueda + sucursal + entrada/salida)
-  marcacionesFiltradas = filtrarMarcacionesLocal(lista);
-
-  // KPIs sobre la lista filtrada (refleja exactamente lo que se está mostrando)
-  $('k-ast-total').textContent = marcacionesFiltradas.length.toLocaleString('es-CL');
-
-  var entradas = 0, salidas = 0;
-  marcacionesFiltradas.forEach(function(m) {
-    var clase = clasificacionMarcas[idMarca(m)];
-    if (clase === 'ENTRADA') entradas++;
-    else if (clase === 'SALIDA') salidas++;
-  });
-  $('k-ast-in').textContent  = entradas.toLocaleString('es-CL');
-  $('k-ast-out').textContent = salidas.toLocaleString('es-CL');
-
-  $('k-ast-peo').textContent = new Set(marcacionesFiltradas.map(function(m) {
-    return (m.employee && (m.employee.code || m.employee.identification)) || m.employeeCode;
-  }).filter(Boolean)).size;
-  $('k-ast-dias').textContent = new Set(marcacionesFiltradas.map(function(m) {
-    return (m.attendanceDate || '').substring(0,10);
-  }).filter(Boolean)).size;
-
-  // Render de la página actual
-  renderPaginaMarcaciones();
-}
-
-function filtrarMarcacionesLocal(lista) {
-  var q = ($('mrc-busca') ? $('mrc-busca').value : '').toLowerCase().trim();
-  var sucF = ($('mrc-suc') ? $('mrc-suc').value : '');
-  var tipoF = ($('mrc-tipo') ? $('mrc-tipo').value : '');
-
-  return lista.filter(function(m) {
-    var emp = m.employee || {};
-    if (sucF && emp.branchOffice !== sucF) return false;
-    // Filtro por entrada/salida usando la clasificación temporal
-    if (tipoF) {
-      var clase = clasificacionMarcas[idMarca(m)];
-      if (clase !== tipoF) return false;
-    }
-    if (q) {
-      var nombre = empNombreCompleto(emp).toLowerCase();
-      var rut = (emp.identification || '').toLowerCase();
-      var code = (emp.code || '').toLowerCase();
-      if (nombre.indexOf(q) < 0 && rut.indexOf(q) < 0 && code.indexOf(q) < 0) return false;
-    }
-    return true;
-  });
-}
-
-function renderPaginaMarcaciones() {
-  var lista = marcacionesFiltradas;
-  var total = lista.length;
-  var totalPaginas = Math.ceil(total / marcacionesPorPagina) || 1;
-  if (marcacionesPaginaUI >= totalPaginas) marcacionesPaginaUI = totalPaginas - 1;
-  if (marcacionesPaginaUI < 0) marcacionesPaginaUI = 0;
-
-  var inicio = marcacionesPaginaUI * marcacionesPorPagina;
-  var fin    = Math.min(inicio + marcacionesPorPagina, total);
-  var slice  = lista.slice(inicio, fin);
-
-  var tb = $('tbody-ast');
-  if (!total) {
-    tb.innerHTML = '<tr><td colspan="7"><div class="empty">Sin resultados con los filtros actuales</div></td></tr>';
-    return;
-  }
-
-  tb.innerHTML = slice.map(function(m) {
-    var dt = m.attendanceDate || '';
-    var fecha = dt.substring(0,10);
-    var hora  = dt.substring(11,19);
-    var emp = m.employee || {};
-    var nombre = empNombreCompleto(emp) || '—';
-
-    // Clasificación entrada/salida basada en orden temporal del día (no en attendanceType)
-    var clase = clasificacionMarcas[idMarca(m)] || '?';
-    var etiqueta, badgeClass;
-    if (clase === 'ENTRADA') {
-      etiqueta = 'ENTRADA'; badgeClass = 'bg';
-    } else if (clase === 'SALIDA') {
-      etiqueta = 'SALIDA'; badgeClass = 'ba';
-    } else {
-      etiqueta = '?'; badgeClass = 'bn';
-    }
-    var sucursal = emp.branchOffice || '—';
-
-    return '<tr>' +
-      '<td>' + (fecha || '—') + '</td>' +
-      '<td><strong>' + (hora || '—') + '</strong></td>' +
-      '<td><a class="emp-link" onclick="abrirModalTrabajador(\'' + (emp.code || '') + '\')">' + nombre + '</a></td>' +
-      '<td>' + (emp.identification || '—') + '</td>' +
-      '<td><span class="badge ' + badgeClass + '">' + etiqueta + '</span></td>' +
-      '<td>' + (m.deviceName || '—') + '</td>' +
-      '<td>' + sucursal + '</td>' +
-    '</tr>';
-  }).join('');
-
-  // Barra de paginación al final
-  var paginaActual = marcacionesPaginaUI + 1;
-  var totalPaginasMostrar = Math.ceil(total / marcacionesPorPagina);
-  tb.innerHTML += '<tr><td colspan="7" style="padding:12px;text-align:center;background:var(--s2);border-top:1px solid var(--brm)">' +
-    '<button class="paginador-btn" onclick="marcacionesPaginaUI=0;renderPaginaMarcaciones()" ' +
-    (marcacionesPaginaUI === 0 ? 'disabled' : '') + ' title="Primera">«</button>' +
-    '<button class="paginador-btn" onclick="marcacionesPaginaUI--;renderPaginaMarcaciones()" ' +
-    (marcacionesPaginaUI === 0 ? 'disabled' : '') + ' title="Anterior">‹</button>' +
-    '<span class="paginador-info">Página <strong>' + paginaActual + '</strong> de ' + totalPaginasMostrar +
-    ' · Mostrando ' + (inicio+1) + '–' + fin + ' de ' + total + '</span>' +
-    '<button class="paginador-btn" onclick="marcacionesPaginaUI++;renderPaginaMarcaciones()" ' +
-    (marcacionesPaginaUI >= totalPaginasMostrar - 1 ? 'disabled' : '') + ' title="Siguiente">›</button>' +
-    '<button class="paginador-btn" onclick="marcacionesPaginaUI=' + (totalPaginasMostrar - 1) + ';renderPaginaMarcaciones()" ' +
-    (marcacionesPaginaUI >= totalPaginasMostrar - 1 ? 'disabled' : '') + ' title="Última">»</button>' +
-  '</td></tr>';
-
-  // Si la API tiene más páginas que aún no descargamos, mostrar botón "Cargar más"
-  var faltanApi = cargaIncremental.totalPages - cargaIncremental.paginasPedidas;
-  if (faltanApi > 0) {
-    var marcasFaltantes = cargaIncremental.totalResult - cacheMarcacionesEnriquecimiento.length;
-    tb.innerHTML += '<tr><td colspan="7" style="padding:14px;text-align:center;background:rgba(34,211,238,.05);border-top:1px solid var(--brm)">' +
-      '<button id="btn-mas-marcaciones" onclick="cargarMasMarcaciones()" ' +
-      'style="padding:9px 22px;background:var(--cyan);color:#0c1117;border:none;' +
-      'border-radius:6px;font-weight:600;cursor:pointer;font-size:12px">' +
-      '↓ Cargar más marcaciones (faltan ~' + marcasFaltantes + ' en ' + faltanApi + ' páginas)' +
-      '</button>' +
-      '<div style="font-size:10.5px;color:var(--t3);margin-top:6px">' +
-      'Cargado: ' + cacheMarcacionesEnriquecimiento.length + ' de ' + cargaIncremental.totalResult +
-      ' marcas · cada bloque trae ~' + (BLOQUE_PAGINAS * 20) + ' marcas en ~6s' +
-      '</div></td></tr>';
-  } else if (cargaIncremental.totalPages > 1) {
-    tb.innerHTML += '<tr><td colspan="7" style="padding:10px;text-align:center;color:var(--green);font-size:11px;background:rgba(34,197,94,.06)">' +
-      '✓ Todas las marcaciones del período cargadas (' + cacheMarcacionesEnriquecimiento.length + ')' +
-      '</td></tr>';
-  }
-}
-
-// Crea los inputs de búsqueda y filtros sobre la tabla de Marcaciones (una sola vez)
-function inicializarFiltrosMarcaciones() {
-  var card = document.querySelector('#v-ast .card');
-  if (!card) return;
-  var tw = card.querySelector('.tw');
-  if (!tw) return;
-
-  var sucsUnicas = {};
-  cacheMarcacionesEnriquecimiento.forEach(function(m) {
-    var s = (m.employee || {}).branchOffice;
-    if (s) sucsUnicas[s] = (sucsUnicas[s] || 0) + 1;
-  });
-
-  var filtrosHtml = '<div id="mrc-filtros-init" class="mrc-filtros">' +
-    '<input id="mrc-busca" placeholder="🔍 Buscar por nombre, RUT o código..." oninput="onCambioFiltroMarc()">' +
-    '<select id="mrc-suc" onchange="onCambioFiltroMarc()">' +
-      '<option value="">Todas las sucursales</option>' +
-      Object.keys(sucsUnicas).sort().map(function(s) {
-        return '<option value="' + s + '">' + s + ' (' + sucsUnicas[s] + ')</option>';
-      }).join('') +
-    '</select>' +
-    '<select id="mrc-tipo" onchange="onCambioFiltroMarc()">' +
-      '<option value="">Todas (entrada+salida)</option>' +
-      '<option value="ENTRADA">Solo entradas</option>' +
-      '<option value="SALIDA">Solo salidas</option>' +
-    '</select>' +
-    '<button onclick="limpiarFiltrosMarc()" class="paginador-btn">Limpiar</button>' +
-  '</div>';
-
-  tw.insertAdjacentHTML('beforebegin', filtrosHtml);
-}
-
-function onCambioFiltroMarc() {
-  marcacionesPaginaUI = 0;
-  renderMarcaciones(cacheMarcacionesEnriquecimiento);
-}
-
-function limpiarFiltrosMarc() {
-  if ($('mrc-busca')) $('mrc-busca').value = '';
-  if ($('mrc-suc'))   $('mrc-suc').value = '';
-  if ($('mrc-tipo'))  $('mrc-tipo').value = '';
-  onCambioFiltroMarc();
-}
-
-// Renderiza un panel de diagnóstico amigable cuando un endpoint devuelve vacío.
-// Muestra: status, qué se pidió, qué respondió, y JSON crudo en un <details>.
-function renderDiagnostico(endpoint, dataRaw) {
-  var pretty = '';
-  try { pretty = JSON.stringify(dataRaw || {}, null, 2); }
-  catch(e) { pretty = String(dataRaw); }
-
-  var tieneAlgo = dataRaw && (dataRaw.totalResult || dataRaw.totalPages);
-  var diagnostico = '';
-  if (tieneAlgo) {
-    diagnostico = '<strong>El API respondió OK</strong> con metadatos (totalResult: ' +
-                  (dataRaw.totalResult || 'n/a') + ', totalPages: ' + (dataRaw.totalPages || 'n/a') +
-                  ') pero <code>data: []</code> está vacío.<br>' +
-                  '<strong>Causa probable:</strong> no hay registros para los parámetros enviados.';
-  } else if (Array.isArray(dataRaw)) {
-    diagnostico = '<strong>El API devolvió un array vacío</strong>. ' +
-                  'Probablemente no hay registros en el período/filtros seleccionados.';
-  } else if (dataRaw && Object.keys(dataRaw).length === 0) {
-    diagnostico = '<strong>El API devolvió un objeto vacío</strong>. ' +
-                  'Puede ser un problema de credenciales o parámetros incorrectos.';
-  } else {
-    diagnostico = '<strong>El API devolvió una estructura no esperada.</strong> ' +
-                  'Mira el JSON crudo abajo para ver qué llegó.';
-  }
-
-  return '<div class="diag-panel">' +
-    '<div class="diag-title">⚠ Sin datos para mostrar</div>' +
-    '<div class="diag-text">' + diagnostico + '</div>' +
-    '<div class="diag-actions">' +
-      '<details><summary>Ver respuesta cruda del API</summary>' +
-      '<pre class="diag-json">' + pretty.replace(/</g,'&lt;') + '</pre>' +
-      '</details>' +
-      '<details><summary>Ver parámetros enviados</summary>' +
-      '<pre class="diag-json">endpoint: /' + endpoint + '\n' +
-      'fecha: ' + ($('d1').value || '?') + ' → ' + ($('d2').value || '?') + '\n' +
-      'sucursal: ' + ($('sucursal').value || '(todas)') + '\n' +
-      'depto: ' + ($('depto').value || '(todos)') +
-      '</pre></details>' +
-    '</div>' +
-  '</div>';
-}
-
-async function cargarPermisos() {
-  var d1 = $('d1').value, d2 = $('d2').value;
-  setStatus('load', 'Cargando permisos...');
-  var data = await apiFetch('/permission', {
-    startDate: d1, endDate: d2, start: d1, end: d2, page: 1
-  });
-  ultimaRespuesta.permission = data;
-
-  var lista = extraerLista(data);
-  renderPermisos(lista, data);
-
-  if (lista.length) {
-    setStatus('ok', 'Permisos: ' + lista.length);
-  } else {
-    setStatus('warn', 'Sin permisos en el período ' + d1 + ' → ' + d2);
-  }
-}
-
-// Estado de orden y filtros locales en pestaña Permisos
-var permisosCache = [];
-var permisosOrden = 'fecha_desc'; // fecha_desc | trabajador | tipo
-
-function renderPermisos(lista, dataRaw) {
-  permisosCache = lista || [];
-
-  // Inicializar filtros UI una sola vez
-  if (!document.getElementById('per-filtros-init')) {
-    inicializarFiltrosPermisos();
-  }
-
-  // Aplicar filtros locales
-  var listaFiltrada = filtrarPermisosLocal(permisosCache);
-
-  // KPIs sobre la lista filtrada (refleja exactamente lo visible)
-  $('k-per-total').textContent = listaFiltrada.length.toLocaleString('es-CL');
-  $('k-per-lic').textContent   = listaFiltrada.filter(function(p) {
-    return (p.permissionType || '').toUpperCase() === 'LICENCIA_MEDICA';
-  }).length.toLocaleString('es-CL');
-  $('k-per-vac').textContent   = listaFiltrada.filter(function(p) {
-    return (p.permissionType || '').toUpperCase() === 'VACACIONES';
-  }).length.toLocaleString('es-CL');
-  $('k-per-trh').textContent   = listaFiltrada.filter(function(p) {
-    return (p.permissionType || '').toUpperCase() === 'TRABAJADO_EN_HORARIO';
-  }).length.toLocaleString('es-CL');
-  $('k-per-peo').textContent   = new Set(listaFiltrada.map(function(p) {
-    return (p.employee && (p.employee.code || p.employee.identification)) || '';
-  }).filter(Boolean)).size.toLocaleString('es-CL');
-
-  var tb = $('tbody-per');
-
-  if (!listaFiltrada.length) {
-    if (!permisosCache.length) {
-      var diag = renderDiagnostico('permission', dataRaw);
-      tb.innerHTML = '<tr><td colspan="7" style="padding:0">' + diag + '</td></tr>';
-    } else {
-      tb.innerHTML = '<tr><td colspan="7"><div class="empty">Sin resultados con los filtros actuales</div></td></tr>';
-    }
-    return;
-  }
-
-  // Ordenar
-  var ordenados = listaFiltrada.slice();
-  if (permisosOrden === 'trabajador') {
-    ordenados.sort(function(a, b) {
-      var na = empNombreCompleto(a.employee || {});
-      var nb = empNombreCompleto(b.employee || {});
-      return na.localeCompare(nb);
-    });
-  } else if (permisosOrden === 'tipo') {
-    ordenados.sort(function(a, b) {
-      var ta = a.permissionType || '';
-      var tb_ = b.permissionType || '';
-      if (ta !== tb_) return ta.localeCompare(tb_);
-      // mismo tipo: ordenar por trabajador
-      return empNombreCompleto(a.employee || {}).localeCompare(empNombreCompleto(b.employee || {}));
-    });
-  } else {
-    // fecha_desc (default)
-    ordenados.sort(function(a, b) {
-      return (b.start || '').localeCompare(a.start || '');
-    });
-  }
-
-  var hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-
-  // Acumulador para fila de totales (suma de días por tipo)
-  var totalDiasPorTipo = {};
-  var totalDiasGlobal = 0;
-
-  var filas = ordenados.map(function(p) {
-    var emp = p.employee || {};
-    var sucursal = emp.branchOffice || '—';
-
-    var inicio = formatearFechaCL(p.start);
-    var fin    = formatearFechaCL(p.end);
-    var periodo = (p.start || p.end) ? inicio + ' → ' + fin : '—';
-
-    var dias = '—';
-    if (p.start && p.end) {
-      var d1 = new Date(p.start.substring(0,10));
-      var d2 = new Date(p.end.substring(0,10));
-      dias = Math.round((d2 - d1) / 86400000) + 1;
-      totalDiasGlobal += dias;
-      var t = p.permissionType || 'OTROS';
-      totalDiasPorTipo[t] = (totalDiasPorTipo[t] || 0) + dias;
-    }
-
-    var vigencia = '';
-    if (p.start && p.end) {
-      var inicioD = new Date(p.start.substring(0,10));
-      var finD    = new Date(p.end.substring(0,10));
-      finD.setHours(23,59,59,999);  // incluyente al final del día
-      if (hoy >= inicioD && hoy <= finD) {
-        vigencia = '<span class="badge bg" title="El permiso incluye hoy">🟢 EN CURSO</span>';
-      } else if (hoy > finD) {
-        vigencia = '<span class="badge bn" title="Período ya finalizado">○ FINALIZADO</span>';
-      } else {
-        vigencia = '<span class="badge ba" title="Permiso futuro">→ PENDIENTE</span>';
+  var marcasEnriquecidas = cacheMarcacionesEnriquecimiento.map(function(m) {
+    var emp = m.employeeCode || m.code || m.deviceCode;
+    var fecha = (m.date || m.markDate || '').substring(0, 10);
+    var hora = m.markTime || m.time || (m.date && m.date.indexOf('T') > 0 ? m.date.substring(11,19) : '');
+    var emObj = empByCode[emp] || {};
+    var horario = horarioByEmpDia[emp + '|' + fecha];
+    var tipo = detectarTipoMarca(m, fecha, emp);
+    var horaTeo = '—', deltaMin = null, esAtraso = false, esTemprano = false, esExtra = false;
+    if (horario) {
+      if (tipo === 'ENTRADA') {
+        horaTeo = fmtHora(horario.start);
+        var dt = parseFechaHora(getFullMarcaDate(m, fecha));
+        var dteo = parseFechaHora(horario.start);
+        if (dt && dteo) {
+          deltaMin = diffMin(dt, dteo);
+          if (deltaMin > getTolerancia()) esAtraso = true;
+          else if (deltaMin < -getTolerancia()) esExtra = true;
+        }
+      } else if (tipo === 'SALIDA') {
+        horaTeo = fmtHora(horario.end);
+        var dt2 = parseFechaHora(getFullMarcaDate(m, fecha));
+        var dteo2 = parseFechaHora(horario.end);
+        if (dt2 && dteo2) {
+          deltaMin = diffMin(dt2, dteo2);
+          if (deltaMin > getTolerancia()) esExtra = true;
+          else if (deltaMin < -getTolerancia()) esTemprano = true;
+        }
       }
     }
+    return {
+      m: m, emp: emObj, fecha: fecha, hora: hora,
+      tipo: tipo, horaTeo: horaTeo, deltaMin: deltaMin,
+      esAtraso: esAtraso, esTemprano: esTemprano, esExtra: esExtra
+    };
+  });
 
-    var tipo = p.permissionType || '—';
-    var nombreTipo = p.permissionName || tipo;
-    var tipoBadgeClass = 'bn';
-    if (tipo === 'LICENCIA_MEDICA') tipoBadgeClass = 'br';
-    else if (tipo === 'VACACIONES') tipoBadgeClass = 'bb';
-    else if (tipo === 'TRABAJADO_EN_HORARIO') tipoBadgeClass = 'bg';
+  // Filtros
+  var lista = marcasEnriquecidas;
+  if (q) {
+    lista = lista.filter(function(x) {
+      return empNombreCompleto(x.emp).toLowerCase().indexOf(q) >= 0 ||
+             (x.emp.identification || '').toLowerCase().indexOf(q) >= 0;
+    });
+  }
+  if (tipoFil === 'entrada') lista = lista.filter(function(x) { return x.tipo === 'ENTRADA'; });
+  if (tipoFil === 'salida') lista = lista.filter(function(x) { return x.tipo === 'SALIDA'; });
+  if (anoFil === 'atraso') lista = lista.filter(function(x) { return x.esAtraso; });
+  if (anoFil === 'extra') lista = lista.filter(function(x) { return x.esExtra; });
+  if (anoFil === 'temp') lista = lista.filter(function(x) { return x.esTemprano; });
 
+  // Ordenar por fecha + hora desc
+  lista.sort(function(a, b) {
+    var fa = a.fecha + a.hora, fb = b.fecha + b.hora;
+    return fb.localeCompare(fa);
+  });
+
+  // KPIs
+  var diasUnicos = {}, trabUnicos = {}, atra = 0, ext = 0, temp = 0;
+  marcasEnriquecidas.forEach(function(x) {
+    diasUnicos[x.fecha] = true;
+    trabUnicos[x.emp.code] = true;
+    if (x.esAtraso) atra++;
+    if (x.esExtra && x.deltaMin > 0) ext += x.deltaMin;
+    if (x.esTemprano) temp++;
+  });
+  $('k-ast-total').textContent = marcasEnriquecidas.length;
+  $('k-ast-rango').textContent = $('d1').value + ' al ' + $('d2').value;
+  $('k-ast-dias').textContent = Object.keys(diasUnicos).length;
+  $('k-ast-trab').textContent = Object.keys(trabUnicos).length;
+  $('k-ast-atra').textContent = atra;
+  $('k-ast-ext').textContent = (ext / 60).toFixed(1);
+  $('k-ast-temp').textContent = temp;
+
+  // Tabla
+  var tb = $('tbody-ast');
+  if (lista.length === 0) {
+    tb.innerHTML = '<tr><td colspan="8"><div class="empty">— Sin marcaciones —</div></td></tr>';
+    return;
+  }
+  // Limitar a 1000 filas para no morir
+  var maxRender = 1000;
+  var truncated = lista.length > maxRender;
+  lista = lista.slice(0, maxRender);
+
+  tb.innerHTML = lista.map(function(x) {
+    var deltaTxt = '—';
+    if (x.deltaMin !== null) {
+      var sign = x.deltaMin > 0 ? '+' : '';
+      var color = x.esAtraso ? 'var(--red)' : x.esExtra ? 'var(--purple)' : x.esTemprano ? 'var(--amber)' : 'var(--t2)';
+      deltaTxt = '<span style="color:' + color + ';font-weight:500">' + sign + x.deltaMin + ' min</span>';
+    }
+    var rowClass = x.esAtraso ? 'row-alert' : (x.esExtra || x.esTemprano) ? 'row-warn' : '';
+    var tipoCol = x.tipo === 'ENTRADA' ? '<span class="s-pill ok">ENT</span>' :
+                  x.tipo === 'SALIDA' ? '<span class="s-pill" style="background:var(--blue-bg);color:var(--blue)">SAL</span>' :
+                  '<span class="s-pill" style="background:var(--s4);color:var(--t3)">INT</span>';
+    return '<tr class="' + rowClass + '">' +
+      '<td class="num">' + fmtFecha(x.fecha) + '</td>' +
+      '<td class="num">' + (x.hora ? x.hora.substring(0,5) : '—') + '</td>' +
+      '<td><a class="emp-link" onclick="abrirModalEmpleado(\'' + x.emp.code + '\')">' + empNombreCompleto(x.emp) + '</a></td>' +
+      '<td class="num">' + (x.emp.identification || '—') + '</td>' +
+      '<td>' + tipoCol + '</td>' +
+      '<td class="num">' + x.horaTeo + '</td>' +
+      '<td>' + deltaTxt + '</td>' +
+      '<td>' + (x.emp.branchOfficeName || '—') + '</td>' +
+    '</tr>';
+  }).join('') + (truncated ? '<tr><td colspan="8"><div class="empty">Mostrando ' + maxRender + ' de ' + (lista.length+marcasEnriquecidas.length-maxRender) + '. Refina filtros para ver más.</div></td></tr>' : '');
+
+  window._astData = marcasEnriquecidas;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   VISTA ANOMALÍAS
+   ═══════════════════════════════════════════════════════════════════════ */
+function generarAnomalias() {
+  // Por cada empleado activo y cada día del rango con horario asignado, generar evento
+  var anomalias = [];
+  var d1 = $('d1').value, d2 = $('d2').value;
+  if (!d1 || !d2) return [];
+  var fechas = diasEnRango(d1, d2);
+  var activos = cacheEmpleados.filter(empActivo);
+
+  activos.forEach(function(e) {
+    fechas.forEach(function(f) {
+      var r = calcularResumenDia(e.code, f);
+      // Solo generar anomalía si tiene horario teórico ese día
+      if (!r.horario) return;
+
+      if (r.atrasoMin > 0) {
+        anomalias.push({
+          fecha: f, emp: e, tipo: 'atraso', min: r.atrasoMin,
+          teorica: fmtHora(r.horario.start),
+          real: r.primeraDt ? fmtHora(r.primeraDt) : '—',
+          turno: r.horario.workshiftName
+        });
+      }
+      if (r.salidaTempMin > 0) {
+        anomalias.push({
+          fecha: f, emp: e, tipo: 'temp', min: r.salidaTempMin,
+          teorica: fmtHora(r.horario.end),
+          real: r.ultimaDt ? fmtHora(r.ultimaDt) : '—',
+          turno: r.horario.workshiftName
+        });
+      }
+      if (r.hhEEMin > 0) {
+        anomalias.push({
+          fecha: f, emp: e, tipo: 'extra', min: r.hhEEMin,
+          teorica: fmtHora(r.horario.end),
+          real: r.ultimaDt ? fmtHora(r.ultimaDt) : '—',
+          turno: r.horario.workshiftName
+        });
+      }
+      if (r.sinMarca) {
+        // Solo contar como "no marcó" si la fecha es <= hoy (no futuro)
+        if (f <= hoy()) {
+          anomalias.push({
+            fecha: f, emp: e, tipo: 'nomarca', min: 0,
+            teorica: fmtHora(r.horario.start),
+            real: '—',
+            turno: r.horario.workshiftName
+          });
+        }
+      }
+    });
+  });
+  return anomalias;
+}
+
+function renderAnomalias() {
+  var anomalias = generarAnomalias();
+
+  var q = ($('ano-busca').value || '').toLowerCase();
+  var tipoFil = $('ano-tipo').value;
+  var orden = $('ano-orden').value || 'fecha';
+
+  var lista = anomalias.slice();
+  if (q) {
+    lista = lista.filter(function(a) {
+      return empNombreCompleto(a.emp).toLowerCase().indexOf(q) >= 0 ||
+             (a.emp.identification || '').toLowerCase().indexOf(q) >= 0;
+    });
+  }
+  if (tipoFil) lista = lista.filter(function(a) { return a.tipo === tipoFil; });
+
+  if (orden === 'fecha') lista.sort(function(a, b) { return b.fecha.localeCompare(a.fecha); });
+  if (orden === 'trab') lista.sort(function(a, b) {
+    return empNombreCompleto(a.emp).localeCompare(empNombreCompleto(b.emp));
+  });
+  if (orden === 'min') lista.sort(function(a, b) { return b.min - a.min; });
+
+  // KPIs
+  var atra = anomalias.filter(function(a) { return a.tipo === 'atraso'; });
+  var temp = anomalias.filter(function(a) { return a.tipo === 'temp'; });
+  var ext = anomalias.filter(function(a) { return a.tipo === 'extra'; });
+  var nom = anomalias.filter(function(a) { return a.tipo === 'nomarca'; });
+  var trabSet = {};
+  anomalias.forEach(function(a) { trabSet[a.emp.code] = true; });
+  var sumAtra = atra.reduce(function(a, x) { return a + x.min; }, 0);
+
+  $('k-ano-atra').textContent = atra.length;
+  $('k-ano-temp').textContent = temp.length;
+  $('k-ano-ext').textContent = (ext.reduce(function(a,x){return a+x.min},0) / 60).toFixed(1);
+  $('k-ano-nomarc').textContent = nom.length;
+  $('k-ano-trab').textContent = Object.keys(trabSet).length;
+  $('k-ano-prom').textContent = atra.length ? Math.round(sumAtra / atra.length) : 0;
+
+  // Tabla
+  var tb = $('tbody-ano');
+  if (lista.length === 0) {
+    tb.innerHTML = '<tr><td colspan="9"><div class="empty">— Sin anomalías —</div></td></tr>';
+    return;
+  }
+  tb.innerHTML = lista.slice(0, 1000).map(function(a) {
+    var tipoLbl, tipoColor, severidad;
+    if (a.tipo === 'atraso') { tipoLbl = 'ATRASO'; tipoColor = 'atraso'; }
+    if (a.tipo === 'temp') { tipoLbl = 'SALIDA TEMPRANA'; tipoColor = 'warn'; }
+    if (a.tipo === 'extra') { tipoLbl = 'HORAS EXTRA'; tipoColor = 'extra'; }
+    if (a.tipo === 'nomarca') { tipoLbl = 'NO MARCÓ'; tipoColor = 'no-marca'; }
+
+    if (a.tipo === 'nomarca') severidad = 'CRÍTICA';
+    else if (a.min >= 60) severidad = 'ALTA';
+    else if (a.min >= 30) severidad = 'MEDIA';
+    else severidad = 'BAJA';
+
+    var sevColor = severidad === 'CRÍTICA' ? 'var(--red)' :
+                   severidad === 'ALTA' ? 'var(--red)' :
+                   severidad === 'MEDIA' ? 'var(--amber)' : 'var(--t2)';
+
+    var diff = a.tipo === 'nomarca' ? '—' : (a.min + ' min');
     return '<tr>' +
-      '<td>' + (p.id || p.permissionId || '—') + '</td>' +
-      '<td><a class="emp-link" onclick="abrirModalTrabajador(\'' + (emp.code || '') + '\')">' + (empNombreCompleto(emp) || '—') + '</a></td>' +
-      '<td>' + sucursal + '</td>' +
-      '<td><span class="badge ' + tipoBadgeClass + '">' + nombreTipo + '</span></td>' +
-      '<td>' + periodo + '</td>' +
-      '<td style="text-align:center"><strong>' + dias + '</strong></td>' +
+      '<td class="num">' + fmtFecha(a.fecha) + ' <span style="color:var(--t3);font-size:10px">' + diaSemana(a.fecha) + '</span></td>' +
+      '<td><a class="emp-link" onclick="abrirModalEmpleado(\'' + a.emp.code + '\')">' + empNombreCompleto(a.emp) + '</a></td>' +
+      '<td class="num">' + (a.emp.identification || '—') + '</td>' +
+      '<td>' + a.turno + '</td>' +
+      '<td><span class="s-pill ' + tipoColor + '">' + tipoLbl + '</span></td>' +
+      '<td class="num">' + a.teorica + '</td>' +
+      '<td class="num">' + a.real + '</td>' +
+      '<td class="num" style="font-weight:600">' + diff + '</td>' +
+      '<td><span style="color:' + sevColor + ';font-weight:500">' + severidad + '</span></td>' +
+    '</tr>';
+  }).join('');
+
+  window._anoData = anomalias;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   VISTA TURNOS & HORARIOS
+   ═══════════════════════════════════════════════════════════════════════ */
+function renderTurnos() {
+  var q = ($('tur-busca').value || '').toLowerCase();
+  var perFil = $('tur-period').value;
+  var lista = cacheAsignaciones.slice();
+  if (q) {
+    lista = lista.filter(function(a) {
+      var n = (a.employee.name + ' ' + a.employee.lastName).toLowerCase();
+      var rut = (a.employee.identification || '').toLowerCase();
+      var t = (a.workshiftName || '').toLowerCase();
+      return n.indexOf(q) >= 0 || rut.indexOf(q) >= 0 || t.indexOf(q) >= 0;
+    });
+  }
+  if (perFil) lista = lista.filter(function(a) { return a.period === perFil; });
+
+  // KPIs
+  var turUnicos = {}, trabSet = {};
+  cacheAsignaciones.forEach(function(a) {
+    turUnicos[a.workshiftCode] = true;
+    if (a.employee) trabSet[a.employee.code] = true;
+  });
+  var d1 = $('d1').value, d2 = $('d2').value;
+  var diasRango = (d1 && d2) ? diasEnRango(d1, d2).length : 0;
+
+  // Activos sin turno
+  var conTur = {};
+  cacheAsignaciones.forEach(function(a) { if (a.employee) conTur[a.employee.code] = true; });
+  var activosSinTur = cacheEmpleados.filter(function(e) { return empActivo(e) && !conTur[e.code]; });
+
+  $('k-tur-asig').textContent = cacheAsignaciones.length;
+  $('k-tur-unic').textContent = Object.keys(turUnicos).length;
+  $('k-tur-trab').textContent = Object.keys(trabSet).length;
+  $('k-tur-dias').textContent = diasRango;
+  $('k-tur-hor').textContent = cacheHorarios.length;
+  $('k-tur-sin').textContent = activosSinTur.length;
+
+  var tb = $('tbody-tur');
+  if (lista.length === 0) {
+    tb.innerHTML = '<tr><td colspan="7"><div class="empty">— Sin asignaciones —</div></td></tr>';
+    return;
+  }
+  // Ordenar por nombre
+  lista.sort(function(a, b) {
+    return (a.employee.name + a.employee.lastName).localeCompare(b.employee.name + b.employee.lastName);
+  });
+  tb.innerHTML = lista.map(function(a) {
+    var estado = empActivo(a.employee) ? '<span class="s-pill act">ACTIVO</span>' : '<span class="s-pill ina">INACTIVO</span>';
+    return '<tr>' +
+      '<td><a class="emp-link" onclick="abrirModalEmpleado(\'' + a.employee.code + '\')">' + a.employee.name + ' ' + a.employee.lastName + '</a></td>' +
+      '<td class="num">' + (a.employee.identification || '—') + '</td>' +
+      '<td>' + (a.workshiftName || a.workshiftCode) + '</td>' +
+      '<td>' + (a.period || '—') + '</td>' +
+      '<td class="num">' + fmtFecha(a.start) + '</td>' +
+      '<td class="num">' + fmtFecha(a.end) + '</td>' +
+      '<td>' + estado + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function renderHorarios() {
+  var q = ($('hor-busca').value || '').toLowerCase();
+  var lista = cacheHorarios.slice();
+  if (q) {
+    lista = lista.filter(function(h) {
+      return (h.employeeName || '').toLowerCase().indexOf(q) >= 0 ||
+             (h.rut || '').toLowerCase().indexOf(q) >= 0;
+    });
+  }
+  // Ordenar por fecha desc + nombre
+  lista.sort(function(a, b) {
+    if (a.date !== b.date) return b.date.localeCompare(a.date);
+    return (a.employeeName || '').localeCompare(b.employeeName || '');
+  });
+
+  var tb = $('tbody-hor');
+  if (lista.length === 0) {
+    tb.innerHTML = '<tr><td colspan="9"><div class="empty">— Sin horarios programados —</div></td></tr>';
+    return;
+  }
+  tb.innerHTML = lista.slice(0, 1000).map(function(h) {
+    var ini = parseFechaHora(h.start);
+    var fin = parseFechaHora(h.end);
+    var horas = (ini && fin) ? ((fin - ini) / 3600000).toFixed(1) : '—';
+    return '<tr>' +
+      '<td class="num">' + fmtFecha(h.date) + '</td>' +
+      '<td>' + diaSemana(h.date) + '</td>' +
+      '<td><a class="emp-link" onclick="abrirModalEmpleado(\'' + h.employeeCode + '\')">' + h.employeeName + '</a></td>' +
+      '<td class="num">' + (h.rut || '—') + '</td>' +
+      '<td>' + h.workshiftName + '</td>' +
+      '<td>' + h.scheduleName + '</td>' +
+      '<td class="num">' + fmtHora(h.start) + '</td>' +
+      '<td class="num">' + fmtHora(h.end) + '</td>' +
+      '<td class="num">' + horas + ' h</td>' +
+    '</tr>';
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   VISTA PERMISOS
+   ═══════════════════════════════════════════════════════════════════════ */
+function renderPermisos() {
+  var q = ($('per-busca').value || '').toLowerCase();
+  var lista = cachePermisos.slice();
+  if (q) {
+    lista = lista.filter(function(p) {
+      var n = ((p.employeeName || '') + ' ' + (p.employee && p.employee.name || '')).toLowerCase();
+      return n.indexOf(q) >= 0;
+    });
+  }
+
+  var fechaHoy = hoy();
+  var tipos = {}, trab = {}, vigentes = 0, dias = 0, proximos = 0;
+  var fechaProxLimite = (function() {
+    var d = new Date();
+    d.setDate(d.getDate() + 7);
+    return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+  })();
+  lista.forEach(function(p) {
+    var ini = (p.start || p.startDate || '').substring(0, 10);
+    var fin = (p.end || p.endDate || '').substring(0, 10);
+    var t = p.permissionTypeName || p.type || p.permissionType || '—';
+    tipos[t] = true;
+    var emp = p.employeeCode || (p.employee && p.employee.code);
+    if (emp) trab[emp] = true;
+    if (ini <= fechaHoy && fin >= fechaHoy) vigentes++;
+    if (fin >= fechaHoy && fin <= fechaProxLimite) proximos++;
+    if (ini && fin) {
+      var di = new Date(ini), df = new Date(fin);
+      dias += Math.round((df - di) / (1000*60*60*24)) + 1;
+    }
+  });
+  $('k-per-total').textContent = cachePermisos.length;
+  $('k-per-trab').textContent = Object.keys(trab).length;
+  $('k-per-hoy').textContent = vigentes;
+  $('k-per-tipos').textContent = Object.keys(tipos).length;
+  $('k-per-dias').textContent = dias;
+  $('k-per-proxi').textContent = proximos;
+
+  var tb = $('tbody-per');
+  if (lista.length === 0) {
+    tb.innerHTML = '<tr><td colspan="7"><div class="empty">— Sin permisos —</div></td></tr>';
+    return;
+  }
+  tb.innerHTML = lista.map(function(p) {
+    var ini = (p.start || p.startDate || '').substring(0, 10);
+    var fin = (p.end || p.endDate || '').substring(0, 10);
+    var nombre = p.employeeName || (p.employee ? (p.employee.name + ' ' + p.employee.lastName) : '—');
+    var rut = p.identification || (p.employee && p.employee.identification) || '—';
+    var tipo = p.permissionTypeName || p.type || p.permissionType || '—';
+    var diasP = (ini && fin) ? Math.round((new Date(fin) - new Date(ini)) / (1000*60*60*24)) + 1 : '—';
+    var vigencia;
+    if (ini && fin) {
+      if (ini <= fechaHoy && fin >= fechaHoy) vigencia = '<span class="s-pill permiso">VIGENTE</span>';
+      else if (fin < fechaHoy) vigencia = '<span class="s-pill" style="background:var(--s4);color:var(--t3)">FINALIZADO</span>';
+      else vigencia = '<span class="s-pill warn">FUTURO</span>';
+    } else vigencia = '—';
+    return '<tr>' +
+      '<td>' + nombre + '</td>' +
+      '<td class="num">' + rut + '</td>' +
+      '<td>' + tipo + '</td>' +
+      '<td class="num">' + fmtFecha(ini) + '</td>' +
+      '<td class="num">' + fmtFecha(fin) + '</td>' +
+      '<td class="num">' + diasP + '</td>' +
       '<td>' + vigencia + '</td>' +
     '</tr>';
   }).join('');
-
-  // Fila de totales al final (suma general de días)
-  var tiposVisibles = Object.keys(totalDiasPorTipo).map(function(t) {
-    return t + ': ' + totalDiasPorTipo[t] + 'd';
-  }).join(' · ');
-
-  filas += '<tr style="background:rgba(34,211,238,.06);border-top:2px solid var(--cyan)">' +
-    '<td colspan="5" style="padding:10px;font-size:11.5px"><strong>TOTAL ' + ordenados.length + ' permisos</strong>' +
-    (tiposVisibles ? ' · ' + tiposVisibles : '') + '</td>' +
-    '<td style="text-align:center;padding:10px"><strong style="color:var(--cyan);font-size:13px">' + totalDiasGlobal + 'd</strong></td>' +
-    '<td></td>' +
-  '</tr>';
-
-  tb.innerHTML = filas;
 }
 
-function filtrarPermisosLocal(lista) {
-  var q = ($('per-busca') ? $('per-busca').value : '').toLowerCase().trim();
-  var tipoF = ($('per-tipo') ? $('per-tipo').value : '');
-  var sucF  = ($('per-suc')  ? $('per-suc').value  : '');
-  var vigF  = ($('per-vig')  ? $('per-vig').value  : '');
-
-  var hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-
-  return lista.filter(function(p) {
-    var emp = p.employee || {};
-    if (tipoF && p.permissionType !== tipoF) return false;
-    if (sucF && emp.branchOffice !== sucF) return false;
-    if (q) {
-      var nombre = empNombreCompleto(emp).toLowerCase();
-      var rut = (emp.identification || '').toLowerCase();
-      if (nombre.indexOf(q) < 0 && rut.indexOf(q) < 0) return false;
-    }
-    if (vigF) {
-      var d1 = new Date(p.start.substring(0,10));
-      var d2 = new Date(p.end.substring(0,10));
-      d2.setHours(23,59,59,999);
-      var estado;
-      if (hoy >= d1 && hoy <= d2) estado = 'EN_CURSO';
-      else if (hoy > d2) estado = 'FINALIZADO';
-      else estado = 'PENDIENTE';
-      if (estado !== vigF) return false;
-    }
-    return true;
-  });
-}
-
-function inicializarFiltrosPermisos() {
-  var card = document.querySelector('#v-per .card');
-  if (!card) return;
-  var tw = card.querySelector('.tw');
-  if (!tw) return;
-
-  // Construir lista de tipos y sucursales únicos del cache
-  var tipos = {}, sucs = {};
-  permisosCache.forEach(function(p) {
-    var t = p.permissionType || '';
-    if (t) tipos[t] = (p.permissionName || t);
-    var s = (p.employee || {}).branchOffice || '';
-    if (s) sucs[s] = (sucs[s] || 0) + 1;
-  });
-
-  var html = '<div id="per-filtros-init" class="mrc-filtros">' +
-    '<input id="per-busca" placeholder="🔍 Buscar trabajador o RUT..." oninput="onCambioFiltroPer()">' +
-    '<select id="per-tipo" onchange="onCambioFiltroPer()">' +
-      '<option value="">Todos los tipos</option>' +
-      Object.keys(tipos).sort().map(function(t) {
-        return '<option value="' + t + '">' + tipos[t] + '</option>';
-      }).join('') +
-    '</select>' +
-    '<select id="per-suc" onchange="onCambioFiltroPer()">' +
-      '<option value="">Todas las sucursales</option>' +
-      Object.keys(sucs).sort().map(function(s) {
-        return '<option value="' + s + '">' + s + ' (' + sucs[s] + ')</option>';
-      }).join('') +
-    '</select>' +
-    '<select id="per-vig" onchange="onCambioFiltroPer()">' +
-      '<option value="">Todas las vigencias</option>' +
-      '<option value="EN_CURSO">🟢 En curso (hoy)</option>' +
-      '<option value="PENDIENTE">→ Pendientes</option>' +
-      '<option value="FINALIZADO">○ Finalizados</option>' +
-    '</select>' +
-    '<select id="per-orden" onchange="permisosOrden=this.value;onCambioFiltroPer()">' +
-      '<option value="fecha_desc">↓ Por fecha (recientes primero)</option>' +
-      '<option value="trabajador">A→Z Por trabajador</option>' +
-      '<option value="tipo">A→Z Por tipo</option>' +
-    '</select>' +
-    '<button onclick="limpiarFiltrosPer()" class="paginador-btn">Limpiar</button>' +
-  '</div>';
-
-  tw.insertAdjacentHTML('beforebegin', html);
-}
-
-function onCambioFiltroPer() {
-  renderPermisos(permisosCache, null);
-}
-
-function limpiarFiltrosPer() {
-  ['per-busca','per-tipo','per-suc','per-vig'].forEach(function(id) {
-    if ($(id)) $(id).value = '';
-  });
-  if ($('per-orden')) { $('per-orden').value = 'fecha_desc'; permisosOrden = 'fecha_desc'; }
-  onCambioFiltroPer();
-}
-
-// Formatea una fecha ISO ('2026-04-08T00:00:00') a formato chileno '08-04-2026'
-function formatearFechaCL(iso) {
-  if (!iso) return '—';
-  var s = String(iso).substring(0, 10);
-  var p = s.split('-');
-  if (p.length !== 3) return s;
-  return p[2] + '-' + p[1] + '-' + p[0];
-}
-
-async function cargarTurnos() {
-  setStatus('load', 'Cargando asignaciones de turnos...');
-  var data = await apiFetch('/workshift/assign', { page: 1 });
-  ultimaRespuesta.workshiftAssign = data;
-
-  var lista = extraerLista(data);
-  var tb = $('tbody-tur');
-
-  if (!lista.length) {
-    var diag = renderDiagnostico('workshift/assign', data);
-    tb.innerHTML = '<tr><td colspan="4" style="padding:0">' + diag + '</td></tr>';
-    setStatus('warn', 'Turnos vacíos. Revisa el panel de diagnóstico.');
+/* ═══════════════════════════════════════════════════════════════════════
+   VISTAS SUCURSALES Y DEPARTAMENTOS
+   ═══════════════════════════════════════════════════════════════════════ */
+function renderSucursales() {
+  var tb = $('tbody-suc');
+  if (cacheSucursales.length === 0) {
+    tb.innerHTML = '<tr><td colspan="4"><div class="empty">— Sin sucursales —</div></td></tr>';
     return;
   }
-
-  tb.innerHTML = lista.map(function(t) {
-    var emp = t.employee || {};
+  // Contar empleados por sucursal
+  var conteo = {};
+  cacheEmpleados.forEach(function(e) {
+    var c = e.branchOfficeCode;
+    conteo[c] = (conteo[c] || 0) + 1;
+  });
+  tb.innerHTML = cacheSucursales.map(function(s) {
+    var status = '<span class="s-pill act">ACTIVA</span>';
     return '<tr>' +
-      '<td>' + (empNombreCompleto(emp) || '—') + '</td>' +
-      '<td>' + (t.workshiftName || t.workshift || t.turno || '—') + '</td>' +
-      '<td>' + (t.startDate || '—') + '</td>' +
-      '<td>' + (t.endDate || '—') + '</td>' +
+      '<td class="num">' + (s.code || '—') + '</td>' +
+      '<td>' + (s.name || '—') + '</td>' +
+      '<td class="num">' + (conteo[s.code] || 0) + '</td>' +
+      '<td>' + status + '</td>' +
     '</tr>';
   }).join('');
-  setStatus('ok', 'Turnos: ' + lista.length);
 }
 
-function mostrarErrorSetup(msg) {
-  if (msg.indexOf('500') >= 0 && msg.indexOf('credenciales') >= 0) {
-    var tb = $('tbody-emp');
-    tb.innerHTML = '<tr><td colspan="8">' +
-      '<div class="err-panel">' +
-      '<div style="font-weight:600;color:var(--amber);margin-bottom:8px">⚠️ Credenciales Workera no configuradas</div>' +
-      '<div>Para que este dashboard funcione necesitas configurar las API keys de Workera en Azure:</div>' +
-      '<ol style="margin-top:10px;padding-left:22px;line-height:1.9">' +
-      '<li>Inicia sesión en <code>workera.com/app/login</code> con la empresa <strong>SURTEC</strong></li>' +
-      '<li>Click en tu perfil (arriba derecha) → <strong>Editar perfil</strong></li>' +
-      '<li>Panel derecho → opción <strong>API</strong> → botón <strong>Habilitar API KEY</strong></li>' +
-      '<li>Copia el <code>API User</code> (tu correo) y el <code>API Key</code> (32 caracteres)</li>' +
-      '<li>Ve a Azure Portal → Function App → Configuration → Application Settings</li>' +
-      '<li>Agrega: <code>WORKERA_USER</code> = tu correo / <code>WORKERA_KEY</code> = los 32 caracteres</li>' +
-      '<li>Guarda y recarga este dashboard</li>' +
-      '</ol>' +
-      '</div>' +
-    '</td></tr>';
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// EXPORTAR REPORTE DEL TRABAJADOR A PDF
-// ─────────────────────────────────────────────────────────────────────────
-// Genera un PDF con membrete REDTEC, datos personales, KPIs, distribución
-// de sucursales, timeline día a día y permisos del período. Usado para:
-// - Reuniones uno-a-uno con el trabajador
-// - Auditorías de RRHH
-// - Imprimir y archivar firmado
-// Usa jsPDF dibujando texto manualmente (no html2canvas) para mejor calidad.
-async function exportarTrabajadorPDF() {
-  if (typeof jspdf === 'undefined' || !jspdf.jsPDF) {
-    alert('La librería jsPDF no está cargada. Verifica la conexión a internet.');
+function renderDepartamentos() {
+  var tb = $('tbody-dep');
+  if (cacheDepartamentos.length === 0) {
+    tb.innerHTML = '<tr><td colspan="5"><div class="empty">— Sin departamentos —</div></td></tr>';
     return;
   }
-  if (!modalEmpleadoActual) {
-    alert('No hay un trabajador seleccionado.');
-    return;
-  }
-
-  var btn = $('btn-pdf-emp');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Generando...'; }
-
-  try {
-    var emp = modalEmpleadoActual;
-    var d1 = $('d1').value, d2 = $('d2').value;
-
-    // Cargar permisos del empleado para el período (si no se cargaron aún)
-    var permisos = [];
-    try { permisos = await cargarPermisosEmpleado(emp); } catch(e) {}
-
-    // Filtrar marcaciones del empleado
-    var marcasEmp = cacheMarcacionesEnriquecimiento.filter(function(m) {
-      return m.employee && String(m.employee.code) === String(emp.code);
-    });
-    var clasif = clasificarEntradasSalidas(marcasEmp);
-
-    // Cálculos
-    var diasMarcados = new Set(marcasEmp.map(function(m) {
-      return (m.attendanceDate || '').substring(0, 10);
-    })).size;
-    var entradas = 0, salidas = 0;
-    marcasEmp.forEach(function(m) {
-      var c = clasif[idMarca(m)];
-      if (c === 'ENTRADA') entradas++;
-      else if (c === 'SALIDA') salidas++;
-    });
-
-    var edad = '—';
-    if (emp.birthDate) {
-      try {
-        var nac = new Date(emp.birthDate);
-        var ahora = new Date();
-        var aniosE = ahora.getFullYear() - nac.getFullYear();
-        var mDif = ahora.getMonth() - nac.getMonth();
-        if (mDif < 0 || (mDif === 0 && ahora.getDate() < nac.getDate())) aniosE--;
-        edad = aniosE + ' años';
-      } catch (e) {}
-    }
-
-    // Construir el PDF: A4 portrait, milímetros
-    var doc = new jspdf.jsPDF({ unit: 'mm', format: 'a4' });
-    var pageW = 210, pageH = 297;
-    var margin = 15;
-    var y = margin;
-
-    // Helpers de dibujo
-    function setH1() { doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(20,20,20); }
-    function setH2() { doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(40,40,40); }
-    function setH3() { doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(80,80,80); }
-    function setBody() { doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(40,40,40); }
-    function setSmall() { doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(120,120,120); }
-    function linea(y) { doc.setDrawColor(200); doc.setLineWidth(0.2); doc.line(margin, y, pageW - margin, y); }
-
-    function checkPageBreak(needed) {
-      if (y + needed > pageH - margin - 10) {
-        doc.addPage();
-        y = margin;
-        return true;
-      }
-      return false;
-    }
-
-    // ── MEMBRETE ──────────────────────────────────────────────
-    // Logo: rectángulo rojo con "R"
-    doc.setFillColor(230, 60, 60);
-    doc.rect(margin, y, 22, 14, 'F');
-    doc.setFont('helvetica','bold');
-    doc.setFontSize(12);
-    doc.setTextColor(255,255,255);
-    doc.text('R', margin + 8, y + 9);
-
-    setH1();
-    doc.text('REDTEC', margin + 26, y + 7);
-    setSmall();
-    doc.text('Reporte de asistencia - Workera', margin + 26, y + 12);
-
-    // Lado derecho: fecha de generación + período
-    // Uso formato chileno DD-MM-YYYY que es más corto que ISO + flecha ASCII
-    doc.setFont('helvetica','normal');
-    doc.setFontSize(8);
-    doc.setTextColor(120,120,120);
-    var ahora = new Date();
-    var ahoraStr = ahora.toLocaleDateString('es-CL', { day:'2-digit', month:'2-digit', year:'numeric' }) +
-                   ' ' + ahora.toLocaleTimeString('es-CL', { hour:'2-digit', minute:'2-digit', hour12: false });
-    doc.text('Generado: ' + ahoraStr, pageW - margin, y + 7, { align: 'right' });
-    var periodoStr = 'Periodo: ' + formatearFechaCL(d1 || '') + '  a  ' + formatearFechaCL(d2 || '');
-    doc.text(periodoStr, pageW - margin, y + 12, { align: 'right' });
-
-    y += 20;
-    linea(y);
-    y += 8;  // un poco más de aire antes del nombre del trabajador
-
-    // ── NOMBRE DEL TRABAJADOR ─────────────────────────────────
-    setH1();
-    var nombreCompleto = empNombreCompleto(emp);
-    doc.text(nombreCompleto, margin, y);
-    y += 6;
-    setBody();
-    doc.setTextColor(80,80,80);
-    doc.text('RUT: ' + (emp.identification || '-') + '   -   Codigo: ' + (emp.code || '-'), margin, y);
-    y += 8;
-
-    // ── DATOS PERSONALES ──────────────────────────────────────
-    setH2();
-    doc.text('Datos personales', margin, y);
-    y += 4;
-    linea(y);
-    y += 5;
-
-    // 2 columnas
-    setBody();
-    var col1X = margin;
-    var col2X = pageW / 2;
-    var lineH = 5;
-
-    function campoPdf(x, y, label, value) {
-      setH3();
-      doc.text(label.toUpperCase(), x, y);
-      setBody();
-      doc.text(String(value || '—').substring(0, 50), x, y + 4);
-    }
-
-    campoPdf(col1X, y, 'Nacionalidad', emp.nationality);
-    campoPdf(col2X, y, 'Fecha de nacimiento', emp.birthDate ? formatearFechaCL(emp.birthDate) + ' (' + edad + ')' : '—');
-    y += lineH * 2 + 1;
-
-    campoPdf(col1X, y, 'Género', emp.genre);
-    campoPdf(col2X, y, 'Estado civil', emp.civilStatus);
-    y += lineH * 2 + 1;
-
-    campoPdf(col1X, y, 'Estado en Workera', emp.employeeStatus);
-    campoPdf(col2X, y, 'Última marca', emp._ultimaMarca ? formatearFechaCL(emp._ultimaMarca) : '—');
-    y += lineH * 2 + 1;
-
-    campoPdf(col1X, y, 'Dirección', emp.address);
-    y += lineH * 2 + 1;
-
-    campoPdf(col1X, y, 'Teléfono personal', emp.personalPhone);
-    campoPdf(col2X, y, 'Email personal', emp.personalMail);
-    y += lineH * 2 + 1;
-
-    campoPdf(col1X, y, 'Email corporativo', emp.corporateMail || '—');
-    campoPdf(col2X, y, 'Teléfono corporativo', emp.corporatePhone || '—');
-    y += lineH * 2 + 4;
-
-    // ── RESUMEN DEL PERÍODO ───────────────────────────────────
-    checkPageBreak(40);
-    setH2();
-    doc.text('Resumen del período', margin, y);
-    y += 4;
-    linea(y);
-    y += 6;
-
-    // 4 mini-cajas con KPIs
-    var boxW = (pageW - margin * 2 - 6) / 4;
-    var boxH = 16;
-    var kpis = [
-      { lbl: 'DÍAS', val: diasMarcados },
-      { lbl: 'MARCAS', val: marcasEmp.length },
-      { lbl: 'ENTRADAS', val: entradas },
-      { lbl: 'SALIDAS', val: salidas }
-    ];
-    kpis.forEach(function(k, i) {
-      var bx = margin + i * (boxW + 2);
-      doc.setDrawColor(200);
-      doc.setFillColor(248,248,248);
-      doc.roundedRect(bx, y, boxW, boxH, 1.5, 1.5, 'FD');
-      setH3();
-      doc.text(k.lbl, bx + boxW/2, y + 5, { align: 'center' });
-      doc.setFont('helvetica','bold');
-      doc.setFontSize(14);
-      doc.setTextColor(40,40,40);
-      doc.text(String(k.val), bx + boxW/2, y + 13, { align: 'center' });
-    });
-    y += boxH + 6;
-
-    // ── DISTRIBUCIÓN DE SUCURSALES ────────────────────────────
-    var dist = emp._distribucionSucursales || {};
-    var totalDist = Object.values(dist).reduce(function(a, b) { return a + b; }, 0);
-    if (totalDist > 0) {
-      checkPageBreak(20);
-      setH2();
-      doc.text('Sucursales donde marcó', margin, y);
-      y += 4;
-      linea(y);
-      y += 5;
-
-      var sucsOrdenadas = Object.keys(dist)
-        .map(function(s) { return { suc: s, n: dist[s], pct: (dist[s] / totalDist * 100) }; })
-        .sort(function(a, b) { return b.n - a.n; });
-
-      setBody();
-      sucsOrdenadas.forEach(function(s) {
-        // Layout: [barra fondo gris claro] [barra gris] [espacio] [texto]
-        var barX = margin;
-        var barTotalW = 60;  // ancho total de la zona de barra (fija)
-        var barH = 4;
-        var barFillW = barTotalW * (s.pct / 100);
-        var barY = y - 3;
-
-        // Fondo claro de la barra (para visualizar el 100%)
-        doc.setFillColor(235, 235, 235);
-        doc.rect(barX, barY, barTotalW, barH, 'F');
-        // Relleno proporcional
-        doc.setFillColor(120, 120, 120);
-        doc.rect(barX, barY, barFillW, barH, 'F');
-
-        // Texto al lado, separado por aire suficiente
-        doc.setTextColor(40, 40, 40);
-        var textoX = barX + barTotalW + 6;
-        var textoSuc = s.suc + ' - ' + s.n + ' marcas (' + s.pct.toFixed(1) + '%)';
-        // Truncar si es demasiado largo para no salirse
-        var maxTxtW = pageW - margin - textoX;
-        var lines = doc.splitTextToSize(textoSuc, maxTxtW);
-        doc.text(lines, textoX, y);
-        y += 6;
-      });
-      y += 3;
-    }
-
-    // ── TIMELINE DÍA A DÍA ────────────────────────────────────
-    checkPageBreak(20);
-    setH2();
-    doc.text('Detalle día a día', margin, y);
-    y += 4;
-    linea(y);
-    y += 5;
-
-    // Construir mapa día → marcas
-    var porDia = {};
-    marcasEmp.forEach(function(m) {
-      var dia = (m.attendanceDate || '').substring(0, 10);
-      var hora = (m.attendanceDate || '').substring(11, 19);
-      if (!dia) return;
-      if (!porDia[dia]) porDia[dia] = [];
-      porDia[dia].push({ hora: hora, clase: clasif[idMarca(m)] || '?' });
-    });
-
-    var inicio = new Date(d1 + 'T12:00:00');
-    var fin    = new Date(d2 + 'T12:00:00');
-    var diasNombre = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
-    var diasArr = [];
-    for (var t = inicio.getTime(); t <= fin.getTime(); t += 86400000) {
-      var dt = new Date(t);
-      diasArr.push({ iso: dt.toISOString().substring(0, 10), fecha: dt });
-    }
-
-    setBody();
-    doc.setFontSize(9);
-    diasArr.forEach(function(d) {
-      checkPageBreak(6);
-      var marks = porDia[d.iso] || [];
-      var dn = diasNombre[d.fecha.getDay()];
-      doc.setTextColor(120,120,120);
-      doc.text(dn + ' ' + formatearFechaCL(d.iso), margin, y);
-
-      if (!marks.length) {
-        doc.setTextColor(180,180,180);
-        doc.setFont('helvetica','italic');
-        doc.text('— sin marcas —', margin + 30, y);
-        doc.setFont('helvetica','normal');
-      } else {
-        marks.sort(function(a, b) { return a.hora.localeCompare(b.hora); });
-        var lblTexto = marks.map(function(m) {
-          var lbl = m.clase === 'ENTRADA' ? 'IN' : (m.clase === 'SALIDA' ? 'OUT' : '?');
-          return lbl + ' ' + m.hora;
-        }).join('   |   ');
-        doc.setTextColor(40,40,40);
-        doc.text(lblTexto, margin + 30, y);
-      }
-      y += 5;
-    });
-    y += 3;
-
-    // ── PERMISOS DEL PERÍODO ──────────────────────────────────
-    if (permisos.length) {
-      checkPageBreak(20);
-      setH2();
-      doc.text('Permisos del periodo', margin, y);
-      y += 4;
-      linea(y);
-      y += 5;
-
-      setBody();
-      doc.setFontSize(9);
-      permisos.forEach(function(p) {
-        checkPageBreak(7);
-        var dias = '-';
-        if (p.start && p.end) {
-          var pd1 = new Date(p.start.substring(0,10));
-          var pd2 = new Date(p.end.substring(0,10));
-          dias = Math.round((pd2 - pd1) / 86400000) + 1;
-        }
-        doc.setTextColor(40,40,40);
-        doc.text(p.permissionName || p.permissionType || '-', margin, y);
-        doc.setTextColor(80,80,80);
-        doc.text(formatearFechaCL(p.start) + '  a  ' + formatearFechaCL(p.end) + '   (' + dias + ' dias)',
-                 margin + 50, y);
-        y += 5;
-      });
-    }
-
-    // ── FIRMAS ───────────────────────────────────────────────
-    checkPageBreak(35);
-    y = pageH - margin - 28;
-    linea(y);
-    y += 8;
-    setBody();
-    doc.setFontSize(9);
-    doc.setTextColor(120,120,120);
-    var firmaW = (pageW - margin * 2 - 10) / 2;
-    doc.text('________________________________', margin, y + 12);
-    doc.text('Firma del trabajador', margin + firmaW/2, y + 18, { align: 'center' });
-    doc.text('________________________________', margin + firmaW + 10, y + 12);
-    doc.text('Firma del supervisor', margin + firmaW * 1.5 + 10, y + 18, { align: 'center' });
-
-    // ── PIE DE PÁGINA con número en todas las páginas ─────────
-    var totalPaginas = doc.internal.getNumberOfPages();
-    for (var i = 1; i <= totalPaginas; i++) {
-      doc.setPage(i);
-      doc.setFont('helvetica','normal');
-      doc.setFontSize(7);
-      doc.setTextColor(150,150,150);
-      doc.text('Página ' + i + ' de ' + totalPaginas, pageW - margin, pageH - 8, { align: 'right' });
-      doc.text('Reporte generado por dashboard Workera · REDTEC', margin, pageH - 8);
-    }
-
-    // Descargar
-    var nombreArchivo = 'reporte_' + (emp.code || 'emp') + '_' + (emp.lastName || '').replace(/\s+/g,'_') + '_' + d1 + '_' + d2 + '.pdf';
-    doc.save(nombreArchivo);
-
-    setStatus('ok', '✓ PDF descargado: ' + nombreArchivo);
-  } catch (e) {
-    console.error('[Workera] Error generando PDF:', e);
-    alert('Error generando PDF: ' + e.message);
-  } finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = '📄 PDF'; }
-  }
-}
-
-
-function abrirModalTrabajador(code) {
-  if (!code) return;
-  var emp = cacheEmpleados.find(function(e) { return String(e.code) === String(code); });
-  if (!emp) {
-    // Empleado NO está en el cache de la empresa actual (típicamente porque pertenece
-    // a otra empresa de Workera). Buscamos sus datos en las marcaciones cacheadas
-    // para mostrar un mensaje informativo con nombre real y empresa.
-    var marcaEmpleado = cacheMarcacionesEnriquecimiento.find(function(m) {
-      return m.employee && String(m.employee.code) === String(code);
-    });
-    var nombre = marcaEmpleado ? empNombreCompleto(marcaEmpleado.employee) : '';
-    var rut = marcaEmpleado ? marcaEmpleado.employee.identification : '';
-    var empresa = marcaEmpleado ? marcaEmpleado.employee.companyName : '';
-    var sucursal = marcaEmpleado ? marcaEmpleado.employee.branchOffice : '';
-
-    var msg = '';
-    if (nombre) {
-      msg = nombre + ' (RUT ' + (rut || code) + ') no está en el listado actual de Trabajadores.\n\n';
-      if (empresa && empresa !== ($('empresa') ? $('empresa').value : '')) {
-        msg += 'Pertenece a la empresa: ' + empresa + '\n';
-      }
-      if (sucursal) {
-        msg += 'Sucursal donde marca: ' + sucursal + '\n';
-      }
-      msg += '\nPara ver su detalle completo, cambiá el selector de Empresa arriba a la empresa correspondiente.';
-    } else {
-      msg = 'No se encontró el empleado con código ' + code + ' en los datos cargados.\n\n' +
-            'Posibles causas:\n' +
-            ' · Pertenece a otra empresa de Workera (cambia el selector arriba)\n' +
-            ' · Los datos del empleado aún no se cargaron (refrescá Trabajadores)';
-    }
-    alert(msg);
-    return;
-  }
-  modalEmpleadoActual = emp;
-
-  // Header
-  $('modal-emp-nombre').textContent = empNombreCompleto(emp);
-  $('modal-emp-sub').textContent = 'CÓDIGO: ' + emp.code + ' · RUT: ' + (emp.identification || '—');
-
-  // Cuerpo: render inicial con lo que tenemos en cache (datos personales + marcas + sucursales)
-  $('modal-emp-body').innerHTML = renderModalEmpleado(emp, null);
-
-  // Mostrar modal
-  $('modal-emp').classList.add('on');
-  document.body.style.overflow = 'hidden';
-
-  // Cargar permisos del empleado en el rango actual (async)
-  cargarPermisosEmpleado(emp).then(function(permisos) {
-    // Cuando vuelven, refrescar la sección de permisos del modal
-    var section = document.getElementById('modal-emp-permisos');
-    if (section) {
-      section.innerHTML = renderSeccionPermisos(emp, permisos);
-    }
-  }).catch(function(e) {
-    console.warn('[Workera] Error cargando permisos del empleado:', e.message);
-    var section = document.getElementById('modal-emp-permisos');
-    if (section) {
-      section.innerHTML = '<div class="modal-loading" style="color:var(--red)">Error al cargar permisos: ' + e.message + '</div>';
-    }
+  var conteo = {};
+  cacheEmpleados.forEach(function(e) {
+    var c = e.departmentCode;
+    conteo[c] = (conteo[c] || 0) + 1;
   });
-}
-
-function cerrarModalTrabajador(ev) {
-  if (ev && ev.target && !ev.target.classList.contains('modal-bg') && ev.target.id !== 'modal-emp') {
-    return;  // Click dentro del modal-box, ignorar
-  }
-  $('modal-emp').classList.remove('on');
-  document.body.style.overflow = '';
-}
-
-// Render inicial del cuerpo del modal (datos personales + KPIs + timeline + sucursales)
-function renderModalEmpleado(emp, permisos) {
-  var d1 = $('d1').value, d2 = $('d2').value;
-
-  // Filtrar las marcaciones cacheadas para este empleado
-  var marcasEmp = cacheMarcacionesEnriquecimiento.filter(function(m) {
-    return m.employee && String(m.employee.code) === String(emp.code);
-  });
-
-  // KPIs del período
-  var diasMarcados = new Set(marcasEmp.map(function(m) {
-    return (m.attendanceDate || '').substring(0, 10);
-  })).size;
-  var totalMarcas = marcasEmp.length;
-  // Clasificación entrada/salida por orden temporal del propio empleado
-  var clasifEmp = clasificarEntradasSalidas(marcasEmp);
-  var entradas = 0, salidas = 0;
-  marcasEmp.forEach(function(m) {
-    var c = clasifEmp[idMarca(m)];
-    if (c === 'ENTRADA') entradas++;
-    else if (c === 'SALIDA') salidas++;
-  });
-
-  // Edad calculada
-  var edad = '—';
-  if (emp.birthDate) {
-    try {
-      var nac = new Date(emp.birthDate);
-      var ahora = new Date();
-      var aniosE = ahora.getFullYear() - nac.getFullYear();
-      var m = ahora.getMonth() - nac.getMonth();
-      if (m < 0 || (m === 0 && ahora.getDate() < nac.getDate())) aniosE--;
-      edad = aniosE + ' años';
-    } catch (e) {}
-  }
-
-  // Calcular distribución de sucursales (porcentajes)
-  var dist = emp._distribucionSucursales || {};
-  var totalDist = Object.values(dist).reduce(function(a, b) { return a + b; }, 0);
-  var sucsOrdenadas = Object.keys(dist)
-    .map(function(s) { return { suc: s, n: dist[s], pct: totalDist ? (dist[s] / totalDist * 100) : 0 }; })
-    .sort(function(a, b) { return b.n - a.n; });
-
-  var html = '';
-
-  // ── SECCIÓN 1: Datos personales ─────────────────────
-  html += '<div class="modal-section">';
-  html += '<h3>Datos personales</h3>';
-  html += '<div class="modal-grid">';
-  html += campoModal('Nombre completo', empNombreCompleto(emp));
-  html += campoModal('RUT', emp.identification);
-  html += campoModal('Fecha de nacimiento', emp.birthDate ? formatearFechaCL(emp.birthDate) + ' (' + edad + ')' : '—');
-  html += campoModal('Género', emp.genre);
-  html += campoModal('Estado civil', emp.civilStatus);
-  html += campoModal('Nacionalidad', emp.nationality);
-  html += campoModal('Estado', empActivo(emp) ? '🟢 Activo' : '🔴 Inactivo');
-  html += campoModal('Dirección', emp.address);
-  html += campoModal('Teléfono personal', emp.personalPhone);
-  html += campoModal('Email personal', emp.personalMail);
-  html += campoModal('Email corporativo', emp.corporateMail || '—');
-  html += campoModal('Teléfono corporativo', emp.corporatePhone || '—');
-  html += '</div></div>';
-
-  // ── SECCIÓN 2: KPIs del período ─────────────────────
-  html += '<div class="modal-section">';
-  html += '<h3>Actividad en el período (' + d1 + ' → ' + d2 + ')</h3>';
-  html += '<div class="modal-kpis">';
-  html += '<div class="modal-kpi"><div class="modal-kpi-lbl">Días con marcas</div><div class="modal-kpi-val cyan">' + diasMarcados + '</div></div>';
-  html += '<div class="modal-kpi"><div class="modal-kpi-lbl">Total marcas</div><div class="modal-kpi-val">' + totalMarcas + '</div></div>';
-  html += '<div class="modal-kpi"><div class="modal-kpi-lbl">Entradas</div><div class="modal-kpi-val green">' + entradas + '</div></div>';
-  html += '<div class="modal-kpi"><div class="modal-kpi-lbl">Salidas</div><div class="modal-kpi-val amber">' + salidas + '</div></div>';
-  html += '<div class="modal-kpi"><div class="modal-kpi-lbl">Última marca</div><div class="modal-kpi-val cyan" style="font-size:14px">' + (emp._ultimaMarca ? formatearFechaCL(emp._ultimaMarca) : '—') + '</div></div>';
-  html += '</div></div>';
-
-  // ── SECCIÓN 3: Distribución de sucursales ─────────
-  if (sucsOrdenadas.length) {
-    var colores = ['#22d4fa', '#22d47a', '#f5a623', '#f56060', '#a78bfa', '#4f8ef7'];
-    html += '<div class="modal-section">';
-    html += '<h3>Sucursales donde marca (últimos 30 días)</h3>';
-    html += '<div class="modal-suc-bar">';
-    sucsOrdenadas.forEach(function(s, i) {
-      var color = colores[i % colores.length];
-      html += '<div class="modal-suc-segment" style="background:' + color +
-              ';width:' + s.pct.toFixed(1) + '%" title="' + s.suc + ': ' + s.pct.toFixed(1) + '%">' +
-              (s.pct > 8 ? s.pct.toFixed(0) + '%' : '') +
-              '</div>';
-    });
-    html += '</div>';
-    html += '<div class="modal-suc-list">';
-    sucsOrdenadas.forEach(function(s, i) {
-      var color = colores[i % colores.length];
-      html += '<div><span class="dot" style="background:' + color + '"></span>' +
-              '<strong>' + s.suc + '</strong> · ' + s.n + ' marcas (' + s.pct.toFixed(1) + '%)</div>';
-    });
-    html += '</div></div>';
-  }
-
-  // ── SECCIÓN 4: Timeline día a día ─────────────────
-  html += '<div class="modal-section">';
-  html += '<h3>Timeline del período</h3>';
-  html += '<div class="modal-timeline">' + renderTimelineEmpleado(emp, marcasEmp, d1, d2) + '</div>';
-  html += '</div>';
-
-  // ── SECCIÓN 5: Permisos (placeholder con loading) ─
-  html += '<div class="modal-section">';
-  html += '<h3>Permisos del período</h3>';
-  html += '<div id="modal-emp-permisos"><div class="modal-loading">Cargando permisos...</div></div>';
-  html += '</div>';
-
-  return html;
-}
-
-function campoModal(label, value) {
-  return '<div class="modal-field">' +
-    '<div class="modal-field-lbl">' + label + '</div>' +
-    '<div class="modal-field-val">' + (value != null && value !== '' ? value : '—') + '</div>' +
-    '</div>';
-}
-
-// Genera el timeline día a día con marcas (in/out) y permisos
-function renderTimelineEmpleado(emp, marcas, d1, d2) {
-  if (!d1 || !d2) return '<em>Selecciona fechas</em>';
-
-  // Clasificar entradas/salidas del empleado por orden temporal
-  var clasif = clasificarEntradasSalidas(marcas);
-
-  // Construir mapa día → marcas (con la clase ya calculada)
-  var porDia = {};
-  marcas.forEach(function(m) {
-    var dia = (m.attendanceDate || '').substring(0, 10);
-    var hora = (m.attendanceDate || '').substring(11, 19);
-    if (!dia) return;
-    if (!porDia[dia]) porDia[dia] = [];
-    porDia[dia].push({
-      hora: hora,
-      clase: clasif[idMarca(m)] || '?'
-    });
-  });
-
-  // Generar lista de días en el rango
-  var inicio = new Date(d1 + 'T12:00:00');
-  var fin    = new Date(d2 + 'T12:00:00');
-  var dias = [];
-  for (var t = inicio.getTime(); t <= fin.getTime(); t += 86400000) {
-    var d = new Date(t);
-    var iso = d.toISOString().substring(0, 10);
-    dias.push({ iso: iso, fecha: d });
-  }
-
-  if (dias.length > 60) {
-    return '<em>Rango muy amplio (' + dias.length + ' días). Acotá el rango para ver el timeline.</em>';
-  }
-
-  var diasNombre = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
-  return dias.reverse().map(function(d) {
-    var marks = porDia[d.iso] || [];
-    var dn = diasNombre[d.fecha.getDay()];
-    var lblFecha = '<span class="day-date">' + dn + ' ' + formatearFechaCL(d.iso) + '</span>';
-
-    var eventos;
-    if (!marks.length) {
-      eventos = '<span class="ev-none">— sin marcas —</span>';
-    } else {
-      marks.sort(function(a, b) { return a.hora.localeCompare(b.hora); });
-      eventos = marks.map(function(m) {
-        var cssClass = m.clase === 'ENTRADA' ? 'ev-in' : (m.clase === 'SALIDA' ? 'ev-out' : 'ev-none');
-        var label = m.clase === 'ENTRADA' ? 'IN ' : (m.clase === 'SALIDA' ? 'OUT' : '? ');
-        return '<span class="' + cssClass + '">' + label + ' ' + m.hora + '</span>';
-      }).join(' · ');
-    }
-
-    return '<div class="day">' + lblFecha + '<span class="day-events">' + eventos + '</span></div>';
+  tb.innerHTML = cacheDepartamentos.map(function(d) {
+    var status = (d.status || 'ACTIVO').toUpperCase() === 'ACTIVO'
+      ? '<span class="s-pill act">ACTIVO</span>'
+      : '<span class="s-pill ina">' + (d.status || '—') + '</span>';
+    var def = d.defaultDepartment ? '✓' : '—';
+    return '<tr>' +
+      '<td class="num">' + (d.code || '—') + '</td>' +
+      '<td>' + (d.name || '—') + '</td>' +
+      '<td class="num">' + (d.employeesCount !== undefined ? d.employeesCount : (conteo[d.code] || 0)) + '</td>' +
+      '<td>' + def + '</td>' +
+      '<td>' + status + '</td>' +
+    '</tr>';
   }).join('');
 }
 
-// Carga los permisos del empleado en el rango actual
-async function cargarPermisosEmpleado(emp) {
-  var d1 = $('d1').value, d2 = $('d2').value;
-  var data = await apiFetch('/permission', {
-    startDate: d1, endDate: d2, start: d1, end: d2, page: 1
-  });
-  var lista = extraerLista(data);
-  // Filtrar solo los del empleado
-  return lista.filter(function(p) {
-    return p.employee && String(p.employee.code) === String(emp.code);
-  });
-}
+/* ═══════════════════════════════════════════════════════════════════════
+   MODAL DETALLE DE EMPLEADO
+   ═══════════════════════════════════════════════════════════════════════ */
+function abrirModalEmpleado(code) {
+  var emp = cacheEmpleados.find(function(e) { return e.code == code; });
+  if (!emp) {
+    // Buscar en asignaciones u horarios
+    var ah = cacheAsignaciones.find(function(a) { return a.employee && a.employee.code == code; });
+    if (ah) emp = ah.employee;
+  }
+  if (!emp) return;
+  modalEmpleadoActual = emp;
 
-// Render de la sección de permisos del modal
-function renderSeccionPermisos(emp, permisos) {
-  if (!permisos.length) {
-    return '<div class="modal-loading">Sin permisos en el período seleccionado</div>';
+  var asig = cacheAsignaciones.filter(function(a) { return a.employee && a.employee.code == code; });
+  var horarios = cacheHorarios.filter(function(h) { return h.employeeCode == code; });
+  var marcas = cacheMarcacionesEnriquecimiento.filter(function(m) {
+    return (m.employeeCode || m.code || m.deviceCode) == code;
+  });
+  var permisos = cachePermisos.filter(function(p) {
+    var pc = p.employeeCode || (p.employee && p.employee.code);
+    return pc == code;
+  });
+
+  // Construir HTML
+  var html = '';
+  html += '<h2>' + empNombreCompleto(emp) + '</h2>';
+  html += '<div class="modal-sub">RUT: ' + (emp.identification || '—') + ' · Código: ' + (emp.code || '—') + '</div>';
+
+  // Datos personales
+  html += '<div class="modal-section"><h3>Datos personales</h3><div class="modal-grid">';
+  html += '<div><div class="lbl">Sucursal</div><div class="val">' + empSucursalAdmin(emp) + '</div></div>';
+  html += '<div><div class="lbl">Departamento</div><div class="val">' + empDepartamento(emp) + '</div></div>';
+  html += '<div><div class="lbl">Estado</div><div class="val">' + (emp.employeeStatus || '—') + '</div></div>';
+  html += '<div><div class="lbl">Género</div><div class="val">' + (emp.genre || '—') + '</div></div>';
+  html += '<div><div class="lbl">Email</div><div class="val">' + (emp.personalMail || '—') + '</div></div>';
+  html += '<div><div class="lbl">Teléfono</div><div class="val">' + (emp.personalPhone || '—') + '</div></div>';
+  html += '</div></div>';
+
+  // Turnos asignados
+  if (asig.length) {
+    html += '<div class="modal-section"><h3>Turnos asignados (' + asig.length + ')</h3>';
+    html += '<div class="tw"><table class="tbl">';
+    html += '<thead><tr><th>Turno</th><th>Período</th><th>Inicio</th><th>Término</th></tr></thead><tbody>';
+    asig.forEach(function(a) {
+      html += '<tr><td>' + a.workshiftName + '</td><td>' + a.period + '</td>' +
+              '<td class="num">' + fmtFecha(a.start) + '</td><td class="num">' + fmtFecha(a.end) + '</td></tr>';
+    });
+    html += '</tbody></table></div></div>';
   }
 
-  var hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
+  // Resumen de asistencia (si hay horarios y marcas)
+  if (horarios.length) {
+    var atrasos = 0, sumAtra = 0, hhEE = 0, sinMarca = 0;
+    var fechas = [];
+    horarios.forEach(function(h) { if (fechas.indexOf(h.date) < 0) fechas.push(h.date); });
+    fechas.forEach(function(f) {
+      var r = calcularResumenDia(emp.code, f);
+      if (r.atrasoMin > 0) { atrasos++; sumAtra += r.atrasoMin; }
+      if (r.hhEEMin > 0) hhEE += r.hhEEMin;
+      if (r.sinMarca && f <= hoy()) sinMarca++;
+    });
+    html += '<div class="modal-section"><h3>Resumen de asistencia (' + fechas.length + ' días con horario)</h3>';
+    html += '<div class="modal-grid">';
+    html += '<div><div class="lbl">Atrasos</div><div class="val" style="color:var(--red)">' + atrasos + ' (' + sumAtra + ' min)</div></div>';
+    html += '<div><div class="lbl">Horas extra</div><div class="val" style="color:var(--purple)">' + (hhEE/60).toFixed(1) + ' h</div></div>';
+    html += '<div><div class="lbl">No marcó</div><div class="val" style="color:var(--red)">' + sinMarca + ' días</div></div>';
+    html += '<div><div class="lbl">Marcas totales</div><div class="val">' + marcas.length + '</div></div>';
+    html += '</div></div>';
 
-  return '<table class="tbl"><thead><tr>' +
-    '<th>Tipo</th><th>Inicio</th><th>Fin</th><th>Días</th><th>Vigencia</th>' +
-    '</tr></thead><tbody>' +
-    permisos.map(function(p) {
-      var inicio = formatearFechaCL(p.start);
-      var fin = formatearFechaCL(p.end);
-      var dias = '—';
-      var vigencia = '';
-      if (p.start && p.end) {
-        var d1 = new Date(p.start.substring(0,10));
-        var d2 = new Date(p.end.substring(0,10));
-        dias = Math.round((d2 - d1) / 86400000) + 1;
-        // Comparación con fin del día (incluyente)
-        var d2End = new Date(d2); d2End.setHours(23,59,59,999);
-        if (hoy >= d1 && hoy <= d2End) {
-          vigencia = '<span class="badge bg">🟢 EN CURSO</span>';
-        } else if (hoy > d2End) {
-          vigencia = '<span class="badge bn">○ FINALIZADO</span>';
-        } else {
-          vigencia = '<span class="badge ba">→ PENDIENTE</span>';
-        }
-      }
-      var tipo = p.permissionType || '—';
-      var nombreTipo = p.permissionName || tipo;
-      var tipoBadgeClass = 'bn';
-      if (tipo === 'LICENCIA_MEDICA') tipoBadgeClass = 'br';
-      else if (tipo === 'VACACIONES') tipoBadgeClass = 'bb';
-      else if (tipo === 'TRABAJADO_EN_HORARIO') tipoBadgeClass = 'bg';
-
-      return '<tr>' +
-        '<td><span class="badge ' + tipoBadgeClass + '">' + nombreTipo + '</span></td>' +
-        '<td>' + inicio + '</td>' +
-        '<td>' + fin + '</td>' +
-        '<td style="text-align:center"><strong>' + dias + '</strong></td>' +
-        '<td>' + vigencia + '</td>' +
-        '</tr>';
-    }).join('') + '</tbody></table>';
-}
-
-// Cerrar modal con ESC
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') cerrarModalTrabajador();
-});
-
-// ─────────────────────────────────────────────────────────────────────────
-
-// Al cargar la página, cargar sucursales
-window.addEventListener('DOMContentLoaded', function() {
-  document.body.classList.add('tab-emp');  // pestaña por defecto = Trabajadores
-
-  // Cargar cache de marcaciones desde localStorage (si existe)
-  var info = cacheCargarDeDisco();
-  if (info.marcas > 0) {
-    console.log('[Workera] Cache restaurado: ' + info.dias + ' días, ' + info.marcas + ' marcas');
-    setTimeout(function() {
-      var el = document.getElementById('cache-info');
-      if (el) el.textContent = '· 💾 ' + info.marcas.toLocaleString('es-CL') + ' marcas en cache (' + info.dias + ' días)';
-    }, 100);
+    // Detalle día a día
+    html += '<div class="modal-section"><h3>Detalle día a día</h3><div class="tw">';
+    html += '<table class="tbl"><thead><tr><th>Fecha</th><th>Día</th><th>Horario</th><th>Entrada teó.</th><th>Entrada real</th><th>Salida real</th><th>Atraso</th><th>HH.EE.</th></tr></thead><tbody>';
+    fechas.sort().reverse().forEach(function(f) {
+      var r = calcularResumenDia(emp.code, f);
+      var entReal = r.primeraDt ? fmtHora(r.primeraDt) : '<span style="color:var(--red)">—</span>';
+      var salReal = (r.ultimaDt && r.marcasCount >= 2) ? fmtHora(r.ultimaDt) : '—';
+      var atr = r.atrasoMin > 0 ? '<span style="color:var(--red);font-weight:600">+' + r.atrasoMin + 'm</span>' : '—';
+      var ee = r.hhEEMin > 0 ? '<span style="color:var(--purple);font-weight:600">' + (r.hhEEMin/60).toFixed(1) + 'h</span>' : '—';
+      html += '<tr><td class="num">' + fmtFecha(f) + '</td><td>' + diaSemana(f) + '</td>' +
+              '<td>' + (r.horario ? r.horario.scheduleName : '—') + '</td>' +
+              '<td class="num">' + (r.horario ? fmtHora(r.horario.start) : '—') + '</td>' +
+              '<td class="num">' + entReal + '</td><td class="num">' + salReal + '</td>' +
+              '<td>' + atr + '</td><td>' + ee + '</td></tr>';
+    });
+    html += '</tbody></table></div></div>';
   }
 
-  cargarSucursales();
+  if (permisos.length) {
+    html += '<div class="modal-section"><h3>Permisos (' + permisos.length + ')</h3><div class="tw">';
+    html += '<table class="tbl"><thead><tr><th>Tipo</th><th>Inicio</th><th>Término</th></tr></thead><tbody>';
+    permisos.forEach(function(p) {
+      html += '<tr><td>' + (p.permissionTypeName || p.type || '—') + '</td>' +
+              '<td class="num">' + fmtFecha(p.start || p.startDate) + '</td>' +
+              '<td class="num">' + fmtFecha(p.end || p.endDate) + '</td></tr>';
+    });
+    html += '</tbody></table></div></div>';
+  }
 
-  // Si cambia el tenant (empresa), limpiar caches y recargar sucursales del nuevo tenant
-  $('empresa').addEventListener('change', function() {
-    cacheEmpleados = [];
-    cacheSucursales = [];
-    // NO limpiamos el cache de marcas porque puede ser útil entre empresas
-    setStatus('load', 'Cambio de empresa: ' + $('empresa').value + '. Recargando sucursales...');
-    cargarSucursales();
+  $('modal-body').innerHTML = html;
+  $('modal-bg').classList.add('on');
+}
+
+function cerrarModal() {
+  $('modal-bg').classList.remove('on');
+  modalEmpleadoActual = null;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   EXPORTAR A EXCEL
+   ═══════════════════════════════════════════════════════════════════════ */
+function exportXLSX(filename, sheetName, rows) {
+  if (typeof XLSX === 'undefined') { alert('XLSX no disponible'); return; }
+  var ws = XLSX.utils.json_to_sheet(rows);
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.writeFile(wb, filename);
+}
+function exportarTrabajadoresExcel() {
+  var asigPorEmp = {};
+  cacheAsignaciones.forEach(function(a) { if (a.employee) asigPorEmp[a.employee.code] = a; });
+  var rows = cacheEmpleados.map(function(e) {
+    var asg = asigPorEmp[e.code];
+    return {
+      Codigo: e.code, RUT: e.identification, Nombre: empNombreCompleto(e),
+      Sucursal: empSucursalAdmin(e), Departamento: empDepartamento(e),
+      Turno: asg ? asg.workshiftName : '', Periodo: asg ? asg.period : '',
+      Estado: e.employeeStatus, Email: e.personalMail, Telefono: e.personalPhone,
+      Genero: e.genre, FechaNac: e.birthDate
+    };
   });
-});
+  exportXLSX('trabajadores_workera.xlsx', 'Trabajadores', rows);
+}
+function exportarMarcacionesExcel() {
+  if (!window._astData) renderMarcaciones();
+  var rows = (window._astData || []).map(function(x) {
+    return {
+      Fecha: x.fecha, Hora: x.hora, Trabajador: empNombreCompleto(x.emp),
+      RUT: x.emp.identification, Tipo: x.tipo, HoraTeorica: x.horaTeo,
+      DiferenciaMin: x.deltaMin, EsAtraso: x.esAtraso ? 'SI' : '',
+      EsHorasExtra: x.esExtra ? 'SI' : '', EsSalidaTemprana: x.esTemprano ? 'SI' : '',
+      Sucursal: x.emp.branchOfficeName || ''
+    };
+  });
+  exportXLSX('marcaciones_workera.xlsx', 'Marcaciones', rows);
+}
+function exportarAnomaliasExcel() {
+  if (!window._anoData) renderAnomalias();
+  var rows = (window._anoData || []).map(function(a) {
+    return {
+      Fecha: a.fecha, Dia: diaSemana(a.fecha), Trabajador: empNombreCompleto(a.emp),
+      RUT: a.emp.identification, Turno: a.turno,
+      Tipo: a.tipo === 'atraso' ? 'ATRASO' : a.tipo === 'temp' ? 'SALIDA TEMPRANA' :
+            a.tipo === 'extra' ? 'HORAS EXTRA' : 'NO MARCO',
+      HoraTeorica: a.teorica, HoraReal: a.real, Minutos: a.min
+    };
+  });
+  exportXLSX('anomalias_workera.xlsx', 'Anomalias', rows);
+}
+function exportarTurnosExcel() {
+  var rows = cacheAsignaciones.map(function(a) {
+    return {
+      Trabajador: a.employee.name + ' ' + a.employee.lastName,
+      RUT: a.employee.identification, Turno: a.workshiftName,
+      Periodo: a.period, Inicio: a.start, Termino: a.end,
+      Estado: a.employee.employeeStatus
+    };
+  });
+  exportXLSX('turnos_workera.xlsx', 'Turnos', rows);
+}
+function exportarHorariosExcel() {
+  var rows = cacheHorarios.map(function(h) {
+    return {
+      Fecha: h.date, Dia: diaSemana(h.date),
+      Trabajador: h.employeeName, RUT: h.rut,
+      Turno: h.workshiftName, Horario: h.scheduleName,
+      Entrada: fmtHora(h.start), Salida: fmtHora(h.end)
+    };
+  });
+  exportXLSX('horarios_workera.xlsx', 'Horarios', rows);
+}
+function exportarPermisosExcel() {
+  var rows = cachePermisos.map(function(p) {
+    var nombre = p.employeeName || (p.employee ? (p.employee.name + ' ' + p.employee.lastName) : '—');
+    return {
+      Trabajador: nombre,
+      RUT: p.identification || (p.employee && p.employee.identification) || '',
+      Tipo: p.permissionTypeName || p.type || p.permissionType || '',
+      Inicio: p.start || p.startDate, Termino: p.end || p.endDate
+    };
+  });
+  exportXLSX('permisos_workera.xlsx', 'Permisos', rows);
+}
+function exportarHoyExcel() {
+  if (!window._hoyData) actualizarKPIsHoy();
+  var d = window._hoyData; if (!d) return;
+  var rows = d.resumenes.map(function(x) {
+    return {
+      Trabajador: empNombreCompleto(x.emp), RUT: x.emp.identification,
+      Turno: x.r.horario ? x.r.horario.workshiftName : '',
+      EntradaTeorica: x.r.horario ? fmtHora(x.r.horario.start) : '',
+      EntradaReal: x.r.primeraDt ? fmtHora(x.r.primeraDt) : 'NO MARCO',
+      SalidaTeorica: x.r.horario ? fmtHora(x.r.horario.end) : '',
+      SalidaReal: (x.r.ultimaDt && x.r.marcasCount >= 2) ? fmtHora(x.r.ultimaDt) : '',
+      AtrasoMin: x.r.atrasoMin, HorasExtra: (x.r.hhEEMin/60).toFixed(2),
+      Estado: !x.tieneAsignacion ? 'SIN TURNO' :
+              !x.r.primera ? 'NO MARCO' :
+              x.r.atrasoMin > 0 ? 'ATRASO' : 'A TIEMPO'
+    };
+  });
+  exportXLSX('resumen_hoy_workera.xlsx', 'Hoy_' + hoy(), rows);
+}
+function exportarHoy(tipo) {
+  // Atajo desde las cards. tipo: 'nomarc' | 'atrasos' | 'marcaron'
+  if (!window._hoyData) actualizarKPIsHoy();
+  exportarHoyExcel();
+}
+
 </script>
-
-<!-- MODAL DE DETALLE DEL TRABAJADOR -->
-<div id="modal-emp" class="modal-bg" onclick="cerrarModalTrabajador(event)">
-  <div class="modal-box" onclick="event.stopPropagation()">
-    <div class="modal-hdr">
-      <div>
-        <h2 id="modal-emp-nombre">—</h2>
-        <div class="modal-sub" id="modal-emp-sub">—</div>
-      </div>
-      <div style="display:flex;gap:8px;align-items:flex-start">
-        <button id="btn-pdf-emp" onclick="exportarTrabajadorPDF()" class="modal-pdf-btn" title="Descargar reporte en PDF">📄 PDF</button>
-        <button class="modal-close" onclick="cerrarModalTrabajador()" title="Cerrar (Esc)">×</button>
-      </div>
-    </div>
-    <div class="modal-body" id="modal-emp-body"></div>
-  </div>
-</div>
+</body>
+</html>
 
 </body>
 </html>

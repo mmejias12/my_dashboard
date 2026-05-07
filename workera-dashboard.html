@@ -344,8 +344,8 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
       <div class="local-filters">
         <input id="emp-busca" placeholder="Buscar por nombre, RUT o código..." oninput="aplicarFiltrosYRender()" style="flex:1;min-width:200px">
         <select id="emp-estado" class="ctrl-sel" onchange="aplicarFiltrosYRender()">
+          <option value="ACTIVO" selected>Solo activos</option>
           <option value="">Todos los estados</option>
-          <option value="ACTIVO">Solo activos</option>
           <option value="INACTIVO">Solo inactivos</option>
         </select>
       </div>
@@ -1056,6 +1056,16 @@ function mergearMarcasNuevas(nuevas) {
   cacheMarcacionesEnriquecimiento.forEach(function(m) { if (m.checksum) checksums[m.checksum] = true; });
   var nuevasUnicas = nuevas.filter(function(m) { return !m.checksum || !checksums[m.checksum]; });
   cacheMarcacionesEnriquecimiento = cacheMarcacionesEnriquecimiento.concat(nuevasUnicas);
+
+  // DIAGNÓSTICO: imprimir estructura de la primera marca solo una vez
+  if (!window._marcaDebugDone && nuevasUnicas.length > 0) {
+    window._marcaDebugDone = true;
+    console.log('[DEBUG MARCA] Estructura del primer objeto de marca recibido:');
+    console.log('[DEBUG MARCA] Keys:', Object.keys(nuevasUnicas[0]));
+    console.log('[DEBUG MARCA] Objeto completo:', nuevasUnicas[0]);
+    console.log('[DEBUG MARCA] JSON:', JSON.stringify(nuevasUnicas[0], null, 2));
+  }
+
   // Persistir agrupadas por día
   nuevasUnicas.forEach(function(m) {
     var fecha = (m.date || m.markDate || '').substring(0, 10);

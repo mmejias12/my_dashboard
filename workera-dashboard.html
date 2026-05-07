@@ -674,11 +674,12 @@ function tab(t) {
 }
 
 function empNombreCompleto(e) {
+  if (!e) return '—';
   var p = e.name || '';
   if (e.lastName) p += ' ' + e.lastName;
   if (e.secondLastName && (!e.lastName || e.lastName.indexOf(e.secondLastName) < 0))
     p += ' ' + e.secondLastName;
-  return p.trim().replace(/\s+/g, ' ');
+  return p.trim().replace(/\s+/g, ' ') || '—';
 }
 function empActivo(e) {
   return (e.employeeStatus || '').toUpperCase() === 'ACTIVO';
@@ -1067,13 +1068,51 @@ function mergearMarcasNuevas(nuevas) {
   }
 
   // Persistir agrupadas por día
+  // Estructura real Workera: m.attendanceDate = "2026-05-04T06:09:29" (ISO con T)
+  //                          m.employee.code  = "9828794"
   nuevasUnicas.forEach(function(m) {
-    var fecha = (m.date || m.markDate || '').substring(0, 10);
+    var fecha = obtenerFechaMarca(m);
     if (!fecha) return;
     if (!cacheMarcasPorDia[fecha]) cacheMarcasPorDia[fecha] = [];
     cacheMarcasPorDia[fecha].push(m);
   });
   cacheGuardarEnDisco();
+}
+
+/* Helpers para extraer datos de una marca con la estructura real de Workera */
+function obtenerFechaMarca(m) {
+  // attendanceDate viene como "2026-05-04T06:09:29"
+  var s = m.attendanceDate || m.date || m.markDate || '';
+  return s.substring(0, 10);  // "2026-05-04"
+}
+function obtenerHoraMarca(m) {
+  var s = m.attendanceDate || m.date || m.markDate || '';
+  if (s.indexOf('T') > 0) return s.substring(11, 19);  // "06:09:29"
+  return m.markTime || m.time || m.hour || '';
+}
+function obtenerCodeMarca(m) {
+  // employee viene anidado
+  if (m.employee && m.employee.code) return String(m.employee.code);
+  return String(m.employeeCode || m.code || m.deviceCode || '');
+}
+function obtenerEmpDeMarca(m) {
+  // El propio objeto de marca trae todos los datos del empleado anidados
+  return m.employee || null;
+}
+function obtenerTipoMarca(m) {
+  // attendanceType: 0 = entrada, 1 = salida (estimación por convención Workera)
+  // Si no está, usar fallback de "primera/última marca del día"
+  if (typeof m.attendanceType === 'number') {
+    return m.attendanceType === 0 ? 'ENTRADA' : 'SALIDA';
+  }
+  return null;
+}
+function obtenerDateTimeMarca(m) {
+  // Devuelve un objeto Date a partir de attendanceDate
+  var s = m.attendanceDate || m.date || m.markDate;
+  if (!s) return null;
+  var d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -1093,8 +1132,8 @@ function indexMarcasPorEmpDia() {
   // { 'CODE|YYYY-MM-DD': [marcas...] }
   var idx = {};
   cacheMarcacionesEnriquecimiento.forEach(function(m) {
-    var emp = m.employeeCode || m.code || m.deviceCode;
-    var fecha = (m.date || m.markDate || '').substring(0, 10);
+    var emp = obtenerCodeMarca(m);
+    var fecha = obtenerFechaMarca(m);
     if (!emp || !fecha) return;
     var k = emp + '|' + fecha;
     if (!idx[k]) idx[k] = [];
@@ -1107,30 +1146,41 @@ function calcularResumenDia(empleadoCode, fecha) {
   // Devuelve { horario, primeraEntrada, ultimaSalida, atrasoMin, hhEEMin, salidaTempMin, sinMarca, tipo }
   var horario = null;
   for (var i = 0; i < cacheHorarios.length; i++) {
-    if (cacheHorarios[i].employeeCode === empleadoCode && cacheHorarios[i].date === fecha) {
+    if (cacheHorarios[i].employeeCode == empleadoCode && cacheHorarios[i].date === fecha) {
       horario = cacheHorarios[i]; break;
     }
   }
 
   var marcasDelDia = cacheMarcacionesEnriquecimiento.filter(function(m) {
-    var emp = m.employeeCode || m.code || m.deviceCode;
-    var f = (m.date || m.markDate || '').substring(0, 10);
-    return emp == empleadoCode && f === fecha;
+    return obtenerCodeMarca(m) == empleadoCode && obtenerFechaMarca(m) === fecha;
   });
 
-  // Ordenar marcas por hora real
-  marcasDelDia.sort(function(a, b) {
-    var ha = a.markTime || a.time || a.hour || '';
-    var hb = b.markTime || b.time || b.hour || '';
-    return ha.localeCompare(hb);
+  // Separar entradas y salidas usando attendanceType si está disponible
+  var entradas = marcasDelDia.filter(function(m) { return obtenerTipoMarca(m) === 'ENTRADA'; });
+  var salidas  = marcasDelDia.filter(function(m) { return obtenerTipoMarca(m) === 'SALIDA'; });
+
+  // Si no hay attendanceType, usar fallback por hora
+  if (entradas.length === 0 && salidas.length === 0 && marcasDelDia.length > 0) {
+    var ord = marcasDelDia.slice().sort(function(a, b) {
+      return (obtenerHoraMarca(a) || '').localeCompare(obtenerHoraMarca(b) || '');
+    });
+    entradas = [ord[0]];
+    if (ord.length > 1) salidas = [ord[ord.length - 1]];
+  }
+
+  // Tomar la PRIMERA entrada del día (la más temprana) y la ÚLTIMA salida
+  entradas.sort(function(a, b) {
+    return (obtenerHoraMarca(a) || '').localeCompare(obtenerHoraMarca(b) || '');
+  });
+  salidas.sort(function(a, b) {
+    return (obtenerHoraMarca(a) || '').localeCompare(obtenerHoraMarca(b) || '');
   });
 
-  var primera = marcasDelDia[0] || null;
-  var ultima = marcasDelDia[marcasDelDia.length - 1] || null;
-  // Si solo hay una marca, primera === ultima
+  var primera = entradas[0] || null;
+  var ultima  = salidas[salidas.length - 1] || null;
 
-  var primeraDt = primera ? parseFechaHora(getFullMarcaDate(primera, fecha)) : null;
-  var ultimaDt  = ultima  ? parseFechaHora(getFullMarcaDate(ultima, fecha))  : null;
+  var primeraDt = primera ? obtenerDateTimeMarca(primera) : null;
+  var ultimaDt  = ultima  ? obtenerDateTimeMarca(ultima)  : null;
 
   var entradaTeoDt = horario ? parseFechaHora(horario.start) : null;
   var salidaTeoDt  = horario ? parseFechaHora(horario.end)   : null;
@@ -1141,9 +1191,9 @@ function calcularResumenDia(empleadoCode, fecha) {
   if (horario && primeraDt && entradaTeoDt) {
     var d = diffMin(primeraDt, entradaTeoDt);
     if (d > tol) atrasoMin = d;
-    else if (d < -tol) hhEEEntradaMin = -d;  // entró antes
+    else if (d < -tol) hhEEEntradaMin = -d;
   }
-  if (horario && ultimaDt && salidaTeoDt && marcasDelDia.length >= 2) {
+  if (horario && ultimaDt && salidaTeoDt) {
     var d2 = diffMin(ultimaDt, salidaTeoDt);
     if (d2 > tol) hhEEMin = d2;
     else if (d2 < -tol) salidaTempMin = -d2;
@@ -1440,23 +1490,20 @@ function renderMarcaciones() {
   var tipoFil = $('ast-tipo').value;
   var anoFil = $('ast-anomalia').value;
 
-  // Enriquecer marcas con datos del empleado y horario teórico
-  var empByCode = {};
-  cacheEmpleados.forEach(function(e) { empByCode[e.code] = e; });
+  // Enriquecer marcas con datos del empleado (usar el employee anidado en la propia marca)
   var horarioByEmpDia = indexHorariosPorEmpDia();
 
   var marcasEnriquecidas = cacheMarcacionesEnriquecimiento.map(function(m) {
-    var emp = m.employeeCode || m.code || m.deviceCode;
-    var fecha = (m.date || m.markDate || '').substring(0, 10);
-    var hora = m.markTime || m.time || (m.date && m.date.indexOf('T') > 0 ? m.date.substring(11,19) : '');
-    var emObj = empByCode[emp] || {};
-    var horario = horarioByEmpDia[emp + '|' + fecha];
-    var tipo = detectarTipoMarca(m, fecha, emp);
+    var emp = obtenerEmpDeMarca(m) || {};
+    var fecha = obtenerFechaMarca(m);
+    var hora = obtenerHoraMarca(m);
+    var horario = horarioByEmpDia[emp.code + '|' + fecha];
+    var tipo = obtenerTipoMarca(m) || '—';
     var horaTeo = '—', deltaMin = null, esAtraso = false, esTemprano = false, esExtra = false;
     if (horario) {
+      var dt = obtenerDateTimeMarca(m);
       if (tipo === 'ENTRADA') {
         horaTeo = fmtHora(horario.start);
-        var dt = parseFechaHora(getFullMarcaDate(m, fecha));
         var dteo = parseFechaHora(horario.start);
         if (dt && dteo) {
           deltaMin = diffMin(dt, dteo);
@@ -1465,17 +1512,16 @@ function renderMarcaciones() {
         }
       } else if (tipo === 'SALIDA') {
         horaTeo = fmtHora(horario.end);
-        var dt2 = parseFechaHora(getFullMarcaDate(m, fecha));
         var dteo2 = parseFechaHora(horario.end);
-        if (dt2 && dteo2) {
-          deltaMin = diffMin(dt2, dteo2);
+        if (dt && dteo2) {
+          deltaMin = diffMin(dt, dteo2);
           if (deltaMin > getTolerancia()) esExtra = true;
           else if (deltaMin < -getTolerancia()) esTemprano = true;
         }
       }
     }
     return {
-      m: m, emp: emObj, fecha: fecha, hora: hora,
+      m: m, emp: emp, fecha: fecha, hora: hora,
       tipo: tipo, horaTeo: horaTeo, deltaMin: deltaMin,
       esAtraso: esAtraso, esTemprano: esTemprano, esExtra: esExtra
     };
@@ -1497,7 +1543,7 @@ function renderMarcaciones() {
 
   // Ordenar por fecha + hora desc
   lista.sort(function(a, b) {
-    var fa = a.fecha + a.hora, fb = b.fecha + b.hora;
+    var fa = (a.fecha || '') + (a.hora || ''), fb = (b.fecha || '') + (b.hora || '');
     return fb.localeCompare(fa);
   });
 
@@ -1539,18 +1585,18 @@ function renderMarcaciones() {
     var rowClass = x.esAtraso ? 'row-alert' : (x.esExtra || x.esTemprano) ? 'row-warn' : '';
     var tipoCol = x.tipo === 'ENTRADA' ? '<span class="s-pill ok">ENT</span>' :
                   x.tipo === 'SALIDA' ? '<span class="s-pill" style="background:var(--blue-bg);color:var(--blue)">SAL</span>' :
-                  '<span class="s-pill" style="background:var(--s4);color:var(--t3)">INT</span>';
+                  '<span class="s-pill" style="background:var(--s4);color:var(--t3)">—</span>';
     return '<tr class="' + rowClass + '">' +
       '<td class="num">' + fmtFecha(x.fecha) + '</td>' +
       '<td class="num">' + (x.hora ? x.hora.substring(0,5) : '—') + '</td>' +
-      '<td><a class="emp-link" onclick="abrirModalEmpleado(\'' + x.emp.code + '\')">' + empNombreCompleto(x.emp) + '</a></td>' +
+      '<td><a class="emp-link" onclick="abrirModalEmpleado(\'' + (x.emp.code || '') + '\')">' + empNombreCompleto(x.emp) + '</a></td>' +
       '<td class="num">' + (x.emp.identification || '—') + '</td>' +
       '<td>' + tipoCol + '</td>' +
       '<td class="num">' + x.horaTeo + '</td>' +
       '<td>' + deltaTxt + '</td>' +
-      '<td>' + (x.emp.branchOfficeName || '—') + '</td>' +
+      '<td>' + (x.emp.branchOffice || x.emp.branchOfficeName || '—') + '</td>' +
     '</tr>';
-  }).join('') + (truncated ? '<tr><td colspan="8"><div class="empty">Mostrando ' + maxRender + ' de ' + (lista.length+marcasEnriquecidas.length-maxRender) + '. Refina filtros para ver más.</div></td></tr>' : '');
+  }).join('') + (truncated ? '<tr><td colspan="8"><div class="empty">Mostrando ' + maxRender + ' (refina filtros para ver más)</div></td></tr>' : '');
 
   window._astData = marcasEnriquecidas;
 }
@@ -1927,7 +1973,7 @@ function abrirModalEmpleado(code) {
   var asig = cacheAsignaciones.filter(function(a) { return a.employee && a.employee.code == code; });
   var horarios = cacheHorarios.filter(function(h) { return h.employeeCode == code; });
   var marcas = cacheMarcacionesEnriquecimiento.filter(function(m) {
-    return (m.employeeCode || m.code || m.deviceCode) == code;
+    return obtenerCodeMarca(m) == code;
   });
   var permisos = cachePermisos.filter(function(p) {
     var pc = p.employeeCode || (p.employee && p.employee.code);

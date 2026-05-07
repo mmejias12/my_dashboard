@@ -166,7 +166,8 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 .hoy-card{background:var(--s2);border:1px solid var(--br);border-radius:10px;padding:14px}
 .hoy-card-title{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--t3);margin-bottom:8px;font-weight:500;display:flex;align-items:center;justify-content:space-between}
 .hoy-list{max-height:300px;overflow-y:auto;margin:0 -6px;padding:0 6px}
-.hoy-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--br);font-size:11.5px}
+.hoy-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--br);font-size:11.5px;transition:background .12s}
+.hoy-row[onclick]:hover{background:rgba(255,255,255,.04);padding-left:6px;padding-right:6px;margin:0 -6px;border-radius:4px;border-bottom-color:transparent}
 .hoy-row:last-child{border-bottom:none}
 .hoy-row .name{flex:1;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hoy-row .meta{color:var(--t3);font-family:'DM Mono',monospace;font-size:10.5px;flex-shrink:0}
@@ -237,7 +238,7 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
   <button class="tab" onclick="tab('ast')">Marcaciones</button>
   <button class="tab" onclick="tab('ano')">Anomalías <span id="badge-ano" class="tab-badge" style="display:none">0</span></button>
   <button class="tab" onclick="tab('tur')">Turnos &amp; Horarios</button>
-  <button class="tab" onclick="tab('per')">Permisos</button>
+  <button class="tab" onclick="tab('per')">Licencias</button>
   <button class="tab" onclick="tab('suc')">Sucursales</button>
   <button class="tab" onclick="tab('dep')">Departamentos</button>
 </div>
@@ -251,7 +252,7 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
       <div class="kpi red"><div class="kl">No marcaron</div><div class="kv" id="hoy-k-nomarc">—</div><div class="ks" id="hoy-k-nomarc-sub">Con turno asignado</div></div>
       <div class="kpi amber"><div class="kl">Atrasos hoy</div><div class="kv" id="hoy-k-atra">—</div><div class="ks" id="hoy-k-atra-sub">—</div></div>
       <div class="kpi purple"><div class="kl">Horas extra hoy</div><div class="kv" id="hoy-k-ext">—</div><div class="ks">Acumulado del día</div></div>
-      <div class="kpi blue"><div class="kl">Permisos hoy</div><div class="kv" id="hoy-k-per">—</div><div class="ks">Vigentes hoy</div></div>
+      <div class="kpi blue"><div class="kl">Licencias hoy</div><div class="kv" id="hoy-k-per">—</div><div class="ks">Vigentes hoy</div></div>
     </div>
 
     <div id="hoy-alerts"></div>
@@ -383,6 +384,9 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
       </div>
       <div class="local-filters">
         <input id="ast-busca" placeholder="Buscar por nombre o RUT..." oninput="renderMarcaciones()" style="flex:1;min-width:200px">
+        <select id="ast-sucursal" class="ctrl-sel" onchange="renderMarcaciones()">
+          <option value="">Todas las sucursales</option>
+        </select>
         <select id="ast-tipo" class="ctrl-sel" onchange="renderMarcaciones()">
           <option value="">Todos los tipos</option>
           <option value="entrada">Solo entradas</option>
@@ -398,8 +402,9 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
       <div class="tw">
         <table class="tbl" id="tbl-ast">
           <thead><tr>
-            <th>Fecha</th><th>Hora real</th><th>Trabajador</th><th>RUT</th>
-            <th>Tipo</th><th>Hora teórica</th><th>Δ min</th><th>Sucursal</th>
+            <th>Fecha</th><th>Trabajador</th><th>RUT</th>
+            <th>Hora teórica</th><th>Tipo</th><th>Hora real</th>
+            <th>Δ min</th><th>Sucursal</th>
           </tr></thead>
           <tbody id="tbody-ast"><tr><td colspan="8"><div class="empty">Presiona "Cargar datos"</div></td></tr></tbody>
         </table>
@@ -513,11 +518,11 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
     </div>
   </div>
 
-  <!-- ============================== PERMISOS ============================== -->
+  <!-- ============================== LICENCIAS ============================== -->
   <div id="v-per" class="view">
     <div class="krow">
-      <div class="kpi cyan"><div class="kl">Total permisos</div><div class="kv" id="k-per-total">—</div><div class="ks">En período</div></div>
-      <div class="kpi green"><div class="kl">Trabajadores</div><div class="kv" id="k-per-trab">—</div><div class="ks">Con permiso</div></div>
+      <div class="kpi cyan"><div class="kl">Total licencias</div><div class="kv" id="k-per-total">—</div><div class="ks">En período</div></div>
+      <div class="kpi green"><div class="kl">Trabajadores</div><div class="kv" id="k-per-trab">—</div><div class="ks">Con licencia</div></div>
       <div class="kpi amber"><div class="kl">Vigentes hoy</div><div class="kv" id="k-per-hoy">—</div><div class="ks">Día actual</div></div>
       <div class="kpi purple"><div class="kl">Tipos únicos</div><div class="kv" id="k-per-tipos">—</div><div class="ks">Categorías</div></div>
       <div class="kpi blue"><div class="kl">Días totales</div><div class="kv" id="k-per-dias">—</div><div class="ks">Suma de duraciones</div></div>
@@ -525,7 +530,7 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
     </div>
     <div class="card">
       <div class="ct">
-        <span>📝 Permisos del período</span>
+        <span>📝 Licencias del período</span>
         <span class="card-actions"><button class="btn-mini green" onclick="exportarPermisosExcel()">📊 Excel</button></span>
       </div>
       <div class="cs">Endpoint: <code style="color:var(--cyan)">/permission</code>.</div>
@@ -884,7 +889,15 @@ async function cargarTrabajadores() {
   // pero el endpoint también funciona sin filtros si se pide por defecto MATRIZ+INICIAL.
   // Mejor estrategia: pedir SIN filtros y ver si responde con todos.
   // Workera devuelve 43 empleados sin filtros, así que NO necesitamos branchOffice/department aquí.
-  cacheEmpleados = await fetchTodasLasPaginas('/employee');
+  var lista = await fetchTodasLasPaginas('/employee');
+  // Filtrar empleados de prueba (código 12345678 / "PRUEBA WORKERA APP")
+  cacheEmpleados = lista.filter(function(e) {
+    var c = String(e.code || '');
+    var n = (e.name || '').toUpperCase();
+    if (c === '12345678') return false;
+    if (n.indexOf('PRUEBA') >= 0 && n.indexOf('WORKERA') >= 0) return false;
+    return true;
+  });
   return cacheEmpleados;
 }
 async function recargarEmpleados() {
@@ -923,7 +936,11 @@ async function cargarAsignaciones(d1, d2) {
   // Eliminar duplicados por id
   var seen = {};
   cacheAsignaciones = cacheAsignaciones.filter(function(a) {
-    if (seen[a.id]) return false; seen[a.id] = true; return true;
+    if (seen[a.id]) return false; seen[a.id] = true;
+    // Excluir empleado de prueba
+    if (a.employee && (String(a.employee.code) === '12345678' ||
+        ((a.employee.name || '').toUpperCase().indexOf('PRUEBA') >= 0))) return false;
+    return true;
   });
   return cacheAsignaciones;
 }
@@ -944,6 +961,12 @@ async function cargarHorarios(d1, d2) {
           });
           // Cada elem es { employee, schedules: [...] }. Aplanamos.
           resp.forEach(function(r) {
+            // Excluir empleado de prueba
+            if (!r.employee) return;
+            var c = String(r.employee.code || '');
+            var n = (r.employee.name || '').toUpperCase();
+            if (c === '12345678') return;
+            if (n.indexOf('PRUEBA') >= 0 && n.indexOf('WORKERA') >= 0) return;
             if (r.schedules && r.schedules.length) {
               r.schedules.forEach(function(sch) {
                 cacheHorarios.push({
@@ -1053,6 +1076,16 @@ async function cargarSiguienteBloque() {
 }
 function mergearMarcasNuevas(nuevas) {
   if (!nuevas || !nuevas.length) return;
+  // Filtrar empleados de prueba
+  nuevas = nuevas.filter(function(m) {
+    if (!m.employee) return true;
+    var c = String(m.employee.code || '');
+    var n = (m.employee.name || '').toUpperCase();
+    if (c === '12345678') return false;
+    if (n.indexOf('PRUEBA') >= 0 && n.indexOf('WORKERA') >= 0) return false;
+    return true;
+  });
+  if (!nuevas.length) return;
   var checksums = {};
   cacheMarcacionesEnriquecimiento.forEach(function(m) { if (m.checksum) checksums[m.checksum] = true; });
   var nuevasUnicas = nuevas.filter(function(m) { return !m.checksum || !checksums[m.checksum]; });
@@ -1099,13 +1132,35 @@ function obtenerEmpDeMarca(m) {
   // El propio objeto de marca trae todos los datos del empleado anidados
   return m.employee || null;
 }
-function obtenerTipoMarca(m) {
-  // attendanceType: 0 = entrada, 1 = salida (estimación por convención Workera)
-  // Si no está, usar fallback de "primera/última marca del día"
-  if (typeof m.attendanceType === 'number') {
-    return m.attendanceType === 0 ? 'ENTRADA' : 'SALIDA';
-  }
-  return null;
+function obtenerTipoMarca(m, horario) {
+  // En Workera el campo attendanceType siempre devuelve 0, no es confiable.
+  // Heurística: usar horario teórico para clasificar la marca.
+  // Si no hay horario, usar primera/última marca del día como fallback.
+  if (!horario) return null;
+
+  var dt = obtenerDateTimeMarca(m);
+  if (!dt) return null;
+
+  var entradaTeo = parseFechaHora(horario.start);
+  var salidaTeo = parseFechaHora(horario.end);
+  if (!entradaTeo || !salidaTeo) return null;
+
+  // Calcular distancia (en minutos) a entrada vs a salida teórica
+  var distEntrada = Math.abs(diffMin(dt, entradaTeo));
+  var distSalida = Math.abs(diffMin(dt, salidaTeo));
+
+  // La marca pertenece al evento (entrada o salida) más cercano
+  return distEntrada <= distSalida ? 'ENTRADA' : 'SALIDA';
+}
+function obtenerTipoMarcaFallback(m, marcasMismoDia) {
+  // Si no hay horario, usar primera = entrada / última = salida
+  if (!marcasMismoDia || marcasMismoDia.length === 0) return null;
+  var ord = marcasMismoDia.slice().sort(function(a, b) {
+    return (obtenerHoraMarca(a) || '').localeCompare(obtenerHoraMarca(b) || '');
+  });
+  if (m === ord[0]) return 'ENTRADA';
+  if (m === ord[ord.length - 1] && ord.length > 1) return 'SALIDA';
+  return 'INTERMEDIA';
 }
 function obtenerDateTimeMarca(m) {
   // Devuelve un objeto Date a partir de attendanceDate
@@ -1155,12 +1210,17 @@ function calcularResumenDia(empleadoCode, fecha) {
     return obtenerCodeMarca(m) == empleadoCode && obtenerFechaMarca(m) === fecha;
   });
 
-  // Separar entradas y salidas usando attendanceType si está disponible
-  var entradas = marcasDelDia.filter(function(m) { return obtenerTipoMarca(m) === 'ENTRADA'; });
-  var salidas  = marcasDelDia.filter(function(m) { return obtenerTipoMarca(m) === 'SALIDA'; });
+  // Separar entradas y salidas usando horario teórico (más confiable que attendanceType)
+  var entradas = [];
+  var salidas = [];
+  marcasDelDia.forEach(function(m) {
+    var tipo = obtenerTipoMarca(m, horario);
+    if (tipo === 'ENTRADA') entradas.push(m);
+    else if (tipo === 'SALIDA') salidas.push(m);
+  });
 
-  // Si no hay attendanceType, usar fallback por hora
-  if (entradas.length === 0 && salidas.length === 0 && marcasDelDia.length > 0) {
+  // Si no hay horario teórico, usar primera/última como fallback
+  if (!horario && marcasDelDia.length > 0) {
     var ord = marcasDelDia.slice().sort(function(a, b) {
       return (obtenerHoraMarca(a) || '').localeCompare(obtenerHoraMarca(b) || '');
     });
@@ -1291,20 +1351,39 @@ function renderHoy() {
   actualizarKPIsHoy();
   if (!window._hoyData) return;
   var d = window._hoyData;
+  var fechaHoy = hoy();
 
-  // Listas resumen
+  // Helper para chequear si un empleado tiene licencia vigente hoy
+  function licenciaHoy(empCode) {
+    return cachePermisos.find(function(p) {
+      var pc = p.employeeCode || (p.employee && p.employee.code);
+      if (String(pc) !== String(empCode)) return false;
+      var ini = (p.start || p.startDate || '').substring(0, 10);
+      var fin = (p.end || p.endDate || '').substring(0, 10);
+      return ini <= fechaHoy && fin >= fechaHoy;
+    });
+  }
+
+  // Listas resumen — TODAS clickeables y mostrando licencia si aplica
   renderHoyList('hoy-nomarc-list', d.noMarcaron, function(x) {
     var horaTeo = x.r.horario ? fmtHora(x.r.horario.start) : '—';
-    return '<div class="hoy-row alert"><span class="name">' + empNombreCompleto(x.emp) + '</span>' +
-           '<span class="meta">esperaba ' + horaTeo + '</span></div>';
+    var lic = licenciaHoy(x.emp.code);
+    var meta = lic
+      ? '<span class="s-pill permiso" title="' + (lic.permissionTypeName || 'LICENCIA') + '">📋 ' + (lic.permissionTypeName || lic.type || 'LICENCIA') + '</span>'
+      : '<span style="color:var(--red)">esperaba ' + horaTeo + '</span>';
+    return '<div class="hoy-row alert" onclick="abrirModalEmpleado(\'' + x.emp.code + '\')" style="cursor:pointer">' +
+           '<span class="name">' + empNombreCompleto(x.emp) + '</span>' +
+           '<span class="meta">' + meta + '</span></div>';
   });
   renderHoyList('hoy-atra-list', d.atrasos.sort(function(a,b){return b.r.atrasoMin - a.r.atrasoMin}), function(x) {
-    return '<div class="hoy-row"><span class="name">' + empNombreCompleto(x.emp) + '</span>' +
+    return '<div class="hoy-row" onclick="abrirModalEmpleado(\'' + x.emp.code + '\')" style="cursor:pointer">' +
+           '<span class="name">' + empNombreCompleto(x.emp) + '</span>' +
            '<span class="meta" style="color:var(--red)">+' + x.r.atrasoMin + ' min</span></div>';
   });
   renderHoyList('hoy-marc-list', d.marcaron, function(x) {
     var hora = x.r.primeraDt ? fmtHora(x.r.primeraDt) : '—';
-    return '<div class="hoy-row"><span class="name">' + empNombreCompleto(x.emp) + '</span>' +
+    return '<div class="hoy-row" onclick="abrirModalEmpleado(\'' + x.emp.code + '\')" style="cursor:pointer">' +
+           '<span class="name">' + empNombreCompleto(x.emp) + '</span>' +
            '<span class="meta" style="color:var(--green)">' + hora + '</span></div>';
   });
 
@@ -1487,18 +1566,33 @@ function aplicarFiltrosYRender() {
    ═══════════════════════════════════════════════════════════════════════ */
 function renderMarcaciones() {
   var q = ($('ast-busca').value || '').toLowerCase();
+  var sucFil = ($('ast-sucursal') ? $('ast-sucursal').value : '');
   var tipoFil = $('ast-tipo').value;
   var anoFil = $('ast-anomalia').value;
 
-  // Enriquecer marcas con datos del empleado (usar el employee anidado en la propia marca)
+  // Poblar select de sucursales (de las marcas reales)
+  poblarSelectSucursalesAst();
+
   var horarioByEmpDia = indexHorariosPorEmpDia();
+
+  // Para detectar ENT/SAL necesitamos también la primera/última marca por empleado-día (fallback)
+  var marcasPorEmpDia = {};
+  cacheMarcacionesEnriquecimiento.forEach(function(m) {
+    var k = obtenerCodeMarca(m) + '|' + obtenerFechaMarca(m);
+    if (!marcasPorEmpDia[k]) marcasPorEmpDia[k] = [];
+    marcasPorEmpDia[k].push(m);
+  });
 
   var marcasEnriquecidas = cacheMarcacionesEnriquecimiento.map(function(m) {
     var emp = obtenerEmpDeMarca(m) || {};
     var fecha = obtenerFechaMarca(m);
     var hora = obtenerHoraMarca(m);
     var horario = horarioByEmpDia[emp.code + '|' + fecha];
-    var tipo = obtenerTipoMarca(m) || '—';
+    // Detectar tipo: con horario usa proximidad, sin horario usa primera/última
+    var tipo = obtenerTipoMarca(m, horario);
+    if (!tipo) {
+      tipo = obtenerTipoMarcaFallback(m, marcasPorEmpDia[emp.code + '|' + fecha]);
+    }
     var horaTeo = '—', deltaMin = null, esAtraso = false, esTemprano = false, esExtra = false;
     if (horario) {
       var dt = obtenerDateTimeMarca(m);
@@ -1533,6 +1627,12 @@ function renderMarcaciones() {
     lista = lista.filter(function(x) {
       return empNombreCompleto(x.emp).toLowerCase().indexOf(q) >= 0 ||
              (x.emp.identification || '').toLowerCase().indexOf(q) >= 0;
+    });
+  }
+  if (sucFil) {
+    lista = lista.filter(function(x) {
+      var suc = x.emp.branchOffice || x.emp.branchOfficeName || '';
+      return suc === sucFil;
     });
   }
   if (tipoFil === 'entrada') lista = lista.filter(function(x) { return x.tipo === 'ENTRADA'; });
@@ -1575,6 +1675,7 @@ function renderMarcaciones() {
   var truncated = lista.length > maxRender;
   lista = lista.slice(0, maxRender);
 
+  // Orden de columnas: Fecha · Trabajador · RUT · Hora teórica · Tipo · Hora real · Δ min · Sucursal
   tb.innerHTML = lista.map(function(x) {
     var deltaTxt = '—';
     if (x.deltaMin !== null) {
@@ -1585,20 +1686,41 @@ function renderMarcaciones() {
     var rowClass = x.esAtraso ? 'row-alert' : (x.esExtra || x.esTemprano) ? 'row-warn' : '';
     var tipoCol = x.tipo === 'ENTRADA' ? '<span class="s-pill ok">ENT</span>' :
                   x.tipo === 'SALIDA' ? '<span class="s-pill" style="background:var(--blue-bg);color:var(--blue)">SAL</span>' :
+                  x.tipo === 'INTERMEDIA' ? '<span class="s-pill" style="background:var(--s4);color:var(--t3)">INT</span>' :
                   '<span class="s-pill" style="background:var(--s4);color:var(--t3)">—</span>';
     return '<tr class="' + rowClass + '">' +
       '<td class="num">' + fmtFecha(x.fecha) + '</td>' +
-      '<td class="num">' + (x.hora ? x.hora.substring(0,5) : '—') + '</td>' +
       '<td><a class="emp-link" onclick="abrirModalEmpleado(\'' + (x.emp.code || '') + '\')">' + empNombreCompleto(x.emp) + '</a></td>' +
       '<td class="num">' + (x.emp.identification || '—') + '</td>' +
-      '<td>' + tipoCol + '</td>' +
       '<td class="num">' + x.horaTeo + '</td>' +
+      '<td>' + tipoCol + '</td>' +
+      '<td class="num">' + (x.hora ? x.hora.substring(0,5) : '—') + '</td>' +
       '<td>' + deltaTxt + '</td>' +
       '<td>' + (x.emp.branchOffice || x.emp.branchOfficeName || '—') + '</td>' +
     '</tr>';
   }).join('') + (truncated ? '<tr><td colspan="8"><div class="empty">Mostrando ' + maxRender + ' (refina filtros para ver más)</div></td></tr>' : '');
 
   window._astData = marcasEnriquecidas;
+}
+
+function poblarSelectSucursalesAst() {
+  var sel = $('ast-sucursal');
+  if (!sel) return;
+  // Si ya tiene opciones (más allá de "Todas"), no repoblar
+  if (sel.options.length > 1) return;
+  var sucs = {};
+  cacheMarcacionesEnriquecimiento.forEach(function(m) {
+    var emp = obtenerEmpDeMarca(m);
+    if (emp) {
+      var s = emp.branchOffice || emp.branchOfficeName;
+      if (s) sucs[s] = true;
+    }
+  });
+  Object.keys(sucs).sort().forEach(function(s) {
+    var opt = document.createElement('option');
+    opt.value = s; opt.textContent = s;
+    sel.appendChild(opt);
+  });
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -2045,12 +2167,17 @@ function abrirModalEmpleado(code) {
   }
 
   if (permisos.length) {
-    html += '<div class="modal-section"><h3>Permisos (' + permisos.length + ')</h3><div class="tw">';
-    html += '<table class="tbl"><thead><tr><th>Tipo</th><th>Inicio</th><th>Término</th></tr></thead><tbody>';
+    html += '<div class="modal-section"><h3>Licencias (' + permisos.length + ')</h3><div class="tw">';
+    html += '<table class="tbl"><thead><tr><th>Tipo</th><th>Inicio</th><th>Término</th><th>Días</th></tr></thead><tbody>';
     permisos.forEach(function(p) {
-      html += '<tr><td>' + (p.permissionTypeName || p.type || '—') + '</td>' +
-              '<td class="num">' + fmtFecha(p.start || p.startDate) + '</td>' +
-              '<td class="num">' + fmtFecha(p.end || p.endDate) + '</td></tr>';
+      var ini = (p.start || p.startDate || '').substring(0, 10);
+      var fin = (p.end || p.endDate || '').substring(0, 10);
+      var diasP = (ini && fin) ? Math.round((new Date(fin) - new Date(ini)) / (1000*60*60*24)) + 1 : '—';
+      var tipo = p.permissionTypeName || p.type || p.permissionType || 'LICENCIA';
+      html += '<tr><td>' + tipo + '</td>' +
+              '<td class="num">' + fmtFecha(ini) + '</td>' +
+              '<td class="num">' + fmtFecha(fin) + '</td>' +
+              '<td class="num">' + diasP + '</td></tr>';
     });
     html += '</tbody></table></div></div>';
   }

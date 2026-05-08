@@ -646,10 +646,89 @@ var tabActivo = 'hoy';
 var modalEmpleadoActual = null;
 
 /* ─── FERIADOS CHILE ─────────────────────────────────────────────
-   Las funciones de feriados están definidas más abajo en el archivo
-   (después de los helpers básicos pad/hoy). Este bloque era una versión
-   anterior que fue reemplazada por la implementación lazy con feriadosCache.
+   Ley 19.973 + decretos anuales. Fechas fijas + móviles (Pascua).
+   Tipo: 'legal' | 'irrenunciable' | 'eventual'
    ─────────────────────────────────────────────────────────────── */
+function calcularPascua(anio) {
+  // Algoritmo de Gauss para Domingo de Pascua
+  var a = anio % 19;
+  var b = Math.floor(anio / 100);
+  var c = anio % 100;
+  var d = Math.floor(b / 4);
+  var e = b % 4;
+  var f = Math.floor((b + 8) / 25);
+  var g = Math.floor((b - f + 1) / 3);
+  var h = (19 * a + b - d - g + 15) % 30;
+  var i = Math.floor(c / 4);
+  var k = c % 4;
+  var L = (32 + 2 * e + 2 * i - h - k) % 7;
+  var m = Math.floor((a + 11 * h + 22 * L) / 451);
+  var mes = Math.floor((h + L - 7 * m + 114) / 31);
+  var dia = ((h + L - 7 * m + 114) % 31) + 1;
+  return new Date(anio, mes - 1, dia);
+}
+function fechaISO(d) {
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+}
+function generarFeriadosAnio(anio) {
+  var lista = [];
+  // Fijos
+  lista.push({ date: anio + '-01-01', name: 'Año Nuevo', type: 'irrenunciable' });
+  lista.push({ date: anio + '-05-01', name: 'Día del Trabajador', type: 'irrenunciable' });
+  lista.push({ date: anio + '-05-21', name: 'Glorias Navales', type: 'legal' });
+  lista.push({ date: anio + '-06-20', name: 'Día Nacional Pueblos Indígenas', type: 'legal' });
+  lista.push({ date: anio + '-06-29', name: 'San Pedro y San Pablo', type: 'legal' });
+  lista.push({ date: anio + '-07-16', name: 'Virgen del Carmen', type: 'legal' });
+  lista.push({ date: anio + '-08-15', name: 'Asunción de la Virgen', type: 'legal' });
+  lista.push({ date: anio + '-09-18', name: 'Independencia Nacional', type: 'irrenunciable' });
+  lista.push({ date: anio + '-09-19', name: 'Glorias del Ejército', type: 'irrenunciable' });
+  lista.push({ date: anio + '-10-12', name: 'Encuentro de Dos Mundos', type: 'legal' });
+  lista.push({ date: anio + '-10-31', name: 'Día de las Iglesias Evangélicas', type: 'legal' });
+  lista.push({ date: anio + '-11-01', name: 'Día de Todos los Santos', type: 'legal' });
+  lista.push({ date: anio + '-12-08', name: 'Inmaculada Concepción', type: 'legal' });
+  lista.push({ date: anio + '-12-25', name: 'Navidad', type: 'irrenunciable' });
+
+  // Móviles (Pascua)
+  var pascua = calcularPascua(anio);
+  var viernes = new Date(pascua); viernes.setDate(pascua.getDate() - 2);
+  var sabado = new Date(pascua); sabado.setDate(pascua.getDate() - 1);
+  lista.push({ date: fechaISO(viernes), name: 'Viernes Santo', type: 'legal' });
+  lista.push({ date: fechaISO(sabado), name: 'Sábado Santo', type: 'legal' });
+
+  return lista;
+}
+// Construir catálogo 2024-2028 en lazy-init (después de que pad() esté definido)
+var FERIADOS_CHILE = [];
+var FERIADOS_INDEX = {};
+function inicializarFeriados() {
+  FERIADOS_CHILE = [];
+  [2024, 2025, 2026, 2027, 2028].forEach(function(a) {
+    FERIADOS_CHILE = FERIADOS_CHILE.concat(generarFeriadosAnio(a));
+  });
+  FERIADOS_INDEX = {};
+  FERIADOS_CHILE.forEach(function(f) { FERIADOS_INDEX[f.date] = f; });
+}
+
+function esFeriado(fecha) {
+  // fecha en formato YYYY-MM-DD
+  return !!FERIADOS_INDEX[fecha];
+}
+function nombreFeriado(fecha) {
+  return FERIADOS_INDEX[fecha] ? FERIADOS_INDEX[fecha].name : '';
+}
+function feriadoBadge(fecha) {
+  // Devuelve span con icono + tooltip si es feriado, vacío si no
+  if (!esFeriado(fecha)) return '';
+  return '<span title="' + nombreFeriado(fecha) + '" style="color:var(--amber);margin-left:4px;font-size:11px">🎉</span>';
+}
+function proximosFeriados(n) {
+  // Devuelve los próximos N feriados desde hoy (ordenados por fecha ascendente)
+  var h = hoy();
+  return FERIADOS_CHILE
+    .filter(function(f) { return f.date >= h; })
+    .sort(function(a, b) { return a.date.localeCompare(b.date); })
+    .slice(0, n || 5);
+}
 
 // Caches
 var cacheEmpleados = [];

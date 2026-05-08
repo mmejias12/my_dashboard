@@ -163,6 +163,26 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 
 /* HOY / DASHBOARD HOY */
 .hoy-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:11px;margin-bottom:13px}
+
+/* FERIADOS */
+.feriado-banner{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:8px;margin-bottom:11px;
+  font-size:12px;line-height:1.5;
+  background:linear-gradient(90deg,rgba(245,166,35,.15),rgba(167,139,250,.10));
+  border-left:3px solid var(--amber);color:var(--t1)}
+.feriado-banner-icon{font-size:18px;line-height:1}
+.proximos-feriados{margin-top:14px;padding:10px 12px;background:var(--s2);border:1px solid var(--br);
+  border-radius:8px;font-size:11px;color:var(--t3);display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+.proximos-feriados strong{color:var(--amber);font-weight:500}
+.prox-fer-item{display:inline-flex;align-items:center;gap:6px;color:var(--t2);
+  font-family:'DM Mono',monospace;font-size:10.5px;padding:3px 8px;background:var(--s3);
+  border-radius:4px;border:1px solid var(--br)}
+.prox-fer-item .nm{color:var(--t1);font-family:'DM Sans',sans-serif;font-weight:500}
+.prox-fer-item.hoy{background:var(--amber-bg);border-color:rgba(245,166,35,.4);color:var(--amber)}
+.prox-fer-item.hoy .nm{color:var(--amber)}
+
+/* Filas de feriado en tablas */
+.tbl tr.row-feriado td{background:rgba(245,166,35,.05)}
+.tbl tr.row-feriado:hover td{background:rgba(245,166,35,.1)}
 .hoy-card{background:var(--s2);border:1px solid var(--br);border-radius:10px;padding:14px}
 .hoy-card-title{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--t3);margin-bottom:8px;font-weight:500;display:flex;align-items:center;justify-content:space-between}
 .hoy-list{max-height:300px;overflow-y:auto;margin:0 -6px;padding:0 6px}
@@ -174,6 +194,26 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 .hoy-row.alert{color:var(--red)}
 .hoy-row.alert .name{color:var(--t1)}
 
+/* FERIADOS */
+.feriado-cell{position:relative;background:linear-gradient(135deg,rgba(167,139,250,.10) 0%,rgba(245,166,35,.06) 100%)!important}
+.feriado-cell::after{content:'🎉';position:absolute;top:2px;right:6px;font-size:11px;opacity:.7}
+.feriado-row td{background:linear-gradient(135deg,rgba(167,139,250,.06) 0%,rgba(245,166,35,.03) 100%)!important}
+.feriado-banner{background:linear-gradient(90deg,var(--purple-bg),var(--amber-bg));
+  border:1px solid rgba(167,139,250,.4);border-left:4px solid var(--purple);
+  border-radius:8px;padding:11px 16px;margin-bottom:13px;display:flex;
+  align-items:center;gap:11px;font-size:13px}
+.feriado-banner-icon{font-size:22px;line-height:1}
+.feriado-banner strong{color:var(--purple)}
+.feriado-tag{display:inline-block;font-size:9.5px;font-weight:600;
+  background:var(--purple-bg);color:var(--purple);padding:1.5px 7px;
+  border-radius:8px;margin-left:6px;vertical-align:middle}
+.proximos-feriados{margin-top:13px;padding:10px 14px;background:var(--s2);
+  border:1px dashed var(--brm);border-radius:8px;font-size:11.5px;color:var(--t2)}
+.proximos-feriados strong{color:var(--purple);margin-right:8px}
+.prox-fer-item{display:inline-block;margin:0 10px 0 0;padding:2px 8px;
+  background:var(--s3);border-radius:6px;font-family:'DM Mono',monospace;font-size:11px}
+.prox-fer-item .nm{color:var(--t1);font-family:'DM Sans',sans-serif;margin-left:5px}
+
 /* SCROLLBAR personalizado */
 ::-webkit-scrollbar{width:8px;height:8px}
 ::-webkit-scrollbar-track{background:var(--s1)}
@@ -182,6 +222,20 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 
 /* Tooltips simples */
 [title]{cursor:help}
+
+/* FERIADOS */
+.feriado-banner{background:linear-gradient(135deg,rgba(167,139,250,.15),rgba(245,166,35,.12));border:1px solid rgba(167,139,250,.3);border-radius:8px;padding:11px 14px;margin-bottom:11px;display:flex;align-items:center;gap:10px;font-size:12px}
+.feriado-banner .ico{font-size:18px}
+.feriado-banner strong{color:var(--purple)}
+.feriado-cell{position:relative}
+.feriado-cell::after{content:'🎉';position:absolute;top:50%;right:6px;transform:translateY(-50%);font-size:11px;opacity:.85}
+.tbl tr.row-feriado td{background:rgba(167,139,250,.06)!important}
+.tbl tr.row-feriado:hover td{background:rgba(167,139,250,.10)!important}
+.feriado-pill{display:inline-block;background:rgba(167,139,250,.15);color:var(--purple);border:1px solid rgba(167,139,250,.3);padding:1px 8px;border-radius:10px;font-size:9.5px;font-weight:500;margin-left:6px}
+.proximos-feriados{font-size:10.5px;color:var(--t3);padding:8px 12px;background:var(--s2);border:1px dashed var(--brm);border-radius:6px;margin-top:8px}
+.proximos-feriados strong{color:var(--purple)}
+.proximos-feriados .pf-item{display:inline-block;margin:0 8px}
+.proximos-feriados .pf-item .pf-d{color:var(--t1);font-weight:500}
 
 /* Print */
 @media print{
@@ -246,6 +300,7 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 <div class="main">
   <!-- ============================== HOY ============================== -->
   <div id="v-hoy" class="view on">
+    <div id="hoy-feriado-banner"></div>
     <div class="krow">
       <div class="kpi cyan"><div class="kl">Trabajadores activos</div><div class="kv" id="hoy-k-act">—</div><div class="ks" id="hoy-k-act-sub">—</div></div>
       <div class="kpi green"><div class="kl">Marcaron hoy</div><div class="kv" id="hoy-k-marc">—</div><div class="ks" id="hoy-k-marc-sub">—</div></div>
@@ -317,6 +372,7 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
           <tbody id="tbody-hoy"><tr><td colspan="10"><div class="empty">Presiona "Cargar datos" para ver el resumen del día</div></td></tr></tbody>
         </table>
       </div>
+      <div id="proximos-feriados-info" class="proximos-feriados"></div>
     </div>
   </div>
 
@@ -589,6 +645,12 @@ var PROXY = '/api/workera-proxy';
 var tabActivo = 'hoy';
 var modalEmpleadoActual = null;
 
+/* ─── FERIADOS CHILE ─────────────────────────────────────────────
+   Las funciones de feriados están definidas más abajo en el archivo
+   (después de los helpers básicos pad/hoy). Este bloque era una versión
+   anterior que fue reemplazada por la implementación lazy con feriadosCache.
+   ─────────────────────────────────────────────────────────────── */
+
 // Caches
 var cacheEmpleados = [];
 var cacheSucursales = [];
@@ -632,6 +694,96 @@ function diaSemana(fecha) {
   var d = new Date(fecha + 'T12:00:00');
   return dias[d.getDay()];
 }
+
+/* ─── FERIADOS LEGALES DE CHILE ─── */
+// Cálculo del Domingo de Pascua (algoritmo de Meeus/Jones/Butcher)
+function calcularPascua(anio) {
+  var a = anio % 19;
+  var b = Math.floor(anio / 100);
+  var c = anio % 100;
+  var d = Math.floor(b / 4);
+  var e = b % 4;
+  var f = Math.floor((b + 8) / 25);
+  var g = Math.floor((b - f + 1) / 3);
+  var h = (19 * a + b - d - g + 15) % 30;
+  var i = Math.floor(c / 4);
+  var k = c % 4;
+  var L = (32 + 2 * e + 2 * i - h - k) % 7;
+  var m = Math.floor((a + 11 * h + 22 * L) / 451);
+  var mes = Math.floor((h + L - 7 * m + 114) / 31);
+  var dia = ((h + L - 7 * m + 114) % 31) + 1;
+  return new Date(anio, mes - 1, dia);
+}
+function fmtFechaISO(d) {
+  return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+}
+// Genera el catálogo de feriados para un año dado
+function generarFeriadosAnio(anio) {
+  var pascua = calcularPascua(anio);
+  var viernesSanto = new Date(pascua); viernesSanto.setDate(pascua.getDate() - 2);
+  var sabadoSanto = new Date(pascua); sabadoSanto.setDate(pascua.getDate() - 1);
+
+  return [
+    { fecha: anio + '-01-01', nombre: 'Año Nuevo' },
+    { fecha: fmtFechaISO(viernesSanto), nombre: 'Viernes Santo' },
+    { fecha: fmtFechaISO(sabadoSanto), nombre: 'Sábado Santo' },
+    { fecha: anio + '-05-01', nombre: 'Día Nacional del Trabajo' },
+    { fecha: anio + '-05-21', nombre: 'Día de las Glorias Navales' },
+    { fecha: anio + '-06-20', nombre: 'Día Nacional de los Pueblos Indígenas' },
+    { fecha: anio + '-06-29', nombre: 'San Pedro y San Pablo' },
+    { fecha: anio + '-07-16', nombre: 'Virgen del Carmen' },
+    { fecha: anio + '-08-15', nombre: 'Asunción de la Virgen' },
+    { fecha: anio + '-09-18', nombre: 'Independencia Nacional' },
+    { fecha: anio + '-09-19', nombre: 'Día de las Glorias del Ejército' },
+    { fecha: anio + '-09-20', nombre: 'Feriado adicional Fiestas Patrias' },
+    { fecha: anio + '-10-12', nombre: 'Encuentro de Dos Mundos' },
+    { fecha: anio + '-10-31', nombre: 'Día de las Iglesias Evangélicas' },
+    { fecha: anio + '-11-01', nombre: 'Día de Todos los Santos' },
+    { fecha: anio + '-12-08', nombre: 'Inmaculada Concepción' },
+    { fecha: anio + '-12-25', nombre: 'Navidad' }
+  ];
+}
+// Cache de feriados por año (se llena bajo demanda)
+var feriadosCache = {};
+function obtenerFeriadosAnio(anio) {
+  if (!feriadosCache[anio]) feriadosCache[anio] = generarFeriadosAnio(anio);
+  return feriadosCache[anio];
+}
+// Devuelve el nombre del feriado si la fecha (YYYY-MM-DD) lo es, o null
+function nombreFeriado(fecha) {
+  if (!fecha || fecha.length < 10) return null;
+  var anio = parseInt(fecha.substring(0, 4), 10);
+  if (!anio || isNaN(anio)) return null;
+  var lista = obtenerFeriadosAnio(anio);
+  for (var i = 0; i < lista.length; i++) {
+    if (lista[i].fecha === fecha.substring(0, 10)) return lista[i].nombre;
+  }
+  return null;
+}
+function esFeriado(fecha) {
+  return nombreFeriado(fecha) !== null;
+}
+function feriadoBadge(fecha) {
+  var nombre = nombreFeriado(fecha);
+  if (!nombre) return '';
+  return ' <span class="feriado-pill" title="' + nombre + '">🎉 FERIADO</span>';
+}
+// Próximos N feriados a partir de hoy
+function proximosFeriados(n) {
+  n = n || 3;
+  var hoyStr = hoy();
+  var anio = parseInt(hoyStr.substring(0, 4), 10);
+  var resultado = [];
+  for (var y = anio; y <= anio + 1; y++) {
+    var lista = obtenerFeriadosAnio(y);
+    for (var i = 0; i < lista.length; i++) {
+      if (lista[i].fecha >= hoyStr && resultado.length < n) resultado.push(lista[i]);
+    }
+    if (resultado.length >= n) break;
+  }
+  return resultado;
+}
+
 function parsearHHMMSS(s) {
   // "08:00:00" o "08:00" → minutos desde medianoche
   if (!s) return null;
@@ -743,6 +895,9 @@ function diasEnRango(d1, d2) {
 
 /* ─── INICIALIZACIÓN ─── */
 window.addEventListener('DOMContentLoaded', function() {
+  // Inicializar catálogo de feriados (necesita pad() definido)
+  inicializarFeriados();
+
   // Fechas por defecto: últimos 7 días incluyendo hoy
   var d = new Date();
   $('d2').value = hoy();
@@ -1311,6 +1466,7 @@ function detectarTipoMarca(m, fecha, empleadoCode) {
    ═══════════════════════════════════════════════════════════════════════ */
 function actualizarKPIsHoy() {
   var fechaHoy = hoy();
+  var hoyEsFeriado = esFeriado(fechaHoy);
   var activos = cacheEmpleados.filter(empActivo);
   var asignacionesHoy = cacheAsignaciones.filter(function(a) {
     return a.start <= fechaHoy && a.end >= fechaHoy && a.employee && empActivo(a.employee);
@@ -1323,8 +1479,11 @@ function actualizarKPIsHoy() {
   });
 
   var marcaron = resumenes.filter(function(x) { return x.r.primera; });
-  var noMarcaron = resumenes.filter(function(x) { return x.tieneAsignacion && !x.r.primera; });
-  var atrasos = resumenes.filter(function(x) { return x.r.atrasoMin > 0; });
+  // Si es feriado, NO contamos atrasos ni no-marcaron (todo es informativo)
+  var noMarcaron = hoyEsFeriado ? [] :
+                   resumenes.filter(function(x) { return x.tieneAsignacion && !x.r.primera; });
+  var atrasos = hoyEsFeriado ? [] :
+                resumenes.filter(function(x) { return x.r.atrasoMin > 0; });
   var hhEE = resumenes.reduce(function(a, x) { return a + (x.r.hhEEMin || 0); }, 0);
   var permHoy = cachePermisos.filter(function(p) {
     var ini = (p.start || p.startDate || '').substring(0, 10);
@@ -1336,15 +1495,17 @@ function actualizarKPIsHoy() {
   $('hoy-k-act-sub').textContent = Object.keys(conTurno).length + ' con turno hoy';
   $('hoy-k-marc').textContent = marcaron.length;
   $('hoy-k-marc-sub').textContent = activos.length ? Math.round(marcaron.length/activos.length*100) + '% del personal' : '—';
-  $('hoy-k-nomarc').textContent = noMarcaron.length;
-  $('hoy-k-atra').textContent = atrasos.length;
+  $('hoy-k-nomarc').textContent = hoyEsFeriado ? '—' : noMarcaron.length;
+  $('hoy-k-atra').textContent = hoyEsFeriado ? '—' : atrasos.length;
   var sumAtra = atrasos.reduce(function(a, x) { return a + x.r.atrasoMin; }, 0);
-  $('hoy-k-atra-sub').textContent = sumAtra ? sumAtra + ' min totales' : '—';
+  $('hoy-k-atra-sub').textContent = hoyEsFeriado ? 'Feriado · sin alertas' :
+                                    (sumAtra ? sumAtra + ' min totales' : '—');
   $('hoy-k-ext').textContent = (hhEE / 60).toFixed(1) + ' h';
   $('hoy-k-per').textContent = permHoy.length;
 
   // Guardar para listas
-  window._hoyData = { resumenes: resumenes, marcaron: marcaron, noMarcaron: noMarcaron, atrasos: atrasos, permHoy: permHoy };
+  window._hoyData = { resumenes: resumenes, marcaron: marcaron, noMarcaron: noMarcaron,
+                      atrasos: atrasos, permHoy: permHoy, hoyEsFeriado: hoyEsFeriado };
 }
 
 function renderHoy() {
@@ -1352,6 +1513,21 @@ function renderHoy() {
   if (!window._hoyData) return;
   var d = window._hoyData;
   var fechaHoy = hoy();
+  var nombreFer = nombreFeriado(fechaHoy);
+
+  // Banner si hoy es feriado (en su contenedor dedicado arriba de los KPIs)
+  var bannerEl = $('hoy-feriado-banner');
+  if (bannerEl) {
+    if (nombreFer) {
+      bannerEl.innerHTML = '<div class="feriado-banner">' +
+        '<span class="ico">🎉</span>' +
+        '<div><strong>Hoy es feriado:</strong> ' + nombreFer + '. ' +
+        '<span style="color:var(--t3)">Los atrasos y ausencias no se cuentan como anomalías. ' +
+        'Las marcaciones de trabajadores en turno son solo informativas.</span></div></div>';
+    } else {
+      bannerEl.innerHTML = '';
+    }
+  }
 
   // Helper para chequear si un empleado tiene licencia vigente hoy
   function licenciaHoy(empCode) {
@@ -1387,26 +1563,49 @@ function renderHoy() {
            '<span class="meta" style="color:var(--green)">' + hora + '</span></div>';
   });
 
-  // Alertas top
+  // Alertas top — si hoy es feriado, omitir alertas de atraso/no-marcó
   var alertsHtml = '';
-  if (d.noMarcaron.length > 0) {
-    alertsHtml += '<div class="alert-box danger"><span class="alert-icon">🚨</span><div>' +
-      '<strong>' + d.noMarcaron.length + ' trabajadores no marcaron entrada hoy.</strong> ' +
-      'Revisa la columna "No han marcado" para ver quiénes y a qué hora se esperaban.</div></div>';
-  }
-  if (d.atrasos.length > 0) {
-    alertsHtml += '<div class="alert-box warn"><span class="alert-icon">⚠️</span><div>' +
-      '<strong>' + d.atrasos.length + ' atrasos detectados hoy.</strong> ' +
-      'Tolerancia configurada: ' + getTolerancia() + ' min.</div></div>';
-  }
-  if (d.noMarcaron.length === 0 && d.atrasos.length === 0 && d.marcaron.length > 0) {
-    alertsHtml += '<div class="alert-box success"><span class="alert-icon">✅</span><div>' +
-      '<strong>Día sin alertas.</strong> Todos los trabajadores con turno asignado marcaron a tiempo.</div></div>';
+  if (!nombreFer) {
+    if (d.noMarcaron.length > 0) {
+      alertsHtml += '<div class="alert-box danger"><span class="alert-icon">🚨</span><div>' +
+        '<strong>' + d.noMarcaron.length + ' trabajadores no marcaron entrada hoy.</strong> ' +
+        'Revisa la columna "No han marcado" para ver quiénes y a qué hora se esperaban.</div></div>';
+    }
+    if (d.atrasos.length > 0) {
+      alertsHtml += '<div class="alert-box warn"><span class="alert-icon">⚠️</span><div>' +
+        '<strong>' + d.atrasos.length + ' atrasos detectados hoy.</strong> ' +
+        'Tolerancia configurada: ' + getTolerancia() + ' min.</div></div>';
+    }
+    if (d.noMarcaron.length === 0 && d.atrasos.length === 0 && d.marcaron.length > 0) {
+      alertsHtml += '<div class="alert-box success"><span class="alert-icon">✅</span><div>' +
+        '<strong>Día sin alertas.</strong> Todos los trabajadores con turno asignado marcaron a tiempo.</div></div>';
+    }
   }
   $('hoy-alerts').innerHTML = alertsHtml;
 
   // Tabla detalle
   renderTablaHoy(d.resumenes);
+
+  // Mini-leyenda de próximos feriados
+  var pf = proximosFeriados(3);
+  var pfEl = $('proximos-feriados-info');
+  if (pfEl) {
+    if (pf.length) {
+      pfEl.innerHTML = '<strong>📅 Próximos feriados:</strong> ' +
+        pf.map(function(f) {
+          var dt = new Date(f.fecha + 'T12:00:00');
+          var diaPalabra = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'][dt.getDay()];
+          return '<span class="pf-item"><span class="pf-d">' + fmtFecha(f.fecha) + ' (' + diaPalabra + ')</span> · ' + f.nombre + '</span>';
+        }).join(' ');
+    } else {
+      pfEl.innerHTML = '';
+    }
+  }
+}
+
+// Función obsoleta - reemplazada por la mini-leyenda dentro de renderHoy
+function renderProximosFeriados() {
+  // Mantener stub vacío por compatibilidad
 }
 
 function renderHoyList(id, items, fnRow) {
@@ -1678,18 +1877,20 @@ function renderMarcaciones() {
   // Orden de columnas: Fecha · Trabajador · RUT · Hora teórica · Tipo · Hora real · Δ min · Sucursal
   tb.innerHTML = lista.map(function(x) {
     var deltaTxt = '—';
-    if (x.deltaMin !== null) {
+    var feriado = esFeriado(x.fecha);
+    if (x.deltaMin !== null && !feriado) {
       var sign = x.deltaMin > 0 ? '+' : '';
       var color = x.esAtraso ? 'var(--red)' : x.esExtra ? 'var(--purple)' : x.esTemprano ? 'var(--amber)' : 'var(--t2)';
       deltaTxt = '<span style="color:' + color + ';font-weight:500">' + sign + x.deltaMin + ' min</span>';
     }
-    var rowClass = x.esAtraso ? 'row-alert' : (x.esExtra || x.esTemprano) ? 'row-warn' : '';
+    var rowClass = feriado ? 'row-feriado' :
+                   (x.esAtraso ? 'row-alert' : (x.esExtra || x.esTemprano) ? 'row-warn' : '');
     var tipoCol = x.tipo === 'ENTRADA' ? '<span class="s-pill ok">ENT</span>' :
                   x.tipo === 'SALIDA' ? '<span class="s-pill" style="background:var(--blue-bg);color:var(--blue)">SAL</span>' :
                   x.tipo === 'INTERMEDIA' ? '<span class="s-pill" style="background:var(--s4);color:var(--t3)">INT</span>' :
                   '<span class="s-pill" style="background:var(--s4);color:var(--t3)">—</span>';
     return '<tr class="' + rowClass + '">' +
-      '<td class="num">' + fmtFecha(x.fecha) + '</td>' +
+      '<td class="num">' + fmtFecha(x.fecha) + feriadoBadge(x.fecha) + '</td>' +
       '<td><a class="emp-link" onclick="abrirModalEmpleado(\'' + (x.emp.code || '') + '\')">' + empNombreCompleto(x.emp) + '</a></td>' +
       '<td class="num">' + (x.emp.identification || '—') + '</td>' +
       '<td class="num">' + x.horaTeo + '</td>' +
@@ -1736,6 +1937,9 @@ function generarAnomalias() {
 
   activos.forEach(function(e) {
     fechas.forEach(function(f) {
+      // EXCLUIR feriados del cálculo de anomalías
+      if (esFeriado(f)) return;
+
       var r = calcularResumenDia(e.code, f);
       // Solo generar anomalía si tiene horario teórico ese día
       if (!r.horario) return;
@@ -1942,8 +2146,10 @@ function renderHorarios() {
     var ini = parseFechaHora(h.start);
     var fin = parseFechaHora(h.end);
     var horas = (ini && fin) ? ((fin - ini) / 3600000).toFixed(1) : '—';
-    return '<tr>' +
-      '<td class="num">' + fmtFecha(h.date) + '</td>' +
+    var feriado = esFeriado(h.date);
+    var rowClass = feriado ? ' class="row-feriado"' : '';
+    return '<tr' + rowClass + '>' +
+      '<td class="num">' + fmtFecha(h.date) + (feriado ? feriadoBadge(h.date) : '') + '</td>' +
       '<td>' + diaSemana(h.date) + '</td>' +
       '<td><a class="emp-link" onclick="abrirModalEmpleado(\'' + h.employeeCode + '\')">' + h.employeeName + '</a></td>' +
       '<td class="num">' + (h.rut || '—') + '</td>' +
@@ -2153,11 +2359,14 @@ function abrirModalEmpleado(code) {
     html += '<table class="tbl"><thead><tr><th>Fecha</th><th>Día</th><th>Horario</th><th>Entrada teó.</th><th>Entrada real</th><th>Salida real</th><th>Atraso</th><th>HH.EE.</th></tr></thead><tbody>';
     fechas.sort().reverse().forEach(function(f) {
       var r = calcularResumenDia(emp.code, f);
-      var entReal = r.primeraDt ? fmtHora(r.primeraDt) : '<span style="color:var(--red)">—</span>';
+      var feriado = esFeriado(f);
+      var entReal = r.primeraDt ? fmtHora(r.primeraDt) : (feriado ? '—' : '<span style="color:var(--red)">—</span>');
       var salReal = (r.ultimaDt && r.marcasCount >= 2) ? fmtHora(r.ultimaDt) : '—';
-      var atr = r.atrasoMin > 0 ? '<span style="color:var(--red);font-weight:600">+' + r.atrasoMin + 'm</span>' : '—';
+      var atr = (r.atrasoMin > 0 && !feriado) ? '<span style="color:var(--red);font-weight:600">+' + r.atrasoMin + 'm</span>' : '—';
       var ee = r.hhEEMin > 0 ? '<span style="color:var(--purple);font-weight:600">' + (r.hhEEMin/60).toFixed(1) + 'h</span>' : '—';
-      html += '<tr><td class="num">' + fmtFecha(f) + '</td><td>' + diaSemana(f) + '</td>' +
+      var rowClass = feriado ? ' class="row-feriado"' : '';
+      var ferIcon = feriado ? feriadoBadge(f) : '';
+      html += '<tr' + rowClass + '><td class="num">' + fmtFecha(f) + ferIcon + '</td><td>' + diaSemana(f) + '</td>' +
               '<td>' + (r.horario ? r.horario.scheduleName : '—') + '</td>' +
               '<td class="num">' + (r.horario ? fmtHora(r.horario.start) : '—') + '</td>' +
               '<td class="num">' + entReal + '</td><td class="num">' + salReal + '</td>' +

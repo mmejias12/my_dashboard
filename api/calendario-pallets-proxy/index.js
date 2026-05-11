@@ -76,8 +76,12 @@ function addDays(d, days) {
 // ─── Llamada al API M3Link ───────────────────────────────────────────────
 function fetchM3(fechaInicio, fechaFin) {
   return new Promise(function (resolve, reject) {
-    var qs = '?fechaInicio=' + encodeURIComponent(fechaInicio) +
-             '&fechaFin='    + encodeURIComponent(fechaFin);
+    // IMPORTANTE: el dashboard usa fechaInicio/fechaFin pero el API real
+    // espera fechaInicial/fechaFinal. Esta traducción es la misma que hace
+    // el proxy /api/ops existente. Sin esto el API ignora el rango y
+    // devuelve solo los últimos registros del día más reciente.
+    var qs = '?fechaInicial=' + encodeURIComponent(fechaInicio) +
+             '&fechaFinal='   + encodeURIComponent(fechaFin);
     var options = {
       host:   API_HOST,
       path:   API_PATH + qs,
@@ -111,22 +115,38 @@ function agregar(items) {
   var totalTrf = 0;
   var fechasSet = new Set();
   var omitidos = { sinFecha: 0, sinPallets: 0, etapaNoCerrada: 0, noTransferencia: 0 };
+  var descartes = []; // log detallado de los primeros 10 descartes
+
+  function logDescarte(razon, item) {
+    if (descartes.length < 10) {
+      descartes.push({
+        razon: razon,
+        operacion: item.operacion,
+        etapaOperacion: item.etapaOperacion,
+        cantidadConfirmada: item.cantidadConfirmada,
+        cantidadDespachada: item.cantidadDespachada,
+        fechaConfirmacion: item.fechaConfirmacion,
+        clienteOrigenStr: item.clienteOrigenStr,
+        clienteDestinoStr: item.clienteDestinoStr
+      });
+    }
+  }
 
   for (var i = 0; i < items.length; i++) {
     var it = items[i];
 
-    if (!it.etapaOperacion) { omitidos.etapaNoCerrada++; continue; }
+    if (!it.etapaOperacion) { omitidos.etapaNoCerrada++; logDescarte('sin etapaOperacion', it); continue; }
     var etapa = String(it.etapaOperacion).toLowerCase();
-    if (etapa.indexOf('cerrada') === -1) { omitidos.etapaNoCerrada++; continue; }
+    if (etapa.indexOf('cerrada') === -1) { omitidos.etapaNoCerrada++; logDescarte('etapa no cerrada: '+it.etapaOperacion, it); continue; }
     if (!it.operacion || String(it.operacion).toLowerCase().indexOf('transferencia') === -1) {
-      omitidos.noTransferencia++; continue;
+      omitidos.noTransferencia++; logDescarte('no es transferencia: '+it.operacion, it); continue;
     }
 
     var fConf = parseFechaM3(it.fechaConfirmacion);
-    if (!fConf) { omitidos.sinFecha++; continue; }
+    if (!fConf) { omitidos.sinFecha++; logDescarte('fecha confirmacion inválida: '+it.fechaConfirmacion, it); continue; }
 
     var pallets = parseInt(it.cantidadConfirmada, 10);
-    if (!pallets || pallets <= 0) { omitidos.sinPallets++; continue; }
+    if (!pallets || pallets <= 0) { omitidos.sinPallets++; logDescarte('sin pallets confirmados', it); continue; }
 
     var cliente = it.clienteOrigenStr;
     var retail  = it.clienteDestinoStr;
@@ -185,7 +205,8 @@ function agregar(items) {
       fechaMin: fechas[0] || null,
       fechaMax: fechas[fechas.length - 1] || null
     },
-    omitidos: omitidos
+    omitidos: omitidos,
+    descartes: descartes
   };
 }
 
@@ -226,6 +247,17 @@ module.exports = async function (context, req) {
     var agg = agregar(items);
     context.log('Procesados:', agg.resumen.totalTrf, 'Omitidos:', JSON.stringify(agg.omitidos));
 
+    // Modo debug: si llega ?debug=1 incluir muestra cruda y razón de descarte
+    var debug = (req.query && req.query.debug == '1');
+    var debugInfo = null;
+    if (debug) {
+      debugInfo = {
+        muestraCruda: items.slice(0, 3),
+        camposPrimerRegistro: items.length ? Object.keys(items[0]) : [],
+        razonesDescarte: agg.descartes ? agg.descartes.slice(0, 10) : []
+      };
+    }
+
     context.res = {
       status: 200,
       headers: {
@@ -243,6 +275,7 @@ module.exports = async function (context, req) {
           registrosProcesados: agg.resumen.totalTrf,
           omitidos: agg.omitidos
         },
+        debug: debugInfo,
         calendario: agg.calendario,
         resumen:    agg.resumen
       }

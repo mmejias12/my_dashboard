@@ -172,10 +172,24 @@ function agregar(items) {
 
     var ckey = cliente + '||' + dr.dias;
     if (!rd._clientes[ckey]) {
-      rd._clientes[ckey] = { cliente: cliente, dias: dr.dias, pallets: 0, trf: 0, origen: dr.origen };
+      rd._clientes[ckey] = {
+        cliente: cliente,
+        dias: dr.dias,
+        pallets: 0,
+        trf: 0,
+        origen: dr.origen,
+        _detalle: []  // detalle de cada transferencia para el modal
+      };
     }
     rd._clientes[ckey].pallets += pallets;
     rd._clientes[ckey].trf += 1;
+    rd._clientes[ckey]._detalle.push({
+      bodegaOrigen:  it.bodegaOrigenStr  || '—',
+      bodegaDestino: it.bodegaDestinoStr || '—',
+      nroPedido:     it.nroPedido        || '—',
+      fechaConfirmacion: fmtISO(fConf),
+      pallets:       pallets
+    });
 
     totalPallets += pallets;
     totalTrf += 1;
@@ -187,7 +201,20 @@ function agregar(items) {
     var dia = calendario[k];
     var retails = Object.keys(dia._retails).map(function (r) {
       var rd = dia._retails[r];
-      var clis = Object.keys(rd._clientes).map(function (c) { return rd._clientes[c]; });
+      var clis = Object.keys(rd._clientes).map(function (c) {
+        var ci = rd._clientes[c];
+        // Ordenar el detalle por bodega origen y luego por nro pedido
+        ci._detalle.sort(function (a, b) {
+          if (a.bodegaOrigen !== b.bodegaOrigen) {
+            return a.bodegaOrigen.localeCompare(b.bodegaOrigen);
+          }
+          return String(a.nroPedido).localeCompare(String(b.nroPedido));
+        });
+        return {
+          cliente: ci.cliente, dias: ci.dias, pallets: ci.pallets,
+          trf: ci.trf, origen: ci.origen, detalle: ci._detalle
+        };
+      });
       clis.sort(function (a, b) { return b.pallets - a.pallets; });
       return { retail: rd.retail, pallets: rd.pallets, trf: rd.trf, clientes: clis };
     });

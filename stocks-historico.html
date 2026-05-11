@@ -325,6 +325,9 @@ function cargarListaClientesDesdeCache() {
 // AUTOCOMPLETE / SELECTOR DE CLIENTES
 // ─────────────────────────────────────────────────────────────────────────
 var hoverIdx = -1;
+// Caché de resultados del dropdown actual, para agregar por índice y
+// evitar bugs con apóstrofes/comillas en nombres (ej: D'AGOSTINI)
+var dropdownResultados = [];
 
 function abrirDropdown() {
   var q = $('cli-input').value.toLowerCase().trim();
@@ -346,6 +349,9 @@ function abrirDropdown() {
     return true;
   }).slice(0, 30);  // máx 30 resultados
 
+  // Guardar en caché para que agregarCliente pueda buscar por índice
+  dropdownResultados = resultados;
+
   if (!resultados.length) {
     dd.innerHTML = '<div class="cli-opt" style="cursor:default;color:var(--text-muted)">Sin resultados</div>';
     dd.classList.add('on');
@@ -354,7 +360,7 @@ function abrirDropdown() {
 
   dd.innerHTML = resultados.map(function(c, idx) {
     var tipos = c.tipos.join(' + ');
-    return '<div class="cli-opt' + (idx === hoverIdx ? ' hover' : '') + '" onclick="agregarCliente(\'' + c.nombre.replace(/'/g, "\\'") + '\')">' +
+    return '<div class="cli-opt' + (idx === hoverIdx ? ' hover' : '') + '" onclick="agregarClienteIdx(' + idx + ')">' +
       '<span class="cli-opt-name">' + c.nombre + '</span>' +
       '<span class="cli-opt-meta">' + tipos + ' · ' + fmtNum(c.stock) + ' pall</span>' +
     '</div>';
@@ -367,6 +373,13 @@ function cerrarDropdown() {
     $('cli-dropdown').classList.remove('on');
     hoverIdx = -1;
   }, 150);  // delay para permitir click
+}
+
+// Wrapper que recibe el índice y resuelve al objeto del autocomplete
+function agregarClienteIdx(idx) {
+  var c = dropdownResultados[idx];
+  if (!c) return;
+  agregarCliente(c.nombre);
 }
 
 function agregarCliente(nombre) {
@@ -387,6 +400,11 @@ function agregarCliente(nombre) {
   renderTags();
   $('cli-dropdown').classList.remove('on');
   $('cli-input').focus();
+}
+
+function quitarClienteIdx(idx) {
+  var c = clientesSeleccionados[idx];
+  if (c) quitarCliente(c.nombre);
 }
 
 function quitarCliente(nombre) {
@@ -415,13 +433,19 @@ function renderTags() {
   // Quitar tags existentes (no el input)
   Array.from(box.querySelectorAll('.cli-tag')).forEach(function(t) { t.remove(); });
 
-  // Agregar tags antes del input
+  // Agregar tags antes del input — usando índices para evitar bugs con apóstrofes
   var input = $('cli-input');
   clientesSeleccionados.forEach(function(c, idx) {
     var tag = document.createElement('span');
     tag.className = 'cli-tag' + (c.tipos.length === 1 && c.tipos[0] === 'RETAIL' ? ' ret' : '');
-    tag.innerHTML = c.nombre + '<span class="x" onclick="quitarCliente(\'' + c.nombre.replace(/'/g, "\\'") + '\')">×</span>';
+    tag.innerHTML = escapeHtmlSimple(c.nombre) + '<span class="x" onclick="quitarClienteIdx(' + idx + ')">×</span>';
     box.insertBefore(tag, input);
+  });
+}
+
+function escapeHtmlSimple(s) {
+  return String(s || '').replace(/[&<>"']/g, function(m) {
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m];
   });
 }
 
@@ -771,7 +795,9 @@ window.addEventListener('DOMContentLoaded', function() {
 
 // Exponer funciones globales para onclick inline
 window.agregarCliente = agregarCliente;
+window.agregarClienteIdx = agregarClienteIdx;
 window.quitarCliente = quitarCliente;
+window.quitarClienteIdx = quitarClienteIdx;
 window.limpiarClientes = limpiarClientes;
 </script>
 

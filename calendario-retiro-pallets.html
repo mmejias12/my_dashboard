@@ -260,14 +260,104 @@ html, body {
 }
 .retail.open .clientes-list { display: block; }
 .cliente-row {
-  display: flex; justify-content: space-between; padding: 5px 0;
+  display: flex; justify-content: space-between; padding: 6px 4px;
   font-size: 11px; border-bottom: 1px dotted var(--border);
+  cursor: pointer; transition: background .12s;
+  border-radius: 3px;
 }
+.cliente-row:hover { background: var(--bg-hover); }
 .cliente-row:last-child { border-bottom: none; }
 .cliente-name { color: var(--text-primary); flex: 1; padding-right: 8px; }
 .cliente-meta { color: var(--text-muted); font-size: 10px; margin-top: 1px; }
 .cliente-meta .tag-default { color: var(--warn); }
 .cliente-pallets { font-weight: 600; color: var(--accent); min-width: 44px; text-align: right; }
+.cliente-arrow { color: var(--text-muted); font-size: 10px; margin-left: 6px; }
+
+/* ── MODAL DETALLE BODEGAS ── */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(15,17,23,0.78);
+  backdrop-filter: blur(4px); z-index: 9998;
+  display: none; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.modal-backdrop.visible { display: flex; }
+.modal {
+  background: var(--bg-card); border: 1px solid var(--border-md);
+  border-radius: var(--radius-lg); width: 100%; max-width: 920px;
+  max-height: 86vh; display: flex; flex-direction: column;
+  box-shadow: 0 12px 36px rgba(0,0,0,0.45);
+}
+.modal-header {
+  padding: 16px 20px; border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 12px;
+}
+.modal-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+.modal-subtitle { font-size: 12px; color: var(--text-secondary); }
+.modal-subtitle .pipe { color: var(--text-muted); margin: 0 6px; }
+.modal-subtitle .accent { color: var(--accent); font-weight: 600; }
+.modal-close {
+  background: var(--bg-input); border: 1px solid var(--border-md);
+  color: var(--text-primary); width: 30px; height: 30px;
+  border-radius: var(--radius-sm); cursor: pointer; font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s;
+}
+.modal-close:hover { background: var(--bg-hover); }
+.modal-body { padding: 14px 20px; overflow-y: auto; flex: 1; }
+.modal-body::-webkit-scrollbar { width: 8px; }
+.modal-body::-webkit-scrollbar-thumb { background: var(--border-md); border-radius: 4px; }
+
+.bodega-group {
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.bodega-head {
+  background: var(--bg-input);
+  padding: 9px 12px;
+  display: flex; justify-content: space-between; align-items: center;
+  border-bottom: 1px solid var(--border);
+}
+.bodega-name {
+  font-size: 12px; font-weight: 600; color: var(--accent);
+  display: flex; align-items: center; gap: 8px;
+}
+.bodega-name::before {
+  content: '🏭'; font-size: 13px; opacity: .8;
+}
+.bodega-stats { font-size: 11px; color: var(--text-secondary); }
+.bodega-stats strong { color: var(--accent); font-weight: 700; }
+
+.detalle-table {
+  width: 100%; font-size: 11px; border-collapse: collapse;
+}
+.detalle-table thead th {
+  background: var(--bg-page); color: var(--text-muted);
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .4px; text-align: left;
+  padding: 8px 10px; border-bottom: 1px solid var(--border);
+}
+.detalle-table tbody td {
+  padding: 7px 10px; border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+}
+.detalle-table tbody tr:last-child td { border-bottom: none; }
+.detalle-table tbody tr:hover { background: var(--bg-hover); }
+.detalle-table td.num { text-align: right; font-weight: 600; color: var(--accent); }
+.detalle-table td.fecha { color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; font-size: 10.5px; }
+.detalle-table td.pedido { color: var(--info); font-family: 'JetBrains Mono', monospace; font-size: 10.5px; }
+.detalle-table td.bodega-dest { color: var(--text-secondary); }
+
+.modal-footer {
+  padding: 12px 20px; border-top: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+  background: var(--bg-input);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+.modal-summary { font-size: 12px; color: var(--text-secondary); }
+.modal-summary strong { color: var(--accent); font-size: 14px; font-weight: 700; }
 
 .no-data {
   text-align: center; padding: 40px 20px;
@@ -302,6 +392,24 @@ html, body {
   </div>
 </div>
 
+<!-- Modal detalle de bodegas -->
+<div class="modal-backdrop" id="modal-backdrop" onclick="cerrarModalSiBackdrop(event)">
+  <div class="modal" id="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="modal-title">Detalle bodegas</div>
+        <div class="modal-subtitle" id="modal-subtitle">—</div>
+      </div>
+      <button class="modal-close" onclick="cerrarModal()" title="Cerrar (Esc)">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer">
+      <div class="modal-summary" id="modal-summary">—</div>
+      <button class="btn btn-secondary" onclick="cerrarModal()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <div class="main">
   <div class="breadcrumb">
     Comercial › Reportes operacionales › <span class="accent">Calendario Retiro Pallets</span>
@@ -309,7 +417,7 @@ html, body {
 
   <div class="page-header">
     <div class="page-title">📅 Calendario de Retiro Tentativo de Pallets</div>
-    <div class="page-subtitle">Proyección de retiros basada en fecha de confirmación + tiempos de retención por Retail</div>
+    <div class="page-subtitle">Proyección de retiros basada en fecha de confirmación + tiempos de retención por (cliente, retail)</div>
   </div>
 
   <div class="controls">
@@ -616,15 +724,116 @@ function renderRetails(retails, filter) {
       var c = r.clientes[j];
       var tagDefault = (c.origen && c.origen !== 'exacto') ?
         '<span class="tag-default" title="Días tomados de default por retail">⚠ ' + c.origen + '</span>' : '';
-      html += '<div class="cliente-row">' +
+      html += '<div class="cliente-row" onclick="abrirModalBodegas(\'' + escapeAttr(r.retail) + '\',\'' + escapeAttr(c.cliente) + '\')" title="Ver detalle de bodegas">' +
         '<div><div class="cliente-name">' + escapeHtml(c.cliente) + '</div>' +
         '<div class="cliente-meta">' + c.dias + ' días · ' + c.trf + ' trf ' + tagDefault + '</div></div>' +
-        '<div class="cliente-pallets">' + fmtNum(c.pallets) + '</div>' +
+        '<div><span class="cliente-pallets">' + fmtNum(c.pallets) + '</span><span class="cliente-arrow">▸</span></div>' +
       '</div>';
     }
     html += '</div></div>';
   }
   list.innerHTML = html;
+}
+
+// ─── Modal detalle de bodegas ──────────────────────────────────────────
+function abrirModalBodegas(retail, cliente) {
+  if (!selectedDate || !DATA[selectedDate]) return;
+  var dia = DATA[selectedDate];
+
+  // Buscar el cliente dentro del retail
+  var retailObj = null;
+  for (var i = 0; i < dia.retails.length; i++) {
+    if (dia.retails[i].retail === retail) { retailObj = dia.retails[i]; break; }
+  }
+  if (!retailObj) return;
+
+  var clienteObj = null;
+  for (var j = 0; j < retailObj.clientes.length; j++) {
+    if (retailObj.clientes[j].cliente === cliente) { clienteObj = retailObj.clientes[j]; break; }
+  }
+  if (!clienteObj || !clienteObj.detalle) return;
+
+  // Header del modal
+  var dt = new Date(selectedDate + 'T00:00:00');
+  $('modal-title').textContent = '🏭 Detalle de bodegas';
+  $('modal-subtitle').innerHTML =
+    '<span class="accent">' + escapeHtml(cliente) + '</span>' +
+    '<span class="pipe">→</span>' +
+    '<span>' + escapeHtml(retail) + '</span>' +
+    '<span class="pipe">·</span>' +
+    '<span>retiro tentativo: ' + dt.getDate() + ' ' + MESES[dt.getMonth()].toLowerCase() + ' ' + dt.getFullYear() + '</span>' +
+    '<span class="pipe">·</span>' +
+    '<span>' + clienteObj.dias + ' días retención</span>';
+
+  // Agrupar detalle por bodega origen
+  var porBodega = {};
+  for (var k = 0; k < clienteObj.detalle.length; k++) {
+    var d = clienteObj.detalle[k];
+    var bo = d.bodegaOrigen || '—';
+    if (!porBodega[bo]) porBodega[bo] = { pallets: 0, trf: 0, items: [] };
+    porBodega[bo].pallets += d.pallets;
+    porBodega[bo].trf += 1;
+    porBodega[bo].items.push(d);
+  }
+
+  // Render
+  var bodegas = Object.keys(porBodega).sort(function (a, b) {
+    return porBodega[b].pallets - porBodega[a].pallets;
+  });
+
+  var body = '';
+  for (var b = 0; b < bodegas.length; b++) {
+    var bod = bodegas[b];
+    var info = porBodega[bod];
+    var pct = (info.pallets / clienteObj.pallets * 100).toFixed(1);
+    body +=
+      '<div class="bodega-group">' +
+        '<div class="bodega-head">' +
+          '<div class="bodega-name">' + escapeHtml(bod) + '</div>' +
+          '<div class="bodega-stats">' +
+            '<strong>' + fmtNum(info.pallets) + '</strong> pallets · ' +
+            info.trf + ' trf · ' + pct + '%' +
+          '</div>' +
+        '</div>' +
+        '<table class="detalle-table">' +
+          '<thead><tr>' +
+            '<th>Nro pedido</th>' +
+            '<th>Fecha confirmación</th>' +
+            '<th>Bodega destino (retail)</th>' +
+            '<th style="text-align:right">Pallets</th>' +
+          '</tr></thead><tbody>';
+    for (var m = 0; m < info.items.length; m++) {
+      var it = info.items[m];
+      body +=
+        '<tr>' +
+          '<td class="pedido">' + escapeHtml(it.nroPedido) + '</td>' +
+          '<td class="fecha">' + escapeHtml(it.fechaConfirmacion) + '</td>' +
+          '<td class="bodega-dest">' + escapeHtml(it.bodegaDestino) + '</td>' +
+          '<td class="num">' + fmtNum(it.pallets) + '</td>' +
+        '</tr>';
+    }
+    body += '</tbody></table></div>';
+  }
+  $('modal-body').innerHTML = body;
+
+  $('modal-summary').innerHTML =
+    'Total: <strong>' + fmtNum(clienteObj.pallets) + '</strong> pallets · ' +
+    clienteObj.trf + ' transferencias · ' +
+    bodegas.length + ' bodega' + (bodegas.length > 1 ? 's' : '') + ' origen';
+
+  $('modal-backdrop').classList.add('visible');
+}
+
+function cerrarModal() {
+  $('modal-backdrop').classList.remove('visible');
+}
+
+function cerrarModalSiBackdrop(e) {
+  if (e.target.id === 'modal-backdrop') cerrarModal();
+}
+
+function escapeAttr(s) {
+  return String(s || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 }
 
 function escapeHtml(s) {
@@ -638,6 +847,10 @@ $('btnCargar').onclick = cargarDatos;
 $('btnHoy').onclick    = goToday;
 $('search-input').addEventListener('input', function (e) {
   if (selectedDate && DATA[selectedDate]) renderRetails(DATA[selectedDate].retails, e.target.value);
+});
+// Cerrar modal con Esc
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape' && $('modal-backdrop').classList.contains('visible')) cerrarModal();
 });
 setDefaultRange();
 var hoy = new Date();

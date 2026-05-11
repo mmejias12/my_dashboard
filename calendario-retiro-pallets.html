@@ -355,7 +355,11 @@ html, body {
 <script>
 // ─── Configuración ─────────────────────────────────────────────────────
 var isLocal = (window.location.protocol === 'file:');
+var isDev   = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+// Mismo patrón que /api/historial-proxy del dashboard M3Link
 var API_PROXY = '/api/calendario-pallets-proxy';
+// Permite probar contra el API directo en local (mismo token que usa el dashboard)
+var API_DIRECT = 'https://apirdt1.azurewebsites.net/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRangoFechas';
 
 // ─── Estado ────────────────────────────────────────────────────────────
 var DATA = {};
@@ -375,11 +379,6 @@ function fmtNum(n) { return (n == null) ? '—' : Number(n).toLocaleString('es-C
 function fmtISO(d) {
   var y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), dd = String(d.getDate()).padStart(2,'0');
   return y + '-' + m + '-' + dd;
-}
-function fmtDDMMYYYY(iso) {
-  // "2026-05-10" → "10-05-2026"
-  var p = iso.split('-');
-  return p[2] + '-' + p[1] + '-' + p[0];
 }
 function fmtRange(a, b) {
   var pa = a.split('-'), pb = b.split('-');
@@ -413,7 +412,7 @@ function cargarDatos() {
   $('btnCargar').disabled = true;
   setStatus('loading', 'Consultando M3Link…');
 
-  var url = API_PROXY + '?fechaInicial=' + fmtDDMMYYYY(desde) + '&fechaFinal=' + fmtDDMMYYYY(hasta);
+  var url = API_PROXY + '?fechaInicio=' + desde + '&fechaFin=' + hasta;
 
   fetch(url)
     .then(function (r) { return r.json(); })

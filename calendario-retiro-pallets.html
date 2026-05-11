@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calendario Retiro Pallets — REDTEC M3Link</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-page:       #0f1117;
+  --bg-surface:    #181b23;
+  --bg-card:       #1e222d;
+  --bg-input:      #252932;
+  --bg-hover:      #252d3a;
+  --bg-active:     #1a2a1f;
+  --border:        rgba(255,255,255,0.07);
+  --border-md:     rgba(255,255,255,0.12);
+  --border-accent: rgba(74,222,128,0.35);
+  --text-primary:  #e8eaf0;
+  --text-secondary:#9da3b4;
+  --text-muted:    #5a6070;
+  --accent:        #4ade80;
+  --accent-dim:    rgba(74,222,128,0.15);
+  --accent-dark:   #22c55e;
+  --red-logo:      #C0170C;
+  --warn:          #fcd34d;
+  --info:          #60a5fa;
+  --radius-sm:     6px;
+  --radius-md:     9px;
+  --radius-lg:     13px;
+}
+
+html, body {
+  height: 100%; min-height: 100vh;
+  font-family: 'Inter', -apple-system, sans-serif;
+  font-size: 13px;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── TOPBAR ── */
+.topbar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  height: 50px; background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 1.25rem; gap: 12px;
+}
+.logo { display: flex; align-items: center; gap: 9px; }
+.logo-mark {
+  width: 28px; height: 28px; background: var(--red-logo);
+  border-radius: 6px; display: grid; place-items: center;
+  color: #fff; font-weight: 700; font-size: 13px;
+}
+.logo-text { font-weight: 600; font-size: 14px; letter-spacing: .3px; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--text-secondary); }
+.topbar a.back { color: var(--text-secondary); text-decoration: none; padding: 6px 10px; border-radius: 6px; transition: background .15s; }
+.topbar a.back:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* ── LAYOUT ── */
+.main { padding: 70px 1.5rem 1.5rem; max-width: 1500px; margin: 0 auto; }
+.breadcrumb {
+  font-size: 12px; color: var(--text-muted);
+  margin-bottom: 14px;
+}
+.breadcrumb .accent { color: var(--accent); }
+.page-header { margin-bottom: 18px; }
+.page-title { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+.page-subtitle { font-size: 13px; color: var(--text-secondary); }
+
+/* ── CONTROLES ── */
+.controls {
+  display: flex; gap: 12px; align-items: end; flex-wrap: wrap;
+  background: var(--bg-card); padding: 14px 16px;
+  border-radius: var(--radius-md); border: 1px solid var(--border);
+  margin-bottom: 14px;
+}
+.control { display: flex; flex-direction: column; gap: 4px; }
+.control label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; font-weight: 500; }
+.control input[type="date"] {
+  background: var(--bg-input); border: 1px solid var(--border-md);
+  color: var(--text-primary); padding: 7px 10px; border-radius: var(--radius-sm);
+  font-family: inherit; font-size: 13px; outline: none;
+  color-scheme: dark;
+}
+.control input[type="date"]:focus { border-color: var(--accent); }
+.btn {
+  background: var(--accent); color: #0a0d12;
+  border: none; padding: 8px 16px; border-radius: var(--radius-sm);
+  font-family: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: background .15s;
+}
+.btn:hover { background: var(--accent-dark); }
+.btn:disabled { background: var(--text-muted); color: var(--bg-page); cursor: not-allowed; }
+.btn-secondary {
+  background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-md);
+}
+.btn-secondary:hover { background: var(--bg-hover); }
+
+.status {
+  font-size: 12px; padding: 6px 12px; border-radius: var(--radius-sm);
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.status.idle { background: var(--bg-input); color: var(--text-secondary); }
+.status.loading { background: rgba(96,165,250,.15); color: var(--info); }
+.status.ok { background: var(--accent-dim); color: var(--accent); }
+.status.err { background: rgba(248,113,113,.15); color: #f87171; }
+
+/* ── STATS ── */
+.stats {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+  margin-bottom: 14px;
+}
+.stat-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  padding: 14px 16px; border-radius: var(--radius-md);
+}
+.stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+.stat-value { font-size: 22px; font-weight: 700; color: var(--accent); }
+.stat-sub { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+
+/* ── LAYOUT CALENDARIO + DETALLE ── */
+.layout {
+  display: grid; grid-template-columns: 1fr 440px; gap: 14px;
+}
+@media (max-width: 1100px) { .layout { grid-template-columns: 1fr; } }
+
+.cal-card, .detail-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 16px;
+}
+
+.cal-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 14px;
+}
+.cal-nav { display: flex; gap: 6px; align-items: center; }
+.cal-nav button {
+  background: var(--bg-input); border: 1px solid var(--border-md);
+  color: var(--text-primary); padding: 6px 12px; border-radius: var(--radius-sm);
+  cursor: pointer; font-size: 13px; transition: background .15s;
+}
+.cal-nav button:hover { background: var(--bg-hover); }
+.cal-nav .month {
+  font-size: 15px; font-weight: 600;
+  min-width: 170px; text-align: center; text-transform: capitalize;
+}
+
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.dow {
+  text-align: center; font-size: 10px; font-weight: 600;
+  color: var(--text-muted); padding: 6px 0;
+  text-transform: uppercase; letter-spacing: .5px;
+}
+.day {
+  aspect-ratio: 1; background: var(--bg-input);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 6px; cursor: pointer; transition: all .15s;
+  display: flex; flex-direction: column; position: relative; min-height: 70px;
+}
+.day:hover:not(.empty) { border-color: var(--accent); }
+.day.empty { background: transparent; border: none; cursor: default; }
+.day.has-data { background: var(--bg-card); }
+.day.selected {
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 0 12px var(--accent-dim);
+}
+.day-num { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+.day.empty .day-num { color: var(--text-muted); }
+.day-data { margin-top: auto; text-align: right; }
+.day-pallets { font-size: 14px; font-weight: 700; color: var(--accent); line-height: 1; }
+.day-retails { font-size: 10px; color: var(--text-secondary); margin-top: 2px; }
+
+/* Mapa de calor — gradiente verde sobre dark */
+.heat-1 { background: rgba(74,222,128,0.08); }
+.heat-2 { background: rgba(74,222,128,0.18); }
+.heat-3 { background: rgba(74,222,128,0.35); }
+.heat-3 .day-pallets { color: #d1fadf; }
+.heat-4 { background: rgba(74,222,128,0.55); }
+.heat-4 .day-pallets, .heat-4 .day-num, .heat-4 .day-retails { color: #052e16; }
+
+.legend {
+  display: flex; gap: 8px; align-items: center;
+  font-size: 11px; color: var(--text-muted);
+  margin-top: 10px; flex-wrap: wrap;
+}
+.legend-box { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--border); }
+
+/* ── DETALLE ── */
+.detail-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+.detail-date { font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; text-transform: capitalize; }
+.detail-summary {
+  background: var(--bg-input); padding: 12px;
+  border-radius: var(--radius-sm); margin-bottom: 12px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+}
+.ds-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; }
+.ds-value { font-size: 18px; font-weight: 700; color: var(--accent); }
+
+.search-box { margin-bottom: 10px; }
+.search-box input {
+  width: 100%; background: var(--bg-input); border: 1px solid var(--border-md);
+  color: var(--text-primary); padding: 8px 12px; border-radius: var(--radius-sm);
+  font-family: inherit; font-size: 12px; outline: none;
+}
+.search-box input:focus { border-color: var(--accent); }
+
+.retail-list { max-height: 540px; overflow-y: auto; }
+.retail-list::-webkit-scrollbar { width: 6px; }
+.retail-list::-webkit-scrollbar-thumb { background: var(--border-md); border-radius: 3px; }
+
+.retail {
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  margin-bottom: 6px; overflow: hidden; background: var(--bg-input);
+}
+.retail-head {
+  padding: 9px 12px; cursor: pointer;
+  display: flex; justify-content: space-between; align-items: center;
+  transition: background .15s;
+}
+.retail-head:hover { background: var(--bg-hover); }
+.retail-name { font-size: 12px; font-weight: 600; flex: 1; padding-right: 8px; }
+.retail-pallets { font-size: 13px; font-weight: 700; color: var(--accent); }
+.retail-trf { font-size: 10px; color: var(--text-muted); margin-left: 8px; }
+.retail-chev { color: var(--text-muted); margin-left: 8px; transition: transform .15s; }
+.retail.open .retail-chev { transform: rotate(90deg); }
+.clientes-list {
+  display: none; padding: 6px 12px; background: var(--bg-card);
+  border-top: 1px solid var(--border);
+}
+.retail.open .clientes-list { display: block; }
+.cliente-row {
+  display: flex; justify-content: space-between; padding: 5px 0;
+  font-size: 11px; border-bottom: 1px dotted var(--border);
+}
+.cliente-row:last-child { border-bottom: none; }
+.cliente-name { color: var(--text-primary); flex: 1; padding-right: 8px; }
+.cliente-meta { color: var(--text-muted); font-size: 10px; margin-top: 1px; }
+.cliente-meta .tag-default { color: var(--warn); }
+.cliente-pallets { font-weight: 600; color: var(--accent); min-width: 44px; text-align: right; }
+
+.no-data {
+  text-align: center; padding: 40px 20px;
+  color: var(--text-muted); font-size: 12px;
+}
+
+.spinner {
+  display: inline-block; width: 12px; height: 12px;
+  border: 2px solid transparent; border-top-color: currentColor;
+  border-radius: 50%; animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-mark">R</div>
+    <div class="logo-text">REDTEC · M3Link</div>
+  </div>
+  <div class="topbar-right">
+    <a href="/" class="back">← Volver al inicio</a>
+  </div>
+</div>
+
+<div class="main">
+  <div class="breadcrumb">
+    Comercial › Reportes operacionales › <span class="accent">Calendario Retiro Pallets</span>
+  </div>
+
+  <div class="page-header">
+    <div class="page-title">📅 Calendario de Retiro Tentativo de Pallets</div>
+    <div class="page-subtitle">Proyección de retiros basada en fecha de confirmación + tiempos de retención por (cliente, retail)</div>
+  </div>
+
+  <div class="controls">
+    <div class="control">
+      <label>Fecha confirmación desde</label>
+      <input type="date" id="fechaDesde">
+    </div>
+    <div class="control">
+      <label>Fecha confirmación hasta</label>
+      <input type="date" id="fechaHasta">
+    </div>
+    <button class="btn" id="btnCargar">Cargar datos</button>
+    <button class="btn btn-secondary" id="btnHoy">Ir a hoy</button>
+    <div class="status idle" id="status">Listo para consultar</div>
+  </div>
+
+  <div class="stats">
+    <div class="stat-card">
+      <div class="stat-label">Total Pallets a Retirar</div>
+      <div class="stat-value" id="stat-pallets">—</div>
+      <div class="stat-sub">en el período proyectado</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Transferencias</div>
+      <div class="stat-value" id="stat-trf" style="color:var(--info)">—</div>
+      <div class="stat-sub">cerradas procesadas</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Días con Retiros</div>
+      <div class="stat-value" id="stat-dias" style="color:var(--warn)">—</div>
+      <div class="stat-sub">en el rango proyectado</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Período Proyectado</div>
+      <div class="stat-value" id="stat-rango" style="font-size:13px;">—</div>
+      <div class="stat-sub">primer y último día con retiro</div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="cal-card">
+      <div class="cal-header">
+        <div class="cal-nav">
+          <button onclick="changeMonth(-1)">◀</button>
+          <div class="month" id="month-label">—</div>
+          <button onclick="changeMonth(1)">▶</button>
+        </div>
+        <button class="btn" style="padding:6px 12px" onclick="goToday()">Hoy</button>
+      </div>
+      <div class="cal-grid" id="cal-grid"></div>
+      <div class="legend">
+        <span>Volumen pallets:</span>
+        <span><span class="legend-box" style="background:var(--bg-input)"></span> 0</span>
+        <span><span class="legend-box heat-1"></span> 1-200</span>
+        <span><span class="legend-box heat-2"></span> 200-1k</span>
+        <span><span class="legend-box heat-3"></span> 1k-3k</span>
+        <span><span class="legend-box heat-4"></span> 3k+</span>
+      </div>
+    </div>
+
+    <div class="detail-card">
+      <div class="detail-title" id="detail-title">Selecciona un día</div>
+      <div class="detail-date" id="detail-date">Haz click en cualquier día del calendario</div>
+      <div class="detail-summary" id="detail-summary" style="display:none">
+        <div><div class="ds-label">Pallets a retirar</div><div class="ds-value" id="ds-pallets">—</div></div>
+        <div><div class="ds-label">Transferencias</div><div class="ds-value" id="ds-trf">—</div></div>
+      </div>
+      <div class="search-box" id="search-box" style="display:none">
+        <input type="text" id="search-input" placeholder="Buscar retail o cliente...">
+      </div>
+      <div class="retail-list" id="retail-list">
+        <div class="no-data">Carga datos y selecciona un día del calendario</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Configuración ─────────────────────────────────────────────────────
+var isLocal = (window.location.protocol === 'file:');
+var API_PROXY = '/api/calendario-pallets-proxy';
+
+// ─── Estado ────────────────────────────────────────────────────────────
+var DATA = {};
+var viewYear, viewMonth, selectedDate = null;
+
+var MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+var DOW = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+
+// ─── Helpers ───────────────────────────────────────────────────────────
+function $(id) { return document.getElementById(id); }
+function setStatus(tipo, msg) {
+  var el = $('status');
+  el.className = 'status ' + tipo;
+  el.innerHTML = (tipo === 'loading' ? '<span class="spinner"></span> ' : '') + msg;
+}
+function fmtNum(n) { return (n == null) ? '—' : Number(n).toLocaleString('es-CL'); }
+function fmtISO(d) {
+  var y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), dd = String(d.getDate()).padStart(2,'0');
+  return y + '-' + m + '-' + dd;
+}
+function fmtDDMMYYYY(iso) {
+  // "2026-05-10" → "10-05-2026"
+  var p = iso.split('-');
+  return p[2] + '-' + p[1] + '-' + p[0];
+}
+function fmtRange(a, b) {
+  var pa = a.split('-'), pb = b.split('-');
+  var ma = MESES[parseInt(pa[1],10)-1].slice(0,3);
+  var mb = MESES[parseInt(pb[1],10)-1].slice(0,3);
+  return parseInt(pa[2],10) + ' ' + ma + ' - ' + parseInt(pb[2],10) + ' ' + mb + ' ' + pb[0];
+}
+function heatClass(p) {
+  if (p === 0) return '';
+  if (p < 200) return 'heat-1';
+  if (p < 1000) return 'heat-2';
+  if (p < 3000) return 'heat-3';
+  return 'heat-4';
+}
+
+// ─── Defaults: últimos 6 meses ─────────────────────────────────────────
+function setDefaultRange() {
+  var hoy = new Date();
+  var desde = new Date(hoy.getFullYear(), hoy.getMonth() - 6, 1);
+  $('fechaDesde').value = fmtISO(desde);
+  $('fechaHasta').value = fmtISO(hoy);
+}
+
+// ─── Carga de datos ────────────────────────────────────────────────────
+function cargarDatos() {
+  var desde = $('fechaDesde').value;
+  var hasta = $('fechaHasta').value;
+  if (!desde || !hasta) { setStatus('err','Selecciona ambas fechas'); return; }
+  if (desde > hasta)    { setStatus('err','Fecha "desde" debe ser anterior a "hasta"'); return; }
+
+  $('btnCargar').disabled = true;
+  setStatus('loading', 'Consultando M3Link…');
+
+  var url = API_PROXY + '?fechaInicial=' + fmtDDMMYYYY(desde) + '&fechaFinal=' + fmtDDMMYYYY(hasta);
+
+  fetch(url)
+    .then(function (r) { return r.json(); })
+    .then(function (resp) {
+      if (!resp.ok) throw new Error(resp.error || 'Respuesta inválida');
+      DATA = resp.calendario || {};
+      var meta = resp.metadata || {};
+      var res  = resp.resumen  || {};
+      setStatus('ok', 'OK · ' + fmtNum(meta.registrosProcesados) + ' transferencias procesadas (' + fmtNum(meta.registrosCrudos) + ' crudas del API)');
+      pintarStats(res);
+      // Saltar al mes más cargado o al primero con datos
+      var fechas = Object.keys(DATA).sort();
+      if (fechas.length) {
+        var first = new Date(fechas[0] + 'T00:00:00');
+        viewYear = first.getFullYear(); viewMonth = first.getMonth();
+      }
+      renderCalendar();
+    })
+    .catch(function (e) {
+      setStatus('err', 'Error: ' + e.message);
+      console.error(e);
+    })
+    .then(function () { $('btnCargar').disabled = false; });
+}
+
+function pintarStats(r) {
+  $('stat-pallets').textContent = fmtNum(r.totalPallets);
+  $('stat-trf').textContent     = fmtNum(r.totalTrf);
+  $('stat-dias').textContent    = fmtNum(r.totalDias);
+  $('stat-rango').textContent   = (r.fechaMin && r.fechaMax) ? fmtRange(r.fechaMin, r.fechaMax) : '—';
+}
+
+// ─── Calendario ────────────────────────────────────────────────────────
+function renderCalendar() {
+  $('month-label').textContent = MESES[viewMonth] + ' ' + viewYear;
+  var grid = $('cal-grid'); grid.innerHTML = '';
+  for (var i = 0; i < DOW.length; i++) {
+    var d = document.createElement('div'); d.className = 'dow'; d.textContent = DOW[i]; grid.appendChild(d);
+  }
+  var first = new Date(viewYear, viewMonth, 1);
+  var startDow = first.getDay() - 1; if (startDow < 0) startDow = 6;
+  var daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  for (var i = 0; i < startDow; i++) {
+    var e = document.createElement('div'); e.className = 'day empty'; grid.appendChild(e);
+  }
+  var todayStr = fmtISO(new Date());
+  for (var d = 1; d <= daysInMonth; d++) {
+    var dt = new Date(viewYear, viewMonth, d);
+    var key = fmtISO(dt);
+    var info = DATA[key];
+    var div = document.createElement('div');
+    div.className = 'day';
+    if (info) {
+      div.classList.add('has-data');
+      div.classList.add(heatClass(info.total_pallets));
+    }
+    if (key === selectedDate) div.classList.add('selected');
+    var html = '<div class="day-num">' + d + '</div>';
+    if (info) {
+      html += '<div class="day-data"><div class="day-pallets">' + fmtNum(info.total_pallets) + '</div>' +
+              '<div class="day-retails">' + info.retails.length + ' retail' + (info.retails.length>1?'s':'') + '</div></div>';
+    }
+    div.innerHTML = html;
+    if (info) {
+      (function(k) { div.onclick = function() { selectDate(k); }; })(key);
+    }
+    grid.appendChild(div);
+  }
+}
+
+function changeMonth(delta) {
+  viewMonth += delta;
+  if (viewMonth < 0)  { viewMonth = 11; viewYear--; }
+  if (viewMonth > 11) { viewMonth = 0;  viewYear++; }
+  renderCalendar();
+}
+
+function goToday() {
+  var t = new Date();
+  viewYear = t.getFullYear(); viewMonth = t.getMonth();
+  renderCalendar();
+}
+
+function selectDate(key) {
+  selectedDate = key;
+  var info = DATA[key];
+  if (!info) return;
+  var dt = new Date(key + 'T00:00:00');
+  $('detail-title').textContent = '📦 Retiros para ' + dt.getDate() + ' de ' + MESES[dt.getMonth()];
+  $('detail-date').textContent  = dt.toLocaleDateString('es-CL', { weekday: 'long' }) + ' · ' + key;
+  $('detail-summary').style.display = 'grid';
+  $('search-box').style.display = 'block';
+  $('ds-pallets').textContent = fmtNum(info.total_pallets);
+  $('ds-trf').textContent     = fmtNum(info.total_trf);
+  renderRetails(info.retails, '');
+  renderCalendar();
+}
+
+function renderRetails(retails, filter) {
+  var list = $('retail-list');
+  var f = (filter || '').toLowerCase().trim();
+  var filtered = retails.map(function (r) {
+    var matchR = r.retail.toLowerCase().indexOf(f) !== -1;
+    var clis = r.clientes.filter(function (c) { return matchR || c.cliente.toLowerCase().indexOf(f) !== -1; });
+    if (matchR || clis.length) return {
+      retail: r.retail, pallets: r.pallets, trf: r.trf,
+      clientes: matchR ? r.clientes : clis
+    };
+    return null;
+  }).filter(Boolean);
+
+  if (!filtered.length) { list.innerHTML = '<div class="no-data">Sin coincidencias</div>'; return; }
+
+  var html = '';
+  for (var i = 0; i < filtered.length; i++) {
+    var r = filtered[i];
+    html += '<div class="retail">' +
+      '<div class="retail-head" onclick="this.parentNode.classList.toggle(\'open\')">' +
+        '<div class="retail-name">' + escapeHtml(r.retail) + '</div>' +
+        '<div><span class="retail-pallets">' + fmtNum(r.pallets) + '</span>' +
+        '<span class="retail-trf">' + r.trf + ' trf</span>' +
+        '<span class="retail-chev">▸</span></div>' +
+      '</div>' +
+      '<div class="clientes-list">';
+    for (var j = 0; j < r.clientes.length; j++) {
+      var c = r.clientes[j];
+      var tagDefault = (c.origen && c.origen !== 'exacto') ?
+        '<span class="tag-default" title="Días tomados de default por retail">⚠ ' + c.origen + '</span>' : '';
+      html += '<div class="cliente-row">' +
+        '<div><div class="cliente-name">' + escapeHtml(c.cliente) + '</div>' +
+        '<div class="cliente-meta">' + c.dias + ' días · ' + c.trf + ' trf ' + tagDefault + '</div></div>' +
+        '<div class="cliente-pallets">' + fmtNum(c.pallets) + '</div>' +
+      '</div>';
+    }
+    html += '</div></div>';
+  }
+  list.innerHTML = html;
+}
+
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, function (m) {
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m];
+  });
+}
+
+// ─── Init ──────────────────────────────────────────────────────────────
+$('btnCargar').onclick = cargarDatos;
+$('btnHoy').onclick    = goToday;
+$('search-input').addEventListener('input', function (e) {
+  if (selectedDate && DATA[selectedDate]) renderRetails(DATA[selectedDate].retails, e.target.value);
+});
+setDefaultRange();
+var hoy = new Date();
+viewYear = hoy.getFullYear(); viewMonth = hoy.getMonth();
+renderCalendar();
+setStatus('idle', 'Selecciona un rango y presiona "Cargar datos"');
+</script>
+
+</body>
+</html>

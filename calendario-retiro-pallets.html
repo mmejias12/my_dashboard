@@ -583,7 +583,28 @@ function cargarDatos() {
   var url = API_PROXY + '?fechaInicio=' + desde + '&fechaFin=' + hasta;
 
   fetch(url)
-    .then(function (r) { return r.json(); })
+    .then(function (r) {
+      // Si la respuesta no es JSON (ej. "Backend call failure" o HTML de error),
+      // capturar el texto plano para mostrar mensaje útil
+      var ct = r.headers.get('content-type') || '';
+      if (!r.ok || ct.indexOf('json') === -1) {
+        return r.text().then(function (txt) {
+          var snip = (txt || '').substring(0, 200).replace(/\s+/g, ' ').trim();
+          var msg = 'HTTP ' + r.status;
+          if (snip) msg += ' — ' + snip;
+          // Diagnóstico amigable para errores conocidos
+          if (snip.toLowerCase().indexOf('backend call failure') !== -1) {
+            msg = 'El servidor del API M3Link no responde (Backend call failure). ' +
+                  'El servicio backend probablemente está caído. Intenta más tarde o contacta a soporte M3Link.';
+          } else if (r.status === 502 || r.status === 503 || r.status === 504) {
+            msg = 'API M3Link no disponible (HTTP ' + r.status + '). ' +
+                  'El servicio backend está caído o muy lento. Intenta más tarde.';
+          }
+          throw new Error(msg);
+        });
+      }
+      return r.json();
+    })
     .then(function (resp) {
       if (!resp.ok) throw new Error(resp.error || 'Respuesta inválida');
       DATA = resp.calendario || {};
@@ -694,6 +715,11 @@ function selectDate(key) {
   renderCalendar();
 }
 
+// Caché del último resultado filtrado, para que el modal pueda buscar
+// por índice en vez de por nombre (evita bugs con apóstrofes/comillas
+// en nombres como D'AGOSTINI, O'HIGGINS, etc.)
+var FILTERED_RETAILS = [];
+
 function renderRetails(retails, filter) {
   var list = $('retail-list');
   var f = (filter || '').toLowerCase().trim();
@@ -706,6 +732,9 @@ function renderRetails(retails, filter) {
     };
     return null;
   }).filter(Boolean);
+
+  // Guardar en caché para el modal
+  FILTERED_RETAILS = filtered;
 
   if (!filtered.length) { list.innerHTML = '<div class="no-data">Sin coincidencias</div>'; return; }
 
@@ -724,7 +753,9 @@ function renderRetails(retails, filter) {
       var c = r.clientes[j];
       var tagDefault = (c.origen && c.origen !== 'exacto') ?
         '<span class="tag-default" title="Días tomados de default por retail">⚠ ' + c.origen + '</span>' : '';
-      html += '<div class="cliente-row" onclick="abrirModalBodegas(\'' + escapeAttr(r.retail) + '\',\'' + escapeAttr(c.cliente) + '\')" title="Ver detalle de bodegas">' +
+      // Pasamos índices (i,j) en lugar de strings — evita bugs con
+      // apóstrofes/comillas en nombres
+      html += '<div class="cliente-row" onclick="abrirModalBodegas(' + i + ',' + j + ')" title="Ver detalle de bodegas">' +
         '<div><div class="cliente-name">' + escapeHtml(c.cliente) + '</div>' +
         '<div class="cliente-meta">' + c.dias + ' días · ' + c.trf + ' trf ' + tagDefault + '</div></div>' +
         '<div><span class="cliente-pallets">' + fmtNum(c.pallets) + '</span><span class="cliente-arrow">▸</span></div>' +
@@ -736,22 +767,23 @@ function renderRetails(retails, filter) {
 }
 
 // ─── Modal detalle de bodegas ──────────────────────────────────────────
-function abrirModalBodegas(retail, cliente) {
+function abrirModalBodegas(retailIdx, clienteIdx) {
   if (!selectedDate || !DATA[selectedDate]) return;
-  var dia = DATA[selectedDate];
 
-  // Buscar el cliente dentro del retail
-  var retailObj = null;
-  for (var i = 0; i < dia.retails.length; i++) {
-    if (dia.retails[i].retail === retail) { retailObj = dia.retails[i]; break; }
+  // Buscar en el caché de filtrados (mismo array que renderizó renderRetails)
+  var retailObj = FILTERED_RETAILS[retailIdx];
+  if (!retailObj) {
+    console.warn('Retail no encontrado en caché, idx=', retailIdx);
+    return;
   }
-  if (!retailObj) return;
+  var clienteObj = retailObj.clientes[clienteIdx];
+  if (!clienteObj || !clienteObj.detalle) {
+    console.warn('Cliente sin detalle, idx=', clienteIdx, clienteObj);
+    return;
+  }
 
-  var clienteObj = null;
-  for (var j = 0; j < retailObj.clientes.length; j++) {
-    if (retailObj.clientes[j].cliente === cliente) { clienteObj = retailObj.clientes[j]; break; }
-  }
-  if (!clienteObj || !clienteObj.detalle) return;
+  var retail  = retailObj.retail;
+  var cliente = clienteObj.cliente;
 
   // Header del modal
   var dt = new Date(selectedDate + 'T00:00:00');

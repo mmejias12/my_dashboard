@@ -1,13 +1,13 @@
 // ─────────────────────────────────────────────────────────────────────────
 // Azure Function: calendario-pallets-proxy
 // ─────────────────────────────────────────────────────────────────────────
-// Llama al API M3Link (OpsXRangoFechas), filtra transferencias cerradas,
-// cruza con la tabla de retención y devuelve datos agregados listos para
-// pintar el calendario.
+// Llama al API M3Link (token-based, mismo patrón que /proxy/ops), filtra
+// transferencias cerradas, cruza con la tabla de retención y devuelve datos
+// agregados listos para pintar el calendario.
 //
 // Query params:
-//   fechaInicial=DD-MM-YYYY  (rango de Fecha Confirmación)
-//   fechaFinal=DD-MM-YYYY
+//   fechaInicio=YYYY-MM-DD
+//   fechaFin=YYYY-MM-DD
 //
 // Responde JSON:
 //   {
@@ -21,39 +21,41 @@
 var https = require('https');
 var retencion = require('./retencion.json');
 
+// Mismo endpoint que usa el dashboard M3Link actual (con token en path)
 var API_HOST = 'apirdt1.azurewebsites.net';
-var API_PATH = '/api/Operaciones/OpsXRangoFechas';
+var API_PATH = '/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRangoFechas';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
-// Convierte "DD-MM-YYYY" o "01-01-2026, 12:00:00 a. m." a Date (UTC mediodía
-// para evitar problemas de zona horaria Chile UTC-4)
+// Convierte el formato del API M3Link (puede venir como "DD-MM-YYYY",
+// "DD-MM-YYYY, HH:MM:SS a. m." o ISO) a Date UTC mediodía
 function parseFechaM3(s) {
   if (!s) return null;
   var clean = String(s).split(',')[0].trim();
+  // Caso 1: ISO "YYYY-MM-DD..."
+  if (/^\d{4}-\d{2}-\d{2}/.test(clean)) {
+    var p = clean.substring(0, 10).split('-');
+    return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2], 12, 0, 0));
+  }
+  // Caso 2: "DD-MM-YYYY"
   var parts = clean.split('-');
-  if (parts.length !== 3) return null;
-  var d = parseInt(parts[0], 10);
-  var m = parseInt(parts[1], 10) - 1;
-  var y = parseInt(parts[2], 10);
-  return new Date(Date.UTC(y, m, d, 12, 0, 0));
+  if (parts.length === 3 && parts[2].length === 4) {
+    return new Date(Date.UTC(+parts[2], +parts[1] - 1, +parts[0], 12, 0, 0));
+  }
+  return null;
 }
 
-// Formatea Date a "YYYY-MM-DD"
 function fmtISO(d) {
   if (!d) return null;
-  var y = d.getUTCFullYear();
-  var m = String(d.getUTCMonth() + 1).padStart(2, '0');
-  var dd = String(d.getUTCDate()).padStart(2, '0');
-  return y + '-' + m + '-' + dd;
+  return d.getUTCFullYear() + '-' +
+    String(d.getUTCMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getUTCDate()).padStart(2, '0');
 }
 
-// Resuelve días de retención para un par (cliente, retail)
-//   1. Lookup exacto en retencion.lookup
-//   2. Fallback a defaultPorRetail
-//   3. Fallback a defaultGlobal
+// Resuelve días de retención: lookup exacto → default por retail → default global
 function resolverDias(cliente, retail) {
-  if (!cliente || !retail) return retencion.metadata.defaultGlobal;
+  var def = retencion.metadata.defaultGlobal;
+  if (!cliente || !retail) return { dias: def, origen: 'default_global' };
   var c = String(cliente).trim();
   var r = String(retail).trim();
   if (retencion.lookup[c] && retencion.lookup[c][r] != null) {
@@ -62,22 +64,20 @@ function resolverDias(cliente, retail) {
   if (retencion.defaultPorRetail[r] != null) {
     return { dias: retencion.defaultPorRetail[r], origen: 'default_retail' };
   }
-  return { dias: retencion.metadata.defaultGlobal, origen: 'default_global' };
+  return { dias: def, origen: 'default_global' };
 }
 
-// Suma días a una fecha (UTC para no derrapar por DST)
 function addDays(d, days) {
-  if (!d) return null;
   var r = new Date(d.getTime());
   r.setUTCDate(r.getUTCDate() + days);
   return r;
 }
 
 // ─── Llamada al API M3Link ───────────────────────────────────────────────
-function fetchM3(fechaInicial, fechaFinal) {
+function fetchM3(fechaInicio, fechaFin) {
   return new Promise(function (resolve, reject) {
-    var qs = '?fechaInicial=' + encodeURIComponent(fechaInicial) +
-             '&fechaFinal='   + encodeURIComponent(fechaFinal);
+    var qs = '?fechaInicio=' + encodeURIComponent(fechaInicio) +
+             '&fechaFin='    + encodeURIComponent(fechaFin);
     var options = {
       host:   API_HOST,
       path:   API_PATH + qs,
@@ -92,54 +92,46 @@ function fetchM3(fechaInicial, fechaFinal) {
           return reject(new Error('M3Link respondió ' + res.statusCode));
         }
         try {
-          var body = Buffer.concat(chunks).toString('utf8');
-          resolve(JSON.parse(body));
+          resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
         } catch (e) {
           reject(new Error('JSON inválido del API: ' + e.message));
         }
       });
     });
     req.on('error', reject);
-    req.setTimeout(60000, function () { req.destroy(new Error('Timeout API M3Link')); });
+    req.setTimeout(120000, function () { req.destroy(new Error('Timeout API M3Link (120s)')); });
     req.end();
   });
 }
 
 // ─── Agregación ──────────────────────────────────────────────────────────
 function agregar(items) {
-  // items: array crudo del API M3Link
-  // Devuelve { calendario, resumen }
-
-  var calendario = {};         // { fecha: { total_pallets, total_trf, retails: {} } }
+  var calendario = {};
   var totalPallets = 0;
   var totalTrf = 0;
   var fechasSet = new Set();
+  var omitidos = { sinFecha: 0, sinPallets: 0, etapaNoCerrada: 0, noTransferencia: 0 };
 
   for (var i = 0; i < items.length; i++) {
     var it = items[i];
 
-    // Filtros
-    if (!it.etapaOperacion) continue;
+    if (!it.etapaOperacion) { omitidos.etapaNoCerrada++; continue; }
     var etapa = String(it.etapaOperacion).toLowerCase();
-    if (etapa.indexOf('cerrada') === -1) continue;          // solo Transferencia Cerrada
-    if (!it.operacion || String(it.operacion).toLowerCase().indexOf('transferencia') === -1) continue;
+    if (etapa.indexOf('cerrada') === -1) { omitidos.etapaNoCerrada++; continue; }
+    if (!it.operacion || String(it.operacion).toLowerCase().indexOf('transferencia') === -1) {
+      omitidos.noTransferencia++; continue;
+    }
 
     var fConf = parseFechaM3(it.fechaConfirmacion);
-    if (!fConf) continue;
+    if (!fConf) { omitidos.sinFecha++; continue; }
+
+    var pallets = parseInt(it.cantidadConfirmada, 10);
+    if (!pallets || pallets <= 0) { omitidos.sinPallets++; continue; }
 
     var cliente = it.clienteOrigenStr;
     var retail  = it.clienteDestinoStr;
-    // Solo proyectamos retiro si efectivamente se confirmó la recepción en
-    // el retail (Confirmada > 0). Las cerradas con Confirmada=0 son casos
-    // de rechazo/rebote y no representan pallets que vayan a retornar.
-    var pallets = parseInt(it.cantidadConfirmada, 10);
-    if (!pallets || pallets <= 0) continue;
-
     var dr = resolverDias(cliente, retail);
-    var dias = (typeof dr === 'object') ? dr.dias : dr;
-    var origenLookup = (typeof dr === 'object') ? dr.origen : 'default_global';
-
-    var fechaRetiro = addDays(fConf, dias);
+    var fechaRetiro = addDays(fConf, dr.dias);
     var key = fmtISO(fechaRetiro);
     if (!key) continue;
     fechasSet.add(key);
@@ -158,9 +150,9 @@ function agregar(items) {
     rd.pallets += pallets;
     rd.trf += 1;
 
-    var ckey = cliente + '||' + dias;
+    var ckey = cliente + '||' + dr.dias;
     if (!rd._clientes[ckey]) {
-      rd._clientes[ckey] = { cliente: cliente, dias: dias, pallets: 0, trf: 0, origen: origenLookup };
+      rd._clientes[ckey] = { cliente: cliente, dias: dr.dias, pallets: 0, trf: 0, origen: dr.origen };
     }
     rd._clientes[ckey].pallets += pallets;
     rd._clientes[ckey].trf += 1;
@@ -169,7 +161,7 @@ function agregar(items) {
     totalTrf += 1;
   }
 
-  // Convertir objetos a arrays ordenados
+  // Convertir objetos a arrays ordenados (mayor volumen primero)
   var calOut = {};
   Object.keys(calendario).forEach(function (k) {
     var dia = calendario[k];
@@ -192,14 +184,14 @@ function agregar(items) {
       totalDias: fechas.length,
       fechaMin: fechas[0] || null,
       fechaMax: fechas[fechas.length - 1] || null
-    }
+    },
+    omitidos: omitidos
   };
 }
 
 // ─── Handler ─────────────────────────────────────────────────────────────
 module.exports = async function (context, req) {
 
-  // CORS preflight
   if (req.method === 'OPTIONS') {
     context.res = {
       status: 200,
@@ -213,27 +205,26 @@ module.exports = async function (context, req) {
     return;
   }
 
-  var fechaInicial = (req.query && req.query.fechaInicial) ? req.query.fechaInicial : '';
-  var fechaFinal   = (req.query && req.query.fechaFinal)   ? req.query.fechaFinal   : '';
+  var fechaInicio = (req.query && req.query.fechaInicio) ? req.query.fechaInicio : '';
+  var fechaFin    = (req.query && req.query.fechaFin)    ? req.query.fechaFin    : '';
 
-  if (!fechaInicial || !fechaFinal) {
+  if (!fechaInicio || !fechaFin) {
     context.res = {
       status: 400,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      body: { ok: false, error: 'Faltan parámetros fechaInicial / fechaFinal (formato DD-MM-YYYY)' }
+      body: { ok: false, error: 'Faltan parámetros fechaInicio / fechaFin (formato YYYY-MM-DD)' }
     };
     return;
   }
 
   try {
-    context.log('Llamando M3Link:', fechaInicial, 'a', fechaFinal);
-    var raw = await fetchM3(fechaInicial, fechaFinal);
-
-    // El API M3Link puede devolver array directo o { data: [...] }; normalizar
+    context.log('Llamando M3Link:', fechaInicio, 'a', fechaFin);
+    var raw = await fetchM3(fechaInicio, fechaFin);
     var items = Array.isArray(raw) ? raw : (raw && raw.data) ? raw.data : [];
     context.log('Registros recibidos del API:', items.length);
 
     var agg = agregar(items);
+    context.log('Procesados:', agg.resumen.totalTrf, 'Omitidos:', JSON.stringify(agg.omitidos));
 
     context.res = {
       status: 200,
@@ -245,11 +236,12 @@ module.exports = async function (context, req) {
       body: {
         ok: true,
         metadata: {
-          fechaInicial: fechaInicial,
-          fechaFinal:   fechaFinal,
+          fechaInicio: fechaInicio,
+          fechaFin:    fechaFin,
           tablaRetencion: retencion.metadata,
           registrosCrudos: items.length,
-          registrosProcesados: agg.resumen.totalTrf
+          registrosProcesados: agg.resumen.totalTrf,
+          omitidos: agg.omitidos
         },
         calendario: agg.calendario,
         resumen:    agg.resumen

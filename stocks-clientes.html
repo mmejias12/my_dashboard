@@ -98,6 +98,42 @@
   .cut-date-box.active .cut-date-clear { display:inline-block; }
   .cut-date-clear:hover { background:var(--bg-hover); color:var(--text-primary); }
   .cut-date-info { font-size:11.5px; color:var(--accent); font-weight:500; margin-left:8px; }
+  /* Botones navegación fecha (◀ ▶) */
+  .nav-day-btn {
+    background: var(--bg-input); border:1px solid var(--border-md);
+    color: var(--text-primary); width:30px; height:30px;
+    border-radius:6px; cursor:pointer; font-size:13px;
+    display:inline-flex; align-items:center; justify-content:center;
+    transition: background .12s, border-color .12s;
+  }
+  .nav-day-btn:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--accent); }
+  .nav-day-btn:disabled { opacity:.35; cursor:not-allowed; }
+  /* Menú "⋮ más opciones" */
+  .menu-wrap { position:relative; display:inline-block; }
+  .menu-btn { padding:6px 10px !important; font-weight:700; font-size:14px; line-height:1; }
+  .more-menu {
+    display:none; position:absolute; top:calc(100% + 4px); right:0;
+    background: var(--bg-card); border:1px solid var(--border-md);
+    border-radius:8px; padding:6px;
+    min-width: 280px; z-index: 200;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .more-menu.open { display:block; }
+  .more-menu-title {
+    font-size:10px; text-transform:uppercase; letter-spacing:.6px;
+    color: var(--text-muted); padding:6px 10px 4px; font-weight:600;
+  }
+  .menu-item {
+    display:flex; gap:10px; width:100%; text-align:left;
+    background:transparent; border:none; color: var(--text-primary);
+    padding:8px 10px; border-radius:6px; cursor:pointer;
+    font-family:inherit;
+  }
+  .menu-item:hover { background: var(--bg-hover); }
+  .mi-ico { font-size:16px; line-height:1; padding-top:2px; }
+  .mi-text { display:flex; flex-direction:column; gap:2px; }
+  .mi-title { font-size:12.5px; font-weight:500; }
+  .mi-sub { font-size:10.5px; color: var(--text-muted); }
   /* Banner del snapshot */
   .snap-banner {
     display:flex; align-items:center; gap:10px;
@@ -225,17 +261,38 @@
 
       <button id="btn-load" class="btn" onclick="cargarSnapshot()" title="Cargar snapshot precalculado (instantáneo)">📊 Cargar snapshot</button>
       <button id="btn-refresh-2026" class="btn btn-sec" onclick="refrescarMovimientos2026()" title="Refresca solo los movimientos 2026 (rápido)">🔄 Actualizar 2026</button>
-      <button class="btn btn-sec" onclick="cargarDatos(true)" title="Consulta directa al SAP en tiempo real (lento por cold start)">⚡ Tiempo real</button>
       <button class="btn btn-sec" onclick="exportarExcel()">↓ Excel</button>
+      <div class="menu-wrap">
+        <button id="btn-more" class="btn btn-sec menu-btn" onclick="toggleMenu(event)" title="Más opciones" aria-haspopup="true">⋮</button>
+        <div id="more-menu" class="more-menu">
+          <div class="more-menu-title">Modo avanzado</div>
+          <button class="menu-item" onclick="closeMenu();cargarDatos(true)" title="Fuerza una consulta directa al SAP (cold start ~30s). Usar solo para reconciliar datos.">
+            <span class="mi-ico">⚡</span>
+            <span class="mi-text">
+              <span class="mi-title">Consultar SAP en tiempo real</span>
+              <span class="mi-sub">Lento (~30s) · solo para reconciliar</span>
+            </span>
+          </button>
+          <button class="menu-item" onclick="closeMenu();limpiarCacheLocal()" title="Borrar cache del navegador">
+            <span class="mi-ico">🗑</span>
+            <span class="mi-text">
+              <span class="mi-title">Limpiar cache local</span>
+              <span class="mi-sub">Forzar carga limpia del snapshot</span>
+            </span>
+          </button>
+        </div>
+      </div>
     </div>
 
-    <!-- Segunda fila: filtro fecha de corte -->
+    <!-- Segunda fila: filtro fecha de corte con navegación -->
     <div class="filters-row" style="margin-top:10px">
       <span class="filter-lbl">📅 Stock al:</span>
+      <button id="cut-prev" class="nav-day-btn" onclick="moverFecha(-1)" title="Día anterior (←)" disabled>◀</button>
       <div class="cut-date-box" id="cut-date-box">
         <input type="date" id="cut-date" min="2026-01-01" placeholder="Hoy (sin filtro)">
-        <button class="cut-date-clear" id="cut-date-clear" onclick="limpiarFechaCorte()" title="Quitar filtro de fecha">✕</button>
+        <button class="cut-date-clear" id="cut-date-clear" onclick="limpiarFechaCorte()" title="Quitar filtro (Esc)">✕</button>
       </div>
+      <button id="cut-next" class="nav-day-btn" onclick="moverFecha(1)" title="Día siguiente (→)" disabled>▶</button>
       <span id="cut-date-info" class="cut-date-info"></span>
     </div>
   </div>
@@ -450,7 +507,7 @@ async function cargarSnapshot() {
     procesarYRender();
   } catch (e) {
     console.error('[Stocks] cargarSnapshot:', e);
-    setStatus('err', 'Error cargando snapshot: ' + (e.message || e) + ' · Probá "⚡ Tiempo real"');
+    setStatus('err', 'Error cargando snapshot: ' + (e.message || e) + ' · Probá el menú ⋮ → Consultar SAP en tiempo real');
   } finally {
     hideOverlay();
   }
@@ -582,10 +639,70 @@ function setFechaCorte(iso) {
     info.textContent = '';
     try { localStorage.removeItem(SHARED_DATE_KEY); } catch (e) {}
   }
+  actualizarBotonesNav();
   if (raw && raw.length) procesarYRender();
 }
 
 function limpiarFechaCorte() { setFechaCorte(null); }
+
+// Mover fecha de corte +/- N días (con clamp a [2026-01-01, hoy])
+function moverFecha(deltaDias) {
+  var base = fechaCorte || new Date().toISOString().substring(0, 10);
+  var d = new Date(base + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + deltaDias);
+  var iso = d.toISOString().substring(0, 10);
+  var hoy = new Date().toISOString().substring(0, 10);
+  if (iso < '2026-01-01') iso = '2026-01-01';
+  if (iso > hoy) iso = hoy;
+  setFechaCorte(iso);
+}
+
+// Habilitar/deshabilitar ◀ ▶ según extremos
+function actualizarBotonesNav() {
+  var prev = $('cut-prev'), next = $('cut-next');
+  if (!prev || !next) return;
+  if (!fechaCorte) { prev.disabled = false; next.disabled = false; return; }
+  prev.disabled = fechaCorte <= '2026-01-01';
+  next.disabled = fechaCorte >= new Date().toISOString().substring(0, 10);
+}
+
+// Menú "⋮ más opciones"
+function toggleMenu(e) {
+  if (e) { e.stopPropagation(); }
+  $('more-menu').classList.toggle('open');
+}
+function closeMenu() { $('more-menu').classList.remove('open'); }
+
+// Cierra menú si se hace click afuera
+document.addEventListener('click', function(e) {
+  var menu = $('more-menu');
+  var btn = $('btn-more');
+  if (menu && menu.classList.contains('open') &&
+      !menu.contains(e.target) && e.target !== btn) {
+    menu.classList.remove('open');
+  }
+});
+
+// Limpiar cache local (snapshot + movs)
+function limpiarCacheLocal() {
+  try {
+    localStorage.removeItem(CACHE_KEY);
+    localStorage.removeItem(MOVS_CACHE_KEY);
+    localStorage.removeItem(SHARED_DATE_KEY);
+  } catch (e) {}
+  setStatus('ok', '✓ Cache local borrado. Recargando snapshot…');
+  setTimeout(cargarSnapshot, 300);
+}
+
+// Atajos de teclado: ← → mueven fecha, Esc limpia filtro
+document.addEventListener('keydown', function(e) {
+  // No actuar si el foco está en un input/textarea
+  var t = e.target.tagName;
+  if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') return;
+  if (e.key === 'ArrowLeft')  { e.preventDefault(); moverFecha(-1); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); moverFecha(1); }
+  else if (e.key === 'Escape' && fechaCorte) { e.preventDefault(); limpiarFechaCorte(); }
+});
 
 function restaurarFechaCorteCompartida() {
   try {

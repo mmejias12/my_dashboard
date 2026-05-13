@@ -266,13 +266,6 @@
         <button id="btn-more" class="btn btn-sec menu-btn" onclick="toggleMenu(event)" title="Más opciones" aria-haspopup="true">⋮</button>
         <div id="more-menu" class="more-menu">
           <div class="more-menu-title">Modo avanzado</div>
-          <button class="menu-item" onclick="closeMenu();cargarDatos(true)" title="Fuerza una consulta directa al SAP (cold start ~30s). Usar solo para reconciliar datos.">
-            <span class="mi-ico">⚡</span>
-            <span class="mi-text">
-              <span class="mi-title">Consultar SAP en tiempo real</span>
-              <span class="mi-sub">Lento (~30s) · solo para reconciliar</span>
-            </span>
-          </button>
           <button class="menu-item" onclick="closeMenu();limpiarCacheLocal()" title="Borrar cache del navegador">
             <span class="mi-ico">🗑</span>
             <span class="mi-text">
@@ -461,7 +454,10 @@ function hideOverlay() {
   $('logo-img').classList.remove('spinning');
 }
 
-// Banner snapshot
+// Variables auxiliares para el banner
+var movsMeta = null; // metadata de los movimientos (timestamp del refresh)
+
+// Banner snapshot enriquecido
 function actualizarBannerSnapshot() {
   if (!snapshotMeta) {
     $('snapshot-banner').style.display = 'none';
@@ -469,7 +465,25 @@ function actualizarBannerSnapshot() {
   }
   var d = new Date(snapshotMeta.generadoEn);
   var hr = d.toLocaleString('es-CL', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit', hour12:false });
-  $('snap-text').textContent = 'Datos del ' + hr + ' · ' + (snapshotMeta.total_combinaciones || raw.length) + ' combinaciones';
+  var txt = '<strong>Snapshot</strong> ' + hr + ' · ' + (snapshotMeta.total_combinaciones || raw.length) + ' comb';
+
+  // Si tenemos movimientos con timestamp más nuevo que el snapshot, mostrarlo
+  if (movsMeta && movsMeta.generadoEn) {
+    var mDate = new Date(movsMeta.generadoEn);
+    if (mDate > d) {
+      var mhr = mDate.toLocaleString('es-CL', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit', hour12:false });
+      // Contar movimientos posteriores al snapshot (los que se están sumando)
+      var fechaSnap = d.toISOString().substring(0, 10);
+      var postCount = 0;
+      for (var i = 0; i < movs2026.length; i++) {
+        if (movs2026[i].fecha && movs2026[i].fecha > fechaSnap) postCount++;
+      }
+      txt += ' · <strong style="color:var(--accent)">🔄 Movs ' + mhr + '</strong>';
+      if (postCount > 0) txt += ' <span style="color:var(--text-secondary)">(+' + postCount + ' post-snapshot)</span>';
+    }
+  }
+
+  $('snap-text').innerHTML = txt;
   $('snapshot-banner').style.display = 'flex';
 }
 
@@ -495,6 +509,7 @@ async function cargarSnapshot() {
     raw = stockData.items || [];
     movs2026 = movsData.items || [];
     snapshotMeta = stockData._meta || null;
+    movsMeta = movsData._meta || null;
     cacheSet(raw);
     movsCacheSet(movs2026, movsData._meta);
 
@@ -507,7 +522,7 @@ async function cargarSnapshot() {
     procesarYRender();
   } catch (e) {
     console.error('[Stocks] cargarSnapshot:', e);
-    setStatus('err', 'Error cargando snapshot: ' + (e.message || e) + ' · Probá el menú ⋮ → Consultar SAP en tiempo real');
+    setStatus('err', 'Error cargando snapshot: ' + (e.message || e) + ' · Verificá la conexión o probá "Actualizar 2026"');
   } finally {
     hideOverlay();
   }
@@ -527,9 +542,11 @@ async function refrescarMovimientos2026() {
     if (!data.ok) throw new Error(data.error || 'Error desconocido del proxy');
 
     movs2026 = data.items || [];
-    movsCacheSet(movs2026, { generadoEn: new Date().toISOString(), fuente: 'proxy en vivo' });
+    movsMeta = { generadoEn: new Date().toISOString(), fuente: 'proxy en vivo', total: movs2026.length };
+    movsCacheSet(movs2026, movsMeta);
     var seg = Math.round((data.tomo_ms || 0) / 1000);
-    setStatus('ok', '✓ ' + movs2026.length.toLocaleString('es-CL') + ' movimientos 2026 actualizados · ' + seg + 's');
+    setStatus('ok', '✓ ' + movs2026.length.toLocaleString('es-CL') + ' movimientos 2026 actualizados · ' + seg + 's · stock recalculado al instante');
+    actualizarBannerSnapshot();
 
     procesarYRender();
   } catch (e) {
@@ -598,31 +615,96 @@ async function cargarDatos(forzarRefresh) {
 //                + SUM(salida de mov con fecha > X)
 // para cada combinación (nombre, bodega, producto)
 
-function aplicarFechaCorte(items) {
-  if (!fechaCorte || !movs2026.length) return items;
-  // Construir índice: clave (nombre|bodega|producto) → {entradaPost, salidaPost}
-  var ajuste = {};
+// ─────────────────────────────────────────────────────────────────────────
+// CÁLCULO DE STOCK con fecha de corte (OPCIÓN A - matemática en cliente)
+// ─────────────────────────────────────────────────────────────────────────
+// Estrategia: el snapshot puede ser de hace varias horas. Los movimientos
+// 2026 pueden ser más frescos (al hacer "Actualizar 2026"). Calculamos:
+//
+//   stock_real_ahora(combinación) = stock_snapshot
+//                                 + SUM(entrada de mov posteriores al snapshot)
+//                                 − SUM(salida de mov posteriores al snapshot)
+//
+//   stock_al_dia_X(combinación) = stock_real_ahora
+//                              − SUM(entrada de mov con fecha > X)
+//                              + SUM(salida de mov con fecha > X)
+//
+// El primer ajuste corrige la desactualización del snapshot.
+// El segundo aplica el filtro de fecha de corte.
+// Si no hay fecha de corte, solo se aplica el primer ajuste (stock al ahora).
+
+// Fecha ISO (YYYY-MM-DD) del snapshot, derivada de _meta.generadoEn
+function fechaSnapshotISO() {
+  if (!snapshotMeta || !snapshotMeta.generadoEn) return null;
+  return new Date(snapshotMeta.generadoEn).toISOString().substring(0, 10);
+}
+
+// Aplica ajustes de movimientos sobre raw. Devuelve items recalculados.
+// Si hay fechaCorte → stock al día X; si no → stock al instante actual.
+function aplicarAjustesStock(items) {
+  if (!movs2026 || !movs2026.length) return items;
+
+  var fechaSnap = fechaSnapshotISO(); // base del baseline
+  if (!fechaSnap) return items;
+
+  // Índice: clave (nombre|bodega|producto) → {ajustePost, ajusteCorte}
+  // ajustePost  = mov DESPUÉS de la fecha del snapshot (sumar al baseline)
+  // ajusteCorte = mov DESPUÉS de la fecha de corte (restar para llegar al día X)
+  var idx = {};
   for (var i = 0; i < movs2026.length; i++) {
     var m = movs2026[i];
-    if (!m.fecha || m.fecha <= fechaCorte) continue; // solo movimientos posteriores
+    if (!m.fecha) continue;
     var k = (m.nombre || '') + '||' + (m.bodega || '') + '||' + (m.producto || '');
-    if (!ajuste[k]) ajuste[k] = { e: 0, s: 0 };
-    ajuste[k].e += Number(m.entrada || 0);
-    ajuste[k].s += Number(m.salida || 0);
+    if (!idx[k]) idx[k] = { postE: 0, postS: 0, corteE: 0, corteS: 0 };
+    var e = Number(m.entrada || 0);
+    var s = Number(m.salida || 0);
+    // Movimientos posteriores al snapshot → sumarlos al baseline para llegar al "ahora"
+    if (m.fecha > fechaSnap) { idx[k].postE += e; idx[k].postS += s; }
+    // Movimientos posteriores a la fecha de corte → restarlos para llegar al día X
+    if (fechaCorte && m.fecha > fechaCorte) { idx[k].corteE += e; idx[k].corteS += s; }
   }
-  // Aplicar ajuste a cada item
-  return items.map(function(r) {
+
+  // Aplicar ajustes a cada item
+  var result = items.map(function (r) {
     var k = (r.nombre || '') + '||' + (r.bodega || '') + '||' + (r.producto || '');
-    var aj = ajuste[k];
-    if (!aj) return r; // sin ajuste = el stock no cambió desde la fecha de corte
+    var aj = idx[k];
+    if (!aj) return r; // sin movimientos = stock del snapshot intacto
+
+    // Paso 1: stock_real_ahora = stock_snapshot + entradas_post − salidas_post
+    var stockAhora = r.stock + aj.postE - aj.postS;
+    // Paso 2: si hay fecha de corte, deshacer movimientos posteriores al corte
+    var stockFinal = fechaCorte ? (stockAhora - aj.corteE + aj.corteS) : stockAhora;
+
     return Object.assign({}, r, {
-      stock: r.stock - aj.e + aj.s,
-      _ajustado: true,
-      _entradaPost: aj.e,
-      _salidaPost: aj.s
+      stock: stockFinal,
+      _stockOriginal: r.stock,
+      _ajustePost: { e: aj.postE, s: aj.postS },
+      _ajusteCorte: fechaCorte ? { e: aj.corteE, s: aj.corteS } : null
     });
-  }).filter(function(r) { return r.stock !== 0; }); // ocultar combinaciones que daban 0 al día X
+  });
+
+  // Sumar combinaciones que están SOLO en movimientos (no en stock baseline)
+  // Caso: combinación con stock=0 hoy pero con movimientos durante 2026
+  // Asunción: si no está en stockActual, su stock al 1-ene-2026 ≈ 0
+  var clavesEnRaw = {};
+  for (var i = 0; i < items.length; i++) {
+    var r = items[i];
+    var k = (r.nombre || '') + '||' + (r.bodega || '') + '||' + (r.producto || '');
+    clavesEnRaw[k] = true;
+  }
+  // (no agregamos huérfanos por defecto — son raros y sus números pueden confundir)
+  // Si en el futuro hace falta, se activa con un flag.
+
+  // Filtrar items con stock 0 SOLO si hay fecha de corte activa
+  // (cuando es vista "al instante", mantener combinaciones aunque den 0 puede ser ruido)
+  if (fechaCorte) {
+    result = result.filter(function (r) { return r.stock !== 0; });
+  }
+  return result;
 }
+
+// Backwards compat: el código ya llamaba aplicarFechaCorte, redirigir
+function aplicarFechaCorte(items) { return aplicarAjustesStock(items); }
 
 function setFechaCorte(iso) {
   fechaCorte = iso || null;
@@ -718,10 +800,15 @@ function restaurarFechaCorteCompartida() {
 // PROCESAMIENTO Y RENDER
 // ─────────────────────────────────────────────────────────────────────────
 
-// Filtra raw por tipo (CLIENTES/RETAIL) y búsqueda
-// Si hay fecha de corte, aplica el recálculo antes del filtro
+// Filtra raw por tipo (CLIENTES/RETAIL) y búsqueda.
+// Aplica los ajustes de stock SIEMPRE que tengamos movimientos posteriores
+// al snapshot (para que el stock mostrado sea "al instante actual") y/o
+// fecha de corte activa.
 function filtrarRaw() {
-  var fuente = fechaCorte ? aplicarFechaCorte(raw) : raw;
+  // Si hay movimientos cargados, siempre intentamos ajustar (es matemáticamente
+  // correcto: actualiza al "ahora" + aplica corte si está activo). Si no hay
+  // movs, usamos el snapshot tal cual.
+  var fuente = (movs2026 && movs2026.length) ? aplicarAjustesStock(raw) : raw;
   var q = ($('busca').value || '').toLowerCase().trim();
   return fuente.filter(function(r) {
     if (r.cliente !== tipoActivo) return false;
@@ -1005,7 +1092,8 @@ window.addEventListener('DOMContentLoaded', function() {
   var movsCache = movsCacheGet();
   if (movsCache) {
     movs2026 = movsCache.items || [];
-    snapshotMeta = movsCache.meta || null;
+    movsMeta = movsCache.meta || null;
+    snapshotMeta = snapshotMeta || movsCache.meta || null;
   }
   var cache = cacheGet();
   if (cache && cache.items && cache.items.length) {

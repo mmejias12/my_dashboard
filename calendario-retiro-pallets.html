@@ -830,16 +830,28 @@ function abrirModalBodegas(retailIdx, clienteIdx) {
         '<table class="detalle-table">' +
           '<thead><tr>' +
             '<th>Nro pedido</th>' +
-            '<th>Fecha confirmación</th>' +
+            '<th>Fecha despacho</th>' +
             '<th>Bodega destino (retail)</th>' +
             '<th style="text-align:right">Pallets</th>' +
           '</tr></thead><tbody>';
     for (var m = 0; m < info.items.length; m++) {
       var it = info.items[m];
+      // Fecha principal: despacho. Fallback a confirmación si no vino.
+      // Tooltip muestra la fecha de confirmación para referencia.
+      var fechaPrincipal = it.fechaDespacho || it.fechaConfirmacion || '—';
+      var fechaTooltip = '';
+      if (it.fechaConfirmacion && it.fechaDespacho && it.fechaConfirmacion !== it.fechaDespacho) {
+        fechaTooltip = 'Confirmación: ' + it.fechaConfirmacion;
+      } else if (!it.fechaDespacho && it.fechaConfirmacion) {
+        fechaTooltip = 'Sin fecha de despacho · usando confirmación';
+      }
+      var fechaCell = fechaTooltip
+        ? '<td class="fecha" title="' + escapeHtml(fechaTooltip) + '" style="border-bottom:1px dotted var(--text-muted);cursor:help">' + escapeHtml(fechaPrincipal) + '</td>'
+        : '<td class="fecha">' + escapeHtml(fechaPrincipal) + '</td>';
       body +=
         '<tr>' +
           '<td class="pedido">' + escapeHtml(it.nroPedido) + '</td>' +
-          '<td class="fecha">' + escapeHtml(it.fechaConfirmacion) + '</td>' +
+          fechaCell +
           '<td class="bodega-dest">' + escapeHtml(it.bodegaDestino) + '</td>' +
           '<td class="num">' + fmtNum(it.pallets) + '</td>' +
         '</tr>';

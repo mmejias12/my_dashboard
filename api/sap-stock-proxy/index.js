@@ -456,13 +456,19 @@ module.exports = async function (context, req) {
       if (['acumulado', 'periodo'].indexOf(stockTipo) < 0) {
         throw new Error("stockTipo inválido: usa 'acumulado' o 'periodo'");
       }
-      // Para 'acumulado' siempre arrancamos desde 2023 para que el cálculo sea correcto.
-      // Para 'periodo' respetamos el rango pedido por el usuario.
+      // Baseline configurable para 'acumulado':
+      // Originalmente arrancaba en 2023, pero para clientes grandes excedía el
+      // timeout de Azure Functions Consumption Plan (~230s) por el volumen de
+      // movimientos a procesar. Lo bajamos a 2026 para máximo rendimiento.
+      // Si en el futuro el comercial necesita historia más profunda, subir
+      // este valor o aceptar el desde= que mande el cliente.
+      const BASELINE_ACUMULADO = '2026-01-01';
       if (stockTipo === 'acumulado') {
-        if (!filtros.desde) filtros.desde = '2023-01-01';
+        if (!filtros.desde) filtros.desde = BASELINE_ACUMULADO;
         if (!filtros.hasta) filtros.hasta = new Date().toISOString().substring(0, 10);
       } else {
-        if (!filtros.desde) filtros.desde = '2023-01-01';
+        // 'periodo' respeta el rango que mande el usuario; default razonable
+        if (!filtros.desde) filtros.desde = BASELINE_ACUMULADO;
         if (!filtros.hasta) filtros.hasta = new Date().toISOString().substring(0, 10);
       }
 

@@ -191,6 +191,16 @@
   .kpi-val.ret { color:var(--c-ret); }
   .kpi-val.pos { color:var(--c-pos); }
   .kpi-sub { font-size:10.5px;color:var(--text-muted);margin-top:3px; }
+  /* Modo expandido: con apertura/cierre cuando hay fecha de corte */
+  .kpi.with-cut { background: rgba(74,222,128,0.06); border-color: rgba(74,222,128,0.30); }
+  .kpi-cut-extra { display:none; margin-top:10px; padding-top:8px; border-top:1px solid rgba(74,222,128,0.20); }
+  .kpi.with-cut .kpi-cut-extra { display:block; }
+  .kpi-cut-row { display:flex; justify-content:space-between; align-items:center; font-size:11px; margin-top:3px; }
+  .kpi-cut-row:first-child { margin-top:0; }
+  .kpi-cut-row .lbl { color: var(--text-muted); }
+  .kpi-cut-row .val { color: var(--text-primary); font-weight:600; font-family: 'JetBrains Mono', monospace; }
+  .kpi-cut-row .val.delta-pos { color: var(--accent); }
+  .kpi-cut-row .val.delta-neg { color: #f87171; }
 
   /* TABLA EXPANDIBLE */
   .section-title { font-size:13px;font-weight:600;color:var(--text-primary);margin:18px 0 10px;display:flex;align-items:center;gap:7px; }
@@ -302,7 +312,21 @@
 
   <!-- KPIs -->
   <div class="kpis" id="kpis" style="display:none">
-    <div class="kpi"><div class="kpi-lbl">Total pallets stock</div><div class="kpi-val pos" id="k-total">—</div><div class="kpi-sub" id="k-total-sub">—</div></div>
+    <div class="kpi" id="kpi-total-box">
+      <div class="kpi-lbl" id="k-total-lbl">Total pallets stock</div>
+      <div class="kpi-val pos" id="k-total">—</div>
+      <div class="kpi-sub" id="k-total-sub">—</div>
+      <div class="kpi-cut-extra">
+        <div class="kpi-cut-row">
+          <span class="lbl">📂 Apertura</span>
+          <span class="val" id="k-apertura">—</span>
+        </div>
+        <div class="kpi-cut-row">
+          <span class="lbl" id="k-mov-lbl">▼ Movim. del día</span>
+          <span class="val" id="k-movneto">—</span>
+        </div>
+      </div>
+    </div>
     <div class="kpi"><div class="kpi-lbl">Clientes/Retails únicos</div><div class="kpi-val" id="k-unicos">—</div><div class="kpi-sub" id="k-unicos-sub">Con stock en bodegas</div></div>
     <div class="kpi"><div class="kpi-lbl">Bodegas con stock</div><div class="kpi-val" id="k-bodegas">—</div><div class="kpi-sub">Ubicaciones distintas</div></div>
     <div class="kpi"><div class="kpi-lbl">Combinaciones cli/bod/prod</div><div class="kpi-val" id="k-combos">—</div><div class="kpi-sub">Filas con stock != 0</div></div>
@@ -898,11 +922,62 @@ function calcularKPIs(filas, agrupado) {
   filas.forEach(function(r) { bodegasUnicas.add(r.bodega); });
 
   $('k-total').textContent = fmtNum(totalStock);
-  $('k-total-sub').textContent = 'Σ entradas - Σ salidas históricas';
   $('k-unicos').textContent = agrupado.length;
   $('k-unicos-sub').textContent = (tipoActivo === 'CLIENTES' ? 'Clientes' : 'Retails') + ' con stock vigente';
   $('k-bodegas').textContent = bodegasUnicas.size;
   $('k-combos').textContent = filas.length;
+
+  // ─── Modo "apertura / cierre" cuando hay fecha de corte ─────────────
+  var kpiBox = $('kpi-total-box');
+  if (fechaCorte && movs2026 && movs2026.length) {
+    // Calcular movimientos netos del día seleccionado para el tipo activo
+    var entDia = 0, salDia = 0;
+    for (var i = 0; i < movs2026.length; i++) {
+      var m = movs2026[i];
+      if (m.fecha !== fechaCorte) continue;
+      if (m.cliente !== tipoActivo) continue;
+      entDia += Number(m.entrada || 0);
+      salDia += Number(m.salida || 0);
+    }
+    var netoDia = entDia - salDia;
+    var apertura = totalStock - netoDia;
+
+    // Hoy en curso vs día pasado
+    var hoyISO = new Date().toISOString().substring(0, 10);
+    var esHoy = (fechaCorte === hoyISO);
+
+    // Etiqueta y subtítulo dinámicos
+    var fechaTxt = formatearFechaCorta(fechaCorte);
+    if (esHoy) {
+      $('k-total-lbl').textContent = 'Pallets · al AHORA del ' + fechaTxt;
+      $('k-total-sub').textContent = 'Día en curso · sigue habiendo movimientos';
+    } else {
+      $('k-total-lbl').textContent = 'Pallets · cierre del ' + fechaTxt;
+      $('k-total-sub').textContent = 'Stock al final del día seleccionado';
+    }
+
+    // Apertura + movimiento neto del día
+    $('k-apertura').textContent = fmtNum(apertura);
+    var signo = netoDia >= 0 ? '+' : '−';
+    $('k-movneto').textContent = signo + fmtNum(Math.abs(netoDia));
+    $('k-movneto').className = 'val ' + (netoDia >= 0 ? 'delta-pos' : 'delta-neg');
+    $('k-mov-lbl').textContent = (esHoy ? '▼ Movim. del día (hasta ahora)' : '▼ Movim. del día');
+
+    kpiBox.classList.add('with-cut');
+  } else {
+    // Sin filtro: KPI clásico
+    $('k-total-lbl').textContent = 'Total pallets stock';
+    $('k-total-sub').textContent = 'Σ entradas − Σ salidas históricas';
+    kpiBox.classList.remove('with-cut');
+  }
+}
+
+// Formato corto de fecha para etiquetas: "13-may-2026"
+function formatearFechaCorta(iso) {
+  if (!iso) return '';
+  var meses = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  var p = iso.split('-');
+  return p[2] + '-' + meses[parseInt(p[1], 10) - 1] + '-' + p[0];
 }
 
 function renderTabla(agrupado) {

@@ -92,13 +92,24 @@ function fetchM3(fechaInicio, fechaFin) {
       var chunks = [];
       res.on('data', function (c) { chunks.push(c); });
       res.on('end', function () {
+        var body = Buffer.concat(chunks).toString('utf8');
         if (res.statusCode !== 200) {
-          return reject(new Error('M3Link respondió ' + res.statusCode));
+          // Capturar el body de error para devolver mensaje útil
+          var snippet = body.substring(0, 200).replace(/\s+/g, ' ').trim();
+          return reject(new Error('API M3Link respondió ' + res.statusCode +
+            (snippet ? ' (' + snippet + ')' : '')));
+        }
+        // Validar que la respuesta sea JSON antes de parsear
+        var trimmed = body.trim();
+        if (!trimmed || (trimmed[0] !== '[' && trimmed[0] !== '{')) {
+          var snip = trimmed.substring(0, 150).replace(/\s+/g, ' ');
+          return reject(new Error('API M3Link devolvió respuesta no-JSON: "' + snip + '". ' +
+            'Probablemente el servicio backend está caído.'));
         }
         try {
-          resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+          resolve(JSON.parse(body));
         } catch (e) {
-          reject(new Error('JSON inválido del API: ' + e.message));
+          reject(new Error('JSON inválido del API M3Link: ' + e.message));
         }
       });
     });
@@ -125,6 +136,7 @@ function agregar(items) {
         etapaOperacion: item.etapaOperacion,
         cantidadConfirmada: item.cantidadConfirmada,
         cantidadDespachada: item.cantidadDespachada,
+        fechaDespacho: item.fechaDespacho || item.fechaEmision || item.fechaEnvio || null,
         fechaConfirmacion: item.fechaConfirmacion,
         clienteOrigenStr: item.clienteOrigenStr,
         clienteDestinoStr: item.clienteDestinoStr
@@ -142,8 +154,22 @@ function agregar(items) {
       omitidos.noTransferencia++; logDescarte('no es transferencia: '+it.operacion, it); continue;
     }
 
+    // ────────────────────────────────────────────────────────────────────
+    // CÁLCULO BASE: usar fecha DESPACHO (no confirmación)
+    // ────────────────────────────────────────────────────────────────────
+    // El comercial pidió calcular días de retención desde la fecha en que
+    // el pedido sale físicamente hacia el retail, no desde la confirmación
+    // (que puede ser muy posterior y deformar el cálculo del retiro).
+    // Si fechaDespacho no viene en la respuesta, fallback a confirmación.
+    // Posibles nombres del campo en el API: fechaDespacho, fechaEmision,
+    // fechaEnvio. Si tu API usa otro nombre, agregarlo aquí abajo.
+    var rawDespacho = it.fechaDespacho || it.fechaEmision || it.fechaEnvio || null;
+    var fDesp = rawDespacho ? parseFechaM3(rawDespacho) : null;
     var fConf = parseFechaM3(it.fechaConfirmacion);
-    if (!fConf) { omitidos.sinFecha++; logDescarte('fecha confirmacion inválida: '+it.fechaConfirmacion, it); continue; }
+
+    // La fecha base es despacho si existe; si no, fallback a confirmación
+    var fBase = fDesp || fConf;
+    if (!fBase) { omitidos.sinFecha++; logDescarte('sin fecha válida (despacho ni confirmación): desp='+rawDespacho+' conf='+it.fechaConfirmacion, it); continue; }
 
     var pallets = parseInt(it.cantidadConfirmada, 10);
     if (!pallets || pallets <= 0) { omitidos.sinPallets++; logDescarte('sin pallets confirmados', it); continue; }
@@ -151,7 +177,7 @@ function agregar(items) {
     var cliente = it.clienteOrigenStr;
     var retail  = it.clienteDestinoStr;
     var dr = resolverDias(cliente, retail);
-    var fechaRetiro = addDays(fConf, dr.dias);
+    var fechaRetiro = addDays(fBase, dr.dias);
     var key = fmtISO(fechaRetiro);
     if (!key) continue;
     fechasSet.add(key);
@@ -184,11 +210,15 @@ function agregar(items) {
     rd._clientes[ckey].pallets += pallets;
     rd._clientes[ckey].trf += 1;
     rd._clientes[ckey]._detalle.push({
-      bodegaOrigen:  it.bodegaOrigenStr  || '—',
-      bodegaDestino: it.bodegaDestinoStr || '—',
-      nroPedido:     it.nroPedido        || '—',
-      fechaConfirmacion: fmtISO(fConf),
-      pallets:       pallets
+      bodegaOrigen:      it.bodegaOrigenStr  || '—',
+      bodegaDestino:     it.bodegaDestinoStr || '—',
+      nroPedido:         it.nroPedido        || '—',
+      // Ambas fechas para que el modal pueda mostrar la principal + tooltip
+      fechaDespacho:     fDesp ? fmtISO(fDesp) : null,
+      fechaConfirmacion: fConf ? fmtISO(fConf) : null,
+      // 'fechaBase' marca cuál se usó para el cálculo (debugging)
+      fechaBase:         fDesp ? 'despacho' : 'confirmacion',
+      pallets:           pallets
     });
 
     totalPallets += pallets;

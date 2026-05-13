@@ -208,8 +208,8 @@
     <div class="filters-row">
       <span class="filter-lbl">Vista:</span>
       <div class="seg" id="seg-stockTipo">
-        <button class="seg-btn on" data-st="acumulado">📊 Stock acumulado</button>
-        <button class="seg-btn"    data-st="periodo">📈 Movimiento del período</button>
+        <button class="seg-btn"    data-st="acumulado">📊 Stock acumulado</button>
+        <button class="seg-btn on" data-st="periodo">📈 Movimiento del período</button>
       </div>
 
       <span class="filter-lbl" style="margin-left:14px">Granularidad:</span>
@@ -298,7 +298,7 @@ var CACHE_STOCK_ACTUAL = 'sap_stock_actual_v1';
 // Estado
 var clientesSeleccionados = [];   // [{ nombre, tipos: ['CLIENTES','RETAIL'] }]
 var seriesData = {};              // { 'CLIENTES|WALMART': [{periodo, entradas, salidas, stock}], ... }
-var stockTipo  = 'acumulado';     // 'acumulado' | 'periodo'
+var stockTipo  = 'periodo';       // 'periodo' (default, rápido) | 'acumulado' (stock al cierre, más lento)
 var granularidad = 'mensual';
 var listaClientesAutocomp = [];   // [{ nombre, tipos: ['CLIENTES','RETAIL'], stock: 1234 }]
 var chartInstance = null;
@@ -527,6 +527,9 @@ async function cargarSeleccionados() {
 
   try {
     // Hacer las llamadas en paralelo (1 por cliente seleccionado)
+    // Si el proxy devuelve "Backend call failure" u otro texto plano,
+    // el .json() crashea con "Unexpected token". Por eso usamos .text()
+    // primero y detectamos errores conocidos.
     var promesas = clientesSeleccionados.map(function(c) {
       var url = API_PROXY +
         '?modo=stockxfecha' +
@@ -534,18 +537,52 @@ async function cargarSeleccionados() {
         '&stockTipo=' + encodeURIComponent(stockTipo) +
         '&cliente=' + encodeURIComponent(c.nombre);
       return fetch(url, { headers: { 'Accept': 'application/json' } })
-        .then(function(r) { return r.json(); })
-        .then(function(j) { return { cliente: c, data: j }; });
+        .then(function(r) {
+          return r.text().then(function(txt) { return { status: r.status, ok: r.ok, text: txt }; });
+        })
+        .then(function(res) {
+          // Detectar respuestas no-JSON (Backend call failure, HTML de error, etc.)
+          var trimmed = (res.text || '').trim();
+          if (!trimmed || (trimmed[0] !== '{' && trimmed[0] !== '[')) {
+            var snippet = trimmed.substring(0, 120).replace(/\s+/g, ' ');
+            var msg = 'El proxy SAP no respondió con JSON';
+            if (snippet.toLowerCase().indexOf('backend call failure') !== -1) {
+              msg = 'Function App caído (Backend call failure) — el endpoint modo=stockxfecha no responde';
+            } else if (snippet.toLowerCase().indexOf('error 5') !== -1 || res.status >= 500) {
+              msg = 'Error del servidor (HTTP ' + res.status + ')';
+            }
+            return { cliente: c, error: msg, raw: snippet };
+          }
+          try {
+            return { cliente: c, data: JSON.parse(res.text) };
+          } catch (e) {
+            return { cliente: c, error: 'JSON inválido: ' + e.message };
+          }
+        });
     });
 
     var resultados = await Promise.all(promesas);
 
+    // Verificar si TODOS fallaron con el mismo error → es un problema del backend
+    var fallidos = resultados.filter(function(r) { return r.error; });
+    if (fallidos.length === resultados.length) {
+      var muestra = fallidos[0];
+      mostrarErrorRecuperable(
+        muestra.error,
+        muestra.raw ? 'Respuesta del servidor: "' + muestra.raw + '"' : null
+      );
+      return;
+    }
+
     // Procesar respuestas: agrupar items por (tipo, nombre)
     seriesData = {};
     var totalItems = 0;
+    var clientesConError = [];
     resultados.forEach(function(r) {
-      if (!r.data.ok) {
-        console.warn('[Stocks-x-fecha] Error para ' + r.cliente.nombre + ':', r.data.error);
+      if (r.error || !r.data || !r.data.ok) {
+        var err = r.error || (r.data && r.data.error) || 'error desconocido';
+        console.warn('[Stocks-x-fecha] Error para ' + r.cliente.nombre + ':', err);
+        clientesConError.push(r.cliente.nombre);
         return;
       }
       (r.data.items || []).forEach(function(it) {
@@ -562,17 +599,44 @@ async function cargarSeleccionados() {
       return;
     }
 
-    setStatus('ok', '✓ ' + totalItems + ' puntos cargados de ' + Object.keys(seriesData).length + ' series · ' + clientesSeleccionados.length + ' selección(es)');
+    var warn = clientesConError.length ? ' · ⚠ falló para: ' + clientesConError.join(', ') : '';
+    setStatus('ok', '✓ ' + totalItems + ' puntos cargados de ' + Object.keys(seriesData).length + ' series · ' + clientesSeleccionados.length + ' selección(es)' + warn);
 
     renderTodo();
   } catch (e) {
     console.error('[Stocks-x-fecha]', e);
-    setStatus('err', 'Error: ' + (e.message || e));
+    mostrarErrorRecuperable('Error inesperado: ' + (e.message || e), null);
   } finally {
     btn.disabled = false; btn.textContent = '📥 Cargar evolución';
     $('loading-overlay').classList.remove('visible');
     $('logo-img').classList.remove('spinning');
   }
+}
+
+// Muestra un cartel de error con botón de reintento
+function mostrarErrorRecuperable(mensaje, detalle) {
+  setStatus('err', '✕ ' + mensaje);
+  var box = $('error-recoverable');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'error-recoverable';
+    box.style.cssText = 'background:rgba(248,113,113,0.10);border:1px solid rgba(248,113,113,0.4);' +
+      'border-radius:8px;padding:12px 16px;margin:10px 0;font-size:12.5px;color:var(--text-primary);' +
+      'display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap';
+    var statusEl = $('status');
+    if (statusEl && statusEl.parentNode) {
+      statusEl.parentNode.insertBefore(box, statusEl.nextSibling);
+    }
+  }
+  var detHTML = detalle ? '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">' + detalle + '</div>' : '';
+  box.innerHTML =
+    '<div><strong style="color:#f87171">✕ ' + mensaje + '</strong>' + detHTML + '</div>' +
+    '<button onclick="this.parentNode.remove();cargarSeleccionados()" ' +
+    'style="background:var(--bg-input);border:1px solid var(--border-md);color:var(--text-primary);' +
+    'padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit">' +
+    '🔄 Reintentar</button>';
+  box.style.display = 'flex';
+  ocultarTodo();
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -911,6 +975,12 @@ window.addEventListener('DOMContentLoaded', function() {
       document.querySelectorAll('#seg-stockTipo .seg-btn').forEach(function(x) { x.classList.remove('on'); });
       b.classList.add('on');
       stockTipo = b.getAttribute('data-st');
+      // Aviso informativo: modo acumulado puede ser más lento
+      if (stockTipo === 'acumulado') {
+        setStatus('cache', 'ℹ Modo acumulado: arranca desde 2026-01-01. Para clientes grandes puede tardar 10-20s.');
+      } else {
+        setStatus('', 'Modo movimiento del período: muestra entradas − salidas por cada ' + granularidadLabel() + '.');
+      }
       // Si ya hay datos cargados, recargar (cambia el cálculo)
       if (Object.keys(seriesData).length) cargarSeleccionados();
     });

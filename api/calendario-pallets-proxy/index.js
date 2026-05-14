@@ -11,7 +11,7 @@
 //
 // Responde JSON:
 //   {
-//     ok: true,
+//     ok: true, esto esta ok ultima version 14-05 11:23
 //     metadata: { ... },
 //     calendario: { "2026-03-25": { total_pallets, total_trf, retails: [...] } },
 //     resumen:    { totalPallets, totalTrf, totalDias, fechaMin, fechaMax }

@@ -417,7 +417,7 @@ html, body {
 
   <div class="page-header">
     <div class="page-title">📅 Calendario de Retiro Tentativo de Pallets</div>
-    <div class="page-subtitle">Proyección de retiros basada en fecha de confirmación + tiempos de retención por (Retail)</div>
+    <div class="page-subtitle">Proyección de retiros basada en fecha de confirmación + tiempos de retención por (cliente, retail)</div>
   </div>
 
   <div class="controls">
@@ -830,28 +830,16 @@ function abrirModalBodegas(retailIdx, clienteIdx) {
         '<table class="detalle-table">' +
           '<thead><tr>' +
             '<th>Nro pedido</th>' +
-            '<th>Fecha despacho</th>' +
+            '<th>Fecha confirmación</th>' +
             '<th>Bodega destino (retail)</th>' +
             '<th style="text-align:right">Pallets</th>' +
           '</tr></thead><tbody>';
     for (var m = 0; m < info.items.length; m++) {
       var it = info.items[m];
-      // Fecha principal: despacho. Fallback a confirmación si no vino.
-      // Tooltip muestra la fecha de confirmación para referencia.
-      var fechaPrincipal = it.fechaDespacho || it.fechaConfirmacion || '—';
-      var fechaTooltip = '';
-      if (it.fechaConfirmacion && it.fechaDespacho && it.fechaConfirmacion !== it.fechaDespacho) {
-        fechaTooltip = 'Confirmación: ' + it.fechaConfirmacion;
-      } else if (!it.fechaDespacho && it.fechaConfirmacion) {
-        fechaTooltip = 'Sin fecha de despacho · usando confirmación';
-      }
-      var fechaCell = fechaTooltip
-        ? '<td class="fecha" title="' + escapeHtml(fechaTooltip) + '" style="border-bottom:1px dotted var(--text-muted);cursor:help">' + escapeHtml(fechaPrincipal) + '</td>'
-        : '<td class="fecha">' + escapeHtml(fechaPrincipal) + '</td>';
       body +=
         '<tr>' +
           '<td class="pedido">' + escapeHtml(it.nroPedido) + '</td>' +
-          fechaCell +
+          '<td class="fecha">' + escapeHtml(it.fechaConfirmacion) + '</td>' +
           '<td class="bodega-dest">' + escapeHtml(it.bodegaDestino) + '</td>' +
           '<td class="num">' + fmtNum(it.pallets) + '</td>' +
         '</tr>';

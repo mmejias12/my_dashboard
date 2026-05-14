@@ -1,9 +1,15 @@
 // ─────────────────────────────────────────────────────────────────────────
 // Azure Function: calendario-pallets-proxy
+// VERSION: v2-retiros-reales-ok-14may-2026
 // ─────────────────────────────────────────────────────────────────────────
 // Llama al API M3Link (token-based, mismo patrón que /proxy/ops), filtra
 // transferencias cerradas, cruza con la tabla de retención y devuelve datos
 // agregados listos para pintar el calendario.
+//
+// PASE 2 (NUEVO): además de transferencias, agrupa retiros (operacion=Retiros
+// + todas las etapas + cantConfirmada por fechaRequerida) y los devuelve como
+// `retirosReales` en la respuesta. Esto permite al frontend mostrar
+// "estimado vs real" en cada día del calendario.
 //
 // Query params:
 //   fechaInicio=YYYY-MM-DD
@@ -11,10 +17,12 @@
 //
 // Responde JSON:
 //   {
-//     ok: true, esto esta ok ultima version 14-05 11:23
+//     ok: true,
 //     metadata: { ... },
-//     calendario: { "2026-03-25": { total_pallets, total_trf, retails: [...] } },
-//     resumen:    { totalPallets, totalTrf, totalDias, fechaMin, fechaMax }
+//     calendario:    { "2026-03-25": { total_pallets, total_trf, retails: [...] } },
+//     retirosReales: { "2026-03-25": { total_pallets, total_trf, retails: [...] } },  ← NUEVO
+//     resumen:       { totalPallets, totalTrf, totalDias, fechaMin, fechaMax,
+//                      totalRetiros, trfRetiros }  ← NUEVOS últimos 2 campos
 //   }
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -355,6 +363,22 @@ module.exports = async function (context, req) {
         'Access-Control-Allow-Headers': 'Accept, Content-Type'
       },
       body: ''
+    };
+    return;
+  }
+
+  // Endpoint de versión: /api/calendario-pallets-proxy?version=1
+  // Devuelve la versión sin tocar API M3Link (útil para validar deploy).
+  if (req.query && req.query.version === '1') {
+    context.res = {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
+      body: {
+        ok: true,
+        version: 'v2-retiros-reales-ok-14may-2026',
+        features: ['transferencias-cerradas', 'retiros-reales', 'fechaDespacho-fallback'],
+        timestamp: new Date().toISOString()
+      }
     };
     return;
   }

@@ -433,8 +433,9 @@ module.exports = async function (context, req) {
           omitidos: agg.omitidos
         },
         debug: debugInfo,
-        calendario: agg.calendario,
-        resumen:    agg.resumen
+        calendario:    agg.calendario,
+        retirosReales: agg.retirosReales,  // ← faltaba: expone los retiros al frontend
+        resumen:       agg.resumen
       }
     };
   } catch (err) {

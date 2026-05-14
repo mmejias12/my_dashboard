@@ -136,6 +136,7 @@ function agregar(items) {
         etapaOperacion: item.etapaOperacion,
         cantidadConfirmada: item.cantidadConfirmada,
         cantidadDespachada: item.cantidadDespachada,
+        fechaDespacho: item.fechaDespacho || item.fechaEmision || item.fechaEnvio || null,
         fechaConfirmacion: item.fechaConfirmacion,
         clienteOrigenStr: item.clienteOrigenStr,
         clienteDestinoStr: item.clienteDestinoStr
@@ -153,8 +154,22 @@ function agregar(items) {
       omitidos.noTransferencia++; logDescarte('no es transferencia: '+it.operacion, it); continue;
     }
 
+    // ────────────────────────────────────────────────────────────────────
+    // CÁLCULO BASE: usar fecha DESPACHO (no confirmación)
+    // ────────────────────────────────────────────────────────────────────
+    // El comercial pidió calcular días de retención desde la fecha en que
+    // el pedido sale físicamente hacia el retail, no desde la confirmación
+    // (que puede ser muy posterior y deformar el cálculo del retiro).
+    // Si fechaDespacho no viene en la respuesta, fallback a confirmación.
+    // Posibles nombres del campo en el API: fechaDespacho, fechaEmision,
+    // fechaEnvio. Si tu API usa otro nombre, agregarlo aquí abajo.
+    var rawDespacho = it.fechaDespacho || it.fechaEmision || it.fechaEnvio || null;
+    var fDesp = rawDespacho ? parseFechaM3(rawDespacho) : null;
     var fConf = parseFechaM3(it.fechaConfirmacion);
-    if (!fConf) { omitidos.sinFecha++; logDescarte('fecha confirmacion inválida: '+it.fechaConfirmacion, it); continue; }
+
+    // La fecha base es despacho si existe; si no, fallback a confirmación
+    var fBase = fDesp || fConf;
+    if (!fBase) { omitidos.sinFecha++; logDescarte('sin fecha válida (despacho ni confirmación): desp='+rawDespacho+' conf='+it.fechaConfirmacion, it); continue; }
 
     var pallets = parseInt(it.cantidadConfirmada, 10);
     if (!pallets || pallets <= 0) { omitidos.sinPallets++; logDescarte('sin pallets confirmados', it); continue; }
@@ -162,7 +177,7 @@ function agregar(items) {
     var cliente = it.clienteOrigenStr;
     var retail  = it.clienteDestinoStr;
     var dr = resolverDias(cliente, retail);
-    var fechaRetiro = addDays(fConf, dr.dias);
+    var fechaRetiro = addDays(fBase, dr.dias);
     var key = fmtISO(fechaRetiro);
     if (!key) continue;
     fechasSet.add(key);
@@ -195,11 +210,15 @@ function agregar(items) {
     rd._clientes[ckey].pallets += pallets;
     rd._clientes[ckey].trf += 1;
     rd._clientes[ckey]._detalle.push({
-      bodegaOrigen:  it.bodegaOrigenStr  || '—',
-      bodegaDestino: it.bodegaDestinoStr || '—',
-      nroPedido:     it.nroPedido        || '—',
-      fechaConfirmacion: fmtISO(fConf),
-      pallets:       pallets
+      bodegaOrigen:      it.bodegaOrigenStr  || '—',
+      bodegaDestino:     it.bodegaDestinoStr || '—',
+      nroPedido:         it.nroPedido        || '—',
+      // Ambas fechas para que el modal pueda mostrar la principal + tooltip
+      fechaDespacho:     fDesp ? fmtISO(fDesp) : null,
+      fechaConfirmacion: fConf ? fmtISO(fConf) : null,
+      // 'fechaBase' marca cuál se usó para el cálculo (debugging)
+      fechaBase:         fDesp ? 'despacho' : 'confirmacion',
+      pallets:           pallets
     });
 
     totalPallets += pallets;
@@ -234,16 +253,92 @@ function agregar(items) {
   });
 
   var fechas = Array.from(fechasSet).sort();
+
+  // ────────────────────────────────────────────────────────────────────────
+  // SEGUNDO PASE: retiros reales (operacion=Retiros, todas las etapas)
+  // ────────────────────────────────────────────────────────────────────────
+  // El comercial validó contra SAP que este filtro coincide 1:1:
+  //   operacion = "Retiros"
+  //   etapaOperacion = TODAS (sin filtrar)
+  //   suma cantidadConfirmada
+  //   agrupado por fechaRequerida
+  // Ejemplo verificado: 01-may a 13-may → 38.390 pallets (coincide con SAP).
+  //
+  // Este dato es independiente del calendario de transferencias. Se devuelve
+  // por separado para que el frontend lo cruce por fecha y muestre como
+  // "real retirado" junto al estimado.
+  var retirosReales = {};   // { 'YYYY-MM-DD': { pallets, trf, retails:{ retail: { pallets, trf, items:[...] } } } }
+  var totalRetiros = 0;
+  var trfRetiros = 0;
+  var omitidosRetiros = { sinFecha: 0, sinCantidad: 0, noRetiro: 0 };
+
+  for (var i2 = 0; i2 < items.length; i2++) {
+    var ir = items[i2];
+    if (!ir.operacion || String(ir.operacion).toLowerCase().indexOf('retiro') === -1) {
+      omitidosRetiros.noRetiro++; continue;
+    }
+    var cantR = parseInt(ir.cantidadConfirmada, 10);
+    if (!cantR || cantR <= 0) { omitidosRetiros.sinCantidad++; continue; }
+    var fReqRaw = ir.fechaRequerida;
+    var fReq = fReqRaw ? parseFechaM3(fReqRaw) : null;
+    if (!fReq) { omitidosRetiros.sinFecha++; continue; }
+    var kR = fmtISO(fReq);
+    if (!kR) continue;
+
+    if (!retirosReales[kR]) {
+      retirosReales[kR] = { pallets: 0, trf: 0, retails: {} };
+    }
+    var bucket = retirosReales[kR];
+    bucket.pallets += cantR;
+    bucket.trf += 1;
+
+    var retailR = ir.clienteOrigenStr || ir.clienteDestinoStr || '—';
+    if (!bucket.retails[retailR]) {
+      bucket.retails[retailR] = { pallets: 0, trf: 0, items: [] };
+    }
+    var rb = bucket.retails[retailR];
+    rb.pallets += cantR;
+    rb.trf += 1;
+    if (rb.items.length < 50) {
+      rb.items.push({
+        nroPedido: ir.nroPedido || '—',
+        bodegaDestino: ir.bodegaDestinoStr || ir.bodegaOrigenStr || '—',
+        fechaRequerida: fmtISO(fReq),
+        fechaDespacho: ir.fechaDespacho ? fmtISO(parseFechaM3(ir.fechaDespacho)) : null,
+        etapaOperacion: ir.etapaOperacion || '—',
+        cantidad: cantR
+      });
+    }
+    totalRetiros += cantR;
+    trfRetiros += 1;
+  }
+
+  // Convertir retiros a output ordenado por pallets DESC
+  var retirosOut = {};
+  Object.keys(retirosReales).forEach(function (kk) {
+    var b = retirosReales[kk];
+    var retArr = Object.keys(b.retails).map(function (rname) {
+      var info = b.retails[rname];
+      return { retail: rname, pallets: info.pallets, trf: info.trf, items: info.items };
+    });
+    retArr.sort(function (a, b2) { return b2.pallets - a.pallets; });
+    retirosOut[kk] = { total_pallets: b.pallets, total_trf: b.trf, retails: retArr };
+  });
+
   return {
     calendario: calOut,
+    retirosReales: retirosOut,
     resumen: {
       totalPallets: totalPallets,
       totalTrf: totalTrf,
       totalDias: fechas.length,
       fechaMin: fechas[0] || null,
-      fechaMax: fechas[fechas.length - 1] || null
+      fechaMax: fechas[fechas.length - 1] || null,
+      totalRetiros: totalRetiros,
+      trfRetiros: trfRetiros
     },
     omitidos: omitidos,
+    omitidosRetiros: omitidosRetiros,
     descartes: descartes
   };
 }

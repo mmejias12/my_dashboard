@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────
 // Azure Function: calendario-pallets-proxy
-// VERSION: v4-incluye-trans-diferenciada-15may-2026
+// VERSION: v5-confirmado-y-retirado-15may-2026
 // ─────────────────────────────────────────────────────────────────────────
 // Llama al API M3Link (token-based, mismo patrón que /proxy/ops), filtra
 // transferencias cerradas, cruza con la tabla de retención y devuelve datos
@@ -283,8 +283,19 @@ function agregar(items) {
   // Este dato es independiente del calendario de transferencias. Se devuelve
   // por separado para que el frontend lo cruce por fecha y muestre como
   // "real retirado" junto al estimado.
-  var retirosReales = {};   // { 'YYYY-MM-DD': { pallets, trf, retails:{ retail: { pallets, trf, items:[...] } } } }
-  var totalRetiros = 0;
+  // SEGUNDO PASE: retiros (operacion=Retiro, todas las etapas)
+  // Acumulamos DOS métricas simultáneamente:
+  //   - confirmado (cantSolicitada): lo que se SOLICITÓ retirar = "confirmado para retiro"
+  //                                  Esto es lo que el jefe operacional consulta.
+  //   - retirado   (cantConfirmada): lo que ya se RETIRÓ efectivamente
+  //
+  // Para un día cerrado los dos números son idénticos. Para un día en curso o
+  // futuro, "confirmado" es mayor (hay solicitudes que aún no se ejecutan).
+  // El frontend muestra ambos para responder "¿cuánto va a retirarse?" y
+  // "¿cuánto se retiró efectivamente?".
+  var retirosReales = {};
+  var totalRetiros = 0;      // suma cantConfirmada (retirado)
+  var totalConfirmado = 0;   // suma cantSolicitada (confirmado para retiro)
   var trfRetiros = 0;
   var omitidosRetiros = { sinFecha: 0, sinCantidad: 0, noRetiro: 0 };
 
@@ -293,15 +304,16 @@ function agregar(items) {
     if (!ir.operacion || String(ir.operacion).toLowerCase().indexOf('retiro') === -1) {
       omitidosRetiros.noRetiro++; continue;
     }
-    // Filtrar REDTEC S.A. (retiros internos, no son retiros a retail)
-    // El dashboard M3Link no los cuenta; nosotros tampoco para que cuadren los números.
+    // Filtrar REDTEC S.A. (retiros internos, no son retiros a retail).
     var retailR_raw = ir.clienteOrigenStr || ir.clienteDestinoStr || '';
     if (String(retailR_raw).trim().toUpperCase() === 'REDTEC S.A.') {
       omitidosRetiros.redtecInterno = (omitidosRetiros.redtecInterno || 0) + 1;
       continue;
     }
-    var cantR = parseInt(ir.cantidadConfirmada, 10);
-    if (!cantR || cantR <= 0) { omitidosRetiros.sinCantidad++; continue; }
+    var cantR = parseInt(ir.cantidadConfirmada, 10) || 0;   // retirado real
+    var cantS = parseInt(ir.cantidadSolicitada, 10) || 0;   // confirmado para retiro
+    // Si AMBAS son 0, no aporta info. Si una de las dos > 0, vale la pena contarla.
+    if (cantR <= 0 && cantS <= 0) { omitidosRetiros.sinCantidad++; continue; }
     var fReqRaw = ir.fechaRequerida;
     var fReq = fReqRaw ? parseFechaM3(fReqRaw) : null;
     if (!fReq) { omitidosRetiros.sinFecha++; continue; }
@@ -309,18 +321,20 @@ function agregar(items) {
     if (!kR) continue;
 
     if (!retirosReales[kR]) {
-      retirosReales[kR] = { pallets: 0, trf: 0, retails: {} };
+      retirosReales[kR] = { pallets: 0, palletsConfirmado: 0, trf: 0, retails: {} };
     }
     var bucket = retirosReales[kR];
     bucket.pallets += cantR;
+    bucket.palletsConfirmado += cantS;
     bucket.trf += 1;
 
     var retailR = ir.clienteOrigenStr || ir.clienteDestinoStr || '—';
     if (!bucket.retails[retailR]) {
-      bucket.retails[retailR] = { pallets: 0, trf: 0, items: [] };
+      bucket.retails[retailR] = { pallets: 0, palletsConfirmado: 0, trf: 0, items: [] };
     }
     var rb = bucket.retails[retailR];
     rb.pallets += cantR;
+    rb.palletsConfirmado += cantS;
     rb.trf += 1;
     if (rb.items.length < 50) {
       rb.items.push({
@@ -329,23 +343,45 @@ function agregar(items) {
         fechaRequerida: fmtISO(fReq),
         fechaDespacho: ir.fechaDespacho ? fmtISO(parseFechaM3(ir.fechaDespacho)) : null,
         etapaOperacion: ir.etapaOperacion || '—',
-        cantidad: cantR
+        cantidadSolicitada: cantS,
+        cantidadConfirmada: cantR
       });
     }
     totalRetiros += cantR;
+    totalConfirmado += cantS;
     trfRetiros += 1;
   }
 
-  // Convertir retiros a output ordenado por pallets DESC
+  // Convertir retiros a output ordenado por pallets DESC.
+  // Cada bucket trae las DOS métricas (retirado y confirmado-para-retiro).
+  // El frontend decide cuál mostrar como principal.
+  // Para ordenar por relevancia: usa palletsConfirmado (que captura tanto el
+  // 'va a retirarse' del día en curso como el 'ya retirado' del día cerrado).
   var retirosOut = {};
   Object.keys(retirosReales).forEach(function (kk) {
     var b = retirosReales[kk];
     var retArr = Object.keys(b.retails).map(function (rname) {
       var info = b.retails[rname];
-      return { retail: rname, pallets: info.pallets, trf: info.trf, items: info.items };
+      return {
+        retail: rname,
+        pallets: info.pallets,                    // retirado (cantConfirmada)
+        palletsConfirmado: info.palletsConfirmado, // confirmado para retiro (cantSolicitada)
+        trf: info.trf,
+        items: info.items
+      };
     });
-    retArr.sort(function (a, b2) { return b2.pallets - a.pallets; });
-    retirosOut[kk] = { total_pallets: b.pallets, total_trf: b.trf, retails: retArr };
+    retArr.sort(function (a, b2) {
+      // Ordenar por el mayor de los dos (palletsConfirmado generalmente)
+      var aMax = Math.max(a.pallets, a.palletsConfirmado);
+      var bMax = Math.max(b2.pallets, b2.palletsConfirmado);
+      return bMax - aMax;
+    });
+    retirosOut[kk] = {
+      total_pallets: b.pallets,                    // retirado real
+      total_palletsConfirmado: b.palletsConfirmado, // confirmado para retiro
+      total_trf: b.trf,
+      retails: retArr
+    };
   });
 
   return {
@@ -357,7 +393,8 @@ function agregar(items) {
       totalDias: fechas.length,
       fechaMin: fechas[0] || null,
       fechaMax: fechas[fechas.length - 1] || null,
-      totalRetiros: totalRetiros,
+      totalRetiros: totalRetiros,           // suma cantConfirmada
+      totalConfirmado: totalConfirmado,     // suma cantSolicitada (NUEVO)
       trfRetiros: trfRetiros
     },
     omitidos: omitidos,
@@ -390,8 +427,8 @@ module.exports = async function (context, req) {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
       body: {
         ok: true,
-        version: 'v4-incluye-trans-diferenciada-15may-2026',
-        features: ['transferencias-cerradas', 'trans-diferenciada', 'retiros-reales', 'fechaDespacho-fallback', 'descarta-redtec-interno'],
+        version: 'v5-confirmado-y-retirado-15may-2026',
+        features: ['transferencias-cerradas', 'trans-diferenciada', 'retiros-reales', 'retiros-confirmados-cantSolicitada', 'fechaDespacho-fallback', 'descarta-redtec-interno'],
         timestamp: new Date().toISOString()
       }
     };

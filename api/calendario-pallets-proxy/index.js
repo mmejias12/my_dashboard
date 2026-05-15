@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────
 // Azure Function: calendario-pallets-proxy
-// VERSION: v3-filtra-redtec-15may-2026
+// VERSION: v4-incluye-trans-diferenciada-15may-2026
 // ─────────────────────────────────────────────────────────────────────────
 // Llama al API M3Link (token-based, mismo patrón que /proxy/ops), filtra
 // transferencias cerradas, cruza con la tabla de retención y devuelve datos
@@ -158,7 +158,15 @@ function agregar(items) {
     if (!it.etapaOperacion) { omitidos.etapaNoCerrada++; logDescarte('sin etapaOperacion', it); continue; }
     var etapa = String(it.etapaOperacion).toLowerCase();
     if (etapa.indexOf('cerrada') === -1) { omitidos.etapaNoCerrada++; logDescarte('etapa no cerrada: '+it.etapaOperacion, it); continue; }
-    if (!it.operacion || String(it.operacion).toLowerCase().indexOf('transferencia') === -1) {
+    // Aceptamos 2 tipos de operación que conceptualmente son transferencias:
+    //   - "Transferencias"     → flujo estándar cliente → retail
+    //   - "Trans Diferenciada" → variante operativa, casi exclusiva de WALMART
+    //                            (70.345 de 70.356 pallets · 97.5%). Se descartaba
+    //                            antes y eso causaba el sub-conteo de WALMART.
+    // Ambas aplican retencionDias por cliente-retail igual.
+    var opLower = String(it.operacion || '').toLowerCase();
+    var esTransferencia = opLower.indexOf('transferencia') !== -1 || opLower.indexOf('trans diferenciada') !== -1;
+    if (!it.operacion || !esTransferencia) {
       omitidos.noTransferencia++; logDescarte('no es transferencia: '+it.operacion, it); continue;
     }
 
@@ -382,8 +390,8 @@ module.exports = async function (context, req) {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
       body: {
         ok: true,
-        version: 'v3-filtra-redtec-15may-2026',
-        features: ['transferencias-cerradas', 'retiros-reales', 'fechaDespacho-fallback', 'descarta-redtec-interno'],
+        version: 'v4-incluye-trans-diferenciada-15may-2026',
+        features: ['transferencias-cerradas', 'trans-diferenciada', 'retiros-reales', 'fechaDespacho-fallback', 'descarta-redtec-interno'],
         timestamp: new Date().toISOString()
       }
     };

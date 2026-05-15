@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────
 // Azure Function: calendario-pallets-proxy
-// VERSION: v2-retiros-reales-ok-14may-2026
+// VERSION: v3-filtra-redtec-15may-2026
 // ─────────────────────────────────────────────────────────────────────────
 // Llama al API M3Link (token-based, mismo patrón que /proxy/ops), filtra
 // transferencias cerradas, cruza con la tabla de retención y devuelve datos
@@ -285,6 +285,13 @@ function agregar(items) {
     if (!ir.operacion || String(ir.operacion).toLowerCase().indexOf('retiro') === -1) {
       omitidosRetiros.noRetiro++; continue;
     }
+    // Filtrar REDTEC S.A. (retiros internos, no son retiros a retail)
+    // El dashboard M3Link no los cuenta; nosotros tampoco para que cuadren los números.
+    var retailR_raw = ir.clienteOrigenStr || ir.clienteDestinoStr || '';
+    if (String(retailR_raw).trim().toUpperCase() === 'REDTEC S.A.') {
+      omitidosRetiros.redtecInterno = (omitidosRetiros.redtecInterno || 0) + 1;
+      continue;
+    }
     var cantR = parseInt(ir.cantidadConfirmada, 10);
     if (!cantR || cantR <= 0) { omitidosRetiros.sinCantidad++; continue; }
     var fReqRaw = ir.fechaRequerida;
@@ -375,8 +382,8 @@ module.exports = async function (context, req) {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
       body: {
         ok: true,
-        version: 'v2-retiros-reales-ok-14may-2026',
-        features: ['transferencias-cerradas', 'retiros-reales', 'fechaDespacho-fallback'],
+        version: 'v3-filtra-redtec-15may-2026',
+        features: ['transferencias-cerradas', 'retiros-reales', 'fechaDespacho-fallback', 'descarta-redtec-interno'],
         timestamp: new Date().toISOString()
       }
     };

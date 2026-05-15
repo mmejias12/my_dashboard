@@ -220,6 +220,14 @@ html, body {
 .day-real.future .dr-num { color: var(--text-secondary); font-weight:500; }
 .day-real.today .dr-num { color: var(--accent); }
 .day-real.past .dr-num { color: var(--accent); }
+/* Segunda línea del real: pallets ya retirados (cantConfirmada) */
+.day-real-sub {
+  display:flex; align-items:center; gap:4px; margin-top:3px;
+  font-size:10px; line-height:1.1;
+}
+.day-real-sub .drs-ico { font-size:9px; }
+.day-real-sub .drs-num { font-weight:600; color: var(--text-secondary); font-size:10.5px; }
+.day-real-sub .drs-nota { color: var(--text-muted); font-size:9px; }
 /* Para tarjetas con SOLO retiros (sin transferencias) */
 .day.only-real { background: rgba(74,222,128,0.04); }
 .day.only-real:hover { background: rgba(74,222,128,0.10); }
@@ -238,7 +246,10 @@ html, body {
 .real-title { font-size:12.5px; font-weight:600; color: var(--accent); }
 .real-source { font-size:10px; color: var(--text-muted); }
 .real-stats { display:grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap:8px; }
+.real-stats-3 { grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); }
 .real-kpi { display:flex; flex-direction:column; gap:2px; padding:6px 8px; background: rgba(15,17,23,0.5); border-radius:5px; }
+.real-kpi.kpi-primary { background: rgba(74,222,128,0.10); border: 1px solid rgba(74,222,128,0.30); }
+.real-kpi.kpi-primary .rk-val { font-size: 17px; }
 .rk-lbl { font-size:9.5px; color: var(--text-muted); text-transform:uppercase; letter-spacing:.4px; font-weight:600; }
 .rk-val { font-size:16px; font-weight:600; color: var(--text-primary); line-height:1.1; }
 .rk-val.accent { color: var(--accent); }
@@ -247,7 +258,8 @@ html, body {
 .real-tbl { width:100%; font-size:11px; border-collapse: collapse; }
 .real-tbl th { color: var(--text-muted); text-align:left; padding: 5px 6px; font-weight:600; border-bottom:1px solid rgba(255,255,255,0.06); }
 .real-tbl td { color: var(--text-primary); padding: 4px 6px; }
-.real-tbl td.num { text-align:right; font-family: 'JetBrains Mono', monospace; color: var(--accent); font-weight:600; }
+.real-tbl td.num { text-align:right; font-family: 'JetBrains Mono', monospace; color: var(--text-secondary); font-weight:600; }
+.real-tbl td.num.accent { color: var(--accent); }
 .real-more { font-size:10px; color: var(--text-muted); text-align:center; margin-top:4px; font-style:italic; }
 .heat-3 .day-retails, .heat-4 .day-retails { color: rgba(255,255,255,0.85); }
 
@@ -748,37 +760,56 @@ function renderCalendar() {
       html += '<div class="day-data"><div class="day-pallets">' + fmtNum(info.total_pallets) + '</div>' +
               '<div class="day-retails">' + info.retails.length + ' retail' + (info.retails.length>1?'s':'') + '</div></div>';
     }
-    // Real retirado según M3Link (operacion=Retiros + cantConfirmada por fechaRequerida)
-    // Estado visual diferenciado: pasado / hoy / futuro
+    // Real M3Link: ahora mostramos DOS números
+    //   Confirmado: cantSolicitada (lo que VA a retirarse - dato del jefe operacional)
+    //   Retirado:   cantConfirmada (lo que YA se retiró efectivamente)
     var real = RETIROS_REALES[key];
-    if (real && real.total_pallets > 0) {
+    var confirmado = real ? (real.total_palletsConfirmado || 0) : 0;
+    var retirado   = real ? (real.total_pallets || 0) : 0;
+    if (real && (confirmado > 0 || retirado > 0)) {
       var palletsEst = info ? info.total_pallets : 0;
-      var pct = palletsEst > 0 ? Math.round((real.total_pallets / palletsEst) * 100) : null;
+      // El % se calcula contra Confirmado (es el dato más representativo del día)
+      var pct = palletsEst > 0 && confirmado > 0 ? Math.round((confirmado / palletsEst) * 100) : null;
       var estadoCls = 'day-real';
-      var icono = '✅';
       var nota = '';
-      if (key > todayStr) {       // futuro
+      if (key > todayStr) {
         estadoCls += ' future';
-        icono = '📅';
         nota = 'programado';
-      } else if (key === todayStr) { // hoy
+      } else if (key === todayStr) {
         estadoCls += ' today';
-        icono = '🔄';
-        nota = pct != null ? pct + '% en curso' : 'en curso';
-      } else {                    // pasado
+        // Hoy: cumplimiento parcial dentro del día
+        var pctEjec = confirmado > 0 ? Math.round((retirado / confirmado) * 100) : 0;
+        nota = pctEjec + '% ejecutado';
+      } else {
         estadoCls += ' past';
-        nota = pct != null ? pct + '% cumplido' : '';
+        // Pasado: confirmado vs retirado (deberían ser idénticos si el día cerró completo)
+        var pctCumpl = confirmado > 0 ? Math.round((retirado / confirmado) * 100) : 0;
+        nota = pctCumpl + '% cumplido';
       }
+      // Línea 1: Confirmado (dato principal, el que pregunta el jefe)
       html += '<div class="' + estadoCls + '">' +
-                '<span class="dr-ico">' + icono + '</span>' +
-                '<span class="dr-num">' + fmtNum(real.total_pallets) + '</span>' +
-                (nota ? '<span class="dr-nota">' + nota + '</span>' : '') +
+                '<span class="dr-ico">📋</span>' +
+                '<span class="dr-num">' + fmtNum(confirmado) + '</span>' +
+                '<span class="dr-nota">confirmado</span>' +
               '</div>';
+      // Línea 2: Retirado (solo si difiere del confirmado significativamente)
+      if (retirado !== confirmado && retirado > 0) {
+        html += '<div class="day-real-sub">' +
+                  '<span class="drs-ico">✅</span>' +
+                  '<span class="drs-num">' + fmtNum(retirado) + '</span>' +
+                  '<span class="drs-nota">' + nota + '</span>' +
+                '</div>';
+      } else if (nota && retirado === confirmado) {
+        // Día cerrado con cumplimiento 100%: mostrar la nota igual
+        html += '<div class="day-real-sub">' +
+                  '<span class="drs-nota" style="margin-left:18px">' + nota + '</span>' +
+                '</div>';
+      }
     }
     div.innerHTML = html;
-    // Click funciona si hay transferencias O retiros reales
-    if (info || (real && real.total_pallets > 0)) {
-      if (!info) div.classList.add('only-real');  // marker para CSS
+    // Click funciona si hay transferencias O retiros (confirmado o retirado)
+    if (info || (real && (confirmado > 0 || retirado > 0))) {
+      if (!info) div.classList.add('only-real');
       (function(k) { div.onclick = function() { selectDate(k); }; })(key);
     }
     grid.appendChild(div);
@@ -817,54 +848,66 @@ function selectDate(key) {
 }
 
 // Renderiza la sección de retiros reales en el panel lateral del día
+// Muestra TRES KPIs: Confirmado (cantSolicitada) · Retirado (cantConfirmada) · Estimado calendario
 function renderRealRetirado(key, real, info) {
   var cont = $('real-section');
   if (!cont) return;
-  if (!real || real.total_pallets <= 0) {
+  var confirmado = real ? (real.total_palletsConfirmado || 0) : 0;
+  var retirado   = real ? (real.total_pallets || 0) : 0;
+  if (!real || (confirmado <= 0 && retirado <= 0)) {
     cont.style.display = 'none';
     return;
   }
   var todayStr = fmtISO(new Date());
   var palletsEst = info ? info.total_pallets : 0;
-  var pct = palletsEst > 0 ? Math.round((real.total_pallets / palletsEst) * 100) : null;
   var estado = key > todayStr ? 'futuro' : (key === todayStr ? 'hoy' : 'pasado');
-  var labelPct = '';
-  if (pct != null) {
-    if (estado === 'pasado') labelPct = pct + '% cumplido vs estimado';
-    else if (estado === 'hoy') labelPct = pct + '% en curso vs estimado';
-    else labelPct = pct + '% programado vs estimado';
-  }
+
+  // % ejecución del día: retirado / confirmado
+  var pctEjec = confirmado > 0 ? Math.round((retirado / confirmado) * 100) : null;
+  // % cumplimiento vs estimado calendario: confirmado / estimado
+  var pctCalCumpl = palletsEst > 0 ? Math.round((confirmado / palletsEst) * 100) : null;
+
+  var ejecLabel = estado === 'futuro' ? 'pendiente' : (estado === 'hoy' ? 'ejecutado hoy' : 'cumplimiento');
 
   var html =
     '<div class="real-header">' +
-      '<span class="real-title">📊 Real retirado según M3Link</span>' +
-      '<span class="real-source">operación = Retiros · todas las etapas · suma cantidadConfirmada</span>' +
+      '<span class="real-title">📊 Retiros según M3Link</span>' +
+      '<span class="real-source">operación = Retiros · todas las etapas</span>' +
     '</div>' +
-    '<div class="real-stats">' +
-      '<div class="real-kpi">' +
-        '<span class="rk-lbl">Total real</span>' +
-        '<span class="rk-val accent">' + fmtNum(real.total_pallets) + '</span>' +
+    '<div class="real-stats real-stats-3">' +
+      // KPI 1: CONFIRMADO PARA RETIRO (cantSolicitada) - número principal
+      '<div class="real-kpi kpi-primary">' +
+        '<span class="rk-lbl">📋 Confirmado p/retiro</span>' +
+        '<span class="rk-val accent">' + fmtNum(confirmado) + '</span>' +
         '<span class="rk-sub">' + fmtNum(real.total_trf) + ' transferencia' + (real.total_trf > 1 ? 's' : '') + '</span>' +
       '</div>' +
+      // KPI 2: RETIRADO REAL (cantConfirmada)
       '<div class="real-kpi">' +
-        '<span class="rk-lbl">Estimado calendario</span>' +
-        '<span class="rk-val">' + (info ? fmtNum(info.total_pallets) : '0') + '</span>' +
-        '<span class="rk-sub">' + (info ? fmtNum(info.total_trf) : '0') + ' transferencias cerradas</span>' +
+        '<span class="rk-lbl">✅ Retirado real</span>' +
+        '<span class="rk-val">' + fmtNum(retirado) + '</span>' +
+        '<span class="rk-sub">' + (pctEjec != null ? pctEjec + '% ' + ejecLabel : '—') + '</span>' +
       '</div>' +
-      (labelPct ? '<div class="real-kpi"><span class="rk-lbl">Comparación</span>' +
-        '<span class="rk-val ' + (pct >= 80 && estado === 'pasado' ? 'accent' : '') + '">' + (pct != null ? pct + '%' : '—') + '</span>' +
-        '<span class="rk-sub">' + labelPct.replace(pct + '% ', '') + '</span></div>' : '') +
+      // KPI 3: ESTIMADO CALENDARIO (nuestro modelo)
+      '<div class="real-kpi">' +
+        '<span class="rk-lbl">📅 Estimado calendario</span>' +
+        '<span class="rk-val">' + (info ? fmtNum(info.total_pallets) : '0') + '</span>' +
+        '<span class="rk-sub">' + (pctCalCumpl != null ? pctCalCumpl + '% vs estimado' : (info ? fmtNum(info.total_trf) + ' trf cerradas' : '—')) + '</span>' +
+      '</div>' +
     '</div>';
 
-  // Detalle por retail (top 5)
+  // Detalle por retail (top 5): mostrar confirmado + retirado
   if (real.retails && real.retails.length) {
     html += '<div class="real-retails-title">Retiros por retail · top ' + Math.min(real.retails.length, 5) + '</div>';
     html += '<table class="real-tbl"><thead><tr>' +
-              '<th>Retail</th><th style="text-align:right">Pallets</th><th style="text-align:right">Trf</th>' +
+              '<th>Retail</th>' +
+              '<th style="text-align:right" title="Confirmado para retiro (cantidadSolicitada)">📋 Conf.</th>' +
+              '<th style="text-align:right" title="Ya retirado real (cantidadConfirmada)">✅ Real</th>' +
+              '<th style="text-align:right">Trf</th>' +
             '</tr></thead><tbody>';
     real.retails.slice(0, 5).forEach(function (rr) {
       html += '<tr>' +
                 '<td>' + escapeHtml(rr.retail) + '</td>' +
+                '<td class="num accent">' + fmtNum(rr.palletsConfirmado || 0) + '</td>' +
                 '<td class="num">' + fmtNum(rr.pallets) + '</td>' +
                 '<td class="num">' + fmtNum(rr.trf) + '</td>' +
               '</tr>';

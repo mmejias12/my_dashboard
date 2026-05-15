@@ -366,27 +366,14 @@ html, body {
   font-size: 12px; font-weight: 600; color: var(--accent);
   display: flex; align-items: center; gap: 8px;
 }
-.bodega-name::before {
-  content: '🏭'; font-size: 13px; opacity: .8;
-}
 .bodega-stats { font-size: 11px; color: var(--text-secondary); }
 .bodega-stats strong { color: var(--accent); font-weight: 700; }
-/* Doble agrupación: destinos dentro de cada bodega origen */
-.bodega-destinos { padding-left: 0; }
-.dest-block { border-top: 1px solid var(--border); }
-.dest-block:first-child { border-top: none; }
-.dest-head {
-  display: flex; align-items: center; gap: 8px;
-  padding: 9px 14px; cursor: pointer;
-  background: rgba(74, 222, 128, 0.03);
-  transition: background 0.15s;
-}
-.dest-head:hover { background: rgba(74, 222, 128, 0.08); }
-.dest-caret { color: var(--accent); font-size: 10px; width: 12px; user-select: none; }
-.dest-name { flex: 1; font-size: 12.5px; color: var(--text-primary); font-weight: 500; }
-.dest-stats { font-size: 11px; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; }
-.dest-body { display: none; padding: 0 8px 8px; }
-.dest-block.open .dest-body { display: block; }
+/* Bodega origen como dropdown expandible (1 click → ver TODOS los pedidos) */
+.bodega-head { cursor: pointer; user-select: none; transition: background 0.15s; align-items: center; gap: 10px; }
+.bodega-head:hover { background: rgba(74, 222, 128, 0.06); }
+.bo-caret { color: var(--accent); font-size: 11px; width: 14px; flex-shrink: 0; }
+.bodega-body { display: none; }
+.bodega-group.open .bodega-body { display: block; }
 
 .detalle-table {
   width: 100%; font-size: 11px; border-collapse: collapse;
@@ -591,12 +578,13 @@ function fmtFechaDDMM(s) {
   return String(s);
 }
 
-// Toggle expand/collapse de bodega destino dentro del modal
+// Toggle expand/collapse de un bloque (bodega origen) dentro del modal
 function toggleDestino(id, headerEl) {
   var block = document.getElementById(id);
   if (!block) return;
   block.classList.toggle('open');
-  var caret = headerEl.querySelector('.dest-caret');
+  // Soportar tanto .bo-caret (bodega origen) como .dest-caret (legado)
+  var caret = headerEl.querySelector('.bo-caret') || headerEl.querySelector('.dest-caret');
   if (caret) caret.textContent = block.classList.contains('open') ? '▼' : '▶';
 }
 function fmtISO(d) {
@@ -972,22 +960,18 @@ function abrirModalBodegas(retailIdx, clienteIdx) {
     '<span class="pipe">·</span>' +
     '<span>' + clienteObj.dias + ' días retención</span>';
 
-  // ─── Agrupación de doble nivel ────────────────────────────────────────
-  // Nivel 1: bodega ORIGEN (mantener vista actual, ej: HAMBURGO CD RENCA)
-  // Nivel 2: bodega DESTINO del retail (NUEVO, dropdown expandible)
-  // El detalle individual de pedidos queda dentro de cada bodega destino.
+  // Agrupar detalle por bodega ORIGEN (CD del cliente, ej: HAMBURGO CD RENCA)
+  // Cada CD origen es un dropdown que al expandir muestra TODOS los pedidos
+  // de esa bodega, en una sola tabla. Así el comercial ve los 53 pedidos
+  // de Hamburgo CD Renca con 1 click, sin abrir 30 sub-dropdowns.
   var porBodega = {};
   for (var k = 0; k < clienteObj.detalle.length; k++) {
     var d = clienteObj.detalle[k];
     var bo = d.bodegaOrigen || '—';
-    var bd = d.bodegaDestino || '—';
-    if (!porBodega[bo]) porBodega[bo] = { pallets: 0, trf: 0, destinos: {} };
+    if (!porBodega[bo]) porBodega[bo] = { pallets: 0, trf: 0, items: [] };
     porBodega[bo].pallets += d.pallets;
     porBodega[bo].trf += 1;
-    if (!porBodega[bo].destinos[bd]) porBodega[bo].destinos[bd] = { pallets: 0, trf: 0, items: [] };
-    porBodega[bo].destinos[bd].pallets += d.pallets;
-    porBodega[bo].destinos[bd].trf += 1;
-    porBodega[bo].destinos[bd].items.push(d);
+    porBodega[bo].items.push(d);
   }
 
   var bodegas = Object.keys(porBodega).sort(function (a, b) {
@@ -999,69 +983,61 @@ function abrirModalBodegas(retailIdx, clienteIdx) {
     var bod = bodegas[b];
     var info = porBodega[bod];
     var pct = (info.pallets / clienteObj.pallets * 100).toFixed(1);
+    var rowId = 'cdo-' + b;
+    // Primera bodega abierta por defecto, resto colapsadas
+    var openCls = b === 0 ? 'open' : '';
+    var caret = b === 0 ? '▼' : '▶';
 
-    // Ordenar bodegas destino por pallets desc
-    var destinosKeys = Object.keys(info.destinos).sort(function (a, b2) {
-      return info.destinos[b2].pallets - info.destinos[a].pallets;
+    // Ordenar items por bodega destino y luego por nro pedido para que sea consistente
+    var items = info.items.slice().sort(function (a, c) {
+      var bdA = a.bodegaDestino || '';
+      var bdC = c.bodegaDestino || '';
+      if (bdA !== bdC) return bdA.localeCompare(bdC);
+      return String(a.nroPedido).localeCompare(String(c.nroPedido));
     });
 
     body +=
-      '<div class="bodega-group">' +
-        '<div class="bodega-head">' +
-          '<div class="bodega-name">' + escapeHtml(bod) + '</div>' +
+      '<div class="bodega-group ' + openCls + '" id="' + rowId + '">' +
+        '<div class="bodega-head" onclick="toggleDestino(\'' + rowId + '\', this)">' +
+          '<div class="bodega-name">' +
+            '<span class="bo-caret">' + caret + '</span>' +
+            '<span>' + escapeHtml(bod) + '</span>' +
+          '</div>' +
           '<div class="bodega-stats">' +
             '<strong>' + fmtNum(info.pallets) + '</strong> pallets · ' +
             info.trf + ' trf · ' + pct + '%' +
           '</div>' +
         '</div>' +
-        '<div class="bodega-destinos">';
+        '<div class="bodega-body">' +
+          '<table class="detalle-table">' +
+            '<thead><tr>' +
+              '<th>Nro pedido</th>' +
+              '<th>Fecha despacho</th>' +
+              '<th>Bodega destino (retail)</th>' +
+              '<th style="text-align:right">Pallets</th>' +
+            '</tr></thead><tbody>';
 
-    for (var dj = 0; dj < destinosKeys.length; dj++) {
-      var dKey = destinosKeys[dj];
-      var dInfo = info.destinos[dKey];
-      var rowId = 'cd-' + b + '-' + dj;
-      var pdInicial = dj === 0 ? 'open' : '';   // primer destino abierto por defecto
-      var caretInicial = dj === 0 ? '▼' : '▶';
-
-      body +=
-        '<div class="dest-block ' + pdInicial + '" id="' + rowId + '">' +
-          '<div class="dest-head" onclick="toggleDestino(\'' + rowId + '\', this)">' +
-            '<span class="dest-caret">' + caretInicial + '</span>' +
-            '<span class="dest-name">' + escapeHtml(dKey) + '</span>' +
-            '<span class="dest-stats">' + fmtNum(dInfo.pallets) + ' pallets · ' + dInfo.trf + ' trf</span>' +
-          '</div>' +
-          '<div class="dest-body">' +
-            '<table class="detalle-table">' +
-              '<thead><tr>' +
-                '<th>Nro pedido</th>' +
-                '<th>Fecha despacho</th>' +
-                '<th style="text-align:right">Pallets</th>' +
-              '</tr></thead><tbody>';
-
-      for (var m = 0; m < dInfo.items.length; m++) {
-        var it = dInfo.items[m];
-        // Fecha principal: despacho. Fallback a confirmación si no vino.
-        var fechaPrincipal = it.fechaDespacho ? fmtFechaDDMM(it.fechaDespacho) : (it.fechaConfirmacion ? fmtFechaDDMM(it.fechaConfirmacion) : '—');
-        var fechaTooltip = '';
-        if (it.fechaConfirmacion && it.fechaDespacho && it.fechaConfirmacion !== it.fechaDespacho) {
-          fechaTooltip = 'Confirmación: ' + fmtFechaDDMM(it.fechaConfirmacion);
-        } else if (!it.fechaDespacho && it.fechaConfirmacion) {
-          fechaTooltip = 'Sin fecha de despacho · usando confirmación';
-        }
-        var fechaCell = fechaTooltip
-          ? '<td class="fecha" title="' + escapeHtml(fechaTooltip) + '" style="border-bottom:1px dotted var(--text-muted);cursor:help">' + escapeHtml(fechaPrincipal) + '</td>'
-          : '<td class="fecha">' + escapeHtml(fechaPrincipal) + '</td>';
-        body +=
-          '<tr>' +
-            '<td class="pedido">' + escapeHtml(it.nroPedido) + '</td>' +
-            fechaCell +
-            '<td class="num">' + fmtNum(it.pallets) + '</td>' +
-          '</tr>';
+    for (var m = 0; m < items.length; m++) {
+      var it = items[m];
+      var fechaPrincipal = it.fechaDespacho ? fmtFechaDDMM(it.fechaDespacho) : (it.fechaConfirmacion ? fmtFechaDDMM(it.fechaConfirmacion) : '—');
+      var fechaTooltip = '';
+      if (it.fechaConfirmacion && it.fechaDespacho && it.fechaConfirmacion !== it.fechaDespacho) {
+        fechaTooltip = 'Confirmación: ' + fmtFechaDDMM(it.fechaConfirmacion);
+      } else if (!it.fechaDespacho && it.fechaConfirmacion) {
+        fechaTooltip = 'Sin fecha de despacho · usando confirmación';
       }
-      body += '</tbody></table></div></div>';
+      var fechaCell = fechaTooltip
+        ? '<td class="fecha" title="' + escapeHtml(fechaTooltip) + '" style="border-bottom:1px dotted var(--text-muted);cursor:help">' + escapeHtml(fechaPrincipal) + '</td>'
+        : '<td class="fecha">' + escapeHtml(fechaPrincipal) + '</td>';
+      body +=
+        '<tr>' +
+          '<td class="pedido">' + escapeHtml(it.nroPedido) + '</td>' +
+          fechaCell +
+          '<td class="bodega-dest">' + escapeHtml(it.bodegaDestino) + '</td>' +
+          '<td class="num">' + fmtNum(it.pallets) + '</td>' +
+        '</tr>';
     }
-
-    body += '</div></div>';
+    body += '</tbody></table></div></div>';
   }
   $('modal-body').innerHTML = body;
 

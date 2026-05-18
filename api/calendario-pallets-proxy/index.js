@@ -1,12 +1,19 @@
 // ─────────────────────────────────────────────────────────────────────────
 // Azure Function: calendario-pallets-proxy
-// VERSION: v5-confirmado-y-retirado-15may-2026
+// VERSION: v6-estimado-despachado94-18may-2026
 // ─────────────────────────────────────────────────────────────────────────
 // Llama al API M3Link (token-based, mismo patrón que /proxy/ops), filtra
 // transferencias cerradas, cruza con la tabla de retención y devuelve datos
 // agregados listos para pintar el calendario.
 //
-// PASE 2 (NUEVO): además de transferencias, agrupa retiros (operacion=Retiros
+// CAMBIO v6: el ESTIMADO calendario ahora se calcula con
+//   cantidadDespachada × FACTOR_RETORNO  (sobre TODAS las etapas)
+// en vez de cantidadConfirmada solo-Cerrada. Motivo: el encargado de área
+// valida mes a mes contra inventario físico que ~94% de lo despachado vuelve
+// como retiro. Confirmada dejaba fuera ~50k pallets de transferencias
+// pendientes (confirman tarde o en cero). El RETIRO REAL M3Link NO cambia.
+//
+// PASE 2: además de transferencias, agrupa retiros (operacion=Retiros
 // + todas las etapas + cantConfirmada por fechaRequerida) y los devuelve como
 // `retirosReales` en la respuesta. Esto permite al frontend mostrar
 // "estimado vs real" en cada día del calendario.
@@ -32,6 +39,11 @@ var retencion = require('./retencion.json');
 // Mismo endpoint que usa el dashboard M3Link actual (con token en path)
 var API_HOST = 'apirdt1.azurewebsites.net';
 var API_PATH = '/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRangoFechas';
+
+// Factor de retorno del estimado calendario: % de lo DESPACHADO que
+// históricamente vuelve como retiro. Calibrado mes a mes contra inventario
+// físico por el encargado de área. Si cambia, ajustar solo esta línea.
+var FACTOR_RETORNO = 0.94;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
@@ -155,9 +167,11 @@ function agregar(items) {
   for (var i = 0; i < items.length; i++) {
     var it = items[i];
 
+    // v6: el estimado ahora considera TODAS las etapas (Cerrada + Pendiente
+    // Adjuntar Respaldo + Pendiente Confirmación). Antes solo Cerrada, lo que
+    // dejaba fuera ~50k pallets ya despachados pero sin confirmar. El encargado
+    // valida con inventario que esos también vuelven como retiro.
     if (!it.etapaOperacion) { omitidos.etapaNoCerrada++; logDescarte('sin etapaOperacion', it); continue; }
-    var etapa = String(it.etapaOperacion).toLowerCase();
-    if (etapa.indexOf('cerrada') === -1) { omitidos.etapaNoCerrada++; logDescarte('etapa no cerrada: '+it.etapaOperacion, it); continue; }
     // Aceptamos 2 tipos de operación que conceptualmente son transferencias:
     //   - "Transferencias"     → flujo estándar cliente → retail
     //   - "Trans Diferenciada" → variante operativa, casi exclusiva de WALMART
@@ -187,8 +201,12 @@ function agregar(items) {
     var fBase = fDesp || fConf;
     if (!fBase) { omitidos.sinFecha++; logDescarte('sin fecha válida (despacho ni confirmación): desp='+rawDespacho+' conf='+it.fechaConfirmacion, it); continue; }
 
-    var pallets = parseInt(it.cantidadConfirmada, 10);
-    if (!pallets || pallets <= 0) { omitidos.sinPallets++; logDescarte('sin pallets confirmados', it); continue; }
+    // v6: estimado = cantidadDespachada × FACTOR_RETORNO (antes: cantidadConfirmada).
+    // Despachada = lo que físicamente salió hacia el retail. Aplicar el factor
+    // de retorno da el pronóstico de cuánto volverá como retiro.
+    var despachada = parseInt(it.cantidadDespachada, 10) || 0;
+    var pallets = Math.round(despachada * FACTOR_RETORNO);
+    if (!pallets || pallets <= 0) { omitidos.sinPallets++; logDescarte('sin pallets despachados', it); continue; }
 
     var cliente = it.clienteOrigenStr;
     var retail  = it.clienteDestinoStr;
@@ -427,8 +445,9 @@ module.exports = async function (context, req) {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
       body: {
         ok: true,
-        version: 'v5-confirmado-y-retirado-15may-2026',
-        features: ['transferencias-cerradas', 'trans-diferenciada', 'retiros-reales', 'retiros-confirmados-cantSolicitada', 'fechaDespacho-fallback', 'descarta-redtec-interno'],
+        version: 'v6-estimado-despachado94-18may-2026',
+        features: ['estimado-despachada-x-94', 'todas-las-etapas', 'trans-diferenciada', 'retiros-reales', 'retiros-confirmados-cantSolicitada', 'fechaDespacho-fallback', 'descarta-redtec-interno'],
+        factorRetorno: FACTOR_RETORNO,
         timestamp: new Date().toISOString()
       }
     };

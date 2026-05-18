@@ -43,7 +43,7 @@ var API_PATH = '/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRang
 // Factor de retorno del estimado calendario: % de lo DESPACHADO que
 // históricamente vuelve como retiro. Calibrado mes a mes contra inventario
 // físico por el encargado de área. Si cambia, ajustar solo esta línea.
-var FACTOR_RETORNO = 0.94;
+var FACTOR_RETORNO = 0.99;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 

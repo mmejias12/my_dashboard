@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   ────────────────────────────────────────────────────────────────────
-  VERSION: v7-confirmado-y-retirado-19may-2026
+  VERSION: v5-confirmado-y-retirado-15may-2026
   Features:
     • 📋 Confirmado p/retiro (cantSolicitada) + ✅ Retirado (cantConfirmada)
     • Tabla retail con 2 columnas numéricas (Conf · Real)
@@ -182,6 +182,18 @@ html, body {
   font-size: 15px; font-weight: 600;
   min-width: 170px; text-align: center; text-transform: capitalize;
 }
+/* v8: etiquetas de total mes visible vs mes siguiente */
+.month-totals { display: flex; align-items: center; gap: 10px; flex: 1; justify-content: center; }
+.mt-box {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 4px 12px; border-radius: 6px; min-width: 90px;
+}
+.mt-current { background: rgba(74,222,128,0.10); border: 1px solid rgba(74,222,128,0.25); }
+.mt-next { background: var(--bg-input); border: 1px solid var(--border); opacity: .8; }
+.mt-lbl { font-size: 9.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .4px; }
+.mt-val { font-size: 15px; font-weight: 700; color: var(--accent); font-family: 'JetBrains Mono', monospace; }
+.mt-next .mt-val { color: var(--text-secondary); }
+.mt-arrow { color: var(--text-muted); font-size: 13px; }
 
 .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
 .dow {
@@ -232,6 +244,11 @@ html, body {
 .day-real.future .dr-num { color: var(--text-secondary); font-weight:500; }
 .day-real.today .dr-num { color: var(--accent); }
 .day-real.past .dr-num { color: var(--accent); }
+/* v8: reversa del día en la tarjeta del calendario */
+.day-reversa {
+  font-size: 9.5px; color: var(--warn); margin-top: 2px;
+  font-weight: 600; opacity: .85; line-height: 1.1;
+}
 /* Segunda línea del real: pallets ya retirados (cantConfirmada) */
 .day-real-sub {
   display:flex; align-items:center; gap:4px; margin-top:3px;
@@ -558,6 +575,17 @@ html, body {
           <div class="month" id="month-label">—</div>
           <button onclick="changeMonth(1)">▶</button>
         </div>
+        <div class="month-totals" id="month-totals">
+          <div class="mt-box mt-current">
+            <span class="mt-lbl" id="mt-cur-lbl">—</span>
+            <span class="mt-val" id="mt-cur-val">—</span>
+          </div>
+          <div class="mt-arrow">→</div>
+          <div class="mt-box mt-next">
+            <span class="mt-lbl" id="mt-next-lbl">—</span>
+            <span class="mt-val" id="mt-next-val">—</span>
+          </div>
+        </div>
         <button class="btn" style="padding:6px 12px" onclick="goToday()">Hoy</button>
       </div>
       <div class="cal-grid" id="cal-grid"></div>
@@ -770,8 +798,33 @@ function pintarStats(r) {
 }
 
 // ─── Calendario ────────────────────────────────────────────────────────
+// v8: suma el estimado de todos los días de un mes desde DATA
+function totalMes(year, month) {
+  var total = 0;
+  var prefijo = year + '-' + String(month + 1).padStart(2, '0') + '-';
+  Object.keys(DATA).forEach(function (k) {
+    if (k.indexOf(prefijo) === 0) total += (DATA[k].total_pallets || 0);
+  });
+  return total;
+}
+
+// v8: actualiza las 2 etiquetas (mes visible vs mes siguiente)
+function pintarTotalesMes() {
+  var curLbl = MESES[viewMonth] + ' ' + viewYear;
+  var nextM = viewMonth + 1, nextY = viewYear;
+  if (nextM > 11) { nextM = 0; nextY += 1; }
+  var nextLbl = MESES[nextM] + ' ' + nextY;
+  var curTot  = totalMes(viewYear, viewMonth);
+  var nextTot = totalMes(nextY, nextM);
+  if ($('mt-cur-lbl'))  $('mt-cur-lbl').textContent  = curLbl;
+  if ($('mt-cur-val'))  $('mt-cur-val').textContent  = fmtNum(curTot);
+  if ($('mt-next-lbl')) $('mt-next-lbl').textContent = nextLbl;
+  if ($('mt-next-val')) $('mt-next-val').textContent = fmtNum(nextTot);
+}
+
 function renderCalendar() {
   $('month-label').textContent = MESES[viewMonth] + ' ' + viewYear;
+  pintarTotalesMes();
   var grid = $('cal-grid'); grid.innerHTML = '';
   for (var i = 0; i < DOW.length; i++) {
     var d = document.createElement('div'); d.className = 'dow'; d.textContent = DOW[i]; grid.appendChild(d);
@@ -798,6 +851,11 @@ function renderCalendar() {
     if (info) {
       html += '<div class="day-data"><div class="day-pallets">' + fmtNum(info.total_pallets) + '</div>' +
               '<div class="day-retails">' + info.retails.length + ' retail' + (info.retails.length>1?'s':'') + '</div></div>';
+      // v8: reversa del día (si hubo confirmación en cero ese día)
+      if (info.total_reversa && info.total_reversa > 0) {
+        html += '<div class="day-reversa" title="Pallets reversados (confirmados en cero). La proyección pudo ser mayor.">' +
+                  '↩ ' + fmtNum(info.total_reversa) + ' reversa</div>';
+      }
     }
     // Real M3Link: ahora mostramos DOS números
     //   Confirmado: cantSolicitada (lo que VA a retirarse - dato del jefe operacional)

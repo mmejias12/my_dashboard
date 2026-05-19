@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────
 // Azure Function: calendario-pallets-proxy
-// VERSION: v7-reversa-y-cola-19may-2026
+// VERSION: v8-reversa-diaria-comparacion-19may-2026
 // ─────────────────────────────────────────────────────────────────────────
 // Llama al API M3Link (token-based, mismo patrón que /proxy/ops), filtra
 // transferencias cerradas, cruza con la tabla de retención y devuelve datos
@@ -244,10 +244,11 @@ function agregar(items, rangoFin) {
     }
 
     if (!calendario[key]) {
-      calendario[key] = { total_pallets: 0, total_trf: 0, _retails: {} };
+      calendario[key] = { total_pallets: 0, total_trf: 0, total_reversa: 0, _retails: {} };
     }
     var dia = calendario[key];
     dia.total_pallets += pallets;
+    dia.total_reversa += reversaItem;
     dia.total_trf += 1;
 
     if (!dia._retails[retail]) {
@@ -310,7 +311,7 @@ function agregar(items, rangoFin) {
       return { retail: rd.retail, pallets: rd.pallets, trf: rd.trf, clientes: clis };
     });
     retails.sort(function (a, b) { return b.pallets - a.pallets; });
-    calOut[k] = { total_pallets: dia.total_pallets, total_trf: dia.total_trf, retails: retails };
+    calOut[k] = { total_pallets: dia.total_pallets, total_trf: dia.total_trf, total_reversa: dia.total_reversa || 0, retails: retails };
   });
 
   var fechas = Array.from(fechasSet).sort();
@@ -478,7 +479,7 @@ module.exports = async function (context, req) {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
       body: {
         ok: true,
-        version: 'v7-reversa-y-cola-19may-2026',
+        version: 'v8-reversa-diaria-comparacion-19may-2026',
         features: ['estimado-despachada-x-94', 'todas-las-etapas', 'trans-diferenciada', 'retiros-reales', 'retiros-confirmados-cantSolicitada', 'reversa-cantPendiente-negativa', 'cola-pendiente-fuera-rango', 'fechaDespacho-fallback', 'descarta-redtec-interno'],
         factorRetorno: FACTOR_RETORNO,
         timestamp: new Date().toISOString()

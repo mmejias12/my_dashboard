@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────
 // Azure Function: calendario-pallets-proxy
-// VERSION: v6-estimado-despachado94-18may-2026
+// VERSION: v7-reversa-y-cola-19may-2026
 // ─────────────────────────────────────────────────────────────────────────
 // Llama al API M3Link (token-based, mismo patrón que /proxy/ops), filtra
 // transferencias cerradas, cruza con la tabla de retención y devuelve datos
@@ -43,7 +43,7 @@ var API_PATH = '/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRang
 // Factor de retorno del estimado calendario: % de lo DESPACHADO que
 // históricamente vuelve como retiro. Calibrado mes a mes contra inventario
 // físico por el encargado de área. Si cambia, ajustar solo esta línea.
-var FACTOR_RETORNO = 0.99;
+var FACTOR_RETORNO = 0.94;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
@@ -140,10 +140,17 @@ function fetchM3(fechaInicio, fechaFin) {
 }
 
 // ─── Agregación ──────────────────────────────────────────────────────────
-function agregar(items) {
+function agregar(items, rangoFin) {
+  // rangoFin: 'YYYY-MM-DD' = última fecha del rango consultado. Sirve para
+  // detectar la "cola pendiente": transferencias despachadas dentro del rango
+  // cuyo retiro proyectado cae DESPUÉS del rango (aún no tocaba retirarlas).
   var calendario = {};
   var totalPallets = 0;
   var totalTrf = 0;
+  var totalReversa = 0;       // |cantPendiente negativa| acumulada
+  var opsReversa = 0;
+  var colaPendiente = 0;      // pallets despachados con retiro fuera del rango
+  var opsColaPendiente = 0;
   var fechasSet = new Set();
   var omitidos = { sinFecha: 0, sinPallets: 0, etapaNoCerrada: 0, noTransferencia: 0 };
   var descartes = []; // log detallado de los primeros 10 descartes
@@ -215,6 +222,26 @@ function agregar(items) {
     var key = fmtISO(fechaRetiro);
     if (!key) continue;
     fechasSet.add(key);
+
+    // ─── Reversa: cantidadPendiente negativa ──────────────────────────────
+    // Ocurre cuando pasan los ~30 días (según cliente) sin justificar la
+    // transferencia y se confirma en cero. Esos pallets NO se van a retirar.
+    // Ej: Sol 140 · Desp 140 · Conf 0 · Pend -140 → reversa de 140.
+    var pend = parseInt(it.cantidadPendiente, 10) || 0;
+    var reversaItem = pend < 0 ? Math.abs(pend) : 0;
+    if (reversaItem > 0) {
+      totalReversa += reversaItem;
+      opsReversa += 1;
+    }
+
+    // ─── Cola pendiente: despachado en rango con retiro DESPUÉS del rango ──
+    // Esto evita el sesgo a la baja: si consultás "hasta 15/05" y un pallet
+    // se despachó el 10/05 con 30 días de retención, su retiro cae el 09/06
+    // (fuera del rango). Lo contamos aparte como contexto.
+    if (rangoFin && key > rangoFin) {
+      colaPendiente += pallets;
+      opsColaPendiente += 1;
+    }
 
     if (!calendario[key]) {
       calendario[key] = { total_pallets: 0, total_trf: 0, _retails: {} };
@@ -413,7 +440,13 @@ function agregar(items) {
       fechaMax: fechas[fechas.length - 1] || null,
       totalRetiros: totalRetiros,           // suma cantConfirmada
       totalConfirmado: totalConfirmado,     // suma cantSolicitada (NUEVO)
-      trfRetiros: trfRetiros
+      trfRetiros: trfRetiros,
+      // v7: reversa (cantPendiente negativa) y cola pendiente (retiro fuera del rango)
+      totalReversa: totalReversa,
+      opsReversa: opsReversa,
+      colaPendiente: colaPendiente,
+      opsColaPendiente: opsColaPendiente,
+      estimadoNeto: totalPallets - totalReversa  // estimado descontando reversas
     },
     omitidos: omitidos,
     omitidosRetiros: omitidosRetiros,
@@ -445,8 +478,8 @@ module.exports = async function (context, req) {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
       body: {
         ok: true,
-        version: 'v6-estimado-despachado94-18may-2026',
-        features: ['estimado-despachada-x-94', 'todas-las-etapas', 'trans-diferenciada', 'retiros-reales', 'retiros-confirmados-cantSolicitada', 'fechaDespacho-fallback', 'descarta-redtec-interno'],
+        version: 'v7-reversa-y-cola-19may-2026',
+        features: ['estimado-despachada-x-94', 'todas-las-etapas', 'trans-diferenciada', 'retiros-reales', 'retiros-confirmados-cantSolicitada', 'reversa-cantPendiente-negativa', 'cola-pendiente-fuera-rango', 'fechaDespacho-fallback', 'descarta-redtec-interno'],
         factorRetorno: FACTOR_RETORNO,
         timestamp: new Date().toISOString()
       }
@@ -472,7 +505,7 @@ module.exports = async function (context, req) {
     var items = Array.isArray(raw) ? raw : (raw && raw.data) ? raw.data : [];
     context.log('Registros recibidos del API:', items.length);
 
-    var agg = agregar(items);
+    var agg = agregar(items, fechaFin);
     context.log('Procesados:', agg.resumen.totalTrf, 'Omitidos:', JSON.stringify(agg.omitidos));
 
     // Modo debug: si llega ?debug=1 incluir muestra cruda y razón de descarte

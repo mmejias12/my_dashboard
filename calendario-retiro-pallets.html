@@ -320,6 +320,20 @@ html, body {
 .retail-trf { font-size: 10px; color: var(--text-muted); margin-left: 8px; }
 .retail-chev { color: var(--text-muted); margin-left: 8px; transition: transform .15s; }
 .retail.open .retail-chev { transform: rotate(90deg); }
+/* v7: encabezado de columnas de la lista de retails (fijo, una sola vez) */
+.retail-list-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 7px 12px; position: sticky; top: 0; z-index: 2;
+  background: var(--bg-input);
+  border-bottom: 1px solid var(--border-md);
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .5px; color: var(--text-muted);
+}
+.retail-list-header .rlh-name { flex: 1; padding-right: 8px; }
+.retail-list-header .rlh-cols { display: flex; align-items: center; }
+.retail-list-header .rlh-pallets { min-width: 52px; text-align: right; }
+.retail-list-header .rlh-trf { min-width: 44px; text-align: right; margin-left: 8px; }
+.retail-list-header .rlh-spacer { width: 12px; margin-left: 8px; }
 .clientes-list {
   display: none; padding: 6px 12px; background: var(--bg-card);
   border-top: 1px solid var(--border);
@@ -523,6 +537,16 @@ html, body {
       <div class="stat-label">Período Proyectado</div>
       <div class="stat-value" id="stat-rango" style="font-size:13px;">—</div>
       <div class="stat-sub">primer y último día con retiro</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Cola Pendiente</div>
+      <div class="stat-value" id="stat-cola" style="color:var(--info)">—</div>
+      <div class="stat-sub">despachado, retiro cae fuera del rango</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Reversa</div>
+      <div class="stat-value" id="stat-reversa" style="color:var(--warn)">—</div>
+      <div class="stat-sub">confirmado en cero (no justificado)</div>
     </div>
   </div>
 
@@ -740,6 +764,9 @@ function pintarStats(r) {
   $('stat-trf').textContent     = fmtNum(r.totalTrf);
   $('stat-dias').textContent    = fmtNum(r.totalDias);
   $('stat-rango').textContent   = (r.fechaMin && r.fechaMax) ? fmtRange(r.fechaMin, r.fechaMax) : '—';
+  // v7: cola pendiente y reversa
+  if ($('stat-cola'))    $('stat-cola').textContent    = fmtNum(r.colaPendiente || 0);
+  if ($('stat-reversa')) $('stat-reversa').textContent = fmtNum(r.totalReversa || 0);
 }
 
 // ─── Calendario ────────────────────────────────────────────────────────
@@ -956,7 +983,15 @@ function renderRetails(retails, filter) {
 
   if (!filtered.length) { list.innerHTML = '<div class="no-data">Sin coincidencias</div>'; return; }
 
-  var html = '';
+  // v7: encabezado de columnas (una sola vez, arriba de toda la lista)
+  var html = '<div class="retail-list-header">' +
+      '<div class="rlh-name">Retail</div>' +
+      '<div class="rlh-cols">' +
+        '<span class="rlh-pallets">Pallets</span>' +
+        '<span class="rlh-trf">Trf</span>' +
+        '<span class="rlh-spacer"></span>' +
+      '</div>' +
+    '</div>';
   for (var i = 0; i < filtered.length; i++) {
     var r = filtered[i];
     html += '<div class="retail">' +

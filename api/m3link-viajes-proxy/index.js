@@ -1,6 +1,10 @@
 // api/m3link-viajes-proxy/index.js
 // Proxy para consultar la API de M3Link de REDTEC (apirdt1)
 // Evita CORS llamando server-side desde Azure Function
+//
+// IMPORTANTE: M3Link espera los parámetros `fechaInicial` y `fechaFinal`
+// (NO fechaDesde/fechaHasta). Si se pasan nombres incorrectos, la API
+// ignora silenciosamente y devuelve un rango default.
 
 const M3LINK_URL = 'https://apirdt1.azurewebsites.net/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRangoFechas';
 
@@ -12,21 +16,21 @@ module.exports = async function (context, req) {
     'Content-Type': 'application/json'
   };
 
-  const fechaDesde = (req.query.fechaDesde || '').trim();
-  const fechaHasta = (req.query.fechaHasta || '').trim();
+  // Aceptamos varios alias desde el frontend, pero al backend siempre le mandamos
+  // los nombres oficiales que espera (fechaInicial / fechaFinal)
+  const fechaInicial = (req.query.fechaInicial || req.query.fechaDesde || req.query.desde || '').trim();
+  const fechaFinal   = (req.query.fechaFinal   || req.query.fechaHasta || req.query.hasta || '').trim();
 
-  if (!fechaDesde || !fechaHasta) {
+  if (!fechaInicial || !fechaFinal) {
     context.res = {
       status: 400,
       headers: corsHeaders,
-      body: { ok: false, error: 'Faltan parámetros fechaDesde y fechaHasta (formato YYYY-MM-DD)' }
+      body: { ok: false, error: 'Faltan parámetros fechaInicial y fechaFinal (formato YYYY-MM-DD)' }
     };
     return;
   }
 
-  // Construir URL con los parámetros - probamos primero los nombres más comunes
-  // Si M3Link espera otros nombres, se ajustan aquí
-  const url = `${M3LINK_URL}?fechaDesde=${encodeURIComponent(fechaDesde)}&fechaHasta=${encodeURIComponent(fechaHasta)}`;
+  const url = `${M3LINK_URL}?fechaInicial=${encodeURIComponent(fechaInicial)}&fechaFinal=${encodeURIComponent(fechaFinal)}`;
 
   context.log(`[m3link-proxy] GET ${url}`);
 
@@ -34,7 +38,6 @@ module.exports = async function (context, req) {
     let lastError = null;
     let data = null;
 
-    // Reintento simple: hasta 2 intentos ante 5xx
     for (let intento = 1; intento <= 2; intento++) {
       try {
         const r = await fetch(url, {
@@ -43,7 +46,6 @@ module.exports = async function (context, req) {
         });
 
         if (!r.ok) {
-          // Si es 4xx, no reintentamos
           if (r.status >= 400 && r.status < 500) {
             const txt = await r.text();
             context.log.error(`[m3link-proxy] HTTP ${r.status}: ${txt.slice(0, 500)}`);
@@ -76,8 +78,6 @@ module.exports = async function (context, req) {
       return;
     }
 
-    // M3Link puede devolver array directo o un wrapper {items:[...]}
-    // Lo devolvemos tal cual, el frontend lo normaliza
     context.log(`[m3link-proxy] OK · ${Array.isArray(data) ? data.length : 'objeto'} registros`);
 
     context.res = {

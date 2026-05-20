@@ -576,7 +576,7 @@ async function cargarViajes(){
   setEmpty('contenedorDetalle', 'spinner', 'Consultando M3Link…');
 
   try {
-    const url = `/api/m3link-viajes-proxy?fechaDesde=${desde}&fechaHasta=${hasta}`;
+    const url = `/api/m3link-viajes-proxy?fechaInicial=${desde}&fechaFinal=${hasta}`;
     const r = await fetch(url);
     if(!r.ok) throw new Error('HTTP ' + r.status);
     const data = await r.json();

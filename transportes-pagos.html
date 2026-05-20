@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Transportes · Pagos · REDTEC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#07080e;
+  --s1:#0c0d16;
+  --s2:#11121c;
+  --s3:#171824;
+  --s4:#1e2030;
+  --border:rgba(255,255,255,.055);
+  --border-md:rgba(255,255,255,.1);
+  --border-hi:rgba(255,255,255,.18);
+  --t1:#eef0f8;
+  --t2:#7b82a0;
+  --t3:#3d4260;
+  --green:#1ec96a;
+  --green-d:rgba(30,201,106,.12);
+  --blue:#4b8df8;
+  --blue-d:rgba(75,141,248,.12);
+  --amber:#f4a836;
+  --amber-d:rgba(244,168,54,.12);
+  --red:#f05656;
+  --red-d:rgba(240,86,86,.12);
+  --purple:#9b7dfa;
+  --purple-d:rgba(155,125,250,.12);
+  --cyan:#2dd4d4;
+  --cyan-d:rgba(45,212,212,.12);
+  --redtec:#c0392b;
+  --redtec-d:rgba(192,57,43,.15);
+  --radius:8px;
+  --radius-lg:12px;
+}
+html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;background:var(--bg);color:var(--t1);-webkit-font-smoothing:antialiased;line-height:1.5}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--s4);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:var(--border-hi)}
+
+/* HEADER */
+.hdr{height:50px;background:var(--s1);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 18px;gap:12px;position:sticky;top:0;z-index:200}
+.hdr-logo{width:28px;height:28px;background:#c0392b;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:10.5px;flex-shrink:0;text-decoration:none}
+.hdr-brand{font-size:13px;font-weight:600;color:var(--t1)}
+.hdr-pipe{width:1px;height:16px;background:var(--border-md)}
+.hdr-section{font-size:12px;color:var(--t2)}
+.hdr-right{margin-left:auto;display:flex;gap:10px;align-items:center}
+.live-badge{display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:10.5px;font-weight:500;border:1px solid}
+.live-badge.verde{color:var(--green);border-color:rgba(30,201,106,.25);background:rgba(30,201,106,.07)}
+.live-badge.gris{color:var(--t3);border-color:var(--border);background:transparent}
+.live-badge.amber{color:var(--amber);border-color:rgba(244,168,54,.25);background:rgba(244,168,54,.07)}
+.live-badge.rojo{color:var(--red);border-color:rgba(240,86,86,.25);background:rgba(240,86,86,.07)}
+.pulse{width:6px;height:6px;border-radius:50%;flex-shrink:0;animation:pp 2s infinite}
+.pulse.verde{background:var(--green)}
+.pulse.gris{background:var(--t3);animation:none}
+.pulse.amber{background:var(--amber)}
+.pulse.rojo{background:var(--red)}
+@keyframes pp{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* LAYOUT */
+.layout{display:flex;min-height:calc(100vh - 50px)}
+.sidebar{width:210px;min-width:210px;background:var(--s1);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:14px 0}
+.sb-label{font-size:9.5px;font-weight:600;letter-spacing:.9px;color:var(--t3);text-transform:uppercase;padding:0 14px 6px}
+.sb-item{display:flex;align-items:center;gap:8px;padding:7px 14px;cursor:pointer;font-size:12.5px;color:var(--t2);transition:background .15s,color .15s;border-left:2px solid transparent;margin:1px 0}
+.sb-item:hover{background:var(--s2);color:var(--t1)}
+.sb-item.active{background:var(--s2);color:var(--t1);border-left-color:var(--blue)}
+.sb-item .ico{width:15px;text-align:center;opacity:.7;font-size:13px}
+.sb-item.active .ico{opacity:1}
+.sb-sep{height:1px;background:var(--border);margin:10px 14px}
+.main{flex:1;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0;overflow-x:hidden}
+
+/* CONFIG PANEL */
+.config-panel{background:var(--s2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px;display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:10.5px;color:var(--t2);font-weight:500;text-transform:uppercase;letter-spacing:.5px}
+.dinput{background:var(--s3);border:1px solid var(--border-md);border-radius:6px;color:var(--t1);font-size:12.5px;padding:7px 10px;font-family:'DM Sans',sans-serif;outline:none;width:140px;transition:border .15s}
+.dinput:focus{border-color:var(--blue)}
+.sinput{background:var(--s3);border:1px solid var(--border-md);border-radius:6px;color:var(--t1);font-size:12.5px;padding:7px 10px;font-family:'DM Sans',sans-serif;outline:none;min-width:140px;transition:border .15s;cursor:pointer}
+.sinput:focus{border-color:var(--blue)}
+.btn-go{background:var(--blue);color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:opacity .15s,transform .1s;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.btn-go:hover{opacity:.9}
+.btn-go:active{transform:scale(.98)}
+.btn-go:disabled{opacity:.5;cursor:not-allowed}
+.btn-xls{background:var(--green-d);color:var(--green);border:1px solid rgba(30,201,106,.2);border-radius:6px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:opacity .15s;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.btn-xls:hover{opacity:.85}
+.btn-print{background:var(--amber-d);color:var(--amber);border:1px solid rgba(244,168,54,.2);border-radius:6px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:opacity .15s;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.btn-print:hover{opacity:.85}
+.config-info{font-size:11px;color:var(--t3);align-self:center}
+
+/* KPIs */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+.kpi{background:var(--s2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;display:flex;flex-direction:column;gap:4px;position:relative;overflow:hidden;transition:border-color .2s}
+.kpi:hover{border-color:var(--border-hi)}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:2px 2px 0 0}
+.kpi.blue::before{background:var(--blue)}
+.kpi.green::before{background:var(--green)}
+.kpi.amber::before{background:var(--amber)}
+.kpi.red::before{background:var(--red)}
+.kpi.purple::before{background:var(--purple)}
+.kpi.cyan::before{background:var(--cyan)}
+.kpi-label{font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;font-weight:500}
+.kpi-val{font-size:22px;font-weight:600;font-family:'DM Mono',monospace;line-height:1.1;color:var(--t1)}
+.kpi-val.blue{color:var(--blue)}
+.kpi-val.green{color:var(--green)}
+.kpi-val.amber{color:var(--amber)}
+.kpi-val.red{color:var(--red)}
+.kpi-val.purple{color:var(--purple)}
+.kpi-val.cyan{color:var(--cyan)}
+.kpi-sub{font-size:10.5px;color:var(--t3)}
+
+/* CARD */
+.card{background:var(--s2);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
+.card-hdr{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.card-title{font-size:12px;font-weight:600;color:var(--t1);display:flex;align-items:center;gap:7px}
+.card-title-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:var(--blue)}
+.card-body{padding:14px 16px}
+.card-body.no-pad{padding:0}
+.card-footer{padding:10px 16px;border-top:1px solid var(--border);font-size:10.5px;color:var(--t3)}
+
+/* TABS */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);padding:0 2px}
+.tab{padding:9px 16px;font-size:12.5px;font-weight:500;color:var(--t2);cursor:pointer;border-bottom:2px solid transparent;transition:color .15s,border-color .15s;white-space:nowrap;background:transparent;border-top:none;border-left:none;border-right:none;font-family:'DM Sans',sans-serif}
+.tab:hover{color:var(--t1)}
+.tab.active{color:var(--t1);border-bottom-color:var(--blue)}
+
+/* TABLES */
+.tbl-wrap{overflow-x:auto;max-height:65vh;overflow-y:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead th{padding:8px 12px;text-align:left;font-size:10px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);background:var(--s3);white-space:nowrap;position:sticky;top:0;z-index:5}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:rgba(255,255,255,.025)}
+tbody td{padding:9px 12px;color:var(--t2);vertical-align:middle;white-space:nowrap}
+tbody td.bold{color:var(--t1);font-weight:500}
+tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
+tbody td.right{text-align:right}
+tbody td.center{text-align:center}
+thead th.right{text-align:right}
+thead th.center{text-align:center}
+
+/* BADGES */
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:.2px;white-space:nowrap}
+.badge.ok{background:var(--green-d);color:var(--green)}
+.badge.warn{background:var(--amber-d);color:var(--amber)}
+.badge.crit{background:var(--red-d);color:var(--red)}
+.badge.blue{background:var(--blue-d);color:var(--blue)}
+.badge.purple{background:var(--purple-d);color:var(--purple)}
+.badge.cyan{background:var(--cyan-d);color:var(--cyan)}
+.badge.rojo{background:var(--redtec-d);color:var(--redtec);border:1px solid rgba(192,57,43,.25)}
+.badge.blanco-rt{background:var(--cyan-d);color:var(--cyan)}
+.badge.blanco-rdt{background:var(--blue-d);color:var(--blue)}
+.badge.repar{background:var(--purple-d);color:var(--purple)}
+
+/* SEARCH */
+.search-box{background:var(--s3);border:1px solid var(--border-md);border-radius:6px;color:var(--t1);font-size:12.5px;padding:6px 10px;font-family:'DM Sans',sans-serif;outline:none;width:220px;transition:border .15s}
+.search-box:focus{border-color:var(--blue)}
+.filter-select{background:var(--s3);border:1px solid var(--border-md);border-radius:6px;color:var(--t1);font-size:12px;padding:6px 10px;font-family:'DM Sans',sans-serif;outline:none;cursor:pointer;min-width:120px}
+.tag-count{font-size:10.5px;color:var(--t3)}
+
+/* MINI BAR */
+.mini-bar-wrap{display:flex;align-items:center;gap:8px;min-width:140px}
+.mini-bar-bg{flex:1;height:4px;background:var(--s4);border-radius:2px;overflow:hidden}
+.mini-bar-fill{height:100%;border-radius:2px;transition:width .3s}
+.mini-bar-label{font-size:11px;color:var(--t2);font-family:'DM Mono',monospace;min-width:75px;text-align:right}
+
+/* EMPTY / LOADING */
+.empty{text-align:center;padding:48px 20px;color:var(--t3)}
+.empty-ico{font-size:32px;margin-bottom:10px;opacity:.5}
+.empty-txt{font-size:13px;font-weight:500;color:var(--t2);margin-bottom:6px}
+.empty-sub{font-size:11.5px}
+.spinner{width:20px;height:20px;border:2px solid var(--border-md);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-row{display:flex;align-items:center;gap:10px;padding:20px 16px;color:var(--t2);justify-content:center}
+
+/* SECTION TITLE */
+.section-title{font-size:11px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.7px;padding:12px 16px 8px;border-bottom:1px solid var(--border)}
+
+/* ALERT */
+.alert{padding:10px 14px;border-radius:8px;font-size:12px;display:none;border:1px solid;align-items:center;gap:8px}
+.alert.show{display:flex}
+.alert.ok{background:var(--green-d);color:var(--green);border-color:rgba(30,201,106,.25)}
+.alert.warn{background:var(--amber-d);color:var(--amber);border-color:rgba(244,168,54,.25)}
+.alert.err{background:var(--red-d);color:var(--red);border-color:rgba(240,86,86,.25)}
+
+/* VALIDATOR */
+.validator{background:var(--amber-d);border:1px solid rgba(244,168,54,.2);border-radius:8px;padding:12px 14px;font-size:11.5px;color:var(--amber);display:none}
+.validator.show{display:block}
+.validator h4{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.validator ul{margin-left:18px;color:var(--t2)}
+.validator li{margin:3px 0;line-height:1.4}
+.validator li b{color:var(--amber);font-weight:600}
+
+/* PREFACTURA */
+.pf-select-row{background:var(--s2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.pf-select-row label{font-size:10.5px;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.pf-doc{background:var(--s2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;max-width:1200px;margin:0 auto}
+.pf-head{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:1px solid var(--border);margin-bottom:16px;flex-wrap:wrap;gap:12px}
+.pf-head h2{font-size:18px;font-weight:600;color:var(--t1);letter-spacing:.3px}
+.pf-head .subtitle{font-size:11px;color:var(--t2);margin-top:3px;text-transform:uppercase;letter-spacing:.5px}
+.pf-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;background:var(--s3);padding:12px 14px;border-radius:8px;border:1px solid var(--border);margin-bottom:16px}
+.pf-meta-item{display:flex;flex-direction:column;gap:2px}
+.pf-meta-label{font-size:9.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.pf-meta-val{font-size:13px;color:var(--t1);font-weight:500}
+.pf-cat-header{background:rgba(192,57,43,.08) !important;color:var(--redtec) !important;font-weight:600;padding:8px 12px !important;border-top:1px solid rgba(192,57,43,.2);font-size:10.5px !important;text-transform:uppercase;letter-spacing:.5px}
+.pf-subtotal-row td{font-weight:600;background:var(--s3);color:var(--t1)}
+.pf-totals{margin-top:16px;background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:14px 18px}
+.pf-totals-row{display:flex;justify-content:space-between;padding:5px 0;font-size:12.5px;color:var(--t2)}
+.pf-totals-row span:last-child{font-family:'DM Mono',monospace;color:var(--t1)}
+.pf-totals-row.subgroup{font-size:11.5px;color:var(--t3)}
+.pf-totals-row.neto{border-top:1px solid var(--border);padding-top:8px;margin-top:4px;font-weight:600;color:var(--t1)}
+.pf-totals-row.grand{border-top:1px solid var(--border-md);padding-top:8px;margin-top:4px;font-weight:600;font-size:16px;color:var(--redtec)}
+.pf-totals-row.grand span:last-child{color:var(--redtec)}
+
+/* MONEY positive */
+.money{font-family:'DM Mono',monospace;font-weight:500}
+.money.positive{color:var(--green)}
+.money.zero{color:var(--t3)}
+
+/* PRINT */
+@media print {
+  body{background:white;color:#222}
+  .hdr,.sidebar,.config-panel,.tabs,.kpi-grid,.alert,.validator,.pf-select-row,.btn-go,.btn-xls,.btn-print{display:none !important}
+  .layout{display:block}
+  .main{padding:0}
+  .pf-doc{background:white;border:none;padding:0;max-width:none;color:#222}
+  .pf-head{border-color:#ccc}
+  .pf-head h2{color:#922b21}
+  .pf-head .subtitle,.pf-meta-label{color:#666}
+  .pf-meta{background:#f8f8f8;border-color:#ddd}
+  .pf-meta-val{color:#222}
+  table{font-size:10.5px}
+  thead th{background:#f0f0f0 !important;color:#444 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tbody td{color:#444}
+  tbody td.bold{color:#000}
+  .pf-cat-header{background:#fdedec !important;color:#922b21 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .pf-subtotal-row td{background:#f5f5f5 !important;color:#000 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .pf-totals{background:#f8f8f8;border-color:#ddd}
+  .pf-totals-row{color:#444}
+  .pf-totals-row span:last-child{color:#000}
+  .pf-totals-row.grand,.pf-totals-row.grand span:last-child{color:#922b21}
+  .badge.rojo{background:#fadbd8 !important;color:#922b21 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <a href="index.html" class="hdr-logo">RT</a>
+  <span class="hdr-brand">REDTEC</span>
+  <div class="hdr-pipe"></div>
+  <span class="hdr-section">Transportes · Pagos SPOT</span>
+  <div class="hdr-right">
+    <div class="live-badge gris" id="badge-estado">
+      <span class="pulse gris" id="badge-dot"></span>
+      <span id="badge-txt">Sin cargar</span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="sb-label">Vistas</div>
+    <div class="sb-item active" data-tab="resumen" onclick="switchTab('resumen')">
+      <span class="ico">📊</span> Resumen
+    </div>
+    <div class="sb-item" data-tab="detalle" onclick="switchTab('detalle')">
+      <span class="ico">☰</span> Detalle viajes
+    </div>
+    <div class="sb-item" data-tab="prefactura" onclick="switchTab('prefactura')">
+      <span class="ico">📄</span> Prefactura
+    </div>
+    <div class="sb-item" data-tab="zonas" onclick="switchTab('zonas')">
+      <span class="ico">📍</span> Por zona
+    </div>
+    <div class="sb-sep"></div>
+    <div class="sb-label">Sistema</div>
+    <div class="sb-item" data-tab="validacion" onclick="switchTab('validacion')">
+      <span class="ico">⚠</span> Validación
+    </div>
+  </nav>
+
+  <main class="main">
+
+    <!-- CONFIG PANEL -->
+    <div class="config-panel">
+      <div class="field">
+        <label>Fecha inicio</label>
+        <input type="date" class="dinput" id="fi" />
+      </div>
+      <div class="field">
+        <label>Fecha fin</label>
+        <input type="date" class="dinput" id="ff" />
+      </div>
+      <button class="btn-go" id="btnCargar">▶ Cargar viajes</button>
+      <div class="field">
+        <label>Patente</label>
+        <select class="sinput" id="filtroPatente"><option value="">Todas</option></select>
+      </div>
+      <div class="field">
+        <label>Semana</label>
+        <select class="sinput" id="filtroSemana"><option value="">Todas</option></select>
+      </div>
+      <div class="field">
+        <label>Línea de negocio</label>
+        <select class="sinput" id="filtroLinea"><option value="">Todas</option></select>
+      </div>
+      <div class="field">
+        <label>Buscar</label>
+        <input type="text" class="search-box" id="busqueda" placeholder="Cliente, bodega, pedido…" />
+      </div>
+      <button class="btn-xls" id="btnExcel">⬇ Excel</button>
+      <button class="btn-print" id="btnPDF">🖨 Imprimir prefactura</button>
+    </div>
+
+    <!-- ALERTS -->
+    <div class="alert" id="alerta"></div>
+
+    <!-- KPIs -->
+    <div class="kpi-grid" id="kpis"></div>
+
+    <!-- TAB CONTENT -->
+    <div id="tab-resumen">
+      <div class="card">
+        <div class="card-hdr">
+          <div class="card-title"><span class="card-title-dot" style="background:var(--blue)"></span> Resumen por transportista</div>
+          <span class="tag-count" id="cntResumen"></span>
+        </div>
+        <div class="card-body no-pad">
+          <div id="contenedorResumen"><div class="empty"><div class="empty-ico">📊</div><div class="empty-txt">Sin datos cargados</div><div class="empty-sub">Selecciona un rango de fechas y haz click en Cargar viajes</div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-detalle" style="display:none">
+      <div class="card">
+        <div class="card-hdr">
+          <div class="card-title"><span class="card-title-dot" style="background:var(--cyan)"></span> Detalle de viajes</div>
+          <span class="tag-count" id="cntDetalle"></span>
+        </div>
+        <div class="card-body no-pad">
+          <div id="contenedorDetalle"><div class="empty"><div class="empty-ico">☰</div><div class="empty-txt">Sin datos cargados</div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-prefactura" style="display:none">
+      <div class="pf-select-row">
+        <label>Transportista</label>
+        <select class="sinput" id="selPrefactura" style="min-width:280px"><option value="">— Selecciona patente —</option></select>
+        <span id="periodoTxt" style="color:var(--t3);font-size:11px;margin-left:auto"></span>
+      </div>
+      <div id="contenedorPrefactura" style="margin-top:12px">
+        <div class="card"><div class="card-body"><div class="empty"><div class="empty-ico">📄</div><div class="empty-txt">Selecciona un transportista</div><div class="empty-sub">Carga datos y elige una patente del listado</div></div></div></div>
+      </div>
+    </div>
+
+    <div id="tab-zonas" style="display:none">
+      <div class="card">
+        <div class="card-hdr">
+          <div class="card-title"><span class="card-title-dot" style="background:var(--purple)"></span> Pagos por zona / destino</div>
+          <span class="tag-count" id="cntZonas"></span>
+        </div>
+        <div class="card-body no-pad">
+          <div id="contenedorZonas"><div class="empty"><div class="empty-ico">📍</div><div class="empty-txt">Sin datos cargados</div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-validacion" style="display:none">
+      <div class="card">
+        <div class="card-hdr">
+          <div class="card-title"><span class="card-title-dot" style="background:var(--amber)"></span> Validación de datos</div>
+        </div>
+        <div class="card-body">
+          <div id="contenedorValidacion"><div class="empty"><div class="empty-ico">⚠</div><div class="empty-txt">Sin datos para validar</div></div></div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+</div>
+
+<script>
+// ============================================================
+// CATÁLOGOS
+// ============================================================
+
+const CAMIONES = {
+  'BJCL13': {chofer:'ISMAEL CAMPOS', razonSocial:'ISMAEL CAMPOS', capacidad:252},
+  'CCRC36': {chofer:'JUAN CARLOS VEGA', razonSocial:'TRANSPORTES CHOVELLEN SPA', capacidad:540},
+  'CPVW43': {chofer:'CRISTOBAL ECHEVERRIA', razonSocial:'TRANSPORTES CHOVELLEN SPA', capacidad:540},
+  'FV2792': {chofer:'EMILIO CAULLE', razonSocial:'TRANSPORTES CHOVELLEN SPA', capacidad:540},
+  'LS3119': {chofer:'ANTONIO VEGA', razonSocial:'VICTOR ALEJANDRO VEGA LEAL', capacidad:252},
+  'NC8771': {chofer:'JULIO BULNES', razonSocial:'TRANSPORTES CHOVELLEN SPA', capacidad:540},
+  'RW5303': {chofer:'GONZALO CAMPOS', razonSocial:'SOCIEDAD CAMPOS TORRES LTDA.', capacidad:540},
+  'SP3393': {chofer:'CESAR ANABALON', razonSocial:'JUAN CARLOS VEGA PAVEZ', capacidad:252},
+  'VG1943': {chofer:'VICTOR VEGA', razonSocial:'TRANSPORTES CHOVELLEN SPA', capacidad:540},
+  'XC9869': {chofer:'ALEJANDRO PENDOLA', razonSocial:'CARMEN GLORIA VALDEBENITO', capacidad:540},
+  'YG5106': {chofer:'MIGUEL GOMEZ', razonSocial:'', capacidad:540}
+};
+
+const TARIFAS = [{"key":"00041 HIPER HUECHURABA","nombre":"00041 HIPER HUECHURABA","recinto":"00041 HIPER HUECHURABA","comuna":"HUECHURABA","region":"RM","zona":"P4","t252":237,"t540":209},{"key":"00041 HIPER HUECHURABA","nombre":"00041 HIPER HUECHURABA","recinto":"00041 HIPER HUECHURABA","comuna":"HUECHURABA","region":"RM","zona":"P5","t252":249,"t540":215},{"key":"00049 HIPER QUILICURA OHIGGINS","nombre":"00049 HIPER QUILICURA Ohiggins","recinto":"00049 HIPER QUILICURA Ohiggins","comuna":"QUILICURA","region":"RM","zona":"P3","t252":188,"t540":174},{"key":"00076 HIPER DEPARTAMENTAL","nombre":"00076 HIPER DEPARTAMENTAL","recinto":"00076 HIPER DEPARTAMENTAL","comuna":"LA FLORIDA","region":"RM","zona":"P18","t252":189,"t540":174},{"key":"00086 HIPER RECOLETA","nombre":"00086 HIPER RECOLETA","recinto":"00086 HIPER RECOLETA","comuna":"RECOLETA","region":"RM","zona":"P6","t252":238,"t540":212},{"key":"00671 HIPER QUILICURA MARCOLETA","nombre":"00671 HIPER QUILICURA Marcoleta","recinto":"00671 HIPER QUILICURA Marcoleta","comuna":"QUILICURA","region":"RM","zona":"P3","t252":188,"t540":174},{"key":"00682 HIPER SAN JOAQUIN","nombre":"00682 HIPER SAN JOAQUIN","recinto":"00682 HIPER SAN JOAQUIN","comuna":"SAN JOAQUIN","region":"RM","zona":"P18","t252":189,"t540":174},{"key":"00693 HIPER LA PINTANA","nombre":"00693 HIPER LA PINTANA","recinto":"00693 HIPER LA PINTANA","comuna":"LA PINTANA","region":"RM","zona":"P16","t252":312,"t540":259},{"key":"00748 HIPER RENCA","nombre":"00748 HIPER RENCA","recinto":"00748 HIPER RENCA","comuna":"RENCA","region":"RM","zona":"P2","t252":170,"t540":156},{"key":"ACONCAGUA FOODS","nombre":"ACONCAGUA FOODS","recinto":"ACONCAGUA FOODS S.A","comuna":"BUIN","region":"RM","zona":"P31","t252":335,"t540":285},{"key":"ALIFRUT RENGO PLANTA","nombre":"ALIFRUT RENGO PLANTA","recinto":"ALIMENTOS Y FRUTOS SA - ALIFRUT","comuna":"RENGO","region":"VI REGIÓN","zona":"P27","t252":756,"t540":650},{"key":"ALIMENTOS ANDINO RENCA","nombre":"ALIMENTOS ANDINO RENCA","recinto":"ALIMENTOS ANDINOS SPA.","comuna":"RENCA","region":"RM","zona":"P2","t252":170,"t540":156},{"key":"ARCOR CERRILLOS GRAL. VELASQUEZ 9309","nombre":"ARCOR CERRILLOS Gral. Velasquez 9309","recinto":"INDUSTRIA DE ALIMENTOS DOS EN UNO SA","comuna":"CERRILLOS","region":"RM","zona":"P10","t252":157,"t540":147},{"key":"BALLERINA PLANTA CERRILLOS","nombre":"BALLERINA Planta Cerrillos","recinto":"LABORATORIO BALLERINA LIMITADA","comuna":"CERRILLOS","region":"RM","zona":"P10","t252":157,"t540":147},{"key":"BODEGA SOFTYS SAN ANTONIO ULOG","nombre":"BODEGA SOFTYS SAN ANTONIO ULOG","recinto":"SOFTYS CHILE SPA ULOG","comuna":"SAN ANTONIO","region":"V REGIÓN","zona":"P28","t252":639,"t540":591},{"key":"BRÜGGEN RENCA","nombre":"Brüggen Renca","recinto":"BRUEGGEN","comuna":"RENCA","region":"RM","zona":"P2","t252":170,"t540":156},{"key":"CAMBIASO VALPARAISO CD","nombre":"CAMBIASO Valparaiso CD","recinto":"CAMBIASO VALPARAISO CD","comuna":"PLACILLA","region":"V REGIÓN","zona":"P29","t252":678,"t540":601},{"key":"CASTANO QUILICURA","nombre":"CASTANO QUILICURA","recinto":"CASTAÑO CD QULICURA","comuna":"QUILICURA","region":"RM","zona":"P4","t252":237,"t540":209},{"key":"CD FASA","nombre":"CD FASA","recinto":"CD FASA","comuna":"PUDAHUEL","region":"RM","zona":"P13","t252":140,"t540":143},{"key":"CD PRE-UNIC","nombre":"CD PRE-UNIC","recinto":"CD PRE-UNIC","comuna":"PUDAHUEL","region":"RM","zona":"P1","t252":117,"t540":120},{"key":"COLGATE - IMO CBP","nombre":"COLGATE - IMO CBP","recinto":"COLGATE - BUNKER CALYCO (IMO)","comuna":"LAMPA","region":"RM","zona":"P19","t252":168,"t540":171},{"key":"COLGATE INOCUO CBP","nombre":"COLGATE INOCUO CBP","recinto":"COLGATE-CALYCO CBP (INOCUO)","comuna":"PUDAHUEL","region":"RM","zona":"P17","t252":149,"t540":152},{"key":"COMERCIAL ANDEN SALZ PLANTA","nombre":"COMERCIAL ANDEN SALZ PLANTA","recinto":"COMERCIAL ANDEN SALZ LIMITADA","comuna":"MAIPU","region":"RM","zona":"P10","t252":157,"t540":147},{"key":"COMERCIAL CANADA QUILICURA","nombre":"COMERCIAL CANADA Quilicura","recinto":"COMERCIAL CANADA SPA","comuna":"COLINA","region":"RM","zona":"P4","t252":237,"t540":209},{"key":"COMERCIAL CASTRO CD CERRILLOS","nombre":"COMERCIAL CASTRO CD CERRILLOS","recinto":"COMERCIAL CASTRO CD CERRILLOS","comuna":"CERRILLOS","region":"RM","zona":"P10","t252":157,"t540":147},{"key":"COMERCIAL ECCSA SAN BERNARDO","nombre":"COMERCIAL ECCSA San Bernardo","recinto":"COMERCIAL ECCSA S.A.","comuna":"SAN BERNARDO","region":"RM","zona":"P10","t252":157,"t540":147},{"key":"COMERCIAL NABEK SPA","nombre":"COMERCIAL NABEK SPA","recinto":"COMERCIAL NABEK SPA","comuna":"LA PINTANA","region":"RM","zona":"P15","t252":225,"t540":191},{"key":"COMERCIAL ROCKY S.A.","nombre":"COMERCIAL ROCKY S.A.","recinto":"COMERCIAL ROCKY S.A.","comuna":"HIJUELAS","region":"V REGIÓN","zona":"P30","t252":723,"t540":617},{"key":"COMERCIALIZADORA PANOR","nombre":"COMERCIALIZADORA PANOR","recinto":"COMERCIALIZADORA PANOR SPA","comuna":"VALPARAISO","region":"V REGIÓN","zona":"P29","t252":678,"t540":601},{"key":"DEMARIA CD SANTIAGO","nombre":"DEMARIA CD Santiago","recinto":"DEMARIA CD SANTIAGO","comuna":"QUILICURA","region":"RM","zona":"P2","t252":170,"t540":156},{"key":"DEMARIA MAQUILA LAB. DUKAY","nombre":"DEMARIA MAQUILA LAB. DUKAY","recinto":"DEMARIA MAQUILA LAB. DUKAY","comuna":"LAMPA","region":"RM","zona":"P12","t252":306,"t540":260},{"key":"DEMARIA MEGA CARRASCAL","nombre":"DEMARIA MEGA CARRASCAL","recinto":"DEMARIA MEGA CARRASCAL","comuna":"CERRO NAVIA","region":"RM","zona":"P7","t252":186,"t540":168},{"key":"DEMARIA MEGA NOVICIADO","nombre":"DEMARIA MEGA NOVICIADO","recinto":"DEMARIA MEGA NOVICIADO","comuna":"LAMPA","region":"RM","zona":"P19","t252":168,"t540":171},{"key":"DEMARIA PALLET PARKING 5","nombre":"DEMARIA PALLET PARKING 5","recinto":"DEMARIA PALLET PARKING 5","comuna":"PUDAHUEL","region":"RM","zona":"P1","t252":117,"t540":120},{"key":"DEMARIA WAREHOUSING","nombre":"DEMARIA WAREHOUSING","recinto":"DEMARIA WAREHOUSING","comuna":"LAMPA","region":"RM","zona":"P4","t252":237,"t540":209},{"key":"DESA DIST ERRAZURRIZ LAMPA","nombre":"DESA DIST ERRAZURRIZ LAMPA","recinto":"DESA DIST ERRAZURRIZ","comuna":"LAMPA","region":"RM","zona":"P4","t252":237,"t540":209},{"key":"DIST.CASANOVA SALAR DE ASCOTAN 1291 ENEA","nombre":"DIST.CASANOVA Salar de Ascotan 1291 Enea","recinto":"DISTRIBUIDORA CASANOVA","comuna":"PUDAHUEL","region":"RM","zona":"P1","t252":117,"t540":120},{"key":"DISTRIBUIDORA LAGOS SAN BDO","nombre":"DISTRIBUIDORA LAGOS SAN BDO","recinto":"DISTRIBUIDORA LAGOS","comuna":"SAN BERNARDO","region":"RM","zona":"P15","t252":225,"t540":191},{"key":"DOS BANDERAS PUDAHUEL BODEGA LEVEL","nombre":"DOS BANDERAS Pudahuel Bodega Level","recinto":"DOS BANDERAS BODEGA PUDAHUEL","comuna":"PUDAHUEL","region":"RM","zona":"P2","t252":170,"t540":156},{"key":"DOS BANDERAS SANTIAGO","nombre":"DOS BANDERAS Santiago","recinto":"DOS BANDERAS SANTIAGO","comuna":"QUILICURA","region":"RM","zona":"P2","t252":170,"t540":156},{"key":"EGA KAT LOGISTICA","nombre":"EGA KAT LOGISTICA","recinto":"EGA KAT","comuna":"PUDAHUEL","region":"RM","zona":"P1","t252":117,"t540":120},{"key":"EMB. ANDINA PLANTA RENCA","nombre":"EMB. ANDINA PLANTA RENCA","recinto":"EMBOTELLADORA ANDINA","comuna":"RENCA","region":"RM","zona":"P2","t252":170,"t540":156},{"key":"EMBO. METROPOLITANA QUILICURA","nombre":"EMBO. METROPOLITANA Quilicura","recinto":"EMBOTELLADORA METROPOLITANA","comuna":"QUILICURA","region":"RM","zona":"P2","t252":170,"t540":156},{"key":"ENVASES CMF","nombre":"ENVASES CMF","recinto":"ENVASES CMF S.A.","comuna":"PUDAHUEL","region":"RM","zona":"P1","t252":117,"t540":120},{"key":"GOOD FOOD CD","nombre":"GOOD FOOD CD","recinto":"GOOD FOOD","comuna":"PEÑAFLOR","region":"RM","zona":"P22","t252":214,"t540":211},{"key":"HALEON PUDAHUEL LA MARTINA 400","nombre":"HALEON PUDAHUEL La Martina 400","recinto":"HALEON CHILE SPA","comuna":"PUDAHUEL","region":"RM","zona":"P1","t252":117,"t540":120},{"key":"HAMBURGO CD RENCA","nombre":"HAMBURGO CD Renca","recinto":"HAMBURGO CD RENCA","comuna":"RENCA","region":"RM","zona":"P2","t252":170,"t540":156},{"key":"IFCO CHILE QUILICURA","nombre":"IFCO CHILE Quilicura","recinto":"","comuna":"PUDAHUEL","region":"RM","zona":"P13","t252":null,"t540":143},{"key":"IFCO CHILE QUILICURA","nombre":"IFCO CHILE Quilicura","recinto":"IFCO SISA","comuna":"PUDAHUEL","region":"RM","zona":"P13","t252":140,"t540":null},{"key":"INDUSTRIA DE ALIMENTOS TRENDY","nombre":"INDUSTRIA DE ALIMENTOS TRENDY","recinto":"INDUSTRIA DE ALIMENTOS TRENDY","comuna":"PUDAHUEL","region":"RM","zona":"P1","t252":117,"t540":120},{"key":"INDUSTRIAS CLEANER D Y C SAN BERNARDO","nombre":"INDUSTRIAS CLEANER D y C San Bernardo","recinto":"INDUSTRIAS CLEANER DyC","comuna":"SAN BERNARDO","region":"RM","zona":"P14","t252":202,"t540":175},{"key":"INDUSTRIAS CLEANER EMPRESA RENCA","nombre":"INDUSTRIAS CLEANER Empresa Renca","recinto":"INDUSTRIAS CLEANER RENCA","comuna":"RENCA","region":"RM","zona":"P2","t252":170,"t540":156},{"key":"INDUSTRIAS CLEANER LAMPA","nombre":"INDUSTRIAS CLEANER LAMPA","recinto":"INDUSTRIAS CLEANER LAMPA","comuna":"LAMPA","region":"RM","zona":"P4","t252":237,"t540":209},{"key":"INDUSTRIAS CLEANER MANUCHAR SAN ANTONIO","nombre":"INDUSTRIAS CLEANER Manuchar San Antonio","recinto":"INDUSTRIAS CLEANER Manuchar","comuna":"SAN ANTONIO","region":"V REGIÓN","zona":"P28","t252":null,"t540":591},{"key":"INDUSTRIAS CLEANER SCALPI QUILICURA LAUTARO 3005","nombre":"INDUSTRIAS CLEANER Scalpi Quilicura Lautaro 3005","recinto":"INDUSTRIAS CLEANER CHILE S.A.","comuna":"QUILICURA","region":"RM","zona":"P4","t252":237,"t540":209},{"key":"INDUSTRIAS CLEANER MANUCHAR","nombre":"INDUSTRIAS CLEANER Manuchar","recinto":"INDUSTRIAS CLEANER Manuchar","comuna":"SAN ANTONIO","region":"V REGIÓN","zona":"P28","t252":639,"t540":null},{"key":"INTERCARRY CD LO ESPEJO","nombre":"INTERCARRY CD LO ESPEJO","recinto":"INTERCARRY CD LO ESPEJO","comuna":"SAN BERNARDO","region":"RM","zona":"P14","t252":202,"t540":175},{"key":"INTERCARRY CD MACUL","nombre":"INTERCARRY CD Macul","recinto":"INTERCARRY CD MACUL","comuna":"MACUL","region":"RM","zona":"P18","t252":189,"t540":174},{"key":"INTERCOS COLINA","nombre":"INTERCOS COLINA","recinto":"INTERCOS COLINA","comuna":"COLINA","region":"RM","zona":"P4","t252":237,"t540":209},{"key":"INTERCOS DUKAY","nombre":"INTERCOS DUKAY","recinto":"INTERCOS DUKAY","comuna":"LAMPA","region":"RM","zona":"P12","t252":306,"t540":260},{"key":"INTERCOS SIM","nombre":"INTERCOS SIM","recinto":"INTERCOS SIM","comuna":"ESTACION CENTRAL","region":"RM","zona":"P4","t252":237,"t540":209},{"key":"LAF CD RENCA","nombre":"LAF CD Renca","recinto":"LAF CD RENCA","comuna":"RENCA","region":"RM","zona":"P2","t252":170,"t540":156},{"key":"LESAFFRE CD","nombre":"LESAFFRE CD","recinto":"LESAFFRE CD","comuna":"QUILICURA","region":"RM","zona":"P4","t252":237,"t540":209},{"key":"M3034 MAYORISTA 10 RENGO","nombre":"M3034 MAYORISTA 10 RENGO","recinto":"M3034 MAYORISTA 10 RENGO","comuna":"RENGO","region":"VI REGIÓN","zona":"P27","t252":756,"t540":650},{"key":"MARGARITA UAUY E HIJOS","nombre":"MARGARITA UAUY E HIJOS","recinto":"MARGARITA UAUY E HIJOS","comuna":"LAMPA","region":"RM","zona":"P4","t252":237,"t540":209},{"key":"MARGOT IRENE RIVERA VILLA","nombre":"MARGOT IRENE RIVERA VILLA","recinto":"MARGOT IRENE RIVERA VILLA","comuna":"MAIPÚ","region":"RM","zona":"P10","t252":157,"t540":147},{"key":"MARINETTI QUILICURA CD","nombre":"MARINETTI QUILICURA CD","recinto":"MMP MARINETTI LTDA","comuna":"RENCA","region":"RM","zona":"P2","t252":170,"t540":156},{"key":"MARITANO CD HUECHURABA","nombre":"MARITANO CD HUECHURABA","recinto":"MARITANO CD HUECHURABA","comuna":"HUECHURABA","region":"RM","zona":"P5","t252":249,"t540":215},{"key":"MOL HEREDIA MAIPU PLANTA","nombre":"MOL HEREDIA MAIPU PLANTA","recinto":"MOLINERA HEREDIA LTDA.","comuna":"MAIPU","region":"RM","zona":"P10","t252":157,"t540":147},{"key":"MOLINO PUENTE ALTO CD","nombre":"MOLINO PUENTE ALTO CD","recinto":"MOLINO PUENTE ALTO S.A","comuna":"PUENTE ALTO","region":"RM","zona":"P16","t252":312,"t540":259},{"key":"NESTLE MAIPU C. MELIPILLA 15300","nombre":"NESTLE MAIPÚ C. Melipilla 15300","recinto":"NESTLE CHILE S.A","comuna":"MAIPÚ","region":"RM","zona":"P21","t252":195,"t540":184},{"key":"NUTRATRADE S.A - LAS ACACIAS","nombre":"NUTRATRADE S.A - Las acacias","recinto":"NUTRATRADE S.A - Las acacias","comuna":"SAN BERNARDO","region":"RM","zona":"P14","t252":202,"t540":175},{"key":"NUTRATRADE S.A - LOS PINOS","nombre":"NUTRATRADE S.A - Los pinos","recinto":"NUTRATRADE S.A - Los pinos","comuna":"SAN BERNARDO","region":"RM","zona":"P15","t252":225,"t540":191},{"key":"NUTRISCO","nombre":"NUTRISCO","recinto":"NUTRISCO","comuna":"COLINA","region":"RM","zona":"P4","t252":237,"t540":209},{"key":"PAIMASA ISLA DE MAIPO","nombre":"PAIMASA ISLA DE MAIPO","recinto":"PAIMASA ISLA DE MAIPO","comuna":"ISLA DE MAIPO","region":"RM","zona":"P24","t252":291,"t540":278},{"key":"PF SANTIAGO PLANTA","nombre":"PF SANTIAGO PLANTA","recinto":"PF SANTIAGO PLANTA","comuna":"RENCA","region":"RM","zona":"P8","t252":190,"t540":173},{"key":"PIBAMOUR CD BUENAVENTURA","nombre":"PIBAMOUR CD BUENAVENTURA","recinto":"PIBAMOUR CD BUENAVENTURA","comuna":"QUILICURA","region":"RM","zona":"P4","t252":237,"t540":209},{"key":"PIBAMOUR CD FRIO","nombre":"PIBAMOUR CD FRIO","recinto":"PIBAMOUR CD FRIO","comuna":"RENCA","region":"RM","zona":"P2","t252":170,"t540":156},{"key":"PRISA CD QUILICURA","nombre":"PRISA CD Quilicura","recinto":"CD PRISA","comuna":"PUDAHUEL","region":"RM","zona":"P2","t252":170,"t540":156},{"key":"PRISA PRILOGIC","nombre":"PRISA PRILOGIC","recinto":"PRISA PRILOGIC","comuna":"CERRILLOS","region":"RM","zona":"P10","t252":157,"t540":147},{"key":"PROALSA CD LO AGUIRRE","nombre":"PROALSA CD Lo Aguirre","recinto":"PROALSA CD LO AGUIRRE","comuna":"PUDAHUEL","region":"RM","zona":"P13","t252":140,"t540":143},{"key":"PROCTER AND GAMBLE","nombre":"PROCTER AND GAMBLE","recinto":"P&G","comuna":"MACUL","region":"RM","zona":"P18","t252":189,"t540":174},{"key":"QUINTA ENEA","nombre":"QUINTA ENEA","recinto":"QUINTA ENEA S.A.","comuna":"PUDAHUEL","region":"RM","zona":"P1","t252":117,"t540":120},{"key":"QUINTA VESPUCIO","nombre":"QUINTA VESPUCIO","recinto":"QUINTA VESPUCIO","comuna":"PUDAHUEL","region":"RM","zona":"P1","t252":117,"t540":120},{"key":"RABIE SANTIAGO","nombre":"RABIE SANTIAGO","recinto":"RABIE SANTIAGO","comuna":"QUILICURA","region":"RM","zona":"P2","t252":170,"t540":156},{"key":"RECUPAC S.A.","nombre":"RECUPAC S.A.","recinto":"RECUPAC S.A.","comuna":"HUECHURABA","region":"RM","zona":"P4","t252":237,"t540":209},{"key":"SIADTALEB SAN BERNANDO CD BARRANCON 2080","nombre":"SIADTALEB  SAN BERNANDO CD Barrancon 2080","recinto":"DISTRIBUIDORA TALEB","comuna":"SAN BERNARDO","region":"RM","zona":"P26","t252":254,"t540":219},{"key":"SOFTYS PLANTA TALAGANTE","nombre":"SOFTYS PLANTA TALAGANTE","recinto":"SOFTYS CHILE SPA TALAGANTE","comuna":"TALAGANTE","region":"RM","zona":"P24","t252":291,"t540":278},{"key":"SOFTYS PLANTA PUENTE ALTO","nombre":"Softys Planta Puente Alto","recinto":"SOFTYS CHILE SPA PUENTE ALTO","comuna":"PUENTE ALTO","region":"RM","zona":"P16","t252":312,"t540":259},{"key":"SOFTYS TEXVAL","nombre":"Softys TEXVAL","recinto":"SOFTYS CHILE SPA TEXVAL","comuna":"VALPARAÍSO","region":"V REGIÓN","zona":"P29","t252":678,"t540":601},{"key":"TEBA GRAN AVENIDA AV. JOSE MIGUEL CARERRA 13365","nombre":"TEBA GRAN AVENIDA Av. José Miguel Carerra 13365","recinto":"TEBA GRAN AVENIDA","comuna":"SAN BERNARDO","region":"RM","zona":"P15","t252":225,"t540":191},{"key":"TEBA JJ PEREZ AV. J.J PEREZ #6142 CERRO NAVIA","nombre":"TEBA JJ PEREZ Av. J.J Perez #6142 Cerro Navia","recinto":"TEBA JJ PEREZ","comuna":"CERRO NAVIA","region":"RM","zona":"P7","t252":186,"t540":168},{"key":"TEBA LO BLANCO AV. LO BLANCO #2561 LA PINTANA","nombre":"TEBA LO BLANCO Av. Lo Blanco #2561 La Pintana","recinto":"TEBA LO BLANCO","comuna":"LA PINTANA","region":"RM","zona":"P15","t252":225,"t540":191},{"key":"TEBA LO VALLEDOR AV.GRL.VELAZQUEZ #3409 CERRILLOS","nombre":"TEBA LO VALLEDOR Av.Grl.Velázquez #3409 Cerrillos","recinto":"TEBA LO VALLEDOR","comuna":"CERRILLOS","region":"RM","zona":"P10","t252":157,"t540":147},{"key":"THE PROTEIN COMPANY PAINE","nombre":"THE PROTEIN COMPANY Paine","recinto":"THE PROTEIN COMPANY","comuna":"PAINE","region":"RM","zona":"P25","t252":348,"t540":301},{"key":"TUCAPEL PRODUCCION SANTIAGO","nombre":"TUCAPEL PRODUCCION SANTIAGO","recinto":"EMPRESAS TUCAPEL S.A.","comuna":"PUDAHUEL","region":"RM","zona":"P2","t252":170,"t540":156},{"key":"TUCAPEL SA","nombre":"TUCAPEL SA","recinto":"EMPRESAS TUCAPEL S.A.","comuna":"PUDAHUEL","region":"RM","zona":"P2","t252":170,"t540":156},{"key":"VETERQUIMICA S.A.","nombre":"VETERQUIMICA S.A.","recinto":"VETERQUIMICA S.A.","comuna":"MAIPU","region":"RM","zona":"P10","t252":157,"t540":147},{"key":"VIRUTEX CD PUDAHUEL","nombre":"VIRUTEX CD Pudahuel","recinto":"VIRUTEX CD PUDAHUEL","comuna":"PUDAHUEL","region":"RM","zona":"P1","t252":117,"t540":120},{"key":"VIRUTEX MAMUT SAN JOAQUIN","nombre":"VIRUTEX MAMUT SAN JOAQUIN","recinto":"VIRUTEX MAMUT","comuna":"SAN JOAQUIN","region":"RM","zona":"P18","t252":189,"t540":174},{"key":"VIRUTEX MELIPILLA","nombre":"VIRUTEX MELIPILLA","recinto":"VIRUTEX CD MELIPILLA","comuna":"CERRILLOS","region":"RM","zona":"P10","t252":157,"t540":147},{"key":"WOODPALLETS","nombre":"WOODPALLETS","recinto":"WOODPALLETS (APR)","comuna":"TALAGANTE","region":"RM","zona":"P23","t252":238,"t540":224},{"key":"ZAL03 CD ALVI AEROPARQUE","nombre":"ZAL03 CD ALVI AEROPARQUE","recinto":"ZAL03 CD ALVI AEROPARQUE","comuna":"PUDAHUEL","region":"RM","zona":"P2","t252":170,"t540":156},{"key":"ZCS01 CD CENCOSUD NOVICIADO","nombre":"ZCS01 CD CENCOSUD NOVICIADO","recinto":"ZCS01 CD CENCOSUD NOVICIADO","comuna":"PUDAHUEL","region":"RM","zona":"P13","t252":140,"t540":143},{"key":"ZCS07 CD CENCOSUD LO AGUIRRE","nombre":"ZCS07 CD CENCOSUD LO AGUIRRE","recinto":"ZCS07 CD CENCOSUD LO AGUIRRE","comuna":"PUDAHUEL","region":"RM","zona":"P13","t252":140,"t540":143},{"key":"ZSB CD SALCO BRAND","nombre":"ZSB CD SALCO BRAND","recinto":"ZSB CD SALCOBRAND","comuna":"SAN BERNARDO","region":"RM","zona":"P10","t252":157,"t540":147},{"key":"ZTT01 CD TOTTUS LA FARFANA","nombre":"ZTT01 CD TOTTUS LA FARFANA","recinto":"CD TOTTUS LA FARFANA","comuna":"PUDAHUEL","region":"RM","zona":"P1","t252":117,"t540":120},{"key":"ZUN01 CD UNIMARC LO AGUIRRE","nombre":"ZUN01 CD UNIMARC LO AGUIRRE","recinto":"ZUN01 CD UNIMARC LO AGUIRRE","comuna":"PUDAHUEL","region":"RM","zona":"P13","t252":140,"t540":143},{"key":"ZWM01 CD WM LO AGUIRRE SECO","nombre":"ZWM01 CD WM LO AGUIRRE SECO","recinto":"ZWM01 CD WM LO AGUIRRE SECO","comuna":"PUDAHUEL","region":"RM","zona":"P13","t252":140,"t540":143},{"key":"ZWM02 CD WM QUILICURA FRIO","nombre":"ZWM02 CD WM QUILICURA FRIO","recinto":"ZWM02 CD WM QUILICURA FRIO","comuna":"QUILICURA","region":"RM","zona":"P4","t252":237,"t540":209},{"key":"ZWM08 WM RENTAPACK SANTIAGO","nombre":"ZWM08 WM RENTAPACK SANTIAGO","recinto":"ZWM08 WM RENTAPACK SANTIAGO","comuna":"QUILICURA","region":"RM","zona":"P2","t252":170,"t540":156},{"key":"ZWM11 CD WM EL PENON","nombre":"ZWM11 CD WM EL PEÑON","recinto":"ZWM11 CD WM EL PEÑON","comuna":"SAN BERNARDO","region":"RM","zona":"P26","t252":254,"t540":219}];
+
+const TARIFAS_IDX = {};
+TARIFAS.forEach(t => {
+  if (!TARIFAS_IDX[t.key]) TARIFAS_IDX[t.key] = [];
+  TARIFAS_IDX[t.key].push(t);
+});
+
+// ============================================================
+// UTILIDADES
+// ============================================================
+
+function normalize(s){
+  if(!s) return '';
+  return String(s).toUpperCase().trim()
+    .replace(/Á/g,'A').replace(/É/g,'E').replace(/Í/g,'I').replace(/Ó/g,'O').replace(/Ú/g,'U').replace(/Ñ/g,'N')
+    .replace(/\s+/g,' ');
+}
+function fmtCLP(n){
+  if(n==null||isNaN(n)) return '—';
+  return '$' + Math.round(n).toLocaleString('es-CL');
+}
+function fmtInt(n){
+  if(n==null||isNaN(n)) return '—';
+  return Math.round(n).toLocaleString('es-CL');
+}
+function fmtDate(d){
+  if(!d) return '';
+  const dt = new Date(d);
+  if(isNaN(dt)) return d;
+  return dt.toLocaleDateString('es-CL');
+}
+function semanaISO(d){
+  const date = new Date(d);
+  if(isNaN(date)) return '';
+  const target = new Date(date.valueOf());
+  const dayNr = (date.getDay() + 6) % 7;
+  target.setDate(target.getDate() - dayNr + 3);
+  const firstThursday = target.valueOf();
+  target.setMonth(0, 1);
+  if(target.getDay() !== 4) target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+  return 1 + Math.ceil((firstThursday - target) / 604800000);
+}
+function esRedtec(b){
+  if(!b) return false;
+  const n = normalize(b);
+  return n.includes('REDTEC SANTIAGO') || n.includes('SANTIAGO INSPECCION');
+}
+
+// ============================================================
+// MOTOR DE CÁLCULO
+// ============================================================
+
+function getBodegaTarifable(viaje){
+  const op = (viaje.operacion||'').trim();
+  if(op === 'Emision' || op === 'Emision 24 horas') return viaje.bodegaDestinoStr;
+  if(op === 'Retiro' || op === 'Devolucion'){
+    if(!esRedtec(viaje.bodegaOrigenStr)) return viaje.bodegaOrigenStr;
+    return viaje.bodegaDestinoStr;
+  }
+  if(!esRedtec(viaje.bodegaOrigenStr)) return viaje.bodegaOrigenStr;
+  return viaje.bodegaDestinoStr;
+}
+
+function lookupTarifa(bodega, capacidad){
+  if(!bodega) return null;
+  const key = normalize(bodega);
+  const matches = TARIFAS_IDX[key];
+  if(!matches || !matches.length) return null;
+  const m = matches[0];
+  const tarifa = capacidad === 252 ? m.t252 : m.t540;
+  return {zona: m.zona, tarifa, comuna: m.comuna, region: m.region, nombreBodega: m.nombre};
+}
+
+function clasificarLinea(viaje){
+  const op = (viaje.operacion||'').trim();
+  const origen = normalize(viaje.bodegaOrigenStr);
+  const destino = normalize(viaje.bodegaDestinoStr);
+  const cliente = normalize(viaje.clienteOrigenStr) + ' ' + normalize(viaje.clienteDestinoStr);
+  const obs = normalize(viaje.observacion);
+
+  if(obs.includes('FALSO FLETE') || obs.includes('FALSO')){
+    return {linea:'FALSO FLETE', tipoOperacion:'FALSO FLETE', claseOp:'Blanco comercializacion Redtec'};
+  }
+  if(cliente.includes('IFCO') || cliente.includes('LOGISTICA Y TRANSPORTES RT')){
+    return {linea:'COMERCIALIZACION', tipoOperacion:'COMPRA', claseOp:'Blanco comercializacion RT'};
+  }
+  if(op === 'Emision' || op === 'Emision 24 horas'){
+    return {linea:'EMISION ROJO', tipoOperacion:'EMISIÓN ROJOS', claseOp:'Rojo'};
+  }
+  if(op === 'Retiro'){
+    if(destino.includes('REDTEC SANTIAGO')){
+      if(/^Z[A-Z]{2}\d/.test((viaje.bodegaOrigenStr||'').trim())){
+        return {linea:'RETIRO ROJO', tipoOperacion:'RETIRO CD RETAIL', claseOp:'Rojo'};
+      }
+      return {linea:'RETIRO ROJO', tipoOperacion:'RETIRO RUTA RM', claseOp:'Rojo'};
+    }
+    return {linea:'RETIRO ROJO', tipoOperacion:'RETIRO RUTA RM', claseOp:'Rojo'};
+  }
+  if(op === 'Devolucion'){
+    return {linea:'RETIRO ROJO', tipoOperacion:'DEVOLUCION', claseOp:'Rojo'};
+  }
+  return {linea:'-', tipoOperacion:'-', claseOp:'-'};
+}
+
+function procesarViaje(raw){
+  const patente = (raw.patente||'').trim().toUpperCase();
+  const camion = CAMIONES[patente] || {chofer:raw.chofer||'', razonSocial:'', capacidad:null};
+  const capacidad = camion.capacidad;
+  const cantidad = Number(raw.cantidadConfirmada) || 0;
+
+  const bodegaTarif = getBodegaTarifable(raw);
+  const tarifaInfo = lookupTarifa(bodegaTarif, capacidad);
+  const clasif = clasificarLinea(raw);
+
+  const valorUnit = tarifaInfo ? tarifaInfo.tarifa : null;
+  const total = (valorUnit && cantidad) ? valorUnit * cantidad : null;
+  const fecha = raw.fechaConfirmacion || raw.fechaDespacho || raw.horaIngreso;
+  const semana = fecha ? semanaISO(fecha) : '';
+
+  return {
+    semana,
+    clienteOrigenStr: raw.clienteOrigenStr||'',
+    clienteDestinoStr: raw.clienteDestinoStr||'',
+    nroPedido: raw.nroPedido||'',
+    dteNro: raw.dteNro||raw.nroDocumento||'',
+    operacion: raw.operacion||'',
+    etapaOperacion: raw.etapaOperacion||'',
+    lineaNegocios: clasif.linea,
+    tipoOperacion: clasif.tipoOperacion,
+    claseOp: clasif.claseOp,
+    fechaConfirmacion: fecha,
+    cantidadConfirmada: cantidad,
+    bodegaOrigenStr: raw.bodegaOrigenStr||'',
+    bodegaDestinoStr: raw.bodegaDestinoStr||'',
+    patente,
+    chofer: raw.chofer||camion.chofer,
+    capacidad,
+    razonSocial: camion.razonSocial,
+    valorUnit, total,
+    observacion: raw.observacion||'',
+    bodegaTarifada: bodegaTarif,
+    zonaTarif: tarifaInfo?tarifaInfo.zona:null,
+    comunaTarif: tarifaInfo?tarifaInfo.comuna:null,
+    sinTarifa: !tarifaInfo && !esRedtec(bodegaTarif),
+    sinPatente: !CAMIONES[patente] && patente
+  };
+}
+
+// ============================================================
+// ESTADO Y FETCH
+// ============================================================
+
+let VIAJES_PROC = [];
+
+async function cargarViajes(){
+  const desde = document.getElementById('fi').value;
+  const hasta = document.getElementById('ff').value;
+  if(!desde||!hasta){ setAlerta('Selecciona un rango de fechas','warn'); return; }
+
+  setBadge('amber','Cargando…');
+  const btn = document.getElementById('btnCargar');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner" style="border-top-color:#fff;width:13px;height:13px;border-width:2px"></span> Cargando…';
+
+  setEmpty('contenedorResumen', 'spinner', 'Consultando M3Link…');
+  setEmpty('contenedorDetalle', 'spinner', 'Consultando M3Link…');
+
+  try {
+    const url = `/api/m3link-viajes-proxy?fechaDesde=${desde}&fechaHasta=${hasta}`;
+    const r = await fetch(url);
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    const arr = Array.isArray(data) ? data : (data.items||data.data||[]);
+
+    if(!arr.length){
+      setAlerta('Sin viajes en el rango seleccionado','warn');
+      VIAJES_PROC = [];
+      setBadge('amber','Sin datos');
+    } else {
+      VIAJES_PROC = arr.map(procesarViaje);
+      setAlerta(`✓ ${VIAJES_PROC.length} viajes cargados`, 'ok');
+      setBadge('verde', `${VIAJES_PROC.length} viajes`);
+    }
+
+    construirFiltros();
+    renderTodo();
+
+  } catch(err) {
+    console.error(err);
+    setAlerta('Error consultando M3Link: ' + err.message,'err');
+    setBadge('rojo','Error');
+    setEmpty('contenedorResumen', 'err', 'Error al cargar datos');
+    setEmpty('contenedorDetalle', 'err', 'Error al cargar datos');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '▶ Cargar viajes';
+  }
+}
+
+function setBadge(tipo, txt){
+  const b = document.getElementById('badge-estado');
+  const d = document.getElementById('badge-dot');
+  const t = document.getElementById('badge-txt');
+  b.className = 'live-badge ' + tipo;
+  d.className = 'pulse ' + tipo;
+  t.textContent = txt;
+}
+function setAlerta(msg, tipo){
+  const a = document.getElementById('alerta');
+  a.textContent = msg;
+  a.className = 'alert show ' + tipo;
+  if(tipo === 'ok') setTimeout(()=>a.classList.remove('show'), 4000);
+}
+function setEmpty(id, ico, txt, sub){
+  const el = document.getElementById(id);
+  if(!el) return;
+  if(ico === 'spinner'){
+    el.innerHTML = `<div class="loading-row"><span class="spinner"></span> ${txt}</div>`;
+  } else if(ico === 'err'){
+    el.innerHTML = `<div class="empty"><div class="empty-ico">⚠</div><div class="empty-txt">${txt}</div></div>`;
+  } else {
+    el.innerHTML = `<div class="empty"><div class="empty-ico">${ico}</div><div class="empty-txt">${txt}</div>${sub?'<div class="empty-sub">'+sub+'</div>':''}</div>`;
+  }
+}
+
+// ============================================================
+// FILTROS
+// ============================================================
+
+function construirFiltros(){
+  const patentes = [...new Set(VIAJES_PROC.map(v=>v.patente).filter(Boolean))].sort();
+  const semanas = [...new Set(VIAJES_PROC.map(v=>v.semana).filter(Boolean))].sort((a,b)=>a-b);
+  const lineas = [...new Set(VIAJES_PROC.map(v=>v.lineaNegocios).filter(Boolean))].sort();
+
+  const fillSel = (id, items, lbl) => {
+    const sel = document.getElementById(id);
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">'+lbl+'</option>' + items.map(x=>`<option value="${x}">${x}</option>`).join('');
+    if(items.includes(cur)) sel.value = cur;
+  };
+  fillSel('filtroPatente', patentes, 'Todas');
+  fillSel('filtroSemana', semanas.map(String), 'Todas');
+  fillSel('filtroLinea', lineas, 'Todas');
+
+  const selPF = document.getElementById('selPrefactura');
+  const curPF = selPF.value;
+  selPF.innerHTML = '<option value="">— Selecciona patente —</option>' + patentes.map(p=>{
+    const c = CAMIONES[p]||{chofer:''};
+    return `<option value="${p}">${p} · ${c.chofer}</option>`;
+  }).join('');
+  if(patentes.includes(curPF)) selPF.value = curPF;
+}
+
+function aplicarFiltros(){
+  const p = document.getElementById('filtroPatente').value;
+  const s = document.getElementById('filtroSemana').value;
+  const l = document.getElementById('filtroLinea').value;
+  const q = normalize(document.getElementById('busqueda').value);
+
+  return VIAJES_PROC.filter(v => {
+    if(p && v.patente !== p) return false;
+    if(s && String(v.semana) !== s) return false;
+    if(l && v.lineaNegocios !== l) return false;
+    if(q){
+      const blob = normalize([v.clienteOrigenStr, v.clienteDestinoStr, v.bodegaOrigenStr, v.bodegaDestinoStr, v.nroPedido, v.dteNro, v.chofer].join(' '));
+      if(!blob.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+
+function renderTodo(){
+  renderKPIs();
+  renderResumen();
+  renderDetalle();
+  renderZonas();
+  renderValidacion();
+  if(document.getElementById('selPrefactura').value) renderPrefactura();
+}
+
+function renderKPIs(){
+  const data = aplicarFiltros();
+  const totalNeto = data.reduce((s,v)=>s+(v.total||0),0);
+  const totalPallets = data.reduce((s,v)=>s+(v.cantidadConfirmada||0),0);
+  const transportistas = new Set(data.map(v=>v.razonSocial).filter(Boolean)).size;
+  const patentes = new Set(data.map(v=>v.patente).filter(Boolean)).size;
+  const iva = totalNeto * 0.19;
+  const total = totalNeto + iva;
+
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi blue"><div class="kpi-label">Viajes</div><div class="kpi-val blue">${fmtInt(data.length)}</div><div class="kpi-sub">${patentes} patentes activas</div></div>
+    <div class="kpi cyan"><div class="kpi-label">Pallets movidos</div><div class="kpi-val cyan">${fmtInt(totalPallets)}</div><div class="kpi-sub">en el período</div></div>
+    <div class="kpi green"><div class="kpi-label">Neto a pagar</div><div class="kpi-val green">${fmtCLP(totalNeto)}</div><div class="kpi-sub">sin IVA</div></div>
+    <div class="kpi amber"><div class="kpi-label">IVA 19%</div><div class="kpi-val amber">${fmtCLP(iva)}</div><div class="kpi-sub">a aplicar</div></div>
+    <div class="kpi red"><div class="kpi-label">Total a pagar</div><div class="kpi-val red">${fmtCLP(total)}</div><div class="kpi-sub">con IVA</div></div>
+    <div class="kpi purple"><div class="kpi-label">Transportistas</div><div class="kpi-val purple">${transportistas}</div><div class="kpi-sub">facturando</div></div>
+  `;
+}
+
+function tagClase(c){
+  if(!c||c==='-') return '<span class="badge" style="background:var(--s3);color:var(--t3)">—</span>';
+  if(c === 'Rojo') return '<span class="badge rojo">Rojo</span>';
+  if(c.includes('RT')) return '<span class="badge blanco-rt">Bl. RT</span>';
+  if(c.includes('Redtec')) return '<span class="badge blanco-rdt">Bl. RDT</span>';
+  return '<span class="badge">'+c+'</span>';
+}
+
+function renderDetalle(){
+  const data = aplicarFiltros();
+  document.getElementById('cntDetalle').textContent = `${data.length} viajes`;
+  if(!data.length){
+    setEmpty('contenedorDetalle','☰','Sin resultados','Ajusta los filtros');
+    return;
+  }
+  let html = '<div class="tbl-wrap"><table><thead><tr>';
+  html += '<th class="center">Sem</th><th>Fecha</th><th>Operación</th><th>Línea</th><th>Categoría</th>';
+  html += '<th>N° Pedido</th><th>DTE</th><th>Origen</th><th>Destino</th>';
+  html += '<th>Patente</th><th>Chofer</th><th class="right">Pallets</th>';
+  html += '<th class="right">Tarifa</th><th class="right">Total</th>';
+  html += '</tr></thead><tbody>';
+  data.forEach(v => {
+    html += '<tr>';
+    html += `<td class="center mono">${v.semana||''}</td>`;
+    html += `<td>${fmtDate(v.fechaConfirmacion)}</td>`;
+    html += `<td>${v.operacion}</td>`;
+    html += `<td>${v.lineaNegocios}</td>`;
+    html += `<td>${tagClase(v.claseOp)}</td>`;
+    html += `<td class="mono">${v.nroPedido}</td>`;
+    html += `<td class="mono">${v.dteNro}</td>`;
+    html += `<td>${v.bodegaOrigenStr||''}</td>`;
+    html += `<td>${v.bodegaDestinoStr||''}</td>`;
+    html += `<td class="bold mono">${v.patente}</td>`;
+    html += `<td>${v.chofer}</td>`;
+    html += `<td class="right mono">${fmtInt(v.cantidadConfirmada)}</td>`;
+    html += `<td class="right mono">${v.valorUnit?fmtCLP(v.valorUnit):'<span class="badge crit">sin tarifa</span>'}</td>`;
+    html += `<td class="right bold mono">${fmtCLP(v.total)}</td>`;
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+  document.getElementById('contenedorDetalle').innerHTML = html;
+}
+
+function renderResumen(){
+  const data = aplicarFiltros();
+  if(!data.length){
+    setEmpty('contenedorResumen','📊','Sin datos','Carga datos primero');
+    document.getElementById('cntResumen').textContent = '';
+    return;
+  }
+  const resumen = {};
+  data.forEach(v => {
+    const k = v.patente || '(sin patente)';
+    if(!resumen[k]) resumen[k] = {patente:k, chofer:v.chofer, razonSocial:v.razonSocial, capacidad:v.capacidad, Rojo:0, BlRT:0, BlRDT:0, viajes:0, pallets:0, neto:0};
+    resumen[k].viajes++;
+    resumen[k].pallets += v.cantidadConfirmada||0;
+    resumen[k].neto += v.total||0;
+    if(v.claseOp === 'Rojo') resumen[k].Rojo += v.total||0;
+    else if(v.claseOp && v.claseOp.includes('RT')) resumen[k].BlRT += v.total||0;
+    else if(v.claseOp && v.claseOp.includes('Redtec')) resumen[k].BlRDT += v.total||0;
+  });
+  const rows = Object.values(resumen).sort((a,b)=>b.neto-a.neto);
+  const maxNeto = Math.max(...rows.map(r=>r.neto), 1);
+  document.getElementById('cntResumen').textContent = `${rows.length} transportistas`;
+
+  let totalNeto=0,totalRojo=0,totalRT=0,totalRDT=0,totalViajes=0,totalPallets=0;
+  rows.forEach(r=>{totalNeto+=r.neto;totalRojo+=r.Rojo;totalRT+=r.BlRT;totalRDT+=r.BlRDT;totalViajes+=r.viajes;totalPallets+=r.pallets;});
+  const ivaTotal = totalNeto*0.19;
+
+  let html = '<div class="tbl-wrap"><table><thead><tr>';
+  html += '<th>Patente</th><th>Chofer</th><th>Razón Social</th><th class="center">Cap</th>';
+  html += '<th class="right">Viajes</th><th class="right">Pallets</th>';
+  html += '<th class="right">Rojo</th><th class="right">Bl. RT</th><th class="right">Bl. RDT</th>';
+  html += '<th class="right">Neto</th><th class="right">Total c/IVA</th><th>Distribución</th>';
+  html += '</tr></thead><tbody>';
+  rows.forEach(r => {
+    const iva = r.neto*0.19;
+    const tot = r.neto+iva;
+    const pct = Math.round(r.neto / maxNeto * 100);
+    html += '<tr>';
+    html += `<td class="bold mono">${r.patente}</td>`;
+    html += `<td>${r.chofer}</td>`;
+    html += `<td style="font-size:11px;color:var(--t3)">${r.razonSocial||'—'}</td>`;
+    html += `<td class="center mono">${r.capacidad||'—'}</td>`;
+    html += `<td class="right mono">${fmtInt(r.viajes)}</td>`;
+    html += `<td class="right mono">${fmtInt(r.pallets)}</td>`;
+    html += `<td class="right mono">${r.Rojo?fmtCLP(r.Rojo):'<span class="money zero">—</span>'}</td>`;
+    html += `<td class="right mono">${r.BlRT?fmtCLP(r.BlRT):'<span class="money zero">—</span>'}</td>`;
+    html += `<td class="right mono">${r.BlRDT?fmtCLP(r.BlRDT):'<span class="money zero">—</span>'}</td>`;
+    html += `<td class="right bold mono">${fmtCLP(r.neto)}</td>`;
+    html += `<td class="right mono" style="color:var(--green)">${fmtCLP(tot)}</td>`;
+    html += `<td><div class="mini-bar-wrap"><div class="mini-bar-bg"><div class="mini-bar-fill" style="width:${pct}%;background:var(--blue)"></div></div><span class="mini-bar-label">${pct}%</span></div></td>`;
+    html += '</tr>';
+  });
+  // Total row
+  html += `<tr style="background:var(--s3);font-weight:600;border-top:1px solid var(--border-md)">
+    <td class="bold" colspan="4">TOTAL</td>
+    <td class="right bold mono">${fmtInt(totalViajes)}</td>
+    <td class="right bold mono">${fmtInt(totalPallets)}</td>
+    <td class="right bold mono">${fmtCLP(totalRojo)}</td>
+    <td class="right bold mono">${fmtCLP(totalRT)}</td>
+    <td class="right bold mono">${fmtCLP(totalRDT)}</td>
+    <td class="right bold mono" style="color:var(--t1)">${fmtCLP(totalNeto)}</td>
+    <td class="right bold mono" style="color:var(--green)">${fmtCLP(totalNeto+ivaTotal)}</td>
+    <td></td>
+  </tr>`;
+  html += '</tbody></table></div>';
+  document.getElementById('contenedorResumen').innerHTML = html;
+}
+
+function renderZonas(){
+  const data = aplicarFiltros();
+  document.getElementById('cntZonas').textContent = `${data.length} viajes`;
+  if(!data.length){ setEmpty('contenedorZonas','📍','Sin datos'); return; }
+
+  const porZona = {};
+  data.forEach(v => {
+    const z = v.zonaTarif || '(sin tarifa)';
+    if(!porZona[z]) porZona[z] = {zona:z, viajes:0, pallets:0, neto:0, destinos:new Set()};
+    porZona[z].viajes++;
+    porZona[z].pallets += v.cantidadConfirmada||0;
+    porZona[z].neto += v.total||0;
+    if(v.bodegaTarifada) porZona[z].destinos.add(v.bodegaTarifada);
+  });
+  const rows = Object.values(porZona).sort((a,b)=>b.neto-a.neto);
+  const maxNeto = Math.max(...rows.map(r=>r.neto), 1);
+
+  let html = '<div class="tbl-wrap"><table><thead><tr>';
+  html += '<th>Zona</th><th class="right">Viajes</th><th class="right">Pallets</th>';
+  html += '<th class="right">Destinos</th><th class="right">Neto</th><th>Distribución</th>';
+  html += '</tr></thead><tbody>';
+  rows.forEach(r => {
+    const pct = Math.round(r.neto / maxNeto * 100);
+    html += '<tr>';
+    html += `<td class="bold mono">${r.zona}</td>`;
+    html += `<td class="right mono">${fmtInt(r.viajes)}</td>`;
+    html += `<td class="right mono">${fmtInt(r.pallets)}</td>`;
+    html += `<td class="right mono">${r.destinos.size}</td>`;
+    html += `<td class="right bold mono">${fmtCLP(r.neto)}</td>`;
+    html += `<td><div class="mini-bar-wrap"><div class="mini-bar-bg"><div class="mini-bar-fill" style="width:${pct}%;background:var(--purple)"></div></div><span class="mini-bar-label">${pct}%</span></div></td>`;
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+  document.getElementById('contenedorZonas').innerHTML = html;
+}
+
+function renderPrefactura(){
+  const patente = document.getElementById('selPrefactura').value;
+  const cont = document.getElementById('contenedorPrefactura');
+  if(!patente){
+    cont.innerHTML = '<div class="card"><div class="card-body"><div class="empty"><div class="empty-ico">📄</div><div class="empty-txt">Selecciona un transportista</div></div></div></div>';
+    return;
+  }
+  const desde = document.getElementById('fi').value;
+  const hasta = document.getElementById('ff').value;
+  document.getElementById('periodoTxt').textContent = `Período ${fmtDate(desde)} → ${fmtDate(hasta)}`;
+
+  const data = VIAJES_PROC.filter(v => v.patente === patente);
+  if(!data.length){
+    cont.innerHTML = '<div class="card"><div class="card-body"><div class="empty"><div class="empty-ico">📄</div><div class="empty-txt">Sin viajes para esta patente en el período</div></div></div></div>';
+    return;
+  }
+
+  const camion = CAMIONES[patente]||{};
+  const grupos = {'Rojo':[], 'Blanco comercializacion RT':[], 'Blanco comercializacion Redtec':[]};
+  data.forEach(v => {
+    const g = grupos[v.claseOp] || grupos['Rojo'];
+    g.push(v);
+  });
+
+  let html = '<div class="pf-doc">';
+  html += `<div class="pf-head">
+    <div>
+      <h2>Prefactura Transportista SPOT</h2>
+      <div class="subtitle">REDTEC · Pago mensual</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px">Período</div>
+      <div style="font-family:'DM Mono',monospace;font-size:14px;color:var(--t1);margin-top:2px">${fmtDate(desde)} → ${fmtDate(hasta)}</div>
+    </div>
+  </div>`;
+
+  html += `<div class="pf-meta">
+    <div class="pf-meta-item"><span class="pf-meta-label">Patente</span><span class="pf-meta-val" style="font-family:'DM Mono',monospace">${patente}</span></div>
+    <div class="pf-meta-item"><span class="pf-meta-label">Chofer</span><span class="pf-meta-val">${camion.chofer||data[0].chofer}</span></div>
+    <div class="pf-meta-item"><span class="pf-meta-label">Razón Social</span><span class="pf-meta-val">${camion.razonSocial||'—'}</span></div>
+    <div class="pf-meta-item"><span class="pf-meta-label">Capacidad</span><span class="pf-meta-val">${camion.capacidad||'—'} pallets</span></div>
+  </div>`;
+
+  html += '<div class="tbl-wrap"><table><thead><tr>';
+  html += '<th class="center">Sem</th><th>N° Pedido</th><th>DTE</th><th>Operación</th><th>Fecha</th>';
+  html += '<th class="right">Pallets</th><th>Origen</th><th>Destino</th>';
+  html += '<th class="right">V.Unit</th><th class="right">Total</th>';
+  html += '</tr></thead><tbody>';
+
+  const subtotales = {};
+  let granNeto = 0, granPallets = 0;
+
+  Object.entries(grupos).forEach(([cat, viajes]) => {
+    if(!viajes.length) return;
+    html += `<tr><td colspan="10" class="pf-cat-header">${cat}</td></tr>`;
+    let subtotal = 0, subpall = 0;
+    viajes.forEach(v => {
+      html += '<tr>';
+      html += `<td class="center mono">${v.semana||''}</td>`;
+      html += `<td class="mono">${v.nroPedido}</td>`;
+      html += `<td class="mono">${v.dteNro}</td>`;
+      html += `<td>${v.operacion}</td>`;
+      html += `<td>${fmtDate(v.fechaConfirmacion)}</td>`;
+      html += `<td class="right mono">${fmtInt(v.cantidadConfirmada)}</td>`;
+      html += `<td>${v.bodegaOrigenStr||''}</td>`;
+      html += `<td>${v.bodegaDestinoStr||''}</td>`;
+      html += `<td class="right mono">${v.valorUnit?fmtCLP(v.valorUnit):'<span class="badge crit">—</span>'}</td>`;
+      html += `<td class="right bold mono">${fmtCLP(v.total)}</td>`;
+      html += '</tr>';
+      subtotal += v.total||0;
+      subpall += v.cantidadConfirmada||0;
+    });
+    html += `<tr class="pf-subtotal-row"><td colspan="5" class="right">Subtotal ${cat}</td><td class="right mono">${fmtInt(subpall)}</td><td colspan="3"></td><td class="right mono">${fmtCLP(subtotal)}</td></tr>`;
+    subtotales[cat] = {neto:subtotal, pallets:subpall};
+    granNeto += subtotal;
+    granPallets += subpall;
+  });
+
+  html += '</tbody></table></div>';
+
+  const iva = granNeto * 0.19;
+  const total = granNeto + iva;
+
+  html += '<div class="pf-totals">';
+  Object.entries(subtotales).forEach(([cat, sub])=>{
+    if(sub.neto) html += `<div class="pf-totals-row subgroup"><span>${cat} · ${fmtInt(sub.pallets)} pallets</span><span>${fmtCLP(sub.neto)}</span></div>`;
+  });
+  html += `<div class="pf-totals-row neto"><span>NETO</span><span>${fmtCLP(granNeto)}</span></div>`;
+  html += `<div class="pf-totals-row"><span>IVA 19%</span><span>${fmtCLP(iva)}</span></div>`;
+  html += `<div class="pf-totals-row grand"><span>TOTAL A PAGAR</span><span>${fmtCLP(total)}</span></div>`;
+  html += `<div class="pf-totals-row subgroup" style="margin-top:6px;border-top:1px dashed var(--border);padding-top:6px"><span>Total pallets movidos</span><span>${fmtInt(granPallets)}</span></div>`;
+  html += '</div>';
+
+  html += '</div>';
+  cont.innerHTML = html;
+}
+
+function renderValidacion(){
+  const cont = document.getElementById('contenedorValidacion');
+  if(!VIAJES_PROC.length){
+    setEmpty('contenedorValidacion','⚠','Sin datos para validar');
+    return;
+  }
+  const sinTarifa = VIAJES_PROC.filter(x=>x.sinTarifa);
+  const sinPatente = VIAJES_PROC.filter(x=>x.sinPatente);
+  const conObs = VIAJES_PROC.filter(x=>x.observacion && x.observacion.trim());
+
+  let html = '';
+  if(!sinTarifa.length && !sinPatente.length && !conObs.length){
+    cont.innerHTML = '<div class="empty"><div class="empty-ico">✓</div><div class="empty-txt" style="color:var(--green)">Datos consistentes</div><div class="empty-sub">No se detectaron problemas en los viajes cargados</div></div>';
+    return;
+  }
+
+  if(sinTarifa.length){
+    html += `<div style="margin-bottom:14px"><div class="section-title" style="padding:0 0 8px;border:none">⚠ ${sinTarifa.length} viajes sin tarifa</div>`;
+    html += '<div class="tbl-wrap" style="max-height:300px"><table><thead><tr><th>Patente</th><th>Bodega sin tarifa</th><th>Operación</th><th>Fecha</th><th class="right">Pallets</th></tr></thead><tbody>';
+    sinTarifa.slice(0,50).forEach(v=>{
+      html += `<tr><td class="bold mono">${v.patente}</td><td>${v.bodegaTarifada}</td><td>${v.operacion}</td><td>${fmtDate(v.fechaConfirmacion)}</td><td class="right mono">${fmtInt(v.cantidadConfirmada)}</td></tr>`;
+    });
+    html += '</tbody></table></div></div>';
+  }
+  if(sinPatente.length){
+    html += `<div style="margin-bottom:14px"><div class="section-title" style="padding:0 0 8px;border:none">⚠ ${sinPatente.length} viajes con patente desconocida</div>`;
+    const pats = [...new Set(sinPatente.map(x=>x.patente))];
+    html += `<p style="color:var(--t2);font-size:12px;margin-bottom:6px">Patentes no registradas en el catálogo CAMIONES:</p>`;
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
+    pats.forEach(p=>{html += `<span class="badge warn" style="font-size:11px;padding:4px 8px">${p}</span>`});
+    html += '</div></div>';
+  }
+  if(conObs.length){
+    html += `<div><div class="section-title" style="padding:0 0 8px;border:none">📝 ${conObs.length} viajes con observación</div>`;
+    html += '<div class="tbl-wrap" style="max-height:300px"><table><thead><tr><th>Patente</th><th>N° Pedido</th><th>Fecha</th><th>Observación</th></tr></thead><tbody>';
+    conObs.slice(0,50).forEach(v=>{
+      html += `<tr><td class="bold mono">${v.patente}</td><td class="mono">${v.nroPedido}</td><td>${fmtDate(v.fechaConfirmacion)}</td><td style="color:var(--amber)">${v.observacion}</td></tr>`;
+    });
+    html += '</tbody></table></div></div>';
+  }
+  cont.innerHTML = html;
+}
+
+// ============================================================
+// EXPORTAR EXCEL
+// ============================================================
+
+function exportarExcel(){
+  if(!VIAJES_PROC.length){ setAlerta('No hay datos para exportar','warn'); return; }
+  const data = aplicarFiltros();
+  const wb = XLSX.utils.book_new();
+
+  const headers = ['Semana','Cliente OrigenStr','Cliente DestinoStr','Nro Pedido','DTE Nro','Operacion','Etapa Operacion','LINEA DE NEGOCIOS','TIPO DE OPERACIÓN','CLASE OP','Fecha Confirmacion','Cantidad Confirmada','Bodega OrigenStr','Bodega DestinoStr','Patente','Chofer','CAPACIDAD','RAZON SOCIAL','VALOR UNIT','TOTAL','Observacion'];
+
+  const buildRows = (subset) => subset.map(v=>[
+    v.semana, v.clienteOrigenStr, v.clienteDestinoStr, v.nroPedido, v.dteNro,
+    v.operacion, v.etapaOperacion, v.lineaNegocios, v.tipoOperacion, v.claseOp,
+    v.fechaConfirmacion?fmtDate(v.fechaConfirmacion):'',
+    v.cantidadConfirmada, v.bodegaOrigenStr, v.bodegaDestinoStr,
+    v.patente, v.chofer, v.capacidad, v.razonSocial,
+    v.valorUnit, v.total, v.observacion
+  ]);
+
+  // Hoja SPOT consolidada
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...buildRows(data)]);
+  XLSX.utils.book_append_sheet(wb, ws, 'SPOT');
+
+  // Una hoja por patente
+  const patentes = [...new Set(data.map(v=>v.patente).filter(Boolean))].sort();
+  patentes.forEach(p => {
+    const sub = data.filter(v=>v.patente===p);
+    const rows = buildRows(sub);
+    const totalP = sub.reduce((s,v)=>s+(v.total||0),0);
+    const palletsP = sub.reduce((s,v)=>s+(v.cantidadConfirmada||0),0);
+    rows.push(['','','','','','','','','','','TOTAL','','','','','','','',palletsP,totalP,'']);
+    const ws2 = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    XLSX.utils.book_append_sheet(wb, ws2, p);
+  });
+
+  // Resumen
+  const resumen = {};
+  data.forEach(v => {
+    const k = v.patente;
+    if(!resumen[k]) resumen[k] = {patente:k, chofer:v.chofer, razonSocial:v.razonSocial, capacidad:v.capacidad, Rojo:0, BlRT:0, BlRDT:0, viajes:0, pallets:0, neto:0};
+    resumen[k].viajes++;
+    resumen[k].pallets += v.cantidadConfirmada||0;
+    resumen[k].neto += v.total||0;
+    if(v.claseOp === 'Rojo') resumen[k].Rojo += v.total||0;
+    else if(v.claseOp && v.claseOp.includes('RT')) resumen[k].BlRT += v.total||0;
+    else if(v.claseOp && v.claseOp.includes('Redtec')) resumen[k].BlRDT += v.total||0;
+  });
+  const resRows = [['Patente','Chofer','Razón Social','Capacidad','Viajes','Pallets','Rojo','Blanco RT','Blanco RDT','Neto','IVA 19%','Total']];
+  Object.values(resumen).forEach(r => {
+    const iva = r.neto*0.19;
+    resRows.push([r.patente, r.chofer, r.razonSocial, r.capacidad, r.viajes, r.pallets, r.Rojo, r.BlRT, r.BlRDT, r.neto, iva, r.neto+iva]);
+  });
+  const wsR = XLSX.utils.aoa_to_sheet(resRows);
+  XLSX.utils.book_append_sheet(wb, wsR, 'Resumen');
+
+  const desde = document.getElementById('fi').value;
+  const hasta = document.getElementById('ff').value;
+  XLSX.writeFile(wb, `BBDD_SPOT_${desde}_a_${hasta}.xlsx`);
+  setAlerta('✓ Excel generado','ok');
+}
+
+// ============================================================
+// TABS
+// ============================================================
+
+function switchTab(t){
+  document.querySelectorAll('.sb-item').forEach(x => x.classList.remove('active'));
+  const sb = document.querySelector(`.sb-item[data-tab="${t}"]`);
+  if(sb) sb.classList.add('active');
+  ['resumen','detalle','prefactura','zonas','validacion'].forEach(name=>{
+    const el = document.getElementById('tab-'+name);
+    if(el) el.style.display = (name===t)?'':'none';
+  });
+}
+
+// ============================================================
+// EVENTOS
+// ============================================================
+
+document.getElementById('btnCargar').addEventListener('click', cargarViajes);
+document.getElementById('btnExcel').addEventListener('click', exportarExcel);
+document.getElementById('btnPDF').addEventListener('click', ()=>{
+  switchTab('prefactura');
+  setTimeout(()=>window.print(), 300);
+});
+
+['filtroPatente','filtroSemana','filtroLinea','busqueda'].forEach(id=>{
+  document.getElementById(id).addEventListener('change', renderTodo);
+  document.getElementById(id).addEventListener('input', renderTodo);
+});
+document.getElementById('selPrefactura').addEventListener('change', renderPrefactura);
+
+// Fechas por defecto: mes actual
+const hoy = new Date();
+const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+document.getElementById('fi').value = inicio.toISOString().slice(0,10);
+document.getElementById('ff').value = hoy.toISOString().slice(0,10);
+
+// KPIs iniciales vacíos
+renderKPIs();
+
+</script>
+</body>
+</html>

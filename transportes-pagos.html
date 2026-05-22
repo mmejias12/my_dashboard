@@ -1225,8 +1225,14 @@ async function descargarPrefacturaPDF(){
   const patente = document.getElementById('selPrefactura').value;
   if(!patente){ setAlerta('Selecciona un transportista primero','warn'); return; }
 
-  const doc = document.getElementById('pf-doc-print');
-  if(!doc){ setAlerta('No hay prefactura para descargar','warn'); return; }
+  // Reconstruir los datos (respetando filtro de semanas) para generar HTML limpio
+  const filtroPorSemana = SEMANAS_SEL.size > 0;
+  const dataAll = VIAJES_PROC.filter(v => {
+    if(v.patente !== patente) return false;
+    if(filtroPorSemana && !SEMANAS_SEL.has(v.semana)) return false;
+    return true;
+  });
+  if(!dataAll.length){ setAlerta('No hay viajes para esta patente con el filtro actual','warn'); return; }
 
   const desde = document.getElementById('fi').value;
   const hasta = document.getElementById('ff').value;
@@ -1235,62 +1241,136 @@ async function descargarPrefacturaPDF(){
   setBadge('amber','Generando PDF…');
   showOverlay(true, `Generando PDF de ${patente}…`);
 
-  // Clonar el nodo y limpiar elementos no imprimibles (chips, botones)
-  const clone = doc.cloneNode(true);
-  clone.querySelectorAll('.no-print, .pf-filter-bar').forEach(el => el.remove());
-  // Forzar fondos claros para impresión
-  clone.style.background = '#fff';
-  clone.style.color = '#222';
-  clone.style.border = 'none';
-  clone.style.padding = '20px';
+  const camion = CAMIONES[patente]||{};
+  const semsLabel = filtroPorSemana
+    ? (() => { const a = [...SEMANAS_SEL].sort((x,y)=>x-y); return a.length===1 ? `Semana ${a[0]}` : `Semanas ${a.join(', ')}`; })()
+    : '';
 
-  // Wrapper temporal off-screen
+  const grupos = {'Rojo':[], 'Blanco comercializacion RT':[], 'Blanco comercializacion Redtec':[]};
+  dataAll.forEach(v => { (grupos[v.claseOp] || grupos['Rojo']).push(v); });
+
+  // Construir HTML plano con colores explícitos (no depende del CSS dark)
+  let h = `<div style="font-family:'DM Sans',sans-serif;background:#fff;color:#222;padding:18px;width:1080px;font-size:11px;line-height:1.4">`;
+
+  // Header
+  h += `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:1px solid #ccc;margin-bottom:14px">`;
+  h += `<div style="display:flex;align-items:center;gap:14px">`;
+  h += `<img src="${LOGO_REDTEC}" alt="REDTEC" style="width:48px;height:48px;object-fit:contain">`;
+  h += `<div>`;
+  h += `<div style="font-size:20px;font-weight:600;color:#922b21">Prefactura Transportista SPOT</div>`;
+  h += `<div style="font-size:11px;color:#666;margin-top:2px;text-transform:uppercase;letter-spacing:.5px">REDTEC · Pago mensual${semsLabel?' · '+semsLabel:''}</div>`;
+  h += `</div></div>`;
+  h += `<div style="text-align:right">`;
+  h += `<div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px">Período</div>`;
+  h += `<div style="font-family:'DM Mono',monospace;font-size:14px;color:#222;margin-top:2px">${fmtDate(desde)} → ${fmtDate(hasta)}</div>`;
+  if(semsLabel) h += `<div style="font-size:11px;color:#4b8df8;margin-top:3px;font-weight:500">⚐ ${semsLabel}</div>`;
+  h += `</div></div>`;
+
+  // Meta del transportista
+  const metaItems = [
+    ['Patente', patente, true],
+    ['Chofer', camion.chofer||dataAll[0].chofer||'—', false],
+    ['Razón Social', camion.razonSocial||'—', false],
+    ['Capacidad', (camion.capacidad||'—')+' pallets', false]
+  ];
+  h += `<div style="display:flex;gap:10px;background:#f5f5f5;padding:12px 14px;border-radius:8px;border:1px solid #ddd;margin-bottom:14px">`;
+  metaItems.forEach(([lbl,val,mono])=>{
+    h += `<div style="flex:1">`;
+    h += `<div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.5px;font-weight:600">${lbl}</div>`;
+    h += `<div style="font-size:13px;color:#222;font-weight:500;margin-top:2px${mono?";font-family:'DM Mono',monospace":''}">${val}</div>`;
+    h += `</div>`;
+  });
+  h += `</div>`;
+
+  // Tabla
+  h += `<table style="width:100%;border-collapse:collapse;font-size:10.5px;table-layout:fixed">`;
+  h += `<colgroup>
+    <col style="width:34px"><col style="width:74px"><col style="width:64px"><col style="width:82px">
+    <col style="width:74px"><col style="width:50px"><col><col><col style="width:70px"><col style="width:84px">
+  </colgroup>`;
+  h += `<thead><tr style="background:#ececec">`;
+  ['SEM','N° PEDIDO','DTE','OPERACIÓN','FECHA','PALL.','ORIGEN','DESTINO','V.UNIT','TOTAL'].forEach((th,i)=>{
+    const align = (i===0||i===5||i===8||i===9) ? (i===0?'center':'right') : 'left';
+    h += `<th style="padding:6px 6px;text-align:${align};font-size:9px;font-weight:600;color:#555;text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid #ccc">${th}</th>`;
+  });
+  h += `</tr></thead><tbody>`;
+
+  const subtotales = {};
+  let granNeto = 0, granPallets = 0;
+
+  Object.entries(grupos).forEach(([cat, viajes]) => {
+    if(!viajes.length) return;
+    h += `<tr><td colspan="10" style="background:#fdedec;color:#922b21;font-weight:600;padding:7px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.4px;border-top:1px solid #f5b7b1">${cat}</td></tr>`;
+    let subtotal = 0, subpall = 0;
+    viajes.forEach(v => {
+      h += `<tr style="border-bottom:1px solid #eee">`;
+      h += `<td style="padding:6px;text-align:center;font-family:'DM Mono',monospace;color:#444;vertical-align:top">${v.semana||''}</td>`;
+      h += `<td style="padding:6px;font-family:'DM Mono',monospace;color:#222;vertical-align:top">${v.nroPedido}</td>`;
+      h += `<td style="padding:6px;font-family:'DM Mono',monospace;color:#444;vertical-align:top">${v.dteNro||''}</td>`;
+      h += `<td style="padding:6px;color:#333;vertical-align:top">${v.operacion}</td>`;
+      h += `<td style="padding:6px;color:#444;vertical-align:top;font-family:'DM Mono',monospace">${fmtDate(v.fechaConfirmacion)}</td>`;
+      h += `<td style="padding:6px;text-align:right;font-family:'DM Mono',monospace;color:#222;vertical-align:top">${fmtInt(v.cantidadConfirmada)}</td>`;
+      h += `<td style="padding:6px;color:#333;vertical-align:top;word-break:break-word">${v.bodegaOrigenStr||''}</td>`;
+      h += `<td style="padding:6px;color:#333;vertical-align:top;word-break:break-word">${v.bodegaDestinoStr||''}</td>`;
+      h += `<td style="padding:6px;text-align:right;font-family:'DM Mono',monospace;color:#222;vertical-align:top">${v.valorUnit?fmtCLP(v.valorUnit):'—'}</td>`;
+      h += `<td style="padding:6px;text-align:right;font-family:'DM Mono',monospace;color:#000;font-weight:600;vertical-align:top">${fmtCLP(v.total)}</td>`;
+      h += `</tr>`;
+      subtotal += v.total||0;
+      subpall += v.cantidadConfirmada||0;
+    });
+    // Subtotal del grupo
+    h += `<tr style="background:#f5f5f5;font-weight:600;border-top:1px solid #ddd">`;
+    h += `<td colspan="5" style="padding:6px 8px;text-align:right;color:#222">Subtotal ${cat}</td>`;
+    h += `<td style="padding:6px;text-align:right;font-family:'DM Mono',monospace;color:#222">${fmtInt(subpall)}</td>`;
+    h += `<td colspan="3"></td>`;
+    h += `<td style="padding:6px;text-align:right;font-family:'DM Mono',monospace;color:#000;font-weight:700">${fmtCLP(subtotal)}</td>`;
+    h += `</tr>`;
+    subtotales[cat] = {neto:subtotal, pallets:subpall};
+    granNeto += subtotal;
+    granPallets += subpall;
+  });
+
+  h += `</tbody></table>`;
+
+  // Totales
+  const iva = granNeto * 0.19;
+  const total = granNeto + iva;
+
+  h += `<div style="margin-top:16px;background:#f8f8f8;border:1px solid #ddd;border-radius:8px;padding:12px 16px">`;
+  Object.entries(subtotales).forEach(([cat, sub])=>{
+    if(sub.neto) h += `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11px;color:#666"><span>${cat} · ${fmtInt(sub.pallets)} pallets</span><span style="font-family:'DM Mono',monospace;color:#222">${fmtCLP(sub.neto)}</span></div>`;
+  });
+  h += `<div style="display:flex;justify-content:space-between;padding:6px 0 4px;border-top:1px solid #ddd;margin-top:4px;font-weight:600;font-size:12.5px;color:#000"><span>NETO</span><span style="font-family:'DM Mono',monospace">${fmtCLP(granNeto)}</span></div>`;
+  h += `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11.5px;color:#444"><span>IVA 19%</span><span style="font-family:'DM Mono',monospace">${fmtCLP(iva)}</span></div>`;
+  h += `<div style="display:flex;justify-content:space-between;padding:8px 0 4px;border-top:2px solid #922b21;margin-top:6px;font-weight:700;font-size:16px;color:#922b21"><span>TOTAL A PAGAR</span><span style="font-family:'DM Mono',monospace">${fmtCLP(total)}</span></div>`;
+  h += `<div style="display:flex;justify-content:space-between;padding:6px 0 0;border-top:1px dashed #ccc;margin-top:6px;font-size:10.5px;color:#888"><span>Total pallets movidos</span><span style="font-family:'DM Mono',monospace">${fmtInt(granPallets)}</span></div>`;
+  h += `</div>`;
+
+  // Footer
+  h += `<div style="margin-top:18px;padding-top:10px;border-top:1px solid #ddd;font-size:9.5px;color:#aaa;text-align:center">Documento generado por REDTEC · ${new Date().toLocaleString('es-CL')}</div>`;
+
+  h += `</div>`;
+
+  // Wrapper off-screen
   const wrapper = document.createElement('div');
   wrapper.style.position = 'fixed';
   wrapper.style.left = '-9999px';
   wrapper.style.top = '0';
-  wrapper.style.width = '1100px';
-  wrapper.style.background = '#fff';
-  wrapper.appendChild(clone);
+  wrapper.style.background = '#ffffff';
+  wrapper.innerHTML = h;
   document.body.appendChild(wrapper);
 
-  // Sobreescribir colores oscuros en el clone para que el PDF salga claro
-  const allEls = clone.querySelectorAll('*');
-  allEls.forEach(el => {
-    const cs = getComputedStyle(el);
-    const bg = cs.backgroundColor;
-    const fg = cs.color;
-    // Backgrounds oscuros → claros
-    if(bg.includes('rgb(17,18,28)') || bg.includes('rgb(23,24,36)') || bg.includes('rgb(12,13,22)')){
-      el.style.background = '#fff';
-    }
-    // Texto blanco/claro → oscuro
-    if(fg.includes('rgb(238, 240, 248)') || fg.includes('rgb(123, 130, 160)')){
-      el.style.color = '#222';
-    }
-  });
-  // Headers de categoría conservan tinte rojo claro
-  clone.querySelectorAll('.pf-cat-header').forEach(el => {
-    el.style.background = '#fdedec';
-    el.style.color = '#922b21';
-  });
-  clone.querySelectorAll('.pf-totals').forEach(el => { el.style.background = '#f8f8f8'; el.style.border = '1px solid #ddd'; });
-  clone.querySelectorAll('thead th').forEach(el => { el.style.background = '#f0f0f0'; el.style.color = '#444'; });
-  clone.querySelectorAll('.pf-subtotal-row td').forEach(el => { el.style.background = '#f5f5f5'; el.style.color = '#000'; });
-  clone.querySelectorAll('.pf-meta').forEach(el => { el.style.background = '#f8f8f8'; el.style.border = '1px solid #ddd'; });
-  clone.querySelectorAll('tbody td').forEach(el => { if(el.style.color === '') el.style.color = '#333'; });
-
   const opt = {
-    margin: [10, 10, 10, 10],
+    margin: [8, 8, 10, 8],
     filename: filename,
     image: { type: 'jpeg', quality: 0.95 },
-    html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+    html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-    pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    pagebreak: { mode: ['css', 'legacy'] }
   };
 
   try {
-    await html2pdf().set(opt).from(wrapper).save();
+    await html2pdf().set(opt).from(wrapper.firstElementChild).save();
     setAlerta(`✓ PDF descargado: ${filename}`,'ok');
     setBadge('verde', `${VIAJES_PROC.length} viajes`);
   } catch(err){

@@ -1008,11 +1008,29 @@ function renderPrefactura(){
   }
   const desde = document.getElementById('fi').value;
   const hasta = document.getElementById('ff').value;
-  document.getElementById('periodoTxt').textContent = `Período ${fmtDate(desde)} → ${fmtDate(hasta)}`;
 
-  const dataAll = VIAJES_PROC.filter(v => v.patente === patente);
+  // Aplicar filtro multi-semana del panel superior si está activo
+  const filtroPorSemana = SEMANAS_SEL.size > 0;
+  const dataAll = VIAJES_PROC.filter(v => {
+    if(v.patente !== patente) return false;
+    if(filtroPorSemana && !SEMANAS_SEL.has(v.semana)) return false;
+    return true;
+  });
+
+  // Texto del período (con info de filtro de semanas si aplica)
+  let periodoTxt = `Período ${fmtDate(desde)} → ${fmtDate(hasta)}`;
+  if(filtroPorSemana){
+    const semsArr = [...SEMANAS_SEL].sort((a,b)=>a-b);
+    const semsStr = semsArr.length === 1 ? `Semana ${semsArr[0]}` : `Semanas ${semsArr.join(', ')}`;
+    periodoTxt += ` · ${semsStr}`;
+  }
+  document.getElementById('periodoTxt').textContent = periodoTxt;
+
   if(!dataAll.length){
-    cont.innerHTML = '<div class="card"><div class="card-body"><div class="empty"><div class="empty-ico">📄</div><div class="empty-txt">Sin viajes para esta patente en el período</div></div></div></div>';
+    const msg = filtroPorSemana
+      ? 'Sin viajes para esta patente en las semanas seleccionadas'
+      : 'Sin viajes para esta patente en el período';
+    cont.innerHTML = `<div class="card"><div class="card-body"><div class="empty"><div class="empty-ico">📄</div><div class="empty-txt">${msg}</div></div></div></div>`;
     return;
   }
 
@@ -1034,17 +1052,24 @@ function renderPrefactura(){
   });
 
   let html = '<div class="pf-doc" id="pf-doc-print">';
+
+  // Texto extra de semanas si hay filtro
+  const semsLabel = filtroPorSemana
+    ? (() => { const a = [...SEMANAS_SEL].sort((x,y)=>x-y); return a.length===1 ? `Semana ${a[0]}` : `Semanas ${a.join(', ')}`; })()
+    : '';
+
   html += `<div class="pf-head">
     <div class="pf-head-left">
       <img class="pf-head-logo" src="${LOGO_REDTEC}" alt="REDTEC">
       <div>
         <h2>Prefactura Transportista SPOT</h2>
-        <div class="subtitle">REDTEC · Pago mensual</div>
+        <div class="subtitle">REDTEC · Pago mensual${semsLabel?' · '+semsLabel:''}</div>
       </div>
     </div>
     <div style="text-align:right">
       <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px">Período</div>
       <div style="font-family:'DM Mono',monospace;font-size:14px;color:var(--t1);margin-top:2px">${fmtDate(desde)} → ${fmtDate(hasta)}</div>
+      ${semsLabel?`<div style="font-size:11px;color:var(--blue);margin-top:3px;font-weight:500">⚐ ${semsLabel}</div>`:''}
     </div>
   </div>`;
 
@@ -1227,12 +1252,25 @@ async function enviarPrefacturaCorreo(){
   const patente = document.getElementById('selPrefactura').value;
   if(!patente){ setAlerta('Selecciona un transportista primero','warn'); return; }
 
-  const dataAll = VIAJES_PROC.filter(v => v.patente === patente);
-  if(!dataAll.length){ setAlerta('No hay viajes para esta patente','warn'); return; }
+  // Respetar el mismo filtro de semanas que la prefactura visible
+  const filtroPorSemana = SEMANAS_SEL.size > 0;
+  const dataAll = VIAJES_PROC.filter(v => {
+    if(v.patente !== patente) return false;
+    if(filtroPorSemana && !SEMANAS_SEL.has(v.semana)) return false;
+    return true;
+  });
+  if(!dataAll.length){ setAlerta('No hay viajes para esta patente con el filtro actual','warn'); return; }
 
   const camion = CAMIONES[patente]||{};
   const desde = document.getElementById('fi').value;
   const hasta = document.getElementById('ff').value;
+
+  // Construir label de semanas si aplica
+  let semsLabel = '';
+  if(filtroPorSemana){
+    const a = [...SEMANAS_SEL].sort((x,y)=>x-y);
+    semsLabel = a.length === 1 ? `Semana ${a[0]}` : `Semanas ${a.join(', ')}`;
+  }
 
   // Calcular totales
   let neto = 0, pallets = 0;
@@ -1253,11 +1291,12 @@ async function enviarPrefacturaCorreo(){
   await descargarPrefacturaPDF();
 
   // Paso 2: abrir cliente de correo con cuerpo pre-armado
-  const asunto = `Prefactura SPOT ${patente} · ${mes}`;
+  const asuntoSems = semsLabel ? ` · ${semsLabel}` : '';
+  const asunto = `Prefactura SPOT ${patente} · ${mes}${asuntoSems}`;
   const cuerpoLines = [
     `Estimado/a ${camion.chofer || patente},`,
     ``,
-    `Adjunto encontrarás la prefactura correspondiente al período ${fmtDate(desde)} → ${fmtDate(hasta)} por los servicios prestados con la patente ${patente}.`,
+    `Adjunto encontrarás la prefactura correspondiente al período ${fmtDate(desde)} → ${fmtDate(hasta)}${semsLabel?' ('+semsLabel+')':''} por los servicios prestados con la patente ${patente}.`,
     ``,
     `RESUMEN`,
     `------------------------------`,
@@ -1281,7 +1320,6 @@ async function enviarPrefacturaCorreo(){
   const cuerpo = cuerpoLines.join('\n');
 
   const mailto = `mailto:?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
-  // Pequeño delay para que el usuario vea el toast del PDF antes
   setTimeout(()=>{
     window.location.href = mailto;
     setAlerta('✓ Correo abierto. Adjunta el PDF descargado.','ok');

@@ -273,6 +273,54 @@ thead th.center{text-align:center}
 .money.positive{color:var(--green)}
 .money.zero{color:var(--t3)}
 
+/* MODAL HISTORIAL */
+.modal-backdrop{position:fixed;inset:0;background:rgba(7,8,14,.7);backdrop-filter:blur(4px);z-index:1000;display:none;align-items:flex-start;justify-content:center;padding:40px 20px;overflow-y:auto}
+.modal-backdrop.on{display:flex}
+.modal-box{background:var(--s2);border:1px solid var(--border-md);border-radius:var(--radius-lg);width:100%;max-width:920px;max-height:calc(100vh - 80px);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.5)}
+.modal-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-shrink:0}
+.modal-head-title{font-size:15px;font-weight:600;color:var(--t1);font-family:'DM Mono',monospace}
+.modal-head-sub{font-size:11.5px;color:var(--t2);margin-top:3px}
+.modal-close{background:var(--s3);border:1px solid var(--border-md);color:var(--t2);width:32px;height:32px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;transition:all .15s;flex-shrink:0;font-family:'DM Sans',sans-serif;line-height:1}
+.modal-close:hover{background:var(--s4);color:var(--t1)}
+.modal-body{padding:18px 20px;overflow-y:auto;flex:1}
+.hist-info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:18px}
+.hist-info-block{background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+.hist-info-lbl{font-size:9.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin-bottom:3px}
+.hist-info-val{font-size:13px;color:var(--t1);font-weight:500}
+.hist-info-val.mono{font-family:'DM Mono',monospace;font-size:12px}
+.hist-loading{display:flex;align-items:center;gap:10px;padding:20px;color:var(--t2);justify-content:center;font-size:12.5px}
+.hist-tl{position:relative;padding-left:24px;margin-top:8px}
+.hist-tl::before{content:'';position:absolute;left:7px;top:8px;bottom:8px;width:2px;background:var(--border-md)}
+.hist-tl-item{position:relative;padding:0 0 16px 16px}
+.hist-tl-item:last-child{padding-bottom:0}
+.hist-tl-dot{position:absolute;left:-21px;top:4px;width:14px;height:14px;border-radius:50%;border:3px solid var(--s2);background:var(--green);z-index:1}
+.hist-tl-dot.blue{background:var(--blue)}
+.hist-tl-dot.amber{background:var(--amber)}
+.hist-tl-dot.red{background:var(--red)}
+.hist-tl-dot.purple{background:var(--purple)}
+.hist-tl-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+.hist-tl-titulo{font-size:13px;font-weight:600;color:var(--t1)}
+.hist-tl-fecha{font-size:11px;color:var(--t3);font-family:'DM Mono',monospace}
+.hist-tl-meta{display:flex;gap:14px;font-size:11.5px;color:var(--t2);margin-bottom:6px;flex-wrap:wrap}
+.hist-tl-meta strong{color:var(--t1);font-weight:500}
+.hist-tl-meta .lbl{color:var(--t3);text-transform:uppercase;font-size:9.5px;letter-spacing:.4px;margin-right:4px}
+.hist-tl-cant{display:inline-flex;gap:10px;font-family:'DM Mono',monospace;font-size:11px}
+.hist-tl-cant span{display:flex;align-items:center;gap:4px}
+.hist-tl-cant .sol{color:var(--blue)}
+.hist-tl-cant .des{color:var(--amber)}
+.hist-tl-cant .con{color:var(--green)}
+.hist-tl-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}
+.hist-tl-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:10px;font-size:10.5px;font-weight:500;background:var(--s4);color:var(--t2);border:1px solid var(--border-md)}
+.hist-tl-chip.green{background:var(--green-d);color:var(--green);border-color:rgba(30,201,106,.25)}
+.hist-tl-chip.blue{background:var(--blue-d);color:var(--blue);border-color:rgba(75,141,248,.25)}
+.hist-tl-chip.amber{background:var(--amber-d);color:var(--amber);border-color:rgba(244,168,54,.25)}
+.hist-tl-chip.purple{background:var(--purple-d);color:var(--purple);border-color:rgba(155,125,250,.25)}
+.hist-tl-chip.red{background:var(--red-d);color:var(--red);border-color:rgba(240,86,86,.25)}
+
+/* Estilo para N° Pedido clickeable en tabla detalle */
+.pedido-link{cursor:pointer;color:var(--blue);text-decoration:underline;text-decoration-color:rgba(75,141,248,.4);text-underline-offset:2px;transition:color .15s}
+.pedido-link:hover{color:var(--cyan)}
+
 /* PRINT */
 @media print {
   body{background:white;color:#222}
@@ -296,6 +344,7 @@ thead th.center{text-align:center}
   .pf-totals-row span:last-child{color:#000}
   .pf-totals-row.grand,.pf-totals-row.grand span:last-child{color:#922b21}
   .badge.rojo{background:#fadbd8 !important;color:#922b21 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .pedido-link, .no-print-link{color:#222 !important;text-decoration:none !important;cursor:default !important}
 }
 </style>
 </head>
@@ -661,8 +710,14 @@ async function cargarViajes(){
       VIAJES_PROC = [];
       setBadge('amber','Sin datos');
     } else {
-      VIAJES_PROC = arr.map(procesarViaje);
-      setAlerta(`✓ ${VIAJES_PROC.length} viajes cargados`, 'ok');
+      const todosProc = arr.map(procesarViaje);
+      // Excluir viajes sin patente asignada (estados "Por Confirmar"/"Despachar" en M3Link
+      // que aún no fueron asignados a un camión y no son facturables)
+      VIAJES_PROC = todosProc.filter(v => v.patente && v.patente.trim().length > 0);
+      const excluidos = todosProc.length - VIAJES_PROC.length;
+      let msg = `✓ ${VIAJES_PROC.length} viajes cargados`;
+      if(excluidos > 0) msg += ` (${excluidos} sin patente excluidos)`;
+      setAlerta(msg, 'ok');
       setBadge('verde', `${VIAJES_PROC.length} viajes`);
     }
 
@@ -875,7 +930,7 @@ function renderDetalle(){
     html += `<td>${v.operacion}</td>`;
     html += `<td>${v.lineaNegocios}</td>`;
     html += `<td>${tagClase(v.claseOp)}</td>`;
-    html += `<td class="mono">${v.nroPedido}</td>`;
+    html += `<td class="mono pedido-link" onclick="abrirModalHistorial('${v.nroPedido}')" title="Ver historial">${v.nroPedido}</td>`;
     html += `<td class="mono">${v.dteNro}</td>`;
     html += `<td>${v.bodegaOrigenStr||''}</td>`;
     html += `<td>${v.bodegaDestinoStr||''}</td>`;
@@ -1112,7 +1167,7 @@ function renderPrefactura(){
     viajes.forEach(v => {
       html += '<tr>';
       html += `<td class="pf-col-sem mono">${v.semana||''}</td>`;
-      html += `<td class="pf-col-ped mono">${v.nroPedido}</td>`;
+      html += `<td class="pf-col-ped mono pedido-link no-print-link" onclick="abrirModalHistorial('${v.nroPedido}')" title="Ver historial">${v.nroPedido}</td>`;
       html += `<td class="pf-col-dte mono">${v.dteNro}</td>`;
       html += `<td class="pf-col-ope">${v.operacion}</td>`;
       html += `<td class="pf-col-fch">${fmtDate(v.fechaConfirmacion)}</td>`;
@@ -1490,6 +1545,197 @@ document.getElementById('ff').value = hoy.toISOString().slice(0,10);
 // KPIs iniciales vacíos
 renderKPIs();
 
+// ============================================================
+// MODAL HISTORIAL DEL PEDIDO
+// ============================================================
+
+const HIST_CACHE = {}; // cache en memoria por nroPedido
+
+async function abrirModalHistorial(nroPedido){
+  if(!nroPedido) return;
+
+  // Buscar registro original entre los viajes procesados para mostrar info adicional
+  const r = VIAJES_PROC.find(v => String(v.nroPedido) === String(nroPedido));
+
+  document.getElementById('modal-hist-titulo').textContent = `Pedido #${nroPedido}`;
+  document.getElementById('modal-hist-sub').textContent = r
+    ? `${r.operacion||''} · ${r.etapaOperacion||''} · ${r.clienteDestinoStr||''}`
+    : 'Historial de eventos';
+
+  // Body con info del pedido + skeleton del timeline
+  let body = '';
+  if(r){
+    body += '<div class="hist-info-grid">';
+    body += hInfoBlock('Cliente origen',  r.clienteOrigenStr  || '—');
+    body += hInfoBlock('Cliente destino', r.clienteDestinoStr || '—');
+    body += hInfoBlock('Bodega origen',   r.bodegaOrigenStr   || '—');
+    body += hInfoBlock('Bodega destino',  r.bodegaDestinoStr  || '—');
+    body += hInfoBlock('Patente',         r.patente || '—', true);
+    body += hInfoBlock('Chofer',          r.chofer  || '—');
+    body += hInfoBlock('DTE',             r.dteNro  || '—', true);
+    body += hInfoBlock('Total facturado', r.total ? fmtCLP(r.total) : '—', true);
+    body += '</div>';
+  }
+  body += '<div style="font-size:11px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.7px;padding:4px 0 10px;border-bottom:1px solid var(--border);margin-bottom:10px">Línea de tiempo del pedido</div>';
+  body += '<div id="hist-tl-cont"><div class="hist-loading"><span class="spinner"></span> Cargando historial…</div></div>';
+
+  document.getElementById('modal-hist-body').innerHTML = body;
+  document.getElementById('modal-hist').classList.add('on');
+  document.body.style.overflow = 'hidden';
+
+  // Fetch del historial real
+  if(HIST_CACHE[nroPedido]){
+    renderHistorialTL(HIST_CACHE[nroPedido], r);
+  } else {
+    try {
+      const res = await fetch(`/api/historial-proxy?nroPedido=${encodeURIComponent(nroPedido)}`);
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const data = await res.json();
+      const eventos = Array.isArray(data) ? data : (data.items||data.data||[]);
+      HIST_CACHE[nroPedido] = eventos;
+      renderHistorialTL(eventos, r);
+    } catch(err){
+      console.error(err);
+      document.getElementById('hist-tl-cont').innerHTML =
+        `<div class="empty"><div class="empty-ico">⚠</div><div class="empty-txt">No se pudo cargar el historial</div><div class="empty-sub">${err.message}</div></div>`;
+    }
+  }
+}
+
+function hInfoBlock(lbl, val, mono){
+  return `<div class="hist-info-block"><div class="hist-info-lbl">${lbl}</div><div class="hist-info-val${mono?' mono':''}">${val}</div></div>`;
+}
+
+function cerrarModalHistorial(){
+  document.getElementById('modal-hist').classList.remove('on');
+  document.body.style.overflow = '';
+}
+
+function renderHistorialTL(eventos, registro){
+  const cont = document.getElementById('hist-tl-cont');
+  if(!eventos || !eventos.length){
+    cont.innerHTML = '<div class="empty"><div class="empty-ico">∅</div><div class="empty-txt">Sin eventos en el historial</div></div>';
+    return;
+  }
+
+  // Ordenar por fecha ascendente (más antiguo arriba)
+  const ord = [...eventos].sort((a,b)=>{
+    const fa = new Date(a.fechaModificacion || a.fecha || a.horaIngreso || 0).getTime();
+    const fb = new Date(b.fechaModificacion || b.fecha || b.horaIngreso || 0).getTime();
+    return fa - fb;
+  });
+
+  let html = '<div class="hist-tl">';
+  let etapaPrev = null, patentePrev = null, dtePrev = null;
+  let despPrev = null, conPrev = null;
+
+  ord.forEach((ev, idx) => {
+    const esUltimo = idx === ord.length - 1;
+    const etapa = (ev.etapaOperacion || ev.etapa || '').trim();
+    const fecha = ev.fechaModificacion || ev.fecha || ev.horaIngreso || '';
+    const usuario = ev.usuario || '—';
+    const tituloEv = ev.accion || ev.tipoEvento || (idx === 0 ? 'Registro creado' : 'Modificación');
+
+    // Color del dot
+    let dotClass = 'green';
+    if(esUltimo){
+      const et = etapa.toLowerCase();
+      if(et.includes('anulad')) dotClass = 'red';
+      else if(et.includes('confirmar') || et.includes('cerrar')) dotClass = 'blue';
+      else if(et.includes('despachar') || et.includes('por confirmar')) dotClass = 'amber';
+      else dotClass = 'blue';
+    }
+
+    html += `<div class="hist-tl-item">`;
+    html += `<span class="hist-tl-dot ${dotClass}"></span>`;
+    html += `<div class="hist-tl-head">`;
+    html += `<div class="hist-tl-titulo">${tituloEv}${etapa?` <span style="color:var(--t2);font-weight:400;font-size:12px"> — ${etapa}</span>`:''}</div>`;
+    html += `<div class="hist-tl-fecha">${fmtFechaHora(fecha)}</div>`;
+    html += `</div>`;
+
+    html += `<div class="hist-tl-meta">`;
+    if(usuario !== '—') html += `<span><span class="lbl">Usuario</span><strong>${usuario}</strong></span>`;
+    const cantHtml = [];
+    if(ev.cantidadSolicitada != null) cantHtml.push(`<span class="sol">Sol: ${fmtInt(ev.cantidadSolicitada)}</span>`);
+    if(ev.cantidadDespachada != null && ev.cantidadDespachada !== 0) cantHtml.push(`<span class="des">Desp: ${fmtInt(ev.cantidadDespachada)}</span>`);
+    if(ev.cantidadConfirmada != null && ev.cantidadConfirmada !== 0) cantHtml.push(`<span class="con">Conf: ${fmtInt(ev.cantidadConfirmada)}</span>`);
+    if(cantHtml.length) html += `<span class="hist-tl-cant">${cantHtml.join('')}</span>`;
+    html += `</div>`;
+
+    // Cambios detectados vs evento anterior, como chips
+    const chips = [];
+    if(etapaPrev !== null && etapa && etapa !== etapaPrev){
+      chips.push(`<span class="hist-tl-chip blue">→ ${etapaPrev} → ${etapa}</span>`);
+    }
+    if(ev.patente && ev.patente !== patentePrev && patentePrev !== null){
+      chips.push(`<span class="hist-tl-chip purple">🚛 Asignó patente ${ev.patente}${ev.chofer?` · ${ev.chofer}`:''}</span>`);
+    } else if(ev.patente && idx === 0){
+      chips.push(`<span class="hist-tl-chip purple">🚛 Patente ${ev.patente}${ev.chofer?` · ${ev.chofer}`:''}</span>`);
+    }
+    if(ev.dteNro && ev.dteNro !== dtePrev && dtePrev !== null){
+      chips.push(`<span class="hist-tl-chip green">📄 Generó DTE #${ev.dteNro}</span>`);
+    }
+    if(ev.cantidadDespachada != null && despPrev !== null && ev.cantidadDespachada !== despPrev){
+      const delta = ev.cantidadDespachada - despPrev;
+      chips.push(`<span class="hist-tl-chip amber">📦 Despacho ${delta>0?'+':''}${fmtInt(delta)} (total ${fmtInt(ev.cantidadDespachada)})</span>`);
+    }
+    if(ev.cantidadConfirmada != null && conPrev !== null && ev.cantidadConfirmada !== conPrev){
+      const delta = ev.cantidadConfirmada - conPrev;
+      chips.push(`<span class="hist-tl-chip green">✓ Confirmó ${delta>0?'+':''}${fmtInt(delta)} (total ${fmtInt(ev.cantidadConfirmada)})</span>`);
+    }
+    if(ev.fechaDespacho && idx > 0 && !patentePrev){
+      chips.push(`<span class="hist-tl-chip blue">📅 Programó despacho ${fmtFechaHora(ev.fechaDespacho)}</span>`);
+    }
+    if(ev.observacion && ev.observacion.trim()){
+      chips.push(`<span class="hist-tl-chip">💬 ${ev.observacion}</span>`);
+    }
+    if(chips.length){
+      html += `<div class="hist-tl-chips">${chips.join('')}</div>`;
+    }
+
+    html += `</div>`;
+
+    etapaPrev = etapa || etapaPrev;
+    patentePrev = ev.patente || patentePrev;
+    dtePrev = ev.dteNro || dtePrev;
+    if(ev.cantidadDespachada != null) despPrev = ev.cantidadDespachada;
+    if(ev.cantidadConfirmada != null) conPrev = ev.cantidadConfirmada;
+  });
+
+  html += '</div>';
+  cont.innerHTML = html;
+}
+
+function fmtFechaHora(d){
+  if(!d) return '';
+  const dt = new Date(d);
+  if(isNaN(dt)) return d;
+  const fecha = dt.toLocaleDateString('es-CL');
+  const hora = dt.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
+  return `${fecha} ${hora}`;
+}
+
+// ESC cierra el modal
+document.addEventListener('keydown', (e)=>{
+  if(e.key === 'Escape' && document.getElementById('modal-hist').classList.contains('on')){
+    cerrarModalHistorial();
+  }
+});
+
 </script>
+<!-- MODAL HISTORIAL DEL PEDIDO -->
+<div class="modal-backdrop" id="modal-hist" onclick="if(event.target===this)cerrarModalHistorial()">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <div class="modal-head-title" id="modal-hist-titulo">Pedido</div>
+        <div class="modal-head-sub" id="modal-hist-sub">Historial</div>
+      </div>
+      <button class="modal-close" onclick="cerrarModalHistorial()" aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body" id="modal-hist-body"></div>
+  </div>
+</div>
+
 </body>
 </html>

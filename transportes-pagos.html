@@ -477,9 +477,8 @@ thead th.center{text-align:center}
         <select class="sinput" id="selPrefactura" style="min-width:280px"><option value="">— Selecciona patente —</option></select>
         <span id="periodoTxt" style="color:var(--t3);font-size:11px"></span>
         <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn-xls" id="btnPDFDescarga">⬇ Descargar PDF</button>
           <button class="btn-go" id="btnEnviarCorreo" style="background:var(--purple)">✉ Enviar por correo</button>
-          <button class="btn-print" id="btnImprimirPF">🖨 Imprimir</button>
+          <button class="btn-print" id="btnImprimirPF">🖨 Imprimir / Guardar PDF</button>
         </div>
       </div>
       <div id="contenedorPrefactura" style="margin-top:12px">
@@ -1225,30 +1224,8 @@ function setPfFilter(op){
 }
 
 // ============================================================
-// PDF Y CORREO PREFACTURA
+// ENVÍO POR CORREO
 // ============================================================
-
-async function descargarPrefacturaPDF(){
-  const patente = document.getElementById('selPrefactura').value;
-  if(!patente){ setAlerta('Selecciona un transportista primero','warn'); return; }
-
-  // Validar que haya datos para la selección actual
-  const filtroPorSemana = SEMANAS_SEL.size > 0;
-  const dataAll = VIAJES_PROC.filter(v => {
-    if(v.patente !== patente) return false;
-    if(filtroPorSemana && !SEMANAS_SEL.has(v.semana)) return false;
-    return true;
-  });
-  if(!dataAll.length){ setAlerta('No hay viajes para esta patente con el filtro actual','warn'); return; }
-
-  // Usar el sistema de impresión del navegador, que es el que mejor renderiza
-  // (mismo resultado que "Imprimir prefactura" → el usuario elige "Guardar como PDF" en el diálogo)
-  setAlerta('Se abrirá el diálogo de impresión. Selecciona "Guardar como PDF" como destino.','warn');
-  setTimeout(()=>{
-    window.print();
-  }, 300);
-}
-
 
 async function enviarPrefacturaCorreo(){
   const patente = document.getElementById('selPrefactura').value;
@@ -1453,7 +1430,6 @@ document.getElementById('btnPDF').addEventListener('click', ()=>{
   switchTab('prefactura');
   setTimeout(()=>window.print(), 300);
 });
-document.getElementById('btnPDFDescarga').addEventListener('click', descargarPrefacturaPDF);
 document.getElementById('btnEnviarCorreo').addEventListener('click', enviarPrefacturaCorreo);
 document.getElementById('btnImprimirPF').addEventListener('click', ()=>{
   window.print();

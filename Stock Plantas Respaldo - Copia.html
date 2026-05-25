@@ -455,10 +455,9 @@ function cargarMovimientos(){
         else if (f === manana) slot = 'manana';
         if (!slot) continue;
 
-        /* Sumamos cantidadConfirmada (lo realmente procesado).
-           Si cambia el criterio, ajustar a cantidadSolicitada o a 1 (conteo de registros). */
-        var qty = Number(getField(r, 'cantidadConfirmada'));
-        if (isNaN(qty) || qty === 0) qty = Number(getField(r, 'cantidadSolicitada')) || 0;
+        /* Sumamos cantidadConfirmada (mismo criterio que la pantalla del m3link).
+           Si está en 0, queda en 0 — refleja que aún no se confirma la operación. */
+        var qty = Number(getField(r, 'cantidadConfirmada')) || 0;
         acc[cat][slot] += qty;
       }
 

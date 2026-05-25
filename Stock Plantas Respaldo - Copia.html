@@ -301,11 +301,16 @@
         <button class="btn" onclick="reloadExcel()" title="Recargar el Excel embebido">
           ↻ Refrescar
         </button>
-        <a class="btn btn-primary"
-           href="https://redtecsacl-my.sharepoint.com/:x:/g/personal/fcallejas_redtecsa_com/IQCOQTGyMzzFSoG7sYpTev1pAQp1SkRasFEohpPCyg_nHeM?e=Ura6Cr"
+        <a class="btn"
+           href="https://redtecsacl-my.sharepoint.com/:x:/g/personal/fcallejas_redtecsa_com/IQCOQTGyMzzFSoG7sYpTev1pAWiSrQ8zO7EO62kCUC6PVO4?e=WtFQmk"
            target="_blank" rel="noopener"
-           title="Abrir el archivo completo en SharePoint">
-          ↗ Abrir en SharePoint
+           title="Abrir el archivo en SharePoint (navegador)">
+          ↗ SharePoint
+        </a>
+        <a class="btn btn-primary"
+           href="ms-excel:ofe|u|https://redtecsacl-my.sharepoint.com/personal/fcallejas_redtecsa_com/_layouts/15/Doc.aspx?sourcedoc=%7Bb231418e-3c33-4ac5-81bb-b18a537afd69%7D&file=Stock%20Plantas%20Respaldo%20-%20Copia.xlsx&action=default&mobileredirect=true"
+           title="Abrir directamente en Excel de escritorio para editar en tiempo real">
+          ⊞ Editar en Excel
         </a>
       </div>
     </div>
@@ -318,19 +323,19 @@
         <span class="excel-bar-title">Stock Plantas Respaldo - Copia.xlsx — SharePoint REDTEC</span>
         <span class="excel-bar-status">
           <span class="live-dot"></span>
-          Modo edición
+          Vista en vivo · Editar abre Excel
         </span>
       </div>
 
       <div class="iframe-loader" id="ifl">
         <div class="spinner"></div>
-        <div class="iframe-loader-text">Cargando Excel en modo edición…</div>
+        <div class="iframe-loader-text">Cargando Excel desde SharePoint…</div>
       </div>
 
       <iframe
         id="excelFrame"
         class="excel-iframe"
-        src="https://redtecsacl-my.sharepoint.com/personal/fcallejas_redtecsa_com/_layouts/15/Doc.aspx?sourcedoc={b231418e-3c33-4ac5-81bb-b18a537afd69}&action=edit&wdAllowInteractivity=True&wdHideGridlines=False&wdHideHeaders=False&wdDownloadButton=True&wdInConfigurator=True"
+        src="https://redtecsacl-my.sharepoint.com/personal/fcallejas_redtecsa_com/_layouts/15/Doc.aspx?sourcedoc={b231418e-3c33-4ac5-81bb-b18a537afd69}&action=embedview&wdAllowInteractivity=True&wdHideGridlines=True&wdHideHeaders=True&wdDownloadButton=True&wdInConfigurator=True"
         frameborder="0"
         onload="document.getElementById('ifl').classList.add('hidden');">
       </iframe>

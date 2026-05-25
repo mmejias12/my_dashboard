@@ -48,19 +48,24 @@
   .demo-badge { font-size:10px;font-weight:600;letter-spacing:.5px;padding:3px 8px;border-radius:4px;background:rgba(251,191,36,0.15);color:#fcd34d;border:1px solid rgba(251,191,36,0.3); }
 
   /* LAYOUT */
-  .main { display:flex; padding-top:50px; min-height:100vh; }
+  .main { display:flex; flex-direction:column; padding-top:50px; min-height:100vh; }
 
-  /* SIDEBAR IZQUIERDA (con datos A/H/M) */
-  .sidebar { width:260px;min-width:260px;background:var(--bg-surface);border-right:1px solid var(--border);padding:1rem .875rem;position:sticky;top:50px;height:calc(100vh - 50px);overflow-y:auto; }
-  .sb-section { margin-bottom:1.25rem; }
-  .sb-section-title { font-size:10px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--text-muted);padding:.3rem .25rem .55rem;display:flex;align-items:center;justify-content:space-between; }
+  /* BARRA INFERIOR (antes era lateral) - horizontal abajo */
+  .sidebar { order:2; width:100%; background:var(--bg-surface); border-top:1px solid var(--border); padding:.75rem 1rem; }
+  .sb-section { margin-bottom:0; }
+  .sb-section + .sb-section { margin-left:1rem; padding-left:1rem; border-left:1px solid var(--border); }
+  .sb-section-title { font-size:10px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--text-muted);padding:0 .25rem .4rem;display:flex;align-items:center;justify-content:space-between;gap:8px; }
   .sb-section-title .live-dot { width:6px;height:6px; }
 
-  /* Bloques de movimientos */
-  .mov-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:.65rem .75rem;margin-bottom:.45rem;transition:border-color .15s,background .15s;cursor:default; }
+  /* Contenedor horizontal de bloques */
+  .sb-row { display:flex; gap:.5rem; align-items:stretch; flex-wrap:wrap; }
+  .sb-stock-wrap { display:flex; flex-direction:column; min-width:170px; }
+
+  /* Bloques de movimientos - ahora compactos horizontalmente */
+  .mov-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:.55rem .7rem;margin-bottom:0;transition:border-color .15s,background .15s;cursor:default;flex:1;min-width:165px; }
   .mov-card:hover { border-color:var(--border-md); }
-  .mov-head { display:flex;align-items:center;justify-content:space-between;margin-bottom:.45rem; }
-  .mov-label { font-size:10.5px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:2px 7px;border-radius:4px; }
+  .mov-head { display:flex;align-items:center;justify-content:space-between;margin-bottom:.4rem; }
+  .mov-label { font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:2px 7px;border-radius:4px; }
   .mov-label.em  { background:var(--b-em-bg);  color:var(--b-em-tx); }
   .mov-label.tra { background:var(--b-tra-bg); color:var(--b-tra-tx); }
   .mov-label.ret { background:var(--b-ret-bg); color:var(--b-ret-tx); }
@@ -69,29 +74,30 @@
   .mov-trend.up   { color:var(--accent); }
   .mov-trend.down { color:#f87171; }
 
-  /* Filas A/H/M */
-  .mov-rows { display:grid;grid-template-columns:auto 1fr;gap:3px 10px;align-items:baseline; }
-  .mov-day { font-size:10.5px;font-weight:500;color:var(--text-muted);letter-spacing:.5px;font-family:'JetBrains Mono',monospace; }
-  .mov-val { font-size:14px;font-weight:500;color:var(--text-secondary);font-family:'JetBrains Mono',monospace;text-align:right; }
-  /* Hoy (H) destacado */
-  .mov-day.today { color:var(--text-primary); font-weight:600; }
-  .mov-val.today { color:var(--text-primary); font-size:17px; font-weight:600; }
+  /* Filas A/H/M - ahora en línea horizontal para aprovechar espacio */
+  .mov-rows { display:grid; grid-template-columns:1fr 1fr 1fr; gap:0 6px; align-items:end; }
+  .mov-rows > div { display:flex; flex-direction:column; align-items:center; padding:2px 0; border-radius:4px; }
+  .mov-rows > div.is-today { background:rgba(74,222,128,0.07); }
+  .mov-day { font-size:9.5px;font-weight:500;color:var(--text-muted);letter-spacing:.5px;font-family:'JetBrains Mono',monospace;text-transform:uppercase; }
+  .mov-val { font-size:13.5px;font-weight:500;color:var(--text-secondary);font-family:'JetBrains Mono',monospace; }
+  .mov-day.today { color:var(--accent); font-weight:700; }
+  .mov-val.today { color:var(--text-primary); font-size:16px; font-weight:700; }
   .mov-val.placeholder { color:var(--text-muted); }
 
-  /* Bloque de Stock */
-  .stock-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:.7rem .75rem;margin-bottom:.45rem; }
-  .stock-row { display:flex;justify-content:space-between;align-items:baseline;padding:4px 0; }
-  .stock-row + .stock-row { border-top:1px dashed var(--border); margin-top:2px; padding-top:8px; }
+  /* Bloque de Stock - compacto horizontal */
+  .stock-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:.55rem .7rem;flex:1;min-width:160px; }
+  .stock-row { display:flex;justify-content:space-between;align-items:baseline;padding:3px 0; }
+  .stock-row + .stock-row { border-top:1px dashed var(--border); padding-top:5px; margin-top:2px; }
   .stock-key { font-size:11px;color:var(--text-secondary);font-weight:500;letter-spacing:.3px; }
-  .stock-val { font-size:14px;color:var(--text-muted);font-family:'JetBrains Mono',monospace;font-weight:500; }
-  .stock-pending { font-size:9.5px;color:var(--text-muted);font-style:italic;margin-top:7px;padding-top:6px;border-top:1px dashed var(--border);text-align:center; }
+  .stock-val { font-size:13px;color:var(--text-muted);font-family:'JetBrains Mono',monospace;font-weight:500; }
+  .stock-pending { font-size:9px;color:var(--text-muted);font-style:italic;margin-top:5px;text-align:center; }
 
   /* Leyenda */
-  .legend { font-size:10px;color:var(--text-muted);line-height:1.5;padding:.5rem .25rem 0;border-top:1px solid var(--border);margin-top:.5rem; }
-  .legend code { font-family:'JetBrains Mono',monospace;color:var(--text-secondary);background:var(--bg-input);padding:1px 4px;border-radius:3px;font-size:9.5px; }
+  .legend { font-size:9.5px;color:var(--text-muted);line-height:1.4;padding:0 .25rem;text-align:right;margin-top:.4rem; }
+  .legend code { font-family:'JetBrains Mono',monospace;color:var(--text-secondary);background:var(--bg-input);padding:1px 4px;border-radius:3px;font-size:9px; }
 
-  /* CONTENIDO CENTRAL */
-  .content { flex:1;padding:1rem 1.25rem;display:flex;flex-direction:column;min-width:0; }
+  /* CONTENIDO CENTRAL - ahora arriba y ocupando todo el ancho */
+  .content { order:1;flex:1;padding:.75rem 1rem .5rem;display:flex;flex-direction:column;min-width:0;min-height:calc(100vh - 50px - 230px); }
   .content-head { display:flex;align-items:center;justify-content:space-between;margin-bottom:.875rem;gap:1rem;flex-wrap:wrap; }
   .page-title { font-size:15px;font-weight:600;color:var(--text-primary); }
   .breadcrumb { font-size:11px;color:var(--text-muted);margin-top:3px; }
@@ -106,7 +112,7 @@
   .btn-primary:hover { background:rgba(74,222,128,0.25); }
 
   /* Contenedor del iframe del Excel */
-  .excel-wrap { flex:1; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); overflow:hidden; position:relative; min-height:600px; display:flex; flex-direction:column; }
+  .excel-wrap { flex:1; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); overflow:hidden; position:relative; min-height:calc(100vh - 50px - 230px - 110px); display:flex; flex-direction:column; }
   .excel-bar { height:32px;background:var(--bg-surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 .75rem;gap:8px; }
   .excel-bar .dot { width:9px;height:9px;border-radius:50%; }
   .excel-bar .dot.r { background:#ed6a5e; }
@@ -125,9 +131,9 @@
 
   /* Responsive */
   @media (max-width: 900px) {
-    .sidebar { width:100%; position:relative; height:auto; border-right:none; border-bottom:1px solid var(--border); }
-    .main { flex-direction:column; }
-    .excel-wrap { min-height:500px; }
+    .sb-section + .sb-section { margin-left:0; padding-left:0; border-left:none; border-top:1px solid var(--border); padding-top:.75rem; margin-top:.75rem; }
+    .sidebar { padding:.6rem .75rem; }
+    .excel-wrap { min-height:450px; }
   }
 </style>
 </head>
@@ -151,101 +157,128 @@
 
 <div class="main">
 
-  <!-- BARRA LATERAL: MOVIMIENTOS + STOCK -->
+  <!-- BARRA INFERIOR: MOVIMIENTOS + STOCK -->
   <aside class="sidebar">
+    <div style="display:flex; gap:1rem; align-items:flex-start; flex-wrap:wrap;">
 
-    <div class="sb-section">
-      <div class="sb-section-title">
-        <span>Movimientos</span>
-        <span id="mov-status" class="live-dot" title="Cargando..."></span>
+      <div class="sb-section" style="flex:1; min-width:0;">
+        <div class="sb-section-title">
+          <span>Movimientos</span>
+          <span id="mov-status" class="live-dot" title="Cargando..."></span>
+          <span class="legend" style="margin-left:auto; margin-top:0;">
+            <code>A</code> Ayer · <code>H</code> Hoy · <code>M</code> Mañana
+          </span>
+        </div>
+
+        <div class="sb-row">
+          <!-- EMISIONES -->
+          <div class="mov-card">
+            <div class="mov-head">
+              <span class="mov-label em">Emisiones</span>
+              <span class="mov-trend" id="trend-em">—</span>
+            </div>
+            <div class="mov-rows">
+              <div>
+                <span class="mov-day">A</span>
+                <span class="mov-val placeholder" id="em-a" title="Ayer">—</span>
+              </div>
+              <div class="is-today">
+                <span class="mov-day today">H</span>
+                <span class="mov-val placeholder today" id="em-h" title="Hoy">—</span>
+              </div>
+              <div>
+                <span class="mov-day">M</span>
+                <span class="mov-val placeholder" id="em-m" title="Mañana">—</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- TRANSFERENCIAS -->
+          <div class="mov-card">
+            <div class="mov-head">
+              <span class="mov-label tra">Transferencias</span>
+              <span class="mov-trend" id="trend-tra">—</span>
+            </div>
+            <div class="mov-rows">
+              <div>
+                <span class="mov-day">A</span>
+                <span class="mov-val placeholder" id="tra-a" title="Ayer">—</span>
+              </div>
+              <div class="is-today">
+                <span class="mov-day today">H</span>
+                <span class="mov-val placeholder today" id="tra-h" title="Hoy">—</span>
+              </div>
+              <div>
+                <span class="mov-day">M</span>
+                <span class="mov-val placeholder" id="tra-m" title="Mañana">—</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- RETIROS -->
+          <div class="mov-card">
+            <div class="mov-head">
+              <span class="mov-label ret">Retiros</span>
+              <span class="mov-trend" id="trend-ret">—</span>
+            </div>
+            <div class="mov-rows">
+              <div>
+                <span class="mov-day">A</span>
+                <span class="mov-val placeholder" id="ret-a" title="Ayer">—</span>
+              </div>
+              <div class="is-today">
+                <span class="mov-day today">H</span>
+                <span class="mov-val placeholder today" id="ret-h" title="Hoy">—</span>
+              </div>
+              <div>
+                <span class="mov-day">M</span>
+                <span class="mov-val placeholder" id="ret-m" title="Mañana">—</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- DEVOLUCIONES -->
+          <div class="mov-card">
+            <div class="mov-head">
+              <span class="mov-label dev">Devoluciones</span>
+              <span class="mov-trend" id="trend-dev">—</span>
+            </div>
+            <div class="mov-rows">
+              <div>
+                <span class="mov-day">A</span>
+                <span class="mov-val placeholder" id="dev-a" title="Ayer">—</span>
+              </div>
+              <div class="is-today">
+                <span class="mov-day today">H</span>
+                <span class="mov-val placeholder today" id="dev-h" title="Hoy">—</span>
+              </div>
+              <div>
+                <span class="mov-day">M</span>
+                <span class="mov-val placeholder" id="dev-m" title="Mañana">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <!-- EMISIONES -->
-      <div class="mov-card">
-        <div class="mov-head">
-          <span class="mov-label em">Emisiones</span>
-          <span class="mov-trend" id="trend-em">—</span>
+      <!-- STOCK -->
+      <div class="sb-section sb-stock-wrap">
+        <div class="sb-section-title">
+          <span>Stock Actual</span>
         </div>
-        <div class="mov-rows">
-          <span class="mov-day">A</span>
-          <span class="mov-val placeholder" id="em-a" title="Ayer">—</span>
-          <span class="mov-day today">H</span>
-          <span class="mov-val placeholder today" id="em-h" title="Hoy">—</span>
-          <span class="mov-day">M</span>
-          <span class="mov-val placeholder" id="em-m" title="Mañana">—</span>
-        </div>
-      </div>
-
-      <!-- TRANSFERENCIAS -->
-      <div class="mov-card">
-        <div class="mov-head">
-          <span class="mov-label tra">Transferencias</span>
-          <span class="mov-trend" id="trend-tra">—</span>
-        </div>
-        <div class="mov-rows">
-          <span class="mov-day">A</span>
-          <span class="mov-val placeholder" id="tra-a" title="Ayer">—</span>
-          <span class="mov-day today">H</span>
-          <span class="mov-val placeholder today" id="tra-h" title="Hoy">—</span>
-          <span class="mov-day">M</span>
-          <span class="mov-val placeholder" id="tra-m" title="Mañana">—</span>
+        <div class="stock-card">
+          <div class="stock-row">
+            <span class="stock-key">Clientes</span>
+            <span class="stock-val">—</span>
+          </div>
+          <div class="stock-row">
+            <span class="stock-key">Retail</span>
+            <span class="stock-val">—</span>
+          </div>
+          <div class="stock-pending">Endpoint pendiente</div>
         </div>
       </div>
 
-      <!-- RETIROS -->
-      <div class="mov-card">
-        <div class="mov-head">
-          <span class="mov-label ret">Retiros</span>
-          <span class="mov-trend" id="trend-ret">—</span>
-        </div>
-        <div class="mov-rows">
-          <span class="mov-day">A</span>
-          <span class="mov-val placeholder" id="ret-a" title="Ayer">—</span>
-          <span class="mov-day today">H</span>
-          <span class="mov-val placeholder today" id="ret-h" title="Hoy">—</span>
-          <span class="mov-day">M</span>
-          <span class="mov-val placeholder" id="ret-m" title="Mañana">—</span>
-        </div>
-      </div>
-
-      <!-- DEVOLUCIONES -->
-      <div class="mov-card">
-        <div class="mov-head">
-          <span class="mov-label dev">Devoluciones</span>
-          <span class="mov-trend" id="trend-dev">—</span>
-        </div>
-        <div class="mov-rows">
-          <span class="mov-day">A</span>
-          <span class="mov-val placeholder" id="dev-a" title="Ayer">—</span>
-          <span class="mov-day today">H</span>
-          <span class="mov-val placeholder today" id="dev-h" title="Hoy">—</span>
-          <span class="mov-day">M</span>
-          <span class="mov-val placeholder" id="dev-m" title="Mañana">—</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- STOCK -->
-    <div class="sb-section">
-      <div class="sb-section-title">
-        <span>Stock Actual</span>
-      </div>
-      <div class="stock-card">
-        <div class="stock-row">
-          <span class="stock-key">Clientes</span>
-          <span class="stock-val">—</span>
-        </div>
-        <div class="stock-row">
-          <span class="stock-key">Retail</span>
-          <span class="stock-val">—</span>
-        </div>
-        <div class="stock-pending">Endpoint pendiente</div>
-      </div>
-    </div>
-
-    <!-- Leyenda -->
-    <div class="legend">
-      <code>A</code> Ayer · <code>H</code> Hoy · <code>M</code> Mañana
     </div>
   </aside>
 
@@ -285,19 +318,19 @@
         <span class="excel-bar-title">Stock Plantas Respaldo - Copia.xlsx — SharePoint REDTEC</span>
         <span class="excel-bar-status">
           <span class="live-dot"></span>
-          Conectado
+          Modo edición
         </span>
       </div>
 
       <div class="iframe-loader" id="ifl">
         <div class="spinner"></div>
-        <div class="iframe-loader-text">Cargando Excel desde SharePoint…</div>
+        <div class="iframe-loader-text">Cargando Excel en modo edición…</div>
       </div>
 
       <iframe
         id="excelFrame"
         class="excel-iframe"
-        src="https://redtecsacl-my.sharepoint.com/personal/fcallejas_redtecsa_com/_layouts/15/Doc.aspx?sourcedoc={b231418e-3c33-4ac5-81bb-b18a537afd69}&action=embedview&wdAllowInteractivity=True&wdHideGridlines=True&wdHideHeaders=True&wdDownloadButton=True&wdInConfigurator=True"
+        src="https://redtecsacl-my.sharepoint.com/personal/fcallejas_redtecsa_com/_layouts/15/Doc.aspx?sourcedoc={b231418e-3c33-4ac5-81bb-b18a537afd69}&action=edit&wdAllowInteractivity=True&wdHideGridlines=False&wdHideHeaders=False&wdDownloadButton=True&wdInConfigurator=True"
         frameborder="0"
         onload="document.getElementById('ifl').classList.add('hidden');">
       </iframe>

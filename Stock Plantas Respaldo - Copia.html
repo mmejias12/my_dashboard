@@ -372,11 +372,16 @@ var OPS_MAP = {
   dev: ['devolucion']
 };
 
-/* ----- Filtro por planta (Santiago absorbe zona norte) -----
-   Regla: si la bodega destino contiene "TALCA" → Talca; cualquier otra → Santiago. */
+/* ----- Filtro por planta (Santiago absorbe zona norte, EXCEPTO Coquimbo Virtual) -----
+   Reglas (basadas en bodegaDestinoStr):
+     - Contiene "TALCA"            → Talca
+     - Contiene "COQUIMBO VIRTUAL" → excluido (bodega virtual, no se contabiliza)
+     - Cualquier otro              → Santiago
+   Devuelve null cuando el registro debe ignorarse completamente. */
 function plantaDe(bodegaDestino){
   if (!bodegaDestino) return 'santiago';
   var b = String(bodegaDestino).toUpperCase();
+  if (b.indexOf('COQUIMBO VIRTUAL') !== -1) return null;   /* excluir Coquimbo Virtual */
   if (b.indexOf('TALCA') !== -1) return 'talca';
   return 'santiago';
 }
@@ -519,11 +524,12 @@ function pintarMovimientos(){
   for (var i = 0; i < rawCache.length; i++){
     var r = rawCache[i];
 
+    /* Calcular planta SIEMPRE para poder excluir Coquimbo Virtual del total */
+    var p = plantaDe(getField(r, 'bodegaDestinoStr'));
+    if (p === null) continue;   /* Coquimbo Virtual: nunca se contabiliza */
+
     /* Filtro por planta (cuando no es "todos") */
-    if (plantaActiva !== 'todos') {
-      var p = plantaDe(getField(r, 'bodegaDestinoStr'));
-      if (p !== plantaActiva) continue;
-    }
+    if (plantaActiva !== 'todos' && p !== plantaActiva) continue;
 
     var cat = clasificar(getField(r, 'operacion'));
     if (!cat) continue;
@@ -614,10 +620,10 @@ function cargarStock(){
 
       for (var i = 0; i < rows.length; i++){
         var row = rows[i];
-        var whs = String(row.WhsCode || row.whsCode || row.CLIENTES || '').toUpperCase();
-        /* El campo de stock acumulado puede llamarse stock, Stock, saldo, neto, etc.
-           Probamos los nombres más comunes en orden. */
-        var qty = Number(row.stock || row.Stock || row.saldo || row.neto || row.cantidad || 0);
+        /* El proxy SAP renombra columnas: WhsCode → cliente, etc.
+           Valores reales de "cliente": "CLIENTES" o "RETAIL". */
+        var whs = String(row.cliente || row.CLIENTES || row.WhsCode || row.whsCode || '').toUpperCase();
+        var qty = Number(row.stock || row.Stock || 0);
         if (isNaN(qty)) qty = 0;
 
         if (whs === 'CLIENTES')      totClientes += qty;

@@ -362,15 +362,17 @@ var OPS_MAP = {
   dev: ['devolucion']
 };
 
-/* ----- Filtro por planta (Santiago absorbe zona norte, EXCEPTO Coquimbo Virtual) -----
-   Reglas (basadas en bodegaDestinoStr):
-     - Contiene "TALCA"            → Talca
-     - Contiene "COQUIMBO VIRTUAL" → excluido (bodega virtual, no se contabiliza)
-     - Cualquier otro              → Santiago
+/* ----- Filtro por planta (basado en bodega ORIGEN, no destino) -----
+   El origen es la planta REDTEC que ejecuta la operación.
+   El destino es el cliente final (no representa la planta).
+   Reglas (sobre bodegaOrigenStr):
+     - "REDTEC TALCA"            → Talca
+     - "REDTEC COQUIMBO VIRTUAL" → excluido (bodega virtual, no se contabiliza)
+     - Cualquier otro REDTEC     → Santiago (absorbe zona norte)
    Devuelve null cuando el registro debe ignorarse completamente. */
-function plantaDe(bodegaDestino){
-  if (!bodegaDestino) return 'santiago';
-  var b = String(bodegaDestino).toUpperCase();
+function plantaDe(bodegaOrigen){
+  if (!bodegaOrigen) return 'santiago';
+  var b = String(bodegaOrigen).toUpperCase();
   if (b.indexOf('COQUIMBO VIRTUAL') !== -1) return null;   /* excluir Coquimbo Virtual */
   if (b.indexOf('TALCA') !== -1) return 'talca';
   return 'santiago';
@@ -487,7 +489,7 @@ function cargarMovimientos(){
 /* ----- Pinta los movimientos en pantalla usando el dataset cacheado + filtro activo -----
    Reglas:
      - Excluye SIEMPRE registros con etapaOperacion = "Anulado" (en cualquier día)
-     - A (Ayer)   → cantidadConfirmada
+     - A (Ayer)   → cantidadConfirmada (EXCEPTO transferencias, que usan solicitada por demora en confirmar)
      - H (Hoy)    → cantidadSolicitada
      - M (Mañana) → cantidadSolicitada
    Filtrado adicional por planta según plantaActiva (todos | santiago | talca). */
@@ -515,8 +517,9 @@ function pintarMovimientos(){
   for (var i = 0; i < rawCache.length; i++){
     var r = rawCache[i];
 
-    /* Calcular planta SIEMPRE para poder excluir Coquimbo Virtual del total */
-    var p = plantaDe(getField(r, 'bodegaDestinoStr'));
+    /* Calcular planta SIEMPRE para poder excluir Coquimbo Virtual del total.
+       Se usa bodegaOrigenStr (la planta REDTEC que ejecuta la operación). */
+    var p = plantaDe(getField(r, 'bodegaOrigenStr'));
     if (p === null) continue;   /* Coquimbo Virtual: nunca se contabiliza */
 
     /* Filtro por planta (cuando no es "todos") */
@@ -537,13 +540,15 @@ function pintarMovimientos(){
     var etapa = String(getField(r, 'etapaOperacion') || '').toLowerCase();
     if (etapa.indexOf('anulad') !== -1) continue;
 
-    /* Cantidad según día */
+    /* Cantidad según día.
+       Excepción: TRANSFERENCIAS usan cantidadSolicitada incluso en ayer,
+       porque la confirmación demora y no llega el mismo día. */
     var qty = 0;
-    if (slot === 'ayer') {
-      /* Ayer: lo confirmado */
+    if (slot === 'ayer' && cat !== 'tra') {
+      /* Ayer: lo confirmado (excepto transferencias) */
       qty = Number(getField(r, 'cantidadConfirmada')) || 0;
     } else {
-      /* Hoy y Mañana: lo solicitado */
+      /* Hoy, Mañana, y Ayer-Transferencias: lo solicitado */
       qty = Number(getField(r, 'cantidadSolicitada')) || 0;
     }
 

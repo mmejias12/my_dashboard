@@ -103,10 +103,7 @@
   .legend code { font-family:'JetBrains Mono',monospace;color:var(--text-secondary);background:var(--bg-input);padding:1px 4px;border-radius:3px;font-size:9px; }
 
   /* CONTENIDO CENTRAL - ahora arriba y ocupando todo el ancho */
-  .content { order:1;flex:1;padding:.75rem 1rem .5rem;display:flex;flex-direction:column;min-width:0;min-height:calc(100vh - 50px - 230px); }
-  .content-head { display:flex;align-items:center;justify-content:space-between;margin-bottom:.625rem;gap:1rem;flex-wrap:wrap; }
-  .page-title { font-size:15px;font-weight:600;color:var(--text-primary); }
-  .breadcrumb { font-size:11px;color:var(--text-muted);margin-top:3px; }
+  .content { order:1;flex:1;padding:.5rem .75rem .4rem;display:flex;flex-direction:column;min-width:0;min-height:calc(100vh - 50px - 230px); }
   .tool-actions { display:flex;gap:8px;align-items:center; }
 
   .btn { font-size:12px;padding:7px 14px;border:1px solid var(--border-md);border-radius:var(--radius-sm);background:var(--bg-input);color:var(--text-primary);cursor:pointer;transition:background .12s,border-color .12s;font-family:'Inter',sans-serif;font-weight:500;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;text-decoration:none; }
@@ -114,19 +111,23 @@
   .btn-primary { background:var(--accent-dim);border-color:var(--border-accent);color:var(--accent); }
   .btn-primary:hover { background:rgba(74,222,128,0.25); }
 
-  /* Contenedor del iframe del Excel - ahora más alto al haber eliminado el toolbar */
-  .excel-wrap { flex:1; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); overflow:hidden; position:relative; min-height:calc(100vh - 50px - 230px - 70px); display:flex; flex-direction:column; }
-  .excel-bar { height:32px;background:var(--bg-surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 .75rem;gap:8px; }
+  /* Contenedor del iframe del Excel - ocupa casi toda la pantalla al no haber header */
+  .excel-wrap { flex:1; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); overflow:hidden; position:relative; min-height:calc(100vh - 50px - 230px - 20px); display:flex; flex-direction:column; }
+  .excel-bar { height:38px;background:var(--bg-surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 .65rem;gap:8px; }
   .excel-bar .dot { width:9px;height:9px;border-radius:50%; }
   .excel-bar .dot.r { background:#ed6a5e; }
   .excel-bar .dot.y { background:#f5bf4f; }
   .excel-bar .dot.g { background:#62c554; }
-  .excel-bar-title { font-size:11px;color:var(--text-secondary);margin-left:8px;font-weight:500; }
-  .excel-bar-status { margin-left:auto;font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:5px; }
+  .excel-bar-title { font-size:11px;color:var(--text-secondary);margin-left:8px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+  .excel-bar-actions { display:flex;gap:5px;align-items:center;flex-shrink:0; }
+  .btn-mini { font-size:11px;padding:4px 9px;border:1px solid var(--border-md);border-radius:5px;background:var(--bg-input);color:var(--text-primary);cursor:pointer;transition:background .12s,border-color .12s;font-family:'Inter',sans-serif;font-weight:500;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;text-decoration:none;line-height:1; }
+  .btn-mini:hover { background:var(--bg-hover);border-color:var(--border-accent); }
+  .btn-mini.btn-primary { background:var(--accent-dim);border-color:var(--border-accent);color:var(--accent); }
+  .btn-mini.btn-primary:hover { background:rgba(74,222,128,0.25); }
   .excel-iframe { flex:1;border:0;width:100%;background:#fff; }
 
   /* Loading state del iframe */
-  .iframe-loader { position:absolute;inset:32px 0 0 0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-card);gap:10px;transition:opacity .3s; }
+  .iframe-loader { position:absolute;inset:38px 0 0 0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-card);gap:10px;transition:opacity .3s; }
   .iframe-loader.hidden { opacity:0;pointer-events:none; }
   .spinner { width:32px;height:32px;border:3px solid var(--border-md);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -294,40 +295,29 @@
   <!-- CONTENIDO PRINCIPAL: EXCEL EMBEBIDO -->
   <main class="content">
 
-    <div class="content-head">
-      <div>
-        <div class="page-title">Stock Plantas Respaldo - Copia</div>
-        <div class="breadcrumb">M3LINK · Estrategias · Excel compartido SharePoint</div>
-      </div>
-      <div class="tool-actions">
-        <button class="btn" onclick="reloadExcel()" title="Recargar el Excel embebido">
-          ↻ Refrescar
-        </button>
-        <a class="btn"
-           href="https://redtecsacl-my.sharepoint.com/:x:/g/personal/fcallejas_redtecsa_com/IQCOQTGyMzzFSoG7sYpTev1pAWiSrQ8zO7EO62kCUC6PVO4?e=WtFQmk"
-           target="_blank" rel="noopener"
-           title="Abrir el archivo en SharePoint (navegador)">
-          ↗ SharePoint
-        </a>
-        <a class="btn btn-primary"
-           id="btn-excel-app"
-           href="ms-excel:ofe|u|https://redtecsacl-my.sharepoint.com/personal/fcallejas_redtecsa_com/Documents/Stock%20Plantas%20Respaldo%20-%20Copia.xlsx"
-           title="Abrir directamente en Excel de escritorio para editar en tiempo real">
-          ⊞ Editar en Excel
-        </a>
-      </div>
-    </div>
-
     <div class="excel-wrap">
       <div class="excel-bar">
         <span class="dot r"></span>
         <span class="dot y"></span>
         <span class="dot g"></span>
-        <span class="excel-bar-title">Stock Plantas Respaldo - Copia.xlsx — SharePoint REDTEC</span>
-        <span class="excel-bar-status">
-          <span class="live-dot"></span>
-          Vista en vivo · Editar abre Excel
-        </span>
+        <span class="excel-bar-title">Stock Plantas Respaldo - Copia.xlsx</span>
+        <div class="excel-bar-actions">
+          <button class="btn btn-mini" onclick="reloadExcel()" title="Recargar el Excel embebido">
+            ↻
+          </button>
+          <a class="btn btn-mini"
+             href="https://redtecsacl-my.sharepoint.com/:x:/g/personal/fcallejas_redtecsa_com/IQCOQTGyMzzFSoG7sYpTev1pAWiSrQ8zO7EO62kCUC6PVO4?e=WtFQmk"
+             target="_blank" rel="noopener"
+             title="Abrir el archivo en SharePoint (navegador)">
+            ↗ SharePoint
+          </a>
+          <a class="btn btn-mini btn-primary"
+             id="btn-excel-app"
+             href="ms-excel:ofe|u|https://redtecsacl-my.sharepoint.com/personal/fcallejas_redtecsa_com/Documents/Stock%20Plantas%20Respaldo%20-%20Copia.xlsx"
+             title="Abrir directamente en Excel de escritorio para editar en tiempo real">
+            ⊞ Editar en Excel
+          </a>
+        </div>
       </div>
 
       <div class="iframe-loader" id="ifl">
@@ -495,10 +485,11 @@ function cargarMovimientos(){
 }
 
 /* ----- Pinta los movimientos en pantalla usando el dataset cacheado + filtro activo -----
-   Reglas de cantidad por día:
-     A (Ayer)   → cantidadConfirmada (lo realmente confirmado)
-     H (Hoy)    → cantidadSolicitada SIN registros con etapaOperacion = "Anulado"
-     M (Mañana) → cantidadSolicitada SIN registros con etapaOperacion = "Anulado"
+   Reglas:
+     - Excluye SIEMPRE registros con etapaOperacion = "Anulado" (en cualquier día)
+     - A (Ayer)   → cantidadConfirmada
+     - H (Hoy)    → cantidadSolicitada
+     - M (Mañana) → cantidadSolicitada
    Filtrado adicional por planta según plantaActiva (todos | santiago | talca). */
 function pintarMovimientos(){
   if (!rawCache) return;
@@ -541,15 +532,18 @@ function pintarMovimientos(){
     else if (f === manana) slot = 'manana';
     if (!slot) continue;
 
-    /* Lógica por día */
+    /* Excluir anulados SIEMPRE, en cualquier día (A, H, M).
+       "anulad" cubre "Anulado", "Anulada", "ANULADO", etc. */
+    var etapa = String(getField(r, 'etapaOperacion') || '').toLowerCase();
+    if (etapa.indexOf('anulad') !== -1) continue;
+
+    /* Cantidad según día */
     var qty = 0;
     if (slot === 'ayer') {
-      /* Ayer: solo lo confirmado */
+      /* Ayer: lo confirmado */
       qty = Number(getField(r, 'cantidadConfirmada')) || 0;
     } else {
-      /* Hoy y Mañana: solicitado, excluyendo anulados */
-      var etapa = String(getField(r, 'etapaOperacion') || '').toLowerCase();
-      if (etapa.indexOf('anulad') !== -1) continue;   /* descarta "Anulado", "Anulada", etc. */
+      /* Hoy y Mañana: lo solicitado */
       qty = Number(getField(r, 'cantidadSolicitada')) || 0;
     }
 
@@ -586,12 +580,14 @@ function setPlanta(p){
 
 /* ============================================================
    STOCK SAP B1 (Clientes / Retail)
-   Usa el proxy /api/sap-stock-proxy?modo=actual que ya existe
-   y devuelve stock acumulado por whsCode (CLIENTES, RETAIL, etc.)
+   Lee del snapshot JSON generado por GitHub Actions cada noche.
+   Esto da respuesta INSTANTÁNEA (vs. consultar SAP en vivo) y muestra
+   el stock del cierre del día anterior (sin movimientos del día actual
+   que inflarían el número).
    ============================================================ */
-var SAP_PROXY = '/api/sap-stock-proxy';
+var STOCK_SNAPSHOT = '/data/stocks-actual.json';
 
-function setStock(elId, val, statusElId){
+function setStock(elId, val){
   var el = document.getElementById(elId);
   if (!el) return;
   if (val === null || val === undefined || isNaN(val)) {
@@ -604,49 +600,60 @@ function setStock(elId, val, statusElId){
 function cargarStock(){
   var dot = document.getElementById('stock-status');
   var pending = document.getElementById('stock-pending');
-  if (dot) { dot.style.background = '#fcd34d'; dot.title = 'Consultando SAP…'; }
-  if (pending) pending.textContent = 'Consultando SAP…';
+  if (dot) { dot.style.background = '#fcd34d'; dot.title = 'Leyendo snapshot…'; }
 
-  fetch(SAP_PROXY + '?modo=actual', { headers: { 'Accept': 'application/json' } })
+  /* cache-bust para que no se quede pegado en versiones viejas del JSON */
+  var url = STOCK_SNAPSHOT + '?_=' + Date.now();
+
+  fetch(url, { headers: { 'Accept': 'application/json' } })
     .then(function(r){
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
     })
     .then(function(data){
-      var rows = Array.isArray(data) ? data : (data && data.items) ? data.items : [];
-
+      /* El snapshot puede traer totales pre-calculados en totales_por_tipo,
+         lo que evita iterar las 1057 filas. Si no, sumamos manualmente. */
       var totClientes = 0;
       var totRetail   = 0;
 
-      for (var i = 0; i < rows.length; i++){
-        var row = rows[i];
-        /* El proxy SAP renombra columnas: WhsCode → cliente, etc.
-           Valores reales de "cliente": "CLIENTES" o "RETAIL". */
-        var whs = String(row.cliente || row.CLIENTES || row.WhsCode || row.whsCode || '').toUpperCase();
-        var qty = Number(row.stock || row.Stock || 0);
-        if (isNaN(qty)) qty = 0;
-
-        if (whs === 'CLIENTES')      totClientes += qty;
-        else if (whs === 'RETAIL')   totRetail   += qty;
+      if (data && data.totales_por_tipo) {
+        totClientes = Number((data.totales_por_tipo.CLIENTES || {}).total_pallets) || 0;
+        totRetail   = Number((data.totales_por_tipo.RETAIL   || {}).total_pallets) || 0;
+      } else {
+        var rows = Array.isArray(data) ? data : (data && data.items) ? data.items : [];
+        for (var i = 0; i < rows.length; i++){
+          var row = rows[i];
+          var whs = String(row.cliente || row.CLIENTES || '').toUpperCase();
+          var qty = Number(row.stock || row.Stock || 0);
+          if (isNaN(qty)) qty = 0;
+          if (whs === 'CLIENTES')    totClientes += qty;
+          else if (whs === 'RETAIL') totRetail   += qty;
+        }
       }
 
       setStock('stk-clientes', totClientes);
       setStock('stk-retail',   totRetail);
 
-      if (dot) { dot.style.background = '#4ade80'; dot.title = 'Stock actualizado'; }
+      if (dot) { dot.style.background = '#4ade80'; dot.title = 'Stock al cierre del día anterior'; }
+
+      /* Mostrar cuándo se generó el snapshot, para que el usuario sepa la frescura */
       if (pending) {
-        var t = new Date();
-        pending.textContent = 'Actualizado ' + pad(t.getHours()) + ':' + pad(t.getMinutes());
+        if (data && data._meta && data._meta.generadoEn) {
+          var g = new Date(data._meta.generadoEn);
+          pending.textContent = 'Cierre del ' + pad(g.getDate()) + '/' + pad(g.getMonth()+1);
+        } else {
+          pending.textContent = 'Snapshot diario';
+        }
       }
 
-      console.log('[SAP Stock] Filas:', rows.length, '| Clientes:', totClientes, '| Retail:', totRetail);
+      console.log('[SAP Stock snapshot] Clientes:', totClientes, '| Retail:', totRetail, '| Generado:', data && data._meta ? data._meta.generadoEn : 'n/d');
     })
     .catch(function(err){
-      console.error('Error cargando stock SAP:', err);
+      console.error('Error leyendo snapshot de stock:', err);
       setStock('stk-clientes', null);
-      setStock('stk-retail', null);
-      if (dot) { dot.style.background = '#f87171'; dot.title = 'Error consultando SAP'; }
-      if (pending) pending.textContent = 'Error al consultar SAP';
+      setStock('stk-retail',   null);
+      if (dot) { dot.style.background = '#f87171'; dot.title = 'Error leyendo snapshot'; }
+      if (pending) pending.textContent = 'Snapshot no disponible';
     });
 }
 

@@ -1,0 +1,1406 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redtec | Gestión de Clientes y Conteos</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --primary: #1a2e4a;
+            --accent: #d94f3d;
+            --accent-hover: #c0392b;
+            --bg: #f0f2f5;
+            --white: #ffffff;
+            --text: #1a2e4a;
+            --text-light: #6b7a90;
+            --border: #d1d9e6;
+            --success: #27ae60;
+            --warning: #f39c12;
+            --error: #e74c3c;
+            --info: #3498db;
+            --shadow: 0 2px 8px rgba(26,46,74,0.08);
+            --shadow-lg: 0 8px 24px rgba(26,46,74,0.15);
+            --radius: 8px;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+
+        .header { background:var(--primary); color:white; padding:0 24px; display:flex; align-items:center; justify-content:space-between; height:60px; box-shadow:0 2px 8px rgba(0,0,0,0.3); }
+        .header-left { display:flex; align-items:center; gap:16px; }
+        .logo { font-size:22px; font-weight:800; letter-spacing:2px; color:var(--accent); }
+        .header-title { font-size:14px; color:rgba(255,255,255,0.7); border-left:1px solid rgba(255,255,255,0.2); padding-left:16px; }
+        .sync-status { display:flex; align-items:center; gap:8px; font-size:13px; color:rgba(255,255,255,0.8); }
+        .sync-dot { width:8px; height:8px; border-radius:50%; background:#27ae60; flex-shrink:0; }
+        .sync-dot.loading { animation:pulse 1s infinite; background:#f39c12; }
+        .sync-dot.error { background:#e74c3c; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+        .tabs { background:var(--white); display:flex; border-bottom:2px solid var(--border); padding:0 24px; box-shadow:var(--shadow); }
+        .tab-btn { padding:14px 20px; border:none; background:none; cursor:pointer; font-size:14px; font-weight:600; color:var(--text-light); border-bottom:3px solid transparent; margin-bottom:-2px; transition:all 0.2s; display:flex; align-items:center; gap:6px; }
+        .tab-btn:hover { color:var(--primary); }
+        .tab-btn.active { color:var(--accent); border-bottom-color:var(--accent); }
+
+        .main { max-width:1500px; margin:0 auto; padding:24px; }
+
+        .section-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
+        .section-left { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+        .section-title { font-size:20px; font-weight:700; color:var(--primary); }
+        .record-count { background:var(--bg); padding:3px 10px; border-radius:20px; font-size:12px; color:var(--text-light); font-weight:600; }
+
+        .filters { display:flex; gap:10px; flex-wrap:wrap; }
+        .search-box { position:relative; }
+        .search-box input { padding:8px 12px 8px 32px; border:1px solid var(--border); border-radius:var(--radius); font-size:13px; width:220px; outline:none; transition:border-color 0.2s; }
+        .search-box input:focus { border-color:var(--accent); }
+        .search-icon { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--text-light); font-size:13px; }
+        .filter-select { padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius); font-size:13px; outline:none; background:white; cursor:pointer; }
+        .filter-select:focus { border-color:var(--accent); }
+
+        .btn { padding:8px 16px; border:none; border-radius:var(--radius); font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s; display:inline-flex; align-items:center; gap:6px; }
+        .btn-primary { background:var(--accent); color:white; }
+        .btn-primary:hover { background:var(--accent-hover); transform:translateY(-1px); }
+        .btn-secondary { background:var(--white); color:var(--primary); border:1px solid var(--border); }
+        .btn-secondary:hover { background:var(--bg); }
+        .btn-icon { padding:5px 8px; font-size:14px; background:none; border:1px solid var(--border); border-radius:6px; cursor:pointer; transition:all 0.2s; }
+        .btn-icon:hover { background:var(--bg); }
+        .btn-icon.edit:hover { border-color:var(--info); color:var(--info); }
+        .btn-icon.delete:hover { border-color:var(--error); color:var(--error); }
+
+        .stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:12px; margin-bottom:20px; }
+        .stat-card { background:var(--white); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); text-align:center; border-top:3px solid var(--border); }
+        .stat-card.total { border-top-color:var(--primary); }
+        .stat-card.prog { border-top-color:var(--info); }
+        .stat-card.pend { border-top-color:var(--warning); }
+        .stat-card.espe { border-top-color:#9b59b6; }
+        .stat-card.real { border-top-color:var(--success); }
+        .stat-value { font-size:28px; font-weight:800; color:var(--primary); line-height:1; }
+        .stat-label { font-size:11px; color:var(--text-light); text-transform:uppercase; letter-spacing:0.5px; margin-top:4px; }
+
+        .table-wrapper { background:var(--white); border-radius:var(--radius); box-shadow:var(--shadow); overflow:auto; }
+        table { width:100%; border-collapse:collapse; font-size:13px; }
+        thead th { background:var(--primary); color:white; padding:12px 14px; text-align:left; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; white-space:nowrap; }
+        thead th:first-child { border-radius:var(--radius) 0 0 0; }
+        thead th:last-child { border-radius:0 var(--radius) 0 0; }
+        tbody tr { border-bottom:1px solid var(--border); transition:background 0.15s; }
+        tbody tr:hover { background:#f8f9fc; }
+        tbody tr:last-child { border-bottom:none; }
+        tbody td { padding:10px 14px; vertical-align:middle; }
+        .actions-cell { display:flex; gap:6px; }
+
+        .badge { padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; white-space:nowrap; }
+        .b-prog { background:#dbeafe; color:#1e40af; }
+        .b-pend { background:#fef3c7; color:#92400e; }
+        .b-espe { background:#ede9fe; color:#6d28d9; }
+        .b-real { background:#d1fae5; color:#065f46; }
+        .u-urg { color:#dc2626; font-weight:700; }
+        .u-mod { color:#d97706; font-weight:700; }
+        .u-prox { color:#7c3aed; font-weight:700; }
+        .u-plan { color:#2563eb; font-weight:600; }
+        .u-baja { color:#6b7280; }
+
+        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:flex-start; padding:30px 20px; overflow-y:auto; }
+        .modal-overlay.active { display:flex; }
+        .modal { background:var(--white); border-radius:12px; width:100%; max-width:680px; box-shadow:var(--shadow-lg); animation:modalIn 0.25s ease; }
+        @keyframes modalIn { from{opacity:0;transform:translateY(-20px)} to{opacity:1;transform:translateY(0)} }
+        .modal-header { padding:20px 24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+        .modal-title { font-size:17px; font-weight:700; color:var(--primary); }
+        .modal-close { background:none; border:none; font-size:20px; cursor:pointer; color:var(--text-light); padding:4px; border-radius:4px; line-height:1; }
+        .modal-close:hover { background:var(--bg); }
+        .modal-body { padding:24px; }
+        .modal-footer { padding:16px 24px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:10px; }
+
+        .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+        .form-grid .full { grid-column:1/-1; }
+        .form-group { display:flex; flex-direction:column; gap:5px; }
+        .form-label { font-size:11px; font-weight:700; color:var(--text-light); text-transform:uppercase; letter-spacing:0.5px; }
+        .form-control { padding:9px 12px; border:1px solid var(--border); border-radius:var(--radius); font-size:13px; outline:none; transition:border-color 0.2s; font-family:inherit; }
+        .form-control:focus { border-color:var(--accent); }
+        textarea.form-control { resize:vertical; min-height:80px; }
+
+        .toast-container { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+        .toast { padding:12px 20px; border-radius:var(--radius); color:white; font-size:14px; font-weight:500; box-shadow:var(--shadow-lg); animation:toastIn 0.3s ease, toastOut 0.3s ease 2.7s; display:flex; align-items:center; gap:8px; }
+        .t-success { background:var(--success); }
+        .t-error { background:var(--error); }
+        .t-info { background:var(--info); }
+        @keyframes toastIn { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:translateX(0)} }
+        @keyframes toastOut { from{opacity:1} to{opacity:0} }
+
+        .loading-overlay { display:none; position:fixed; inset:0; background:rgba(255,255,255,0.8); z-index:2000; justify-content:center; align-items:center; }
+        .loading-overlay.active { display:flex; }
+        .spinner { width:40px; height:40px; border:4px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite; }
+        @keyframes spin { to{transform:rotate(360deg)} }
+
+        .config-card { background:var(--white); border-radius:var(--radius); padding:24px; box-shadow:var(--shadow); margin-bottom:20px; }
+        .config-title { font-size:16px; font-weight:700; color:var(--primary); margin-bottom:8px; }
+        .config-desc { font-size:13px; color:var(--text-light); margin-bottom:16px; line-height:1.6; }
+        .alert { padding:12px 16px; border-radius:var(--radius); font-size:13px; margin-bottom:16px; line-height:1.5; }
+        .a-info { background:#dbeafe; color:#1e40af; border-left:4px solid #3b82f6; }
+        .a-warn { background:#fef3c7; color:#92400e; border-left:4px solid #f59e0b; }
+        .a-ok { background:#d1fae5; color:#065f46; border-left:4px solid #10b981; }
+        .a-err { background:#fee2e2; color:#991b1b; border-left:4px solid #ef4444; }
+        .step-list { counter-reset:steps; list-style:none; }
+        .step-list li { counter-increment:steps; padding:12px 0; border-bottom:1px solid var(--border); font-size:13px; display:flex; gap:12px; align-items:flex-start; line-height:1.6; }
+        .step-list li::before { content:counter(steps); background:var(--accent); color:white; width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex-shrink:0; margin-top:1px; }
+        .step-list li:last-child { border-bottom:none; }
+        .code-block { background:#f1f5f9; border:1px solid var(--border); border-radius:6px; padding:10px 14px; font-family:'Courier New',monospace; font-size:12px; color:#334155; word-break:break-all; }
+        .link { color:var(--accent); }
+
+        .diff-pos { color: #065f46; font-weight: 700; background: #d1fae5; padding: 2px 8px; border-radius: 12px; }
+        .diff-neg { color: #991b1b; font-weight: 700; background: #fee2e2; padding: 2px 8px; border-radius: 12px; }
+        .diff-zero { color: #1e40af; font-weight: 700; background: #dbeafe; padding: 2px 8px; border-radius: 12px; }
+        .res-summary { background: var(--white); border-radius: var(--radius); padding: 16px 20px; box-shadow: var(--shadow); border-left: 4px solid var(--accent); margin-bottom: 16px; display:flex; gap:32px; flex-wrap:wrap; }
+        .res-summary-item { text-align:center; }
+        .res-summary-item .val { font-size:22px; font-weight:800; color:var(--primary); }
+        .res-summary-item .lbl { font-size:11px; color:var(--text-light); text-transform:uppercase; }
+        .empty-state { text-align:center; padding:60px 24px; color:var(--text-light); }
+        .empty-icon { font-size:48px; margin-bottom:12px; }
+        .hidden { display:none !important; }
+        @media(max-width:768px) { .main{padding:16px} .form-grid{grid-template-columns:1fr} .section-header{flex-direction:column;align-items:flex-start} }
+    </style>
+</head>
+<body>
+
+<header class="header">
+    <div class="header-left">
+        <div class="logo">REDTEC</div>
+        <div class="header-title">Gestión de Clientes y Conteos</div>
+    </div>
+    <div class="sync-status">
+        <div class="sync-dot loading" id="syncDot"></div>
+        <span id="syncText">Conectando...</span>
+    </div>
+</header>
+
+<nav class="tabs">
+    <button class="tab-btn active" onclick="switchTab('clientes')">👥 Base de Clientes</button>
+    <button class="tab-btn" onclick="switchTab('calendario')">📅 Calendario de Conteos</button>
+    <button class="tab-btn" onclick="switchTab('resultados')">📊 Resultado Conteos</button>
+    <button class="tab-btn" onclick="switchTab('kpi')">📈 Análisis KPI</button>
+    <button class="tab-btn" onclick="switchTab('config')">⚙️ Configuración</button>
+</nav>
+
+<main class="main">
+
+    <!-- TAB CLIENTES -->
+    <div id="tab-clientes">
+        <div class="section-header">
+            <div class="section-left">
+                <h2 class="section-title">Base de Clientes</h2>
+                <span class="record-count" id="clientCount">—</span>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <div class="filters">
+                    <div class="search-box">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="searchC" placeholder="Buscar cliente..." oninput="renderClientes()">
+                    </div>
+                    <select class="filter-select" id="fCEjec" onchange="renderClientes()">
+                        <option value="">Todos los ejecutivos</option>
+                        <option>Rodrigo S.</option><option>Jaqueline M.</option><option>Catalina J.</option>
+                    </select>
+                    <select class="filter-select" id="fCMes" onchange="renderClientes()">
+                        <option value="">Todos los meses</option>
+                        <option>Enero</option><option>Febrero</option><option>Marzo</option><option>Abril</option>
+                        <option>Mayo</option><option>Junio</option><option>Julio</option><option>Agosto</option>
+                        <option>Septiembre</option><option>Octubre</option><option>Noviembre</option><option>Diciembre</option>
+                    </select>
+                </div>
+                <button class="btn btn-secondary" onclick="exportCSV('clientes')">⬇ Exportar Excel</button>
+                <button class="btn btn-primary" onclick="openModal('cliente')">+ Nuevo Cliente</button>
+            </div>
+        </div>
+        <div class="table-wrapper">
+            <table>
+                <thead><tr>
+                    <th>#</th><th>Cliente</th><th>Responsable</th><th>Teléfono</th>
+                    <th>Correo</th><th>Ejecutivo</th><th>Mes Teórico</th><th>Acciones</th>
+                </tr></thead>
+                <tbody id="ctBody"></tbody>
+            </table>
+            <div class="empty-state hidden" id="cEmpty"><div class="empty-icon">👥</div><div>No se encontraron clientes</div></div>
+        </div>
+    </div>
+
+    <!-- TAB CALENDARIO -->
+    <div id="tab-calendario" class="hidden">
+        <div class="stats-grid" id="statsGrid"></div>
+        <div class="section-header">
+            <div class="section-left">
+                <h2 class="section-title">Calendario de Conteos</h2>
+                <span class="record-count" id="calCount">—</span>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <div class="filters">
+                    <div class="search-box">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="searchK" placeholder="Buscar cliente..." oninput="renderCalendario()">
+                    </div>
+                    <select class="filter-select" id="fKEstado" onchange="renderCalendario()">
+                        <option value="">Todos los estados</option>
+                        <option>Programado</option><option>Pendiente</option>
+                        <option>En espera de respuesta</option><option>Realizado</option>
+                    </select>
+                    <select class="filter-select" id="fKEjec" onchange="renderCalendario()">
+                        <option value="">Todos los ejecutivos</option>
+                        <option>Rodrigo S.</option><option>Jaqueline M.</option><option>Catalina J.</option>
+                    </select>
+                    <select class="filter-select" id="fKMes" onchange="renderCalendario()">
+                        <option value="">Todos los meses</option>
+                        <option>Enero</option><option>Febrero</option><option>Marzo</option><option>Abril</option>
+                        <option>Mayo</option><option>Junio</option><option>Julio</option><option>Agosto</option>
+                        <option>Septiembre</option><option>Octubre</option><option>Noviembre</option><option>Diciembre</option>
+                    </select>
+                </div>
+                <button class="btn btn-secondary" onclick="exportCSV('calendario')">⬇ Exportar Excel</button>
+                <button class="btn btn-primary" onclick="openModal('conteo')">+ Nuevo Conteo</button>
+            </div>
+        </div>
+        <div class="table-wrapper">
+            <table>
+                <thead><tr>
+                    <th>N°</th><th>Cliente</th><th>Estado</th><th>Recinto</th><th>Urgencia</th>
+                    <th>Fecha</th><th>Horario</th><th>Responsable</th><th>Ejecutivo</th><th>Mes</th><th>Acciones</th>
+                </tr></thead>
+                <tbody id="ktBody"></tbody>
+            </table>
+            <div class="empty-state hidden" id="kEmpty"><div class="empty-icon">📅</div><div>No se encontraron conteos</div></div>
+        </div>
+    </div>
+
+    <!-- TAB CONFIG -->
+    <div id="tab-config" class="hidden">
+        <div class="config-card">
+            <div class="config-title">🔌 Estado de la Conexión</div>
+            <div id="configStatus" class="alert a-info">Verificando configuración...</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <button class="btn btn-secondary" onclick="testConnection()">🔄 Probar Conexión</button>
+                <button class="btn btn-primary" onclick="initializeData()">☁️ Subir Datos Iniciales al Almacén</button>
+            </div>
+        </div>
+        <div class="config-card">
+            <div class="config-title">📋 Información de Configuración</div>
+            <div class="alert a-warn">⚠️ Los datos se guardan como JSON en Azure Blob Storage a través de la función <code>clientes-store</code>. Para cambiar el endpoint, edita la constante <code>STORE_URL</code> en este archivo.</div>
+            <div style="margin-top:12px;">
+                <div class="form-label" style="margin-bottom:6px;">Endpoint del almacén interno</div>
+                <div class="code-block" id="showScriptUrl">—</div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- TAB RESULTADOS -->
+    <div id="tab-resultados" class="hidden">
+        <div class="section-header">
+            <div class="section-left">
+                <h2 class="section-title">Resultado Conteos</h2>
+                <span class="record-count" id="resCount">—</span>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <div class="search-box">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="searchR" placeholder="Buscar cliente..." oninput="renderResultados()">
+                </div>
+                <select class="filter-select" id="fREstado" onchange="renderResultados()">
+                    <option value="">Todos los estados</option>
+                    <option value="exacto">Exacto</option>
+                    <option value="sobrante">Sobrante</option>
+                    <option value="faltante">Faltante</option>
+                </select>
+                <button class="btn btn-secondary" onclick="exportCSV('resultados')">⬇ Exportar Excel</button>
+                <button class="btn btn-primary" onclick="openModalResultado()">+ Ingresar Resultado</button>
+            </div>
+        </div>
+
+        <!-- Tarjetas resumen -->
+        <div class="stats-grid" id="resStatsGrid" style="margin-bottom:20px;"></div>
+
+        <div class="table-wrapper">
+            <table>
+                <thead><tr>
+                    <th>#</th>
+                    <th>Cliente</th>
+                    <th>Fecha Conteo</th>
+                    <th>Ítem / Descripción</th>
+                    <th style="text-align:right;">Conteo Físico</th>
+                    <th style="text-align:right;">Stock SAP</th>
+                    <th style="text-align:right;">Diferencia</th>
+                    <th style="text-align:right;">Pendientes 2024</th>
+                    <th style="text-align:right;">Dif. Total</th>
+                    <th>Estado Dif.</th>
+                    <th>Observaciones</th>
+                    <th>Acciones</th>
+                </tr></thead>
+                <tbody id="resBody"></tbody>
+            </table>
+            <div class="empty-state hidden" id="resEmpty">
+                <div class="empty-icon">📊</div>
+                <div>No hay resultados ingresados aún.<br>Selecciona un conteo realizado para ingresar su resultado.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB KPI / ANÁLISIS DE DIFERENCIAS -->
+    <div id="tab-kpi" class="hidden">
+        <div class="section-header">
+            <div class="section-left">
+                <h2 class="section-title">Análisis de Diferencias (SAP vs Físico)</h2>
+                <span class="record-count" id="kpiCount">—</span>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <select class="filter-select" id="fKpiEjec" onchange="renderKPI()">
+                    <option value="">Todos los ejecutivos</option>
+                    <option>Rodrigo S.</option><option>Jaqueline M.</option><option>Catalina J.</option>
+                </select>
+                <select class="filter-select" id="fKpiCliente" onchange="renderKPI()">
+                    <option value="">Todos los clientes</option>
+                </select>
+                <button class="btn btn-secondary" onclick="exportKPI()">⬇ Exportar Análisis (Excel)</button>
+            </div>
+        </div>
+
+        <div class="stats-grid" id="kpiStatsGrid" style="margin-bottom:20px;"></div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;" id="kpiChartsWrap">
+            <div class="config-card">
+                <div class="config-title">Faltantes vs Sobrantes</div>
+                <div id="kpiBarFS"></div>
+            </div>
+            <div class="config-card">
+                <div class="config-title">Diferencia total por cliente (Top 10 en magnitud)</div>
+                <div id="kpiBarCliente"></div>
+            </div>
+        </div>
+
+        <div class="config-card" style="margin-bottom:20px;">
+            <div class="config-title">Exactitud de inventario por ejecutivo</div>
+            <div class="table-wrapper" style="box-shadow:none;">
+                <table>
+                    <thead><tr>
+                        <th>Ejecutivo</th><th style="text-align:right;">Ítems</th>
+                        <th style="text-align:right;">Exactos</th><th style="text-align:right;">% Exactitud</th>
+                        <th style="text-align:right;">Faltante (u.)</th><th style="text-align:right;">Sobrante (u.)</th>
+                        <th style="text-align:right;">Dif. neta</th>
+                    </tr></thead>
+                    <tbody id="kpiEjecBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="table-wrapper">
+            <table>
+                <thead><tr>
+                    <th>#</th><th>Cliente</th><th>Fecha</th><th>Ítem</th>
+                    <th style="text-align:right;">Físico</th><th style="text-align:right;">SAP</th>
+                    <th style="text-align:right;">Dif. Total</th><th>Estado</th><th style="text-align:right;">|Impacto|</th>
+                </tr></thead>
+                <tbody id="kpiBody"></tbody>
+            </table>
+            <div class="empty-state hidden" id="kpiEmpty"><div class="empty-icon">📈</div><div>No hay resultados para analizar todavía.</div></div>
+        </div>
+    </div>
+
+</main>
+
+<!-- MODAL CLIENTE -->
+<div class="modal-overlay" id="modalC">
+    <div class="modal">
+        <div class="modal-header">
+            <div class="modal-title" id="mCTitle">Nuevo Cliente</div>
+            <button class="modal-close" onclick="closeModal('modalC')">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-grid">
+                <div class="form-group full">
+                    <label class="form-label">Cliente / Empresa *</label>
+                    <input type="text" class="form-control" id="c_cli" placeholder="Nombre de la empresa">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Responsable</label>
+                    <input type="text" class="form-control" id="c_resp" placeholder="Nombre del contacto">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Teléfono</label>
+                    <input type="text" class="form-control" id="c_tel" placeholder="9XXXXXXXX">
+                </div>
+                <div class="form-group full">
+                    <label class="form-label">Correo</label>
+                    <input type="email" class="form-control" id="c_cor" placeholder="correo@empresa.cl">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Ejecutivo Redtec</label>
+                    <select class="form-control" id="c_ejec">
+                        <option value="">Seleccionar...</option>
+                        <option>Rodrigo S.</option><option>Jaqueline M.</option><option>Catalina J.</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Mes Teórico</label>
+                    <select class="form-control" id="c_mes">
+                        <option value="">Seleccionar...</option>
+                        <option>Enero</option><option>Febrero</option><option>Marzo</option><option>Abril</option>
+                        <option>Mayo</option><option>Junio</option><option>Julio</option><option>Agosto</option>
+                        <option>Septiembre</option><option>Octubre</option><option>Noviembre</option><option>Diciembre</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('modalC')">Cancelar</button>
+            <button class="btn btn-primary" onclick="saveCliente()">💾 Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL CONTEO -->
+<div class="modal-overlay" id="modalK">
+    <div class="modal" style="max-width:780px;">
+        <div class="modal-header">
+            <div class="modal-title" id="mKTitle">Nuevo Conteo</div>
+            <button class="modal-close" onclick="closeModal('modalK')">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-grid">
+                <div class="form-group full">
+                    <label class="form-label">Cliente / Empresa *</label>
+                    <input type="text" class="form-control" id="k_cli" placeholder="Nombre de la empresa">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Estado</label>
+                    <select class="form-control" id="k_est">
+                        <option>Pendiente</option><option>En espera de respuesta</option>
+                        <option>Programado</option><option>Realizado</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Urgencia</label>
+                    <select class="form-control" id="k_urg">
+                        <option>—</option><option>Baja</option><option>Moderada</option>
+                        <option>Próximo</option><option>Planificada</option><option>Urgente</option>
+                    </select>
+                </div>
+                <div class="form-group full">
+                    <label class="form-label">Recinto</label>
+                    <input type="text" class="form-control" id="k_rec" placeholder="Dirección o nombre del recinto">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Fecha</label>
+                    <input type="text" class="form-control" id="k_fec" placeholder="ej: 15 jun 2026">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Horario</label>
+                    <input type="text" class="form-control" id="k_hor" placeholder="ej: 09:00">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Responsable (Cliente)</label>
+                    <input type="text" class="form-control" id="k_res" placeholder="Nombre del contacto">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Teléfono</label>
+                    <input type="text" class="form-control" id="k_tel" placeholder="9XXXXXXXX">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Correo</label>
+                    <input type="email" class="form-control" id="k_cor" placeholder="correo@empresa.cl">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Ejecutivo Redtec</label>
+                    <select class="form-control" id="k_ejec">
+                        <option value="">Seleccionar...</option>
+                        <option>Rodrigo S.</option><option>Jaqueline M.</option><option>Catalina J.</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Mes Teórico</label>
+                    <select class="form-control" id="k_mes">
+                        <option value="">Seleccionar...</option>
+                        <option>Enero</option><option>Febrero</option><option>Marzo</option><option>Abril</option>
+                        <option>Mayo</option><option>Junio</option><option>Julio</option><option>Agosto</option>
+                        <option>Septiembre</option><option>Octubre</option><option>Noviembre</option><option>Diciembre</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Req. Acceso</label>
+                    <select class="form-control" id="k_acc">
+                        <option>Sin requerimiento</option>
+                        <option>DNI / Cédula de identidad</option>
+                        <option>Credencial empresa + foto</option>
+                        <option>Charla de inducción / Lista de acceso</option>
+                        <option>Otro</option>
+                    </select>
+                </div>
+                <div class="form-group full">
+                    <label class="form-label">Implementos</label>
+                    <input type="text" class="form-control" id="k_imp" placeholder="ej: Chaleco reflectante; Casco; Botas">
+                </div>
+                <div class="form-group full">
+                    <label class="form-label">Observaciones</label>
+                    <textarea class="form-control" id="k_obs" placeholder="Notas adicionales..."></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('modalK')">Cancelar</button>
+            <button class="btn btn-primary" onclick="saveConteo()">💾 Guardar</button>
+        </div>
+    </div>
+</div>
+
+
+<!-- MODAL RESULTADO CONTEO -->
+<div class="modal-overlay" id="modalR">
+    <div class="modal" style="max-width:720px;">
+        <div class="modal-header">
+            <div class="modal-title" id="mRTitle">Ingresar Resultado de Conteo</div>
+            <button class="modal-close" onclick="closeModal('modalR')">✕</button>
+        </div>
+        <div class="modal-body">
+            <!-- Selector de conteo realizado -->
+            <div class="form-group full" style="margin-bottom:16px;">
+                <label class="form-label">Seleccionar Conteo Realizado *</label>
+                <select class="form-control" id="r_conteo" onchange="onSelectConteo()">
+                    <option value="">-- Selecciona un conteo --</option>
+                </select>
+            </div>
+            <!-- Info del conteo seleccionado -->
+            <div id="r_infoConteo" style="display:none; background:#f8f9fc; border:1px solid var(--border); border-radius:var(--radius); padding:12px 16px; margin-bottom:16px; font-size:13px; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                <div><span style="color:var(--text-light);font-weight:600;">Fecha:</span> <span id="r_infoFecha">—</span></div>
+                <div><span style="color:var(--text-light);font-weight:600;">Ejecutivo:</span> <span id="r_infoEjec">—</span></div>
+                <div><span style="color:var(--text-light);font-weight:600;">Recinto:</span> <span id="r_infoRecinto">—</span></div>
+                <div><span style="color:var(--text-light);font-weight:600;">Responsable:</span> <span id="r_infoResp">—</span></div>
+            </div>
+            <div class="form-grid">
+                <div class="form-group full">
+                    <label class="form-label">Ítem / Descripción del producto *</label>
+                    <input type="text" class="form-control" id="r_item" placeholder="ej: Pallets de producto A, Caja ref. 1234...">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Conteo Físico (unidades) *</label>
+                    <input type="number" class="form-control" id="r_fisico" placeholder="0" min="0" oninput="calcDiff()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Stock SAP (unidades) *</label>
+                    <input type="number" class="form-control" id="r_sap" placeholder="0" min="0" oninput="calcDiff()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Diferencia (calculada)</label>
+                    <input type="text" class="form-control" id="r_diff" readonly style="background:#f8f9fc; font-weight:700;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">% Diferencia</label>
+                    <input type="text" class="form-control" id="r_pct" readonly style="background:#f8f9fc; font-weight:700;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Pendientes 2024 (número positivo)</label>
+                    <input type="number" class="form-control" id="r_pend2024" placeholder="0" min="0" oninput="calcDiff()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Diferencia Total (calculada)</label>
+                    <input type="text" class="form-control" id="r_difftotal" readonly style="background:#f8f9fc; font-weight:700;">
+                </div>
+                <div class="form-group full">
+                    <label class="form-label">Observaciones</label>
+                    <textarea class="form-control" id="r_obs" placeholder="Notas sobre el resultado del conteo..."></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('modalR')">Cancelar</button>
+            <button class="btn btn-primary" onclick="saveResultado()">💾 Guardar Resultado</button>
+        </div>
+    </div>
+</div>
+
+<div class="loading-overlay" id="loadingOverlay">
+    <div style="text-align:center;">
+        <div class="spinner" style="margin:0 auto 12px;"></div>
+        <div style="color:#6b7a90;font-size:13px;">Sincronizando con el almacén interno...</div>
+    </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ================================================================
+//  ⚙️  CONFIGURACIÓN — Endpoint interno (Azure Function clientes-store)
+//  Reemplaza Google Sheets. Guarda la data como JSON de texto en Blob.
+//  Si pruebas en local con SWA CLI, déjalo en "/api/clientes-store".
+// ================================================================
+const STORE_URL = "/api/clientes-store";
+// ================================================================
+
+// ================================================================
+//  DATOS INICIALES (se cargan al almacén la primera vez si está vacío)
+// ================================================================
+const INIT_C = [
+    {id:1,cliente:"ALD LOGISTICA SpA.",responsable:"Karen del Rio",telefono:"985919422",correo:"Karen.delrio@agurto.cl",ejecutivo:"Rodrigo S.",mes:"Agosto"},
+    {id:2,cliente:"ALIMENTOS ANDINOS SpA.",responsable:"Cristian Ceron",telefono:"993300655",correo:"cceron@chilehamburgo.cl",ejecutivo:"Jaqueline M.",mes:"Mayo"},
+    {id:3,cliente:"ALIMENTOS Y FRUTOS SA",responsable:"Victor Correa",telefono:"974798388",correo:"vcorrea@minutoverde.cl",ejecutivo:"Jaqueline M.",mes:"Septiembre"},
+    {id:4,cliente:"ARTES GRAFICA S.A",responsable:"Maggie Flores",telefono:"993446278",correo:"mflores@happydays.cl",ejecutivo:"Jaqueline M.",mes:"Junio"},
+    {id:5,cliente:"BOETTCHER Y BOETTCHER LTDA.",responsable:"Bernardo",telefono:"978573741",correo:"bernardob@bigchile.cl",ejecutivo:"Catalina J.",mes:"Julio"},
+    {id:6,cliente:"CAMBIASO HNOS S.A.C.",responsable:"Mauricio Cornejo",telefono:"964948327",correo:"mcornejo@cambiaso.cl",ejecutivo:"Jaqueline M.",mes:"Marzo"},
+    {id:7,cliente:"COLGATE PALMOLIVE CHILE SA",responsable:"Marion Bascunan",telefono:"966353914",correo:"marion_bascunan@colpal.com",ejecutivo:"Rodrigo S.",mes:"Abril"},
+    {id:8,cliente:"COMERCIAL ANDEN SALZ LIMITADA",responsable:"Geraldine Araya",telefono:"991501073",correo:"garaya@andesal.cl",ejecutivo:"Jaqueline M.",mes:"Septiembre"},
+    {id:9,cliente:"COMERCIAL FG CORP SpA",responsable:"Nedielko Simunovic",telefono:"994381889",correo:"nsimunovic@fgcorp.cl",ejecutivo:"Catalina J.",mes:"Octubre"},
+    {id:10,cliente:"Comercial Rocky S.A.",responsable:"",telefono:"",correo:"",ejecutivo:"Catalina J.",mes:"Octubre"},
+    {id:11,cliente:"CONFITES MERELLO S.A.",responsable:"Gerardo Guerrero",telefono:"994563890",correo:"gguerrero@merello.cl",ejecutivo:"Rodrigo S.",mes:"Noviembre"},
+    {id:12,cliente:"DAILY FOODS S.A.",responsable:"Mario Palma",telefono:"940251056",correo:"m.palma@dailyfoods.cl",ejecutivo:"Catalina J.",mes:"Octubre"},
+    {id:13,cliente:"DURACELL PILAS LTDA",responsable:"Milva Castellanos",telefono:"990334767",correo:"castellanos.m@duracell.com",ejecutivo:"Catalina J.",mes:"Julio"},
+    {id:14,cliente:"ELABORADORA DE ALIMENTOS FRUTALE LIMITADA (Castano)",responsable:"Paula Urrea",telefono:"994751247",correo:"paula.urrea@castano.cl",ejecutivo:"Catalina J.",mes:"Junio"},
+    {id:15,cliente:"EMBOTELLADORA DOS BANDERAS SPA",responsable:"Hector Riffo",telefono:"989425899",correo:"gestionlogisticaybodegas@dosbanderas.cl",ejecutivo:"Jaqueline M.",mes:"Junio"},
+    {id:16,cliente:"EMBOTELLADORA METROPOLITANA S.A.",responsable:"Fernanda Henriquez",telefono:"942105671",correo:"fhenriquez@emsachile.com",ejecutivo:"Jaqueline M.",mes:"Junio"},
+    {id:17,cliente:"EMPRESAS DEMARIA S.A.",responsable:"Juan Muñoz",telefono:"974368237",correo:"jmunoz@demaria.cl",ejecutivo:"Rodrigo S.",mes:"Mayo"},
+    {id:18,cliente:"FH ALIMENTOS SpA.",responsable:"Leonardo Perez",telefono:"931342600",correo:"lperez@fhalimentos.cl",ejecutivo:"Rodrigo S.",mes:"Junio"},
+    {id:19,cliente:"GEOMAR SPA",responsable:"Cristhian Martínez",telefono:"967669933",correo:"cristhian@geomar.cl",ejecutivo:"Jaqueline M.",mes:"Julio"},
+    {id:20,cliente:"German Guerra y Cia SpA",responsable:"Marisella Hervia",telefono:"992497869",correo:"administracion@graficaguerra.cl",ejecutivo:"Jaqueline M.",mes:"Agosto"},
+    {id:21,cliente:"GOOD FOOD",responsable:"Claudio Ramirez",telefono:"994190646",correo:"cramirez@gourmet.cl",ejecutivo:"Catalina J.",mes:"Julio"},
+    {id:22,cliente:"GRAN PAVESI ALIMENTOS LIMITADA",responsable:"Jonathan",telefono:"92274463",correo:"j.maldonado@pavesi.cl",ejecutivo:"Jaqueline M.",mes:"Junio"},
+    {id:23,cliente:"HALEON CHILE SPA",responsable:"Miguel Quiroz",telefono:"954344740",correo:"miguel.a.quiroz@haleon.com",ejecutivo:"Catalina J.",mes:"Mayo"},
+    {id:24,cliente:"HAMBURGO S.A.",responsable:"Cristian Ceron",telefono:"947708596",correo:"cceron@lafchile.com",ejecutivo:"Rodrigo S.",mes:"Julio"},
+    {id:25,cliente:"HEREDIA MOLINOS SA",responsable:"Sinthya",telefono:"981582576",correo:"logistica@molineraheredia.com",ejecutivo:"Jaqueline M.",mes:"Agosto"},
+    {id:26,cliente:"ILKO CHILE S.A.",responsable:"Sebastian Krause",telefono:"",correo:"Sebastian.krause@virutexilko.cl",ejecutivo:"Jaqueline M.",mes:"Septiembre"},
+    {id:27,cliente:"INDUSTRIAS CLEANER CHILE S.A.",responsable:"Hector Lagos",telefono:"951471445",correo:"hlagos@cleaner.cl",ejecutivo:"Jaqueline M.",mes:"Junio"},
+    {id:28,cliente:"INDUSTRIAS PRODUCTOS ALIMENTICIOS SA (Proalsa)",responsable:"Ivan Gonzalez",telefono:"942514085",correo:"igonzalez@proalsa.cl",ejecutivo:"Catalina J.",mes:"Julio"},
+    {id:29,cliente:"LA FUENTE NATURAL SA",responsable:"Hector Toro",telefono:"",correo:"htoro@lafuentenatural.cl",ejecutivo:"Jaqueline M.",mes:"Septiembre"},
+    {id:30,cliente:"LABORATORIO INTERNACIONAL DE COSMETICOS SA (INTERCOS)",responsable:"Patricia Vargas",telefono:"977660949",correo:"pvargas@intercos.cl",ejecutivo:"Rodrigo S.",mes:"Junio"},
+    {id:31,cliente:"LABORATORIOS BALLERINA",responsable:"Hector Plaza",telefono:"964898622",correo:"hplaza@ballerina.cl",ejecutivo:"Rodrigo S.",mes:"Agosto"},
+    {id:32,cliente:"LATIN AMERICAN FOODS S.A.",responsable:"Cristian Ceron",telefono:"993300655",correo:"cceron@chilehamburgo.cl",ejecutivo:"Jaqueline M.",mes:"Mayo"},
+    {id:33,cliente:"LESAFFRE INDUSTRIAL CHILE S.A.",responsable:"Marco Candia",telefono:"",correo:"m.candia@lesaffre.com",ejecutivo:"Catalina J.",mes:"Junio"},
+    {id:34,cliente:"MAYR-MELNHOF PACKAGING MARINETTI LTDA",responsable:"Julián Sánchez",telefono:"79783733",correo:"julian.sanchez@mm.group",ejecutivo:"Jaqueline M.",mes:"Septiembre"},
+    {id:35,cliente:"MIGUEL MARITANO INDUSTRIA DE JABONES S.A.",responsable:"Jose Rivas",telefono:"998206278",correo:"jrivas@maritano.cl",ejecutivo:"Rodrigo S.",mes:"Julio"},
+    {id:36,cliente:"MOLINO PUENTE ALTO SA",responsable:"",telefono:"",correo:"supervisorbodega@molinopuentealto.cl",ejecutivo:"Jaqueline M.",mes:"Agosto"},
+    {id:37,cliente:"PAIMASA S.A.",responsable:"Hernan Catalan",telefono:"949370812",correo:"hcatalan@paimasa.cl",ejecutivo:"Catalina J.",mes:"Agosto"},
+    {id:38,cliente:"PIBAMOUR LTDA",responsable:"Adan Reyes",telefono:"920873566",correo:"jrodriguez@tw.cl",ejecutivo:"Catalina J.",mes:"Septiembre"},
+    {id:39,cliente:"PRODUCTOS FERNANDEZ SA",responsable:"Fernando escalona",telefono:"998833347",correo:"fernando.escalona@pfalimentos.cl",ejecutivo:"Jaqueline M.",mes:"Enero"},
+    {id:40,cliente:"PROSEPAN",responsable:"Marcelino Valenzuela",telefono:"944129448",correo:"mvalenzuela@balearespa.cl",ejecutivo:"Rodrigo S.",mes:"Julio"},
+    {id:41,cliente:"PUNTO AZUL S.A.",responsable:"Guillermo Tapia",telefono:"976690874",correo:"ggutierrez@ptoazul.cl",ejecutivo:"Catalina J.",mes:"Mayo"},
+    {id:42,cliente:"QUINTA S.A.",responsable:"Andrea Contreras",telefono:"920616748",correo:"acontreras@quintasa.cl",ejecutivo:"Catalina J.",mes:"Octubre"},
+    {id:43,cliente:"SOCIEDAD COMERCIAL E INVERSIONES LOS ALERCES SA",responsable:"Jesus Diaz",telefono:"935422598",correo:"facturacion@smartpack.cl",ejecutivo:"Jaqueline M.",mes:"Mayo"},
+    {id:44,cliente:"SOCIEDAD INDUSTRIAL KUNSTMANN S.A.",responsable:"Martiniano Vega",telefono:"944916914",correo:"mvega@siksa.cl",ejecutivo:"Rodrigo S.",mes:"Octubre"},
+    {id:45,cliente:"TAK S.A",responsable:"Miguel Blanco",telefono:"999168121",correo:"mblanco@coexca.cl",ejecutivo:"Jaqueline M.",mes:"Mayo"},
+    {id:46,cliente:"THE PROTEIN COMPANY SPA",responsable:"Marco Mendez",telefono:"979199519",correo:"mmendez@tpcchile.cl",ejecutivo:"Jaqueline M.",mes:"Mayo"},
+    {id:47,cliente:"TRANSPORTES DESA LTDA",responsable:"Catherine Padilla",telefono:"988308588",correo:"logisticos@transporteslm.cl",ejecutivo:"Jaqueline M.",mes:"Enero"},
+    {id:48,cliente:"TUCAPEL SA",responsable:"Rodrigo Vergara",telefono:"",correo:"rvergara@tucapel.cl",ejecutivo:"Catalina J.",mes:"Mayo"}
+];
+
+const INIT_K = [
+    {id:1,num:1,cliente:"ALD LOGISTICA SpA.",estado:"Programado",recinto:"Centro Logístico BSF - Puerto Madero #9710, Bodega E-7",urgencia:"Baja",fecha:"10 ago 2026",horario:"10:00",responsable:"Karen del Rio",telefono:"985919422",correo:"Karen.delrio@agurto.cl",ejecutivo:"Rodrigo S.",mes:"Agosto",acceso:"DNI / Cédula de identidad",implementos:"Chaleco reflectante; Casco de seguridad; Botas / zapatos de seguridad",obs:"Enviar días antes a la fecha datos de los participantes: RUT, Nombre y patente de vehículo si corresponde"},
+    {id:2,num:2,cliente:"ALIMENTOS ANDINOS SpA.",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Cristian Ceron",telefono:"993300655",correo:"cceron@chilehamburgo.cl",ejecutivo:"Jaqueline M.",mes:"Mayo",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:3,num:3,cliente:"ALIMENTOS Y FRUTOS SA",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Victor Correa",telefono:"974798388",correo:"vcorrea@minutoverde.cl",ejecutivo:"Jaqueline M.",mes:"Septiembre",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:4,num:4,cliente:"ARTES GRAFICA S.A",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Maggie Flores",telefono:"993446278",correo:"mflores@happydays.cl",ejecutivo:"Jaqueline M.",mes:"Junio",acceso:"DNI / Cédula de identidad",implementos:"",obs:""},
+    {id:5,num:5,cliente:"BOETTCHER Y BOETTCHER LTDA.",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Bernardo",telefono:"978573741",correo:"bernardob@bigchile.cl",ejecutivo:"Catalina J.",mes:"Julio",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:6,num:6,cliente:"CAMBIASO HNOS S.A.C.",estado:"Realizado",recinto:"Recinto Principal",urgencia:"—",fecha:"5 mar 2026",horario:"",responsable:"Mauricio Cornejo",telefono:"964948327",correo:"mcornejo@cambiaso.cl",ejecutivo:"Jaqueline M.",mes:"Marzo",acceso:"Sin requerimiento",implementos:"",obs:"Conteo realizado sin observaciones ☑️"},
+    {id:7,num:7,cliente:"COLGATE PALMOLIVE CHILE SA",estado:"Realizado",recinto:"Colgate CBP",urgencia:"—",fecha:"23 abr 2026",horario:"08:00",responsable:"Henry Garcia",telefono:"966353914",correo:"marion_bascunan@colpal.com",ejecutivo:"Rodrigo S.",mes:"Abril",acceso:"DNI / Cédula de identidad",implementos:"Chaleco reflectante; Casco de seguridad; Botas / zapatos de seguridad",obs:"Tres (3) ejecutivos para conteo en bodegas de Chorrillos y CBP. Llevar inducciones al ingresar."},
+    {id:8,num:7,cliente:"COLGATE PALMOLIVE CHILE SA",estado:"Realizado",recinto:"Colgate Chorrillos",urgencia:"—",fecha:"23 abr 2026",horario:"09:30",responsable:"Natalia Suarez",telefono:"966353914",correo:"marion_bascunan@colpal.com",ejecutivo:"Rodrigo S.",mes:"Abril",acceso:"DNI / Cédula de identidad",implementos:"Chaleco reflectante; Casco de seguridad; Botas / zapatos de seguridad",obs:"Una vez finalizado el conteo en CBP un (1) ejecutivo se dirige a Chorrillos"},
+    {id:9,num:8,cliente:"COMERCIAL ANDEN SALZ LIMITADA",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Geraldine Araya",telefono:"991501073",correo:"garaya@andesal.cl",ejecutivo:"Jaqueline M.",mes:"Septiembre",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:10,num:9,cliente:"COMERCIAL FG CORP SpA",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Nedielko Simunovic",telefono:"994381889",correo:"nsimunovic@fgcorp.cl",ejecutivo:"Catalina J.",mes:"Octubre",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:11,num:10,cliente:"Comercial Rocky S.A.",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"",telefono:"",correo:"",ejecutivo:"Catalina J.",mes:"Octubre",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:12,num:11,cliente:"CONFITES MERELLO S.A.",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Gerardo Guerrero",telefono:"994563890",correo:"gguerrero@merello.cl",ejecutivo:"Rodrigo S.",mes:"Noviembre",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:13,num:12,cliente:"DAILY FOODS S.A.",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Mario Palma",telefono:"940251056",correo:"m.palma@dailyfoods.cl",ejecutivo:"Catalina J.",mes:"Octubre",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:14,num:13,cliente:"DURACELL PILAS LTDA",estado:"Programado",recinto:"Recinto Principal",urgencia:"Baja",fecha:"8 jul 2026",horario:"09:30",responsable:"Eduardo Mendoza",telefono:"990334767",correo:"castellanos.m@duracell.com",ejecutivo:"Catalina J.",mes:"Julio",acceso:"DNI / Cédula de identidad",implementos:"Chaleco reflectante; Casco de seguridad; Botas / zapatos de seguridad",obs:"Descargar APP SMARTKI para acceso"},
+    {id:15,num:14,cliente:"ELABORADORA DE ALIMENTOS FRUTALE LIMITADA (Castano)",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Paula Urrea",telefono:"994751247",correo:"paula.urrea@castano.cl",ejecutivo:"Catalina J.",mes:"Junio",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:16,num:15,cliente:"EMBOTELLADORA DOS BANDERAS SPA",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Hector Riffo",telefono:"989425899",correo:"gestionlogisticaybodegas@dosbanderas.cl",ejecutivo:"Jaqueline M.",mes:"Junio",acceso:"Sin requerimiento",implementos:"",obs:"Acuso recibo. Estaremos en contacto para coordinar la fecha. Ahora es demasiado pronto para fijar un día."},
+    {id:17,num:16,cliente:"EMBOTELLADORA METROPOLITANA S.A.",estado:"Programado",recinto:"Recinto Principal",urgencia:"Planificada",fecha:"16 jun 2026",horario:"",responsable:"Fernanda Henriquez",telefono:"942105671",correo:"fhenriquez@emsachile.com",ejecutivo:"Jaqueline M.",mes:"Junio",acceso:"Sin requerimiento",implementos:"Chaleco reflectante; Casco de seguridad; Botas / zapatos de seguridad",obs:""},
+    {id:18,num:17,cliente:"EMPRESAS DEMARIA S.A.",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Juan Muñoz",telefono:"974368237",correo:"jmunoz@demaria.cl",ejecutivo:"Rodrigo S.",mes:"Mayo",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:19,num:18,cliente:"FH ALIMENTOS SpA.",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Leonardo Perez",telefono:"931342600",correo:"lperez@fhalimentos.cl",ejecutivo:"Rodrigo S.",mes:"Junio",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:20,num:19,cliente:"GEOMAR SPA",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Cristhian Martínez",telefono:"967669933",correo:"cristhian@geomar.cl",ejecutivo:"Jaqueline M.",mes:"Julio",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:21,num:20,cliente:"German Guerra y Cia SpA",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Marisella Hervia",telefono:"992497869",correo:"administracion@graficaguerra.cl",ejecutivo:"Jaqueline M.",mes:"Agosto",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:22,num:21,cliente:"GOOD FOOD",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Claudio Ramirez",telefono:"994190646",correo:"cramirez@gourmet.cl",ejecutivo:"Catalina J.",mes:"Julio",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:23,num:22,cliente:"GRAN PAVESI ALIMENTOS LIMITADA",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Jonathan",telefono:"92274463",correo:"j.maldonado@pavesi.cl",ejecutivo:"Jaqueline M.",mes:"Junio",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:24,num:23,cliente:"HALEON CHILE SPA",estado:"Programado",recinto:"Recinto Principal",urgencia:"Moderada",fecha:"14 may 2026",horario:"14:00",responsable:"Miguel Quiroz",telefono:"95434470",correo:"miguel.a.quiroz@haleon.com",ejecutivo:"Catalina J.",mes:"Mayo",acceso:"DNI / Cédula de identidad",implementos:"Chaleco reflectante; Casco de seguridad; Botas / zapatos de seguridad",obs:"Charla de inducción de seguridad a realizarse antes de ingresar."},
+    {id:25,num:24,cliente:"HAMBURGO S.A.",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Cristian Ceron",telefono:"947708596",correo:"cceron@lafchile.com",ejecutivo:"Rodrigo S.",mes:"Julio",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:26,num:25,cliente:"HEREDIA MOLINOS SA",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Sinthya",telefono:"981582576",correo:"logistica@molineraheredia.com",ejecutivo:"Jaqueline M.",mes:"Agosto",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:27,num:26,cliente:"ILKO CHILE S.A.",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Sebastian Krause",telefono:"",correo:"Sebastian.krause@virutexilko.cl",ejecutivo:"Jaqueline M.",mes:"Septiembre",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:28,num:27,cliente:"INDUSTRIAS CLEANER CHILE S.A.",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Hector Lagos",telefono:"951471445",correo:"hlagos@cleaner.cl",ejecutivo:"Jaqueline M.",mes:"Junio",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:29,num:28,cliente:"INDUSTRIAS PRODUCTOS ALIMENTICIOS SA (Proalsa)",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Ivan Gonzalez",telefono:"942514085",correo:"igonzalez@proalsa.cl",ejecutivo:"Catalina J.",mes:"Julio",acceso:"Sin requerimiento",implementos:"",obs:"Cliente solicita indicar cuándo fue el último inventario y su resultado"},
+    {id:30,num:29,cliente:"LA FUENTE NATURAL SA",estado:"Pendiente",recinto:"Bernardo O'Higgins 150, Complejo Los Libertadores, Colina",urgencia:"—",fecha:"",horario:"",responsable:"Hector Toro",telefono:"",correo:"htoro@lafuentenatural.cl",ejecutivo:"Jaqueline M.",mes:"Septiembre",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:31,num:30,cliente:"LABORATORIO INTERNACIONAL DE COSMETICOS SA (INTERCOS)",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Patricia Vargas",telefono:"977660949",correo:"pvargas@intercos.cl",ejecutivo:"Rodrigo S.",mes:"Junio",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:32,num:31,cliente:"LABORATORIOS BALLERINA",estado:"Programado",recinto:"Recinto Principal",urgencia:"Moderada",fecha:"15 may 2026",horario:"",responsable:"Hector Plaza",telefono:"964898622",correo:"hplaza@ballerina.cl",ejecutivo:"Rodrigo S.",mes:"Agosto",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:33,num:32,cliente:"LATIN AMERICAN FOODS S.A.",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Cristian Ceron",telefono:"993300655",correo:"cceron@chilehamburgo.cl",ejecutivo:"Jaqueline M.",mes:"Mayo",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:34,num:33,cliente:"LESAFFRE INDUSTRIAL CHILE S.A.",estado:"Programado",recinto:"Recinto Principal",urgencia:"Planificada",fecha:"17 jun 2026",horario:"09:00",responsable:"Claudio Morales",telefono:"978095819",correo:"m.candia@lesaffre.com",ejecutivo:"Catalina J.",mes:"Junio",acceso:"Charla de inducción / Lista de acceso",implementos:"Chaleco reflectante; Casco de seguridad; Botas / zapatos de seguridad; Lentes de seguridad",obs:"El día anterior enviar los datos del personal que realizará el inventario (REDTEC)"},
+    {id:35,num:34,cliente:"MAYR-MELNHOF PACKAGING MARINETTI LTDA",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Julián Sánchez",telefono:"79783733",correo:"julian.sanchez@mm.group",ejecutivo:"Jaqueline M.",mes:"Septiembre",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:36,num:35,cliente:"MIGUEL MARITANO INDUSTRIA DE JABONES S.A.",estado:"Programado",recinto:"Recinto Principal",urgencia:"Baja",fecha:"9 jul 2026",horario:"10:00",responsable:"Jose Rivas E",telefono:"998206278",correo:"jrivas@maritano.cl",ejecutivo:"Rodrigo S.",mes:"Julio",acceso:"DNI / Cédula de identidad",implementos:"Chaleco reflectante; Casco de seguridad; Botas / zapatos de seguridad",obs:""},
+    {id:37,num:36,cliente:"MOLINO PUENTE ALTO SA",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"",telefono:"",correo:"supervisorbodega@molinopuentealto.cl",ejecutivo:"Jaqueline M.",mes:"Agosto",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:38,num:37,cliente:"PAIMASA S.A.",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Hernan Catalan",telefono:"949370812",correo:"hcatalan@paimasa.cl",ejecutivo:"Catalina J.",mes:"Agosto",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:39,num:38,cliente:"PIBAMOUR LTDA",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Adan Reyes",telefono:"920873566",correo:"jrodriguez@tw.cl",ejecutivo:"Catalina J.",mes:"Septiembre",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:40,num:39,cliente:"PRODUCTOS FERNANDEZ SA",estado:"Realizado",recinto:"Recinto Principal",urgencia:"—",fecha:"12 ene 2026",horario:"",responsable:"Fernando escalona",telefono:"998833347",correo:"fernando.escalona@pfalimentos.cl",ejecutivo:"Jaqueline M.",mes:"Enero",acceso:"Sin requerimiento",implementos:"",obs:"Realizado sin observaciones ☑️"},
+    {id:41,num:40,cliente:"PROSEPAN",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Marcelino Valenzuela",telefono:"944129448",correo:"mvalenzuela@balearespa.cl",ejecutivo:"Rodrigo S.",mes:"Julio",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:42,num:41,cliente:"PUNTO AZUL S.A.",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Guillermo Tapia",telefono:"976690874",correo:"ggutierrez@ptoazul.cl",ejecutivo:"Catalina J.",mes:"Mayo",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:43,num:42,cliente:"QUINTA S.A.",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Andrea Contreras",telefono:"920616748",correo:"acontreras@quintasa.cl",ejecutivo:"Catalina J.",mes:"Octubre",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:44,num:43,cliente:"SOCIEDAD COMERCIAL E INVERSIONES LOS ALERCES SA",estado:"Programado",recinto:"Recinto Principal",urgencia:"Urgente",fecha:"5 may 2026",horario:"09:00",responsable:"Jesus Diaz",telefono:"935422598",correo:"facturacion@smartpack.cl",ejecutivo:"Jaqueline M.",mes:"Mayo",acceso:"Credencial empresa + foto",implementos:"Chaleco reflectante; Casco de seguridad; Botas / zapatos de seguridad",obs:""},
+    {id:45,num:44,cliente:"SOCIEDAD INDUSTRIAL KUNSTMANN S.A.",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Martiniano Vega",telefono:"944916914",correo:"mvega@siksa.cl",ejecutivo:"Rodrigo S.",mes:"Octubre",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:46,num:45,cliente:"TAK S.A",estado:"Programado",recinto:"Recinto Principal",urgencia:"Próximo",fecha:"11 may 2026",horario:"12:30",responsable:"Miguel Blanco",telefono:"999168121",correo:"mblanco@coexca.cl",ejecutivo:"Jaqueline M.",mes:"Mayo",acceso:"DNI / Cédula de identidad",implementos:"Chaleco reflectante; Casco de seguridad; Botas / zapatos de seguridad",obs:"+ Ropa térmica"},
+    {id:47,num:46,cliente:"THE PROTEIN COMPANY SPA",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Marco Mendez",telefono:"979199519",correo:"mmendez@tpcchile.cl",ejecutivo:"Jaqueline M.",mes:"Mayo",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:48,num:47,cliente:"TRANSPORTES DESA LTDA",estado:"Realizado",recinto:"Recinto Principal",urgencia:"—",fecha:"23 ene 2026",horario:"",responsable:"Catherine Padilla",telefono:"988308588",correo:"logisticos@transporteslm.cl",ejecutivo:"Jaqueline M.",mes:"Enero",acceso:"Sin requerimiento",implementos:"",obs:"Realizado sin observaciones ☑️"},
+    {id:49,num:48,cliente:"TUCAPEL SA",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Rodrigo Vergara",telefono:"",correo:"rvergara@tucapel.cl",ejecutivo:"Catalina J.",mes:"Mayo",acceso:"Sin requerimiento",implementos:"",obs:"Permítannos revisar internamente nuestras cargas de trabajo para proponer una fecha tentativa."}
+];
+
+// ================================================================
+//  STATE
+// ================================================================
+let clientes = [], calendario = [], editCId = null, editKId = null;
+
+// ================================================================
+//  ALMACÉN INTERNO (Azure Function + Blob JSON)
+//  Mismo contrato que tenía GS: .get(sheet) y .put(sheet, data)
+// ================================================================
+const GS = {
+    async get(sheet) {
+        const r = await fetch(`${STORE_URL}?sheet=${encodeURIComponent(sheet)}`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const data = await r.json();
+        if (data && data.error) throw new Error(data.error);
+        return (data || []).map(row => ({...row, id: Number(row.id)||row.id, num: Number(row.num)||row.num}));
+    },
+    async put(sheet, data) {
+        const r = await fetch(STORE_URL, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({sheet: sheet, data: data})
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const res = await r.json();
+        if (res && res.error) throw new Error(res.error);
+        return {ok: true};
+    }
+};
+
+
+// ================================================================
+//  RESULTADOS DE CONTEOS
+// ================================================================
+let resultados = [];
+let editRId = null;
+
+function openModalResultado(id) {
+    editRId = id || null;
+    // Poblar select con conteos realizados
+    const realizados = calendario.filter(k => k.estado === "Realizado");
+    const sel = g("r_conteo");
+    sel.innerHTML = '<option value="">-- Selecciona un conteo --</option>';
+    realizados.forEach(k => {
+        const opt = document.createElement("option");
+        opt.value = k.id;
+        opt.textContent = `${k.cliente} — ${k.fecha || "Sin fecha"} (${k.ejecutivo})`;
+        sel.appendChild(opt);
+    });
+
+    if (editRId) {
+        const r = resultados.find(x => x.id == editRId);
+        if (r) {
+            g("mRTitle").textContent = "Editar Resultado";
+            sel.value = r.conteoId;
+            onSelectConteo();
+            g("r_item").value = r.item;
+            g("r_fisico").value = r.fisico;
+            g("r_sap").value = r.sap;
+            g("r_pend2024").value = r.pendientes2024 || 0;
+            g("r_obs").value = r.obs;
+            calcDiff();
+        }
+    } else {
+        g("mRTitle").textContent = "Ingresar Resultado de Conteo";
+        g("r_item").value = "";
+        g("r_fisico").value = "";
+        g("r_sap").value = "";
+        g("r_obs").value = "";
+        g("r_diff").value = "";
+        g("r_pct").value = "";
+        g("r_pend2024").value = "";
+        g("r_difftotal").value = "";
+        g("r_infoConteo").style.display = "none";
+    }
+    g("modalR").classList.add("active");
+}
+
+function onSelectConteo() {
+    const id = g("r_conteo").value;
+    const info = g("r_infoConteo");
+    if (!id) { info.style.display = "none"; return; }
+    const k = calendario.find(x => x.id == id);
+    if (!k) return;
+    info.style.display = "grid";
+    g("r_infoFecha").textContent = k.fecha || "—";
+    g("r_infoEjec").textContent = k.ejecutivo || "—";
+    g("r_infoRecinto").textContent = k.recinto || "—";
+    g("r_infoResp").textContent = k.responsable || "—";
+}
+
+function calcDiff() {
+    const fis = parseFloat(g("r_fisico").value) || 0;
+    const sap = parseFloat(g("r_sap").value) || 0;
+    const pend = parseFloat(g("r_pend2024").value) || 0;
+    const diff = fis - sap;
+    // Pendientes 2024 se restan (se ingresan positivos pero son negativos en efecto)
+    const diffTotal = pend !== 0 ? diff + (-Math.abs(pend)) : diff;
+
+    // Diferencia base
+    g("r_diff").value = (diff >= 0 ? "+" : "") + diff;
+    g("r_diff").style.color = diff > 0 ? "#065f46" : diff < 0 ? "#991b1b" : "#1e40af";
+
+    // % diferencia
+    if (sap !== 0) {
+        const pct = ((diff / sap) * 100).toFixed(2);
+        g("r_pct").value = (diff >= 0 ? "+" : "") + pct + "%";
+        g("r_pct").style.color = diff > 0 ? "#065f46" : diff < 0 ? "#991b1b" : "#1e40af";
+    } else {
+        g("r_pct").value = sap === 0 && fis === 0 ? "0%" : "N/A";
+    }
+
+    // Diferencia total (incluye pendientes 2024)
+    g("r_difftotal").value = (diffTotal >= 0 ? "+" : "") + diffTotal;
+    g("r_difftotal").style.color = diffTotal > 0 ? "#065f46" : diffTotal < 0 ? "#991b1b" : "#1e40af";
+}
+
+async function saveResultado() {
+    const conteoId = g("r_conteo").value;
+    const item = g("r_item").value.trim();
+    const fisico = g("r_fisico").value;
+    const sap = g("r_sap").value;
+    if (!conteoId) { toast("Selecciona un conteo", "error"); return; }
+    if (!item) { toast("Ingresa el ítem/descripción", "error"); return; }
+    if (fisico === "" || sap === "") { toast("Ingresa conteo físico y stock SAP", "error"); return; }
+
+    const k = calendario.find(x => x.id == conteoId);
+    const fis = parseFloat(fisico);
+    const sapVal = parseFloat(sap);
+    const diff = fis - sapVal;
+    const pct = sapVal !== 0 ? ((diff / sapVal) * 100).toFixed(2) + "%" : (fis === 0 ? "0%" : "N/A");
+
+    const pend2024 = parseFloat(g("r_pend2024").value) || 0;
+    const diffTotal = pend2024 !== 0 ? diff + (-Math.abs(pend2024)) : diff;
+    const d = {
+        id: editRId || Date.now(),
+        conteoId: conteoId,
+        cliente: k ? k.cliente : "",
+        fecha: k ? k.fecha : "",
+        ejecutivo: k ? k.ejecutivo : "",
+        recinto: k ? k.recinto : "",
+        responsable: k ? k.responsable : "",
+        item: item,
+        fisico: fis,
+        sap: sapVal,
+        diferencia: diff,
+        porcentaje: pct,
+        pendientes2024: pend2024,
+        difTotal: diffTotal,
+        obs: g("r_obs").value.trim()
+    };
+
+    if (editRId) {
+        resultados[resultados.findIndex(x => x.id == editRId)] = d;
+        toast("Resultado actualizado ✓", "success");
+    } else {
+        resultados.push(d);
+        toast("Resultado guardado ✓", "success");
+    }
+    closeModal("modalR");
+    renderResultados();
+    try {
+        showLoad(true);
+        await GS.put("Resultados", resultados);
+        setSync("ok", "Sincronizado ✓");
+    } catch(e) {
+        setSync("error", "Error al guardar");
+        toast("Error al sincronizar con el almacén", "error");
+    } finally { showLoad(false); }
+}
+
+async function delResultado(id) {
+    if (!confirm("¿Eliminar este resultado?")) return;
+    resultados = resultados.filter(x => x.id != id);
+    renderResultados();
+    toast("Resultado eliminado", "info");
+    try { showLoad(true); await GS.put("Resultados", resultados); setSync("ok","Sincronizado ✓"); }
+    catch(e) { setSync("error","Error al guardar"); } finally { showLoad(false); }
+}
+
+function renderResultados() {
+    const q = (g("searchR").value || "").toLowerCase();
+    const estFilt = g("fREstado").value;
+    let f = resultados.filter(r => {
+        const rawDiff = Number(r.diferencia);
+        const diff = isNaN(rawDiff) ? 0 : rawDiff;
+        const estadoDif = diff > 0 ? "sobrante" : diff < 0 ? "faltante" : "exacto";
+        return (!q || r.cliente.toLowerCase().includes(q) || (r.item||"").toLowerCase().includes(q)) &&
+               (!estFilt || estadoDif === estFilt);
+    });
+
+    g("resCount").textContent = `${f.length} registros`;
+
+    // Estadísticas resumen
+    const totalItems = f.length;
+    const getTotal = r => { const v = Number(r.difTotal); return (!isNaN(v) && r.difTotal !== '' && r.difTotal !== undefined) ? v : (Number(r.diferencia) || 0); };
+    const conDif = f.filter(r => getTotal(r) !== 0).length;
+    const sinDif = f.filter(r => getTotal(r) === 0).length;
+    const sobrante = f.filter(r => getTotal(r) > 0).length;
+    const faltante = f.filter(r => getTotal(r) < 0).length;
+    g("resStatsGrid").innerHTML = `
+        <div class="stat-card total"><div class="stat-value">${totalItems}</div><div class="stat-label">Total Ítems</div></div>
+        <div class="stat-card real"><div class="stat-value">${sinDif}</div><div class="stat-label">Sin Diferencia</div></div>
+        <div class="stat-card prog"><div class="stat-value">${sobrante}</div><div class="stat-label">Sobrante</div></div>
+        <div class="stat-card pend"><div class="stat-value">${faltante}</div><div class="stat-label">Faltante</div></div>
+        <div class="stat-card espe"><div class="stat-value">${conDif}</div><div class="stat-label">Con Diferencia</div></div>`;
+
+    const tb = g("resBody"), em = g("resEmpty");
+    if (!f.length) { tb.innerHTML = ""; em.classList.remove("hidden"); return; }
+    em.classList.add("hidden");
+
+    tb.innerHTML = f.map((r, i) => {
+        const diff = Number(r.diferencia);
+        let diffClass = diff > 0 ? "diff-pos" : diff < 0 ? "diff-neg" : "diff-zero";
+        let diffLabel = diff > 0 ? "Sobrante" : diff < 0 ? "Faltante" : "Exacto";
+        let diffBadgeClass = diff > 0 ? "b-real" : diff < 0 ? "b-pend" : "b-prog";
+        const pend2024 = Number(r.pendientes2024) || 0;
+        const difTotal = (!isNaN(Number(r.difTotal)) && r.difTotal !== '' && r.difTotal !== undefined) ? Number(r.difTotal) : diff;
+        let totalClass = difTotal > 0 ? "diff-pos" : difTotal < 0 ? "diff-neg" : "diff-zero";
+        let totalLabel = difTotal > 0 ? "Sobrante" : difTotal < 0 ? "Faltante" : "Exacto";
+        let totalBadge = difTotal > 0 ? "b-real" : difTotal < 0 ? "b-pend" : "b-prog";
+        return `<tr>
+            <td style="color:#6b7a90;font-size:12px;">${i+1}</td>
+            <td><strong style="font-size:12px;">${esc(r.cliente)}</strong></td>
+            <td style="font-size:12px;white-space:nowrap;">${esc(r.fecha)}</td>
+            <td style="font-size:12px;">${esc(r.item)}</td>
+            <td style="text-align:right;font-weight:600;">${Number(r.fisico).toLocaleString("es-CL")}</td>
+            <td style="text-align:right;font-weight:600;">${Number(r.sap).toLocaleString("es-CL")}</td>
+            <td style="text-align:right;"><span class="${diffClass}">${diff >= 0 ? "+" : ""}${Number(diff).toLocaleString("es-CL")}</span></td>
+            <td style="text-align:right;"><span style="color:#7c3aed;font-weight:700;">${pend2024 !== 0 ? "-"+pend2024.toLocaleString("es-CL") : "—"}</span></td>
+            <td style="text-align:right;"><span class="${totalClass}">${difTotal >= 0 ? "+" : ""}${difTotal.toLocaleString("es-CL")}</span></td>
+            <td><span class="badge ${totalBadge}">${totalLabel}</span><br><span style="font-size:11px;color:var(--text-light);">${esc(r.porcentaje)}</span></td>
+            <td style="font-size:12px;max-width:180px;">${esc(r.obs)}</td>
+            <td><div class="actions-cell">
+                <button class="btn-icon edit" onclick="openModalResultado(${r.id})" title="Editar">✏️</button>
+                <button class="btn-icon delete" onclick="delResultado(${r.id})" title="Eliminar">🗑️</button>
+            </div></td>
+        </tr>`;
+    }).join("");
+}
+
+// ================================================================
+//  LOAD
+// ================================================================
+async function loadData() {
+    setSync("loading","Conectando con almacén interno...");
+    try {
+        showLoad(true);
+        const [c, k, res] = await Promise.all([GS.get("Clientes"), GS.get("Calendario"), GS.get("Resultados").catch(()=>[])]);
+        clientes = c || []; calendario = k || [];
+        // Normalizar campos numéricos de resultados que vienen como string desde Sheets
+        resultados = (res || []).map(r => {
+            const fisico         = parseFloat(r.fisico)         || 0;
+            const sap            = parseFloat(r.sap)            || 0;
+            const diferencia     = fisico - sap;
+            const pendientes2024 = parseFloat(r.pendientes2024) || 0;
+            // Si vino difTotal guardado y es válido, usarlo; si no, recalcular
+            const rawDifTotal    = parseFloat(r.difTotal);
+            const difTotal       = !isNaN(rawDifTotal) && r.difTotal !== "" && r.difTotal !== undefined
+                                     ? rawDifTotal
+                                     : (pendientes2024 !== 0 ? diferencia - pendientes2024 : diferencia);
+            return { ...r, fisico, sap, diferencia, pendientes2024, difTotal };
+        });
+        // Si las hojas están vacías, subir datos iniciales automáticamente
+        if (clientes.length === 0 && calendario.length === 0) {
+            await GS.put("Clientes", INIT_C);
+            await GS.put("Calendario", INIT_K);
+            clientes = [...INIT_C]; calendario = [...INIT_K];
+            toast("✅ Datos iniciales cargados en el almacén interno", "success");
+        }
+        renderClientes(); renderCalendario(); renderResultados();
+        setSync("ok","Sincronizado con almacén interno ✓");
+    } catch(e) {
+        clientes = [...INIT_C]; calendario = [...INIT_K];
+        renderClientes(); renderCalendario();
+        setSync("error","Error de conexión");
+        toast("Error al conectar con el almacén. Mostrando datos locales.", "error");
+        console.error(e);
+    } finally { showLoad(false); }
+    updateCfgStatus();
+}
+
+async function pushC() { await GS.put("Clientes", clientes); }
+async function pushK() { await GS.put("Calendario", calendario); }
+
+// ================================================================
+//  RENDER CLIENTES
+// ================================================================
+function renderClientes() {
+    const q = g("searchC").value.toLowerCase();
+    const ej = g("fCEjec").value, ms = g("fCMes").value;
+    let f = clientes.filter(c =>
+        (!q || c.cliente.toLowerCase().includes(q) || (c.responsable||"").toLowerCase().includes(q) || (c.correo||"").toLowerCase().includes(q)) &&
+        (!ej || c.ejecutivo===ej) && (!ms || c.mes===ms)
+    ).sort((a,b) => a.cliente.localeCompare(b.cliente));
+    g("clientCount").textContent = `${f.length} registros`;
+    const tb = g("ctBody"), em = g("cEmpty");
+    if(!f.length) { tb.innerHTML=""; em.classList.remove("hidden"); return; }
+    em.classList.add("hidden");
+    tb.innerHTML = f.map((c,i) => `<tr>
+        <td style="color:#6b7a90;font-size:12px;">${i+1}</td>
+        <td><strong>${esc(c.cliente)}</strong></td>
+        <td>${esc(c.responsable)}</td>
+        <td style="white-space:nowrap;">${esc(c.telefono)}</td>
+        <td style="font-size:12px;"><a href="mailto:${esc(c.correo)}" style="color:#3498db;text-decoration:none;">${esc(c.correo)}</a></td>
+        <td><strong style="font-size:12px;">${esc(c.ejecutivo)}</strong></td>
+        <td>${esc(c.mes)}</td>
+        <td><div class="actions-cell">
+            <button class="btn-icon edit" onclick="editCliente(${c.id})" title="Editar">✏️</button>
+            <button class="btn-icon delete" onclick="delCliente(${c.id})" title="Eliminar">🗑️</button>
+        </div></td>
+    </tr>`).join("");
+}
+
+// ================================================================
+//  RENDER CALENDARIO
+// ================================================================
+function renderCalendario() {
+    const q = g("searchK").value.toLowerCase();
+    const es = g("fKEstado").value, ej = g("fKEjec").value, ms = g("fKMes").value;
+    let f = calendario.filter(k =>
+        (!q || k.cliente.toLowerCase().includes(q) || (k.recinto||"").toLowerCase().includes(q)) &&
+        (!es || k.estado===es) && (!ej || k.ejecutivo===ej) && (!ms || k.mes===ms)
+    );
+    const all = calendario;
+    g("statsGrid").innerHTML = `
+        <div class="stat-card total"><div class="stat-value">${all.length}</div><div class="stat-label">Total</div></div>
+        <div class="stat-card prog"><div class="stat-value">${all.filter(k=>k.estado==="Programado").length}</div><div class="stat-label">Programados</div></div>
+        <div class="stat-card pend"><div class="stat-value">${all.filter(k=>k.estado==="Pendiente").length}</div><div class="stat-label">Pendientes</div></div>
+        <div class="stat-card espe"><div class="stat-value">${all.filter(k=>k.estado==="En espera de respuesta").length}</div><div class="stat-label">En espera</div></div>
+        <div class="stat-card real"><div class="stat-value">${all.filter(k=>k.estado==="Realizado").length}</div><div class="stat-label">Realizados</div></div>`;
+    g("calCount").textContent = `${f.length} registros`;
+    const tb = g("ktBody"), em = g("kEmpty");
+    if(!f.length) { tb.innerHTML=""; em.classList.remove("hidden"); return; }
+    em.classList.add("hidden");
+    const bCls = {"Programado":"b-prog","Pendiente":"b-pend","En espera de respuesta":"b-espe","Realizado":"b-real"};
+    const uCls = {"Urgente":"u-urg","Moderada":"u-mod","Próximo":"u-prox","Planificada":"u-plan","Baja":"u-baja"};
+    tb.innerHTML = f.map(k => `<tr>
+        <td style="color:#6b7a90;font-size:12px;font-weight:700;">${k.num}</td>
+        <td><strong style="font-size:12px;">${esc(k.cliente)}</strong></td>
+        <td><span class="badge ${bCls[k.estado]||''}">${esc(k.estado)}</span></td>
+        <td style="font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(k.recinto)}">${esc(k.recinto)}</td>
+        <td class="${uCls[k.urgencia]||''}" style="font-size:12px;">${esc(k.urgencia)}</td>
+        <td style="font-size:12px;white-space:nowrap;"><strong>${esc(k.fecha)}</strong></td>
+        <td style="font-size:12px;">${esc(k.horario)}</td>
+        <td style="font-size:12px;">${esc(k.responsable)}</td>
+        <td style="font-size:12px;font-weight:600;">${esc(k.ejecutivo)}</td>
+        <td style="font-size:12px;">${esc(k.mes)}</td>
+        <td><div class="actions-cell">
+            <button class="btn-icon edit" onclick="editConteo(${k.id})" title="Editar">✏️</button>
+            <button class="btn-icon delete" onclick="delConteo(${k.id})" title="Eliminar">🗑️</button>
+        </div></td>
+    </tr>`).join("");
+}
+
+// ================================================================
+//  CRUD CLIENTES
+// ================================================================
+function openModal(type) {
+    if(type==='cliente') {
+        editCId=null; g("mCTitle").textContent="Nuevo Cliente";
+        ["c_cli","c_resp","c_tel","c_cor"].forEach(id=>g(id).value="");
+        g("c_ejec").value=""; g("c_mes").value="";
+        g("modalC").classList.add("active");
+    } else {
+        editKId=null; g("mKTitle").textContent="Nuevo Conteo";
+        ["k_cli","k_rec","k_fec","k_hor","k_res","k_tel","k_cor","k_imp","k_obs"].forEach(id=>g(id).value="");
+        g("k_est").value="Pendiente"; g("k_urg").value="—";
+        g("k_ejec").value=""; g("k_mes").value=""; g("k_acc").value="Sin requerimiento";
+        g("modalK").classList.add("active");
+    }
+}
+function closeModal(id) { g(id).classList.remove("active"); }
+
+function editCliente(id) {
+    const c=clientes.find(x=>x.id==id); if(!c) return;
+    editCId=id; g("mCTitle").textContent="Editar Cliente";
+    g("c_cli").value=c.cliente; g("c_resp").value=c.responsable;
+    g("c_tel").value=c.telefono; g("c_cor").value=c.correo;
+    g("c_ejec").value=c.ejecutivo; g("c_mes").value=c.mes;
+    g("modalC").classList.add("active");
+}
+async function saveCliente() {
+    const cli=g("c_cli").value.trim();
+    if(!cli){toast("El nombre es obligatorio","error");return;}
+    const d={id:editCId||Date.now(),cliente:cli,responsable:g("c_resp").value.trim(),
+        telefono:g("c_tel").value.trim(),correo:g("c_cor").value.trim(),
+        ejecutivo:g("c_ejec").value,mes:g("c_mes").value};
+    if(editCId){clientes[clientes.findIndex(x=>x.id==editCId)]=d;toast("Cliente actualizado ✓","success");}
+    else{clientes.push(d);toast("Cliente agregado ✓","success");}
+    closeModal("modalC"); renderClientes();
+    try{showLoad(true);await pushC();setSync("ok","Sincronizado ✓");}
+    catch(e){setSync("error","Error al guardar");toast("Error al sincronizar con el almacén","error");}
+    finally{showLoad(false);}
+}
+async function delCliente(id) {
+    if(!confirm("¿Eliminar este cliente?")) return;
+    clientes=clientes.filter(x=>x.id!=id); renderClientes(); toast("Cliente eliminado","info");
+    try{showLoad(true);await pushC();setSync("ok","Sincronizado ✓");}
+    catch(e){setSync("error","Error al guardar");}finally{showLoad(false);}
+}
+
+// ================================================================
+//  CRUD CALENDARIO
+// ================================================================
+function editConteo(id) {
+    const k=calendario.find(x=>x.id==id); if(!k) return;
+    editKId=id; g("mKTitle").textContent="Editar Conteo";
+    g("k_cli").value=k.cliente; g("k_est").value=k.estado; g("k_urg").value=k.urgencia;
+    g("k_rec").value=k.recinto; g("k_fec").value=k.fecha; g("k_hor").value=k.horario;
+    g("k_res").value=k.responsable; g("k_tel").value=k.telefono; g("k_cor").value=k.correo;
+    g("k_ejec").value=k.ejecutivo; g("k_mes").value=k.mes; g("k_acc").value=k.acceso;
+    g("k_imp").value=k.implementos; g("k_obs").value=k.obs;
+    g("modalK").classList.add("active");
+}
+async function saveConteo() {
+    const cli=g("k_cli").value.trim();
+    if(!cli){toast("El nombre es obligatorio","error");return;}
+    const maxN=calendario.length?Math.max(...calendario.map(k=>Number(k.num)||0)):0;
+    const d={id:editKId||Date.now(),
+        num:editKId?(calendario.find(x=>x.id==editKId)?.num||maxN+1):maxN+1,
+        cliente:cli,estado:g("k_est").value,urgencia:g("k_urg").value,
+        recinto:g("k_rec").value.trim(),fecha:g("k_fec").value.trim(),horario:g("k_hor").value.trim(),
+        responsable:g("k_res").value.trim(),telefono:g("k_tel").value.trim(),correo:g("k_cor").value.trim(),
+        ejecutivo:g("k_ejec").value,mes:g("k_mes").value,acceso:g("k_acc").value,
+        implementos:g("k_imp").value.trim(),obs:g("k_obs").value.trim()};
+    if(editKId){calendario[calendario.findIndex(x=>x.id==editKId)]=d;toast("Conteo actualizado ✓","success");}
+    else{calendario.push(d);toast("Conteo agregado ✓","success");}
+    closeModal("modalK"); renderCalendario();
+    try{showLoad(true);await pushK();setSync("ok","Sincronizado ✓");}
+    catch(e){setSync("error","Error al guardar");toast("Error al sincronizar con el almacén","error");}
+    finally{showLoad(false);}
+}
+async function delConteo(id) {
+    if(!confirm("¿Eliminar este conteo?")) return;
+    calendario=calendario.filter(x=>x.id!=id); renderCalendario(); toast("Conteo eliminado","info");
+    try{showLoad(true);await pushK();setSync("ok","Sincronizado ✓");}
+    catch(e){setSync("error","Error al guardar");}finally{showLoad(false);}
+}
+
+// ================================================================
+//  EXPORT CSV
+// ================================================================
+function exportCSV(type) { exportExcel(type); }  // alias (los botones siguen llamando a esto)
+
+function exportExcel(type) {
+    let header, body, fn, sheetName;
+    if(type==='resultados') {
+        header=["Cliente","Fecha","Ítem","Conteo Físico","Stock SAP","Diferencia","Pendientes 2024","Dif. Total","%Diferencia","Observaciones"];
+        body=resultados.map(r=>[r.cliente,r.fecha,r.item,Number(r.fisico)||0,Number(r.sap)||0,Number(r.diferencia)||0,Number(r.pendientes2024)||0,Number(r.difTotal!==undefined&&r.difTotal!==''?r.difTotal:r.diferencia)||0,r.porcentaje,r.obs]);
+        fn="Resultados_Conteos.xlsx"; sheetName="Resultados";
+    } else if(type==='clientes') {
+        header=["Cliente","Responsable","Teléfono","Correo","Ejecutivo Redtec","Mes Teórico"];
+        body=clientes.map(c=>[c.cliente,c.responsable,c.telefono,c.correo,c.ejecutivo,c.mes]);
+        fn="Clientes_DB.xlsx"; sheetName="Clientes";
+    } else {
+        header=["N°","Cliente","Estado","Recinto","Urgencia","Fecha","Horario","Responsable","Teléfono","Correo","Ejecutivo","Mes teórico","Req. Acceso","Implementos","Observaciones"];
+        body=calendario.map(k=>[k.num,k.cliente,k.estado,k.recinto,k.urgencia,k.fecha,k.horario,k.responsable,k.telefono,k.correo,k.ejecutivo,k.mes,k.acceso,k.implementos,k.obs]);
+        fn="Calendario_Conteos.xlsx"; sheetName="Calendario";
+    }
+    const aoa=[header, ...body];
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    // ancho de columnas automático aproximado
+    ws['!cols']=header.map((h,i)=>{
+        let max=String(h).length;
+        body.forEach(row=>{ const v=row[i]==null?'':String(row[i]); if(v.length>max) max=v.length; });
+        return {wch:Math.min(max+2, 55)};
+    });
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    XLSX.writeFile(wb, fn);
+    toast(`${fn} exportado ✓`,"success");
+}
+
+// ================================================================
+//  ANÁLISIS KPI — Diferencias SAP (faltantes / sobrantes)
+// ================================================================
+function kpiTotal(r){
+    const v=Number(r.difTotal);
+    return (!isNaN(v) && r.difTotal!=='' && r.difTotal!==undefined) ? v : (Number(r.diferencia)||0);
+}
+function kpiFiltered(){
+    const ej=g("fKpiEjec").value, cl=g("fKpiCliente").value;
+    return resultados.filter(r=>(!ej||r.ejecutivo===ej)&&(!cl||r.cliente===cl));
+}
+function miniBar(rows){
+    // rows: [{label, value, color}]  -> barras horizontales con CSS puro
+    const max=Math.max(1,...rows.map(r=>Math.abs(r.value)));
+    return rows.map(r=>{
+        const w=(Math.abs(r.value)/max*100).toFixed(1);
+        return `<div style="display:flex;align-items:center;gap:8px;margin:6px 0;font-size:12px;">
+            <div style="width:130px;text-align:right;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(r.label)}</div>
+            <div style="flex:1;background:var(--bg);border-radius:4px;height:18px;position:relative;">
+                <div style="width:${w}%;background:${r.color};height:100%;border-radius:4px;transition:width .4s;"></div>
+            </div>
+            <div style="width:80px;font-weight:600;">${Number(r.value).toLocaleString("es-CL")}</div>
+        </div>`;
+    }).join("") || `<div style="color:var(--text-light);font-size:13px;">Sin datos</div>`;
+}
+function renderKPI(){
+    // poblar filtro de clientes una vez
+    const selCl=g("fKpiCliente");
+    if(selCl.options.length<=1){
+        [...new Set(resultados.map(r=>r.cliente).filter(Boolean))].sort().forEach(c=>{
+            const o=document.createElement("option"); o.value=c; o.textContent=c; selCl.appendChild(o);
+        });
+    }
+    const f=kpiFiltered();
+    g("kpiCount").textContent=`${f.length} ítems`;
+
+    const totItems=f.length;
+    const exactos=f.filter(r=>kpiTotal(r)===0).length;
+    const faltItems=f.filter(r=>kpiTotal(r)<0).length;
+    const sobrItems=f.filter(r=>kpiTotal(r)>0).length;
+    const unidFalt=f.filter(r=>kpiTotal(r)<0).reduce((s,r)=>s+Math.abs(kpiTotal(r)),0);
+    const unidSobr=f.filter(r=>kpiTotal(r)>0).reduce((s,r)=>s+kpiTotal(r),0);
+    const difNeta=f.reduce((s,r)=>s+kpiTotal(r),0);
+    const impactoAbs=f.reduce((s,r)=>s+Math.abs(kpiTotal(r)),0);
+    const exactPct=totItems?((exactos/totItems)*100).toFixed(1):"0";
+
+    g("kpiStatsGrid").innerHTML=`
+        <div class="stat-card total"><div class="stat-value">${totItems}</div><div class="stat-label">Ítems analizados</div></div>
+        <div class="stat-card real"><div class="stat-value">${exactPct}%</div><div class="stat-label">Exactitud (sin dif.)</div></div>
+        <div class="stat-card pend"><div class="stat-value">${faltItems}</div><div class="stat-label">Ítems con faltante</div></div>
+        <div class="stat-card prog"><div class="stat-value">${sobrItems}</div><div class="stat-label">Ítems con sobrante</div></div>
+        <div class="stat-card espe"><div class="stat-value">${difNeta>=0?"+":""}${difNeta.toLocaleString("es-CL")}</div><div class="stat-label">Dif. neta (u.)</div></div>`;
+
+    // Gráfico faltantes vs sobrantes (en unidades)
+    g("kpiBarFS").innerHTML=miniBar([
+        {label:"Faltante (u.)", value:unidFalt, color:"var(--error)"},
+        {label:"Sobrante (u.)", value:unidSobr, color:"var(--success)"},
+        {label:"Impacto total", value:impactoAbs, color:"var(--info)"}
+    ]);
+
+    // Top 10 clientes por magnitud de diferencia total
+    const porCliente={};
+    f.forEach(r=>{ porCliente[r.cliente]=(porCliente[r.cliente]||0)+kpiTotal(r); });
+    const topCli=Object.entries(porCliente)
+        .sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).slice(0,10)
+        .map(([label,value])=>({label, value, color: value<0?"var(--error)":value>0?"var(--success)":"var(--text-light)"}));
+    g("kpiBarCliente").innerHTML=miniBar(topCli);
+
+    // Tabla por ejecutivo
+    const ejs={};
+    f.forEach(r=>{
+        const e=r.ejecutivo||"—";
+        ejs[e]=ejs[e]||{items:0,exactos:0,falt:0,sobr:0,neta:0};
+        const t=kpiTotal(r);
+        ejs[e].items++; if(t===0) ejs[e].exactos++;
+        if(t<0) ejs[e].falt+=Math.abs(t); if(t>0) ejs[e].sobr+=t;
+        ejs[e].neta+=t;
+    });
+    g("kpiEjecBody").innerHTML=Object.entries(ejs).map(([e,d])=>`
+        <tr>
+            <td><strong style="font-size:12px;">${esc(e)}</strong></td>
+            <td style="text-align:right;">${d.items}</td>
+            <td style="text-align:right;">${d.exactos}</td>
+            <td style="text-align:right;font-weight:600;">${d.items?((d.exactos/d.items)*100).toFixed(1):"0"}%</td>
+            <td style="text-align:right;"><span class="diff-neg">${d.falt.toLocaleString("es-CL")}</span></td>
+            <td style="text-align:right;"><span class="diff-pos">${d.sobr.toLocaleString("es-CL")}</span></td>
+            <td style="text-align:right;"><span class="${d.neta<0?'diff-neg':d.neta>0?'diff-pos':'diff-zero'}">${d.neta>=0?"+":""}${d.neta.toLocaleString("es-CL")}</span></td>
+        </tr>`).join("") || `<tr><td colspan="7" style="text-align:center;color:var(--text-light);">Sin datos</td></tr>`;
+
+    // Tabla detalle ordenada por impacto descendente
+    const tb=g("kpiBody"), em=g("kpiEmpty");
+    if(!f.length){ tb.innerHTML=""; em.classList.remove("hidden"); return; }
+    em.classList.add("hidden");
+    const sorted=[...f].sort((a,b)=>Math.abs(kpiTotal(b))-Math.abs(kpiTotal(a)));
+    tb.innerHTML=sorted.map((r,i)=>{
+        const t=kpiTotal(r);
+        const cls=t>0?"diff-pos":t<0?"diff-neg":"diff-zero";
+        const lab=t>0?"Sobrante":t<0?"Faltante":"Exacto";
+        const badge=t>0?"b-real":t<0?"b-pend":"b-prog";
+        return `<tr>
+            <td style="color:#6b7a90;font-size:12px;">${i+1}</td>
+            <td><strong style="font-size:12px;">${esc(r.cliente)}</strong></td>
+            <td style="font-size:12px;white-space:nowrap;">${esc(r.fecha)}</td>
+            <td style="font-size:12px;">${esc(r.item)}</td>
+            <td style="text-align:right;font-weight:600;">${(Number(r.fisico)||0).toLocaleString("es-CL")}</td>
+            <td style="text-align:right;font-weight:600;">${(Number(r.sap)||0).toLocaleString("es-CL")}</td>
+            <td style="text-align:right;"><span class="${cls}">${t>=0?"+":""}${t.toLocaleString("es-CL")}</span></td>
+            <td><span class="badge ${badge}">${lab}</span></td>
+            <td style="text-align:right;font-weight:700;">${Math.abs(t).toLocaleString("es-CL")}</td>
+        </tr>`;
+    }).join("");
+}
+function exportKPI(){
+    const f=kpiFiltered();
+    if(!f.length){ toast("No hay datos para exportar","error"); return; }
+    const header=["Cliente","Fecha","Ejecutivo","Ítem","Físico","SAP","Diferencia","Pendientes 2024","Dif. Total","Estado","Impacto (abs)"];
+    const body=f.map(r=>{
+        const t=kpiTotal(r);
+        return [r.cliente,r.fecha,r.ejecutivo,r.item,Number(r.fisico)||0,Number(r.sap)||0,Number(r.diferencia)||0,Number(r.pendientes2024)||0,t,t>0?"Sobrante":t<0?"Faltante":"Exacto",Math.abs(t)];
+    });
+    const ws=XLSX.utils.aoa_to_sheet([header,...body]);
+    ws['!cols']=header.map((h,i)=>{let m=String(h).length;body.forEach(rw=>{const v=rw[i]==null?'':String(rw[i]);if(v.length>m)m=v.length;});return {wch:Math.min(m+2,55)};});
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,"Analisis_KPI");
+    XLSX.writeFile(wb,"Analisis_KPI_Diferencias.xlsx");
+    toast("Análisis KPI exportado ✓","success");
+}
+
+// ================================================================
+//  CONFIG
+// ================================================================
+async function testConnection() {
+    try{
+        showLoad(true);
+        await GS.get("Clientes");
+        toast("✓ Conexión con el almacén interno exitosa","success");
+        setSync("ok","Sincronizado ✓");
+        updateCfgStatus(true);
+    } catch(e){
+        toast("Error: "+e.message,"error");
+        setSync("error","Error de conexión");
+        updateCfgStatus(false);
+    } finally{showLoad(false);}
+}
+async function initializeData() {
+    if(!confirm("¿Sobrescribir los datos del almacén con los datos actuales del archivo?")) return;
+    try {
+        showLoad(true);
+        await GS.put("Clientes", clientes.length ? clientes : INIT_C);
+        await GS.put("Calendario", calendario.length ? calendario : INIT_K);
+        if (resultados.length > 0) await GS.put("Resultados", resultados);
+        toast("✅ Datos subidos al almacén correctamente","success");
+        setSync("ok","Sincronizado ✓");
+    } catch(e){toast("Error: "+e.message,"error");}
+    finally{showLoad(false);}
+}
+function updateCfgStatus(ok) {
+    g("showScriptUrl").textContent = STORE_URL;
+    const el=g("configStatus");
+    if(ok===true){el.className="alert a-ok";el.innerHTML="✅ <strong>Conexión exitosa.</strong> Los datos se guardan como JSON interno y son visibles para todo el equipo.";}
+    else if(ok===false){el.className="alert a-err";el.innerHTML="❌ <strong>Error de conexión.</strong> Verifica que la función <code>clientes-store</code> esté desplegada y que <code>BLOB_CONNECTION_STRING</code> esté configurada.";}
+    else{el.className="alert a-info";el.innerHTML="ℹ️ <strong>Conectado al almacén interno.</strong> Haz clic en <em>Probar Conexión</em> para verificar.";}
+}
+
+// ================================================================
+//  TABS & HELPERS
+// ================================================================
+function switchTab(t) {
+    ["clientes","calendario","resultados","kpi","config"].forEach(x=>{
+        g("tab-"+x).classList.toggle("hidden",x!==t);
+    });
+    document.querySelectorAll(".tab-btn").forEach((b,i)=>b.classList.toggle("active",["clientes","calendario","resultados","kpi","config"][i]===t));
+    if(t==="config") updateCfgStatus();
+    if(t==="resultados") renderResultados();
+    if(t==="kpi") renderKPI();
+}
+function setSync(st,txt) {
+    const d=g("syncDot");
+    d.className="sync-dot"+(st==="loading"?" loading":st==="error"?" error":"");
+    g("syncText").textContent=txt;
+}
+function showLoad(v){g("loadingOverlay").classList.toggle("active",v);}
+function toast(msg,type="info") {
+    const c=g("toastContainer"),t=document.createElement("div");
+    t.className=`toast t-${type}`; t.textContent=msg;
+    c.appendChild(t); setTimeout(()=>t.remove(),3500);
+}
+function g(id){return document.getElementById(id);}
+function esc(s){return s?s.toString().replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"):""}
+
+document.querySelectorAll(".modal-overlay").forEach(o=>o.addEventListener("click",e=>{if(e.target===o)o.classList.remove("active");}));
+
+loadData();
+</script>
+</body>
+</html>

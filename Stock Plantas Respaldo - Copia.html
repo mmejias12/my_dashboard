@@ -170,9 +170,10 @@
           <span>Movimientos</span>
           <span id="mov-status" class="live-dot" title="Cargando..."></span>
           <div class="planta-filter">
-            <button id="btn-pl-todos"    class="planta-btn active" onclick="setPlanta('todos')"    title="Mostrar todas las plantas">Todos</button>
+            <button id="btn-pl-todos"    class="planta-btn active" onclick="setPlanta('todos')"    title="Mostrar Santiago + Talca (sin Coquimbo Virtual)">Todos</button>
             <button id="btn-pl-santiago" class="planta-btn"        onclick="setPlanta('santiago')" title="Solo Santiago (absorbe zona norte)">Santiago</button>
             <button id="btn-pl-talca"    class="planta-btn"        onclick="setPlanta('talca')"    title="Solo Talca">Talca</button>
+            <button id="btn-pl-coquimbo" class="planta-btn"        onclick="setPlanta('coquimbo')" title="Solo Coquimbo Virtual">Coquimbo</button>
           </div>
           <span class="legend" style="margin-left:auto; margin-top:0;">
             <code>A</code> Ayer · <code>H</code> Hoy · <code>M</code> Mañana
@@ -278,12 +279,12 @@
         </div>
         <div class="stock-card">
           <div class="stock-row">
-            <span class="stock-key">Clientes</span>
-            <span class="stock-val" id="stk-clientes">—</span>
-          </div>
-          <div class="stock-row">
             <span class="stock-key">Retail</span>
             <span class="stock-val" id="stk-retail">—</span>
+          </div>
+          <div class="stock-row">
+            <span class="stock-key">Clientes</span>
+            <span class="stock-val" id="stk-clientes">—</span>
           </div>
           <div class="stock-pending" id="stock-pending">Consultando SAP…</div>
         </div>
@@ -366,14 +367,14 @@ var OPS_MAP = {
    El origen es la planta REDTEC que ejecuta la operación.
    El destino es el cliente final (no representa la planta).
    Reglas (sobre bodegaOrigenStr):
-     - "REDTEC TALCA"            → Talca
-     - "REDTEC COQUIMBO VIRTUAL" → excluido (bodega virtual, no se contabiliza)
+     - "REDTEC COQUIMBO VIRTUAL" → coquimbo
+     - "REDTEC TALCA"            → talca
      - Cualquier otro REDTEC     → Santiago (absorbe zona norte)
-   Devuelve null cuando el registro debe ignorarse completamente. */
+   En modo "Todos" se EXCLUYE coquimbo virtual (sigue como antes). */
 function plantaDe(bodegaOrigen){
   if (!bodegaOrigen) return 'santiago';
   var b = String(bodegaOrigen).toUpperCase();
-  if (b.indexOf('COQUIMBO VIRTUAL') !== -1) return null;   /* excluir Coquimbo Virtual */
+  if (b.indexOf('COQUIMBO VIRTUAL') !== -1) return 'coquimbo';
   if (b.indexOf('TALCA') !== -1) return 'talca';
   return 'santiago';
 }
@@ -517,13 +518,16 @@ function pintarMovimientos(){
   for (var i = 0; i < rawCache.length; i++){
     var r = rawCache[i];
 
-    /* Calcular planta SIEMPRE para poder excluir Coquimbo Virtual del total.
-       Se usa bodegaOrigenStr (la planta REDTEC que ejecuta la operación). */
+    /* Calcular planta SIEMPRE (usando bodegaOrigenStr = planta REDTEC que ejecuta) */
     var p = plantaDe(getField(r, 'bodegaOrigenStr'));
-    if (p === null) continue;   /* Coquimbo Virtual: nunca se contabiliza */
 
-    /* Filtro por planta (cuando no es "todos") */
-    if (plantaActiva !== 'todos' && p !== plantaActiva) continue;
+    /* En modo "Todos" excluimos Coquimbo Virtual para no inflar el número.
+       En los filtros específicos sí se muestra cuando se selecciona. */
+    if (plantaActiva === 'todos') {
+      if (p === 'coquimbo') continue;
+    } else {
+      if (p !== plantaActiva) continue;
+    }
 
     var cat = clasificar(getField(r, 'operacion'));
     if (!cat) continue;
@@ -576,7 +580,7 @@ function pintarMovimientos(){
 function setPlanta(p){
   plantaActiva = p;
   /* Actualiza estado visual de los botones */
-  ['todos','santiago','talca'].forEach(function(opt){
+  ['todos','santiago','talca','coquimbo'].forEach(function(opt){
     var b = document.getElementById('btn-pl-' + opt);
     if (b) b.classList.toggle('active', opt === p);
   });
@@ -584,13 +588,24 @@ function setPlanta(p){
 }
 
 /* ============================================================
-   STOCK SAP B1 (Clientes / Retail)
-   Lee del snapshot JSON generado por GitHub Actions cada noche.
-   Esto da respuesta INSTANTÁNEA (vs. consultar SAP en vivo) y muestra
-   el stock del cierre del día anterior (sin movimientos del día actual
-   que inflarían el número).
+   STOCK AL CIERRE DEL DÍA ANTERIOR (Clientes / Retail)
+   Lógica replicada del dashboard /stocks-clientes.html:
+
+     stock_cierre_ayer = total_stocks_actual − neto_movimientos_de_hoy
+
+   Esto es lo que tu cliente espera ver: el stock "fotografiado" al
+   cierre de ayer 23:59, sin que se infle con los movimientos de hoy.
+
+   Carga DOS archivos en paralelo:
+     - /data/stocks-actual.json     (foto actual, con campo "stock" por fila)
+     - /data/movimientos-2026.json  (todos los movimientos del año)
+
+   Filtra movimientos cuya fecha == HOY y resta su neto al stock total.
+   Resultado: número estable durante todo el día, igual a lo de la
+   reunión de 08:30 AM, sin importar cuándo corra el cron.
    ============================================================ */
 var STOCK_SNAPSHOT = '/data/stocks-actual.json';
+var MOVS_SNAPSHOT  = '/data/movimientos-2026.json';
 
 function setStock(elId, val){
   var el = document.getElementById(elId);
@@ -605,61 +620,85 @@ function setStock(elId, val){
 function cargarStock(){
   var dot = document.getElementById('stock-status');
   var pending = document.getElementById('stock-pending');
-  if (dot) { dot.style.background = '#fcd34d'; dot.title = 'Leyendo snapshot…'; }
+  if (dot) { dot.style.background = '#fcd34d'; dot.title = 'Calculando cierre de ayer…'; }
+  if (pending) pending.textContent = 'Calculando…';
 
-  /* cache-bust para que no se quede pegado en versiones viejas del JSON */
-  var url = STOCK_SNAPSHOT + '?_=' + Date.now();
+  /* cache-bust para evitar versiones viejas */
+  var ts = Date.now();
+  Promise.all([
+    fetch(STOCK_SNAPSHOT + '?_=' + ts, { cache: 'no-cache' }),
+    fetch(MOVS_SNAPSHOT  + '?_=' + ts, { cache: 'no-cache' })
+  ])
+  .then(function(responses){
+    if (!responses[0].ok) throw new Error('stocks-actual HTTP ' + responses[0].status);
+    if (!responses[1].ok) throw new Error('movimientos-2026 HTTP ' + responses[1].status);
+    return Promise.all([responses[0].json(), responses[1].json()]);
+  })
+  .then(function(jsons){
+    var stockData = jsons[0];
+    var movsData  = jsons[1];
 
-  fetch(url, { headers: { 'Accept': 'application/json' } })
-    .then(function(r){
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    })
-    .then(function(data){
-      /* El snapshot puede traer totales pre-calculados en totales_por_tipo,
-         lo que evita iterar las 1057 filas. Si no, sumamos manualmente. */
-      var totClientes = 0;
-      var totRetail   = 0;
-
-      if (data && data.totales_por_tipo) {
-        totClientes = Number((data.totales_por_tipo.CLIENTES || {}).total_pallets) || 0;
-        totRetail   = Number((data.totales_por_tipo.RETAIL   || {}).total_pallets) || 0;
-      } else {
-        var rows = Array.isArray(data) ? data : (data && data.items) ? data.items : [];
-        for (var i = 0; i < rows.length; i++){
-          var row = rows[i];
-          var whs = String(row.cliente || row.CLIENTES || '').toUpperCase();
-          var qty = Number(row.stock || row.Stock || 0);
-          if (isNaN(qty)) qty = 0;
-          if (whs === 'CLIENTES')    totClientes += qty;
-          else if (whs === 'RETAIL') totRetail   += qty;
-        }
+    /* Total actual por tipo (desde stocks-actual.json) */
+    var totalActualC = 0;
+    var totalActualR = 0;
+    if (stockData && stockData.totales_por_tipo) {
+      totalActualC = Number((stockData.totales_por_tipo.CLIENTES || {}).total_pallets) || 0;
+      totalActualR = Number((stockData.totales_por_tipo.RETAIL   || {}).total_pallets) || 0;
+    } else {
+      /* fallback: sumar campo stock fila por fila */
+      var rows = (stockData && stockData.items) ? stockData.items : (Array.isArray(stockData) ? stockData : []);
+      for (var i = 0; i < rows.length; i++){
+        var row = rows[i];
+        var tipo = String(row.cliente || '').toUpperCase();
+        var qty = Number(row.stock) || 0;
+        if (tipo === 'CLIENTES')    totalActualC += qty;
+        else if (tipo === 'RETAIL') totalActualR += qty;
       }
+    }
 
-      setStock('stk-clientes', totClientes);
-      setStock('stk-retail',   totRetail);
+    /* Neto de movimientos de HOY (entradas - salidas) */
+    var hoyStr = fmtDate(diasOffset(0));   /* YYYY-MM-DD */
+    var items = (movsData && movsData.items) ? movsData.items : (Array.isArray(movsData) ? movsData : []);
 
-      if (dot) { dot.style.background = '#4ade80'; dot.title = 'Stock al cierre del día anterior'; }
+    var netoHoyC = 0;
+    var netoHoyR = 0;
+    for (var j = 0; j < items.length; j++){
+      var m = items[j];
+      var f = String(m.fecha || '').substring(0, 10);
+      if (f !== hoyStr) continue;
+      var delta = (Number(m.entrada) || 0) - (Number(m.salida) || 0);
+      var tipo2 = String(m.cliente || '').toUpperCase();
+      if (tipo2 === 'CLIENTES')    netoHoyC += delta;
+      else if (tipo2 === 'RETAIL') netoHoyR += delta;
+    }
 
-      /* Mostrar cuándo se generó el snapshot, para que el usuario sepa la frescura */
-      if (pending) {
-        if (data && data._meta && data._meta.generadoEn) {
-          var g = new Date(data._meta.generadoEn);
-          pending.textContent = 'Cierre del ' + pad(g.getDate()) + '/' + pad(g.getMonth()+1);
-        } else {
-          pending.textContent = 'Snapshot diario';
-        }
-      }
+    /* Stock al cierre de ayer = stock actual - movimientos netos de hoy */
+    var cierreC = totalActualC - netoHoyC;
+    var cierreR = totalActualR - netoHoyR;
 
-      console.log('[SAP Stock snapshot] Clientes:', totClientes, '| Retail:', totRetail, '| Generado:', data && data._meta ? data._meta.generadoEn : 'n/d');
-    })
-    .catch(function(err){
-      console.error('Error leyendo snapshot de stock:', err);
-      setStock('stk-clientes', null);
-      setStock('stk-retail',   null);
-      if (dot) { dot.style.background = '#f87171'; dot.title = 'Error leyendo snapshot'; }
-      if (pending) pending.textContent = 'Snapshot no disponible';
-    });
+    setStock('stk-clientes', cierreC);
+    setStock('stk-retail',   cierreR);
+
+    if (dot) { dot.style.background = '#4ade80'; dot.title = 'Stock al cierre de ayer 23:59'; }
+
+    /* Mostrar fecha del cierre que se está mostrando */
+    if (pending) {
+      var ayerStr = fmtDate(diasOffset(-1));
+      var parts = ayerStr.split('-');   /* ["2026","05","27"] */
+      pending.textContent = 'Cierre ' + parts[2] + '/' + parts[1] + ' 23:59';
+    }
+
+    console.log('[Stock cierre] Hoy:', hoyStr,
+                '| Total actual Clientes:', totalActualC, '- neto hoy:', netoHoyC, '= cierre ayer:', cierreC,
+                '| Total actual Retail:', totalActualR, '- neto hoy:', netoHoyR, '= cierre ayer:', cierreR);
+  })
+  .catch(function(err){
+    console.error('Error calculando stock cierre:', err);
+    setStock('stk-clientes', null);
+    setStock('stk-retail',   null);
+    if (dot) { dot.style.background = '#f87171'; dot.title = 'Error: ' + err.message; }
+    if (pending) pending.textContent = 'Snapshot no disponible';
+  });
 }
 
 /* ----- Iframe del Excel ----- */

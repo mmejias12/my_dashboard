@@ -638,7 +638,20 @@ function cargarStock(){
     var stockData = jsons[0];
     var movsData  = jsons[1];
 
-    /* Total actual por tipo (desde stocks-actual.json) */
+    /* Fecha del snapshot (último día que el snapshot ya incluye).
+       Usamos la fecha del _meta.generadoEn → la PARTE DE FECHA local.
+       Ej: snapshot generado el 27-may-2026 19:07 → snapshotDate = "2026-05-27".
+       Esto significa: el snapshot ya tiene las operaciones hasta el 27 inclusive. */
+    var snapshotDate = '';
+    if (stockData && stockData._meta && stockData._meta.generadoEn) {
+      var g = new Date(stockData._meta.generadoEn);
+      snapshotDate = g.getFullYear() + '-' + pad(g.getMonth()+1) + '-' + pad(g.getDate());
+    } else {
+      /* Fallback: si no hay meta, asumir que el snapshot es del día anterior */
+      snapshotDate = fmtDate(diasOffset(-1));
+    }
+
+    /* Total actual por tipo (desde stocks-actual.json) — esto es al cierre de snapshotDate */
     var totalActualC = 0;
     var totalActualR = 0;
     if (stockData && stockData.totales_por_tipo) {
@@ -656,25 +669,32 @@ function cargarStock(){
       }
     }
 
-    /* Neto de movimientos de HOY (entradas - salidas) */
-    var hoyStr = fmtDate(diasOffset(0));   /* YYYY-MM-DD */
+    /* Fecha objetivo: AYER (cierre que queremos mostrar) */
+    var ayerStr = fmtDate(diasOffset(-1));
+
+    /* Sumar movimientos NETOS desde (snapshotDate + 1 día) hasta ayer inclusive.
+       Es decir: todo lo que pasó DESPUÉS del snapshot y hasta el cierre de ayer.
+       Si ayer <= snapshotDate, no hay nada que sumar (el snapshot ya cubre ayer). */
     var items = (movsData && movsData.items) ? movsData.items : (Array.isArray(movsData) ? movsData : []);
 
-    var netoHoyC = 0;
-    var netoHoyR = 0;
+    var netoExtraC = 0;
+    var netoExtraR = 0;
     for (var j = 0; j < items.length; j++){
       var m = items[j];
       var f = String(m.fecha || '').substring(0, 10);
-      if (f !== hoyStr) continue;
+      /* Estricto: f > snapshotDate (días posteriores al snapshot) Y f <= ayerStr */
+      if (!f) continue;
+      if (f <= snapshotDate) continue;   /* ya está incluido en el snapshot */
+      if (f > ayerStr) continue;         /* es de hoy o futuro, no contar */
       var delta = (Number(m.entrada) || 0) - (Number(m.salida) || 0);
       var tipo2 = String(m.cliente || '').toUpperCase();
-      if (tipo2 === 'CLIENTES')    netoHoyC += delta;
-      else if (tipo2 === 'RETAIL') netoHoyR += delta;
+      if (tipo2 === 'CLIENTES')    netoExtraC += delta;
+      else if (tipo2 === 'RETAIL') netoExtraR += delta;
     }
 
-    /* Stock al cierre de ayer = stock actual - movimientos netos de hoy */
-    var cierreC = totalActualC - netoHoyC;
-    var cierreR = totalActualR - netoHoyR;
+    /* Stock al cierre de ayer = total actual (al cierre snapshotDate) + movs netos hasta ayer */
+    var cierreC = totalActualC + netoExtraC;
+    var cierreR = totalActualR + netoExtraR;
 
     setStock('stk-clientes', cierreC);
     setStock('stk-retail',   cierreR);
@@ -683,14 +703,14 @@ function cargarStock(){
 
     /* Mostrar fecha del cierre que se está mostrando */
     if (pending) {
-      var ayerStr = fmtDate(diasOffset(-1));
-      var parts = ayerStr.split('-');   /* ["2026","05","27"] */
+      var parts = ayerStr.split('-');   /* ["2026","05","28"] */
       pending.textContent = 'Cierre ' + parts[2] + '/' + parts[1] + ' 23:59';
     }
 
-    console.log('[Stock cierre] Hoy:', hoyStr,
-                '| Total actual Clientes:', totalActualC, '- neto hoy:', netoHoyC, '= cierre ayer:', cierreC,
-                '| Total actual Retail:', totalActualR, '- neto hoy:', netoHoyR, '= cierre ayer:', cierreR);
+    console.log('[Stock cierre]',
+                'snapshotDate:', snapshotDate, '| ayerStr:', ayerStr,
+                '| Clientes:', totalActualC, '+ extra', netoExtraC, '=', cierreC,
+                '| Retail:', totalActualR, '+ extra', netoExtraR, '=', cierreR);
   })
   .catch(function(err){
     console.error('Error calculando stock cierre:', err);

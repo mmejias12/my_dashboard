@@ -1,7 +1,7 @@
 const https = require('https');
 
 const API_HOST = 'apirdt1.azurewebsites.net';
-const API_PATH = '/api/RDTOut/historialxnropedido';
+const API_PATH = '/api/RDTOut/opsxrangofechas';
 
 // La API Key se lee desde Application Settings de Azure Static Web Apps.
 // En el portal: Configuration -> Application settings -> REDTEC_API_KEY = m2s_live_...
@@ -21,9 +21,11 @@ module.exports = async function (context, req) {
     return;
   }
 
-  // El dashboard manda nroPedido. El API nuevo también lo recibe igual.
-  var nroPedido = (req.query && req.query.nroPedido) ? req.query.nroPedido : '';
-  var query = '?nroPedido=' + encodeURIComponent(nroPedido);
+  // El dashboard sigue mandando fechaInicio/fechaFin (no se toca el HTML).
+  // Acá los traducimos a desde/hasta que es lo que pide el API nuevo RDTOut.
+  var d1 = (req.query && req.query.fechaInicio) ? req.query.fechaInicio : '';
+  var d2 = (req.query && req.query.fechaFin)    ? req.query.fechaFin    : '';
+  var query = '?desde=' + encodeURIComponent(d1) + '&hasta=' + encodeURIComponent(d2);
 
   try {
     var data = await fetchData(API_HOST, API_PATH + query);

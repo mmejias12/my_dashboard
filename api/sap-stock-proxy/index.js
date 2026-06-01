@@ -4,10 +4,13 @@
 // Proxy entre el dashboard m3link y SAP B1 Service Layer.
 // Vista usada: STOCKHISTCLIENTE (movimientos históricos por cliente/bodega/producto)
 //
-// 3 MODOS DE OPERACIÓN:
+// 4 MODOS DE OPERACIÓN:
 //   ?modo=actual                            → Stock acumulado por (cliente, bodega, producto).
 //                                              Suma entradas - salidas desde el inicio del rango,
 //                                              devuelve solo las filas con stock != 0.
+//   ?modo=cierredia&fecha=YYYY-MM-DD        → Stock al cierre de una fecha específica (23:59).
+//                                              Devuelve totales agrupados CLIENTES/RETAIL.
+//                                              Útil para gerencia: "cierre del día anterior" exacto.
 //   ?modo=movimientos&desde=&hasta=         → Movimientos crudos en el rango (raw data).
 //   ?modo=stockxfecha&granularidad=         → Serie temporal con stock acumulado por
 //                                              día/semana/mes (granularidades disponibles).
@@ -434,6 +437,114 @@ module.exports = async function (context, req) {
         payload: payload
       });
       context.log('[SAP] Cache guardado · TTL ' + (STOCK_CACHE_TTL_MS/60000) + ' min');
+
+      context.res = {
+        status: 200,
+        headers: corsHeaders(),
+        body: Object.assign({}, payload, {
+          cache_hit: false,
+          tomo_ms: Date.now() - t0
+        })
+      };
+      return;
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // MODO CIERREDIA: stock al cierre de una fecha específica (23:59).
+    // Replica exactamente lo que hace el script de Google Colab del colega:
+    // trae todos los movimientos hasta esa fecha y suma Entrada - Salida
+    // agrupado por WhsCode (CLIENTES / RETAIL).
+    //
+    // Uso: ?modo=cierredia&fecha=2026-05-31
+    //
+    // Cache de 30 minutos por fecha (los cierres pasados no cambian).
+    // ─────────────────────────────────────────────────────────────────
+    if (modo === 'cierredia') {
+      const fechaCorte = params.fecha || '';
+      if (!fechaCorte || !/^\d{4}-\d{2}-\d{2}$/.test(fechaCorte)) {
+        throw new Error("Parámetro 'fecha' es requerido en formato YYYY-MM-DD. Ej: ?modo=cierredia&fecha=2026-05-31");
+      }
+
+      // Cache key específica para este modo + fecha + filtros opcionales
+      const filtrosCierre = Object.assign({}, filtros, { fechaCorte: fechaCorte });
+      const cacheKey = 'cierredia:' + JSON.stringify(filtrosCierre);
+      const forceRefresh = params.forceRefresh === '1' || params.refresh === '1';
+
+      if (!forceRefresh) {
+        const cached = stockActualCache.get(cacheKey);
+        if (cached && Date.now() < cached.expiresAt) {
+          const ageMs = Date.now() - cached.savedAt;
+          context.log('[SAP] CACHE HIT cierredia ' + fechaCorte + ' · edad ' + Math.round(ageMs/1000) + 's');
+          context.res = {
+            status: 200,
+            headers: corsHeaders(),
+            body: Object.assign({}, cached.payload, {
+              cache_hit: true,
+              cache_age_seconds: Math.round(ageMs / 1000),
+              tomo_ms: Date.now() - t0
+            })
+          };
+          return;
+        }
+      }
+
+      // CACHE MISS: pedir movimientos a SAP hasta la fecha de corte.
+      // Usamos baseline 2023 (igual que modo 'actual') o el desde explícito si se pasa.
+      const filtrosQuery = Object.assign({}, filtros);
+      if (!filtrosQuery.desde) filtrosQuery.desde = '2023-01-01';
+      filtrosQuery.hasta = fechaCorte;   // hasta la fecha de corte (inclusive)
+
+      context.log('[SAP] CACHE MISS cierredia ' + fechaCorte + ' · pidiendo a SAP...');
+      const rows = await fetchRaw(context, filtrosQuery);
+
+      // Sumar Entrada - Salida agrupado por WhsCode.
+      // El campo es 'WhsCode' en SAP y vale "CLIENTES" o "RETAIL".
+      let totalClientes = 0;
+      let totalRetail   = 0;
+      let combClientes  = new Set();
+      let combRetail    = new Set();
+
+      for (const r of rows) {
+        const tipo = String(r.WhsCode || '').toUpperCase();
+        const delta = (Number(r.Entrada) || 0) - (Number(r.Salida) || 0);
+        const combKey = r.SL1Code + '|' + r.BinCode + '|' + r.ItemCode;
+
+        if (tipo === 'CLIENTES') {
+          totalClientes += delta;
+          combClientes.add(combKey);
+        } else if (tipo === 'RETAIL') {
+          totalRetail += delta;
+          combRetail.add(combKey);
+        }
+      }
+
+      const payload = {
+        ok: true,
+        modo: 'cierredia',
+        fechaCorte: fechaCorte,
+        movimientos_procesados: rows.length,
+        filtros: filtrosQuery,
+        totales_por_tipo: {
+          CLIENTES: {
+            total_pallets: totalClientes,
+            combinaciones: combClientes.size
+          },
+          RETAIL: {
+            total_pallets: totalRetail,
+            combinaciones: combRetail.size
+          }
+        }
+      };
+
+      // Cache de 30 minutos. Para fechas de cierre pasadas, el dato no cambia,
+      // pero limitamos por si SAP recibe correcciones retroactivas.
+      const CIERRE_TTL_MS = 30 * 60 * 1000;
+      stockActualCache.set(cacheKey, {
+        savedAt: Date.now(),
+        expiresAt: Date.now() + CIERRE_TTL_MS,
+        payload: payload
+      });
+      context.log('[SAP] cierredia ' + fechaCorte + ' · Clientes: ' + totalClientes + ' · Retail: ' + totalRetail);
 
       context.res = {
         status: 200,

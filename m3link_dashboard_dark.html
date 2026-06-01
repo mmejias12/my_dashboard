@@ -668,7 +668,9 @@
 /* M3LINK Dashboard – JS limpio sin template literals */
 var isLocal  = (window.location.protocol === 'file:');
 var isDev    = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-var API_DIRECT = 'https://apirdt1.azurewebsites.net/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRangoFechas';
+/* Migrado al endpoint nuevo RDTOut (controlador anterior se da de baja).
+   El proxy traduce fechaInicio/fechaFin → desde/hasta. */
+var API_DIRECT = 'https://apirdt1.azurewebsites.net/api/RDTOut/opsxrangofechas';
 var API_PROXY  = '/proxy/ops';
 
 
@@ -1236,8 +1238,9 @@ function renderTotals() {
 /* ── MODAL ──────────────────────────────────────────────── */
 
 // Configuración API historial (mismo patrón que cartola/gps proxies)
+// Migrado al endpoint nuevo RDTOut (controlador anterior se da de baja).
 var API_HIST_PROXY  = '/api/historial-proxy';
-var API_HIST_DIRECT = 'https://apirdt1.azurewebsites.net/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/HistorialXNroPedido';
+var API_HIST_DIRECT = 'https://apirdt1.azurewebsites.net/api/RDTOut/historialxnropedido';
 var IS_LOCAL_HIST = location.protocol === 'file:' || ['localhost','127.0.0.1'].includes(location.hostname);
 
 function openModal(idx) {

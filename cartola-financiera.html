@@ -610,7 +610,9 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script>
 var API_PROXY  = '/api/cartola-proxy';
-var API_DIRECT = 'https://apirdt1.azurewebsites.net/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/CartolaDiariasXRangoFechas';
+/* Migrado al endpoint nuevo RDTOut (controlador anterior se da de baja).
+   El proxy traduce fechainicial/fechafinal → desde/hasta. */
+var API_DIRECT = 'https://apirdt1.azurewebsites.net/api/RDTOut/cartolasdiariasxrangofechas';
 var isLocal = location.protocol === 'file:';
 var isDev   = ['localhost','127.0.0.1'].includes(location.hostname);
 

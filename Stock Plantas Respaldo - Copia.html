@@ -589,23 +589,23 @@ function setPlanta(p){
 
 /* ============================================================
    STOCK AL CIERRE DEL DÍA ANTERIOR (Clientes / Retail)
-   Lógica replicada del dashboard /stocks-clientes.html:
+   Consulta SAP B1 en vivo vía /api/sap-stock-proxy?modo=cierredia.
+   Replica la lógica del script de Google Colab que usa el equipo:
+   trae todos los movimientos hasta la fecha de corte (ayer 23:59)
+   y suma Entrada - Salida agrupado por WhsCode.
 
-     stock_cierre_ayer = total_stocks_actual − neto_movimientos_de_hoy
+   Estabilidad del dato:
+   - Una vez consultado, se guarda en sessionStorage.
+   - F5/refresh → lee de sessionStorage (instantáneo, mismo número).
+   - Cerrar navegador y reabrir → consulta SAP de nuevo.
+   - Si pasa la medianoche con la pestaña abierta, detecta el cambio
+     de fecha objetivo y vuelve a consultar (cache antiguo descartado).
 
-   Esto es lo que tu cliente espera ver: el stock "fotografiado" al
-   cierre de ayer 23:59, sin que se infle con los movimientos de hoy.
-
-   Carga DOS archivos en paralelo:
-     - /data/stocks-actual.json     (foto actual, con campo "stock" por fila)
-     - /data/movimientos-2026.json  (todos los movimientos del año)
-
-   Filtra movimientos cuya fecha == HOY y resta su neto al stock total.
-   Resultado: número estable durante todo el día, igual a lo de la
-   reunión de 08:30 AM, sin importar cuándo corra el cron.
+   Tiempo de respuesta: 15-25 segundos la primera vez (consulta a SAP),
+   instantáneo en cargas siguientes durante la sesión.
    ============================================================ */
-var STOCK_SNAPSHOT = '/data/stocks-actual.json';
-var MOVS_SNAPSHOT  = '/data/movimientos-2026.json';
+var SAP_CIERRE_PROXY = '/api/sap-stock-proxy';
+var SS_CACHE_KEY     = 'stockCierre_v1';   /* clave en sessionStorage */
 
 function setStock(elId, val){
   var el = document.getElementById(elId);
@@ -617,108 +617,85 @@ function setStock(elId, val){
   }
 }
 
+function pintarStockDesdeCache(cache){
+  setStock('stk-clientes', cache.clientes);
+  setStock('stk-retail',   cache.retail);
+  var dot = document.getElementById('stock-status');
+  var pending = document.getElementById('stock-pending');
+  if (dot) { dot.style.background = '#4ade80'; dot.title = 'Cierre de ' + cache.fecha; }
+  if (pending) {
+    var parts = cache.fecha.split('-');
+    pending.textContent = 'Cierre ' + parts[2] + '/' + parts[1] + ' 23:59';
+  }
+}
+
 function cargarStock(){
   var dot = document.getElementById('stock-status');
   var pending = document.getElementById('stock-pending');
-  if (dot) { dot.style.background = '#fcd34d'; dot.title = 'Calculando cierre de ayer…'; }
-  if (pending) pending.textContent = 'Calculando…';
 
-  /* cache-bust para evitar versiones viejas */
-  var ts = Date.now();
-  Promise.all([
-    fetch(STOCK_SNAPSHOT + '?_=' + ts, { cache: 'no-cache' }),
-    fetch(MOVS_SNAPSHOT  + '?_=' + ts, { cache: 'no-cache' })
-  ])
-  .then(function(responses){
-    if (!responses[0].ok) throw new Error('stocks-actual HTTP ' + responses[0].status);
-    if (!responses[1].ok) throw new Error('movimientos-2026 HTTP ' + responses[1].status);
-    return Promise.all([responses[0].json(), responses[1].json()]);
-  })
-  .then(function(jsons){
-    var stockData = jsons[0];
-    var movsData  = jsons[1];
+  /* Fecha objetivo: AYER (cierre del día anterior) */
+  var ayerStr = fmtDate(diasOffset(-1));
 
-    /* Fecha del snapshot (último día que el snapshot ya incluye).
-       Usamos la fecha del _meta.generadoEn → la PARTE DE FECHA local.
-       Ej: snapshot generado el 27-may-2026 19:07 → snapshotDate = "2026-05-27".
-       Esto significa: el snapshot ya tiene las operaciones hasta el 27 inclusive. */
-    var snapshotDate = '';
-    if (stockData && stockData._meta && stockData._meta.generadoEn) {
-      var g = new Date(stockData._meta.generadoEn);
-      snapshotDate = g.getFullYear() + '-' + pad(g.getMonth()+1) + '-' + pad(g.getDate());
-    } else {
-      /* Fallback: si no hay meta, asumir que el snapshot es del día anterior */
-      snapshotDate = fmtDate(diasOffset(-1));
-    }
-
-    /* Total actual por tipo (desde stocks-actual.json) — esto es al cierre de snapshotDate */
-    var totalActualC = 0;
-    var totalActualR = 0;
-    if (stockData && stockData.totales_por_tipo) {
-      totalActualC = Number((stockData.totales_por_tipo.CLIENTES || {}).total_pallets) || 0;
-      totalActualR = Number((stockData.totales_por_tipo.RETAIL   || {}).total_pallets) || 0;
-    } else {
-      /* fallback: sumar campo stock fila por fila */
-      var rows = (stockData && stockData.items) ? stockData.items : (Array.isArray(stockData) ? stockData : []);
-      for (var i = 0; i < rows.length; i++){
-        var row = rows[i];
-        var tipo = String(row.cliente || '').toUpperCase();
-        var qty = Number(row.stock) || 0;
-        if (tipo === 'CLIENTES')    totalActualC += qty;
-        else if (tipo === 'RETAIL') totalActualR += qty;
+  /* Si hay cache de sessionStorage para esta fecha, usarlo (instantáneo) */
+  try {
+    var cachedRaw = sessionStorage.getItem(SS_CACHE_KEY);
+    if (cachedRaw) {
+      var cached = JSON.parse(cachedRaw);
+      if (cached && cached.fecha === ayerStr) {
+        pintarStockDesdeCache(cached);
+        console.log('[Stock cierre] Usando cache sessionStorage para', ayerStr,
+                    '| Clientes:', cached.clientes, '| Retail:', cached.retail);
+        return;
       }
+      /* Fecha distinta → cache obsoleto, descartar */
+      sessionStorage.removeItem(SS_CACHE_KEY);
     }
+  } catch(e){ console.warn('sessionStorage no disponible:', e); }
 
-    /* Fecha objetivo: AYER (cierre que queremos mostrar) */
-    var ayerStr = fmtDate(diasOffset(-1));
+  /* Sin cache: consultar SAP (15-25 seg). Mostrar loader claro. */
+  if (dot) { dot.style.background = '#fcd34d'; dot.title = 'Consultando SAP en vivo (puede tardar 15-25s)…'; }
+  if (pending) pending.textContent = 'Consultando SAP… (15-25s)';
+  setStock('stk-clientes', null);
+  setStock('stk-retail',   null);
 
-    /* Sumar movimientos NETOS desde (snapshotDate + 1 día) hasta ayer inclusive.
-       Es decir: todo lo que pasó DESPUÉS del snapshot y hasta el cierre de ayer.
-       Si ayer <= snapshotDate, no hay nada que sumar (el snapshot ya cubre ayer). */
-    var items = (movsData && movsData.items) ? movsData.items : (Array.isArray(movsData) ? movsData : []);
+  var url = SAP_CIERRE_PROXY + '?modo=cierredia&fecha=' + ayerStr;
 
-    var netoExtraC = 0;
-    var netoExtraR = 0;
-    for (var j = 0; j < items.length; j++){
-      var m = items[j];
-      var f = String(m.fecha || '').substring(0, 10);
-      /* Estricto: f > snapshotDate (días posteriores al snapshot) Y f <= ayerStr */
-      if (!f) continue;
-      if (f <= snapshotDate) continue;   /* ya está incluido en el snapshot */
-      if (f > ayerStr) continue;         /* es de hoy o futuro, no contar */
-      var delta = (Number(m.entrada) || 0) - (Number(m.salida) || 0);
-      var tipo2 = String(m.cliente || '').toUpperCase();
-      if (tipo2 === 'CLIENTES')    netoExtraC += delta;
-      else if (tipo2 === 'RETAIL') netoExtraR += delta;
-    }
+  fetch(url, { headers: { 'Accept': 'application/json' } })
+    .then(function(r){
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function(data){
+      if (!data || !data.totales_por_tipo) throw new Error('Respuesta SAP inválida');
 
-    /* Stock al cierre de ayer = total actual (al cierre snapshotDate) + movs netos hasta ayer */
-    var cierreC = totalActualC + netoExtraC;
-    var cierreR = totalActualR + netoExtraR;
+      var totC = Number((data.totales_por_tipo.CLIENTES || {}).total_pallets) || 0;
+      var totR = Number((data.totales_por_tipo.RETAIL   || {}).total_pallets) || 0;
 
-    setStock('stk-clientes', cierreC);
-    setStock('stk-retail',   cierreR);
+      /* Guardar en sessionStorage para próximos refresh */
+      try {
+        sessionStorage.setItem(SS_CACHE_KEY, JSON.stringify({
+          fecha:    ayerStr,
+          clientes: totC,
+          retail:   totR,
+          consultadoEn: new Date().toISOString()
+        }));
+      } catch(e){ console.warn('No se pudo guardar en sessionStorage:', e); }
 
-    if (dot) { dot.style.background = '#4ade80'; dot.title = 'Stock al cierre de ayer 23:59'; }
+      pintarStockDesdeCache({ fecha: ayerStr, clientes: totC, retail: totR });
 
-    /* Mostrar fecha del cierre que se está mostrando */
-    if (pending) {
-      var parts = ayerStr.split('-');   /* ["2026","05","28"] */
-      pending.textContent = 'Cierre ' + parts[2] + '/' + parts[1] + ' 23:59';
-    }
-
-    console.log('[Stock cierre]',
-                'snapshotDate:', snapshotDate, '| ayerStr:', ayerStr,
-                '| Clientes:', totalActualC, '+ extra', netoExtraC, '=', cierreC,
-                '| Retail:', totalActualR, '+ extra', netoExtraR, '=', cierreR);
-  })
-  .catch(function(err){
-    console.error('Error calculando stock cierre:', err);
-    setStock('stk-clientes', null);
-    setStock('stk-retail',   null);
-    if (dot) { dot.style.background = '#f87171'; dot.title = 'Error: ' + err.message; }
-    if (pending) pending.textContent = 'Snapshot no disponible';
-  });
+      console.log('[Stock cierre]', ayerStr,
+                  '| Clientes:', totC, '| Retail:', totR,
+                  '| Movs procesados:', data.movimientos_procesados,
+                  '| Cache hit en proxy:', data.cache_hit,
+                  '| Tomó:', data.tomo_ms, 'ms');
+    })
+    .catch(function(err){
+      console.error('Error consultando cierre SAP:', err);
+      setStock('stk-clientes', null);
+      setStock('stk-retail',   null);
+      if (dot) { dot.style.background = '#f87171'; dot.title = 'Error: ' + err.message; }
+      if (pending) pending.textContent = 'Error consultando SAP';
+    });
 }
 
 /* ----- Iframe del Excel ----- */
@@ -770,7 +747,9 @@ document.addEventListener('DOMContentLoaded', function(){
 
 /* Recargar cada 5 minutos (300000ms) para mantener datos frescos */
 setInterval(cargarMovimientos, 300000);
-setInterval(cargarStock, 300000);
+/* NO se hace setInterval para cargarStock: el stock del cierre de ayer es un dato
+   inmutable durante la sesión. Solo se vuelve a consultar si el usuario cierra
+   el navegador (sessionStorage se borra) o si cambia el día calendario. */
 </script>
 
 </body>

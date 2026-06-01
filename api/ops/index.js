@@ -1,7 +1,11 @@
 const https = require('https');
 
 const API_HOST = 'apirdt1.azurewebsites.net';
-const API_PATH = '/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRangoFechas';
+const API_PATH = '/api/RDTOut/historialxnropedido';
+
+// La API Key se lee desde Application Settings de Azure Static Web Apps.
+// En el portal: Configuration -> Application settings -> REDTEC_API_KEY = m2s_live_...
+const API_KEY = process.env.REDTEC_API_KEY || 'm2s_live_ORA0CGEE3oowJ7gc2xYNqTOWmbYS8kMdD-l7hlAxvmE';
 
 module.exports = async function (context, req) {
   if (req.method === 'OPTIONS') {
@@ -17,10 +21,9 @@ module.exports = async function (context, req) {
     return;
   }
 
-  var d1 = (req.query && req.query.fechaInicio) ? req.query.fechaInicio : '';
-  var d2 = (req.query && req.query.fechaFin)    ? req.query.fechaFin    : '';
-  // Parámetros correctos del API: fechaInicial y fechaFinal
-  var query = '?fechaInicial=' + d1 + '&fechaFinal=' + d2;
+  // El dashboard manda nroPedido. El API nuevo también lo recibe igual.
+  var nroPedido = (req.query && req.query.nroPedido) ? req.query.nroPedido : '';
+  var query = '?nroPedido=' + encodeURIComponent(nroPedido);
 
   try {
     var data = await fetchData(API_HOST, API_PATH + query);
@@ -52,7 +55,10 @@ function fetchData(host, path) {
       port:     443,
       path:     path,
       method:   'GET',
-      headers:  { 'Accept': 'application/json' }
+      headers:  {
+        'Accept':    'application/json',
+        'X-Api-Key': API_KEY
+      }
     };
     var req = https.request(options, function(res) {
       var chunks = [];

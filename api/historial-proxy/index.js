@@ -1,59 +1,79 @@
-/**
- * Proxy: HistorialXNroPedido
- * Reenvía la consulta del historial del pedido a la API interna.
- * Mismo patrón que cartola-proxy / gps-stops-proxy.
- *
- * Uso desde el cliente:
- *   GET /api/historial-proxy?nroPedido=4023804
- */
-module.exports = async function (context, req) {
-  const nroPedido = (req.query && req.query.nroPedido) || '';
+const https = require('https');
 
-  if (!nroPedido) {
+const API_HOST = 'apirdt1.azurewebsites.net';
+const API_PATH = '/api/RDTOut/historialxnropedido';
+
+// La API Key se lee desde Application Settings de Azure Static Web Apps.
+// En el portal: Configuration -> Application settings -> REDTEC_API_KEY = m2s_live_...
+const API_KEY = process.env.REDTEC_API_KEY || 'm2s_live_ORA0CGEE3oowJ7gc2xYNqTOWmbYS8kMdD-l7hlAxvmE';
+
+module.exports = async function (context, req) {
+  if (req.method === 'OPTIONS') {
     context.res = {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-      body: { ok: false, error: 'Falta parámetro nroPedido' }
+      status: 200,
+      headers: {
+        'Access-Control-Allow-Origin':  '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Accept, Content-Type'
+      },
+      body: ''
     };
     return;
   }
 
-  const upstream = 'https://apirdt1.azurewebsites.net/api/'
-    + 'rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/HistorialXNroPedido'
-    + '?nroPedido=' + encodeURIComponent(nroPedido);
+  // El dashboard manda nroPedido. El API nuevo también lo recibe igual.
+  var nroPedido = (req.query && req.query.nroPedido) ? req.query.nroPedido : '';
+  var query = '?nroPedido=' + encodeURIComponent(nroPedido);
 
   try {
-    // En Node 18+ fetch es global. Si la Function App corre Node 16, ver nota más abajo.
-    const r = await fetch(upstream, {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' }
-    });
-
-    if (!r.ok) {
-      context.res = {
-        status: r.status,
-        headers: { 'Content-Type': 'application/json' },
-        body: { ok: false, error: 'Upstream HTTP ' + r.status }
-      };
-      return;
-    }
-
-    const data = await r.json();
-
+    var data = await fetchData(API_HOST, API_PATH + query);
     context.res = {
       status: 200,
       headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store'
+        'Content-Type':                'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control':               'no-cache'
       },
       body: data
     };
   } catch (err) {
-    context.log.error('historial-proxy error:', err && err.message);
     context.res = {
       status: 502,
-      headers: { 'Content-Type': 'application/json' },
-      body: { ok: false, error: 'Error consultando historial', detail: String(err && err.message || err) }
+      headers: {
+        'Content-Type':                'application/json',
+        'Access-Control-Allow-Origin': '*'
+      },
+      body: JSON.stringify({ error: 'Proxy error', detail: err.message })
     };
   }
 };
+
+function fetchData(host, path) {
+  return new Promise(function(resolve, reject) {
+    var options = {
+      hostname: host,
+      port:     443,
+      path:     path,
+      method:   'GET',
+      headers:  {
+        'Accept':    'application/json',
+        'X-Api-Key': API_KEY
+      }
+    };
+    var req = https.request(options, function(res) {
+      var chunks = [];
+      res.on('data', function(chunk) { chunks.push(chunk); });
+      res.on('end', function() {
+        var body = Buffer.concat(chunks).toString('utf8');
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          resolve(body);
+        } else {
+          reject(new Error('API ' + res.statusCode + ': ' + body.substring(0, 200)));
+        }
+      });
+    });
+    req.on('error', function(e) { reject(e); });
+    req.setTimeout(20000, function() { req.destroy(); reject(new Error('Timeout')); });
+    req.end();
+  });
+}

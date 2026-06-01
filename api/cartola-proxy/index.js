@@ -1,7 +1,11 @@
 const https = require('https');
 
 const API_HOST = 'apirdt1.azurewebsites.net';
-const API_PATH = '/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/CartolaDiariasXRangoFechas';
+const API_PATH = '/api/RDTOut/cartolasdiariasxrangofechas';
+
+// La API Key se lee desde Application Settings de Azure Static Web Apps.
+// En el portal: Configuration -> Application settings -> REDTEC_API_KEY = m2s_live_...
+const API_KEY = process.env.REDTEC_API_KEY || 'm2s_live_ORA0CGEE3oowJ7gc2xYNqTOWmbYS8kMdD-l7hlAxvmE';
 
 module.exports = async function (context, req) {
   if (req.method === 'OPTIONS') {
@@ -17,9 +21,16 @@ module.exports = async function (context, req) {
     return;
   }
 
-  var fechainicial = (req.query && req.query.fechainicial) ? req.query.fechainicial : '';
-  var fechafinal   = (req.query && req.query.fechafinal)   ? req.query.fechafinal   : '';
-  var query = '?fechainicial=' + fechainicial + '&fechafinal=' + fechafinal;
+  // El dashboard manda fechainicial/fechafinal (lowercase, formato viejo).
+  // Acá los traducimos a desde/hasta que es lo que pide el API nuevo RDTOut.
+  // Mantengo compatibilidad por si algún otro consumidor manda fechaInicio/fechaFin.
+  var d1 = '';
+  var d2 = '';
+  if (req.query) {
+    d1 = req.query.fechainicial || req.query.fechaInicio || req.query.desde || '';
+    d2 = req.query.fechafinal   || req.query.fechaFin    || req.query.hasta || '';
+  }
+  var query = '?desde=' + encodeURIComponent(d1) + '&hasta=' + encodeURIComponent(d2);
 
   try {
     var data = await fetchData(API_HOST, API_PATH + query);
@@ -51,7 +62,10 @@ function fetchData(host, path) {
       port:     443,
       path:     path,
       method:   'GET',
-      headers:  { 'Accept': 'application/json' }
+      headers:  {
+        'Accept':    'application/json',
+        'X-Api-Key': API_KEY
+      }
     };
     var req = https.request(options, function(res) {
       var chunks = [];
@@ -66,7 +80,7 @@ function fetchData(host, path) {
       });
     });
     req.on('error', function(e) { reject(e); });
-    req.setTimeout(30000, function() { req.destroy(); reject(new Error('Timeout')); });
+    req.setTimeout(20000, function() { req.destroy(); reject(new Error('Timeout')); });
     req.end();
   });
 }

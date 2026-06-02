@@ -651,6 +651,20 @@ function pintarStockDesdeCache(cache){
 }
 
 function cargarStock(){
+  /* ⚠️ HARDCODE TEMPORAL — valores manuales para la reunión de las 8:30 AM.
+     Mientras se resuelve el workflow de GitHub Actions que genera
+     /data/cierre-ayer.json, mostramos números fijos provistos por el usuario.
+     QUITAR este bloque cuando el workflow vuelva a generar el JSON. */
+  var fechaCierre = fmtDate(diasOffset(-1));
+  pintarStockDesdeCache({
+    fecha:    fechaCierre,
+    clientes: 199512,
+    retail:   551122
+  });
+  console.log('[Stock cierre] ⚠️ HARDCODE TEMPORAL · Clientes: 199.512 · Retail: 551.122 · Total: 750.634');
+  return;
+  /* ───── FIN HARDCODE ───── */
+
   var dot = document.getElementById('stock-status');
   var pending = document.getElementById('stock-pending');
 

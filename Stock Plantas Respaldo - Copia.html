@@ -94,6 +94,9 @@
   .stock-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:.55rem .7rem;flex:1;min-width:160px; }
   .stock-row { display:flex;justify-content:space-between;align-items:baseline;padding:3px 0; }
   .stock-row + .stock-row { border-top:1px dashed var(--border); padding-top:5px; margin-top:2px; }
+  .stock-row.stock-row-total { border-top:1px solid var(--border-accent); margin-top:4px; padding-top:6px; }
+  .stock-row.stock-row-total .stock-key { color:var(--accent);font-weight:600;text-transform:uppercase;font-size:10.5px;letter-spacing:.6px; }
+  .stock-row.stock-row-total .stock-val { color:var(--accent);font-weight:700;font-size:14px; }
   .stock-key { font-size:11px;color:var(--text-secondary);font-weight:500;letter-spacing:.3px; }
   .stock-val { font-size:13px;color:var(--text-muted);font-family:'JetBrains Mono',monospace;font-weight:500; }
   .stock-pending { font-size:9px;color:var(--text-muted);font-style:italic;margin-top:5px;text-align:center; }
@@ -286,6 +289,10 @@
             <span class="stock-key">Clientes</span>
             <span class="stock-val" id="stk-clientes">—</span>
           </div>
+          <div class="stock-row stock-row-total">
+            <span class="stock-key">Total</span>
+            <span class="stock-val" id="stk-total">—</span>
+          </div>
           <div class="stock-pending" id="stock-pending">Consultando SAP…</div>
         </div>
       </div>
@@ -363,17 +370,19 @@ var OPS_MAP = {
   dev: ['devolucion']
 };
 
-/* ----- Filtro por planta (basado en bodega ORIGEN, no destino) -----
-   El origen es la planta REDTEC que ejecuta la operación.
-   El destino es el cliente final (no representa la planta).
-   Reglas (sobre bodegaOrigenStr):
+/* ----- Filtro por planta (basado en la bodega REDTEC de la operación) -----
+   Para Emisiones/Transferencias → recibe bodegaOrigenStr (REDTEC despacha)
+   Para Retiros/Devoluciones    → recibe bodegaDestinoStr (REDTEC recibe)
+   La decisión de qué campo pasar se hace en el bucle de pintarMovimientos.
+
+   Reglas:
      - "REDTEC COQUIMBO VIRTUAL" → coquimbo
      - "REDTEC TALCA"            → talca
      - Cualquier otro REDTEC     → Santiago (absorbe zona norte)
-   En modo "Todos" se EXCLUYE coquimbo virtual (sigue como antes). */
-function plantaDe(bodegaOrigen){
-  if (!bodegaOrigen) return 'santiago';
-  var b = String(bodegaOrigen).toUpperCase();
+   En modo "Todos" se EXCLUYE coquimbo virtual. */
+function plantaDe(bodegaRedtec){
+  if (!bodegaRedtec) return 'santiago';
+  var b = String(bodegaRedtec).toUpperCase();
   if (b.indexOf('COQUIMBO VIRTUAL') !== -1) return 'coquimbo';
   if (b.indexOf('TALCA') !== -1) return 'talca';
   return 'santiago';
@@ -518,8 +527,25 @@ function pintarMovimientos(){
   for (var i = 0; i < rawCache.length; i++){
     var r = rawCache[i];
 
-    /* Calcular planta SIEMPRE (usando bodegaOrigenStr = planta REDTEC que ejecuta) */
-    var p = plantaDe(getField(r, 'bodegaOrigenStr'));
+    /* Primero clasificar el tipo, porque la planta REDTEC se identifica
+       con un campo DISTINTO según el tipo de operación:
+
+         Emisión, Transferencia  → bodegaOrigenStr   (REDTEC despacha)
+         Retiro, Devolución      → bodegaDestinoStr  (REDTEC recibe)
+
+       Si no entendemos esto, los retiros y devoluciones aparecen mal
+       clasificados porque su "origen" es el cliente externo, no REDTEC. */
+    var cat = clasificar(getField(r, 'operacion'));
+    if (!cat) continue;
+
+    /* Elegir el campo de bodega correcto según el tipo */
+    var bodegaPlanta;
+    if (cat === 'ret' || cat === 'dev') {
+      bodegaPlanta = getField(r, 'bodegaDestinoStr');   // a dónde llega → planta REDTEC
+    } else {
+      bodegaPlanta = getField(r, 'bodegaOrigenStr');    // desde dónde sale → planta REDTEC
+    }
+    var p = plantaDe(bodegaPlanta);
 
     /* En modo "Todos" excluimos Coquimbo Virtual para no inflar el número.
        En los filtros específicos sí se muestra cuando se selecciona. */
@@ -528,9 +554,6 @@ function pintarMovimientos(){
     } else {
       if (p !== plantaActiva) continue;
     }
-
-    var cat = clasificar(getField(r, 'operacion'));
-    if (!cat) continue;
 
     var f = soloFecha(getField(r, 'fechaRequerida') || getField(r, 'fechaDespacho') || getField(r, 'horaIngreso'));
     var slot = null;
@@ -618,6 +641,7 @@ function setStock(elId, val){
 function pintarStockDesdeCache(cache){
   setStock('stk-clientes', cache.clientes);
   setStock('stk-retail',   cache.retail);
+  setStock('stk-total',    (Number(cache.clientes) || 0) + (Number(cache.retail) || 0));
   var dot = document.getElementById('stock-status');
   var pending = document.getElementById('stock-pending');
   if (dot) { dot.style.background = '#4ade80'; dot.title = 'Cierre de ' + cache.fecha; }
@@ -692,6 +716,7 @@ function cargarStock(){
       console.error('Error leyendo cierre-ayer.json:', err);
       setStock('stk-clientes', null);
       setStock('stk-retail',   null);
+      setStock('stk-total',    null);
       if (dot) { dot.style.background = '#f87171'; dot.title = 'Error: ' + err.message; }
       if (pending) pending.textContent = 'Snapshot no disponible';
     });

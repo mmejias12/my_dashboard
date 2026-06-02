@@ -3,20 +3,22 @@ name: Snapshot Stocks SAP
 # Genera snapshots del stock actual y los movimientos 2026 desde el proxy
 # SAP, los guarda como JSON en el repo y los despliega a producción.
 #
-# Frecuencia: 3 veces al día (6:00 / 12:00 / 18:00 hora Chile).
-# Chile: UTC-4 (invierno) o UTC-3 (verano). El cron está fijado en UTC,
-# por lo que las horas locales pueden moverse ±1h con DST. Es aceptable
-# para snapshots; si en algún momento querés horas exactas, ajustar dos
-# veces al año.
+# Frecuencia: 3 veces al día.
+# Chile: UTC-4 (invierno) o UTC-3 (verano). El cron está fijado en UTC.
 #
-# 6:00 Chile ≈ 10:00 UTC   (invierno UTC-4) / 09:00 UTC (verano UTC-3)
-# 12:00 Chile ≈ 16:00 UTC                    / 15:00 UTC
-# 18:00 Chile ≈ 22:00 UTC                    / 21:00 UTC
-# Usamos los valores de invierno (más recientes).
+# HORAS PROGRAMADAS (UTC → Chile UTC-4):
+#   07:33 UTC ≈ 03:33 Chile  → snapshot principal para reunión 8:30 AM
+#                              (SAP ya tiene consolidado el cierre 23:59 del día anterior)
+#   16:33 UTC ≈ 12:33 Chile  → refresh mediodía
+#   22:33 UTC ≈ 18:33 Chile  → refresh tarde
+#
+# NOTA: GitHub Actions tiene delays variables (especialmente a las 00/15/30/45 min,
+# que son horas pico globales). Por eso usamos minuto 33 (raro) y el cron principal
+# a las 03:33 AM Chile, garantizando margen amplio antes de la reunión de 8:30.
 
 on:
   schedule:
-    - cron: '0 10,16,22 * * *'
+    - cron: '33 7,16,22 * * *'
   workflow_dispatch:  # permite ejecutar manualmente desde GitHub UI
 
 permissions:

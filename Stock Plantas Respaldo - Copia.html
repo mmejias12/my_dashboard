@@ -173,7 +173,7 @@
           <span>Movimientos</span>
           <span id="mov-status" class="live-dot" title="Cargando..."></span>
           <div class="planta-filter">
-            <button id="btn-pl-todos"    class="planta-btn active" onclick="setPlanta('todos')"    title="Mostrar Santiago + Talca (sin Coquimbo Virtual)">Todos</button>
+            <button id="btn-pl-todos"    class="planta-btn active" onclick="setPlanta('todos')"    title="Mostrar Santiago + Talca + Coquimbo Virtual">Todos</button>
             <button id="btn-pl-santiago" class="planta-btn"        onclick="setPlanta('santiago')" title="Solo Santiago (absorbe zona norte)">Santiago</button>
             <button id="btn-pl-talca"    class="planta-btn"        onclick="setPlanta('talca')"    title="Solo Talca">Talca</button>
             <button id="btn-pl-coquimbo" class="planta-btn"        onclick="setPlanta('coquimbo')" title="Solo Coquimbo Virtual">Coquimbo</button>
@@ -379,7 +379,7 @@ var OPS_MAP = {
      - "REDTEC COQUIMBO VIRTUAL" → coquimbo
      - "REDTEC TALCA"            → talca
      - Cualquier otro REDTEC     → Santiago (absorbe zona norte)
-   En modo "Todos" se EXCLUYE coquimbo virtual. */
+   En modo "Todos" se incluyen las TRES plantas. */
 function plantaDe(bodegaRedtec){
   if (!bodegaRedtec) return 'santiago';
   var b = String(bodegaRedtec).toUpperCase();
@@ -547,13 +547,12 @@ function pintarMovimientos(){
     }
     var p = plantaDe(bodegaPlanta);
 
-    /* En modo "Todos" excluimos Coquimbo Virtual para no inflar el número.
-       En los filtros específicos sí se muestra cuando se selecciona. */
-    if (plantaActiva === 'todos') {
-      if (p === 'coquimbo') continue;
-    } else {
-      if (p !== plantaActiva) continue;
-    }
+    /* Filtro por planta:
+         - "Todos"   → incluye Santiago + Talca + Coquimbo Virtual
+         - Específico → solo la planta seleccionada
+       Coquimbo Virtual SÍ cuenta en el total porque representa pallets reales,
+       aunque la bodega sea "virtual" en SAP. */
+    if (plantaActiva !== 'todos' && p !== plantaActiva) continue;
 
     var f = soloFecha(getField(r, 'fechaRequerida') || getField(r, 'fechaDespacho') || getField(r, 'horaIngreso'));
     var slot = null;

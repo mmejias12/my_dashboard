@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Stock Plantas Respaldo - Copia 2026 — REDTEC 2026</title>
+<title>Stock Plantas Respaldo - Copia — REDTEC 2026</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -589,23 +589,21 @@ function setPlanta(p){
 
 /* ============================================================
    STOCK AL CIERRE DEL DÍA ANTERIOR (Clientes / Retail)
-   Consulta SAP B1 en vivo vía /api/sap-stock-proxy?modo=cierredia.
-   Replica la lógica del script de Google Colab que usa el equipo:
-   trae todos los movimientos hasta la fecha de corte (ayer 23:59)
-   y suma Entrada - Salida agrupado por WhsCode.
+   Lee /data/cierre-ayer.json generado por GitHub Actions 3 veces al día
+   (06:00, 12:00, 18:00 hora Chile).
 
-   Estabilidad del dato:
-   - Una vez consultado, se guarda en sessionStorage.
+   El JSON ya viene con los totales pre-calculados, así que la respuesta
+   es INSTANTÁNEA (no hay que esperar al proxy SAP de 15-25 segundos).
+
+   Estabilidad durante la sesión:
+   - Una vez leído, se guarda en sessionStorage.
    - F5/refresh → lee de sessionStorage (instantáneo, mismo número).
-   - Cerrar navegador y reabrir → consulta SAP de nuevo.
-   - Si pasa la medianoche con la pestaña abierta, detecta el cambio
-     de fecha objetivo y vuelve a consultar (cache antiguo descartado).
-
-   Tiempo de respuesta: 15-25 segundos la primera vez (consulta a SAP),
-   instantáneo en cargas siguientes durante la sesión.
+   - Cerrar navegador y reabrir → vuelve a leer el JSON (también instantáneo).
+   - El JSON solo se actualiza en los crones del workflow (3x al día), por lo
+     que el número se mantiene estable durante varias horas seguidas.
    ============================================================ */
-var SAP_CIERRE_PROXY = '/api/sap-stock-proxy';
-var SS_CACHE_KEY     = 'stockCierre_v1';   /* clave en sessionStorage */
+var CIERRE_JSON   = '/data/cierre-ayer.json';
+var SS_CACHE_KEY  = 'stockCierre_v2';
 
 function setStock(elId, val){
   var el = document.getElementById(elId);
@@ -633,7 +631,6 @@ function cargarStock(){
   var dot = document.getElementById('stock-status');
   var pending = document.getElementById('stock-pending');
 
-  /* Fecha objetivo: AYER (cierre del día anterior) */
   var ayerStr = fmtDate(diasOffset(-1));
 
   /* Si hay cache de sessionStorage para esta fecha, usarlo (instantáneo) */
@@ -643,58 +640,60 @@ function cargarStock(){
       var cached = JSON.parse(cachedRaw);
       if (cached && cached.fecha === ayerStr) {
         pintarStockDesdeCache(cached);
-        console.log('[Stock cierre] Usando cache sessionStorage para', ayerStr,
+        console.log('[Stock cierre] Cache sessionStorage:', ayerStr,
                     '| Clientes:', cached.clientes, '| Retail:', cached.retail);
         return;
       }
-      /* Fecha distinta → cache obsoleto, descartar */
       sessionStorage.removeItem(SS_CACHE_KEY);
     }
   } catch(e){ console.warn('sessionStorage no disponible:', e); }
 
-  /* Sin cache: consultar SAP (15-25 seg). Mostrar loader claro. */
-  if (dot) { dot.style.background = '#fcd34d'; dot.title = 'Consultando SAP en vivo (puede tardar 15-25s)…'; }
-  if (pending) pending.textContent = 'Consultando SAP… (15-25s)';
-  setStock('stk-clientes', null);
-  setStock('stk-retail',   null);
+  /* Sin cache: leer el JSON estático */
+  if (dot) { dot.style.background = '#fcd34d'; dot.title = 'Leyendo snapshot…'; }
+  if (pending) pending.textContent = 'Cargando cierre…';
 
-  var url = SAP_CIERRE_PROXY + '?modo=cierredia&fecha=' + ayerStr;
+  var url = CIERRE_JSON + '?_=' + Date.now();
 
-  fetch(url, { headers: { 'Accept': 'application/json' } })
+  fetch(url, { cache: 'no-cache', headers: { 'Accept': 'application/json' } })
     .then(function(r){
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
     })
     .then(function(data){
-      if (!data || !data.totales_por_tipo) throw new Error('Respuesta SAP inválida');
+      if (!data || !data.totales_por_tipo) {
+        throw new Error('Snapshot inválido (sin totales_por_tipo)');
+      }
 
       var totC = Number((data.totales_por_tipo.CLIENTES || {}).total_pallets) || 0;
       var totR = Number((data.totales_por_tipo.RETAIL   || {}).total_pallets) || 0;
 
-      /* Guardar en sessionStorage para próximos refresh */
+      /* El JSON trae su propia fechaCierre. Si difiere de ayerStr del cliente
+         (raro, salvo bug de timezone), confiamos en la del JSON. */
+      var fechaCierre = data.fechaCierre || ayerStr;
+
+      /* Guardar en sessionStorage para próximos refresh durante la sesión */
       try {
         sessionStorage.setItem(SS_CACHE_KEY, JSON.stringify({
-          fecha:    ayerStr,
+          fecha:    fechaCierre,
           clientes: totC,
           retail:   totR,
-          consultadoEn: new Date().toISOString()
+          leidoEn:  new Date().toISOString()
         }));
       } catch(e){ console.warn('No se pudo guardar en sessionStorage:', e); }
 
-      pintarStockDesdeCache({ fecha: ayerStr, clientes: totC, retail: totR });
+      pintarStockDesdeCache({ fecha: fechaCierre, clientes: totC, retail: totR });
 
-      console.log('[Stock cierre]', ayerStr,
+      var generado = data._meta && data._meta.generadoEn ? data._meta.generadoEn : 'n/d';
+      console.log('[Stock cierre]', fechaCierre,
                   '| Clientes:', totC, '| Retail:', totR,
-                  '| Movs procesados:', data.movimientos_procesados,
-                  '| Cache hit en proxy:', data.cache_hit,
-                  '| Tomó:', data.tomo_ms, 'ms');
+                  '| Snapshot generado:', generado);
     })
     .catch(function(err){
-      console.error('Error consultando cierre SAP:', err);
+      console.error('Error leyendo cierre-ayer.json:', err);
       setStock('stk-clientes', null);
       setStock('stk-retail',   null);
       if (dot) { dot.style.background = '#f87171'; dot.title = 'Error: ' + err.message; }
-      if (pending) pending.textContent = 'Error consultando SAP';
+      if (pending) pending.textContent = 'Snapshot no disponible';
     });
 }
 

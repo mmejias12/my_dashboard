@@ -238,8 +238,8 @@
     <input type="date" id="hasta">
   </div>
   <div class="field">
-    <label>Token API</label>
-    <input type="password" id="token" placeholder="Bearer token..." style="min-width:200px">
+    <label>X-Api-Key</label>
+    <input type="password" id="token" placeholder="m2s_live_..." style="min-width:220px">
   </div>
   <button class="btn-buscar" id="btnBuscar" onclick="buscar()">Consultar</button>
   <button class="btn-excel" id="btnExcel" onclick="exportarExcel()">⬇ Excel</button>
@@ -303,11 +303,11 @@ const savedToken = localStorage.getItem("rdt_token");
 if (savedToken) document.getElementById("token").value = savedToken;
 
 function getHeaders() {
-  const token = document.getElementById("token").value.trim();
-  if (token) localStorage.setItem("rdt_token", token);
+  const key = document.getElementById("token").value.trim();
+  if (key) localStorage.setItem("rdt_token", key);
   return {
     "Content-Type": "application/json",
-    ...(token ? { "Authorization": token.startsWith("Bearer ") ? token : `Bearer ${token}` } : {})
+    ...(key ? { "X-Api-Key": key } : {})
   };
 }
 

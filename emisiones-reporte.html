@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reporte Operaciones — RDT</title>
+<style>
+  :root {
+    --bg:       #07080e;
+    --surface:  #10121a;
+    --border:   #1e2130;
+    --accent:   #c0392b;
+    --accent2:  #e74c3c;
+    --text:     #e8eaf0;
+    --muted:    #6b7280;
+    --green:    #27ae60;
+    --yellow:   #f39c12;
+    --blue:     #2980b9;
+  }
+  [data-theme="light"] {
+    --bg:      #f0f2f5;
+    --surface: #ffffff;
+    --border:  #d1d5db;
+    --text:    #111827;
+    --muted:   #6b7280;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--surface);
+    border-bottom: 2px solid var(--accent);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .logo {
+    width: 32px; height: 32px;
+    background: var(--accent);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 16px; color: #fff; flex-shrink: 0;
+  }
+  header h1 { font-size: 16px; font-weight: 600; }
+  header span { font-size: 12px; color: var(--muted); }
+  .theme-btn {
+    margin-left: auto;
+    background: var(--border);
+    border: none; border-radius: 6px;
+    color: var(--text); padding: 6px 12px;
+    cursor: pointer; font-size: 12px;
+  }
+
+  /* ── Filtros ── */
+  .filters {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .field input, .field select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 7px 10px;
+    font-size: 13px;
+    outline: none;
+    min-width: 140px;
+  }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+
+  .btn-buscar {
+    background: var(--accent);
+    color: #fff;
+    border: none; border-radius: 6px;
+    padding: 8px 22px;
+    font-size: 13px; font-weight: 600;
+    cursor: pointer;
+    transition: background .15s;
+    align-self: flex-end;
+  }
+  .btn-buscar:hover { background: var(--accent2); }
+  .btn-buscar:disabled { opacity: .5; cursor: not-allowed; }
+
+  .btn-excel {
+    background: var(--green);
+    color: #fff;
+    border: none; border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 13px; font-weight: 600;
+    cursor: pointer;
+    align-self: flex-end;
+    display: none;
+  }
+  .btn-excel:hover { filter: brightness(1.1); }
+
+  /* ── Stats ── */
+  .stats {
+    display: flex;
+    gap: 12px;
+    padding: 12px 24px;
+    flex-wrap: wrap;
+  }
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 18px;
+    min-width: 130px;
+  }
+  .stat-val { font-size: 22px; font-weight: 700; }
+  .stat-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .stat.red .stat-val { color: var(--accent2); }
+  .stat.green .stat-val { color: var(--green); }
+  .stat.yellow .stat-val { color: var(--yellow); }
+  .stat.blue .stat-val { color: var(--blue); }
+
+  /* ── Tabla ── */
+  .table-wrap {
+    padding: 0 24px 24px;
+    overflow-x: auto;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  thead th {
+    background: var(--surface);
+    border-bottom: 2px solid var(--accent);
+    padding: 10px 12px;
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background .1s;
+  }
+  tbody tr:hover { background: var(--surface); }
+  tbody td {
+    padding: 9px 12px;
+    white-space: nowrap;
+  }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .badge-cerrado  { background: #1a3a2a; color: #27ae60; }
+  .badge-anulado  { background: #2d1a1a; color: #e74c3c; }
+  .badge-despacho { background: #1a2540; color: #3498db; }
+  .badge-confirmar{ background: #2d2600; color: #f39c12; }
+  .badge-default  { background: var(--border); color: var(--text); }
+
+  /* ── Estado ── */
+  .estado {
+    padding: 20px 24px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .6s linear infinite;
+    vertical-align: middle;
+    margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .progress-bar {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 8px 0 4px;
+    overflow: hidden;
+    width: 300px;
+    max-width: 100%;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width .2s;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">R</div>
+  <div>
+    <h1>Reporte de Operaciones</h1>
+    <span>RDT · REDTEC S.A.</span>
+  </div>
+  <button class="theme-btn" onclick="toggleTheme()">☀ Tema</button>
+</header>
+
+<div class="filters">
+  <div class="field">
+    <label>Tipo Operación</label>
+    <select id="tipoOp">
+      <option value="">Todas</option>
+      <option value="Emision" selected>Emisión</option>
+      <option value="Recepcion">Recepción</option>
+      <option value="Traslado">Traslado</option>
+    </select>
+  </div>
+  <div class="field">
+    <label>Desde</label>
+    <input type="date" id="desde">
+  </div>
+  <div class="field">
+    <label>Hasta</label>
+    <input type="date" id="hasta">
+  </div>
+  <div class="field">
+    <label>Token API</label>
+    <input type="password" id="token" placeholder="Bearer token..." style="min-width:200px">
+  </div>
+  <button class="btn-buscar" id="btnBuscar" onclick="buscar()">Consultar</button>
+  <button class="btn-excel" id="btnExcel" onclick="exportarExcel()">⬇ Excel</button>
+</div>
+
+<div class="stats" id="stats" style="display:none">
+  <div class="stat blue">
+    <div class="stat-val" id="sTot">0</div>
+    <div class="stat-lbl">Total</div>
+  </div>
+  <div class="stat green">
+    <div class="stat-val" id="sCerrado">0</div>
+    <div class="stat-lbl">Cerrados</div>
+  </div>
+  <div class="stat yellow">
+    <div class="stat-val" id="sPend">0</div>
+    <div class="stat-lbl">Pendientes</div>
+  </div>
+  <div class="stat red">
+    <div class="stat-val" id="sAnul">0</div>
+    <div class="stat-lbl">Anulados</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val" id="sSinDte">0</div>
+    <div class="stat-lbl">Sin DTE</div>
+  </div>
+</div>
+
+<div class="estado" id="estado"></div>
+
+<div class="table-wrap">
+  <table id="tabla" style="display:none">
+    <thead>
+      <tr>
+        <th>Nro Pedido</th>
+        <th>Operación</th>
+        <th>Etapa</th>
+        <th>DTE Nro</th>
+        <th>Cliente Destino</th>
+        <th>Bodega Destino</th>
+        <th>Cant. Sol.</th>
+        <th>Usuario Creador</th>
+        <th>Fecha Creación</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<script>
+const BASE = "https://apirdt1.azurewebsites.net/api/RDTOut";
+let datosFinales = [];
+
+// Fechas por defecto: hoy
+const hoy = new Date().toISOString().slice(0,10);
+document.getElementById("desde").value = hoy;
+document.getElementById("hasta").value = hoy;
+
+// Token persistente
+const savedToken = localStorage.getItem("rdt_token");
+if (savedToken) document.getElementById("token").value = savedToken;
+
+function getHeaders() {
+  const token = document.getElementById("token").value.trim();
+  if (token) localStorage.setItem("rdt_token", token);
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { "Authorization": token.startsWith("Bearer ") ? token : `Bearer ${token}` } : {})
+  };
+}
+
+function badgeEtapa(etapa) {
+  const e = etapa?.toLowerCase() ?? "";
+  if (e.includes("cerrado"))   return `<span class="badge badge-cerrado">${etapa}</span>`;
+  if (e.includes("anulado"))   return `<span class="badge badge-anulado">${etapa}</span>`;
+  if (e.includes("despacho"))  return `<span class="badge badge-despacho">${etapa}</span>`;
+  if (e.includes("confirmar")) return `<span class="badge badge-confirmar">${etapa}</span>`;
+  return `<span class="badge badge-default">${etapa ?? "—"}</span>`;
+}
+
+function fmtFecha(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleDateString("es-CL") + " " +
+         d.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
+}
+
+function setEstado(msg, loading = false, pct = null) {
+  const el = document.getElementById("estado");
+  if (!msg) { el.innerHTML = ""; return; }
+  el.innerHTML = `
+    ${loading ? '<span class="spinner"></span>' : ""}${msg}
+    ${pct !== null ? `
+      <div class="progress-bar"><div class="progress-fill" id="pbar" style="width:${pct}%"></div></div>
+      <small id="pbarTxt"></small>` : ""}
+  `;
+}
+
+function updateProgress(i, total) {
+  const pct = Math.round((i / total) * 100);
+  const bar = document.getElementById("pbar");
+  const txt = document.getElementById("pbarTxt");
+  if (bar) bar.style.width = pct + "%";
+  if (txt) txt.textContent = `${i} / ${total} pedidos procesados`;
+}
+
+async function buscar() {
+  const desde   = document.getElementById("desde").value;
+  const hasta   = document.getElementById("hasta").value;
+  const tipoOp  = document.getElementById("tipoOp").value;
+  const headers = getHeaders();
+
+  if (!desde || !hasta) { alert("Selecciona rango de fechas"); return; }
+
+  document.getElementById("btnBuscar").disabled = true;
+  document.getElementById("tabla").style.display = "none";
+  document.getElementById("btnExcel").style.display = "none";
+  document.getElementById("stats").style.display   = "none";
+  document.getElementById("tbody").innerHTML = "";
+  datosFinales = [];
+
+  try {
+    // ── PASO 1: traer operaciones ────────────────────────────────
+    setEstado("Cargando operaciones...", true);
+    const resOps = await fetch(
+      `${BASE}/opsxrangofechas?desde=${desde}&hasta=${hasta}`,
+      { headers }
+    );
+    if (!resOps.ok) throw new Error(`Error ${resOps.status} al cargar operaciones`);
+    const ops = await resOps.json();
+
+    // ── PASO 2: filtrar por tipo ─────────────────────────────────
+    const filtradas = tipoOp
+      ? ops.filter(op => op.operacion === tipoOp)
+      : ops;
+
+    if (filtradas.length === 0) {
+      setEstado(`Sin resultados para "${tipoOp || 'todas'}" en el rango seleccionado.`);
+      document.getElementById("btnBuscar").disabled = false;
+      return;
+    }
+
+    // ── PASO 3: cruzar con historial ─────────────────────────────
+    setEstado(`Cruzando historial de ${filtradas.length} pedidos...`, true, 0);
+
+    for (let i = 0; i < filtradas.length; i++) {
+      const op = filtradas[i];
+      updateProgress(i, filtradas.length);
+
+      let usuarioCreador = op.usuario ?? "—";
+      let fechaCreacion  = op.horaIngreso;
+
+      try {
+        const resH = await fetch(
+          `${BASE}/historialxnropedido?nroPedido=${op.nroPedido}`,
+          { headers }
+        );
+        if (resH.ok) {
+          const hist = await resH.json();
+          const creado = hist.find(h => h.glosaHistorial === "Registro Creado");
+          if (creado) {
+            usuarioCreador = creado.usuario ?? usuarioCreador;
+            fechaCreacion  = creado.fechaCreacionHistorial ?? fechaCreacion;
+          }
+        }
+      } catch (_) { /* usa fallback del op */ }
+
+      datosFinales.push({
+        nroPedido:      op.nroPedido,
+        operacion:      op.operacion,
+        etapa:          op.etapaOperacion,
+        dteNro:         op.dteNro !== 0 ? op.dteNro : "Sin DTE",
+        clienteDestino: op.clienteDestinoStr,
+        bodegaDestino:  op.bodegaDestinoStr,
+        cantSolicitada: op.cantidadSolicitada,
+        usuarioCreador,
+        fechaCreacion,
+      });
+
+      await new Promise(r => setTimeout(r, 80));
+    }
+
+    renderTabla();
+
+  } catch (err) {
+    setEstado(`⚠ ${err.message}`);
+  } finally {
+    document.getElementById("btnBuscar").disabled = false;
+  }
+}
+
+function renderTabla() {
+  const tbody = document.getElementById("tbody");
+  tbody.innerHTML = "";
+
+  // stats
+  const tot     = datosFinales.length;
+  const cerrado = datosFinales.filter(d => d.etapa?.toLowerCase().includes("cerrado")).length;
+  const anulado = datosFinales.filter(d => d.etapa?.toLowerCase().includes("anulado")).length;
+  const sinDte  = datosFinales.filter(d => d.dteNro === "Sin DTE").length;
+  const pend    = tot - cerrado - anulado;
+
+  document.getElementById("sTot").textContent     = tot;
+  document.getElementById("sCerrado").textContent = cerrado;
+  document.getElementById("sPend").textContent    = pend;
+  document.getElementById("sAnul").textContent    = anulado;
+  document.getElementById("sSinDte").textContent  = sinDte;
+  document.getElementById("stats").style.display  = "flex";
+
+  datosFinales.forEach(d => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong>${d.nroPedido}</strong></td>
+      <td>${d.operacion}</td>
+      <td>${badgeEtapa(d.etapa)}</td>
+      <td>${d.dteNro}</td>
+      <td>${d.clienteDestino}</td>
+      <td style="color:var(--muted)">${d.bodegaDestino}</td>
+      <td style="text-align:right">${d.cantSolicitada}</td>
+      <td style="color:var(--yellow)">${d.usuarioCreador}</td>
+      <td style="color:var(--muted)">${fmtFecha(d.fechaCreacion)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById("tabla").style.display     = "table";
+  document.getElementById("btnExcel").style.display  = "inline-block";
+  setEstado(`${tot} registro${tot !== 1 ? "s" : ""} encontrado${tot !== 1 ? "s" : ""}.`);
+}
+
+function exportarExcel() {
+  if (!datosFinales.length) return;
+
+  const cols = [
+    "Nro Pedido","Operación","Etapa","DTE Nro",
+    "Cliente Destino","Bodega Destino","Cant. Sol.",
+    "Usuario Creador","Fecha Creación"
+  ];
+
+  const esc = v => `"${String(v ?? "").replace(/"/g,'""')}"`;
+
+  const rows = datosFinales.map(d => [
+    d.nroPedido, d.operacion, d.etapa, d.dteNro,
+    d.clienteDestino, d.bodegaDestino, d.cantSolicitada,
+    d.usuarioCreador, fmtFecha(d.fechaCreacion)
+  ].map(esc).join(","));
+
+  const csv = "\uFEFF" + [cols.map(esc).join(","), ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  const desde = document.getElementById("desde").value;
+  const hasta = document.getElementById("hasta").value;
+  a.href = url;
+  a.download = `operaciones_${desde}_${hasta}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function toggleTheme() {
+  const t = document.documentElement.getAttribute("data-theme");
+  document.documentElement.setAttribute("data-theme", t === "dark" ? "light" : "dark");
+}
+</script>
+</body>
+</html>

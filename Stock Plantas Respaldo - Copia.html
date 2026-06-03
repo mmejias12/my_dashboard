@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Stock Plantas Respaldo - Copia DEMO — REDTEC 2026</title>
+<title>Stock Planta Respaldo - 2026 DEMO — REDTEC 2026</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -651,19 +651,6 @@ function pintarStockDesdeCache(cache){
 }
 
 function cargarStock(){
-  /* ⚠️ HARDCODE TEMPORAL — valores manuales para la reunión 8:30 AM.
-     Mientras se revisa por qué el cron de las 03:33 no se ejecutó (o el
-     workflow no actualizó cierre-ayer.json), mostramos valores fijos.
-     QUITAR este bloque cuando el cron vuelva a generar el JSON al día. */
-  pintarStockDesdeCache({
-    fecha:    '2026-06-02',
-    clientes: 197270,
-    retail:   551827
-  });
-  console.log('[Stock cierre] ⚠️ HARDCODE TEMPORAL · Cierre 02/06 · Clientes: 197.270 · Retail: 551.827 · Total: 749.097');
-  return;
-  /* ───── FIN HARDCODE ───── */
-
   var dot = document.getElementById('stock-status');
   var pending = document.getElementById('stock-pending');
 

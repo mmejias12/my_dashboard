@@ -64,8 +64,9 @@
     <select id="tipoOp">
       <option value="">Todas</option>
       <option value="Emision" selected>Emision</option>
-      <option value="Recepcion">Recepcion</option>
-      <option value="Traslado">Traslado</option>
+      <option value="Emision 24 horas">Emision 24 horas</option>
+      <option value="Emision LD">Emision LD</option>
+      <option value="Emision Retiro Cliente">Emision Retiro Cliente</option>
     </select>
   </div>
   <div class="field"><label>Desde</label><input type="date" id="desde"></div>
@@ -138,6 +139,20 @@ function updProg(i, tot) {
   if (t) t.textContent = i + ' / ' + tot + ' pedidos procesados';
 }
 
+async function fetchHistConRetry(nroPedido, intentos) {
+  intentos = intentos || 3;
+  for (var t = 1; t <= intentos; t++) {
+    try {
+      var rh = await fetch(BASE_HIST + '?nroPedido=' + nroPedido, { headers: { 'Accept': 'application/json' } });
+      if (rh.ok) return await rh.json();
+      if (rh.status !== 502 && rh.status !== 503) return [];
+    } catch(e) {}
+    // esperar antes de reintentar: 500ms, 1s, 2s
+    await new Promise(function(r) { setTimeout(r, t * 500); });
+  }
+  return [];
+}
+
 async function buscar() {
   var desde = document.getElementById('desde').value;
   var hasta = document.getElementById('hasta').value;
@@ -176,16 +191,13 @@ async function buscar() {
       var fechaCreacion  = op.horaIngreso;
 
       try {
-        var rh = await fetch(BASE_HIST + '?nroPedido=' + op.nroPedido, { headers: { 'Accept': 'application/json' } });
-        if (rh.ok) {
-          var hist = await rh.json();
-          if (Array.isArray(hist)) {
-            for (var j = 0; j < hist.length; j++) {
-              if (hist[j].glosaHistorial === 'Registro Creado') {
-                usuarioCreador = hist[j].usuario || usuarioCreador;
-                fechaCreacion  = hist[j].fechaCreacionHistorial || fechaCreacion;
-                break;
-              }
+        var hist = await fetchHistConRetry(op.nroPedido);
+        if (Array.isArray(hist)) {
+          for (var j = 0; j < hist.length; j++) {
+            if (hist[j].glosaHistorial === 'Registro Creado') {
+              usuarioCreador = hist[j].usuario || usuarioCreador;
+              fechaCreacion  = hist[j].fechaCreacionHistorial || fechaCreacion;
+              break;
             }
           }
         }
@@ -203,7 +215,7 @@ async function buscar() {
         fechaCreacion:  fechaCreacion
       });
 
-      await new Promise(function(r) { setTimeout(r, 80); });
+      await new Promise(function(r) { setTimeout(r, 300); });
     }
 
     renderTabla();

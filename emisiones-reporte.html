@@ -1,507 +1,273 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="dark">
+<html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Reporte Operaciones — RDT</title>
+<title>Reporte Emisiones — RDT</title>
 <style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --bg:       #07080e;
-    --surface:  #10121a;
-    --border:   #1e2130;
-    --accent:   #c0392b;
-    --accent2:  #e74c3c;
-    --text:     #e8eaf0;
-    --muted:    #6b7280;
-    --green:    #27ae60;
-    --yellow:   #f39c12;
-    --blue:     #2980b9;
+    --bg:#0f1117; --surface:#181b23; --card:#1e222d;
+    --border:rgba(255,255,255,0.07); --border-md:rgba(255,255,255,0.12);
+    --text:#e8eaf0; --muted:#9da3b4; --dim:#5a6070;
+    --red:#C0170C; --green:#4ade80; --yellow:#fcd34d;
   }
-  [data-theme="light"] {
-    --bg:      #f0f2f5;
-    --surface: #ffffff;
-    --border:  #d1d5db;
-    --text:    #111827;
-    --muted:   #6b7280;
-  }
-
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Segoe UI', system-ui, sans-serif;
-    font-size: 14px;
-    min-height: 100vh;
-  }
-
-  /* ── Header ── */
-  header {
-    background: var(--surface);
-    border-bottom: 2px solid var(--accent);
-    padding: 12px 24px;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-  .logo {
-    width: 32px; height: 32px;
-    background: var(--accent);
-    border-radius: 6px;
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 900; font-size: 16px; color: #fff; flex-shrink: 0;
-  }
-  header h1 { font-size: 16px; font-weight: 600; }
-  header span { font-size: 12px; color: var(--muted); }
-  .theme-btn {
-    margin-left: auto;
-    background: var(--border);
-    border: none; border-radius: 6px;
-    color: var(--text); padding: 6px 12px;
-    cursor: pointer; font-size: 12px;
-  }
-
-  /* ── Filtros ── */
-  .filters {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 14px 24px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    align-items: flex-end;
-  }
-  .field { display: flex; flex-direction: column; gap: 4px; }
-  .field label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
-  .field input, .field select {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    color: var(--text);
-    padding: 7px 10px;
-    font-size: 13px;
-    outline: none;
-    min-width: 140px;
-  }
-  .field input:focus, .field select:focus { border-color: var(--accent); }
-
-  .btn-buscar {
-    background: var(--accent);
-    color: #fff;
-    border: none; border-radius: 6px;
-    padding: 8px 22px;
-    font-size: 13px; font-weight: 600;
-    cursor: pointer;
-    transition: background .15s;
-    align-self: flex-end;
-  }
-  .btn-buscar:hover { background: var(--accent2); }
-  .btn-buscar:disabled { opacity: .5; cursor: not-allowed; }
-
-  .btn-excel {
-    background: var(--green);
-    color: #fff;
-    border: none; border-radius: 6px;
-    padding: 8px 16px;
-    font-size: 13px; font-weight: 600;
-    cursor: pointer;
-    align-self: flex-end;
-    display: none;
-  }
-  .btn-excel:hover { filter: brightness(1.1); }
-
-  /* ── Stats ── */
-  .stats {
-    display: flex;
-    gap: 12px;
-    padding: 12px 24px;
-    flex-wrap: wrap;
-  }
-  .stat {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 18px;
-    min-width: 130px;
-  }
-  .stat-val { font-size: 22px; font-weight: 700; }
-  .stat-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
-  .stat.red .stat-val { color: var(--accent2); }
-  .stat.green .stat-val { color: var(--green); }
-  .stat.yellow .stat-val { color: var(--yellow); }
-  .stat.blue .stat-val { color: var(--blue); }
-
-  /* ── Tabla ── */
-  .table-wrap {
-    padding: 0 24px 24px;
-    overflow-x: auto;
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
-  }
-  thead th {
-    background: var(--surface);
-    border-bottom: 2px solid var(--accent);
-    padding: 10px 12px;
-    text-align: left;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: .5px;
-    color: var(--muted);
-    white-space: nowrap;
-  }
-  tbody tr {
-    border-bottom: 1px solid var(--border);
-    transition: background .1s;
-  }
-  tbody tr:hover { background: var(--surface); }
-  tbody td {
-    padding: 9px 12px;
-    white-space: nowrap;
-  }
-  .badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 600;
-  }
-  .badge-cerrado  { background: #1a3a2a; color: #27ae60; }
-  .badge-anulado  { background: #2d1a1a; color: #e74c3c; }
-  .badge-despacho { background: #1a2540; color: #3498db; }
-  .badge-confirmar{ background: #2d2600; color: #f39c12; }
-  .badge-default  { background: var(--border); color: var(--text); }
-
-  /* ── Estado ── */
-  .estado {
-    padding: 20px 24px;
-    color: var(--muted);
-    font-size: 13px;
-  }
-  .spinner {
-    display: inline-block;
-    width: 14px; height: 14px;
-    border: 2px solid var(--border);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin .6s linear infinite;
-    vertical-align: middle;
-    margin-right: 8px;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .progress-bar {
-    height: 3px;
-    background: var(--border);
-    border-radius: 2px;
-    margin: 8px 0 4px;
-    overflow: hidden;
-    width: 300px;
-    max-width: 100%;
-  }
-  .progress-fill {
-    height: 100%;
-    background: var(--accent);
-    border-radius: 2px;
-    transition: width .2s;
-  }
+  body { background:var(--bg); color:var(--text); font-family:"Segoe UI",system-ui,sans-serif; font-size:13px; }
+  header { background:var(--surface); border-bottom:2px solid var(--red); padding:12px 20px; display:flex; align-items:center; gap:12px; }
+  .logo { width:30px; height:30px; background:var(--red); border-radius:6px; display:flex; align-items:center; justify-content:center; font-weight:900; color:#fff; font-size:15px; flex-shrink:0; }
+  header h1 { font-size:15px; font-weight:600; }
+  header small { color:var(--muted); font-size:11px; }
+  .filters { background:var(--surface); border-bottom:1px solid var(--border); padding:12px 20px; display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; }
+  .field { display:flex; flex-direction:column; gap:4px; }
+  .field label { font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:.5px; }
+  .field select, .field input[type=date] { background:var(--card); border:1px solid var(--border-md); border-radius:6px; color:var(--text); padding:7px 10px; font-size:13px; outline:none; }
+  .field select:focus, .field input:focus { border-color:var(--red); }
+  .btn { border:none; border-radius:6px; padding:8px 20px; font-size:13px; font-weight:600; cursor:pointer; align-self:flex-end; }
+  .btn-red { background:var(--red); color:#fff; }
+  .btn-red:hover { filter:brightness(1.15); }
+  .btn-red:disabled { opacity:.4; cursor:not-allowed; }
+  .btn-green { background:#166534; color:#86efac; display:none; }
+  .btn-green:hover { background:#14532d; }
+  .stats { display:flex; gap:10px; padding:12px 20px; flex-wrap:wrap; }
+  .stat { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 16px; min-width:110px; }
+  .stat-v { font-size:22px; font-weight:700; }
+  .stat-l { font-size:11px; color:var(--muted); margin-top:2px; }
+  .estado { padding:10px 20px; color:var(--muted); font-size:12px; min-height:32px; }
+  .progress { height:3px; background:var(--border); border-radius:2px; margin:6px 0 2px; width:280px; overflow:hidden; }
+  .progress-fill { height:100%; background:var(--red); border-radius:2px; transition:width .2s; }
+  .spinner { display:inline-block; width:12px; height:12px; border:2px solid var(--border); border-top-color:var(--red); border-radius:50%; animation:spin .6s linear infinite; vertical-align:middle; margin-right:6px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .table-wrap { padding:0 20px 30px; overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  thead th { background:var(--surface); border-bottom:2px solid var(--red); padding:9px 10px; text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--dim); white-space:nowrap; }
+  tbody tr { border-bottom:1px solid var(--border); }
+  tbody tr:hover { background:var(--surface); }
+  tbody td { padding:8px 10px; white-space:nowrap; }
+  .badge { display:inline-block; padding:2px 7px; border-radius:4px; font-size:11px; font-weight:600; }
+  .b-cerrado  { background:rgba(74,222,128,.15);  color:#4ade80; }
+  .b-anulado  { background:rgba(248,113,113,.15); color:#f87171; }
+  .b-despacho { background:rgba(96,165,250,.15);  color:#60a5fa; }
+  .b-pendiente{ background:rgba(252,211,77,.15);  color:#fcd34d; }
+  .b-default  { background:rgba(255,255,255,.07); color:var(--muted); }
 </style>
 </head>
 <body>
 
 <header>
   <div class="logo">R</div>
-  <div>
-    <h1>Reporte de Operaciones</h1>
-    <span>RDT · REDTEC S.A.</span>
-  </div>
-  <button class="theme-btn" onclick="toggleTheme()">☀ Tema</button>
+  <div><h1>Reporte de Emisiones</h1><small>RDT · REDTEC S.A.</small></div>
 </header>
 
 <div class="filters">
   <div class="field">
-    <label>Tipo Operación</label>
+    <label>Operacion</label>
     <select id="tipoOp">
       <option value="">Todas</option>
-      <option value="Emision" selected>Emisión</option>
-      <option value="Recepcion">Recepción</option>
+      <option value="Emision" selected>Emision</option>
+      <option value="Recepcion">Recepcion</option>
       <option value="Traslado">Traslado</option>
     </select>
   </div>
-  <div class="field">
-    <label>Desde</label>
-    <input type="date" id="desde">
-  </div>
-  <div class="field">
-    <label>Hasta</label>
-    <input type="date" id="hasta">
-  </div>
-  <div class="field">
-    <label>X-Api-Key</label>
-    <input type="password" id="token" placeholder="m2s_live_..." style="min-width:220px">
-  </div>
-  <button class="btn-buscar" id="btnBuscar" onclick="buscar()">Consultar</button>
-  <button class="btn-excel" id="btnExcel" onclick="exportarExcel()">⬇ Excel</button>
+  <div class="field"><label>Desde</label><input type="date" id="desde"></div>
+  <div class="field"><label>Hasta</label><input type="date" id="hasta"></div>
+  <button class="btn btn-red" id="btnBuscar" onclick="buscar()">Consultar</button>
+  <button class="btn btn-green" id="btnExcel" onclick="exportarExcel()">Descargar Excel</button>
 </div>
 
 <div class="stats" id="stats" style="display:none">
-  <div class="stat blue">
-    <div class="stat-val" id="sTot">0</div>
-    <div class="stat-lbl">Total</div>
-  </div>
-  <div class="stat green">
-    <div class="stat-val" id="sCerrado">0</div>
-    <div class="stat-lbl">Cerrados</div>
-  </div>
-  <div class="stat yellow">
-    <div class="stat-val" id="sPend">0</div>
-    <div class="stat-lbl">Pendientes</div>
-  </div>
-  <div class="stat red">
-    <div class="stat-val" id="sAnul">0</div>
-    <div class="stat-lbl">Anulados</div>
-  </div>
-  <div class="stat">
-    <div class="stat-val" id="sSinDte">0</div>
-    <div class="stat-lbl">Sin DTE</div>
-  </div>
+  <div class="stat"><div class="stat-v" id="sTot">0</div><div class="stat-l">Total</div></div>
+  <div class="stat"><div class="stat-v" style="color:var(--green)" id="sCerr">0</div><div class="stat-l">Cerrados</div></div>
+  <div class="stat"><div class="stat-v" style="color:var(--yellow)" id="sPend">0</div><div class="stat-l">Pendientes</div></div>
+  <div class="stat"><div class="stat-v" style="color:#f87171" id="sAnul">0</div><div class="stat-l">Anulados</div></div>
+  <div class="stat"><div class="stat-v" style="color:var(--dim)" id="sSinDte">0</div><div class="stat-l">Sin DTE</div></div>
 </div>
 
 <div class="estado" id="estado"></div>
 
 <div class="table-wrap">
   <table id="tabla" style="display:none">
-    <thead>
-      <tr>
-        <th>Nro Pedido</th>
-        <th>Operación</th>
-        <th>Etapa</th>
-        <th>DTE Nro</th>
-        <th>Cliente Destino</th>
-        <th>Bodega Destino</th>
-        <th>Cant. Sol.</th>
-        <th>Usuario Creador</th>
-        <th>Fecha Creación</th>
-      </tr>
-    </thead>
+    <thead><tr>
+      <th>Nro Pedido</th><th>Operacion</th><th>Etapa</th><th>DTE Nro</th>
+      <th>Cliente Destino</th><th>Bodega Destino</th><th>Cant. Sol.</th>
+      <th>Usuario Creador</th><th>Fecha Creacion</th>
+    </tr></thead>
     <tbody id="tbody"></tbody>
   </table>
 </div>
 
 <script>
-const BASE = "https://apirdt1.azurewebsites.net/api/RDTOut";
-let datosFinales = [];
+var isDev = (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+var BASE_OPS  = isDev
+  ? 'https://apirdt1.azurewebsites.net/api/RDTOut/opsxrangofechas'
+  : '/proxy/ops';
+var BASE_HIST = isDev
+  ? 'https://apirdt1.azurewebsites.net/api/RDTOut/historialxnropedido'
+  : '/api/historial-proxy';
 
-// Fechas por defecto: hoy
-const hoy = new Date().toISOString().slice(0,10);
-document.getElementById("desde").value = hoy;
-document.getElementById("hasta").value = hoy;
-
-// Token persistente
-const savedToken = localStorage.getItem("rdt_token");
-if (savedToken) document.getElementById("token").value = savedToken;
-
-function getHeaders() {
-  const key = document.getElementById("token").value.trim();
-  if (key) localStorage.setItem("rdt_token", key);
-  return {
-    "Content-Type": "application/json",
-    ...(key ? { "X-Api-Key": key } : {})
-  };
-}
-
-function badgeEtapa(etapa) {
-  const e = etapa?.toLowerCase() ?? "";
-  if (e.includes("cerrado"))   return `<span class="badge badge-cerrado">${etapa}</span>`;
-  if (e.includes("anulado"))   return `<span class="badge badge-anulado">${etapa}</span>`;
-  if (e.includes("despacho"))  return `<span class="badge badge-despacho">${etapa}</span>`;
-  if (e.includes("confirmar")) return `<span class="badge badge-confirmar">${etapa}</span>`;
-  return `<span class="badge badge-default">${etapa ?? "—"}</span>`;
-}
+var datos = [];
+var hoy = new Date().toISOString().slice(0,10);
+document.getElementById('desde').value = hoy;
+document.getElementById('hasta').value = hoy;
 
 function fmtFecha(iso) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return d.toLocaleDateString("es-CL") + " " +
-         d.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
+  if (!iso) return '-';
+  var d = new Date(iso);
+  return d.toLocaleDateString('es-CL') + ' ' + d.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
 }
 
-function setEstado(msg, loading = false, pct = null) {
-  const el = document.getElementById("estado");
-  if (!msg) { el.innerHTML = ""; return; }
-  el.innerHTML = `
-    ${loading ? '<span class="spinner"></span>' : ""}${msg}
-    ${pct !== null ? `
-      <div class="progress-bar"><div class="progress-fill" id="pbar" style="width:${pct}%"></div></div>
-      <small id="pbarTxt"></small>` : ""}
-  `;
+function badge(etapa) {
+  var e = (etapa||'').toLowerCase();
+  var cls = e.indexOf('cerrado')>=0   ? 'b-cerrado'  :
+            e.indexOf('anulado')>=0   ? 'b-anulado'  :
+            e.indexOf('despacho')>=0  ? 'b-despacho' :
+            (e.indexOf('confirmar')>=0 || e.indexOf('pendiente')>=0) ? 'b-pendiente' : 'b-default';
+  return '<span class="badge '+cls+'">'+(etapa||'-')+'</span>';
 }
 
-function updateProgress(i, total) {
-  const pct = Math.round((i / total) * 100);
-  const bar = document.getElementById("pbar");
-  const txt = document.getElementById("pbarTxt");
-  if (bar) bar.style.width = pct + "%";
-  if (txt) txt.textContent = `${i} / ${total} pedidos procesados`;
+function setEstado(msg, loading, pct) {
+  var el = document.getElementById('estado');
+  el.innerHTML = (loading ? '<span class="spinner"></span>' : '') + msg +
+    (pct != null ? '<div class="progress"><div class="progress-fill" id="pbar" style="width:'+pct+'%"></div></div><small id="ptxt"></small>' : '');
+}
+
+function updProg(i, tot) {
+  var b = document.getElementById('pbar');
+  var t = document.getElementById('ptxt');
+  var p = Math.round(i / tot * 100);
+  if (b) b.style.width = p + '%';
+  if (t) t.textContent = i + ' / ' + tot + ' pedidos procesados';
 }
 
 async function buscar() {
-  const desde   = document.getElementById("desde").value;
-  const hasta   = document.getElementById("hasta").value;
-  const tipoOp  = document.getElementById("tipoOp").value;
-  const headers = getHeaders();
+  var desde = document.getElementById('desde').value;
+  var hasta = document.getElementById('hasta').value;
+  var tipo  = document.getElementById('tipoOp').value;
+  if (!desde || !hasta) { alert('Selecciona fechas'); return; }
 
-  if (!desde || !hasta) { alert("Selecciona rango de fechas"); return; }
-
-  document.getElementById("btnBuscar").disabled = true;
-  document.getElementById("tabla").style.display = "none";
-  document.getElementById("btnExcel").style.display = "none";
-  document.getElementById("stats").style.display   = "none";
-  document.getElementById("tbody").innerHTML = "";
-  datosFinales = [];
+  document.getElementById('btnBuscar').disabled = true;
+  document.getElementById('tabla').style.display = 'none';
+  document.getElementById('btnExcel').style.display = 'none';
+  document.getElementById('stats').style.display = 'none';
+  document.getElementById('tbody').innerHTML = '';
+  datos = [];
 
   try {
-    // ── PASO 1: traer operaciones ────────────────────────────────
-    setEstado("Cargando operaciones...", true);
-    const resOps = await fetch(
-      `${BASE}/opsxrangofechas?desde=${desde}&hasta=${hasta}`,
-      { headers }
-    );
-    if (!resOps.ok) throw new Error(`Error ${resOps.status} al cargar operaciones`);
-    const ops = await resOps.json();
+    setEstado('Cargando operaciones...', true);
+    var url = BASE_OPS + '?fechaInicio=' + desde + '&fechaFin=' + hasta;
+    var res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' — ' + res.statusText);
+    var ops = await res.json();
+    if (!Array.isArray(ops)) ops = [ops];
 
-    // ── PASO 2: filtrar por tipo ─────────────────────────────────
-    const filtradas = tipoOp
-      ? ops.filter(op => op.operacion === tipoOp)
-      : ops;
-
-    if (filtradas.length === 0) {
-      setEstado(`Sin resultados para "${tipoOp || 'todas'}" en el rango seleccionado.`);
-      document.getElementById("btnBuscar").disabled = false;
+    var filtradas = tipo ? ops.filter(function(o) { return o.operacion === tipo; }) : ops;
+    if (!filtradas.length) {
+      setEstado('Sin resultados para el rango seleccionado.');
+      document.getElementById('btnBuscar').disabled = false;
       return;
     }
 
-    // ── PASO 3: cruzar con historial ─────────────────────────────
-    setEstado(`Cruzando historial de ${filtradas.length} pedidos...`, true, 0);
+    setEstado('Cruzando historial de ' + filtradas.length + ' pedidos...', true, 0);
 
-    for (let i = 0; i < filtradas.length; i++) {
-      const op = filtradas[i];
-      updateProgress(i, filtradas.length);
+    for (var i = 0; i < filtradas.length; i++) {
+      var op = filtradas[i];
+      updProg(i, filtradas.length);
 
-      let usuarioCreador = op.usuario ?? "—";
-      let fechaCreacion  = op.horaIngreso;
+      var usuarioCreador = op.usuario || '-';
+      var fechaCreacion  = op.horaIngreso;
 
       try {
-        const resH = await fetch(
-          `${BASE}/historialxnropedido?nroPedido=${op.nroPedido}`,
-          { headers }
-        );
-        if (resH.ok) {
-          const hist = await resH.json();
-          const creado = hist.find(h => h.glosaHistorial === "Registro Creado");
-          if (creado) {
-            usuarioCreador = creado.usuario ?? usuarioCreador;
-            fechaCreacion  = creado.fechaCreacionHistorial ?? fechaCreacion;
+        var rh = await fetch(BASE_HIST + '?nroPedido=' + op.nroPedido, { headers: { 'Accept': 'application/json' } });
+        if (rh.ok) {
+          var hist = await rh.json();
+          if (Array.isArray(hist)) {
+            for (var j = 0; j < hist.length; j++) {
+              if (hist[j].glosaHistorial === 'Registro Creado') {
+                usuarioCreador = hist[j].usuario || usuarioCreador;
+                fechaCreacion  = hist[j].fechaCreacionHistorial || fechaCreacion;
+                break;
+              }
+            }
           }
         }
-      } catch (_) { /* usa fallback del op */ }
+      } catch(e) { /* mantiene fallback del op */ }
 
-      datosFinales.push({
+      datos.push({
         nroPedido:      op.nroPedido,
         operacion:      op.operacion,
         etapa:          op.etapaOperacion,
-        dteNro:         op.dteNro !== 0 ? op.dteNro : "Sin DTE",
+        dteNro:         (op.dteNro && op.dteNro !== 0) ? op.dteNro : 'Sin DTE',
         clienteDestino: op.clienteDestinoStr,
         bodegaDestino:  op.bodegaDestinoStr,
         cantSolicitada: op.cantidadSolicitada,
-        usuarioCreador,
-        fechaCreacion,
+        usuarioCreador: usuarioCreador,
+        fechaCreacion:  fechaCreacion
       });
 
-      await new Promise(r => setTimeout(r, 80));
+      await new Promise(function(r) { setTimeout(r, 80); });
     }
 
     renderTabla();
 
-  } catch (err) {
-    setEstado(`⚠ ${err.message}`);
+  } catch(err) {
+    setEstado('Error: ' + err.message);
   } finally {
-    document.getElementById("btnBuscar").disabled = false;
+    document.getElementById('btnBuscar').disabled = false;
   }
 }
 
 function renderTabla() {
-  const tbody = document.getElementById("tbody");
-  tbody.innerHTML = "";
+  var tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  var cerr = 0, anul = 0, sinDte = 0;
 
-  // stats
-  const tot     = datosFinales.length;
-  const cerrado = datosFinales.filter(d => d.etapa?.toLowerCase().includes("cerrado")).length;
-  const anulado = datosFinales.filter(d => d.etapa?.toLowerCase().includes("anulado")).length;
-  const sinDte  = datosFinales.filter(d => d.dteNro === "Sin DTE").length;
-  const pend    = tot - cerrado - anulado;
+  datos.forEach(function(d) {
+    var e = (d.etapa || '').toLowerCase();
+    if (e.indexOf('cerrado') >= 0) cerr++;
+    if (e.indexOf('anulado') >= 0) anul++;
+    if (d.dteNro === 'Sin DTE') sinDte++;
 
-  document.getElementById("sTot").textContent     = tot;
-  document.getElementById("sCerrado").textContent = cerrado;
-  document.getElementById("sPend").textContent    = pend;
-  document.getElementById("sAnul").textContent    = anulado;
-  document.getElementById("sSinDte").textContent  = sinDte;
-  document.getElementById("stats").style.display  = "flex";
-
-  datosFinales.forEach(d => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td><strong>${d.nroPedido}</strong></td>
-      <td>${d.operacion}</td>
-      <td>${badgeEtapa(d.etapa)}</td>
-      <td>${d.dteNro}</td>
-      <td>${d.clienteDestino}</td>
-      <td style="color:var(--muted)">${d.bodegaDestino}</td>
-      <td style="text-align:right">${d.cantSolicitada}</td>
-      <td style="color:var(--yellow)">${d.usuarioCreador}</td>
-      <td style="color:var(--muted)">${fmtFecha(d.fechaCreacion)}</td>
-    `;
+    var tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td><strong>' + d.nroPedido + '</strong></td>' +
+      '<td>' + d.operacion + '</td>' +
+      '<td>' + badge(d.etapa) + '</td>' +
+      '<td>' + d.dteNro + '</td>' +
+      '<td>' + d.clienteDestino + '</td>' +
+      '<td style="color:var(--muted)">' + d.bodegaDestino + '</td>' +
+      '<td style="text-align:right">' + d.cantSolicitada + '</td>' +
+      '<td style="color:var(--yellow)">' + d.usuarioCreador + '</td>' +
+      '<td style="color:var(--muted)">' + fmtFecha(d.fechaCreacion) + '</td>';
     tbody.appendChild(tr);
   });
 
-  document.getElementById("tabla").style.display     = "table";
-  document.getElementById("btnExcel").style.display  = "inline-block";
-  setEstado(`${tot} registro${tot !== 1 ? "s" : ""} encontrado${tot !== 1 ? "s" : ""}.`);
+  document.getElementById('sTot').textContent   = datos.length;
+  document.getElementById('sCerr').textContent  = cerr;
+  document.getElementById('sPend').textContent  = datos.length - cerr - anul;
+  document.getElementById('sAnul').textContent  = anul;
+  document.getElementById('sSinDte').textContent = sinDte;
+  document.getElementById('stats').style.display = 'flex';
+  document.getElementById('tabla').style.display = 'table';
+  document.getElementById('btnExcel').style.display = 'inline-block';
+  setEstado(datos.length + ' registros encontrados.');
 }
 
 function exportarExcel() {
-  if (!datosFinales.length) return;
-
-  const cols = [
-    "Nro Pedido","Operación","Etapa","DTE Nro",
-    "Cliente Destino","Bodega Destino","Cant. Sol.",
-    "Usuario Creador","Fecha Creación"
-  ];
-
-  const esc = v => `"${String(v ?? "").replace(/"/g,'""')}"`;
-
-  const rows = datosFinales.map(d => [
-    d.nroPedido, d.operacion, d.etapa, d.dteNro,
-    d.clienteDestino, d.bodegaDestino, d.cantSolicitada,
-    d.usuarioCreador, fmtFecha(d.fechaCreacion)
-  ].map(esc).join(","));
-
-  const csv = "\uFEFF" + [cols.map(esc).join(","), ...rows].join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement("a");
-  const desde = document.getElementById("desde").value;
-  const hasta = document.getElementById("hasta").value;
-  a.href = url;
-  a.download = `operaciones_${desde}_${hasta}.csv`;
+  if (!datos.length) return;
+  var cols = ['Nro Pedido','Operacion','Etapa','DTE Nro','Cliente Destino','Bodega Destino','Cant. Sol.','Usuario Creador','Fecha Creacion'];
+  var esc = function(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+  var rows = datos.map(function(d) {
+    return [
+      d.nroPedido, d.operacion, d.etapa, d.dteNro,
+      d.clienteDestino, d.bodegaDestino, d.cantSolicitada,
+      d.usuarioCreador, fmtFecha(d.fechaCreacion)
+    ].map(esc).join(',');
+  });
+  var csv = '\uFEFF' + [cols.map(esc).join(',')].concat(rows).join('\n');
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'emisiones_' + document.getElementById('desde').value + '_' + document.getElementById('hasta').value + '.csv';
   a.click();
-  URL.revokeObjectURL(url);
-}
-
-function toggleTheme() {
-  const t = document.documentElement.getAttribute("data-theme");
-  document.documentElement.setAttribute("data-theme", t === "dark" ? "light" : "dark");
 }
 </script>
 </body>

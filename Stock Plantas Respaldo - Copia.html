@@ -651,18 +651,6 @@ function pintarStockDesdeCache(cache){
 }
 
 function cargarStock(){
-  /* ⚠️ HARDCODE TEMPORAL — valores manuales para la reunión 8:30 AM.
-     El JSON del cron no se sirve actualizado en el dashboard.
-     QUITAR este bloque cuando el cron y el deploy se sincronicen. */
-  pintarStockDesdeCache({
-    fecha:    '2026-06-04',
-    clientes: 199070,
-    retail:   549428
-  });
-  console.log('[Stock cierre] ⚠️ HARDCODE TEMPORAL · Cierre 03/06 · Clientes: 199.070 · Retail: 549.428 · Total: 748.498');
-  return;
-  /* ───── FIN HARDCODE ───── */
-
   var dot = document.getElementById('stock-status');
   var pending = document.getElementById('stock-pending');
 

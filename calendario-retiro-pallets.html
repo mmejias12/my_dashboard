@@ -852,6 +852,33 @@ function pintarTotalesMes() {
   if ($('mt-next-val')) $('mt-next-val').textContent = fmtNum(nextTot);
 }
 
+// v9: helper único — calcula el estimado "final" del día con la lógica de cap+carry.
+//   Devuelve también los componentes para mostrar en badges.
+//   Lunes: propio + dom_prev + exceso_sáb_prev (lo que va realmente a retirarse)
+//   Sábado: capped a SABADO_MAX
+//   Resto: igual al estimado base
+function estimadoFinal(key) {
+  var dt  = new Date(key + 'T00:00:00');
+  var dow = dt.getDay();
+  var info = DATA[key];
+  var base = (info && info.total_pallets) || 0;
+  var out = { dow: dow, base: base, estimadoFinal: base, satExcess: 0, carryDom: 0, carryExc: 0 };
+  if (dow === 6 && base > SABADO_MAX) {
+    out.estimadoFinal = SABADO_MAX;
+    out.satExcess     = base - SABADO_MAX;
+  }
+  if (dow === 1) {
+    var prevSun = new Date(dt.getTime() - 86400000);
+    var prevSat = new Date(dt.getTime() - 2*86400000);
+    var dSun = DATA[fmtISO(prevSun)], dSat = DATA[fmtISO(prevSat)];
+    out.carryDom = (dSun && dSun.total_pallets) || 0;
+    var satEst   = (dSat && dSat.total_pallets) || 0;
+    out.carryExc = Math.max(0, satEst - SABADO_MAX);
+    out.estimadoFinal = base + out.carryDom + out.carryExc;
+  }
+  return out;
+}
+
 function renderCalendar() {
   $('month-label').textContent = MESES[viewMonth] + ' ' + viewYear;
   pintarTotalesMes();
@@ -888,25 +915,13 @@ function renderCalendar() {
     var key  = fmtISO(dt);
     var info = DATA[key];
 
-    // ── v9: cálculos de carry y cap ─────────────────────────────────────
-    var estimadoBase    = info ? (info.total_pallets || 0) : 0;
-    var estimadoMostrar = estimadoBase;   // lo que aparece como "estimado" del día
-    var satExcess       = 0;              // exceso del propio sábado (informativo)
-    var carryDom        = 0;              // domingo previo (solo lunes)
-    var carryExc        = 0;              // exceso sábado previo (solo lunes)
-
-    if (dow === 6 && estimadoBase > SABADO_MAX) {
-      estimadoMostrar = SABADO_MAX;
-      satExcess       = estimadoBase - SABADO_MAX;
-    }
-    if (dow === 1) {
-      var prevSun = new Date(dt.getTime() - 86400000);
-      var prevSat = new Date(dt.getTime() - 2*86400000);
-      var kSun = fmtISO(prevSun), kSat = fmtISO(prevSat);
-      carryDom = (DATA[kSun] && DATA[kSun].total_pallets) || 0;
-      var satEst = (DATA[kSat] && DATA[kSat].total_pallets) || 0;
-      carryExc = Math.max(0, satEst - SABADO_MAX);
-    }
+    // ── v9: usa el helper único ────────────────────────────────────────
+    var ef = estimadoFinal(key);
+    var estimadoBase    = ef.base;
+    var estimadoMostrar = ef.estimadoFinal;   // sábado capped / lunes con suma / resto = base
+    var satExcess       = ef.satExcess;
+    var carryDom        = ef.carryDom;
+    var carryExc        = ef.carryExc;
 
     // ── v9: proyección gerencial (verde) — sólo lun..vie ────────────────
     var proyGerencia = 0;
@@ -917,7 +932,7 @@ function renderCalendar() {
 
     var div = document.createElement('div');
     div.className = 'day';
-    var totalDia = estimadoMostrar + carryDom + carryExc;
+    var totalDia = estimadoMostrar;  // v9: ya incluye carry en lunes y cap en sábado
     if (info || totalDia > 0) {
       div.classList.add('has-data');
       div.classList.add(heatClass(totalDia));
@@ -943,7 +958,7 @@ function renderCalendar() {
       }
     } else if (carryDom > 0 || carryExc > 0) {
       // Lunes sin transferencias propias pero con carry desde el fin de semana
-      html += '<div class="day-data"><div class="day-pallets">' + fmtNum(carryDom + carryExc) + '</div>' +
+      html += '<div class="day-data"><div class="day-pallets">' + fmtNum(estimadoMostrar) + '</div>' +
               '<div class="day-retails">desde fin de semana</div></div>';
     }
 
@@ -1027,23 +1042,26 @@ function selectDate(key) {
   selectedDate = key;
   var info = DATA[key];
   var real = RETIROS_REALES[key];
-  if (!info && !real) return;
+  // v9: el helper ya considera carry y cap; si no hay nada que mostrar, salir
+  var ef = estimadoFinal(key);
+  if (!info && !real && ef.estimadoFinal <= 0) return;
   var dt = new Date(key + 'T00:00:00');
   $('detail-title').textContent = '📦 Retiros para ' + dt.getDate() + ' de ' + MESES[dt.getMonth()];
   $('detail-date').textContent  = dt.toLocaleDateString('es-CL', { weekday: 'long' }) + ' · ' + key;
   $('detail-summary').style.display = 'grid';
   $('search-box').style.display = 'block';
-  $('ds-pallets').textContent = info ? fmtNum(info.total_pallets) : '0';
+  // v9: el "pallets a retirar" es el estimado FINAL (sábado capped, lunes con carry)
+  $('ds-pallets').textContent = fmtNum(ef.estimadoFinal);
   $('ds-trf').textContent     = info ? fmtNum(info.total_trf) : '0';
   // Sección "Real retirado según M3Link" — agrega contexto para validar
-  renderRealRetirado(key, real, info);
+  renderRealRetirado(key, real, info, ef);
   renderRetails(info ? info.retails : [], '');
   renderCalendar();
 }
 
 // Renderiza la sección de retiros reales en el panel lateral del día
 // Muestra TRES KPIs: Confirmado (cantSolicitada) · Retirado (cantConfirmada) · Estimado calendario
-function renderRealRetirado(key, real, info) {
+function renderRealRetirado(key, real, info, ef) {
   var cont = $('real-section');
   if (!cont) return;
   var confirmado = real ? (real.total_palletsConfirmado || 0) : 0;
@@ -1053,15 +1071,30 @@ function renderRealRetirado(key, real, info) {
     return;
   }
   var todayStr = fmtISO(new Date());
-  var palletsEst = info ? info.total_pallets : 0;
+  // v9: usar el estimado FINAL (cap sábado / suma lunes), no el bruto
+  if (!ef) ef = estimadoFinal(key);
+  var palletsEst = ef.estimadoFinal;
   var estado = key > todayStr ? 'futuro' : (key === todayStr ? 'hoy' : 'pasado');
 
   // % ejecución del día: retirado / confirmado
   var pctEjec = confirmado > 0 ? Math.round((retirado / confirmado) * 100) : null;
-  // % cumplimiento vs estimado calendario: confirmado / estimado
+  // % cumplimiento vs estimado final: confirmado / estimadoFinal
   var pctCalCumpl = palletsEst > 0 ? Math.round((confirmado / palletsEst) * 100) : null;
 
   var ejecLabel = estado === 'futuro' ? 'pendiente' : (estado === 'hoy' ? 'ejecutado hoy' : 'cumplimiento');
+
+  // v9: sub-texto del estimado — explica composición si hay cap/carry
+  var estSub;
+  if (ef.dow === 6 && ef.satExcess > 0) {
+    estSub = 'tope sáb · ' + fmtNum(ef.satExcess) + ' va al lun';
+  } else if (ef.dow === 1 && (ef.carryDom > 0 || ef.carryExc > 0)) {
+    var partes = [fmtNum(ef.base) + ' propio'];
+    if (ef.carryDom > 0) partes.push(fmtNum(ef.carryDom) + ' dom');
+    if (ef.carryExc > 0) partes.push(fmtNum(ef.carryExc) + ' sáb');
+    estSub = partes.join(' + ');
+  } else {
+    estSub = pctCalCumpl != null ? pctCalCumpl + '% vs estimado' : (info ? fmtNum(info.total_trf) + ' trf cerradas' : '—');
+  }
 
   var html =
     '<div class="real-header">' +
@@ -1081,11 +1114,11 @@ function renderRealRetirado(key, real, info) {
         '<span class="rk-val">' + fmtNum(retirado) + '</span>' +
         '<span class="rk-sub">' + (pctEjec != null ? pctEjec + '% ' + ejecLabel : '—') + '</span>' +
       '</div>' +
-      // KPI 3: ESTIMADO CALENDARIO (nuestro modelo)
+      // KPI 3: ESTIMADO CALENDARIO (FINAL: con cap sáb / suma lun)
       '<div class="real-kpi">' +
         '<span class="rk-lbl">📅 Estimado calendario</span>' +
-        '<span class="rk-val">' + (info ? fmtNum(info.total_pallets) : '0') + '</span>' +
-        '<span class="rk-sub">' + (pctCalCumpl != null ? pctCalCumpl + '% vs estimado' : (info ? fmtNum(info.total_trf) + ' trf cerradas' : '—')) + '</span>' +
+        '<span class="rk-val">' + fmtNum(palletsEst) + '</span>' +
+        '<span class="rk-sub">' + estSub + '</span>' +
       '</div>' +
     '</div>';
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Stock Plantas Respaldo - Copia 1 DEMO — REDTEC 2026</title>
+<title>Stock Plantas Respaldo - Copia DEMO — REDTEC 2026</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -153,7 +153,7 @@
   <span class="logo-sep"></span>
   <span class="topbar-title">
     <span class="live-dot"></span>
-    Stock Plantas Respaldo - Copia 1
+    Stock Plantas Respaldo - Copia
   </span>
   <span class="demo-badge">DEMO</span>
   <div class="topbar-right">
@@ -651,6 +651,16 @@ function pintarStockDesdeCache(cache){
 }
 
 function cargarStock(){
+  /* ⚠️ HARDCODE TEMPORAL — valores manuales para la reunión 8:30 AM. */
+  pintarStockDesdeCache({
+    fecha:    '2026-06-09',
+    clientes: 197496,
+    retail:   549505
+  });
+  console.log('[Stock cierre] ⚠️ HARDCODE · Cierre 09/06 · Clientes: 197.496 · Retail: 549.505 · Total: 747.001');
+  return;
+  /* ───── FIN HARDCODE ───── */
+
   var dot = document.getElementById('stock-status');
   var pending = document.getElementById('stock-pending');
 

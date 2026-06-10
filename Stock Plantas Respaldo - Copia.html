@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Stock Plantas Respaldo - Copia 2 DEMO — REDTEC 2026</title>
+<title>Stock Plantas Respaldo - Copia DEMO — REDTEC 2026</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -153,7 +153,7 @@
   <span class="logo-sep"></span>
   <span class="topbar-title">
     <span class="live-dot"></span>
-    Stock Plantas Respaldo - Copia 2
+    Stock Plantas Respaldo - Copia
   </span>
   <span class="demo-badge">DEMO</span>
   <div class="topbar-right">
@@ -650,26 +650,33 @@ function pintarStockDesdeCache(cache){
   }
 }
 
-function cargarStock(){
+function cargarStock(forceRefresh){
   var dot = document.getElementById('stock-status');
   var pending = document.getElementById('stock-pending');
 
   var ayerStr = fmtDate(diasOffset(-1));
 
-  /* Si hay cache de sessionStorage para esta fecha, usarlo (instantáneo) */
-  try {
-    var cachedRaw = sessionStorage.getItem(SS_CACHE_KEY);
-    if (cachedRaw) {
-      var cached = JSON.parse(cachedRaw);
-      if (cached && cached.fecha === ayerStr) {
-        pintarStockDesdeCache(cached);
-        console.log('[Stock cierre] Cache sessionStorage:', ayerStr,
-                    '| Clientes:', cached.clientes, '| Retail:', cached.retail);
-        return;
+  /* Cache solo se usa si:
+     1. forceRefresh NO está activo (auto-refresh siempre fuerza)
+     2. La fecha del cache coincide con "ayer real" del cliente */
+  if (!forceRefresh) {
+    try {
+      var cachedRaw = sessionStorage.getItem(SS_CACHE_KEY);
+      if (cachedRaw) {
+        var cached = JSON.parse(cachedRaw);
+        if (cached && cached.fecha === ayerStr) {
+          pintarStockDesdeCache(cached);
+          console.log('[Stock cierre] Cache sessionStorage OK:', ayerStr,
+                      '| Clientes:', cached.clientes, '| Retail:', cached.retail);
+          return;
+        }
+        console.log('[Stock cierre] Cache descartado: fecha cache =', cached && cached.fecha, '≠ ayer =', ayerStr);
+        sessionStorage.removeItem(SS_CACHE_KEY);
       }
-      sessionStorage.removeItem(SS_CACHE_KEY);
-    }
-  } catch(e){ console.warn('sessionStorage no disponible:', e); }
+    } catch(e){ console.warn('sessionStorage no disponible:', e); }
+  } else {
+    console.log('[Stock cierre] Refresh forzado, ignorando cache');
+  }
 
   /* Sin cache: leer el JSON estático */
   if (dot) { dot.style.background = '#fcd34d'; dot.title = 'Leyendo snapshot…'; }
@@ -770,9 +777,11 @@ document.addEventListener('DOMContentLoaded', function(){
 
 /* Recargar cada 5 minutos (300000ms) para mantener datos frescos */
 setInterval(cargarMovimientos, 300000);
-/* NO se hace setInterval para cargarStock: el stock del cierre de ayer es un dato
-   inmutable durante la sesión. Solo se vuelve a consultar si el usuario cierra
-   el navegador (sessionStorage se borra) o si cambia el día calendario. */
+/* Auto-refresh del stock cierre ayer cada 5 min. Pasa forceRefresh=true para
+   ignorar el sessionStorage e ir directo al JSON. Esto resuelve el problema
+   de cuando el cron de las 5 AM ya generó dato nuevo pero el navegador
+   sigue mostrando el cacheado. */
+setInterval(function(){ cargarStock(true); }, 300000);
 </script>
 
 </body>

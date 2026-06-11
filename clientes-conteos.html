@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Redtec | Gestión de Clientes y Conteos</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
     <style>
         :root {
             /* TEMA CLARO (default) */
@@ -180,6 +181,22 @@
         .empty-icon { font-size:48px; margin-bottom:12px; }
         .hidden { display:none !important; }
         @media(max-width:768px) { .main{padding:16px} .form-grid{grid-template-columns:1fr} .section-header{flex-direction:column;align-items:flex-start} }
+
+    /* === Alerta vencimientos conciliación (banner descartable) === */
+    .expiry-banner { background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); border: 2px solid #ef4444; border-radius: var(--radius); padding: 14px 20px; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 14px; box-shadow: 0 2px 8px rgba(239,68,68,0.18); animation: bannerSlide 0.3s ease; }
+    @keyframes bannerSlide { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }
+    .expiry-banner-icon { font-size: 24px; flex-shrink: 0; margin-top: 2px; }
+    .expiry-banner-body { flex: 1; }
+    .expiry-banner-title { font-size: 15px; font-weight: 800; color: #991b1b; margin-bottom: 6px; }
+    .expiry-banner-list { font-size: 13px; color: #7f1d1d; line-height: 1.7; max-height: 200px; overflow-y: auto; }
+    .expiry-banner-list span { background: #fca5a5; border-radius: 4px; padding: 1px 7px; margin-right: 6px; font-weight: 700; white-space: nowrap; display: inline-block; }
+    .expiry-banner-close { background: none; border: none; color: #991b1b; font-size: 18px; cursor: pointer; padding: 2px 6px; border-radius: 4px; flex-shrink: 0; line-height: 1; }
+    .expiry-banner-close:hover { background: #fca5a5; }
+
+    /* Badges de fecha de vencimiento (en tabla) */
+    .date-expired { color: #dc2626; font-weight: 700; background: #fee2e2; padding: 2px 8px; border-radius: 10px; white-space: nowrap; font-size: 12px; }
+    .date-ok { color: #065f46; font-weight: 600; white-space: nowrap; font-size: 12px; }
+    .date-soon { color: #92400e; font-weight: 600; background: #fef3c7; padding: 2px 8px; border-radius: 10px; white-space: nowrap; font-size: 12px; }
     </style>
 </head>
 <body>
@@ -318,6 +335,9 @@
 
     <!-- TAB RESULTADOS -->
     <div id="tab-resultados" class="hidden">
+        <!-- Banner de vencimientos de conciliación (se llena dinámicamente, se oculta si no hay) -->
+        <div id="expiryBanner" style="display:none;"></div>
+
         <div class="section-header">
             <div class="section-left">
                 <h2 class="section-title">Resultado Conteos</h2>
@@ -355,6 +375,7 @@
                     <th style="text-align:right;">Pendientes 2024</th>
                     <th style="text-align:right;">Dif. Total</th>
                     <th>Estado Dif.</th>
+                    <th>Vencimiento Conciliación</th>
                     <th>Observaciones</th>
                     <th>Acciones</th>
                 </tr></thead>
@@ -374,7 +395,10 @@
                 <h2 class="section-title">Análisis de Diferencias (SAP vs Físico)</h2>
                 <span class="record-count" id="kpiCount">—</span>
             </div>
-            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                <select class="filter-select" id="fKpiAnio" onchange="renderKPI()">
+                    <option value="">Todos los años</option>
+                </select>
                 <select class="filter-select" id="fKpiEjec" onchange="renderKPI()">
                     <option value="">Todos los ejecutivos</option>
                     <option>Rodrigo S.</option><option>Jaqueline M.</option><option>Catalina J.</option>
@@ -386,19 +410,38 @@
             </div>
         </div>
 
-        <div class="stats-grid" id="kpiStatsGrid" style="margin-bottom:20px;"></div>
+        <!-- Tarjetas resumen KPI -->
+        <div class="stats-grid" id="kpiSummaryGrid" style="margin-bottom:24px;"></div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;" id="kpiChartsWrap">
-            <div class="config-card">
-                <div class="config-title">Faltantes vs Sobrantes</div>
-                <div id="kpiBarFS"></div>
-            </div>
-            <div class="config-card">
-                <div class="config-title">Diferencia total por cliente (Top 10 en magnitud)</div>
-                <div id="kpiBarCliente"></div>
+        <!-- Gráfico de barras: avance mensual -->
+        <div style="background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px 28px;margin-bottom:24px;">
+            <div style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:4px;">Avance mensual por estado</div>
+            <div style="font-size:12px;color:var(--text-light);margin-bottom:20px;">Cantidad de conteos por mes, desglosados por estado</div>
+            <div style="position:relative;height:360px;">
+                <canvas id="kpiBarChart"></canvas>
             </div>
         </div>
 
+        <!-- Tabla de detalle por mes -->
+        <div style="background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px 28px;margin-bottom:24px;">
+            <div style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:16px;">Detalle por mes</div>
+            <div style="overflow:auto;">
+                <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                    <thead>
+                        <tr>
+                            <th style="background:var(--primary);color:white;padding:10px 14px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-radius:8px 0 0 0;">Mes</th>
+                            <th style="background:var(--primary);color:white;padding:10px 14px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Total</th>
+                            <th style="background:var(--primary);color:white;padding:10px 14px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Programado</th>
+                            <th style="background:var(--primary);color:white;padding:10px 14px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Pendientes Resp.</th>
+                            <th style="background:var(--primary);color:white;padding:10px 14px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-radius:0 8px 0 0;">Realizado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="kpiTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Tabla de detalle de diferencias por ítem (se mantiene del diseño original) -->
         <div class="config-card" style="margin-bottom:20px;">
             <div class="config-title">Exactitud de inventario por ejecutivo</div>
             <div class="table-wrapper" style="box-shadow:none;">
@@ -983,6 +1026,10 @@ function renderResultados() {
         let totalClass = difTotal > 0 ? "diff-pos" : difTotal < 0 ? "diff-neg" : "diff-zero";
         let totalLabel = difTotal > 0 ? "Sobrante" : difTotal < 0 ? "Faltante" : "Exacto";
         let totalBadge = difTotal > 0 ? "b-real" : difTotal < 0 ? "b-pend" : "b-prog";
+
+        /* Vencimiento conciliación = fechaConteo + 30 días */
+        const venc = calcVencimientoConciliacion(r.fecha);
+
         return `<tr>
             <td style="color:#6b7a90;font-size:12px;">${i+1}</td>
             <td><strong style="font-size:12px;">${esc(r.cliente)}</strong></td>
@@ -994,6 +1041,7 @@ function renderResultados() {
             <td style="text-align:right;"><span style="color:#7c3aed;font-weight:700;">${pend2024 !== 0 ? "-"+pend2024.toLocaleString("es-CL") : "—"}</span></td>
             <td style="text-align:right;"><span class="${totalClass}">${difTotal >= 0 ? "+" : ""}${difTotal.toLocaleString("es-CL")}</span></td>
             <td><span class="badge ${totalBadge}">${totalLabel}</span><br><span style="font-size:11px;color:var(--text-light);">${esc(r.porcentaje)}</span></td>
+            <td>${venc.html}</td>
             <td style="font-size:12px;max-width:180px;">${esc(r.obs)}</td>
             <td><div class="actions-cell">
                 <button class="btn-icon edit" onclick="openModalResultado(${r.id})" title="Editar">✏️</button>
@@ -1001,6 +1049,86 @@ function renderResultados() {
             </div></td>
         </tr>`;
     }).join("");
+
+    /* Actualizar banner de vencimientos después de renderizar la tabla */
+    updateExpiryBanner();
+}
+
+/* ====================================================================
+   VENCIMIENTO DE CONCILIACIÓN
+   Plazo fijo: 30 días desde la fecha del conteo.
+   - Vencido (< hoy):    badge rojo
+   - Por vencer ≤ 5 días: badge amarillo
+   - OK (resto):         badge verde
+   ==================================================================== */
+const PLAZO_CONCILIACION_DIAS = 30;
+const MESES_CORTO = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+
+function parseConteoDate(fechaStr) {
+    if (!fechaStr) return null;
+    /* Acepta formatos: "DD/MM/YYYY", "YYYY-MM-DD", "DD-MM-YYYY", "23 abr 2026" */
+    const s = String(fechaStr).trim();
+    let d = null;
+    /* YYYY-MM-DD */
+    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) d = new Date(+m[1], +m[2]-1, +m[3]);
+    /* DD/MM/YYYY o DD-MM-YYYY */
+    if (!d) {
+        m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+        if (m) d = new Date(+m[3], +m[2]-1, +m[1]);
+    }
+    /* "23 abr 2026" */
+    if (!d) {
+        m = s.match(/^(\d{1,2})\s+([a-zñ]{3,})\s+(\d{4})/i);
+        if (m) {
+            const mi = MESES_CORTO.indexOf(m[2].substring(0,3).toLowerCase());
+            if (mi >= 0) d = new Date(+m[3], mi, +m[1]);
+        }
+    }
+    if (d && !isNaN(d.getTime())) { d.setHours(0,0,0,0); return d; }
+    return null;
+}
+
+function calcVencimientoConciliacion(fechaConteo) {
+    const d = parseConteoDate(fechaConteo);
+    if (!d) return { html: '<span style="color:#9ca3af;font-size:12px;">—</span>', expired: false, soon: false, date: null };
+    const exp = new Date(d); exp.setDate(exp.getDate() + PLAZO_CONCILIACION_DIAS);
+    const today = new Date(); today.setHours(0,0,0,0);
+    const diff = Math.floor((exp - today) / 86400000);
+    const formatted = `${exp.getDate()} ${MESES_CORTO[exp.getMonth()]} ${exp.getFullYear()}`;
+    if (diff < 0)   return { html: `<span class="date-expired">⚠ ${formatted}</span>`, expired: true,  soon: false, date: exp };
+    if (diff <= 5)  return { html: `<span class="date-soon">⏱ ${formatted}</span>`,    expired: false, soon: true,  date: exp };
+    return            { html: `<span class="date-ok">✓ ${formatted}</span>`,           expired: false, soon: false, date: exp };
+}
+
+function updateExpiryBanner() {
+    const banner = g('expiryBanner');
+    if (!banner) return;
+
+    /* Buscar todos los resultados con vencimiento vencido */
+    const vencidos = resultados.map(r => ({ r, venc: calcVencimientoConciliacion(r.fecha) }))
+                               .filter(x => x.venc.expired);
+
+    if (!vencidos.length) {
+        banner.style.display = 'none';
+        banner.innerHTML = '';
+        return;
+    }
+
+    const items = vencidos.map(({ r, venc }) => {
+        const expStr = `${venc.date.getDate()} ${MESES_CORTO[venc.date.getMonth()]} ${venc.date.getFullYear()}`;
+        return `<div style="margin-bottom:3px;"><span>Venció ${expStr}</span>${esc(r.cliente)} — ${esc(r.item || '')}</div>`;
+    }).join('');
+
+    banner.style.display = 'block';
+    banner.innerHTML = `<div class="expiry-banner">
+        <div class="expiry-banner-icon">🔴</div>
+        <div class="expiry-banner-body">
+            <div class="expiry-banner-title">⚠ ${vencidos.length} inventario${vencidos.length>1?'s':''} con plazo de conciliación vencido</div>
+            <div class="expiry-banner-list">${items}</div>
+        </div>
+        <button class="expiry-banner-close" onclick="this.closest('.expiry-banner').parentElement.style.display='none'" title="Cerrar">✕</button>
+    </div>`;
 }
 
 // ================================================================
@@ -1261,50 +1389,149 @@ function miniBar(rows){
         </div>`;
     }).join("") || `<div style="color:var(--text-light);font-size:13px;">Sin datos</div>`;
 }
+/* ====================================================================
+   KPI - VARIABLES Y CONSTANTES
+   ==================================================================== */
+let kpiChartInstance = null;
+const MESES_ORDER = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const MESES_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+/* Heurística para detectar año en un registro (busca '20XX' en la fecha) */
+function _kpiAnioOf(r) {
+    if (r.fecha) {
+        const m = String(r.fecha).match(/\b(20\d{2})\b/);
+        if (m) return m[1];
+    }
+    return null;
+}
+
+function _kpiInicAnioFilter() {
+    const sel = g("fKpiAnio");
+    if (!sel) return;
+    /* Solo poblar la primera vez */
+    if (sel.options.length > 1) return;
+    const anios = new Set();
+    resultados.forEach(r => { const a = _kpiAnioOf(r); if (a) anios.add(a); });
+    [...anios].sort((a,b) => +b - +a).forEach(a => {
+        const o = document.createElement("option"); o.value = a; o.textContent = a; sel.appendChild(o);
+    });
+}
+
 function renderKPI(){
-    // poblar filtro de clientes una vez
-    const selCl=g("fKpiCliente");
-    if(selCl.options.length<=1){
+    // poblar filtros una vez
+    _kpiInicAnioFilter();
+    const selCl = g("fKpiCliente");
+    if (selCl && selCl.options.length <= 1) {
         [...new Set(resultados.map(r=>r.cliente).filter(Boolean))].sort().forEach(c=>{
             const o=document.createElement("option"); o.value=c; o.textContent=c; selCl.appendChild(o);
         });
     }
-    const f=kpiFiltered();
-    g("kpiCount").textContent=`${f.length} ítems`;
 
-    const totItems=f.length;
-    const exactos=f.filter(r=>kpiTotal(r)===0).length;
-    const faltItems=f.filter(r=>kpiTotal(r)<0).length;
-    const sobrItems=f.filter(r=>kpiTotal(r)>0).length;
-    const unidFalt=f.filter(r=>kpiTotal(r)<0).reduce((s,r)=>s+Math.abs(kpiTotal(r)),0);
-    const unidSobr=f.filter(r=>kpiTotal(r)>0).reduce((s,r)=>s+kpiTotal(r),0);
-    const difNeta=f.reduce((s,r)=>s+kpiTotal(r),0);
-    const impactoAbs=f.reduce((s,r)=>s+Math.abs(kpiTotal(r)),0);
-    const exactPct=totItems?((exactos/totItems)*100).toFixed(1):"0";
+    const anioFilt = g("fKpiAnio") ? g("fKpiAnio").value : "";
+    const f = kpiFiltered().filter(r => !anioFilt || _kpiAnioOf(r) === anioFilt);
+    g("kpiCount").textContent = `${f.length} ítems`;
 
-    g("kpiStatsGrid").innerHTML=`
+    /* ─── Tarjetas resumen ─── */
+    const totItems = f.length;
+    const exactos  = f.filter(r => kpiTotal(r) === 0).length;
+    const faltItems = f.filter(r => kpiTotal(r) < 0).length;
+    const sobrItems = f.filter(r => kpiTotal(r) > 0).length;
+    const unidFalt = f.filter(r => kpiTotal(r) < 0).reduce((s,r) => s + Math.abs(kpiTotal(r)), 0);
+    const unidSobr = f.filter(r => kpiTotal(r) > 0).reduce((s,r) => s + kpiTotal(r), 0);
+    const difNeta  = f.reduce((s,r) => s + kpiTotal(r), 0);
+    const exactPct = totItems ? ((exactos / totItems) * 100).toFixed(1) : "0";
+
+    g("kpiSummaryGrid").innerHTML = `
         <div class="stat-card total"><div class="stat-value">${totItems}</div><div class="stat-label">Ítems analizados</div></div>
         <div class="stat-card real"><div class="stat-value">${exactPct}%</div><div class="stat-label">Exactitud (sin dif.)</div></div>
         <div class="stat-card pend"><div class="stat-value">${faltItems}</div><div class="stat-label">Ítems con faltante</div></div>
         <div class="stat-card prog"><div class="stat-value">${sobrItems}</div><div class="stat-label">Ítems con sobrante</div></div>
-        <div class="stat-card espe"><div class="stat-value">${difNeta>=0?"+":""}${difNeta.toLocaleString("es-CL")}</div><div class="stat-label">Dif. neta (u.)</div></div>`;
+        <div class="stat-card espe" style="border-top-color:#7c3aed;"><div class="stat-value" style="color:#7c3aed;">${difNeta>=0?"+":""}${difNeta.toLocaleString("es-CL")}</div><div class="stat-label">Dif. neta (u.)</div></div>`;
 
-    // Gráfico faltantes vs sobrantes (en unidades)
-    g("kpiBarFS").innerHTML=miniBar([
-        {label:"Faltante (u.)", value:unidFalt, color:"var(--error)"},
-        {label:"Sobrante (u.)", value:unidSobr, color:"var(--success)"},
-        {label:"Impacto total", value:impactoAbs, color:"var(--info)"}
-    ]);
+    /* ─── Agrupar por mes (usar parseConteoDate para el mes real, no string) ─── */
+    const byMes = {};
+    MESES_ORDER.forEach(m => { byMes[m] = { exactos:0, faltante:0, sobrante:0, total:0 }; });
+    f.forEach(r => {
+        const d = parseConteoDate(r.fecha);
+        if (!d) return;
+        const mesName = MESES_ORDER[d.getMonth()];
+        const t = kpiTotal(r);
+        byMes[mesName].total++;
+        if (t === 0) byMes[mesName].exactos++;
+        else if (t < 0) byMes[mesName].faltante++;
+        else byMes[mesName].sobrante++;
+    });
+    const activeMeses = MESES_ORDER.filter(m => byMes[m].total > 0);
 
-    // Top 10 clientes por magnitud de diferencia total
-    const porCliente={};
-    f.forEach(r=>{ porCliente[r.cliente]=(porCliente[r.cliente]||0)+kpiTotal(r); });
-    const topCli=Object.entries(porCliente)
-        .sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).slice(0,10)
-        .map(([label,value])=>({label, value, color: value<0?"var(--error)":value>0?"var(--success)":"var(--text-light)"}));
-    g("kpiBarCliente").innerHTML=miniBar(topCli);
+    /* ─── Gráfico de barras ─── */
+    if (kpiChartInstance) { kpiChartInstance.destroy(); kpiChartInstance = null; }
+    const canvas = document.getElementById("kpiBarChart");
+    if (canvas && activeMeses.length) {
+        const labels    = activeMeses.map(m => MESES_SHORT[MESES_ORDER.indexOf(m)]);
+        const dExactos  = activeMeses.map(m => byMes[m].exactos);
+        const dFaltante = activeMeses.map(m => byMes[m].faltante);
+        const dSobrante = activeMeses.map(m => byMes[m].sobrante);
+        kpiChartInstance = new Chart(canvas.getContext("2d"), {
+            type: "bar",
+            data: {
+                labels,
+                datasets: [
+                    { label: "Exactos",  data: dExactos,  backgroundColor: "#10b981", borderRadius: 5, borderSkipped: false },
+                    { label: "Faltante", data: dFaltante, backgroundColor: "#f59e0b", borderRadius: 5, borderSkipped: false },
+                    { label: "Sobrante", data: dSobrante, backgroundColor: "#3b82f6", borderRadius: 5, borderSkipped: false }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: "top", labels: { font: { family: "'Segoe UI',sans-serif", size: 12 }, padding: 20, usePointStyle: true, pointStyle: "circle" } },
+                    tooltip: {
+                        mode: "index", intersect: false,
+                        callbacks: { footer: (items) => `Total: ${items.reduce((s,i)=>s+i.raw,0)}` }
+                    }
+                },
+                scales: {
+                    x: { grid: { display: false }, ticks: { font: { family: "'Segoe UI',sans-serif", size: 12 } } },
+                    y: { beginAtZero: true, ticks: { stepSize: 1, font: { family: "'Segoe UI',sans-serif", size: 12 } }, grid: { color: "rgba(0,0,0,0.06)" } }
+                }
+            }
+        });
+    } else if (canvas) {
+        const ctx = canvas.getContext("2d"); ctx.clearRect(0,0,canvas.width,canvas.height);
+    }
 
-    // Tabla por ejecutivo
+    /* ─── Tabla detalle por mes ─── */
+    const tbody = g("kpiTableBody");
+    if (tbody) {
+        if (!activeMeses.length) {
+            tbody.innerHTML = `<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text-light);">Sin datos para mostrar</td></tr>`;
+        } else {
+            const totExactos  = activeMeses.reduce((s,m) => s + byMes[m].exactos, 0);
+            const totFaltante = activeMeses.reduce((s,m) => s + byMes[m].faltante, 0);
+            const totSobrante = activeMeses.reduce((s,m) => s + byMes[m].sobrante, 0);
+            const totMes = activeMeses.reduce((s,m) => s + byMes[m].total, 0);
+            tbody.innerHTML = activeMeses.map((m, idx) => {
+                const d = byMes[m];
+                const pct = d.total ? Math.round((d.exactos / d.total) * 100) : 0;
+                const bg = idx % 2 === 0 ? "white" : "#f8f9fc";
+                return `<tr style="background:${bg};border-bottom:1px solid var(--border);">
+                    <td style="padding:10px 14px;font-weight:600;">${m}</td>
+                    <td style="padding:10px 14px;text-align:center;font-weight:700;">${d.total}</td>
+                    <td style="padding:10px 14px;text-align:center;"><span class="badge b-prog">${d.exactos}</span></td>
+                    <td style="padding:10px 14px;text-align:center;"><span class="badge b-pend">${d.faltante}</span></td>
+                    <td style="padding:10px 14px;text-align:center;"><span class="badge b-real">${d.sobrante}</span> <span style="font-size:11px;color:var(--text-light);">${pct}%</span></td>
+                </tr>`;
+            }).join("") + `<tr style="background:#f0f2f5;font-weight:700;border-top:2px solid var(--border);">
+                <td style="padding:10px 14px;">TOTAL</td>
+                <td style="padding:10px 14px;text-align:center;">${totMes}</td>
+                <td style="padding:10px 14px;text-align:center;">${totExactos}</td>
+                <td style="padding:10px 14px;text-align:center;">${totFaltante}</td>
+                <td style="padding:10px 14px;text-align:center;">${totSobrante}</td>
+            </tr>`;
+        }
+    }
+
+    /* ─── Tabla por ejecutivo (se mantiene) ─── */
     const ejs={};
     f.forEach(r=>{
         const e=r.ejecutivo||"—";
@@ -1325,7 +1552,7 @@ function renderKPI(){
             <td style="text-align:right;"><span class="${d.neta<0?'diff-neg':d.neta>0?'diff-pos':'diff-zero'}">${d.neta>=0?"+":""}${d.neta.toLocaleString("es-CL")}</span></td>
         </tr>`).join("") || `<tr><td colspan="7" style="text-align:center;color:var(--text-light);">Sin datos</td></tr>`;
 
-    // Tabla detalle ordenada por impacto descendente
+    /* ─── Tabla detalle de ítems (se mantiene, ordenada por impacto) ─── */
     const tb=g("kpiBody"), em=g("kpiEmpty");
     if(!f.length){ tb.innerHTML=""; em.classList.remove("hidden"); return; }
     em.classList.add("hidden");

@@ -4,11 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Redtec | Gestión de Clientes y Conteos</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
     <style>
         :root {
-            /* TEMA CLARO (default) */
             --primary: #1a2e4a;
             --accent: #d94f3d;
             --accent-hover: #c0392b;
@@ -25,36 +22,13 @@
             --shadow-lg: 0 8px 24px rgba(26,46,74,0.15);
             --radius: 8px;
         }
-        [data-theme="dark"] {
-            /* TEMA OSCURO — paleta de los dashboards m3link */
-            --primary: #0c0d16;
-            --accent: #c0392b;
-            --accent-hover: #d94f3d;
-            --bg: #07080e;
-            --white: #11121c;
-            --text: #eef0f8;
-            --text-light: #7b82a0;
-            --border: rgba(255,255,255,.1);
-            --success: #1ec96a;
-            --warning: #f4a836;
-            --error: #f05656;
-            --info: #4b8df8;
-            --shadow: 0 2px 8px rgba(0,0,0,0.4);
-            --shadow-lg: 0 8px 24px rgba(0,0,0,0.55);
-            --radius: 8px;
-        }
         * { margin:0; padding:0; box-sizing:border-box; }
-        body { font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; transition:background .25s,color .25s; }
+        body { font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
 
         .header { background:var(--primary); color:white; padding:0 24px; display:flex; align-items:center; justify-content:space-between; height:60px; box-shadow:0 2px 8px rgba(0,0,0,0.3); }
-        .header-left { display:flex; align-items:center; gap:14px; }
-        .hdr-logo { width:34px; height:34px; flex-shrink:0; display:flex; align-items:center; justify-content:center; }
-        .hdr-logo img { width:34px; height:34px; object-fit:contain; filter:drop-shadow(0 1px 2px rgba(0,0,0,.3)); }
+        .header-left { display:flex; align-items:center; gap:16px; }
         .logo { font-size:22px; font-weight:800; letter-spacing:2px; color:var(--accent); }
-        .header-title { font-size:14px; color:rgba(255,255,255,0.7); border-left:1px solid rgba(255,255,255,0.2); padding-left:14px; }
-        .header-right { display:flex; align-items:center; gap:16px; }
-        .theme-toggle { background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.18); color:rgba(255,255,255,0.9); width:36px; height:36px; border-radius:8px; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; transition:background .2s; }
-        .theme-toggle:hover { background:rgba(255,255,255,0.16); }
+        .header-title { font-size:14px; color:rgba(255,255,255,0.7); border-left:1px solid rgba(255,255,255,0.2); padding-left:16px; }
         .sync-status { display:flex; align-items:center; gap:8px; font-size:13px; color:rgba(255,255,255,0.8); }
         .sync-dot { width:8px; height:8px; border-radius:50%; background:#27ae60; flex-shrink:0; }
         .sync-dot.loading { animation:pulse 1s infinite; background:#f39c12; }
@@ -63,14 +37,14 @@
 
         .tabs { background:var(--white); display:flex; border-bottom:2px solid var(--border); padding:0 24px; box-shadow:var(--shadow); }
         .tab-btn { padding:14px 20px; border:none; background:none; cursor:pointer; font-size:14px; font-weight:600; color:var(--text-light); border-bottom:3px solid transparent; margin-bottom:-2px; transition:all 0.2s; display:flex; align-items:center; gap:6px; }
-        .tab-btn:hover { color:var(--accent); }
+        .tab-btn:hover { color:var(--primary); }
         .tab-btn.active { color:var(--accent); border-bottom-color:var(--accent); }
 
         .main { max-width:1500px; margin:0 auto; padding:24px; }
 
         .section-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
         .section-left { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
-        .section-title { font-size:20px; font-weight:700; color:var(--text); }
+        .section-title { font-size:20px; font-weight:700; color:var(--primary); }
         .record-count { background:var(--bg); padding:3px 10px; border-radius:20px; font-size:12px; color:var(--text-light); font-weight:600; }
 
         .filters { display:flex; gap:10px; flex-wrap:wrap; }
@@ -84,7 +58,7 @@
         .btn { padding:8px 16px; border:none; border-radius:var(--radius); font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s; display:inline-flex; align-items:center; gap:6px; }
         .btn-primary { background:var(--accent); color:white; }
         .btn-primary:hover { background:var(--accent-hover); transform:translateY(-1px); }
-        .btn-secondary { background:var(--white); color:var(--text); border:1px solid var(--border); }
+        .btn-secondary { background:var(--white); color:var(--primary); border:1px solid var(--border); }
         .btn-secondary:hover { background:var(--bg); }
         .btn-icon { padding:5px 8px; font-size:14px; background:none; border:1px solid var(--border); border-radius:6px; cursor:pointer; transition:all 0.2s; }
         .btn-icon:hover { background:var(--bg); }
@@ -96,9 +70,9 @@
         .stat-card.total { border-top-color:var(--primary); }
         .stat-card.prog { border-top-color:var(--info); }
         .stat-card.pend { border-top-color:var(--warning); }
-        .stat-card.espe { border-top-color:#9b59b6; }
+        .stat-card.espe { border-top-color:var(--warning); }
         .stat-card.real { border-top-color:var(--success); }
-        .stat-value { font-size:28px; font-weight:800; color:var(--text); line-height:1; }
+        .stat-value { font-size:28px; font-weight:800; color:var(--primary); line-height:1; }
         .stat-label { font-size:11px; color:var(--text-light); text-transform:uppercase; letter-spacing:0.5px; margin-top:4px; }
 
         .table-wrapper { background:var(--white); border-radius:var(--radius); box-shadow:var(--shadow); overflow:auto; }
@@ -115,7 +89,6 @@
         .badge { padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; white-space:nowrap; }
         .b-prog { background:#dbeafe; color:#1e40af; }
         .b-pend { background:#fef3c7; color:#92400e; }
-        .b-espe { background:#ede9fe; color:#6d28d9; }
         .b-real { background:#d1fae5; color:#065f46; }
         .u-urg { color:#dc2626; font-weight:700; }
         .u-mod { color:#d97706; font-weight:700; }
@@ -128,7 +101,7 @@
         .modal { background:var(--white); border-radius:12px; width:100%; max-width:680px; box-shadow:var(--shadow-lg); animation:modalIn 0.25s ease; }
         @keyframes modalIn { from{opacity:0;transform:translateY(-20px)} to{opacity:1;transform:translateY(0)} }
         .modal-header { padding:20px 24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
-        .modal-title { font-size:17px; font-weight:700; color:var(--text); }
+        .modal-title { font-size:17px; font-weight:700; color:var(--primary); }
         .modal-close { background:none; border:none; font-size:20px; cursor:pointer; color:var(--text-light); padding:4px; border-radius:4px; line-height:1; }
         .modal-close:hover { background:var(--bg); }
         .modal-body { padding:24px; }
@@ -156,7 +129,7 @@
         @keyframes spin { to{transform:rotate(360deg)} }
 
         .config-card { background:var(--white); border-radius:var(--radius); padding:24px; box-shadow:var(--shadow); margin-bottom:20px; }
-        .config-title { font-size:16px; font-weight:700; color:var(--text); margin-bottom:8px; }
+        .config-title { font-size:16px; font-weight:700; color:var(--primary); margin-bottom:8px; }
         .config-desc { font-size:13px; color:var(--text-light); margin-bottom:16px; line-height:1.6; }
         .alert { padding:12px 16px; border-radius:var(--radius); font-size:13px; margin-bottom:16px; line-height:1.5; }
         .a-info { background:#dbeafe; color:#1e40af; border-left:4px solid #3b82f6; }
@@ -170,49 +143,47 @@
         .code-block { background:#f1f5f9; border:1px solid var(--border); border-radius:6px; padding:10px 14px; font-family:'Courier New',monospace; font-size:12px; color:#334155; word-break:break-all; }
         .link { color:var(--accent); }
 
+        /* Alerta vencimientos */
+        .expiry-banner { background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); border: 2px solid #ef4444; border-radius: var(--radius); padding: 14px 20px; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 14px; box-shadow: 0 2px 8px rgba(239,68,68,0.18); }
+        .expiry-banner-icon { font-size: 24px; flex-shrink: 0; margin-top: 2px; }
+        .expiry-banner-body { flex: 1; }
+        .expiry-banner-title { font-size: 15px; font-weight: 800; color: #991b1b; margin-bottom: 6px; }
+        .expiry-banner-list { font-size: 13px; color: #7f1d1d; line-height: 1.7; }
+        .expiry-banner-list span { background: #fca5a5; border-radius: 4px; padding: 1px 7px; margin-right: 6px; font-weight: 700; white-space: nowrap; display: inline-block; }
+        .expiry-banner-close { background: none; border: none; color: #991b1b; font-size: 18px; cursor: pointer; padding: 2px 6px; border-radius: 4px; flex-shrink: 0; line-height: 1; }
+        .expiry-banner-close:hover { background: #fca5a5; }
+        /* Fecha vencida en tabla */
+        .date-expired { color: #dc2626; font-weight: 700; background: #fee2e2; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+        .date-ok { color: #065f46; font-weight: 600; white-space: nowrap; }
+        /* Botón ver observaciones */
+        .btn-obs { padding: 3px 8px; font-size: 13px; background: none; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; transition: all 0.2s; color: var(--text-light); }
+        .btn-obs:hover { background: #dbeafe; border-color: #3b82f6; color: #1e40af; }
+        .btn-obs.has-obs { border-color: #93c5fd; color: #1d4ed8; background: #eff6ff; }
+
         .diff-pos { color: #065f46; font-weight: 700; background: #d1fae5; padding: 2px 8px; border-radius: 12px; }
         .diff-neg { color: #991b1b; font-weight: 700; background: #fee2e2; padding: 2px 8px; border-radius: 12px; }
         .diff-zero { color: #1e40af; font-weight: 700; background: #dbeafe; padding: 2px 8px; border-radius: 12px; }
         .res-summary { background: var(--white); border-radius: var(--radius); padding: 16px 20px; box-shadow: var(--shadow); border-left: 4px solid var(--accent); margin-bottom: 16px; display:flex; gap:32px; flex-wrap:wrap; }
         .res-summary-item { text-align:center; }
-        .res-summary-item .val { font-size:22px; font-weight:800; color:var(--text); }
+        .res-summary-item .val { font-size:22px; font-weight:800; color:var(--primary); }
         .res-summary-item .lbl { font-size:11px; color:var(--text-light); text-transform:uppercase; }
         .empty-state { text-align:center; padding:60px 24px; color:var(--text-light); }
         .empty-icon { font-size:48px; margin-bottom:12px; }
         .hidden { display:none !important; }
         @media(max-width:768px) { .main{padding:16px} .form-grid{grid-template-columns:1fr} .section-header{flex-direction:column;align-items:flex-start} }
-
-    /* === Alerta vencimientos conciliación (banner descartable) === */
-    .expiry-banner { background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); border: 2px solid #ef4444; border-radius: var(--radius); padding: 14px 20px; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 14px; box-shadow: 0 2px 8px rgba(239,68,68,0.18); animation: bannerSlide 0.3s ease; }
-    @keyframes bannerSlide { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }
-    .expiry-banner-icon { font-size: 24px; flex-shrink: 0; margin-top: 2px; }
-    .expiry-banner-body { flex: 1; }
-    .expiry-banner-title { font-size: 15px; font-weight: 800; color: #991b1b; margin-bottom: 6px; }
-    .expiry-banner-list { font-size: 13px; color: #7f1d1d; line-height: 1.7; max-height: 200px; overflow-y: auto; }
-    .expiry-banner-list span { background: #fca5a5; border-radius: 4px; padding: 1px 7px; margin-right: 6px; font-weight: 700; white-space: nowrap; display: inline-block; }
-    .expiry-banner-close { background: none; border: none; color: #991b1b; font-size: 18px; cursor: pointer; padding: 2px 6px; border-radius: 4px; flex-shrink: 0; line-height: 1; }
-    .expiry-banner-close:hover { background: #fca5a5; }
-
-    /* Badges de fecha de vencimiento (en tabla) */
-    .date-expired { color: #dc2626; font-weight: 700; background: #fee2e2; padding: 2px 8px; border-radius: 10px; white-space: nowrap; font-size: 12px; }
-    .date-ok { color: #065f46; font-weight: 600; white-space: nowrap; font-size: 12px; }
-    .date-soon { color: #92400e; font-weight: 600; background: #fef3c7; padding: 2px 8px; border-radius: 10px; white-space: nowrap; font-size: 12px; }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
 
 <header class="header">
     <div class="header-left">
-        <a class="hdr-logo" href="index.html" title="REDTEC"><img src="data:image/png;base64,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" alt="REDTEC"></a>
         <div class="logo">REDTEC</div>
         <div class="header-title">Gestión de Clientes y Conteos</div>
     </div>
-    <div class="header-right">
-        <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Cambiar tema">🌙</button>
-        <div class="sync-status">
-            <div class="sync-dot loading" id="syncDot"></div>
-            <span id="syncText">Conectando...</span>
-        </div>
+    <div class="sync-status">
+        <div class="sync-dot loading" id="syncDot"></div>
+        <span id="syncText">Conectando...</span>
     </div>
 </header>
 
@@ -220,11 +191,34 @@
     <button class="tab-btn active" onclick="switchTab('clientes')">👥 Base de Clientes</button>
     <button class="tab-btn" onclick="switchTab('calendario')">📅 Calendario de Conteos</button>
     <button class="tab-btn" onclick="switchTab('resultados')">📊 Resultado Conteos</button>
-    <button class="tab-btn" onclick="switchTab('kpi')">📈 Análisis KPI</button>
+    <button class="tab-btn" onclick="switchTab('kpis')">📈 KPIs</button>
     <button class="tab-btn" onclick="switchTab('config')">⚙️ Configuración</button>
 </nav>
 
 <main class="main">
+
+    <!-- MODAL POPUP de vencimientos (se muestra al entrar a tabs distintos de Resultados) -->
+    <div class="modal-overlay" id="modalExpiry">
+        <div class="modal" style="max-width:600px;">
+            <div class="modal-header" style="background:linear-gradient(135deg,#fee2e2 0%,#fecaca 100%);border-bottom:2px solid #ef4444;">
+                <div class="modal-title" style="color:#991b1b;display:flex;align-items:center;gap:10px;">
+                    <span style="font-size:24px;">⚠️</span>
+                    <span id="modalExpiryTitle">Inventarios con plazo de conciliación vencido</span>
+                </div>
+                <button class="modal-close" onclick="closeModal('modalExpiry')" style="color:#991b1b;">✕</button>
+            </div>
+            <div class="modal-body" style="max-height:60vh;overflow-y:auto;">
+                <div id="modalExpiryList" style="font-size:13.5px;color:#7f1d1d;line-height:1.8;"></div>
+            </div>
+            <div class="modal-footer" style="background:#fef2f2;">
+                <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#7f1d1d;cursor:pointer;margin-right:auto;">
+                    <input type="checkbox" id="modalExpiryDontShow"> No mostrar más en esta sesión
+                </label>
+                <button class="btn btn-secondary" onclick="closeModal('modalExpiry')">Cerrar</button>
+                <button class="btn btn-primary" onclick="closeModal('modalExpiry'); switchTab('resultados');" style="background:#dc2626;">Ver Resultados de Conteo</button>
+            </div>
+        </div>
+    </div>
 
     <!-- TAB CLIENTES -->
     <div id="tab-clientes">
@@ -250,7 +244,7 @@
                         <option>Septiembre</option><option>Octubre</option><option>Noviembre</option><option>Diciembre</option>
                     </select>
                 </div>
-                <button class="btn btn-secondary" onclick="exportCSV('clientes')">⬇ Exportar Excel</button>
+                <button class="btn btn-secondary" onclick="exportCSV('clientes')">⬇ Exportar CSV</button>
                 <button class="btn btn-primary" onclick="openModal('cliente')">+ Nuevo Cliente</button>
             </div>
         </div>
@@ -282,8 +276,8 @@
                     </div>
                     <select class="filter-select" id="fKEstado" onchange="renderCalendario()">
                         <option value="">Todos los estados</option>
-                        <option>Programado</option><option>Pendiente</option>
-                        <option>En espera de respuesta</option><option>Realizado</option>
+                        <option>Programado</option><option>Pendientes de respuesta</option>
+                        <option>Realizado</option>
                     </select>
                     <select class="filter-select" id="fKEjec" onchange="renderCalendario()">
                         <option value="">Todos los ejecutivos</option>
@@ -296,7 +290,7 @@
                         <option>Septiembre</option><option>Octubre</option><option>Noviembre</option><option>Diciembre</option>
                     </select>
                 </div>
-                <button class="btn btn-secondary" onclick="exportCSV('calendario')">⬇ Exportar Excel</button>
+                <button class="btn btn-secondary" onclick="exportCSV('calendario')">⬇ Exportar CSV</button>
                 <button class="btn btn-primary" onclick="openModal('conteo')">+ Nuevo Conteo</button>
             </div>
         </div>
@@ -309,6 +303,55 @@
                 <tbody id="ktBody"></tbody>
             </table>
             <div class="empty-state hidden" id="kEmpty"><div class="empty-icon">📅</div><div>No se encontraron conteos</div></div>
+        </div>
+    </div>
+
+    <!-- TAB KPIs -->
+    <div id="tab-kpis" class="hidden">
+        <div class="section-header">
+            <div class="section-left">
+                <h2 class="section-title">KPIs — Avance de Inventarios</h2>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                <select class="filter-select" id="fKpiAnio" onchange="renderKpis()">
+                    <option value="">Todos los años</option>
+                </select>
+                <select class="filter-select" id="fKpiEjec" onchange="renderKpis()">
+                    <option value="">Todos los ejecutivos</option>
+                    <option>Rodrigo S.</option><option>Jaqueline M.</option><option>Catalina J.</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Tarjetas resumen KPI -->
+        <div class="stats-grid" id="kpiSummaryGrid" style="margin-bottom:24px;"></div>
+
+        <!-- Gráfico de barras -->
+        <div style="background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px 28px;margin-bottom:24px;">
+            <div style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:4px;">Avance mensual por estado</div>
+            <div style="font-size:12px;color:var(--text-light);margin-bottom:20px;">Cantidad de conteos por mes, desglosados por estado</div>
+            <div style="position:relative;height:360px;">
+                <canvas id="kpiBarChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Tabla de detalle por mes -->
+        <div style="background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px 28px;">
+            <div style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:16px;">Detalle por mes</div>
+            <div style="overflow:auto;">
+                <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                    <thead>
+                        <tr>
+                            <th style="background:var(--primary);color:white;padding:10px 14px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-radius:8px 0 0 0;">Mes</th>
+                            <th style="background:var(--primary);color:white;padding:10px 14px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Total</th>
+                            <th style="background:var(--primary);color:white;padding:10px 14px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Programado</th>
+                            <th style="background:var(--primary);color:white;padding:10px 14px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Pendientes Resp.</th>
+                            <th style="background:var(--primary);color:white;padding:10px 14px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-radius:0 8px 0 0;">Realizado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="kpiTableBody"></tbody>
+                </table>
+            </div>
         </div>
     </div>
 
@@ -335,7 +378,7 @@
 
     <!-- TAB RESULTADOS -->
     <div id="tab-resultados" class="hidden">
-        <!-- Banner de vencimientos de conciliación (se llena dinámicamente, se oculta si no hay) -->
+        <!-- Banner descartable de vencimientos (solo en este tab) -->
         <div id="expiryBanner" style="display:none;"></div>
 
         <div class="section-header">
@@ -354,7 +397,7 @@
                     <option value="sobrante">Sobrante</option>
                     <option value="faltante">Faltante</option>
                 </select>
-                <button class="btn btn-secondary" onclick="exportCSV('resultados')">⬇ Exportar Excel</button>
+                <button class="btn btn-secondary" onclick="exportCSV('resultados')">⬇ Exportar CSV</button>
                 <button class="btn btn-primary" onclick="openModalResultado()">+ Ingresar Resultado</button>
             </div>
         </div>
@@ -376,7 +419,6 @@
                     <th style="text-align:right;">Dif. Total</th>
                     <th>Estado Dif.</th>
                     <th>Vencimiento Conciliación</th>
-                    <th>Observaciones</th>
                     <th>Acciones</th>
                 </tr></thead>
                 <tbody id="resBody"></tbody>
@@ -385,88 +427,6 @@
                 <div class="empty-icon">📊</div>
                 <div>No hay resultados ingresados aún.<br>Selecciona un conteo realizado para ingresar su resultado.</div>
             </div>
-        </div>
-    </div>
-
-    <!-- TAB KPI / ANÁLISIS DE DIFERENCIAS -->
-    <div id="tab-kpi" class="hidden">
-        <div class="section-header">
-            <div class="section-left">
-                <h2 class="section-title">Análisis de Diferencias (SAP vs Físico)</h2>
-                <span class="record-count" id="kpiCount">—</span>
-            </div>
-            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-                <select class="filter-select" id="fKpiAnio" onchange="renderKPI()">
-                    <option value="">Todos los años</option>
-                </select>
-                <select class="filter-select" id="fKpiEjec" onchange="renderKPI()">
-                    <option value="">Todos los ejecutivos</option>
-                    <option>Rodrigo S.</option><option>Jaqueline M.</option><option>Catalina J.</option>
-                </select>
-                <select class="filter-select" id="fKpiCliente" onchange="renderKPI()">
-                    <option value="">Todos los clientes</option>
-                </select>
-                <button class="btn btn-secondary" onclick="exportKPI()">⬇ Exportar Análisis (Excel)</button>
-            </div>
-        </div>
-
-        <!-- Tarjetas resumen KPI -->
-        <div class="stats-grid" id="kpiSummaryGrid" style="margin-bottom:24px;"></div>
-
-        <!-- Gráfico de barras: avance mensual -->
-        <div style="background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px 28px;margin-bottom:24px;">
-            <div style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:4px;">Avance mensual por estado</div>
-            <div style="font-size:12px;color:var(--text-light);margin-bottom:20px;">Cantidad de conteos por mes, desglosados por estado</div>
-            <div style="position:relative;height:360px;">
-                <canvas id="kpiBarChart"></canvas>
-            </div>
-        </div>
-
-        <!-- Tabla de detalle por mes -->
-        <div style="background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px 28px;margin-bottom:24px;">
-            <div style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:16px;">Detalle por mes</div>
-            <div style="overflow:auto;">
-                <table style="width:100%;border-collapse:collapse;font-size:13px;">
-                    <thead>
-                        <tr>
-                            <th style="background:var(--primary);color:white;padding:10px 14px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-radius:8px 0 0 0;">Mes</th>
-                            <th style="background:var(--primary);color:white;padding:10px 14px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Total</th>
-                            <th style="background:var(--primary);color:white;padding:10px 14px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Programado</th>
-                            <th style="background:var(--primary);color:white;padding:10px 14px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Pendientes Resp.</th>
-                            <th style="background:var(--primary);color:white;padding:10px 14px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-radius:0 8px 0 0;">Realizado</th>
-                        </tr>
-                    </thead>
-                    <tbody id="kpiTableBody"></tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Tabla de detalle de diferencias por ítem (se mantiene del diseño original) -->
-        <div class="config-card" style="margin-bottom:20px;">
-            <div class="config-title">Exactitud de inventario por ejecutivo</div>
-            <div class="table-wrapper" style="box-shadow:none;">
-                <table>
-                    <thead><tr>
-                        <th>Ejecutivo</th><th style="text-align:right;">Ítems</th>
-                        <th style="text-align:right;">Exactos</th><th style="text-align:right;">% Exactitud</th>
-                        <th style="text-align:right;">Faltante (u.)</th><th style="text-align:right;">Sobrante (u.)</th>
-                        <th style="text-align:right;">Dif. neta</th>
-                    </tr></thead>
-                    <tbody id="kpiEjecBody"></tbody>
-                </table>
-            </div>
-        </div>
-
-        <div class="table-wrapper">
-            <table>
-                <thead><tr>
-                    <th>#</th><th>Cliente</th><th>Fecha</th><th>Ítem</th>
-                    <th style="text-align:right;">Físico</th><th style="text-align:right;">SAP</th>
-                    <th style="text-align:right;">Dif. Total</th><th>Estado</th><th style="text-align:right;">|Impacto|</th>
-                </tr></thead>
-                <tbody id="kpiBody"></tbody>
-            </table>
-            <div class="empty-state hidden" id="kpiEmpty"><div class="empty-icon">📈</div><div>No hay resultados para analizar todavía.</div></div>
         </div>
     </div>
 
@@ -538,7 +498,7 @@
                 <div class="form-group">
                     <label class="form-label">Estado</label>
                     <select class="form-control" id="k_est">
-                        <option>Pendiente</option><option>En espera de respuesta</option>
+                        <option>Pendientes de respuesta</option>
                         <option>Programado</option><option>Realizado</option>
                     </select>
                 </div>
@@ -681,6 +641,24 @@
     </div>
 </div>
 
+<!-- MODAL OBSERVACIONES RESULTADO -->
+<div class="modal-overlay" id="modalObs">
+    <div class="modal" style="max-width:480px;">
+        <div class="modal-header">
+            <div class="modal-title">💬 Observaciones</div>
+            <button class="modal-close" onclick="closeModal('modalObs')">✕</button>
+        </div>
+        <div class="modal-body">
+            <div style="font-size:13px;color:var(--text-light);margin-bottom:6px;" id="obsModalCliente"></div>
+            <div style="font-size:13px;color:var(--text-light);margin-bottom:14px;" id="obsModalItem"></div>
+            <div id="obsModalText" style="font-size:14px;color:var(--text);line-height:1.7;background:#f8f9fc;border:1px solid var(--border);border-radius:var(--radius);padding:16px;min-height:60px;white-space:pre-wrap;"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('modalObs')">Cerrar</button>
+        </div>
+    </div>
+</div>
+
 <div class="loading-overlay" id="loadingOverlay">
     <div style="text-align:center;">
         <div class="spinner" style="margin:0 auto 12px;"></div>
@@ -692,15 +670,18 @@
 
 <script>
 // ================================================================
+//  ⚙️  CONFIGURACIÓN — SOLO EDITAR ESTA LÍNEA SI CAMBIA EL SCRIPT
+// ================================================================
+// ================================================================
 //  ⚙️  CONFIGURACIÓN — Endpoint interno (Azure Function clientes-store)
-//  Reemplaza Google Sheets. Guarda la data como JSON de texto en Blob.
+//  Guarda la data como JSON de texto en Azure Blob Storage.
 //  Si pruebas en local con SWA CLI, déjalo en "/api/clientes-store".
 // ================================================================
 const STORE_URL = "/api/clientes-store";
 // ================================================================
 
 // ================================================================
-//  DATOS INICIALES (se cargan al almacén la primera vez si está vacío)
+//  DATOS INICIALES (se suben al almacén la primera vez si está vacío)
 // ================================================================
 const INIT_C = [
     {id:1,cliente:"ALD LOGISTICA SpA.",responsable:"Karen del Rio",telefono:"985919422",correo:"Karen.delrio@agurto.cl",ejecutivo:"Rodrigo S.",mes:"Agosto"},
@@ -755,54 +736,54 @@ const INIT_C = [
 
 const INIT_K = [
     {id:1,num:1,cliente:"ALD LOGISTICA SpA.",estado:"Programado",recinto:"Centro Logístico BSF - Puerto Madero #9710, Bodega E-7",urgencia:"Baja",fecha:"10 ago 2026",horario:"10:00",responsable:"Karen del Rio",telefono:"985919422",correo:"Karen.delrio@agurto.cl",ejecutivo:"Rodrigo S.",mes:"Agosto",acceso:"DNI / Cédula de identidad",implementos:"Chaleco reflectante; Casco de seguridad; Botas / zapatos de seguridad",obs:"Enviar días antes a la fecha datos de los participantes: RUT, Nombre y patente de vehículo si corresponde"},
-    {id:2,num:2,cliente:"ALIMENTOS ANDINOS SpA.",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Cristian Ceron",telefono:"993300655",correo:"cceron@chilehamburgo.cl",ejecutivo:"Jaqueline M.",mes:"Mayo",acceso:"Sin requerimiento",implementos:"",obs:""},
-    {id:3,num:3,cliente:"ALIMENTOS Y FRUTOS SA",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Victor Correa",telefono:"974798388",correo:"vcorrea@minutoverde.cl",ejecutivo:"Jaqueline M.",mes:"Septiembre",acceso:"Sin requerimiento",implementos:"",obs:""},
-    {id:4,num:4,cliente:"ARTES GRAFICA S.A",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Maggie Flores",telefono:"993446278",correo:"mflores@happydays.cl",ejecutivo:"Jaqueline M.",mes:"Junio",acceso:"DNI / Cédula de identidad",implementos:"",obs:""},
-    {id:5,num:5,cliente:"BOETTCHER Y BOETTCHER LTDA.",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Bernardo",telefono:"978573741",correo:"bernardob@bigchile.cl",ejecutivo:"Catalina J.",mes:"Julio",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:2,num:2,cliente:"ALIMENTOS ANDINOS SpA.",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Cristian Ceron",telefono:"993300655",correo:"cceron@chilehamburgo.cl",ejecutivo:"Jaqueline M.",mes:"Mayo",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:3,num:3,cliente:"ALIMENTOS Y FRUTOS SA",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Victor Correa",telefono:"974798388",correo:"vcorrea@minutoverde.cl",ejecutivo:"Jaqueline M.",mes:"Septiembre",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:4,num:4,cliente:"ARTES GRAFICA S.A",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Maggie Flores",telefono:"993446278",correo:"mflores@happydays.cl",ejecutivo:"Jaqueline M.",mes:"Junio",acceso:"DNI / Cédula de identidad",implementos:"",obs:""},
+    {id:5,num:5,cliente:"BOETTCHER Y BOETTCHER LTDA.",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Bernardo",telefono:"978573741",correo:"bernardob@bigchile.cl",ejecutivo:"Catalina J.",mes:"Julio",acceso:"Sin requerimiento",implementos:"",obs:""},
     {id:6,num:6,cliente:"CAMBIASO HNOS S.A.C.",estado:"Realizado",recinto:"Recinto Principal",urgencia:"—",fecha:"5 mar 2026",horario:"",responsable:"Mauricio Cornejo",telefono:"964948327",correo:"mcornejo@cambiaso.cl",ejecutivo:"Jaqueline M.",mes:"Marzo",acceso:"Sin requerimiento",implementos:"",obs:"Conteo realizado sin observaciones ☑️"},
     {id:7,num:7,cliente:"COLGATE PALMOLIVE CHILE SA",estado:"Realizado",recinto:"Colgate CBP",urgencia:"—",fecha:"23 abr 2026",horario:"08:00",responsable:"Henry Garcia",telefono:"966353914",correo:"marion_bascunan@colpal.com",ejecutivo:"Rodrigo S.",mes:"Abril",acceso:"DNI / Cédula de identidad",implementos:"Chaleco reflectante; Casco de seguridad; Botas / zapatos de seguridad",obs:"Tres (3) ejecutivos para conteo en bodegas de Chorrillos y CBP. Llevar inducciones al ingresar."},
     {id:8,num:7,cliente:"COLGATE PALMOLIVE CHILE SA",estado:"Realizado",recinto:"Colgate Chorrillos",urgencia:"—",fecha:"23 abr 2026",horario:"09:30",responsable:"Natalia Suarez",telefono:"966353914",correo:"marion_bascunan@colpal.com",ejecutivo:"Rodrigo S.",mes:"Abril",acceso:"DNI / Cédula de identidad",implementos:"Chaleco reflectante; Casco de seguridad; Botas / zapatos de seguridad",obs:"Una vez finalizado el conteo en CBP un (1) ejecutivo se dirige a Chorrillos"},
-    {id:9,num:8,cliente:"COMERCIAL ANDEN SALZ LIMITADA",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Geraldine Araya",telefono:"991501073",correo:"garaya@andesal.cl",ejecutivo:"Jaqueline M.",mes:"Septiembre",acceso:"Sin requerimiento",implementos:"",obs:""},
-    {id:10,num:9,cliente:"COMERCIAL FG CORP SpA",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Nedielko Simunovic",telefono:"994381889",correo:"nsimunovic@fgcorp.cl",ejecutivo:"Catalina J.",mes:"Octubre",acceso:"Sin requerimiento",implementos:"",obs:""},
-    {id:11,num:10,cliente:"Comercial Rocky S.A.",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"",telefono:"",correo:"",ejecutivo:"Catalina J.",mes:"Octubre",acceso:"Sin requerimiento",implementos:"",obs:""},
-    {id:12,num:11,cliente:"CONFITES MERELLO S.A.",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Gerardo Guerrero",telefono:"994563890",correo:"gguerrero@merello.cl",ejecutivo:"Rodrigo S.",mes:"Noviembre",acceso:"Sin requerimiento",implementos:"",obs:""},
-    {id:13,num:12,cliente:"DAILY FOODS S.A.",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Mario Palma",telefono:"940251056",correo:"m.palma@dailyfoods.cl",ejecutivo:"Catalina J.",mes:"Octubre",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:9,num:8,cliente:"COMERCIAL ANDEN SALZ LIMITADA",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Geraldine Araya",telefono:"991501073",correo:"garaya@andesal.cl",ejecutivo:"Jaqueline M.",mes:"Septiembre",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:10,num:9,cliente:"COMERCIAL FG CORP SpA",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Nedielko Simunovic",telefono:"994381889",correo:"nsimunovic@fgcorp.cl",ejecutivo:"Catalina J.",mes:"Octubre",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:11,num:10,cliente:"Comercial Rocky S.A.",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"",telefono:"",correo:"",ejecutivo:"Catalina J.",mes:"Octubre",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:12,num:11,cliente:"CONFITES MERELLO S.A.",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Gerardo Guerrero",telefono:"994563890",correo:"gguerrero@merello.cl",ejecutivo:"Rodrigo S.",mes:"Noviembre",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:13,num:12,cliente:"DAILY FOODS S.A.",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Mario Palma",telefono:"940251056",correo:"m.palma@dailyfoods.cl",ejecutivo:"Catalina J.",mes:"Octubre",acceso:"Sin requerimiento",implementos:"",obs:""},
     {id:14,num:13,cliente:"DURACELL PILAS LTDA",estado:"Programado",recinto:"Recinto Principal",urgencia:"Baja",fecha:"8 jul 2026",horario:"09:30",responsable:"Eduardo Mendoza",telefono:"990334767",correo:"castellanos.m@duracell.com",ejecutivo:"Catalina J.",mes:"Julio",acceso:"DNI / Cédula de identidad",implementos:"Chaleco reflectante; Casco de seguridad; Botas / zapatos de seguridad",obs:"Descargar APP SMARTKI para acceso"},
-    {id:15,num:14,cliente:"ELABORADORA DE ALIMENTOS FRUTALE LIMITADA (Castano)",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Paula Urrea",telefono:"994751247",correo:"paula.urrea@castano.cl",ejecutivo:"Catalina J.",mes:"Junio",acceso:"Sin requerimiento",implementos:"",obs:""},
-    {id:16,num:15,cliente:"EMBOTELLADORA DOS BANDERAS SPA",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Hector Riffo",telefono:"989425899",correo:"gestionlogisticaybodegas@dosbanderas.cl",ejecutivo:"Jaqueline M.",mes:"Junio",acceso:"Sin requerimiento",implementos:"",obs:"Acuso recibo. Estaremos en contacto para coordinar la fecha. Ahora es demasiado pronto para fijar un día."},
+    {id:15,num:14,cliente:"ELABORADORA DE ALIMENTOS FRUTALE LIMITADA (Castano)",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Paula Urrea",telefono:"994751247",correo:"paula.urrea@castano.cl",ejecutivo:"Catalina J.",mes:"Junio",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:16,num:15,cliente:"EMBOTELLADORA DOS BANDERAS SPA",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Hector Riffo",telefono:"989425899",correo:"gestionlogisticaybodegas@dosbanderas.cl",ejecutivo:"Jaqueline M.",mes:"Junio",acceso:"Sin requerimiento",implementos:"",obs:"Acuso recibo. Estaremos en contacto para coordinar la fecha. Ahora es demasiado pronto para fijar un día."},
     {id:17,num:16,cliente:"EMBOTELLADORA METROPOLITANA S.A.",estado:"Programado",recinto:"Recinto Principal",urgencia:"Planificada",fecha:"16 jun 2026",horario:"",responsable:"Fernanda Henriquez",telefono:"942105671",correo:"fhenriquez@emsachile.com",ejecutivo:"Jaqueline M.",mes:"Junio",acceso:"Sin requerimiento",implementos:"Chaleco reflectante; Casco de seguridad; Botas / zapatos de seguridad",obs:""},
-    {id:18,num:17,cliente:"EMPRESAS DEMARIA S.A.",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Juan Muñoz",telefono:"974368237",correo:"jmunoz@demaria.cl",ejecutivo:"Rodrigo S.",mes:"Mayo",acceso:"Sin requerimiento",implementos:"",obs:""},
-    {id:19,num:18,cliente:"FH ALIMENTOS SpA.",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Leonardo Perez",telefono:"931342600",correo:"lperez@fhalimentos.cl",ejecutivo:"Rodrigo S.",mes:"Junio",acceso:"Sin requerimiento",implementos:"",obs:""},
-    {id:20,num:19,cliente:"GEOMAR SPA",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Cristhian Martínez",telefono:"967669933",correo:"cristhian@geomar.cl",ejecutivo:"Jaqueline M.",mes:"Julio",acceso:"Sin requerimiento",implementos:"",obs:""},
-    {id:21,num:20,cliente:"German Guerra y Cia SpA",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Marisella Hervia",telefono:"992497869",correo:"administracion@graficaguerra.cl",ejecutivo:"Jaqueline M.",mes:"Agosto",acceso:"Sin requerimiento",implementos:"",obs:""},
-    {id:22,num:21,cliente:"GOOD FOOD",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Claudio Ramirez",telefono:"994190646",correo:"cramirez@gourmet.cl",ejecutivo:"Catalina J.",mes:"Julio",acceso:"Sin requerimiento",implementos:"",obs:""},
-    {id:23,num:22,cliente:"GRAN PAVESI ALIMENTOS LIMITADA",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Jonathan",telefono:"92274463",correo:"j.maldonado@pavesi.cl",ejecutivo:"Jaqueline M.",mes:"Junio",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:18,num:17,cliente:"EMPRESAS DEMARIA S.A.",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Juan Muñoz",telefono:"974368237",correo:"jmunoz@demaria.cl",ejecutivo:"Rodrigo S.",mes:"Mayo",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:19,num:18,cliente:"FH ALIMENTOS SpA.",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Leonardo Perez",telefono:"931342600",correo:"lperez@fhalimentos.cl",ejecutivo:"Rodrigo S.",mes:"Junio",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:20,num:19,cliente:"GEOMAR SPA",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Cristhian Martínez",telefono:"967669933",correo:"cristhian@geomar.cl",ejecutivo:"Jaqueline M.",mes:"Julio",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:21,num:20,cliente:"German Guerra y Cia SpA",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Marisella Hervia",telefono:"992497869",correo:"administracion@graficaguerra.cl",ejecutivo:"Jaqueline M.",mes:"Agosto",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:22,num:21,cliente:"GOOD FOOD",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Claudio Ramirez",telefono:"994190646",correo:"cramirez@gourmet.cl",ejecutivo:"Catalina J.",mes:"Julio",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:23,num:22,cliente:"GRAN PAVESI ALIMENTOS LIMITADA",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Jonathan",telefono:"92274463",correo:"j.maldonado@pavesi.cl",ejecutivo:"Jaqueline M.",mes:"Junio",acceso:"Sin requerimiento",implementos:"",obs:""},
     {id:24,num:23,cliente:"HALEON CHILE SPA",estado:"Programado",recinto:"Recinto Principal",urgencia:"Moderada",fecha:"14 may 2026",horario:"14:00",responsable:"Miguel Quiroz",telefono:"95434470",correo:"miguel.a.quiroz@haleon.com",ejecutivo:"Catalina J.",mes:"Mayo",acceso:"DNI / Cédula de identidad",implementos:"Chaleco reflectante; Casco de seguridad; Botas / zapatos de seguridad",obs:"Charla de inducción de seguridad a realizarse antes de ingresar."},
-    {id:25,num:24,cliente:"HAMBURGO S.A.",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Cristian Ceron",telefono:"947708596",correo:"cceron@lafchile.com",ejecutivo:"Rodrigo S.",mes:"Julio",acceso:"Sin requerimiento",implementos:"",obs:""},
-    {id:26,num:25,cliente:"HEREDIA MOLINOS SA",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Sinthya",telefono:"981582576",correo:"logistica@molineraheredia.com",ejecutivo:"Jaqueline M.",mes:"Agosto",acceso:"Sin requerimiento",implementos:"",obs:""},
-    {id:27,num:26,cliente:"ILKO CHILE S.A.",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Sebastian Krause",telefono:"",correo:"Sebastian.krause@virutexilko.cl",ejecutivo:"Jaqueline M.",mes:"Septiembre",acceso:"Sin requerimiento",implementos:"",obs:""},
-    {id:28,num:27,cliente:"INDUSTRIAS CLEANER CHILE S.A.",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Hector Lagos",telefono:"951471445",correo:"hlagos@cleaner.cl",ejecutivo:"Jaqueline M.",mes:"Junio",acceso:"Sin requerimiento",implementos:"",obs:""},
-    {id:29,num:28,cliente:"INDUSTRIAS PRODUCTOS ALIMENTICIOS SA (Proalsa)",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Ivan Gonzalez",telefono:"942514085",correo:"igonzalez@proalsa.cl",ejecutivo:"Catalina J.",mes:"Julio",acceso:"Sin requerimiento",implementos:"",obs:"Cliente solicita indicar cuándo fue el último inventario y su resultado"},
-    {id:30,num:29,cliente:"LA FUENTE NATURAL SA",estado:"Pendiente",recinto:"Bernardo O'Higgins 150, Complejo Los Libertadores, Colina",urgencia:"—",fecha:"",horario:"",responsable:"Hector Toro",telefono:"",correo:"htoro@lafuentenatural.cl",ejecutivo:"Jaqueline M.",mes:"Septiembre",acceso:"Sin requerimiento",implementos:"",obs:""},
-    {id:31,num:30,cliente:"LABORATORIO INTERNACIONAL DE COSMETICOS SA (INTERCOS)",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Patricia Vargas",telefono:"977660949",correo:"pvargas@intercos.cl",ejecutivo:"Rodrigo S.",mes:"Junio",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:25,num:24,cliente:"HAMBURGO S.A.",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Cristian Ceron",telefono:"947708596",correo:"cceron@lafchile.com",ejecutivo:"Rodrigo S.",mes:"Julio",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:26,num:25,cliente:"HEREDIA MOLINOS SA",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Sinthya",telefono:"981582576",correo:"logistica@molineraheredia.com",ejecutivo:"Jaqueline M.",mes:"Agosto",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:27,num:26,cliente:"ILKO CHILE S.A.",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Sebastian Krause",telefono:"",correo:"Sebastian.krause@virutexilko.cl",ejecutivo:"Jaqueline M.",mes:"Septiembre",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:28,num:27,cliente:"INDUSTRIAS CLEANER CHILE S.A.",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Hector Lagos",telefono:"951471445",correo:"hlagos@cleaner.cl",ejecutivo:"Jaqueline M.",mes:"Junio",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:29,num:28,cliente:"INDUSTRIAS PRODUCTOS ALIMENTICIOS SA (Proalsa)",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Ivan Gonzalez",telefono:"942514085",correo:"igonzalez@proalsa.cl",ejecutivo:"Catalina J.",mes:"Julio",acceso:"Sin requerimiento",implementos:"",obs:"Cliente solicita indicar cuándo fue el último inventario y su resultado"},
+    {id:30,num:29,cliente:"LA FUENTE NATURAL SA",estado:"Pendientes de respuesta",recinto:"Bernardo O'Higgins 150, Complejo Los Libertadores, Colina",urgencia:"—",fecha:"",horario:"",responsable:"Hector Toro",telefono:"",correo:"htoro@lafuentenatural.cl",ejecutivo:"Jaqueline M.",mes:"Septiembre",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:31,num:30,cliente:"LABORATORIO INTERNACIONAL DE COSMETICOS SA (INTERCOS)",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Patricia Vargas",telefono:"977660949",correo:"pvargas@intercos.cl",ejecutivo:"Rodrigo S.",mes:"Junio",acceso:"Sin requerimiento",implementos:"",obs:""},
     {id:32,num:31,cliente:"LABORATORIOS BALLERINA",estado:"Programado",recinto:"Recinto Principal",urgencia:"Moderada",fecha:"15 may 2026",horario:"",responsable:"Hector Plaza",telefono:"964898622",correo:"hplaza@ballerina.cl",ejecutivo:"Rodrigo S.",mes:"Agosto",acceso:"Sin requerimiento",implementos:"",obs:""},
-    {id:33,num:32,cliente:"LATIN AMERICAN FOODS S.A.",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Cristian Ceron",telefono:"993300655",correo:"cceron@chilehamburgo.cl",ejecutivo:"Jaqueline M.",mes:"Mayo",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:33,num:32,cliente:"LATIN AMERICAN FOODS S.A.",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Cristian Ceron",telefono:"993300655",correo:"cceron@chilehamburgo.cl",ejecutivo:"Jaqueline M.",mes:"Mayo",acceso:"Sin requerimiento",implementos:"",obs:""},
     {id:34,num:33,cliente:"LESAFFRE INDUSTRIAL CHILE S.A.",estado:"Programado",recinto:"Recinto Principal",urgencia:"Planificada",fecha:"17 jun 2026",horario:"09:00",responsable:"Claudio Morales",telefono:"978095819",correo:"m.candia@lesaffre.com",ejecutivo:"Catalina J.",mes:"Junio",acceso:"Charla de inducción / Lista de acceso",implementos:"Chaleco reflectante; Casco de seguridad; Botas / zapatos de seguridad; Lentes de seguridad",obs:"El día anterior enviar los datos del personal que realizará el inventario (REDTEC)"},
-    {id:35,num:34,cliente:"MAYR-MELNHOF PACKAGING MARINETTI LTDA",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Julián Sánchez",telefono:"79783733",correo:"julian.sanchez@mm.group",ejecutivo:"Jaqueline M.",mes:"Septiembre",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:35,num:34,cliente:"MAYR-MELNHOF PACKAGING MARINETTI LTDA",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Julián Sánchez",telefono:"79783733",correo:"julian.sanchez@mm.group",ejecutivo:"Jaqueline M.",mes:"Septiembre",acceso:"Sin requerimiento",implementos:"",obs:""},
     {id:36,num:35,cliente:"MIGUEL MARITANO INDUSTRIA DE JABONES S.A.",estado:"Programado",recinto:"Recinto Principal",urgencia:"Baja",fecha:"9 jul 2026",horario:"10:00",responsable:"Jose Rivas E",telefono:"998206278",correo:"jrivas@maritano.cl",ejecutivo:"Rodrigo S.",mes:"Julio",acceso:"DNI / Cédula de identidad",implementos:"Chaleco reflectante; Casco de seguridad; Botas / zapatos de seguridad",obs:""},
-    {id:37,num:36,cliente:"MOLINO PUENTE ALTO SA",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"",telefono:"",correo:"supervisorbodega@molinopuentealto.cl",ejecutivo:"Jaqueline M.",mes:"Agosto",acceso:"Sin requerimiento",implementos:"",obs:""},
-    {id:38,num:37,cliente:"PAIMASA S.A.",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Hernan Catalan",telefono:"949370812",correo:"hcatalan@paimasa.cl",ejecutivo:"Catalina J.",mes:"Agosto",acceso:"Sin requerimiento",implementos:"",obs:""},
-    {id:39,num:38,cliente:"PIBAMOUR LTDA",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Adan Reyes",telefono:"920873566",correo:"jrodriguez@tw.cl",ejecutivo:"Catalina J.",mes:"Septiembre",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:37,num:36,cliente:"MOLINO PUENTE ALTO SA",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"",telefono:"",correo:"supervisorbodega@molinopuentealto.cl",ejecutivo:"Jaqueline M.",mes:"Agosto",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:38,num:37,cliente:"PAIMASA S.A.",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Hernan Catalan",telefono:"949370812",correo:"hcatalan@paimasa.cl",ejecutivo:"Catalina J.",mes:"Agosto",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:39,num:38,cliente:"PIBAMOUR LTDA",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Adan Reyes",telefono:"920873566",correo:"jrodriguez@tw.cl",ejecutivo:"Catalina J.",mes:"Septiembre",acceso:"Sin requerimiento",implementos:"",obs:""},
     {id:40,num:39,cliente:"PRODUCTOS FERNANDEZ SA",estado:"Realizado",recinto:"Recinto Principal",urgencia:"—",fecha:"12 ene 2026",horario:"",responsable:"Fernando escalona",telefono:"998833347",correo:"fernando.escalona@pfalimentos.cl",ejecutivo:"Jaqueline M.",mes:"Enero",acceso:"Sin requerimiento",implementos:"",obs:"Realizado sin observaciones ☑️"},
-    {id:41,num:40,cliente:"PROSEPAN",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Marcelino Valenzuela",telefono:"944129448",correo:"mvalenzuela@balearespa.cl",ejecutivo:"Rodrigo S.",mes:"Julio",acceso:"Sin requerimiento",implementos:"",obs:""},
-    {id:42,num:41,cliente:"PUNTO AZUL S.A.",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Guillermo Tapia",telefono:"976690874",correo:"ggutierrez@ptoazul.cl",ejecutivo:"Catalina J.",mes:"Mayo",acceso:"Sin requerimiento",implementos:"",obs:""},
-    {id:43,num:42,cliente:"QUINTA S.A.",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Andrea Contreras",telefono:"920616748",correo:"acontreras@quintasa.cl",ejecutivo:"Catalina J.",mes:"Octubre",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:41,num:40,cliente:"PROSEPAN",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Marcelino Valenzuela",telefono:"944129448",correo:"mvalenzuela@balearespa.cl",ejecutivo:"Rodrigo S.",mes:"Julio",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:42,num:41,cliente:"PUNTO AZUL S.A.",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Guillermo Tapia",telefono:"976690874",correo:"ggutierrez@ptoazul.cl",ejecutivo:"Catalina J.",mes:"Mayo",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:43,num:42,cliente:"QUINTA S.A.",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Andrea Contreras",telefono:"920616748",correo:"acontreras@quintasa.cl",ejecutivo:"Catalina J.",mes:"Octubre",acceso:"Sin requerimiento",implementos:"",obs:""},
     {id:44,num:43,cliente:"SOCIEDAD COMERCIAL E INVERSIONES LOS ALERCES SA",estado:"Programado",recinto:"Recinto Principal",urgencia:"Urgente",fecha:"5 may 2026",horario:"09:00",responsable:"Jesus Diaz",telefono:"935422598",correo:"facturacion@smartpack.cl",ejecutivo:"Jaqueline M.",mes:"Mayo",acceso:"Credencial empresa + foto",implementos:"Chaleco reflectante; Casco de seguridad; Botas / zapatos de seguridad",obs:""},
-    {id:45,num:44,cliente:"SOCIEDAD INDUSTRIAL KUNSTMANN S.A.",estado:"Pendiente",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Martiniano Vega",telefono:"944916914",correo:"mvega@siksa.cl",ejecutivo:"Rodrigo S.",mes:"Octubre",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:45,num:44,cliente:"SOCIEDAD INDUSTRIAL KUNSTMANN S.A.",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Martiniano Vega",telefono:"944916914",correo:"mvega@siksa.cl",ejecutivo:"Rodrigo S.",mes:"Octubre",acceso:"Sin requerimiento",implementos:"",obs:""},
     {id:46,num:45,cliente:"TAK S.A",estado:"Programado",recinto:"Recinto Principal",urgencia:"Próximo",fecha:"11 may 2026",horario:"12:30",responsable:"Miguel Blanco",telefono:"999168121",correo:"mblanco@coexca.cl",ejecutivo:"Jaqueline M.",mes:"Mayo",acceso:"DNI / Cédula de identidad",implementos:"Chaleco reflectante; Casco de seguridad; Botas / zapatos de seguridad",obs:"+ Ropa térmica"},
-    {id:47,num:46,cliente:"THE PROTEIN COMPANY SPA",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Marco Mendez",telefono:"979199519",correo:"mmendez@tpcchile.cl",ejecutivo:"Jaqueline M.",mes:"Mayo",acceso:"Sin requerimiento",implementos:"",obs:""},
+    {id:47,num:46,cliente:"THE PROTEIN COMPANY SPA",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Marco Mendez",telefono:"979199519",correo:"mmendez@tpcchile.cl",ejecutivo:"Jaqueline M.",mes:"Mayo",acceso:"Sin requerimiento",implementos:"",obs:""},
     {id:48,num:47,cliente:"TRANSPORTES DESA LTDA",estado:"Realizado",recinto:"Recinto Principal",urgencia:"—",fecha:"23 ene 2026",horario:"",responsable:"Catherine Padilla",telefono:"988308588",correo:"logisticos@transporteslm.cl",ejecutivo:"Jaqueline M.",mes:"Enero",acceso:"Sin requerimiento",implementos:"",obs:"Realizado sin observaciones ☑️"},
-    {id:49,num:48,cliente:"TUCAPEL SA",estado:"En espera de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Rodrigo Vergara",telefono:"",correo:"rvergara@tucapel.cl",ejecutivo:"Catalina J.",mes:"Mayo",acceso:"Sin requerimiento",implementos:"",obs:"Permítannos revisar internamente nuestras cargas de trabajo para proponer una fecha tentativa."}
+    {id:49,num:48,cliente:"TUCAPEL SA",estado:"Pendientes de respuesta",recinto:"Recinto Principal",urgencia:"—",fecha:"",horario:"",responsable:"Rodrigo Vergara",telefono:"",correo:"rvergara@tucapel.cl",ejecutivo:"Catalina J.",mes:"Mayo",acceso:"Sin requerimiento",implementos:"",obs:"Permítannos revisar internamente nuestras cargas de trabajo para proponer una fecha tentativa."}
 ];
 
 // ================================================================
@@ -812,7 +793,7 @@ let clientes = [], calendario = [], editCId = null, editKId = null;
 
 // ================================================================
 //  ALMACÉN INTERNO (Azure Function + Blob JSON)
-//  Mismo contrato que tenía GS: .get(sheet) y .put(sheet, data)
+//  Mismo contrato que Google Apps Script: .get(sheet) y .put(sheet, data)
 // ================================================================
 const GS = {
     async get(sheet) {
@@ -985,6 +966,70 @@ async function delResultado(id) {
     catch(e) { setSync("error","Error al guardar"); } finally { showLoad(false); }
 }
 
+function parseConteoDate(fechaStr) {
+    if (!fechaStr) return null;
+    const meses = {ene:0,feb:1,mar:2,abr:3,may:4,jun:5,jul:6,ago:7,sep:8,oct:9,nov:10,dic:11};
+    const parts = fechaStr.trim().toLowerCase().split(/\s+/);
+    if (parts.length < 3) return null;
+    const day = parseInt(parts[0]);
+    const mon = meses[parts[1].substring(0,3)];
+    const year = parseInt(parts[2]);
+    if (isNaN(day) || mon === undefined || isNaN(year)) return null;
+    return new Date(year, mon, day);
+}
+
+function getExpiryInfo(fechaStr) {
+    const conteoDate = parseConteoDate(fechaStr);
+    if (!conteoDate) return { html: '<span style="color:#6b7a90;font-size:12px;">—</span>', expired: false };
+    const expiry = new Date(conteoDate);
+    expiry.setDate(expiry.getDate() + 30);
+    const today = new Date(); today.setHours(0,0,0,0);
+    const expired = expiry < today;
+    const monNames = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    const formatted = `${expiry.getDate()} ${monNames[expiry.getMonth()]} ${expiry.getFullYear()}`;
+    if (expired) {
+        return { html: `<span class="date-expired">⚠ ${formatted}</span>`, expired: true };
+    }
+    return { html: `<span class="date-ok">✓ ${formatted}</span>`, expired: false };
+}
+
+function showObservaciones(id) {
+    const r = resultados.find(x => x.id == id);
+    if (!r) return;
+    g('obsModalCliente').textContent = r.cliente;
+    g('obsModalItem').textContent = r.item ? `Ítem: ${r.item}` : '';
+    g('obsModalText').textContent = r.obs && r.obs.trim() ? r.obs : '(Sin observaciones registradas)';
+    g('modalObs').classList.add('active');
+}
+
+function updateExpiryBanner() {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const monNames = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    const expired = resultados.filter(r => {
+        const d = parseConteoDate(r.fecha);
+        if (!d) return false;
+        const exp = new Date(d); exp.setDate(exp.getDate() + 30);
+        return exp < today;
+    });
+    const banner = g('expiryBanner');
+    if (!expired.length) { banner.style.display = 'none'; return; }
+    const items = expired.map(r => {
+        const d = parseConteoDate(r.fecha);
+        const exp = new Date(d); exp.setDate(exp.getDate() + 30);
+        const expStr = `${exp.getDate()} ${monNames[exp.getMonth()]} ${exp.getFullYear()}`;
+        return `<div style="margin-bottom:3px;"><span>Venció ${expStr}</span>${esc(r.cliente)} — ${esc(r.item)}</div>`;
+    }).join('');
+    banner.style.display = 'block';
+    banner.innerHTML = `<div class="expiry-banner">
+        <div class="expiry-banner-icon">🔴</div>
+        <div class="expiry-banner-body">
+            <div class="expiry-banner-title">⚠ ${expired.length} inventario${expired.length>1?'s':''} con plazo de conciliación vencido</div>
+            <div class="expiry-banner-list">${items}</div>
+        </div>
+        <button class="expiry-banner-close" onclick="this.closest('.expiry-banner').parentElement.style.display='none'" title="Cerrar">✕</button>
+    </div>`;
+}
+
 function renderResultados() {
     const q = (g("searchR").value || "").toLowerCase();
     const estFilt = g("fREstado").value;
@@ -998,7 +1043,6 @@ function renderResultados() {
 
     g("resCount").textContent = `${f.length} registros`;
 
-    // Estadísticas resumen
     const totalItems = f.length;
     const getTotal = r => { const v = Number(r.difTotal); return (!isNaN(v) && r.difTotal !== '' && r.difTotal !== undefined) ? v : (Number(r.diferencia) || 0); };
     const conDif = f.filter(r => getTotal(r) !== 0).length;
@@ -1013,23 +1057,19 @@ function renderResultados() {
         <div class="stat-card espe"><div class="stat-value">${conDif}</div><div class="stat-label">Con Diferencia</div></div>`;
 
     const tb = g("resBody"), em = g("resEmpty");
-    if (!f.length) { tb.innerHTML = ""; em.classList.remove("hidden"); return; }
+    if (!f.length) { tb.innerHTML = ""; em.classList.remove("hidden"); updateExpiryBanner(); return; }
     em.classList.add("hidden");
 
     tb.innerHTML = f.map((r, i) => {
         const diff = Number(r.diferencia);
         let diffClass = diff > 0 ? "diff-pos" : diff < 0 ? "diff-neg" : "diff-zero";
-        let diffLabel = diff > 0 ? "Sobrante" : diff < 0 ? "Faltante" : "Exacto";
-        let diffBadgeClass = diff > 0 ? "b-real" : diff < 0 ? "b-pend" : "b-prog";
         const pend2024 = Number(r.pendientes2024) || 0;
         const difTotal = (!isNaN(Number(r.difTotal)) && r.difTotal !== '' && r.difTotal !== undefined) ? Number(r.difTotal) : diff;
         let totalClass = difTotal > 0 ? "diff-pos" : difTotal < 0 ? "diff-neg" : "diff-zero";
         let totalLabel = difTotal > 0 ? "Sobrante" : difTotal < 0 ? "Faltante" : "Exacto";
         let totalBadge = difTotal > 0 ? "b-real" : difTotal < 0 ? "b-pend" : "b-prog";
-
-        /* Vencimiento conciliación = fechaConteo + 30 días */
-        const venc = calcVencimientoConciliacion(r.fecha);
-
+        const expiry = getExpiryInfo(r.fecha);
+        const hasObs = r.obs && r.obs.trim().length > 0;
         return `<tr>
             <td style="color:#6b7a90;font-size:12px;">${i+1}</td>
             <td><strong style="font-size:12px;">${esc(r.cliente)}</strong></td>
@@ -1041,105 +1081,32 @@ function renderResultados() {
             <td style="text-align:right;"><span style="color:#7c3aed;font-weight:700;">${pend2024 !== 0 ? "-"+pend2024.toLocaleString("es-CL") : "—"}</span></td>
             <td style="text-align:right;"><span class="${totalClass}">${difTotal >= 0 ? "+" : ""}${difTotal.toLocaleString("es-CL")}</span></td>
             <td><span class="badge ${totalBadge}">${totalLabel}</span><br><span style="font-size:11px;color:var(--text-light);">${esc(r.porcentaje)}</span></td>
-            <td>${venc.html}</td>
-            <td style="font-size:12px;max-width:180px;">${esc(r.obs)}</td>
+            <td style="text-align:center;">${expiry.html}</td>
             <td><div class="actions-cell">
+                <button class="btn-obs${hasObs?' has-obs':''}" onclick="showObservaciones(${r.id})" title="${hasObs?'Ver observaciones':'Sin observaciones'}">💬</button>
                 <button class="btn-icon edit" onclick="openModalResultado(${r.id})" title="Editar">✏️</button>
                 <button class="btn-icon delete" onclick="delResultado(${r.id})" title="Eliminar">🗑️</button>
             </div></td>
         </tr>`;
     }).join("");
 
-    /* Actualizar banner de vencimientos después de renderizar la tabla */
     updateExpiryBanner();
-}
-
-/* ====================================================================
-   VENCIMIENTO DE CONCILIACIÓN
-   Plazo fijo: 30 días desde la fecha del conteo.
-   - Vencido (< hoy):    badge rojo
-   - Por vencer ≤ 5 días: badge amarillo
-   - OK (resto):         badge verde
-   ==================================================================== */
-const PLAZO_CONCILIACION_DIAS = 30;
-const MESES_CORTO = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-
-function parseConteoDate(fechaStr) {
-    if (!fechaStr) return null;
-    /* Acepta formatos: "DD/MM/YYYY", "YYYY-MM-DD", "DD-MM-YYYY", "23 abr 2026" */
-    const s = String(fechaStr).trim();
-    let d = null;
-    /* YYYY-MM-DD */
-    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-    if (m) d = new Date(+m[1], +m[2]-1, +m[3]);
-    /* DD/MM/YYYY o DD-MM-YYYY */
-    if (!d) {
-        m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-        if (m) d = new Date(+m[3], +m[2]-1, +m[1]);
-    }
-    /* "23 abr 2026" */
-    if (!d) {
-        m = s.match(/^(\d{1,2})\s+([a-zñ]{3,})\s+(\d{4})/i);
-        if (m) {
-            const mi = MESES_CORTO.indexOf(m[2].substring(0,3).toLowerCase());
-            if (mi >= 0) d = new Date(+m[3], mi, +m[1]);
-        }
-    }
-    if (d && !isNaN(d.getTime())) { d.setHours(0,0,0,0); return d; }
-    return null;
-}
-
-function calcVencimientoConciliacion(fechaConteo) {
-    const d = parseConteoDate(fechaConteo);
-    if (!d) return { html: '<span style="color:#9ca3af;font-size:12px;">—</span>', expired: false, soon: false, date: null };
-    const exp = new Date(d); exp.setDate(exp.getDate() + PLAZO_CONCILIACION_DIAS);
-    const today = new Date(); today.setHours(0,0,0,0);
-    const diff = Math.floor((exp - today) / 86400000);
-    const formatted = `${exp.getDate()} ${MESES_CORTO[exp.getMonth()]} ${exp.getFullYear()}`;
-    if (diff < 0)   return { html: `<span class="date-expired">⚠ ${formatted}</span>`, expired: true,  soon: false, date: exp };
-    if (diff <= 5)  return { html: `<span class="date-soon">⏱ ${formatted}</span>`,    expired: false, soon: true,  date: exp };
-    return            { html: `<span class="date-ok">✓ ${formatted}</span>`,           expired: false, soon: false, date: exp };
-}
-
-function updateExpiryBanner() {
-    const banner = g('expiryBanner');
-    if (!banner) return;
-
-    /* Buscar todos los resultados con vencimiento vencido */
-    const vencidos = resultados.map(r => ({ r, venc: calcVencimientoConciliacion(r.fecha) }))
-                               .filter(x => x.venc.expired);
-
-    if (!vencidos.length) {
-        banner.style.display = 'none';
-        banner.innerHTML = '';
-        return;
-    }
-
-    const items = vencidos.map(({ r, venc }) => {
-        const expStr = `${venc.date.getDate()} ${MESES_CORTO[venc.date.getMonth()]} ${venc.date.getFullYear()}`;
-        return `<div style="margin-bottom:3px;"><span>Venció ${expStr}</span>${esc(r.cliente)} — ${esc(r.item || '')}</div>`;
-    }).join('');
-
-    banner.style.display = 'block';
-    banner.innerHTML = `<div class="expiry-banner">
-        <div class="expiry-banner-icon">🔴</div>
-        <div class="expiry-banner-body">
-            <div class="expiry-banner-title">⚠ ${vencidos.length} inventario${vencidos.length>1?'s':''} con plazo de conciliación vencido</div>
-            <div class="expiry-banner-list">${items}</div>
-        </div>
-        <button class="expiry-banner-close" onclick="this.closest('.expiry-banner').parentElement.style.display='none'" title="Cerrar">✕</button>
-    </div>`;
 }
 
 // ================================================================
 //  LOAD
 // ================================================================
 async function loadData() {
-    setSync("loading","Conectando con almacén interno...");
+    setSync("loading","Conectando con el almacén interno...");
     try {
         showLoad(true);
         const [c, k, res] = await Promise.all([GS.get("Clientes"), GS.get("Calendario"), GS.get("Resultados").catch(()=>[])]);
-        clientes = c || []; calendario = k || [];
+        clientes = c || []; calendario = (k || []).map(item => {
+            if (item.estado === "Pendiente" || item.estado === "En espera de respuesta") {
+                item.estado = "Pendientes de respuesta";
+            }
+            return item;
+        });
         // Normalizar campos numéricos de resultados que vienen como string desde Sheets
         resultados = (res || []).map(r => {
             const fisico         = parseFloat(r.fisico)         || 0;
@@ -1158,10 +1125,15 @@ async function loadData() {
             await GS.put("Clientes", INIT_C);
             await GS.put("Calendario", INIT_K);
             clientes = [...INIT_C]; calendario = [...INIT_K];
-            toast("✅ Datos iniciales cargados en el almacén interno", "success");
+            toast("✅ Datos iniciales subidos al almacén", "success");
         }
         renderClientes(); renderCalendario(); renderResultados();
-        setSync("ok","Sincronizado con almacén interno ✓");
+        setSync("ok","Sincronizado ✓");
+
+        /* Al cargar la página, mostrar modal de vencimientos si los hay
+           (siempre que el usuario no lo haya descartado en esta sesión).
+           Se hace fuera del tab Resultados porque la tab inicial es Clientes. */
+        setTimeout(() => mostrarModalVencimientos(), 500);
     } catch(e) {
         clientes = [...INIT_C]; calendario = [...INIT_K];
         renderClientes(); renderCalendario();
@@ -1218,14 +1190,13 @@ function renderCalendario() {
     g("statsGrid").innerHTML = `
         <div class="stat-card total"><div class="stat-value">${all.length}</div><div class="stat-label">Total</div></div>
         <div class="stat-card prog"><div class="stat-value">${all.filter(k=>k.estado==="Programado").length}</div><div class="stat-label">Programados</div></div>
-        <div class="stat-card pend"><div class="stat-value">${all.filter(k=>k.estado==="Pendiente").length}</div><div class="stat-label">Pendientes</div></div>
-        <div class="stat-card espe"><div class="stat-value">${all.filter(k=>k.estado==="En espera de respuesta").length}</div><div class="stat-label">En espera</div></div>
+        <div class="stat-card pend"><div class="stat-value">${all.filter(k=>k.estado==="Pendientes de respuesta").length}</div><div class="stat-label">Pendientes de respuesta</div></div>
         <div class="stat-card real"><div class="stat-value">${all.filter(k=>k.estado==="Realizado").length}</div><div class="stat-label">Realizados</div></div>`;
     g("calCount").textContent = `${f.length} registros`;
     const tb = g("ktBody"), em = g("kEmpty");
     if(!f.length) { tb.innerHTML=""; em.classList.remove("hidden"); return; }
     em.classList.add("hidden");
-    const bCls = {"Programado":"b-prog","Pendiente":"b-pend","En espera de respuesta":"b-espe","Realizado":"b-real"};
+    const bCls = {"Programado":"b-prog","Pendientes de respuesta":"b-pend","Realizado":"b-real"};
     const uCls = {"Urgente":"u-urg","Moderada":"u-mod","Próximo":"u-prox","Planificada":"u-plan","Baja":"u-baja"};
     tb.innerHTML = f.map(k => `<tr>
         <td style="color:#6b7a90;font-size:12px;font-weight:700;">${k.num}</td>
@@ -1257,7 +1228,7 @@ function openModal(type) {
     } else {
         editKId=null; g("mKTitle").textContent="Nuevo Conteo";
         ["k_cli","k_rec","k_fec","k_hor","k_res","k_tel","k_cor","k_imp","k_obs"].forEach(id=>g(id).value="");
-        g("k_est").value="Pendiente"; g("k_urg").value="—";
+        g("k_est").value="Pendientes de respuesta"; g("k_urg").value="—";
         g("k_ejec").value=""; g("k_mes").value=""; g("k_acc").value="Sin requerimiento";
         g("modalK").classList.add("active");
     }
@@ -1333,262 +1304,25 @@ async function delConteo(id) {
 // ================================================================
 //  EXPORT CSV
 // ================================================================
-function exportCSV(type) { exportExcel(type); }  // alias (los botones siguen llamando a esto)
-
-function exportExcel(type) {
-    let header, body, fn, sheetName;
+function exportCSV(type) {
+    let rows, fn;
     if(type==='resultados') {
-        header=["Cliente","Fecha","Ítem","Conteo Físico","Stock SAP","Diferencia","Pendientes 2024","Dif. Total","%Diferencia","Observaciones"];
-        body=resultados.map(r=>[r.cliente,r.fecha,r.item,Number(r.fisico)||0,Number(r.sap)||0,Number(r.diferencia)||0,Number(r.pendientes2024)||0,Number(r.difTotal!==undefined&&r.difTotal!==''?r.difTotal:r.diferencia)||0,r.porcentaje,r.obs]);
-        fn="Resultados_Conteos.xlsx"; sheetName="Resultados";
+        rows=[["Cliente","Fecha","Ítem","Conteo Físico","Stock SAP","Diferencia","Pendientes 2024","Dif. Total","%Diferencia","Observaciones"]];
+        resultados.forEach(r=>rows.push([r.cliente,r.fecha,r.item,r.fisico,r.sap,r.diferencia,r.pendientes2024||0,r.difTotal||r.diferencia,r.porcentaje,r.obs]));
+        fn="Resultados_Conteos.csv";
     } else if(type==='clientes') {
-        header=["Cliente","Responsable","Teléfono","Correo","Ejecutivo Redtec","Mes Teórico"];
-        body=clientes.map(c=>[c.cliente,c.responsable,c.telefono,c.correo,c.ejecutivo,c.mes]);
-        fn="Clientes_DB.xlsx"; sheetName="Clientes";
+        rows=[["Cliente","Responsable","Teléfono","Correo","Ejecutivo Redtec","Mes Teórico"]];
+        clientes.forEach(c=>rows.push([c.cliente,c.responsable,c.telefono,c.correo,c.ejecutivo,c.mes]));
+        fn="Clientes_DB.csv";
     } else {
-        header=["N°","Cliente","Estado","Recinto","Urgencia","Fecha","Horario","Responsable","Teléfono","Correo","Ejecutivo","Mes teórico","Req. Acceso","Implementos","Observaciones"];
-        body=calendario.map(k=>[k.num,k.cliente,k.estado,k.recinto,k.urgencia,k.fecha,k.horario,k.responsable,k.telefono,k.correo,k.ejecutivo,k.mes,k.acceso,k.implementos,k.obs]);
-        fn="Calendario_Conteos.xlsx"; sheetName="Calendario";
+        rows=[["N°","Cliente","Estado","Recinto","Urgencia","Fecha","Horario","Responsable","Teléfono","Correo","Ejecutivo","Mes teórico","Req. Acceso","Implementos","Observaciones"]];
+        calendario.forEach(k=>rows.push([k.num,k.cliente,k.estado,k.recinto,k.urgencia,k.fecha,k.horario,k.responsable,k.telefono,k.correo,k.ejecutivo,k.mes,k.acceso,k.implementos,k.obs]));
+        fn="Calendario_Conteos.csv";
     }
-    const aoa=[header, ...body];
-    const ws=XLSX.utils.aoa_to_sheet(aoa);
-    // ancho de columnas automático aproximado
-    ws['!cols']=header.map((h,i)=>{
-        let max=String(h).length;
-        body.forEach(row=>{ const v=row[i]==null?'':String(row[i]); if(v.length>max) max=v.length; });
-        return {wch:Math.min(max+2, 55)};
-    });
-    const wb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, sheetName);
-    XLSX.writeFile(wb, fn);
+    const csv=rows.map(r=>r.map(v=>`"${(v||"").toString().replace(/"/g,'""')}"`).join(",")).join("\n");
+    const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=fn; a.click();
     toast(`${fn} exportado ✓`,"success");
-}
-
-// ================================================================
-//  ANÁLISIS KPI — Diferencias SAP (faltantes / sobrantes)
-// ================================================================
-function kpiTotal(r){
-    const v=Number(r.difTotal);
-    return (!isNaN(v) && r.difTotal!=='' && r.difTotal!==undefined) ? v : (Number(r.diferencia)||0);
-}
-function kpiFiltered(){
-    const ej=g("fKpiEjec").value, cl=g("fKpiCliente").value;
-    return resultados.filter(r=>(!ej||r.ejecutivo===ej)&&(!cl||r.cliente===cl));
-}
-function miniBar(rows){
-    // rows: [{label, value, color}]  -> barras horizontales con CSS puro
-    const max=Math.max(1,...rows.map(r=>Math.abs(r.value)));
-    return rows.map(r=>{
-        const w=(Math.abs(r.value)/max*100).toFixed(1);
-        return `<div style="display:flex;align-items:center;gap:8px;margin:6px 0;font-size:12px;">
-            <div style="width:130px;text-align:right;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(r.label)}</div>
-            <div style="flex:1;background:var(--bg);border-radius:4px;height:18px;position:relative;">
-                <div style="width:${w}%;background:${r.color};height:100%;border-radius:4px;transition:width .4s;"></div>
-            </div>
-            <div style="width:80px;font-weight:600;">${Number(r.value).toLocaleString("es-CL")}</div>
-        </div>`;
-    }).join("") || `<div style="color:var(--text-light);font-size:13px;">Sin datos</div>`;
-}
-/* ====================================================================
-   KPI - VARIABLES Y CONSTANTES
-   ==================================================================== */
-let kpiChartInstance = null;
-const MESES_ORDER = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-const MESES_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-
-/* Heurística para detectar año en un registro (busca '20XX' en la fecha) */
-function _kpiAnioOf(r) {
-    if (r.fecha) {
-        const m = String(r.fecha).match(/\b(20\d{2})\b/);
-        if (m) return m[1];
-    }
-    return null;
-}
-
-function _kpiInicAnioFilter() {
-    const sel = g("fKpiAnio");
-    if (!sel) return;
-    /* Solo poblar la primera vez */
-    if (sel.options.length > 1) return;
-    const anios = new Set();
-    resultados.forEach(r => { const a = _kpiAnioOf(r); if (a) anios.add(a); });
-    [...anios].sort((a,b) => +b - +a).forEach(a => {
-        const o = document.createElement("option"); o.value = a; o.textContent = a; sel.appendChild(o);
-    });
-}
-
-function renderKPI(){
-    // poblar filtros una vez
-    _kpiInicAnioFilter();
-    const selCl = g("fKpiCliente");
-    if (selCl && selCl.options.length <= 1) {
-        [...new Set(resultados.map(r=>r.cliente).filter(Boolean))].sort().forEach(c=>{
-            const o=document.createElement("option"); o.value=c; o.textContent=c; selCl.appendChild(o);
-        });
-    }
-
-    const anioFilt = g("fKpiAnio") ? g("fKpiAnio").value : "";
-    const f = kpiFiltered().filter(r => !anioFilt || _kpiAnioOf(r) === anioFilt);
-    g("kpiCount").textContent = `${f.length} ítems`;
-
-    /* ─── Tarjetas resumen ─── */
-    const totItems = f.length;
-    const exactos  = f.filter(r => kpiTotal(r) === 0).length;
-    const faltItems = f.filter(r => kpiTotal(r) < 0).length;
-    const sobrItems = f.filter(r => kpiTotal(r) > 0).length;
-    const unidFalt = f.filter(r => kpiTotal(r) < 0).reduce((s,r) => s + Math.abs(kpiTotal(r)), 0);
-    const unidSobr = f.filter(r => kpiTotal(r) > 0).reduce((s,r) => s + kpiTotal(r), 0);
-    const difNeta  = f.reduce((s,r) => s + kpiTotal(r), 0);
-    const exactPct = totItems ? ((exactos / totItems) * 100).toFixed(1) : "0";
-
-    g("kpiSummaryGrid").innerHTML = `
-        <div class="stat-card total"><div class="stat-value">${totItems}</div><div class="stat-label">Ítems analizados</div></div>
-        <div class="stat-card real"><div class="stat-value">${exactPct}%</div><div class="stat-label">Exactitud (sin dif.)</div></div>
-        <div class="stat-card pend"><div class="stat-value">${faltItems}</div><div class="stat-label">Ítems con faltante</div></div>
-        <div class="stat-card prog"><div class="stat-value">${sobrItems}</div><div class="stat-label">Ítems con sobrante</div></div>
-        <div class="stat-card espe" style="border-top-color:#7c3aed;"><div class="stat-value" style="color:#7c3aed;">${difNeta>=0?"+":""}${difNeta.toLocaleString("es-CL")}</div><div class="stat-label">Dif. neta (u.)</div></div>`;
-
-    /* ─── Agrupar por mes (usar parseConteoDate para el mes real, no string) ─── */
-    const byMes = {};
-    MESES_ORDER.forEach(m => { byMes[m] = { exactos:0, faltante:0, sobrante:0, total:0 }; });
-    f.forEach(r => {
-        const d = parseConteoDate(r.fecha);
-        if (!d) return;
-        const mesName = MESES_ORDER[d.getMonth()];
-        const t = kpiTotal(r);
-        byMes[mesName].total++;
-        if (t === 0) byMes[mesName].exactos++;
-        else if (t < 0) byMes[mesName].faltante++;
-        else byMes[mesName].sobrante++;
-    });
-    const activeMeses = MESES_ORDER.filter(m => byMes[m].total > 0);
-
-    /* ─── Gráfico de barras ─── */
-    if (kpiChartInstance) { kpiChartInstance.destroy(); kpiChartInstance = null; }
-    const canvas = document.getElementById("kpiBarChart");
-    if (canvas && activeMeses.length) {
-        const labels    = activeMeses.map(m => MESES_SHORT[MESES_ORDER.indexOf(m)]);
-        const dExactos  = activeMeses.map(m => byMes[m].exactos);
-        const dFaltante = activeMeses.map(m => byMes[m].faltante);
-        const dSobrante = activeMeses.map(m => byMes[m].sobrante);
-        kpiChartInstance = new Chart(canvas.getContext("2d"), {
-            type: "bar",
-            data: {
-                labels,
-                datasets: [
-                    { label: "Exactos",  data: dExactos,  backgroundColor: "#10b981", borderRadius: 5, borderSkipped: false },
-                    { label: "Faltante", data: dFaltante, backgroundColor: "#f59e0b", borderRadius: 5, borderSkipped: false },
-                    { label: "Sobrante", data: dSobrante, backgroundColor: "#3b82f6", borderRadius: 5, borderSkipped: false }
-                ]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: {
-                    legend: { position: "top", labels: { font: { family: "'Segoe UI',sans-serif", size: 12 }, padding: 20, usePointStyle: true, pointStyle: "circle" } },
-                    tooltip: {
-                        mode: "index", intersect: false,
-                        callbacks: { footer: (items) => `Total: ${items.reduce((s,i)=>s+i.raw,0)}` }
-                    }
-                },
-                scales: {
-                    x: { grid: { display: false }, ticks: { font: { family: "'Segoe UI',sans-serif", size: 12 } } },
-                    y: { beginAtZero: true, ticks: { stepSize: 1, font: { family: "'Segoe UI',sans-serif", size: 12 } }, grid: { color: "rgba(0,0,0,0.06)" } }
-                }
-            }
-        });
-    } else if (canvas) {
-        const ctx = canvas.getContext("2d"); ctx.clearRect(0,0,canvas.width,canvas.height);
-    }
-
-    /* ─── Tabla detalle por mes ─── */
-    const tbody = g("kpiTableBody");
-    if (tbody) {
-        if (!activeMeses.length) {
-            tbody.innerHTML = `<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text-light);">Sin datos para mostrar</td></tr>`;
-        } else {
-            const totExactos  = activeMeses.reduce((s,m) => s + byMes[m].exactos, 0);
-            const totFaltante = activeMeses.reduce((s,m) => s + byMes[m].faltante, 0);
-            const totSobrante = activeMeses.reduce((s,m) => s + byMes[m].sobrante, 0);
-            const totMes = activeMeses.reduce((s,m) => s + byMes[m].total, 0);
-            tbody.innerHTML = activeMeses.map((m, idx) => {
-                const d = byMes[m];
-                const pct = d.total ? Math.round((d.exactos / d.total) * 100) : 0;
-                const bg = idx % 2 === 0 ? "white" : "#f8f9fc";
-                return `<tr style="background:${bg};border-bottom:1px solid var(--border);">
-                    <td style="padding:10px 14px;font-weight:600;">${m}</td>
-                    <td style="padding:10px 14px;text-align:center;font-weight:700;">${d.total}</td>
-                    <td style="padding:10px 14px;text-align:center;"><span class="badge b-prog">${d.exactos}</span></td>
-                    <td style="padding:10px 14px;text-align:center;"><span class="badge b-pend">${d.faltante}</span></td>
-                    <td style="padding:10px 14px;text-align:center;"><span class="badge b-real">${d.sobrante}</span> <span style="font-size:11px;color:var(--text-light);">${pct}%</span></td>
-                </tr>`;
-            }).join("") + `<tr style="background:#f0f2f5;font-weight:700;border-top:2px solid var(--border);">
-                <td style="padding:10px 14px;">TOTAL</td>
-                <td style="padding:10px 14px;text-align:center;">${totMes}</td>
-                <td style="padding:10px 14px;text-align:center;">${totExactos}</td>
-                <td style="padding:10px 14px;text-align:center;">${totFaltante}</td>
-                <td style="padding:10px 14px;text-align:center;">${totSobrante}</td>
-            </tr>`;
-        }
-    }
-
-    /* ─── Tabla por ejecutivo (se mantiene) ─── */
-    const ejs={};
-    f.forEach(r=>{
-        const e=r.ejecutivo||"—";
-        ejs[e]=ejs[e]||{items:0,exactos:0,falt:0,sobr:0,neta:0};
-        const t=kpiTotal(r);
-        ejs[e].items++; if(t===0) ejs[e].exactos++;
-        if(t<0) ejs[e].falt+=Math.abs(t); if(t>0) ejs[e].sobr+=t;
-        ejs[e].neta+=t;
-    });
-    g("kpiEjecBody").innerHTML=Object.entries(ejs).map(([e,d])=>`
-        <tr>
-            <td><strong style="font-size:12px;">${esc(e)}</strong></td>
-            <td style="text-align:right;">${d.items}</td>
-            <td style="text-align:right;">${d.exactos}</td>
-            <td style="text-align:right;font-weight:600;">${d.items?((d.exactos/d.items)*100).toFixed(1):"0"}%</td>
-            <td style="text-align:right;"><span class="diff-neg">${d.falt.toLocaleString("es-CL")}</span></td>
-            <td style="text-align:right;"><span class="diff-pos">${d.sobr.toLocaleString("es-CL")}</span></td>
-            <td style="text-align:right;"><span class="${d.neta<0?'diff-neg':d.neta>0?'diff-pos':'diff-zero'}">${d.neta>=0?"+":""}${d.neta.toLocaleString("es-CL")}</span></td>
-        </tr>`).join("") || `<tr><td colspan="7" style="text-align:center;color:var(--text-light);">Sin datos</td></tr>`;
-
-    /* ─── Tabla detalle de ítems (se mantiene, ordenada por impacto) ─── */
-    const tb=g("kpiBody"), em=g("kpiEmpty");
-    if(!f.length){ tb.innerHTML=""; em.classList.remove("hidden"); return; }
-    em.classList.add("hidden");
-    const sorted=[...f].sort((a,b)=>Math.abs(kpiTotal(b))-Math.abs(kpiTotal(a)));
-    tb.innerHTML=sorted.map((r,i)=>{
-        const t=kpiTotal(r);
-        const cls=t>0?"diff-pos":t<0?"diff-neg":"diff-zero";
-        const lab=t>0?"Sobrante":t<0?"Faltante":"Exacto";
-        const badge=t>0?"b-real":t<0?"b-pend":"b-prog";
-        return `<tr>
-            <td style="color:#6b7a90;font-size:12px;">${i+1}</td>
-            <td><strong style="font-size:12px;">${esc(r.cliente)}</strong></td>
-            <td style="font-size:12px;white-space:nowrap;">${esc(r.fecha)}</td>
-            <td style="font-size:12px;">${esc(r.item)}</td>
-            <td style="text-align:right;font-weight:600;">${(Number(r.fisico)||0).toLocaleString("es-CL")}</td>
-            <td style="text-align:right;font-weight:600;">${(Number(r.sap)||0).toLocaleString("es-CL")}</td>
-            <td style="text-align:right;"><span class="${cls}">${t>=0?"+":""}${t.toLocaleString("es-CL")}</span></td>
-            <td><span class="badge ${badge}">${lab}</span></td>
-            <td style="text-align:right;font-weight:700;">${Math.abs(t).toLocaleString("es-CL")}</td>
-        </tr>`;
-    }).join("");
-}
-function exportKPI(){
-    const f=kpiFiltered();
-    if(!f.length){ toast("No hay datos para exportar","error"); return; }
-    const header=["Cliente","Fecha","Ejecutivo","Ítem","Físico","SAP","Diferencia","Pendientes 2024","Dif. Total","Estado","Impacto (abs)"];
-    const body=f.map(r=>{
-        const t=kpiTotal(r);
-        return [r.cliente,r.fecha,r.ejecutivo,r.item,Number(r.fisico)||0,Number(r.sap)||0,Number(r.diferencia)||0,Number(r.pendientes2024)||0,t,t>0?"Sobrante":t<0?"Faltante":"Exacto",Math.abs(t)];
-    });
-    const ws=XLSX.utils.aoa_to_sheet([header,...body]);
-    ws['!cols']=header.map((h,i)=>{let m=String(h).length;body.forEach(rw=>{const v=rw[i]==null?'':String(rw[i]);if(v.length>m)m=v.length;});return {wch:Math.min(m+2,55)};});
-    const wb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb,ws,"Analisis_KPI");
-    XLSX.writeFile(wb,"Analisis_KPI_Diferencias.xlsx");
-    toast("Análisis KPI exportado ✓","success");
 }
 
 // ================================================================
@@ -1608,7 +1342,7 @@ async function testConnection() {
     } finally{showLoad(false);}
 }
 async function initializeData() {
-    if(!confirm("¿Sobrescribir los datos del almacén con los datos actuales del archivo?")) return;
+    if(!confirm("¿Sobrescribir los datos en el almacén con los datos actuales del archivo?")) return;
     try {
         showLoad(true);
         await GS.put("Clientes", clientes.length ? clientes : INIT_C);
@@ -1622,23 +1356,239 @@ async function initializeData() {
 function updateCfgStatus(ok) {
     g("showScriptUrl").textContent = STORE_URL;
     const el=g("configStatus");
-    if(ok===true){el.className="alert a-ok";el.innerHTML="✅ <strong>Conexión exitosa.</strong> Los datos se guardan como JSON interno y son visibles para todo el equipo.";}
-    else if(ok===false){el.className="alert a-err";el.innerHTML="❌ <strong>Error de conexión.</strong> Verifica que la función <code>clientes-store</code> esté desplegada y que <code>BLOB_CONNECTION_STRING</code> esté configurada.";}
+    if(ok===true){el.className="alert a-ok";el.innerHTML="✅ <strong>Conexión exitosa.</strong> Los datos se sincronizan con el almacén interno (Azure Blob) y son visibles para todo el equipo.";}
+    else if(ok===false){el.className="alert a-err";el.innerHTML="❌ <strong>Error de conexión.</strong> Verifica que la función <code>clientes-store</code> esté desplegada y accesible.";}
     else{el.className="alert a-info";el.innerHTML="ℹ️ <strong>Conectado al almacén interno.</strong> Haz clic en <em>Probar Conexión</em> para verificar.";}
 }
 
 // ================================================================
 //  TABS & HELPERS
 // ================================================================
+// ================================================================
+//  KPIs
+// ================================================================
+let kpiChartInstance = null;
+
+const MESES_ORDER = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+const MESES_SHORT  = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+
+function renderKpis() {
+    const anioFilt = g("fKpiAnio").value;
+    const ejFilt   = g("fKpiEjec").value;
+
+    // Filtrar calendario
+    let data = calendario.filter(k =>
+        (!ejFilt || k.ejecutivo === ejFilt) &&
+        (!anioFilt || _getAnioFromFecha(k, anioFilt))
+    );
+
+    // Totales globales
+    const total  = data.length;
+    const prog   = data.filter(k => k.estado === "Programado").length;
+    const pend   = data.filter(k => k.estado === "Pendientes de respuesta").length;
+    const real   = data.filter(k => k.estado === "Realizado").length;
+    const pctReal = total ? Math.round((real/total)*100) : 0;
+
+    g("kpiSummaryGrid").innerHTML = `
+        <div class="stat-card total"><div class="stat-value">${total}</div><div class="stat-label">Total conteos</div></div>
+        <div class="stat-card prog"><div class="stat-value">${prog}</div><div class="stat-label">Programados</div></div>
+        <div class="stat-card pend"><div class="stat-value">${pend}</div><div class="stat-label">Pendientes resp.</div></div>
+        <div class="stat-card real"><div class="stat-value">${real}</div><div class="stat-label">Realizados</div></div>
+        <div class="stat-card espe" style="border-top-color:#7c3aed;"><div class="stat-value" style="color:#7c3aed;">${pctReal}%</div><div class="stat-label">% Cumplimiento</div></div>`;
+
+    // Agrupar por mes teórico
+    const byMes = {};
+    MESES_ORDER.forEach(m => { byMes[m] = {prog:0,pend:0,real:0,total:0}; });
+    data.forEach(k => {
+        const m = k.mes;
+        if (!byMes[m]) byMes[m] = {prog:0,pend:0,real:0,total:0};
+        if (k.estado === "Programado")               byMes[m].prog++;
+        else if (k.estado === "Pendientes de respuesta") byMes[m].pend++;
+        else if (k.estado === "Realizado")           byMes[m].real++;
+        byMes[m].total++;
+    });
+
+    // Solo meses con datos
+    const activeMeses = MESES_ORDER.filter(m => byMes[m].total > 0);
+    const labels   = activeMeses.map(m => MESES_SHORT[MESES_ORDER.indexOf(m)]);
+    const dProg    = activeMeses.map(m => byMes[m].prog);
+    const dPend    = activeMeses.map(m => byMes[m].pend);
+    const dReal    = activeMeses.map(m => byMes[m].real);
+
+    // Destruir gráfico anterior si existe
+    if (kpiChartInstance) { kpiChartInstance.destroy(); kpiChartInstance = null; }
+
+    const ctx = document.getElementById("kpiBarChart").getContext("2d");
+    kpiChartInstance = new Chart(ctx, {
+        type: "bar",
+        data: {
+            labels,
+            datasets: [
+                { label: "Realizado",               data: dReal, backgroundColor: "#10b981", borderRadius: 5, borderSkipped: false },
+                { label: "Programado",              data: dProg, backgroundColor: "#3b82f6", borderRadius: 5, borderSkipped: false },
+                { label: "Pendientes de respuesta", data: dPend, backgroundColor: "#f59e0b", borderRadius: 5, borderSkipped: false }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: "top",
+                    labels: { font: { family: "'Segoe UI',sans-serif", size: 12 }, padding: 20, usePointStyle: true, pointStyle: "circle" }
+                },
+                tooltip: {
+                    mode: "index",
+                    intersect: false,
+                    callbacks: {
+                        footer: (items) => {
+                            const tot = items.reduce((s,i) => s + i.raw, 0);
+                            return `Total: ${tot}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    stacked: false,
+                    grid: { display: false },
+                    ticks: { font: { family: "'Segoe UI',sans-serif", size: 12 } }
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: { stepSize: 1, font: { family: "'Segoe UI',sans-serif", size: 12 } },
+                    grid: { color: "rgba(0,0,0,0.06)" }
+                }
+            }
+        }
+    });
+
+    // Tabla detalle
+    const tbody = g("kpiTableBody");
+    if (!activeMeses.length) {
+        tbody.innerHTML = `<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text-light);">Sin datos para mostrar</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = activeMeses.map((m, idx) => {
+        const d = byMes[m];
+        const pct = d.total ? Math.round((d.real/d.total)*100) : 0;
+        const bg = idx % 2 === 0 ? "white" : "#f8f9fc";
+        return `<tr style="background:${bg};border-bottom:1px solid var(--border);">
+            <td style="padding:10px 14px;font-weight:600;">${m}</td>
+            <td style="padding:10px 14px;text-align:center;font-weight:700;">${d.total}</td>
+            <td style="padding:10px 14px;text-align:center;"><span class="badge b-prog">${d.prog}</span></td>
+            <td style="padding:10px 14px;text-align:center;"><span class="badge b-pend">${d.pend}</span></td>
+            <td style="padding:10px 14px;text-align:center;"><span class="badge b-real">${d.real}</span> <span style="font-size:11px;color:var(--text-light);">${pct}%</span></td>
+        </tr>`;
+    }).join("") + `<tr style="background:#f0f2f5;font-weight:700;border-top:2px solid var(--border);">
+        <td style="padding:10px 14px;">TOTAL</td>
+        <td style="padding:10px 14px;text-align:center;">${total}</td>
+        <td style="padding:10px 14px;text-align:center;">${prog}</td>
+        <td style="padding:10px 14px;text-align:center;">${pend}</td>
+        <td style="padding:10px 14px;text-align:center;">${real} <span style="font-size:11px;color:var(--text-light);">${pctReal}%</span></td>
+    </tr>`;
+}
+
+function _getAnioFromFecha(k, anioFilt) {
+    // Busca el año en k.fecha (ej: "23 abr 2026") o en k.mes usando heurística
+    if (k.fecha) {
+        const m = k.fecha.match(/\b(20\d{2})\b/);
+        if (m) return m[1] === anioFilt;
+    }
+    // Si no tiene fecha, no podemos filtrar por año con certeza — lo incluimos
+    return true;
+}
+
+function initKpiAnioFilter() {
+    const anios = new Set();
+    calendario.forEach(k => {
+        if (k.fecha) { const m = k.fecha.match(/\b(20\d{2})\b/); if (m) anios.add(m[1]); }
+    });
+    const sel = g("fKpiAnio");
+    const current = sel.value;
+    sel.innerHTML = '<option value="">Todos los años</option>';
+    [...anios].sort().reverse().forEach(a => {
+        const opt = document.createElement("option");
+        opt.value = a; opt.textContent = a;
+        if (a === current) opt.selected = true;
+        sel.appendChild(opt);
+    });
+}
+
 function switchTab(t) {
-    ["clientes","calendario","resultados","kpi","config"].forEach(x=>{
+    ["clientes","calendario","resultados","kpis","config"].forEach(x=>{
         g("tab-"+x).classList.toggle("hidden",x!==t);
     });
-    document.querySelectorAll(".tab-btn").forEach((b,i)=>b.classList.toggle("active",["clientes","calendario","resultados","kpi","config"][i]===t));
+    document.querySelectorAll(".tab-btn").forEach((b,i)=>b.classList.toggle("active",["clientes","calendario","resultados","kpis","config"][i]===t));
     if(t==="config") updateCfgStatus();
     if(t==="resultados") renderResultados();
-    if(t==="kpi") renderKPI();
+    if(t==="kpis") { initKpiAnioFilter(); renderKpis(); }
+
+    /* Mostrar popup de vencimientos al entrar a cualquier tab que NO sea Resultados.
+       En Resultados se usa el banner descartable del tab.
+       Se respeta el "No mostrar más en esta sesión" del modal. */
+    if (t !== "resultados") {
+        mostrarModalVencimientos();
+    }
 }
+
+/* ====================================================================
+   POPUP MODAL de vencimientos de conciliación.
+   Se dispara al entrar a tabs distintos de Resultados.
+   La sesión recuerda si el usuario eligió "no mostrar más" (sessionStorage).
+   ==================================================================== */
+const MESES_CORTO_MODAL = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+
+function mostrarModalVencimientos() {
+    /* Si el usuario ya pidió no mostrar más en esta sesión, salir */
+    if (sessionStorage.getItem('expiryModalDismissed') === '1') return;
+
+    const vencidos = getVencidos();
+    if (!vencidos.length) return;
+
+    const modalList = g('modalExpiryList');
+    const title = g('modalExpiryTitle');
+    if (!modalList || !title) return;
+
+    title.textContent = `${vencidos.length} inventario${vencidos.length>1?'s':''} con plazo de conciliación vencido`;
+
+    modalList.innerHTML = vencidos.map(({ r, expDate }) => {
+        const expStr = `${expDate.getDate()} ${MESES_CORTO_MODAL[expDate.getMonth()]} ${expDate.getFullYear()}`;
+        return `<div style="margin-bottom:8px;padding:6px 10px;background:#fef2f2;border-left:3px solid #ef4444;border-radius:4px;">
+            <span style="background:#fca5a5;border-radius:4px;padding:1px 7px;margin-right:6px;font-weight:700;display:inline-block;color:#7f1d1d;">Venció ${expStr}</span>
+            <strong>${esc(r.cliente)}</strong> — ${esc(r.item || '')}
+        </div>`;
+    }).join('');
+
+    /* Limpiar checkbox cada vez que se muestra */
+    const cb = g('modalExpiryDontShow');
+    if (cb) {
+        cb.checked = false;
+        cb.onchange = function() {
+            if (this.checked) sessionStorage.setItem('expiryModalDismissed', '1');
+            else sessionStorage.removeItem('expiryModalDismissed');
+        };
+    }
+
+    g('modalExpiry').classList.add('active');
+}
+
+/* Helper reutilizable: lista de resultados con vencimiento expirado.
+   Usa la función parseConteoDate ya existente más arriba en el archivo. */
+function getVencidos() {
+    if (typeof resultados === 'undefined' || !Array.isArray(resultados)) return [];
+    const today = new Date(); today.setHours(0,0,0,0);
+    return resultados
+        .map(r => {
+            const d = parseConteoDate(r.fecha);
+            if (!d) return null;
+            const exp = new Date(d); exp.setDate(exp.getDate() + 30);
+            if (exp >= today) return null;
+            return { r, expDate: exp };
+        })
+        .filter(Boolean);
+}
+
 function setSync(st,txt) {
     const d=g("syncDot");
     d.className="sync-dot"+(st==="loading"?" loading":st==="error"?" error":"");
@@ -1652,25 +1602,6 @@ function toast(msg,type="info") {
 }
 function g(id){return document.getElementById(id);}
 function esc(s){return s?s.toString().replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"):""}
-
-// ================================================================
-//  TEMA (dark / white) — persistido en el navegador
-// ================================================================
-function applyTheme(t){
-    if(t==="dark"){ document.documentElement.setAttribute("data-theme","dark"); g("themeToggle").textContent="☀️"; }
-    else { document.documentElement.removeAttribute("data-theme"); g("themeToggle").textContent="🌙"; }
-}
-function toggleTheme(){
-    const dark = document.documentElement.getAttribute("data-theme")==="dark";
-    const next = dark ? "light" : "dark";
-    try{ localStorage.setItem("redtec-theme", next); }catch(e){}
-    applyTheme(next);
-}
-(function initTheme(){
-    let saved="light";
-    try{ saved = localStorage.getItem("redtec-theme") || "light"; }catch(e){}
-    applyTheme(saved);
-})();
 
 document.querySelectorAll(".modal-overlay").forEach(o=>o.addEventListener("click",e=>{if(e.target===o)o.classList.remove("active");}));
 

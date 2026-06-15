@@ -133,6 +133,9 @@ html, body {
   background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-md);
 }
 .btn-secondary:hover { background: var(--bg-hover); }
+.btn-planta { font-size:11px;padding:5px 12px;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;border-radius:5px;font-weight:600;transition:background .12s,color .12s;font-family:inherit; }
+.btn-planta:hover { color:var(--text-primary);background:var(--bg-hover); }
+.btn-planta.active { background:rgba(74,222,128,0.15);color:var(--accent); }
 
 .status {
   font-size: 12px; padding: 6px 12px; border-radius: var(--radius-sm);
@@ -577,6 +580,12 @@ html, body {
     </div>
     <button class="btn" id="btnCargar">Cargar datos</button>
     <button class="btn btn-secondary" id="btnHoy">Ir a hoy</button>
+    <div style="display:inline-flex;gap:2px;background:#1e222d;border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:3px;margin-left:8px;">
+      <button class="btn btn-planta active" id="btn-pl-todos" onclick="setPlantaCalendario('todos')">Todos</button>
+      <button class="btn btn-planta" id="btn-pl-santiago" onclick="setPlantaCalendario('santiago')">Santiago</button>
+      <button class="btn btn-planta" id="btn-pl-talca" onclick="setPlantaCalendario('talca')">Talca</button>
+      <button class="btn btn-planta" id="btn-pl-coquimbo" onclick="setPlantaCalendario('coquimbo')">Coquimbo</button>
+    </div>
     <div class="status idle" id="status">Listo para consultar</div>
   </div>
 
@@ -687,6 +696,10 @@ var API_DIRECT = 'https://apirdt1.azurewebsites.net/api/RDTOut/opsxrangofechas';
 var DATA = {};
 var RETIROS_REALES = {};  // mapa fecha → { total_pallets, total_trf, retails:[{retail,pallets,trf,items}] }
 var viewYear, viewMonth, selectedDate = null;
+
+// v10: filtro por planta REDTEC
+var plantaActiva = 'todos';       // 'todos' | 'santiago' | 'talca' | 'coquimbo'
+var RETAIL_PLANTA = {};            // mapeo retail → planta (construido desde retiros reales)
 
 var MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var DOW = ['Lun','Mar','Mié','Jue','Vie','Sáb'];
@@ -821,6 +834,7 @@ function cargarDatos() {
       if (!resp.ok) throw new Error(resp.error || 'Respuesta inválida');
       DATA = resp.calendario || {};
       RETIROS_REALES = resp.retirosReales || {};
+      buildRetailPlantaMap();  // v10: construir mapeo retail→planta
       var meta = resp.metadata || {};
       var res  = resp.resumen  || {};
       var om = meta.omitidos || {};
@@ -890,25 +904,15 @@ function pintarTotalesMes() {
   if ($('mt-next-val')) $('mt-next-val').textContent = fmtNum(nextTot);
 }
 
-// v10: helper — calcula el estimado "final" del día.
-//   Domingo: no opera, su estimado pasa al lunes siguiente.
-//   Sábado: muestra el estimado COMPLETO (sin tope) → gerencia quiere ver cuánto se debió retirar.
-//   Lunes: propio + domingo previo (ya no suma exceso de sábado, porque sábado ya muestra todo).
-//   Resto: igual al estimado base.
+// v10: helper — calcula el estimado "final" del día, filtrado por planta activa.
 function estimadoFinal(key) {
   var dt  = new Date(key + 'T00:00:00');
   var dow = dt.getDay();
-  var info = DATA[key];
-  var base = (info && info.total_pallets) || 0;
+  var base = getDayEstimado(key, plantaActiva);
   var out = { dow: dow, base: base, estimadoFinal: base, satExcess: 0, carryDom: 0, carryExc: 0 };
-  // Sábado: sin tope, muestra estimado completo
-  // (ya no se aplica SABADO_MAX ni se calcula exceso)
   if (dow === 1) {
-    // Lunes: propio + lo del domingo previo (que no opera)
     var prevSun = new Date(dt.getTime() - 86400000);
-    var dSun = DATA[fmtISO(prevSun)];
-    out.carryDom = (dSun && dSun.total_pallets) || 0;
-    // Ya no sumamos exceso del sábado porque sábado muestra todo su estimado
+    out.carryDom = getDayEstimado(fmtISO(prevSun), plantaActiva);
     out.carryExc = 0;
     out.estimadoFinal = base + out.carryDom;
   }
@@ -985,9 +989,17 @@ function renderCalendar() {
     }
 
     if (info) {
-      html += '<div class="day-data"><div class="day-pallets">' + fmtNum(estimadoMostrar) + '</div>' +
-              '<div class="day-retails">' + info.retails.length + ' retail' + (info.retails.length>1?'s':'') + '</div></div>';
-      // v8: reversa del día (si hubo confirmación en cero ese día)
+      // v10: contar solo retails que mapean a la planta activa
+      var filtRetCount = 0;
+      for (var ri = 0; ri < info.retails.length; ri++) {
+        var rp = RETAIL_PLANTA[info.retails[ri].retail] || 'santiago';
+        if (plantaActiva === 'todos' || rp === plantaActiva) filtRetCount++;
+      }
+      if (estimadoMostrar > 0) {
+        html += '<div class="day-data"><div class="day-pallets">' + fmtNum(estimadoMostrar) + '</div>' +
+                '<div class="day-retails">' + filtRetCount + ' retail' + (filtRetCount>1?'s':'') + '</div></div>';
+      }
+      // v8: reversa del día
       if (info.total_reversa && info.total_reversa > 0) {
         html += '<div class="day-reversa" title="Pallets reversados (confirmados en cero). La proyección pudo ser mayor.">' +
                   '↩ ' + fmtNum(info.total_reversa) + ' reversa</div>';
@@ -1013,8 +1025,8 @@ function renderCalendar() {
               '⤴ ' + fmtNum(satExcess) + ' → lun</div>';
     }
 
-    // Real M3Link: confirmado / retirado (sin cambios funcionales)
-    var real = RETIROS_REALES[key];
+    // Real M3Link: confirmado / retirado — filtrado por planta activa
+    var real = getDayRetiros(key, plantaActiva);
     var confirmado = real ? (real.total_palletsConfirmado || 0) : 0;
     var retirado   = real ? (real.total_pallets || 0) : 0;
     if (real && (confirmado > 0 || retirado > 0)) {
@@ -1077,25 +1089,41 @@ function goToday() {
 function selectDate(key) {
   selectedDate = key;
   var info = DATA[key];
-  var real = RETIROS_REALES[key];
-  // v10: el helper ya considera carry (sin cap sábado); si no hay nada que mostrar, salir
+  var real = getDayRetiros(key, plantaActiva);  // v10: filtrado por planta
+  // v10: el helper ya considera carry y filtro por planta
   var ef = estimadoFinal(key);
   if (!info && !real && ef.estimadoFinal <= 0) return;
   var dt = new Date(key + 'T00:00:00');
-  $('detail-title').textContent = '📦 Retiros para ' + dt.getDate() + ' de ' + MESES[dt.getMonth()];
+  var plantaLabel = plantaActiva !== 'todos' ? ' · ' + plantaActiva.charAt(0).toUpperCase() + plantaActiva.slice(1) : '';
+  $('detail-title').textContent = '📦 Retiros para ' + dt.getDate() + ' de ' + MESES[dt.getMonth()] + plantaLabel;
   $('detail-date').textContent  = dt.toLocaleDateString('es-CL', { weekday: 'long' }) + ' · ' + key;
   $('detail-summary').style.display = 'grid';
   $('search-box').style.display = 'block';
-  // v10: el "pallets a retirar" es el estimado FINAL (lunes con carry de domingo)
   $('ds-pallets').textContent = fmtNum(ef.estimadoFinal);
-  $('ds-trf').textContent     = info ? fmtNum(info.total_trf) : '0';
+  // v10: trf filtradas por planta
+  var filteredTrf = 0;
+  if (info && info.retails) {
+    for (var i = 0; i < info.retails.length; i++) {
+      var p = RETAIL_PLANTA[info.retails[i].retail] || 'santiago';
+      if (plantaActiva === 'todos' || p === plantaActiva) filteredTrf += info.retails[i].trf;
+    }
+  }
+  $('ds-trf').textContent = fmtNum(filteredTrf);
 
   // ── v10: Estimado semanal (Lun–Dom de la semana del día seleccionado) ──
   calcWeekSummary(dt);
 
   // Sección "Real retirado según M3Link" — agrega contexto para validar
   renderRealRetirado(key, real, info, ef);
-  renderRetails(info ? info.retails : [], '');
+  // v10: filtrar retails por planta activa
+  var filteredRetails = [];
+  if (info && info.retails) {
+    for (var fi = 0; fi < info.retails.length; fi++) {
+      var fp = RETAIL_PLANTA[info.retails[fi].retail] || 'santiago';
+      if (plantaActiva === 'todos' || fp === plantaActiva) filteredRetails.push(info.retails[fi]);
+    }
+  }
+  renderRetails(filteredRetails, '');
   renderCalendar();
 }
 
@@ -1421,7 +1449,15 @@ function escapeHtml(s) {
 $('btnCargar').onclick = cargarDatos;
 $('btnHoy').onclick    = goToday;
 $('search-input').addEventListener('input', function (e) {
-  if (selectedDate && DATA[selectedDate]) renderRetails(DATA[selectedDate].retails, e.target.value);
+  if (selectedDate && DATA[selectedDate]) {
+    var sr = DATA[selectedDate].retails || [];
+    var sfr = [];
+    for (var si = 0; si < sr.length; si++) {
+      var sp = RETAIL_PLANTA[sr[si].retail] || 'santiago';
+      if (plantaActiva === 'todos' || sp === plantaActiva) sfr.push(sr[si]);
+    }
+    renderRetails(sfr, e.target.value);
+  }
 });
 // Cerrar modal con Esc
 document.addEventListener('keydown', function (e) {
@@ -1490,7 +1526,7 @@ function abrirModalRetiros(dateKey) {
               '<thead><tr style="background:var(--bg-input);border-bottom:1px solid var(--border);">' +
               '<th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-secondary);">Nro Pedido</th>' +
               '<th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-secondary);">Cliente Origen</th>' +
-              '<th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-secondary);">Cliente Destino</th>' +
+              '<th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-secondary);">Bodega Destino</th>' +
               '<th style="padding:8px 10px;text-align:center;font-size:11px;color:var(--text-secondary);">Etapa</th>' +
               '<th style="padding:8px 10px;text-align:right;font-size:11px;color:var(--text-secondary);">Sol.</th>' +
               '<th style="padding:8px 10px;text-align:right;font-size:11px;color:var(--text-secondary);">Desp.</th>' +
@@ -1513,7 +1549,7 @@ function abrirModalRetiros(dateKey) {
         html += '<tr style="border-bottom:1px solid var(--border);background:' + bgRow + ';">' +
                 '<td style="padding:7px 10px;font-family:\'JetBrains Mono\',monospace;color:var(--accent);font-weight:600;">' + (r.nroPedido || '—') + '</td>' +
                 '<td style="padding:7px 10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeAttr(r.clienteOrigenStr) + '">' + (r.clienteOrigenStr || '—') + '</td>' +
-                '<td style="padding:7px 10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeAttr(r.clienteDestinoStr) + '">' + (r.clienteDestinoStr || '—') + '</td>' +
+                '<td style="padding:7px 10px;white-space:nowrap;font-weight:600;" title="' + escapeAttr(r.bodegaDestinoStr) + '">' + (r.bodegaDestinoStr || '—') + '</td>' +
                 '<td style="padding:7px 10px;text-align:center;"><span style="background:' + etapaBg + ';color:' + etapaColor + ';padding:2px 8px;border-radius:4px;font-weight:600;font-size:11px;">' + etapa + '</span></td>' +
                 '<td style="padding:7px 10px;text-align:right;font-family:\'JetBrains Mono\',monospace;font-weight:600;">' + fmtNum(Number(r.cantidadSolicitada) || 0) + '</td>' +
                 '<td style="padding:7px 10px;text-align:right;font-family:\'JetBrains Mono\',monospace;">' + fmtNum(Number(r.cantidadDespachada) || 0) + '</td>' +
@@ -1536,6 +1572,107 @@ function cerrarModalRetirosDirect() {
 }
 function cerrarModalRetiros(e) {
   if (e.target.id === 'modal-retiros-backdrop') cerrarModalRetirosDirect();
+}
+
+/* ====================================================================
+   v10: FILTRO POR PLANTA REDTEC
+   Construye un mapeo retail→planta desde los retiros reales (bodegaDestino)
+   y filtra tanto el calendario estimado como los retiros reales.
+   ==================================================================== */
+
+/* Clasificar bodega destino → planta */
+function plantaDeCalendario(bodega) {
+  if (!bodega) return 'santiago';
+  var b = String(bodega).toUpperCase();
+  if (b.indexOf('COQUIMBO') !== -1) return 'coquimbo';
+  if (b.indexOf('TALCA') !== -1) return 'talca';
+  return 'santiago';
+}
+
+/* Construir mapeo RETAIL → PLANTA desde los retiros reales.
+   Se ejecuta una vez después de cargar datos.
+   Si un retail aparece en varias plantas, gana la que tiene más pallets. */
+function buildRetailPlantaMap() {
+  RETAIL_PLANTA = {};
+  var conteo = {};   // retail → { santiago: N, talca: N, coquimbo: N }
+  var keys = Object.keys(RETIROS_REALES);
+  for (var i = 0; i < keys.length; i++) {
+    var bucket = RETIROS_REALES[keys[i]];
+    if (!bucket || !bucket.retails) continue;
+    var retNames = Object.keys(bucket.retails);
+    for (var j = 0; j < retNames.length; j++) {
+      var rName = retNames[j];
+      var rData = bucket.retails[rName];
+      if (!rData || !rData.items) continue;
+      if (!conteo[rName]) conteo[rName] = { santiago: 0, talca: 0, coquimbo: 0 };
+      for (var k = 0; k < rData.items.length; k++) {
+        var pl = plantaDeCalendario(rData.items[k].bodegaDestino);
+        var cant = rData.items[k].cantidadSolicitada || rData.items[k].cantidadConfirmada || 1;
+        conteo[rName][pl] += cant;
+      }
+    }
+  }
+  /* Asignar planta dominante por retail */
+  var retails = Object.keys(conteo);
+  for (var r = 0; r < retails.length; r++) {
+    var c = conteo[retails[r]];
+    if (c.talca > c.santiago && c.talca > c.coquimbo) RETAIL_PLANTA[retails[r]] = 'talca';
+    else if (c.coquimbo > c.santiago && c.coquimbo > c.talca) RETAIL_PLANTA[retails[r]] = 'coquimbo';
+    else RETAIL_PLANTA[retails[r]] = 'santiago';
+  }
+  console.log('[Planta] Mapeo construido:', Object.keys(RETAIL_PLANTA).length, 'retails →',
+    Object.values(RETAIL_PLANTA).filter(function(v){return v==='santiago'}).length, 'Stgo,',
+    Object.values(RETAIL_PLANTA).filter(function(v){return v==='talca'}).length, 'Talca,',
+    Object.values(RETAIL_PLANTA).filter(function(v){return v==='coquimbo'}).length, 'Coquimbo');
+}
+
+/* Obtener el estimado de un día filtrado por planta.
+   Si planta='todos', devuelve el total completo.
+   Si hay filtro, suma solo los retails que mapean a esa planta. */
+function getDayEstimado(key, planta) {
+  var info = DATA[key];
+  if (!info) return 0;
+  if (!planta || planta === 'todos') return info.total_pallets || 0;
+  var total = 0;
+  if (info.retails) {
+    for (var i = 0; i < info.retails.length; i++) {
+      var r = info.retails[i];
+      var p = RETAIL_PLANTA[r.retail] || 'santiago';
+      if (p === planta) total += r.pallets;
+    }
+  }
+  return total;
+}
+
+/* Obtener retiros reales de un día filtrado por planta */
+function getDayRetiros(key, planta) {
+  var real = RETIROS_REALES[key];
+  if (!real) return null;
+  if (!planta || planta === 'todos') return real;
+  /* Filtrar retails por planta */
+  var filtrado = { total_pallets: 0, total_palletsConfirmado: 0, total_trf: 0, retails: {} };
+  var retNames = Object.keys(real.retails || {});
+  for (var i = 0; i < retNames.length; i++) {
+    var p = RETAIL_PLANTA[retNames[i]] || 'santiago';
+    if (p !== planta) continue;
+    var r = real.retails[retNames[i]];
+    filtrado.retails[retNames[i]] = r;
+    filtrado.total_pallets += r.pallets || 0;
+    filtrado.total_palletsConfirmado += r.palletsConfirmado || 0;
+    filtrado.total_trf += r.trf || 0;
+  }
+  return (filtrado.total_trf > 0 || filtrado.total_palletsConfirmado > 0) ? filtrado : null;
+}
+
+/* Cambiar filtro de planta y re-renderizar */
+function setPlantaCalendario(p) {
+  plantaActiva = p;
+  ['todos','santiago','talca','coquimbo'].forEach(function(opt) {
+    var b = document.getElementById('btn-pl-' + opt);
+    if (b) b.classList.toggle('active', opt === p);
+  });
+  renderCalendar();
+  if (selectedDate) selectDate(selectedDate);
 }
 
 </script>

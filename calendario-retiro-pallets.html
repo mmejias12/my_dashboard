@@ -1099,10 +1099,11 @@ function selectDate(key) {
   renderCalendar();
 }
 
-/* v10: calcula el estimado total de la semana (Lun→Dom) del día seleccionado
+/* v10: calcula el estimado total de la semana (Lun→Sáb) del día seleccionado
    y lo muestra en la card destacada.
-   Suma estimadoFinal de cada día L-S + base del domingo (que no se renderiza
-   en la grilla pero sí cuenta para la semana). */
+   Suma el estimadoFinal de cada día Lun-Sáb (lo que realmente se muestra
+   en la grilla y se retira esa semana). El domingo no se cuenta porque
+   sus pallets ya están incluidos en el carry del lunes de esa misma semana. */
 function calcWeekSummary(dt) {
   var wsCard = $('week-summary');
   if (!wsCard) return;
@@ -1114,30 +1115,20 @@ function calcWeekSummary(dt) {
 
   var weekTotal = 0;
   var dayLabels = [];
-  for (var i = 0; i < 7; i++) {
+  /* Solo Lun a Sáb (6 días), usando estimadoFinal que ya incluye carry del domingo */
+  for (var i = 0; i < 6; i++) {
     var d = new Date(monday.getTime() + i * 86400000);
     var k = fmtISO(d);
-    var dayDow = d.getDay();
-    /* Para domingo (i=6): sumar su estimado base (va al lunes pero cuenta en la semana).
-       Para el resto: usar estimadoFinal que ya aplica carry de domingo en lunes. */
-    if (dayDow === 0) {
-      /* Domingo: su base no se muestra en grilla pero cuenta para el total semanal */
-      var dInfo = DATA[k];
-      weekTotal += (dInfo && dInfo.total_pallets) || 0;
-    } else {
-      /* Lun-Sáb: usar estimadoFinal SIN sumar carry de domingo
-         (ya lo contamos arriba como domingo independiente) */
-      var dInfo2 = DATA[k];
-      weekTotal += (dInfo2 && dInfo2.total_pallets) || 0;
-    }
+    var ef = estimadoFinal(k);
+    weekTotal += ef.estimadoFinal;
     if (i === 0) dayLabels.push(fmtFechaDDMM(k));
-    if (i === 6) dayLabels.push(fmtFechaDDMM(k));
+    if (i === 5) dayLabels.push(fmtFechaDDMM(k));
   }
 
   wsCard.style.display = 'block';
   $('ws-value').textContent = fmtNum(weekTotal);
   $('ws-title').textContent = 'Estimado semanal';
-  $('ws-sub').textContent = 'Lun ' + dayLabels[0] + ' — Dom ' + dayLabels[1];
+  $('ws-sub').textContent = 'Lun ' + dayLabels[0] + ' — Sáb ' + dayLabels[1];
 }
 
 // Renderiza la sección de retiros reales en el panel lateral del día

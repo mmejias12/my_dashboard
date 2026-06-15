@@ -321,6 +321,14 @@ html, body {
 /* ── DETALLE ── */
 .detail-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
 .detail-date { font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; text-transform: capitalize; }
+
+/* Card semanal destacada */
+.week-summary-card { background: linear-gradient(135deg, #1a2a1f 0%, #1e2d24 100%); border: 1.5px solid rgba(74,222,128,0.35); border-radius: 10px; padding: 14px 18px; margin-bottom: 14px; text-align: center; }
+.ws-header { display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 6px; }
+.ws-icon { font-size: 16px; }
+.ws-title { font-size: 11px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; color: #9da3b4; }
+.ws-value { font-size: 28px; font-weight: 800; color: #4ade80; font-family: 'JetBrains Mono', monospace; letter-spacing: -0.5px; }
+.ws-sub { font-size: 11px; color: #6b7a90; margin-top: 2px; }
 .detail-summary {
   background: var(--bg-input); padding: 12px;
   border-radius: var(--radius-sm); margin-bottom: 12px;
@@ -529,6 +537,25 @@ html, body {
   </div>
 </div>
 
+<!-- Modal: Detalle de retiros solicitados (popup al click en "Solicitado p/retiro") -->
+<div class="modal-backdrop" id="modal-retiros-backdrop" onclick="cerrarModalRetiros(event)">
+  <div class="modal" id="modal-retiros" onclick="event.stopPropagation()" style="max-width:1000px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="modal-retiros-title">📋 Retiros solicitados</div>
+        <div class="modal-subtitle" id="modal-retiros-sub">—</div>
+      </div>
+      <button class="modal-close" onclick="cerrarModalRetirosDirect()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-retiros-body" style="overflow:auto;max-height:60vh;padding:0 20px 20px;">
+      <div style="text-align:center;padding:30px;color:var(--text-secondary);">Cargando...</div>
+    </div>
+    <div class="modal-footer" style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;">
+      <button class="btn btn-secondary" onclick="cerrarModalRetirosDirect()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <div class="main">
   <div class="breadcrumb">
     Comercial › Reportes operacionales › <span class="accent">Calendario Retiro Pallets</span>
@@ -621,6 +648,15 @@ html, body {
     <div class="detail-card">
       <div class="detail-title" id="detail-title">Selecciona un día</div>
       <div class="detail-date" id="detail-date">Haz click en cualquier día del calendario</div>
+      <!-- Card destacada: Estimado semanal (Lun–Dom de la semana del día seleccionado) -->
+      <div class="week-summary-card" id="week-summary" style="display:none;">
+        <div class="ws-header">
+          <span class="ws-icon">📊</span>
+          <span class="ws-title" id="ws-title">Estimado semanal</span>
+        </div>
+        <div class="ws-value" id="ws-value">—</div>
+        <div class="ws-sub" id="ws-sub">Lun – Dom</div>
+      </div>
       <div class="detail-summary" id="detail-summary" style="display:none">
         <div><div class="ds-label">Pallets a retirar</div><div class="ds-value" id="ds-pallets">—</div></div>
         <div><div class="ds-label">Transferencias</div><div class="ds-value" id="ds-trf">—</div></div>
@@ -644,7 +680,8 @@ var isDev   = (window.location.hostname === 'localhost' || window.location.hostn
 // Mismo patrón que /api/historial-proxy del dashboard M3Link
 var API_PROXY = '/api/calendario-pallets-proxy';
 // Permite probar contra el API directo en local (mismo token que usa el dashboard)
-var API_DIRECT = 'https://apirdt1.azurewebsites.net/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRangoFechas';
+// Migrado al endpoint nuevo RDTOut (controlador anterior se da de baja).
+var API_DIRECT = 'https://apirdt1.azurewebsites.net/api/RDTOut/opsxrangofechas';
 
 // ─── Estado ────────────────────────────────────────────────────────────
 var DATA = {};
@@ -658,7 +695,8 @@ var DOW = ['Lun','Mar','Mié','Jue','Vie','Sáb'];
 //   Domingo no opera: su estimado se carga al lunes siguiente.
 //   Sábado tiene tope 1.800 sobre estimado; el exceso se carga al lunes siguiente.
 //   Proyección gerencial: distribuye el total del mes por día de semana.
-var SABADO_MAX = 1800;
+// v10: Sábado sin tope. Se deja variable con Infinity para evitar errores en badges residuales.
+var SABADO_MAX = Infinity;
 var SANTIAGO_PCT = 0.87;   // 87% del volumen pertenece a REDTEC Santiago
 var TALCA_PCT    = 0.10;   // 10% a REDTEC Talca (3% no se distribuye)
 // % por día de la semana (lun..vie) del total de cada bodega
@@ -852,29 +890,27 @@ function pintarTotalesMes() {
   if ($('mt-next-val')) $('mt-next-val').textContent = fmtNum(nextTot);
 }
 
-// v9: helper único — calcula el estimado "final" del día con la lógica de cap+carry.
-//   Devuelve también los componentes para mostrar en badges.
-//   Lunes: propio + dom_prev + exceso_sáb_prev (lo que va realmente a retirarse)
-//   Sábado: capped a SABADO_MAX
-//   Resto: igual al estimado base
+// v10: helper — calcula el estimado "final" del día.
+//   Domingo: no opera, su estimado pasa al lunes siguiente.
+//   Sábado: muestra el estimado COMPLETO (sin tope) → gerencia quiere ver cuánto se debió retirar.
+//   Lunes: propio + domingo previo (ya no suma exceso de sábado, porque sábado ya muestra todo).
+//   Resto: igual al estimado base.
 function estimadoFinal(key) {
   var dt  = new Date(key + 'T00:00:00');
   var dow = dt.getDay();
   var info = DATA[key];
   var base = (info && info.total_pallets) || 0;
   var out = { dow: dow, base: base, estimadoFinal: base, satExcess: 0, carryDom: 0, carryExc: 0 };
-  if (dow === 6 && base > SABADO_MAX) {
-    out.estimadoFinal = SABADO_MAX;
-    out.satExcess     = base - SABADO_MAX;
-  }
+  // Sábado: sin tope, muestra estimado completo
+  // (ya no se aplica SABADO_MAX ni se calcula exceso)
   if (dow === 1) {
+    // Lunes: propio + lo del domingo previo (que no opera)
     var prevSun = new Date(dt.getTime() - 86400000);
-    var prevSat = new Date(dt.getTime() - 2*86400000);
-    var dSun = DATA[fmtISO(prevSun)], dSat = DATA[fmtISO(prevSat)];
+    var dSun = DATA[fmtISO(prevSun)];
     out.carryDom = (dSun && dSun.total_pallets) || 0;
-    var satEst   = (dSat && dSat.total_pallets) || 0;
-    out.carryExc = Math.max(0, satEst - SABADO_MAX);
-    out.estimadoFinal = base + out.carryDom + out.carryExc;
+    // Ya no sumamos exceso del sábado porque sábado muestra todo su estimado
+    out.carryExc = 0;
+    out.estimadoFinal = base + out.carryDom;
   }
   return out;
 }
@@ -1001,7 +1037,7 @@ function renderCalendar() {
       html += '<div class="' + estadoCls + '">' +
                 '<span class="dr-ico">📋</span>' +
                 '<span class="dr-num">' + fmtNum(confirmado) + '</span>' +
-                '<span class="dr-nota">confirmado</span>' +
+                '<span class="dr-nota">solicitado</span>' +
               '</div>';
       if (retirado !== confirmado && retirado > 0) {
         html += '<div class="day-real-sub">' +
@@ -1042,7 +1078,7 @@ function selectDate(key) {
   selectedDate = key;
   var info = DATA[key];
   var real = RETIROS_REALES[key];
-  // v9: el helper ya considera carry y cap; si no hay nada que mostrar, salir
+  // v10: el helper ya considera carry (sin cap sábado); si no hay nada que mostrar, salir
   var ef = estimadoFinal(key);
   if (!info && !real && ef.estimadoFinal <= 0) return;
   var dt = new Date(key + 'T00:00:00');
@@ -1050,17 +1086,62 @@ function selectDate(key) {
   $('detail-date').textContent  = dt.toLocaleDateString('es-CL', { weekday: 'long' }) + ' · ' + key;
   $('detail-summary').style.display = 'grid';
   $('search-box').style.display = 'block';
-  // v9: el "pallets a retirar" es el estimado FINAL (sábado capped, lunes con carry)
+  // v10: el "pallets a retirar" es el estimado FINAL (lunes con carry de domingo)
   $('ds-pallets').textContent = fmtNum(ef.estimadoFinal);
   $('ds-trf').textContent     = info ? fmtNum(info.total_trf) : '0';
+
+  // ── v10: Estimado semanal (Lun–Dom de la semana del día seleccionado) ──
+  calcWeekSummary(dt);
+
   // Sección "Real retirado según M3Link" — agrega contexto para validar
   renderRealRetirado(key, real, info, ef);
   renderRetails(info ? info.retails : [], '');
   renderCalendar();
 }
 
+/* v10: calcula el estimado total de la semana (Lun→Dom) del día seleccionado
+   y lo muestra en la card destacada.
+   Suma estimadoFinal de cada día L-S + base del domingo (que no se renderiza
+   en la grilla pero sí cuenta para la semana). */
+function calcWeekSummary(dt) {
+  var wsCard = $('week-summary');
+  if (!wsCard) return;
+
+  /* Encontrar el lunes de la semana */
+  var dow = dt.getDay(); /* 0=Dom, 1=Lun */
+  var mondayOffset = dow === 0 ? -6 : 1 - dow;
+  var monday = new Date(dt.getTime() + mondayOffset * 86400000);
+
+  var weekTotal = 0;
+  var dayLabels = [];
+  for (var i = 0; i < 7; i++) {
+    var d = new Date(monday.getTime() + i * 86400000);
+    var k = fmtISO(d);
+    var dayDow = d.getDay();
+    /* Para domingo (i=6): sumar su estimado base (va al lunes pero cuenta en la semana).
+       Para el resto: usar estimadoFinal que ya aplica carry de domingo en lunes. */
+    if (dayDow === 0) {
+      /* Domingo: su base no se muestra en grilla pero cuenta para el total semanal */
+      var dInfo = DATA[k];
+      weekTotal += (dInfo && dInfo.total_pallets) || 0;
+    } else {
+      /* Lun-Sáb: usar estimadoFinal SIN sumar carry de domingo
+         (ya lo contamos arriba como domingo independiente) */
+      var dInfo2 = DATA[k];
+      weekTotal += (dInfo2 && dInfo2.total_pallets) || 0;
+    }
+    if (i === 0) dayLabels.push(fmtFechaDDMM(k));
+    if (i === 6) dayLabels.push(fmtFechaDDMM(k));
+  }
+
+  wsCard.style.display = 'block';
+  $('ws-value').textContent = fmtNum(weekTotal);
+  $('ws-title').textContent = 'Estimado semanal';
+  $('ws-sub').textContent = 'Lun ' + dayLabels[0] + ' — Dom ' + dayLabels[1];
+}
+
 // Renderiza la sección de retiros reales en el panel lateral del día
-// Muestra TRES KPIs: Confirmado (cantSolicitada) · Retirado (cantConfirmada) · Estimado calendario
+// Muestra TRES KPIs: Solicitado (cantSolicitada) · Retirado (cantConfirmada) · Estimado calendario
 function renderRealRetirado(key, real, info, ef) {
   var cont = $('real-section');
   if (!cont) return;
@@ -1102,9 +1183,9 @@ function renderRealRetirado(key, real, info, ef) {
       '<span class="real-source">operación = Retiros · todas las etapas</span>' +
     '</div>' +
     '<div class="real-stats real-stats-3">' +
-      // KPI 1: Solicitado PARA RETIRO (cantSolicitada) - número principal
-      '<div class="real-kpi kpi-primary">' +
-        '<span class="rk-lbl">📋 Solicitado p/retiro</span>' +
+      // KPI 1: Solicitado PARA RETIRO (cantSolicitada) - número principal — CLICKABLE
+      '<div class="real-kpi kpi-primary" style="cursor:pointer;" onclick="abrirModalRetiros(\'' + key + '\')" title="Click para ver detalle de retiros solicitados">' +
+        '<span class="rk-lbl">📋 Solicitado p/retiro <span style="font-size:10px;color:var(--accent);margin-left:4px;">🔍 ver</span></span>' +
         '<span class="rk-val accent">' + fmtNum(confirmado) + '</span>' +
         '<span class="rk-sub">' + fmtNum(real.total_trf) + ' transferencia' + (real.total_trf > 1 ? 's' : '') + '</span>' +
       '</div>' +
@@ -1127,7 +1208,7 @@ function renderRealRetirado(key, real, info, ef) {
     html += '<div class="real-retails-title">Retiros por retail · top ' + Math.min(real.retails.length, 5) + '</div>';
     html += '<table class="real-tbl"><thead><tr>' +
               '<th>Retail</th>' +
-              '<th style="text-align:right" title="Confirmado para retiro (cantidadSolicitada)">📋 Conf.</th>' +
+              '<th style="text-align:right" title="Solicitado para retiro (cantidadSolicitada)">📋 Sol.</th>' +
               '<th style="text-align:right" title="Ya retirado real (cantidadConfirmada)">✅ Real</th>' +
               '<th style="text-align:right">Trf</th>' +
             '</tr></thead><tbody>';
@@ -1363,6 +1444,109 @@ setStatus('idle', 'Selecciona un rango y presiona "Cargar datos"');
 // Marca de versión visible para validar el deploy desde consola:
 window.__VERSION__ = 'v5-confirmado-y-retirado-15may-2026';
 console.log('%cCalendario HTML cargado: ' + window.__VERSION__, 'color:#4ade80;font-weight:bold');
+/* ====================================================================
+   MODAL: Detalle retiros solicitados
+   Fetch desde /proxy/ops para la fecha seleccionada, filtra operacion=Retiro
+   y muestra la tabla con Nro Pedido, Cliente, Etapa, Cantidades, etc.
+   ==================================================================== */
+function abrirModalRetiros(dateKey) {
+  var body = $('modal-retiros-body');
+  body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-secondary);">Cargando retiros para ' + dateKey + '...</div>';
+
+  $('modal-retiros-title').textContent = '📋 Retiros solicitados — ' + dateKey;
+  $('modal-retiros-sub').textContent = 'Operación: Retiro · Todos las etapas del día seleccionado';
+  $('modal-retiros-backdrop').classList.add('visible');
+
+  /* Fetch de operaciones del día */
+  var url = '/proxy/ops?fechaInicio=' + dateKey + '&fechaFin=' + dateKey;
+  fetch(url, { headers: { 'Accept': 'application/json' } })
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function(data) {
+      var rows = Array.isArray(data) ? data : (data.items || [data]);
+      /* Filtrar solo operaciones tipo Retiro */
+      var retiros = rows.filter(function(r) {
+        return (r.operacion || '').toLowerCase() === 'retiro';
+      });
+
+      if (!retiros.length) {
+        body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-secondary);">No se encontraron retiros para ' + dateKey + '</div>';
+        return;
+      }
+
+      /* Ordenar por horaIngreso descendente */
+      retiros.sort(function(a, b) {
+        return (b.horaIngreso || '').localeCompare(a.horaIngreso || '');
+      });
+
+      /* Calcular totales */
+      var totalSol = 0, totalDesp = 0, totalConf = 0;
+      retiros.forEach(function(r) {
+        totalSol  += Number(r.cantidadSolicitada)  || 0;
+        totalDesp += Number(r.cantidadDespachada)   || 0;
+        totalConf += Number(r.cantidadConfirmada)   || 0;
+      });
+
+      var html = '<div style="margin-bottom:10px;font-size:12px;color:var(--text-secondary);">' +
+                 retiros.length + ' retiro' + (retiros.length > 1 ? 's' : '') +
+                 ' · Sol: <strong style="color:var(--accent);">' + fmtNum(totalSol) + '</strong>' +
+                 ' · Desp: <strong>' + fmtNum(totalDesp) + '</strong>' +
+                 ' · Conf: <strong>' + fmtNum(totalConf) + '</strong></div>';
+
+      html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">' +
+              '<thead><tr style="background:var(--bg-input);border-bottom:1px solid var(--border);">' +
+              '<th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-secondary);">Nro Pedido</th>' +
+              '<th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-secondary);">Cliente Origen</th>' +
+              '<th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-secondary);">Cliente Destino</th>' +
+              '<th style="padding:8px 10px;text-align:center;font-size:11px;color:var(--text-secondary);">Etapa</th>' +
+              '<th style="padding:8px 10px;text-align:right;font-size:11px;color:var(--text-secondary);">Sol.</th>' +
+              '<th style="padding:8px 10px;text-align:right;font-size:11px;color:var(--text-secondary);">Desp.</th>' +
+              '<th style="padding:8px 10px;text-align:right;font-size:11px;color:var(--text-secondary);">Conf.</th>' +
+              '<th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-secondary);">Hora Ingreso</th>' +
+              '<th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-secondary);">Usuario</th>' +
+              '</tr></thead><tbody>';
+
+      retiros.forEach(function(r, idx) {
+        var etapa = r.etapaOperacion || '—';
+        var etapaColor = 'var(--text-secondary)';
+        var etapaBg = 'var(--bg-input)';
+        if (etapa.toLowerCase().indexOf('solicitud') >= 0) { etapaColor = '#fbbf24'; etapaBg = 'rgba(251,191,36,0.15)'; }
+        else if (etapa.toLowerCase().indexOf('cerrado') >= 0) { etapaColor = '#4ade80'; etapaBg = 'rgba(74,222,128,0.15)'; }
+        else if (etapa.toLowerCase().indexOf('anulad') >= 0) { etapaColor = '#f87171'; etapaBg = 'rgba(248,113,113,0.15)'; }
+
+        var hora = (r.horaIngreso || '').replace('T', ' ').substring(0, 19);
+        var bgRow = idx % 2 === 0 ? 'transparent' : 'var(--bg-input)';
+
+        html += '<tr style="border-bottom:1px solid var(--border);background:' + bgRow + ';">' +
+                '<td style="padding:7px 10px;font-family:\'JetBrains Mono\',monospace;color:var(--accent);font-weight:600;">' + (r.nroPedido || '—') + '</td>' +
+                '<td style="padding:7px 10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeAttr(r.clienteOrigenStr) + '">' + (r.clienteOrigenStr || '—') + '</td>' +
+                '<td style="padding:7px 10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeAttr(r.clienteDestinoStr) + '">' + (r.clienteDestinoStr || '—') + '</td>' +
+                '<td style="padding:7px 10px;text-align:center;"><span style="background:' + etapaBg + ';color:' + etapaColor + ';padding:2px 8px;border-radius:4px;font-weight:600;font-size:11px;">' + etapa + '</span></td>' +
+                '<td style="padding:7px 10px;text-align:right;font-family:\'JetBrains Mono\',monospace;font-weight:600;">' + fmtNum(Number(r.cantidadSolicitada) || 0) + '</td>' +
+                '<td style="padding:7px 10px;text-align:right;font-family:\'JetBrains Mono\',monospace;">' + fmtNum(Number(r.cantidadDespachada) || 0) + '</td>' +
+                '<td style="padding:7px 10px;text-align:right;font-family:\'JetBrains Mono\',monospace;">' + fmtNum(Number(r.cantidadConfirmada) || 0) + '</td>' +
+                '<td style="padding:7px 10px;font-size:11px;color:var(--text-secondary);white-space:nowrap;">' + hora + '</td>' +
+                '<td style="padding:7px 10px;font-size:11px;color:var(--text-secondary);">' + (r.usuario || '—') + '</td>' +
+                '</tr>';
+      });
+
+      html += '</tbody></table>';
+      body.innerHTML = html;
+    })
+    .catch(function(err) {
+      body.innerHTML = '<div style="text-align:center;padding:30px;color:#f87171;">Error: ' + err.message + '</div>';
+    });
+}
+
+function cerrarModalRetirosDirect() {
+  $('modal-retiros-backdrop').classList.remove('visible');
+}
+function cerrarModalRetiros(e) {
+  if (e.target.id === 'modal-retiros-backdrop') cerrarModalRetirosDirect();
+}
+
 </script>
 
 </body>

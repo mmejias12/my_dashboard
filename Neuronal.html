@@ -4,8 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Neural AI Core</title>
+<title>AI Neural System</title>
 
+<!-- LIBRERÍAS -->
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 <script src="https://unpkg.com/3d-force-graph@1.73.0/dist/3d-force-graph.min.js"></script>
@@ -22,7 +23,6 @@ body {
     height:100vh;
 }
 
-/* fondo */
 .space {
     position:fixed;
     width:100%;
@@ -33,7 +33,6 @@ body {
     pointer-events:none;
 }
 
-/* panel IA */
 .panel {
     position:fixed;
     right:30px;
@@ -62,46 +61,51 @@ Seleccione un nodo...
 
 <script>
 
-// 🧠 DATA CON INFORMACIÓN
+// --------------------
+// 🧠 GENERAR DATA (~50 NODOS)
+// --------------------
 const gData = {
-nodes: [
-    { id:"CORE", type:"core", size:10, desc:"Sistema central de decisiones IA" },
+    nodes: [
+        { id:"CORE", type:"core", size:12, desc:"Sistema central IA que coordina todas las áreas." },
 
-    { id:"COMERCIAL", type:"area", size:6,
-      ventas:"+12%", clientes:"1240", estado:"Activo", alertas:"Ninguna" },
-
-    { id:"LOGISTICA", type:"area", size:6,
-      devoluciones:"3.2%", estado:"Operativo", alertas:"Retrasos menores" },
-
-    { id:"OPERACIONES", type:"area", size:6,
-      eficiencia:"89%", estado:"Optimizado", alertas:"OK" },
-
-    { id:"VENTAS", type:"data", size:3, desc:"Ventas trimestrales en alza" },
-    { id:"CLIENTES", type:"data", size:3, desc:"Base de clientes creciente" },
-    { id:"DEVOLUCIONES", type:"data", size:3, desc:"Control de devoluciones activo" },
-    { id:"RUTAS", type:"data", size:3, desc:"Optimización de rutas activa" }
-],
-
-links: [
-    {source:"CORE", target:"COMERCIAL"},
-    {source:"CORE", target:"LOGISTICA"},
-    {source:"CORE", target:"OPERACIONES"},
-
-    {source:"COMERCIAL", target:"VENTAS"},
-    {source:"COMERCIAL", target:"CLIENTES"},
-
-    {source:"LOGISTICA", target:"DEVOLUCIONES"},
-    {source:"OPERACIONES", target:"RUTAS"}
-]
+        { id:"COMERCIAL", type:"area", size:7, ventas:"+12%", clientes:"1240", estado:"Activo", alertas:"OK" },
+        { id:"LOGISTICA", type:"area", size:7, devoluciones:"3.2%", estado:"Operativo", alertas:"Retrasos menores" },
+        { id:"OPERACIONES", type:"area", size:7, eficiencia:"89%", estado:"Optimizado", alertas:"OK" }
+    ],
+    links: []
 };
 
+const areas = ["COMERCIAL","LOGISTICA","OPERACIONES"];
+
+areas.forEach(area => {
+
+    gData.links.push({source:"CORE", target:area});
+
+    for(let i=1;i<=15;i++){
+
+        const id = `${area}_N${i}`;
+
+        gData.nodes.push({
+            id:id,
+            type:"data",
+            size:2 + Math.random()*1.5,
+            desc:`Registro operativo ${i}`
+        });
+
+        gData.links.push({source:area, target:id});
+    }
+});
+
+
+// --------------------
 // 🚀 GRAFO
+// --------------------
 const Graph = ForceGraph3D()(document.getElementById("graph"))
 .graphData(gData)
 .backgroundColor("rgba(0,0,0,0)")
 .showNavInfo(false)
 
-// nodos
+// nodos visuales
 .nodeThreeObject(node => {
 
     const group = new THREE.Group();
@@ -112,7 +116,7 @@ const Graph = ForceGraph3D()(document.getElementById("graph"))
         0x888888;
 
     const core = new THREE.Mesh(
-        new THREE.SphereGeometry(node.size, 64, 64),
+        new THREE.SphereGeometry(node.size, 48, 48),
         new THREE.MeshStandardMaterial({
             color,
             emissive: color,
@@ -137,40 +141,39 @@ const Graph = ForceGraph3D()(document.getElementById("graph"))
     return group;
 })
 
-.linkWidth(0.5)
+// conexiones
+.linkWidth(0.4)
 .linkColor(()=>"rgba(120,200,255,0.25)")
 
+// sinapsis
 .linkDirectionalParticles(4)
 .linkDirectionalParticleSpeed(0.006)
-.linkDirectionalParticleWidth(1.5)
+.linkDirectionalParticleWidth(1.2)
 .linkDirectionalParticleColor(()=>"#00eaff")
 
-// 🎯 CLICK CON INFO
+// click con info
 .onNodeClick(node => {
 
-    let html = `<b>[ NODO: ${node.id} ]</b><br><br>`;
+    let html = `<b>[ ${node.id} ]</b><br><br>`;
 
-    if(node.type === "core"){
+    if(node.type==="core"){
         html += node.desc;
     }
-
-    else if(node.type === "area"){
+    else if(node.type==="area"){
         Object.keys(node).forEach(k=>{
             if(!['id','type','size'].includes(k)){
                 html += `${k.toUpperCase()}: ${node[k]}<br>`;
             }
         });
     }
-
     else{
-        html += node.desc || "Dato estructural";
+        html += node.desc;
     }
 
     document.getElementById("info").innerHTML = html;
 
-    // zoom
-    const dist = 25;
-    const ratio = 1 + dist / Math.hypot(node.x,node.y,node.z);
+    const dist=25;
+    const ratio=1 + dist / Math.hypot(node.x,node.y,node.z);
 
     Graph.cameraPosition(
         {x:node.x*ratio, y:node.y*ratio, z:node.z*ratio},
@@ -179,8 +182,14 @@ const Graph = ForceGraph3D()(document.getElementById("graph"))
     );
 });
 
+// fuerzas (orden visual)
+Graph.d3Force('charge').strength(-120);
+Graph.d3Force('link').distance(25);
 
-// luces
+
+// --------------------
+// 💡 LUCES
+// --------------------
 Graph.scene().add(new THREE.AmbientLight(0x222244,0.7));
 
 const light = new THREE.PointLight(0x00eaff,2,300);
@@ -188,14 +197,17 @@ light.position.set(0,0,0);
 Graph.scene().add(light);
 
 
-// animación
+// --------------------
+// 💓 VIDA (PULSO)
+// --------------------
 let t=0;
+
 function animate(){
     t+=0.02;
 
     Graph.graphData().nodes.forEach(n=>{
         if(n.__threeObj){
-            const s=1+Math.sin(t+n.x*0.02)*0.05;
+            const s=1+Math.sin(t+n.x*0.02)*0.04;
             n.__threeObj.scale.set(s,s,s);
         }
     });
@@ -205,19 +217,23 @@ function animate(){
 animate();
 
 
-// actividad IA
+// --------------------
+// 🔴 ACTIVIDAD IA
+// --------------------
 setInterval(()=>{
     const nodes=Graph.graphData().nodes;
     const n=nodes[Math.floor(Math.random()*nodes.length)];
 
     if(n.__threeObj){
-        n.__threeObj.scale.set(1.6,1.6,1.6);
+        n.__threeObj.scale.set(1.5,1.5,1.5);
         setTimeout(()=>n.__threeObj.scale.set(1,1,1),300);
     }
-},1200);
+},1000);
 
 
-// cámara + control
+// --------------------
+// 🎥 CÁMARA CONTROLABLE
+// --------------------
 let auto=true;
 
 Graph.controls().addEventListener('start',()=>auto=false);
@@ -225,6 +241,7 @@ Graph.controls().addEventListener('start',()=>auto=false);
 function cam(){
     if(auto){
         const time=Date.now()*0.0003;
+
         Graph.cameraPosition({
             x:Math.sin(time)*90,
             z:Math.cos(time)*90,
@@ -235,8 +252,10 @@ function cam(){
 }
 cam();
 
+// inicio
 Graph.cameraPosition({z:120});
 
 </script>
+
 </body>
 </html>

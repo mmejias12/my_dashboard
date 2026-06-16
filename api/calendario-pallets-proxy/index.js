@@ -66,6 +66,17 @@ function parseFechaM3(s) {
   return null;
 }
 
+// v10: determinar planta dominante de un retail (la que tiene más pallets)
+function dominantPlanta(plantasObj) {
+  if (!plantasObj) return 'santiago';
+  var max = 0, winner = 'santiago';
+  var keys = Object.keys(plantasObj);
+  for (var i = 0; i < keys.length; i++) {
+    if (plantasObj[keys[i]] > max) { max = plantasObj[keys[i]]; winner = keys[i]; }
+  }
+  return winner;
+}
+
 function fmtISO(d) {
   if (!d) return null;
   return d.getUTCFullYear() + '-' +
@@ -253,11 +264,15 @@ function agregar(items, rangoFin) {
     dia.total_trf += 1;
 
     if (!dia._retails[retail]) {
-      dia._retails[retail] = { retail: retail, pallets: 0, trf: 0, _clientes: {} };
+      dia._retails[retail] = { retail: retail, pallets: 0, trf: 0, _clientes: {}, _plantas: {} };
     }
     var rd = dia._retails[retail];
     rd.pallets += pallets;
     rd.trf += 1;
+    // v10: trackear planta REDTEC de origen para filtro por planta
+    var bodOrigen = (it.bodegaOrigenStr || '').toUpperCase();
+    var plantaKey = bodOrigen.indexOf('COQUIMBO') >= 0 ? 'coquimbo' : bodOrigen.indexOf('TALCA') >= 0 ? 'talca' : 'santiago';
+    rd._plantas[plantaKey] = (rd._plantas[plantaKey] || 0) + pallets;
 
     var ckey = cliente + '||' + dr.dias;
     if (!rd._clientes[ckey]) {
@@ -309,7 +324,7 @@ function agregar(items, rangoFin) {
         };
       });
       clis.sort(function (a, b) { return b.pallets - a.pallets; });
-      return { retail: rd.retail, pallets: rd.pallets, trf: rd.trf, clientes: clis };
+      return { retail: rd.retail, pallets: rd.pallets, trf: rd.trf, planta: dominantPlanta(rd._plantas), clientes: clis };
     });
     retails.sort(function (a, b) { return b.pallets - a.pallets; });
     calOut[k] = { total_pallets: dia.total_pallets, total_trf: dia.total_trf, total_reversa: dia.total_reversa || 0, retails: retails };

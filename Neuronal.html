@@ -1,181 +1,147 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Core Neuronal Operativo — RRHH</title>
+
+    <!-- UI -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- 3D (SIN módulos) -->
+    <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/3d-force-graph"></script>
+
     <style>
         body { margin: 0; overflow: hidden; background-color: #030307; }
         .graph-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
         .interface-layer { position: relative; z-index: 10; pointer-events: none; }
         .interactive { pointer-events: auto; }
-        
-        /* Filtro de barrido técnico analógico para dar estética de IA avanzada */
+
         .scanline {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.3) 50%), linear-gradient(90deg, rgba(255, 255, 255, 0.02), rgba(0, 0, 0, 0.05));
-            z-index: 2; background-size: 100% 4px, 4px 100%; pointer-events: none; opacity: 0.35;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.3) 50%),
+                        linear-gradient(90deg, rgba(255,255,255,0.02), rgba(0,0,0,0.05));
+            z-index: 2;
+            background-size: 100% 4px, 4px 100%;
+            pointer-events: none;
+            opacity: 0.35;
         }
     </style>
 </head>
+
 <body class="text-white font-sans antialiased">
 
-    <div class="scanline"></div>
+<div class="scanline"></div>
 
-    <div id="3d-graph" class="graph-container"></div>
+<div id="3d-graph" class="graph-container"></div>
 
-    <div class="interface-layer min-h-screen flex flex-col justify-between p-6">
-        
-        <header class="flex justify-between items-start w-full">
-            <div class="bg-slate-950/80 backdrop-blur-xl p-4 rounded-xl border border-white/10 max-w-sm shadow-2xl">
-                <div class="flex items-center gap-2">
-                    <div class="w-2 h-2 rounded-full bg-white animate-pulse"></div>
-                    <h1 class="text-xs uppercase tracking-widest font-mono font-bold text-neutral-200">Neural Matrix Online</h1>
-                </div>
-                <p class="text-[11px] text-neutral-400 mt-1 font-mono">Entorno de producción activo. Procesando hilos de comunicación interna por área.</p>
-            </div>
-        </header>
+<div class="interface-layer min-h-screen flex flex-col justify-between p-6">
 
-        <div class="w-full flex justify-end">
-            <div class="bg-neutral-950/90 backdrop-blur-2xl p-6 rounded-2xl border border-white/10 shadow-[0_0_60px_rgba(255,255,255,0.03)] interactive max-w-xl w-full">
-                
-                <div id="panel-vacio" class="text-xs font-mono text-neutral-500 text-center py-4 flex flex-col items-center gap-2">
-                    <i data-lucide="activity" class="w-5 h-5 text-neutral-600 animate-pulse"></i>
-                    [ SISTEMA OPERATIVO: SELECCIONE UN NODO NEURONAL PARA DEPLOY ]
-                </div>
-                
-                <div id="panel-contenido" class="hidden space-y-4">
-                    <div class="flex justify-between items-center border-b border-white/10 pb-2">
-                        <span id="nodo-tag" class="text-[9px] font-mono uppercase tracking-widest bg-white text-black px-2 py-0.5 rounded font-bold"></span>
-                        <span id="nodo-sub" class="text-xs text-neutral-500 font-mono"></span>
-                    </div>
-                    <div>
-                        <h2 id="nodo-titulo" class="text-md font-bold tracking-tight text-white leading-tight"></h2>
-                        <div class="bg-neutral-900/50 p-4 rounded-xl border border-white/5 mt-3">
-                            <p class="text-[10px] text-neutral-400 font-mono uppercase tracking-widest mb-1">Registro / Observación:</p>
-                            <p id="nodo-descripcion" class="text-xs text-neutral-300 leading-relaxed font-mono whitespace-pre-line"></p>
-                        </div>
-                    </div>
-                </div>
-
-            </div>
+<header class="flex justify-between items-start w-full">
+    <div class="bg-slate-950/80 backdrop-blur-xl p-4 rounded-xl border border-white/10 max-w-sm shadow-2xl">
+        <div class="flex items-center gap-2">
+            <div class="w-2 h-2 rounded-full bg-white animate-pulse"></div>
+            <h1 class="text-xs uppercase tracking-widest font-mono font-bold text-neutral-200">
+                Neural Matrix Online
+            </h1>
         </div>
+        <p class="text-[11px] text-neutral-400 mt-1 font-mono">
+            Entorno de producción activo. Procesando hilos de comunicación interna.
+        </p>
+    </div>
+</header>
+
+<div class="w-full flex justify-end">
+<div class="bg-neutral-950/90 backdrop-blur-2xl p-6 rounded-2xl border border-white/10 shadow-[0_0_60px_rgba(255,255,255,0.03)] interactive max-w-xl w-full">
+
+<div id="panel-vacio" class="text-xs font-mono text-neutral-500 text-center py-4 flex flex-col items-center gap-2">
+    <i data-lucide="activity" class="w-5 h-5 text-neutral-600 animate-pulse"></i>
+    [ SISTEMA OPERATIVO: SELECCIONE UN NODO ]
+</div>
+
+<div id="panel-contenido" class="hidden space-y-4">
+    <div class="flex justify-between items-center border-b border-white/10 pb-2">
+        <span id="nodo-tag" class="text-[9px] font-mono uppercase tracking-widest bg-white text-black px-2 py-0.5 rounded font-bold"></span>
+        <span id="nodo-sub" class="text-xs text-neutral-500 font-mono"></span>
     </div>
 
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "3d-force-graph": "https://unpkg.com/3d-force-graph@1.73.0/dist/3d-force-graph.module.js"
-            }
-        }
-    </script>
+    <div>
+        <h2 id="nodo-titulo" class="text-md font-bold"></h2>
+        <div class="bg-neutral-900/50 p-4 rounded-xl border border-white/5 mt-3">
+            <p class="text-[10px] text-neutral-400 font-mono mb-1">Registro:</p>
+            <p id="nodo-descripcion" class="text-xs text-neutral-300"></p>
+        </div>
+    </div>
+</div>
 
-    <script type="module">
-        import * as THREE from 'three';
-        import ForceGraph3D from '3d-force-graph';
+</div>
+</div>
+</div>
 
-        // Datos estructurados uno a uno de tu archivo 'mockup rrhh.txt'
-        const gData = {
-            nodes: [
-                // Nodos Core (Áreas principales de tu empresa)
-                { id: 'Comercial', label: 'Área Comercial', type: 'area', size: 9, color: '#ffffff' },
-                { id: 'Logistica', label: 'Logística Inversa', type: 'area', size: 9, color: '#ffffff' },
-                { id: 'Operaciones', label: 'Operaciones', type: 'area', size: 9, color: '#ffffff' },
-                { id: 'Transporte', label: 'Área Transporte', type: 'area', size: 9, color: '#ffffff' },
-                { id: 'Planta', label: 'Área Planta', type: 'area', size: 9, color: '#ffffff' },
+<script>
 
-                // Items de Reuniones Comerciales [cite: 2]
-                { id: 'R1', label: 'Lunes 15/06', type: 'reunion', sub: '10:00 hrs', titulo: 'Comercial — Confirmado', desc: 'Reunión ejecutada según planificación.', size: 4.5, color: '#8a8a8a' }, // [cite: 2]
-                { id: 'R2', label: 'Miércoles 17/06', type: 'reunion', sub: '10:00 hrs', titulo: 'Comercial — Reprogramado', desc: 'Se reagenda para Viernes 19/06.', size: 4.5, color: '#8a8a8a' }, // [cite: 2, 3]
-                { id: 'R3', label: 'Viernes 19/06', type: 'reunion', sub: '10:00 hrs', titulo: 'Comercial — Sin Asistencia', desc: 'Equipo en terreno.', size: 4.5, color: '#8a8a8a' }, // [cite: 2]
-                
-                // Item Logística Inversa [cite: 4]
-                { id: 'R4', label: 'Martes 16/06', type: 'reunion', sub: '09:00 hrs', titulo: 'Logística Inversa — Confirmado', desc: 'Seguimiento semanal OK.', size: 4.5, color: '#8a8a8a' }, // [cite: 4]
-                
-                // Item Operaciones [cite: 4]
-                { id: 'R5', label: 'Lunes 15/06', type: 'reunion', sub: '08:30 hrs', titulo: 'Operaciones — Confirmado', desc: 'Planificación diaria ejecutada.', size: 4.5, color: '#8a8a8a' }, // [cite: 4, 5]
-                
-                // Item Transporte [cite: 5]
-                { id: 'R6', label: 'Jueves 18/06', type: 'reunion', sub: '11:00 hrs', titulo: 'Transporte — Reprogramado', desc: 'Nueva fecha: Lunes 22/06.', size: 4.5, color: '#8a8a8a' }, // [cite: 5]
-                
-                // Item Planta [cite: 6]
-                { id: 'R7', label: 'Viernes 19/06', type: 'reunion', sub: '14:00 hrs', titulo: 'Planta — Sin Asistencia', desc: 'Falla operativa.', size: 4.5, color: '#8a8a8a' } // [cite: 6]
-            ],
-            links: [
-                // Amarres lógicos entre filamentos eléctricos
-                { source: 'Comercial', target: 'R1' },
-                { source: 'Comercial', target: 'R2' },
-                { source: 'Comercial', target: 'R3' },
-                { source: 'Logistica', target: 'R4' },
-                { source: 'Operaciones', target: 'R5' },
-                { source: 'Transporte', target: 'R6' },
-                { source: 'Planta', target: 'R7' }
-            ]
-        };
+const gData = {
+    nodes: [
+        { id: 'Comercial', label: 'Área Comercial', type: 'area', size: 9, color: '#ffffff' },
+        { id: 'Logistica', label: 'Logística Inversa', type: 'area', size: 9, color: '#ffffff' },
 
-        // Construir la red neuronal sobre el contenedor limpio
-        const Graph = ForceGraph3D()(document.getElementById('3d-graph'))
-            .graphData(gData)
-            .backgroundColor('#030307')
-            .showNavInfo(false)
-            
-            // Nodos tridimensionales estilo red biológica
-            .nodeThreeObject(node => {
-                const geometry = new THREE.SphereGeometry(node.size, 16, 16);
-                const material = new THREE.MeshBasicMaterial({
-                    color: new THREE.Color(node.color),
-                    transparent: true,
-                    opacity: node.type === 'area' ? 0.95 : 0.4,
-                    wireframe: node.type === 'area' ? false : true
-                });
-                return new THREE.Mesh(geometry, material);
-            })
-            
-            .linkColor(() => '#222226')
-            .linkWidth(1)
-            
-            // Impulsos de sinapsis eléctrica continuos (Chispas flotantes)
-            .linkDirectionalParticles(4)
-            .linkDirectionalParticleSpeed(0.007)
-            .linkDirectionalParticleWidth(2.5)
-            .linkDirectionalParticleColor(() => '#ffffff')
+        { id: 'R1', label: 'Lunes', type: 'reunion', sub: '10:00', titulo: 'Reunión OK', desc: 'Ejecutada correctamente.', size: 4.5, color: '#8a8a8a' },
+        { id: 'R2', label: 'Martes', type: 'reunion', sub: '12:00', titulo: 'Reprogramada', desc: 'Se movió de fecha.', size: 4.5, color: '#8a8a8a' }
+    ],
+    links: [
+        { source: 'Comercial', target: 'R1' },
+        { source: 'Logistica', target: 'R2' }
+    ]
+};
 
-            // Lógica de clic e interacción de datos
-            .onNodeClick(node => {
-                // Zoom cinemático al presionar el elemento
-                const distance = 60;
-                const distRatio = 1 + distance/Math.hypot(node.x, node.y, node.z);
-                Graph.cameraPosition(
-                    { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }, 
-                    node, 
-                    1200
-                );
+const Graph = ForceGraph3D()(document.getElementById('3d-graph'))
+    .graphData(gData)
+    .backgroundColor('#030307')
+    .showNavInfo(false)
+    .nodeThreeObject(node => {
+        const geometry = new THREE.SphereGeometry(node.size, 16, 16);
+        const material = new THREE.MeshBasicMaterial({
+            color: node.color,
+            transparent: true,
+            opacity: node.type === 'area' ? 0.95 : 0.4,
+            wireframe: node.type !== 'area'
+        });
+        return new THREE.Mesh(geometry, material);
+    })
+    .linkColor(() => '#222226')
+    .linkWidth(1)
+    .linkDirectionalParticles(3)
+    .linkDirectionalParticleSpeed(0.01)
+    .onNodeClick(node => {
 
-                document.getElementById('panel-vacio').style.display = 'none';
-                const panel = document.getElementById('panel-contenido');
-                panel.classList.remove('hidden');
+        const distance = 60;
+        const distRatio = 1 + distance/Math.hypot(node.x, node.y, node.z);
 
-                if (node.type === 'area') {
-                    document.getElementById('nodo-titulo').innerText = node.label;
-                    document.getElementById('nodo-descripcion').innerText = "Neurona Matriz Operativa.\nFiltra y centraliza todas las agendas entrantes de esta división corporativa.";
-                    document.getElementById('nodo-sub').innerText = "Nodo Central";
-                    document.getElementById('nodo-tag').innerText = "División";
-                } else {
-                    document.getElementById('nodo-titulo').innerText = node.titulo;
-                    document.getElementById('nodo-descripcion').innerText = node.desc;
-                    document.getElementById('nodo-sub').innerText = node.sub;
-                    document.getElementById('nodo-tag').innerText = "Registro Recibido";
-                }
-            });
+        Graph.cameraPosition(
+            { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio },
+            node,
+            1000
+        );
 
-        // Ajustar elasticidad y distancia del cúmulo celular
-        Graph.d3Force('charge').strength(-140);
-        
-        // Cargar iconos de interfaz periférica
-        lucide.createIcons();
-    </script>
+        document.getElementById('panel-vacio').style.display = 'none';
+        const panel = document.getElementById('panel-contenido');
+        panel.classList.remove('hidden');
+
+        document.getElementById('nodo-titulo').innerText = node.titulo || node.label;
+        document.getElementById('nodo-descripcion').innerText = node.desc || 'Nodo principal';
+        document.getElementById('nodo-sub').innerText = node.sub || 'Core';
+        document.getElementById('nodo-tag').innerText = node.type;
+    });
+
+// FIX lucide seguro
+if (window.lucide) {
+    lucide.createIcons();
+}
+
+</script>
+
 </body>
 </html>

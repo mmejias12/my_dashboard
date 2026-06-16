@@ -3,9 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Neural Core</title>
 
-<!-- ✅ LIBRERÍAS CORRECTAS -->
+<title>Neural AI Core</title>
+
+<!-- ✅ LIBRERÍAS -->
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 <script src="https://unpkg.com/3d-force-graph@1.73.0/dist/3d-force-graph.min.js"></script>
@@ -17,13 +18,12 @@ body {
     background: radial-gradient(circle at center, #05060a, #000000);
 }
 
-/* canvas */
 #graph {
     width:100vw;
     height:100vh;
 }
 
-/* atmósfera espacial */
+/* fondo tipo espacio */
 .space {
     position:fixed;
     width:100%;
@@ -43,7 +43,7 @@ body {
 
 <script>
 
-// 🧠 DATA COHERENTE
+// 🧠 DATA
 const gData = {
 nodes: [
     { id:"CORE", type:"core", size:10 },
@@ -70,7 +70,7 @@ links: [
 ]
 };
 
-// 🎥 GRAFO
+// 🚀 GRAFO
 const Graph = ForceGraph3D()(document.getElementById("graph"))
 .graphData(gData)
 .backgroundColor("rgba(0,0,0,0)")
@@ -86,25 +86,23 @@ const Graph = ForceGraph3D()(document.getElementById("graph"))
         node.type === "area" ? 0xffffff :
         0x888888;
 
-    // núcleo
     const core = new THREE.Mesh(
-        new THREE.SphereGeometry(node.size, 48, 48),
+        new THREE.SphereGeometry(node.size, 64, 64),
         new THREE.MeshStandardMaterial({
             color: color,
             emissive: color,
-            emissiveIntensity: node.type === "core" ? 2 : 0.4,
-            roughness: 0.3,
-            metalness: 0.7
+            emissiveIntensity: node.type === "core" ? 2 : 0.5,
+            metalness: 0.9,
+            roughness: 0.2
         })
     );
 
-    // glow externo
     const glow = new THREE.Mesh(
-        new THREE.SphereGeometry(node.size * 1.6, 48, 48),
+        new THREE.SphereGeometry(node.size * 1.6, 32, 32),
         new THREE.MeshBasicMaterial({
             color: 0x00eaff,
             transparent:true,
-            opacity:0.05
+            opacity:0.04
         })
     );
 
@@ -114,17 +112,17 @@ const Graph = ForceGraph3D()(document.getElementById("graph"))
     return group;
 })
 
-// conexiones finas tipo nervio
-.linkWidth(0.4)
+// conexiones finas
+.linkWidth(0.5)
 .linkColor(() => "rgba(120,200,255,0.25)")
 
-// ⚡ impulso eléctrico
+// ⚡ sinapsis
 .linkDirectionalParticles(4)
 .linkDirectionalParticleSpeed(0.006)
 .linkDirectionalParticleWidth(1.5)
 .linkDirectionalParticleColor(() => "#00eaff")
 
-// 🎯 ZOOM REAL
+// 🎯 CLICK ZOOM
 .onNodeClick(node => {
     const dist = 25;
     const ratio = 1 + dist / Math.hypot(node.x,node.y,node.z);
@@ -136,8 +134,9 @@ const Graph = ForceGraph3D()(document.getElementById("graph"))
     );
 });
 
-// 💡 LUCES CINE
-const ambient = new THREE.AmbientLight(0x222244, 0.6);
+
+// 💡 LUCES
+const ambient = new THREE.AmbientLight(0x222244, 0.7);
 Graph.scene().add(ambient);
 
 const light = new THREE.PointLight(0x00eaff, 2, 300);
@@ -145,7 +144,7 @@ light.position.set(0,0,0);
 Graph.scene().add(light);
 
 
-// 💓 VIDA (pulsación natural, NO robótica)
+// 💓 PULSO ORGÁNICO
 let t = 0;
 
 function animateNodes(){
@@ -153,7 +152,7 @@ function animateNodes(){
 
     Graph.graphData().nodes.forEach(n => {
         if(n.__threeObj){
-            const s = 1 + Math.sin(t + n.x*0.02)*0.06;
+            const s = 1 + Math.sin(t + n.x*0.02)*0.05;
             n.__threeObj.scale.set(s,s,s);
         }
     });
@@ -163,22 +162,46 @@ function animateNodes(){
 animateNodes();
 
 
-// 🎥 CÁMARA CINEMATOGRÁFICA (MUY SUAVE)
-let angle = 0;
+// 🔴 ACTIVIDAD IA (SIMULACIÓN REAL)
+setInterval(() => {
+
+    const nodes = Graph.graphData().nodes;
+    const randomNode = nodes[Math.floor(Math.random()*nodes.length)];
+
+    if(randomNode.__threeObj){
+        randomNode.__threeObj.scale.set(1.6,1.6,1.6);
+
+        setTimeout(()=>{
+            randomNode.__threeObj.scale.set(1,1,1);
+        },300);
+    }
+
+}, 1200);
+
+
+// 🎥 CÁMARA SUAVE (NO BLOQUEA SCROLL)
+let autoRotate = true;
+
+Graph.controls().addEventListener('start', () => {
+    autoRotate = false;
+});
 
 function animateCamera(){
-    angle += 0.0005;
+    if(autoRotate){
+        const time = Date.now()*0.0003;
 
-    Graph.cameraPosition({
-        x: Math.sin(angle) * 90,
-        z: Math.cos(angle) * 90,
-        y: 25
-    });
+        Graph.cameraPosition({
+            x: Math.sin(time)*90,
+            z: Math.cos(time)*90,
+            y: 25
+        });
+    }
 
     requestAnimationFrame(animateCamera);
 }
 animateCamera();
 
+// posición inicial
 Graph.cameraPosition({z:120});
 
 </script>

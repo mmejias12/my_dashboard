@@ -137,6 +137,11 @@ html, body {
 .btn-planta:hover { color:var(--text-primary);background:var(--bg-hover); }
 .btn-planta.active { background:rgba(74,222,128,0.15);color:var(--accent); }
 
+/* v10: Badge resumen semanal (span completo de la fila del calendario) */
+.week-badge { grid-column: 1 / -1; display:flex; justify-content:space-between; align-items:center; padding:4px 10px; background:rgba(74,222,128,0.06); border-left:3px solid var(--accent); border-radius:0 4px 4px 0; margin:2px 0; font-size:11px; }
+.week-badge span { color:var(--text-secondary); font-family:'JetBrains Mono',monospace; font-size:10px; }
+.week-badge strong { color:var(--accent); font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700; }
+
 .status {
   font-size: 12px; padding: 6px 12px; border-radius: var(--radius-sm);
   display: inline-flex; align-items: center; gap: 6px;
@@ -952,6 +957,23 @@ function renderCalendar() {
     // v9: Domingo no se renderiza (su carga aparece en el lunes siguiente).
     if (dow === 0) continue;
 
+    // v10: Badge de resumen semanal al inicio de cada semana (antes del lunes)
+    if (dow === 1) {
+      var wkTotal = 0;
+      for (var wd = 0; wd < 6; wd++) {
+        var wdt = new Date(dt.getTime() + wd * 86400000);
+        var wk = fmtISO(wdt);
+        var wef = estimadoFinal(wk);
+        wkTotal += wef.estimadoFinal;
+      }
+      var wkSat = new Date(dt.getTime() + 5 * 86400000);
+      var wkBadge = document.createElement('div');
+      wkBadge.className = 'week-badge';
+      wkBadge.innerHTML = '<span>' + fmtFechaDDMM(fmtISO(dt)) + ' → ' + fmtFechaDDMM(fmtISO(wkSat)) + '</span>' +
+                          '<strong>' + fmtNum(wkTotal) + '</strong>';
+      grid.appendChild(wkBadge);
+    }
+
     var key  = fmtISO(dt);
     var info = DATA[key];
 
@@ -992,7 +1014,7 @@ function renderCalendar() {
       // v10: contar solo retails que mapean a la planta activa
       var filtRetCount = 0;
       for (var ri = 0; ri < info.retails.length; ri++) {
-        var rp = RETAIL_PLANTA[info.retails[ri].retail] || 'santiago';
+        var rp = info.retails[ri].planta || RETAIL_PLANTA[info.retails[ri].retail] || 'santiago';
         if (plantaActiva === 'todos' || rp === plantaActiva) filtRetCount++;
       }
       if (estimadoMostrar > 0) {
@@ -1104,7 +1126,7 @@ function selectDate(key) {
   var filteredTrf = 0;
   if (info && info.retails) {
     for (var i = 0; i < info.retails.length; i++) {
-      var p = RETAIL_PLANTA[info.retails[i].retail] || 'santiago';
+      var p = info.retails[i].planta || RETAIL_PLANTA[info.retails[i].retail] || 'santiago';
       if (plantaActiva === 'todos' || p === plantaActiva) filteredTrf += info.retails[i].trf;
     }
   }
@@ -1119,7 +1141,7 @@ function selectDate(key) {
   var filteredRetails = [];
   if (info && info.retails) {
     for (var fi = 0; fi < info.retails.length; fi++) {
-      var fp = RETAIL_PLANTA[info.retails[fi].retail] || 'santiago';
+      var fp = info.retails[fi].planta || RETAIL_PLANTA[info.retails[fi].retail] || 'santiago';
       if (plantaActiva === 'todos' || fp === plantaActiva) filteredRetails.push(info.retails[fi]);
     }
   }
@@ -1453,7 +1475,7 @@ $('search-input').addEventListener('input', function (e) {
     var sr = DATA[selectedDate].retails || [];
     var sfr = [];
     for (var si = 0; si < sr.length; si++) {
-      var sp = RETAIL_PLANTA[sr[si].retail] || 'santiago';
+      var sp = sr[si].planta || RETAIL_PLANTA[sr[si].retail] || 'santiago';
       if (plantaActiva === 'todos' || sp === plantaActiva) sfr.push(sr[si]);
     }
     renderRetails(sfr, e.target.value);
@@ -1627,8 +1649,8 @@ function buildRetailPlantaMap() {
 }
 
 /* Obtener el estimado de un día filtrado por planta.
-   Si planta='todos', devuelve el total completo.
-   Si hay filtro, suma solo los retails que mapean a esa planta. */
+   Usa el campo 'planta' que viene directo del proxy (basado en bodegaOrigen
+   de la transferencia). Si no existe, fallback a RETAIL_PLANTA (retiros reales). */
 function getDayEstimado(key, planta) {
   var info = DATA[key];
   if (!info) return 0;
@@ -1637,7 +1659,7 @@ function getDayEstimado(key, planta) {
   if (info.retails) {
     for (var i = 0; i < info.retails.length; i++) {
       var r = info.retails[i];
-      var p = RETAIL_PLANTA[r.retail] || 'santiago';
+      var p = r.planta || RETAIL_PLANTA[r.retail] || 'santiago';
       if (p === planta) total += r.pallets;
     }
   }

@@ -6,7 +6,6 @@
 
 <title>Neural AI Core</title>
 
-<!-- ✅ LIBRERÍAS -->
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 <script src="https://unpkg.com/3d-force-graph@1.73.0/dist/3d-force-graph.min.js"></script>
@@ -23,15 +22,30 @@ body {
     height:100vh;
 }
 
-/* fondo tipo espacio */
+/* fondo */
 .space {
     position:fixed;
     width:100%;
     height:100%;
     background-image: radial-gradient(white 1px, transparent 1px);
-    background-size: 3px 3px;
+    background-size:3px;
     opacity:0.05;
     pointer-events:none;
+}
+
+/* panel IA */
+.panel {
+    position:fixed;
+    right:30px;
+    bottom:30px;
+    width:320px;
+    padding:20px;
+    background:rgba(5,5,10,0.9);
+    border:1px solid rgba(255,255,255,0.08);
+    border-radius:14px;
+    font-family:monospace;
+    color:#ccc;
+    backdrop-filter:blur(10px);
 }
 </style>
 </head>
@@ -41,20 +55,31 @@ body {
 <div id="graph"></div>
 <div class="space"></div>
 
+<div class="panel" id="info">
+[ IA CORE ONLINE ]<br>
+Seleccione un nodo...
+</div>
+
 <script>
 
-// 🧠 DATA
+// 🧠 DATA CON INFORMACIÓN
 const gData = {
 nodes: [
-    { id:"CORE", type:"core", size:10 },
-    { id:"COMERCIAL", type:"area", size:6 },
-    { id:"LOGISTICA", type:"area", size:6 },
-    { id:"OPERACIONES", type:"area", size:6 },
+    { id:"CORE", type:"core", size:10, desc:"Sistema central de decisiones IA" },
 
-    { id:"VENTAS", type:"data", size:3 },
-    { id:"CLIENTES", type:"data", size:3 },
-    { id:"DEVOLUCIONES", type:"data", size:3 },
-    { id:"RUTAS", type:"data", size:3 }
+    { id:"COMERCIAL", type:"area", size:6,
+      ventas:"+12%", clientes:"1240", estado:"Activo", alertas:"Ninguna" },
+
+    { id:"LOGISTICA", type:"area", size:6,
+      devoluciones:"3.2%", estado:"Operativo", alertas:"Retrasos menores" },
+
+    { id:"OPERACIONES", type:"area", size:6,
+      eficiencia:"89%", estado:"Optimizado", alertas:"OK" },
+
+    { id:"VENTAS", type:"data", size:3, desc:"Ventas trimestrales en alza" },
+    { id:"CLIENTES", type:"data", size:3, desc:"Base de clientes creciente" },
+    { id:"DEVOLUCIONES", type:"data", size:3, desc:"Control de devoluciones activo" },
+    { id:"RUTAS", type:"data", size:3, desc:"Optimización de rutas activa" }
 ],
 
 links: [
@@ -76,7 +101,7 @@ const Graph = ForceGraph3D()(document.getElementById("graph"))
 .backgroundColor("rgba(0,0,0,0)")
 .showNavInfo(false)
 
-// 🧬 NODOS REALISTAS
+// nodos
 .nodeThreeObject(node => {
 
     const group = new THREE.Group();
@@ -89,18 +114,18 @@ const Graph = ForceGraph3D()(document.getElementById("graph"))
     const core = new THREE.Mesh(
         new THREE.SphereGeometry(node.size, 64, 64),
         new THREE.MeshStandardMaterial({
-            color: color,
+            color,
             emissive: color,
             emissiveIntensity: node.type === "core" ? 2 : 0.5,
-            metalness: 0.9,
-            roughness: 0.2
+            metalness:0.9,
+            roughness:0.2
         })
     );
 
     const glow = new THREE.Mesh(
-        new THREE.SphereGeometry(node.size * 1.6, 32, 32),
+        new THREE.SphereGeometry(node.size*1.6, 32, 32),
         new THREE.MeshBasicMaterial({
-            color: 0x00eaff,
+            color:0x00eaff,
             transparent:true,
             opacity:0.04
         })
@@ -112,18 +137,38 @@ const Graph = ForceGraph3D()(document.getElementById("graph"))
     return group;
 })
 
-// conexiones finas
 .linkWidth(0.5)
-.linkColor(() => "rgba(120,200,255,0.25)")
+.linkColor(()=>"rgba(120,200,255,0.25)")
 
-// ⚡ sinapsis
 .linkDirectionalParticles(4)
 .linkDirectionalParticleSpeed(0.006)
 .linkDirectionalParticleWidth(1.5)
-.linkDirectionalParticleColor(() => "#00eaff")
+.linkDirectionalParticleColor(()=>"#00eaff")
 
-// 🎯 CLICK ZOOM
+// 🎯 CLICK CON INFO
 .onNodeClick(node => {
+
+    let html = `<b>[ NODO: ${node.id} ]</b><br><br>`;
+
+    if(node.type === "core"){
+        html += node.desc;
+    }
+
+    else if(node.type === "area"){
+        Object.keys(node).forEach(k=>{
+            if(!['id','type','size'].includes(k)){
+                html += `${k.toUpperCase()}: ${node[k]}<br>`;
+            }
+        });
+    }
+
+    else{
+        html += node.desc || "Dato estructural";
+    }
+
+    document.getElementById("info").innerHTML = html;
+
+    // zoom
     const dist = 25;
     const ratio = 1 + dist / Math.hypot(node.x,node.y,node.z);
 
@@ -135,76 +180,63 @@ const Graph = ForceGraph3D()(document.getElementById("graph"))
 });
 
 
-// 💡 LUCES
-const ambient = new THREE.AmbientLight(0x222244, 0.7);
-Graph.scene().add(ambient);
+// luces
+Graph.scene().add(new THREE.AmbientLight(0x222244,0.7));
 
-const light = new THREE.PointLight(0x00eaff, 2, 300);
+const light = new THREE.PointLight(0x00eaff,2,300);
 light.position.set(0,0,0);
 Graph.scene().add(light);
 
 
-// 💓 PULSO ORGÁNICO
-let t = 0;
+// animación
+let t=0;
+function animate(){
+    t+=0.02;
 
-function animateNodes(){
-    t += 0.02;
-
-    Graph.graphData().nodes.forEach(n => {
+    Graph.graphData().nodes.forEach(n=>{
         if(n.__threeObj){
-            const s = 1 + Math.sin(t + n.x*0.02)*0.05;
+            const s=1+Math.sin(t+n.x*0.02)*0.05;
             n.__threeObj.scale.set(s,s,s);
         }
     });
 
-    requestAnimationFrame(animateNodes);
+    requestAnimationFrame(animate);
 }
-animateNodes();
+animate();
 
 
-// 🔴 ACTIVIDAD IA (SIMULACIÓN REAL)
-setInterval(() => {
+// actividad IA
+setInterval(()=>{
+    const nodes=Graph.graphData().nodes;
+    const n=nodes[Math.floor(Math.random()*nodes.length)];
 
-    const nodes = Graph.graphData().nodes;
-    const randomNode = nodes[Math.floor(Math.random()*nodes.length)];
-
-    if(randomNode.__threeObj){
-        randomNode.__threeObj.scale.set(1.6,1.6,1.6);
-
-        setTimeout(()=>{
-            randomNode.__threeObj.scale.set(1,1,1);
-        },300);
+    if(n.__threeObj){
+        n.__threeObj.scale.set(1.6,1.6,1.6);
+        setTimeout(()=>n.__threeObj.scale.set(1,1,1),300);
     }
+},1200);
 
-}, 1200);
 
+// cámara + control
+let auto=true;
 
-// 🎥 CÁMARA SUAVE (NO BLOQUEA SCROLL)
-let autoRotate = true;
+Graph.controls().addEventListener('start',()=>auto=false);
 
-Graph.controls().addEventListener('start', () => {
-    autoRotate = false;
-});
-
-function animateCamera(){
-    if(autoRotate){
-        const time = Date.now()*0.0003;
-
+function cam(){
+    if(auto){
+        const time=Date.now()*0.0003;
         Graph.cameraPosition({
-            x: Math.sin(time)*90,
-            z: Math.cos(time)*90,
-            y: 25
+            x:Math.sin(time)*90,
+            z:Math.cos(time)*90,
+            y:25
         });
     }
-
-    requestAnimationFrame(animateCamera);
+    requestAnimationFrame(cam);
 }
-animateCamera();
+cam();
 
-// posición inicial
 Graph.cameraPosition({z:120});
 
 </script>
-
 </body>
 </html>

@@ -1,133 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Neural Core</title>
+
+<!-- ✅ LIBRERÍAS CORRECTAS -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<script src="https://unpkg.com/3d-force-graph@1.73.0/dist/3d-force-graph.min.js"></script>
+
+<style>
+body {
+    margin:0;
+    overflow:hidden;
+    background: radial-gradient(circle at center, #05060a, #000000);
+}
+
+/* canvas */
+#graph {
+    width:100vw;
+    height:100vh;
+}
+
+/* atmósfera espacial */
+.space {
+    position:fixed;
+    width:100%;
+    height:100%;
+    background-image: radial-gradient(white 1px, transparent 1px);
+    background-size: 3px 3px;
+    opacity:0.05;
+    pointer-events:none;
+}
+</style>
+</head>
+
+<body>
+
+<div id="graph"></div>
+<div class="space"></div>
+
 <script>
 
-// DATA
+// 🧠 DATA COHERENTE
 const gData = {
-  nodes: [
-    { id: "CORE", group: "core", size: 10 },
+nodes: [
+    { id:"CORE", type:"core", size:10 },
+    { id:"COMERCIAL", type:"area", size:6 },
+    { id:"LOGISTICA", type:"area", size:6 },
+    { id:"OPERACIONES", type:"area", size:6 },
 
-    { id: "COMERCIAL", group: "area", size: 6 },
-    { id: "LOGISTICA", group: "area", size: 6 },
-    { id: "OPERACIONES", group: "area", size: 6 },
+    { id:"VENTAS", type:"data", size:3 },
+    { id:"CLIENTES", type:"data", size:3 },
+    { id:"DEVOLUCIONES", type:"data", size:3 },
+    { id:"RUTAS", type:"data", size:3 }
+],
 
-    { id: "Q1", group: "data", size: 3 },
-    { id: "Q2", group: "data", size: 3 },
-    { id: "DEV", group: "data", size: 3 },
-    { id: "RUTA", group: "data", size: 3 }
-  ],
+links: [
+    {source:"CORE", target:"COMERCIAL"},
+    {source:"CORE", target:"LOGISTICA"},
+    {source:"CORE", target:"OPERACIONES"},
 
-  links: [
-    { source: "CORE", target: "COMERCIAL" },
-    { source: "CORE", target: "LOGISTICA" },
-    { source: "CORE", target: "OPERACIONES" },
+    {source:"COMERCIAL", target:"VENTAS"},
+    {source:"COMERCIAL", target:"CLIENTES"},
 
-    { source: "COMERCIAL", target: "Q1" },
-    { source: "COMERCIAL", target: "Q2" },
-
-    { source: "LOGISTICA", target: "DEV" },
-    { source: "OPERACIONES", target: "RUTA" }
-  ]
+    {source:"LOGISTICA", target:"DEVOLUCIONES"},
+    {source:"OPERACIONES", target:"RUTAS"}
+]
 };
 
-
-// GRAFO
+// 🎥 GRAFO
 const Graph = ForceGraph3D()(document.getElementById("graph"))
-  .backgroundColor("#05060a")
-  .graphData(gData)
-  .showNavInfo(false)
+.graphData(gData)
+.backgroundColor("rgba(0,0,0,0)")
+.showNavInfo(false)
 
-  // NODOS REALISTAS (core energético)
-  .nodeThreeObject(node => {
+// 🧬 NODOS REALISTAS
+.nodeThreeObject(node => {
+
     const group = new THREE.Group();
+
+    const color =
+        node.type === "core" ? 0x00eaff :
+        node.type === "area" ? 0xffffff :
+        0x888888;
 
     // núcleo
     const core = new THREE.Mesh(
-      new THREE.SphereGeometry(node.size, 32, 32),
-      new THREE.MeshStandardMaterial({
-        color: node.group === "core" ? "#00f0ff" : "#ffffff",
-        emissive: node.group === "core" ? "#00f0ff" : "#888888",
-        emissiveIntensity: 1
-      })
+        new THREE.SphereGeometry(node.size, 48, 48),
+        new THREE.MeshStandardMaterial({
+            color: color,
+            emissive: color,
+            emissiveIntensity: node.type === "core" ? 2 : 0.4,
+            roughness: 0.3,
+            metalness: 0.7
+        })
     );
 
-    // aura (glow)
+    // glow externo
     const glow = new THREE.Mesh(
-      new THREE.SphereGeometry(node.size * 1.8, 32, 32),
-      new THREE.MeshBasicMaterial({
-        color: "#00f0ff",
-        transparent: true,
-        opacity: 0.08
-      })
+        new THREE.SphereGeometry(node.size * 1.6, 48, 48),
+        new THREE.MeshBasicMaterial({
+            color: 0x00eaff,
+            transparent:true,
+            opacity:0.05
+        })
     );
 
     group.add(core);
     group.add(glow);
 
     return group;
-  })
+})
 
-  // conexiones más finas
-  .linkWidth(0.6)
-  .linkColor(() => "rgba(150,200,255,0.2)")
+// conexiones finas tipo nervio
+.linkWidth(0.4)
+.linkColor(() => "rgba(120,200,255,0.25)")
 
-  // sinapsis más sutiles
-  .linkDirectionalParticles(3)
-  .linkDirectionalParticleSpeed(0.004)
-  .linkDirectionalParticleWidth(1.5)
-  .linkDirectionalParticleColor(() => "#00eaff")
+// ⚡ impulso eléctrico
+.linkDirectionalParticles(4)
+.linkDirectionalParticleSpeed(0.006)
+.linkDirectionalParticleWidth(1.5)
+.linkDirectionalParticleColor(() => "#00eaff")
 
-  // 🎯 CLICK REAL (zoom correcto)
-  .onNodeClick(node => {
-
-    const distance = 30;
-    const distRatio = 1 + distance / Math.hypot(node.x, node.y, node.z);
+// 🎯 ZOOM REAL
+.onNodeClick(node => {
+    const dist = 25;
+    const ratio = 1 + dist / Math.hypot(node.x,node.y,node.z);
 
     Graph.cameraPosition(
-      { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio },
-      node,
-      1200
+        {x:node.x*ratio, y:node.y*ratio, z:node.z*ratio},
+        node,
+        1200
     );
-  });
+});
 
-
-// 💡 iluminación pro
-const ambient = new THREE.AmbientLight(0x8888ff, 0.4);
+// 💡 LUCES CINE
+const ambient = new THREE.AmbientLight(0x222244, 0.6);
 Graph.scene().add(ambient);
 
-const light = new THREE.PointLight(0x00f0ff, 2, 300);
-light.position.set(0, 0, 0);
+const light = new THREE.PointLight(0x00eaff, 2, 300);
+light.position.set(0,0,0);
 Graph.scene().add(light);
 
 
-// 💓 pulsación orgánica (MUCHO más natural)
+// 💓 VIDA (pulsación natural, NO robótica)
 let t = 0;
-setInterval(() => {
-  t += 0.03;
 
-  Graph.nodes().forEach(n => {
-    const s = 1 + Math.sin(t + n.x * 0.02) * 0.05;
-    n.__threeObj.scale.set(s, s, s);
-  });
+function animateNodes(){
+    t += 0.02;
 
-}, 30);
+    Graph.graphData().nodes.forEach(n => {
+        if(n.__threeObj){
+            const s = 1 + Math.sin(t + n.x*0.02)*0.06;
+            n.__threeObj.scale.set(s,s,s);
+        }
+    });
+
+    requestAnimationFrame(animateNodes);
+}
+animateNodes();
 
 
-// 🎥 cámara cinematográfica (MUY importante)
+// 🎥 CÁMARA CINEMATOGRÁFICA (MUY SUAVE)
 let angle = 0;
 
-function animateCamera() {
-  angle += 0.0008;
+function animateCamera(){
+    angle += 0.0005;
 
-  Graph.cameraPosition({
-    x: Math.sin(angle) * 80,
-    z: Math.cos(angle) * 80,
-    y: 30
-  });
+    Graph.cameraPosition({
+        x: Math.sin(angle) * 90,
+        z: Math.cos(angle) * 90,
+        y: 25
+    });
 
-  requestAnimationFrame(animateCamera);
+    requestAnimationFrame(animateCamera);
 }
-
 animateCamera();
 
-Graph.cameraPosition({ z: 120 });
+Graph.cameraPosition({z:120});
 
 </script>
+
+</body>
+</html>

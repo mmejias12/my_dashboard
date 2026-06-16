@@ -1,183 +1,133 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>Neural AI Core</title>
-
-<script src="https://cdn.tailwindcss.com"></script>
-
-<!-- ✅ libs correctas -->
-<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
-<script src="https://unpkg.com/3d-force-graph@1.73.0/dist/3d-force-graph.min.js"></script>
-
-<style>
-body { margin:0; overflow:hidden; background:#020205; }
-
-#graph {
-    width:100vw;
-    height:100vh;
-}
-
-/* glow IA */
-.glow {
-    position:fixed;
-    width:100%;
-    height:100%;
-    background:radial-gradient(circle at center, rgba(0,200,255,0.08), transparent 65%);
-    pointer-events:none;
-}
-
-/* UI */
-.panel {
-    position:fixed;
-    bottom:40px;
-    right:40px;
-    width:320px;
-    padding:20px;
-    background:rgba(5,5,10,0.9);
-    border:1px solid rgba(255,255,255,0.08);
-    border-radius:14px;
-    font-family:monospace;
-    color:#ccc;
-}
-</style>
-</head>
-
-<body>
-
-<div id="graph"></div>
-<div class="glow"></div>
-
-<div class="panel">
-    <div id="info">[ IA CORE ONLINE ]<br>Seleccione nodo...</div>
-</div>
-
 <script>
 
-// 🧠 DATA SIMULADA COHERENTE
+// DATA
 const gData = {
-nodes: [
-    {id:"AI_CORE", group:"core", size:14, color:"#00f0ff"},
+  nodes: [
+    { id: "CORE", group: "core", size: 10 },
 
-    {id:"COMERCIAL", group:"area", size:8, color:"#ffffff"},
-    {id:"LOGISTICA", group:"area", size:8, color:"#ffffff"},
-    {id:"OPERACIONES", group:"area", size:8, color:"#ffffff"},
+    { id: "COMERCIAL", group: "area", size: 6 },
+    { id: "LOGISTICA", group: "area", size: 6 },
+    { id: "OPERACIONES", group: "area", size: 6 },
 
-    {id:"VENTA_Q1", group:"data", size:4, color:"#8a8a8a", desc:"Crecimiento +12%"},
-    {id:"VENTA_Q2", group:"data", size:4, color:"#8a8a8a", desc:"Caída -4%"},
+    { id: "Q1", group: "data", size: 3 },
+    { id: "Q2", group: "data", size: 3 },
+    { id: "DEV", group: "data", size: 3 },
+    { id: "RUTA", group: "data", size: 3 }
+  ],
 
-    {id:"DEVOLUCIONES", group:"data", size:4, color:"#8a8a8a", desc:"Ratio 3.2%"},
-    {id:"RUTA_OPTIMA", group:"data", size:4, color:"#8a8a8a", desc:"Optimización activa"}
-],
+  links: [
+    { source: "CORE", target: "COMERCIAL" },
+    { source: "CORE", target: "LOGISTICA" },
+    { source: "CORE", target: "OPERACIONES" },
 
-links: [
-    {source:"AI_CORE", target:"COMERCIAL"},
-    {source:"AI_CORE", target:"LOGISTICA"},
-    {source:"AI_CORE", target:"OPERACIONES"},
+    { source: "COMERCIAL", target: "Q1" },
+    { source: "COMERCIAL", target: "Q2" },
 
-    {source:"COMERCIAL", target:"VENTA_Q1"},
-    {source:"COMERCIAL", target:"VENTA_Q2"},
-
-    {source:"LOGISTICA", target:"DEVOLUCIONES"},
-
-    {source:"OPERACIONES", target:"RUTA_OPTIMA"}
-]
+    { source: "LOGISTICA", target: "DEV" },
+    { source: "OPERACIONES", target: "RUTA" }
+  ]
 };
 
-// 🚀 GRAFO
-const Graph = ForceGraph3D()(document.getElementById('graph'))
-.graphData(gData)
-.backgroundColor("#020205")
-.showNavInfo(false)
 
-// NODOS estilo IA
-.nodeThreeObject(node => {
+// GRAFO
+const Graph = ForceGraph3D()(document.getElementById("graph"))
+  .backgroundColor("#05060a")
+  .graphData(gData)
+  .showNavInfo(false)
 
-    const geometry = new THREE.SphereGeometry(node.size, 32, 32);
+  // NODOS REALISTAS (core energético)
+  .nodeThreeObject(node => {
+    const group = new THREE.Group();
 
-    const material = new THREE.MeshStandardMaterial({
-        color: node.color,
-        emissive: node.color,
-        emissiveIntensity: node.group === "core" ? 2 : 0.6
-    });
+    // núcleo
+    const core = new THREE.Mesh(
+      new THREE.SphereGeometry(node.size, 32, 32),
+      new THREE.MeshStandardMaterial({
+        color: node.group === "core" ? "#00f0ff" : "#ffffff",
+        emissive: node.group === "core" ? "#00f0ff" : "#888888",
+        emissiveIntensity: 1
+      })
+    );
 
-    return new THREE.Mesh(geometry, material);
-})
+    // aura (glow)
+    const glow = new THREE.Mesh(
+      new THREE.SphereGeometry(node.size * 1.8, 32, 32),
+      new THREE.MeshBasicMaterial({
+        color: "#00f0ff",
+        transparent: true,
+        opacity: 0.08
+      })
+    );
 
-// LINKS
-.linkColor(() => "rgba(255,255,255,0.15)")
-.linkWidth(1.5)
+    group.add(core);
+    group.add(glow);
 
-// ⚡ SINAPSIS
-.linkDirectionalParticles(8)
-.linkDirectionalParticleSpeed(0.008)
-.linkDirectionalParticleWidth(2)
-.linkDirectionalParticleColor(() => "#00f0ff")
+    return group;
+  })
 
-// 🧠 INTERACCIÓN
-.onNodeClick(node => {
-    document.getElementById("info").innerHTML =
-        "[ NODO ]<br>" +
-        node.id +
-        "<br><br>" +
-        (node.desc || "Nodo estructural IA");
+  // conexiones más finas
+  .linkWidth(0.6)
+  .linkColor(() => "rgba(150,200,255,0.2)")
 
-    const dist = 70;
-    const ratio = 1 + dist / Math.hypot(node.x,node.y,node.z);
+  // sinapsis más sutiles
+  .linkDirectionalParticles(3)
+  .linkDirectionalParticleSpeed(0.004)
+  .linkDirectionalParticleWidth(1.5)
+  .linkDirectionalParticleColor(() => "#00eaff")
+
+  // 🎯 CLICK REAL (zoom correcto)
+  .onNodeClick(node => {
+
+    const distance = 30;
+    const distRatio = 1 + distance / Math.hypot(node.x, node.y, node.z);
 
     Graph.cameraPosition(
-        {x: node.x*ratio, y: node.y*ratio, z: node.z*ratio},
-        node,
-        1000
+      { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio },
+      node,
+      1200
     );
-});
+  });
 
-// 🔥 LUCES IA
-const light = new THREE.PointLight(0x00f0ff, 2, 500);
-light.position.set(0,0,0);
+
+// 💡 iluminación pro
+const ambient = new THREE.AmbientLight(0x8888ff, 0.4);
+Graph.scene().add(ambient);
+
+const light = new THREE.PointLight(0x00f0ff, 2, 300);
+light.position.set(0, 0, 0);
 Graph.scene().add(light);
 
 
-// 💓 PULSO NEURONAL
+// 💓 pulsación orgánica (MUCHO más natural)
 let t = 0;
 setInterval(() => {
-    t += 0.05;
+  t += 0.03;
 
-    Graph.nodes().forEach(n => {
-        const scale = 1 + Math.sin(t + n.x*0.01) * 0.12;
-        n.__threeObj.scale.set(scale,scale,scale);
-    });
+  Graph.nodes().forEach(n => {
+    const s = 1 + Math.sin(t + n.x * 0.02) * 0.05;
+    n.__threeObj.scale.set(s, s, s);
+  });
 
 }, 30);
 
 
-// 🎥 CÁMARA VIVA (IA observando)
-setInterval(() => {
-    const time = Date.now() * 0.0002;
+// 🎥 cámara cinematográfica (MUY importante)
+let angle = 0;
 
-    Graph.cameraPosition({
-        x: Math.sin(time) * 120,
-        z: Math.cos(time) * 120,
-        y: Math.sin(time*0.8) * 60
-    });
+function animateCamera() {
+  angle += 0.0008;
 
-}, 80);
+  Graph.cameraPosition({
+    x: Math.sin(angle) * 80,
+    z: Math.cos(angle) * 80,
+    y: 30
+  });
 
+  requestAnimationFrame(animateCamera);
+}
 
-// 🔁 AUTO-IMPULSO (vida continua)
-setInterval(() => {
+animateCamera();
 
-    Graph.d3Force('charge').strength(-150 - Math.random()*30);
-
-}, 2000);
-
-
-// INICIAL
-Graph.cameraPosition({z:140});
+Graph.cameraPosition({ z: 120 });
 
 </script>
-
-</body>
-</html>

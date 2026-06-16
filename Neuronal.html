@@ -1,145 +1,181 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Core Neuronal Operativo — RRHH</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <!-- UI -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+<title>Neural AI Core</title>
 
-    <!-- 3D (SIN módulos) -->
-    <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
-    <script src="https://unpkg.com/3d-force-graph"></script>
+<script src="https://cdn.tailwindcss.com"></script>
 
-    <style>
-        body { margin: 0; overflow: hidden; background-color: #030307; }
-        .graph-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
-        .interface-layer { position: relative; z-index: 10; pointer-events: none; }
-        .interactive { pointer-events: auto; }
+<!-- ✅ libs correctas -->
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<script src="https://unpkg.com/3d-force-graph@1.73.0/dist/3d-force-graph.min.js"></script>
 
-        .scanline {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.3) 50%),
-                        linear-gradient(90deg, rgba(255,255,255,0.02), rgba(0,0,0,0.05));
-            z-index: 2;
-            background-size: 100% 4px, 4px 100%;
-            pointer-events: none;
-            opacity: 0.35;
-        }
-    </style>
+<style>
+body { margin:0; overflow:hidden; background:#020205; }
+
+#graph {
+    width:100vw;
+    height:100vh;
+}
+
+/* glow IA */
+.glow {
+    position:fixed;
+    width:100%;
+    height:100%;
+    background:radial-gradient(circle at center, rgba(0,200,255,0.08), transparent 65%);
+    pointer-events:none;
+}
+
+/* UI */
+.panel {
+    position:fixed;
+    bottom:40px;
+    right:40px;
+    width:320px;
+    padding:20px;
+    background:rgba(5,5,10,0.9);
+    border:1px solid rgba(255,255,255,0.08);
+    border-radius:14px;
+    font-family:monospace;
+    color:#ccc;
+}
+</style>
 </head>
 
-<body class="text-white font-sans antialiased">
+<body>
 
-<div class="scanline"></div>
+<div id="graph"></div>
+<div class="glow"></div>
 
-<div id="3d-graph" class="graph-container"></div>
-
-<div class="interface-layer min-h-screen flex flex-col justify-between p-6">
-
-<header class="flex justify-between items-start w-full">
-    <div class="bg-slate-950/80 backdrop-blur-xl p-4 rounded-xl border border-white/10 max-w-sm shadow-2xl">
-        <div class="flex items-center gap-2">
-            <div class="w-2 h-2 rounded-full bg-white animate-pulse"></div>
-            <h1 class="text-xs uppercase tracking-widest font-mono font-bold text-neutral-200">
-                Neural Matrix Online
-            </h1>
-        </div>
-        <p class="text-[11px] text-neutral-400 mt-1 font-mono">
-            Entorno de producción activo. Procesando hilos de comunicación interna.
-        </p>
-    </div>
-</header>
-
-<div class="w-full flex justify-end">
-<div class="bg-neutral-950/90 backdrop-blur-2xl p-6 rounded-2xl border border-white/10 shadow-[0_0_60px_rgba(255,255,255,0.03)] interactive max-w-xl w-full">
-
-<div id="panel-vacio" class="text-xs font-mono text-neutral-500 text-center py-4 flex flex-col items-center gap-2">
-    <i data-lucide="activity" class="w-5 h-5 text-neutral-600 animate-pulse"></i>
-    [ SISTEMA OPERATIVO: SELECCIONE UN NODO ]
-</div>
-
-<div id="panel-contenido" class="hidden space-y-4">
-    <div class="flex justify-between items-center border-b border-white/10 pb-2">
-        <span id="nodo-tag" class="text-[9px] font-mono uppercase tracking-widest bg-white text-black px-2 py-0.5 rounded font-bold"></span>
-        <span id="nodo-sub" class="text-xs text-neutral-500 font-mono"></span>
-    </div>
-
-    <div>
-        <h2 id="nodo-titulo" class="text-md font-bold"></h2>
-        <div class="bg-neutral-900/50 p-4 rounded-xl border border-white/5 mt-3">
-            <p class="text-[10px] text-neutral-400 font-mono mb-1">Registro:</p>
-            <p id="nodo-descripcion" class="text-xs text-neutral-300"></p>
-        </div>
-    </div>
-</div>
-
-</div>
-</div>
+<div class="panel">
+    <div id="info">[ IA CORE ONLINE ]<br>Seleccione nodo...</div>
 </div>
 
 <script>
 
+// 🧠 DATA SIMULADA COHERENTE
 const gData = {
-    nodes: [
-        { id: 'Comercial', label: 'Área Comercial', type: 'area', size: 9, color: '#ffffff' },
-        { id: 'Logistica', label: 'Logística Inversa', type: 'area', size: 9, color: '#ffffff' },
+nodes: [
+    {id:"AI_CORE", group:"core", size:14, color:"#00f0ff"},
 
-        { id: 'R1', label: 'Lunes', type: 'reunion', sub: '10:00', titulo: 'Reunión OK', desc: 'Ejecutada correctamente.', size: 4.5, color: '#8a8a8a' },
-        { id: 'R2', label: 'Martes', type: 'reunion', sub: '12:00', titulo: 'Reprogramada', desc: 'Se movió de fecha.', size: 4.5, color: '#8a8a8a' }
-    ],
-    links: [
-        { source: 'Comercial', target: 'R1' },
-        { source: 'Logistica', target: 'R2' }
-    ]
+    {id:"COMERCIAL", group:"area", size:8, color:"#ffffff"},
+    {id:"LOGISTICA", group:"area", size:8, color:"#ffffff"},
+    {id:"OPERACIONES", group:"area", size:8, color:"#ffffff"},
+
+    {id:"VENTA_Q1", group:"data", size:4, color:"#8a8a8a", desc:"Crecimiento +12%"},
+    {id:"VENTA_Q2", group:"data", size:4, color:"#8a8a8a", desc:"Caída -4%"},
+
+    {id:"DEVOLUCIONES", group:"data", size:4, color:"#8a8a8a", desc:"Ratio 3.2%"},
+    {id:"RUTA_OPTIMA", group:"data", size:4, color:"#8a8a8a", desc:"Optimización activa"}
+],
+
+links: [
+    {source:"AI_CORE", target:"COMERCIAL"},
+    {source:"AI_CORE", target:"LOGISTICA"},
+    {source:"AI_CORE", target:"OPERACIONES"},
+
+    {source:"COMERCIAL", target:"VENTA_Q1"},
+    {source:"COMERCIAL", target:"VENTA_Q2"},
+
+    {source:"LOGISTICA", target:"DEVOLUCIONES"},
+
+    {source:"OPERACIONES", target:"RUTA_OPTIMA"}
+]
 };
 
-const Graph = ForceGraph3D()(document.getElementById('3d-graph'))
-    .graphData(gData)
-    .backgroundColor('#030307')
-    .showNavInfo(false)
-    .nodeThreeObject(node => {
-        const geometry = new THREE.SphereGeometry(node.size, 16, 16);
-        const material = new THREE.MeshBasicMaterial({
-            color: node.color,
-            transparent: true,
-            opacity: node.type === 'area' ? 0.95 : 0.4,
-            wireframe: node.type !== 'area'
-        });
-        return new THREE.Mesh(geometry, material);
-    })
-    .linkColor(() => '#222226')
-    .linkWidth(1)
-    .linkDirectionalParticles(3)
-    .linkDirectionalParticleSpeed(0.01)
-    .onNodeClick(node => {
+// 🚀 GRAFO
+const Graph = ForceGraph3D()(document.getElementById('graph'))
+.graphData(gData)
+.backgroundColor("#020205")
+.showNavInfo(false)
 
-        const distance = 60;
-        const distRatio = 1 + distance/Math.hypot(node.x, node.y, node.z);
+// NODOS estilo IA
+.nodeThreeObject(node => {
 
-        Graph.cameraPosition(
-            { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio },
-            node,
-            1000
-        );
+    const geometry = new THREE.SphereGeometry(node.size, 32, 32);
 
-        document.getElementById('panel-vacio').style.display = 'none';
-        const panel = document.getElementById('panel-contenido');
-        panel.classList.remove('hidden');
-
-        document.getElementById('nodo-titulo').innerText = node.titulo || node.label;
-        document.getElementById('nodo-descripcion').innerText = node.desc || 'Nodo principal';
-        document.getElementById('nodo-sub').innerText = node.sub || 'Core';
-        document.getElementById('nodo-tag').innerText = node.type;
+    const material = new THREE.MeshStandardMaterial({
+        color: node.color,
+        emissive: node.color,
+        emissiveIntensity: node.group === "core" ? 2 : 0.6
     });
 
-// FIX lucide seguro
-if (window.lucide) {
-    lucide.createIcons();
-}
+    return new THREE.Mesh(geometry, material);
+})
+
+// LINKS
+.linkColor(() => "rgba(255,255,255,0.15)")
+.linkWidth(1.5)
+
+// ⚡ SINAPSIS
+.linkDirectionalParticles(8)
+.linkDirectionalParticleSpeed(0.008)
+.linkDirectionalParticleWidth(2)
+.linkDirectionalParticleColor(() => "#00f0ff")
+
+// 🧠 INTERACCIÓN
+.onNodeClick(node => {
+    document.getElementById("info").innerHTML =
+        "[ NODO ]<br>" +
+        node.id +
+        "<br><br>" +
+        (node.desc || "Nodo estructural IA");
+
+    const dist = 70;
+    const ratio = 1 + dist / Math.hypot(node.x,node.y,node.z);
+
+    Graph.cameraPosition(
+        {x: node.x*ratio, y: node.y*ratio, z: node.z*ratio},
+        node,
+        1000
+    );
+});
+
+// 🔥 LUCES IA
+const light = new THREE.PointLight(0x00f0ff, 2, 500);
+light.position.set(0,0,0);
+Graph.scene().add(light);
+
+
+// 💓 PULSO NEURONAL
+let t = 0;
+setInterval(() => {
+    t += 0.05;
+
+    Graph.nodes().forEach(n => {
+        const scale = 1 + Math.sin(t + n.x*0.01) * 0.12;
+        n.__threeObj.scale.set(scale,scale,scale);
+    });
+
+}, 30);
+
+
+// 🎥 CÁMARA VIVA (IA observando)
+setInterval(() => {
+    const time = Date.now() * 0.0002;
+
+    Graph.cameraPosition({
+        x: Math.sin(time) * 120,
+        z: Math.cos(time) * 120,
+        y: Math.sin(time*0.8) * 60
+    });
+
+}, 80);
+
+
+// 🔁 AUTO-IMPULSO (vida continua)
+setInterval(() => {
+
+    Graph.d3Force('charge').strength(-150 - Math.random()*30);
+
+}, 2000);
+
+
+// INICIAL
+Graph.cameraPosition({z:140});
 
 </script>
 

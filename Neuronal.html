@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Core Neuronal Operativo — RRHH</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/3d-force-graph"></script>
+    <script src="https://unpkg.com/three"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #030307; }
+        .graph-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+        .interface-layer { position: relative; z-index: 10; pointer-events: none; }
+        .interactive { pointer-events: auto; }
+        
+        /* Filtro de barrido técnico analógico para mayor inmersión visual */
+        .scanline {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.3) 50%), linear-gradient(90deg, rgba(255, 255, 255, 0.03), rgba(0, 0, 0, 0.08));
+            z-index: 2; background-size: 100% 4px, 4px 100%; pointer-events: none; opacity: 0.35;
+        }
+    </style>
+</head>
+<body class="text-white font-sans antialiased">
+
+    <div class="scanline"></div>
+
+    <div id="3d-graph" class="graph-container"></div>
+
+    <div class="interface-layer min-h-screen flex flex-col justify-between p-6">
+        
+        <header class="flex justify-between items-start w-full">
+            <div class="bg-neutral-950/80 backdrop-blur-xl p-4 rounded-xl border border-white/10 max-w-sm shadow-2xl">
+                <div class="flex items-center gap-2">
+                    <div class="w-2 h-2 rounded-full bg-white animate-pulse"></div>
+                    <h1 class="text-xs uppercase tracking-widest font-mono font-bold text-neutral-200">Neural Matrix Online</h1>
+                </div>
+                <p class="text-[11px] text-neutral-400 mt-1 font-mono">Entorno de producción activo. Procesando hilos de comunicación interna por área.</p>
+            </div>
+        </header>
+
+        <div class="w-full flex justify-end">
+            <div class="bg-neutral-950/90 backdrop-blur-2xl p-6 rounded-2xl border border-white/10 shadow-[0_0_60px_rgba(255,255,255,0.03)] interactive max-w-xl w-full">
+                
+                <div id="panel-vacio" class="text-xs font-mono text-neutral-500 text-center py-4 flex flex-col items-center gap-2">
+                    <i data-lucide="shield-alert" class="w-5 h-5 text-neutral-600 animate-pulse"></i>
+                    [ SISTEMA OPERATIVO: SELECCIONE UN NODO NEURONAL PARA DEPLOY ]
+                </div>
+                
+                <div id="panel-contenido" class="hidden space-y-4">
+                    <div class="flex justify-between items-center border-b border-white/10 pb-2">
+                        <span id="nodo-tag" class="text-[9px] font-mono uppercase tracking-widest bg-white text-black px-2 py-0.5 rounded font-bold"></span>
+                        <span id="nodo-sub" class="text-xs text-neutral-500 font-mono"></span>
+                    </div>
+                    <div>
+                        <h2 id="nodo-titulo" class="text-md font-bold tracking-tight text-white leading-tight"></h2>
+                        <div class="bg-neutral-900/50 p-4 rounded-xl border border-white/5 mt-3">
+                            <p class="text-[10px] text-neutral-400 font-mono uppercase tracking-widest mb-1">Registro / Observación:</p>
+                            <p id="nodo-descripcion" class="text-xs text-neutral-300 leading-relaxed font-mono whitespace-pre-line"></p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Mapeo estructurado de datos basado en el archivo original de agendas
+        const gData = {
+            nodes: [
+                // Neuronas de Origen Central (Nodos Madre de Área)
+                { id: 'Comercial', label: 'Área Comercial', type: 'area', size: 10, color: '#ffffff' },
+                { id: 'Logistica', label: 'Logística Inversa', type: 'area', size: 10, color: '#ffffff' },
+                { id: 'Operaciones', label: 'Operaciones', type: 'area', size: 10, color: '#ffffff' },
+                { id: 'Transporte', label: 'Área Transporte', type: 'area', size: 10, color: '#ffffff' },
+                { id: 'Planta', label: 'Área Planta', type: 'area', size: 10, color: '#ffffff' },
+
+                // Instancias de Eventos Operativos (Agendas Conectadas)
+                { id: 'R1', label: 'Comercial — 15/06', type: 'reunion', sub: '10:00 hrs', titulo: 'Comercial — Lunes 15/06', desc: 'Estado: Confirmado.\n\nObservación de Agenda: Reunión ejecutada de manera óptima según la planificación establecida con la jefatura.', size: 4.5, color: '#999999' },
+                { id: 'R2', label: 'Comercial — 17/06', type: 'reunion', sub: '10:00 hrs', titulo: 'Comercial — Miércoles 17/06', desc: 'Estado: Reprogramado.\n\nObservación de Agenda: Se reagenda formalmente para el Viernes 19/06.', size: 4.5, color: '#999999' },
+                { id: 'R3', label: 'Comercial — 19/06', type: 'reunion', sub: '10:00 hrs', titulo: 'Comercial — Viernes 19/06', desc: 'Estado: Sin asistencia.\n\nObservación de Agenda: Todo el equipo desplegado de emergencia en terreno.', size: 4.5, color: '#999999' },
+                
+                { id: 'R4', label: 'Logística — 16/06', type: 'reunion', sub: '09:00 hrs', titulo: 'Logística Inversa — Martes 16/06', desc: 'Estado: Confirmado.\n\nObservación de Agenda: Seguimiento semanal de flujos e inventarios OK.', size: 4.5, color: '#999999' },
+                
+                { id: 'R5', label: 'Operaciones — 15/06', type: 'reunion', sub: '08:30 hrs', titulo: 'Operaciones — Lunes 15/06', desc: 'Estado: Confirmado.\n\nObservación de Agenda: Planificación diaria ejecutada sin contratiempos por el supervisor.', size: 4.5, color: '#999999' },
+                
+                { id: 'R6', label: 'Transporte — 18/06', type: 'reunion', sub: '11:00 hrs', titulo: 'Transporte — Jueves 18/06', desc: 'Estado: Reprogramado.\n\nObservación de Agenda: Nueva fecha de ejecución estipulada para el Lunes 22/06.', size: 4.5, color: '#999999' },
+                
+                { id: 'R7', label: 'Planta — 19/06', type: 'reunion', sub: '14:00 hrs', titulo: 'Planta — Viernes 19/06', desc: 'Estado: Sin asistencia.\n\nObservación de Agenda: Cancelación automática debido a una falla operativa crítica en la línea principal.', size: 4.5, color: '#999999' }
+            ],
+            links: [
+                // Filamentos neuronales de enlace
+                { source: 'Comercial', target: 'R1' },
+                { source: 'Comercial', target: 'R2' },
+                { source: 'Comercial', target: 'R3' },
+                { source: 'Logistica', target: 'R4' },
+                { source: 'Operaciones', target: 'R5' },
+                { source: 'Transporte', target: 'R6' },
+                { source: 'Planta', target: 'R7' }
+            ]
+        };
+
+        // Inicialización y configuración avanzada del Gráfico 3D
+        const Graph = ForceGraph3D()(document.getElementById('3d-graph'))
+            .graphData(gData)
+            .backgroundColor('#030307') // Fondo negro aeroespacial
+            .showNavInfo(false)
+            
+            // Reemplazo geométrico nativo para evitar bloqueos por CORS locales
+            .nodeThreeObject(node => {
+                const geometry = new THREE.SphereGeometry(node.size, 24, 24);
+                const material = new THREE.MeshBasicMaterial({
+                    color: new THREE.Color(node.color),
+                    transparent: true,
+                    opacity: node.type === 'area' ? 0.95 : 0.4,
+                    wireframe: node.type === 'area' ? false : true // Nodos de datos en formato filamento eléctrico
+                });
+                return new THREE.Mesh(geometry, material);
+            })
+            
+            // Configuración de filamentos de la red
+            .linkColor(() => '#222226')
+            .linkWidth(1)
+            
+            // Configuración cinética de chispazos de datos (Pulsos neuronales)
+            .linkDirectionalParticles(4) // 4 partículas de datos fluyendo en simultáneo
+            .linkDirectionalParticleSpeed(0.008) // Velocidad controlada
+            .linkDirectionalParticleWidth(2.6) // Grosor del destello
+            .linkDirectionalParticleColor(() => '#ffffff') // Chispas blancas de alta intensidad
+
+            // Lógica de Intercepción del Clic
+            .onNodeClick(node => {
+                // Desplazamiento cinematográfico de la cámara hacia el nodo seleccionado
+                const distance = 55;
+                const distRatio = 1 + distance/Math.hypot(node.x, node.y, node.z);
+                Graph.cameraPosition(
+                    { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }, 
+                    node, 
+                    1400 // Animación fluida de 1.4 segundos
+                );
+
+                // Despliegue de datos del Inspector
+                document.getElementById('panel-vacio').style.display = 'none';
+                const panel = document.getElementById('panel-contenido');
+                panel.classList.remove('hidden');
+
+                if (node.type === 'area') {
+                    document.getElementById('nodo-titulo').innerText = node.label;
+                    document.getElementById('nodo-descripcion').innerText = "Neurona Matriz Organizacional.\nEnlazada de forma directa con los reportes de asistencia de su respectiva división comercial u operativa.";
+                    document.getElementById('nodo-sub').innerText = "Nodo Raíz";
+                    document.getElementById('nodo-tag').innerText = "Infraestructura";
+                } else {
+                    document.getElementById('nodo-titulo').innerText = node.titulo;
+                    document.getElementById('nodo-descripcion').innerText = node.desc;
+                    document.getElementById('nodo-sub').innerText = node.sub;
+                    document.getElementById('nodo-tag').innerText = "Registro Recibido";
+                }
+            });
+
+        // Configuración de la fuerza de gravedad para mantener la red unida y flotando armónicamente
+        Graph.d3Force('charge').strength(-140);
+
+        // Renderizar iconos
+        lucide.createIcons();
+    </script>
+</body>
+</html>

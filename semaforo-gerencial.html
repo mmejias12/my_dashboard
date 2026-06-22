@@ -1,0 +1,1435 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Dashboard Gerencial Semáforo · v3 · REDTEC</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-page:#0a0c12; --bg-surface:#13161f; --bg-card:#1a1e28; --bg-card-hover:#222731;
+  --bg-input:#252a35; --border:rgba(255,255,255,0.07); --border-md:rgba(255,255,255,0.15);
+  --t1:#e8eaf0; --t2:#a8aebc; --t3:#6b7280;
+  --accent:#4ade80; --red-logo:#C0170C;
+  --green:#22c55e; --green-dim:rgba(34,197,94,0.12); --green-bg:rgba(34,197,94,0.08);
+  --yellow:#eab308; --yellow-dim:rgba(234,179,8,0.14); --yellow-bg:rgba(234,179,8,0.09);
+  --orange:#f97316; --orange-dim:rgba(249,115,22,0.16); --orange-bg:rgba(249,115,22,0.1);
+  --red:#ef4444; --red-dim:rgba(239,68,68,0.18); --red-bg:rgba(239,68,68,0.1);
+  --blue:#3b82f6;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{font-family:'Inter',sans-serif;background:var(--bg-page);color:var(--t1);font-size:14px;-webkit-font-smoothing:antialiased}
+
+/* MOCKUP BANNER */
+.mockup-banner{position:fixed;top:0;left:0;right:0;background:linear-gradient(90deg,#eab308,#f97316);color:#0a0c12;text-align:center;padding:7px;font-size:12px;font-weight:600;z-index:200;letter-spacing:.4px}
+
+/* TOPBAR */
+.topbar{position:fixed;top:28px;left:0;right:0;height:60px;background:var(--bg-surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1.5rem;gap:16px;z-index:100}
+.logo{display:flex;align-items:center;gap:11px;text-decoration:none;color:inherit}
+.logo-box{width:34px;height:34px;border-radius:8px;background:var(--red-logo);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:15px}
+.logo-name{font-weight:700;font-size:16px}
+.logo-sep{width:1px;height:22px;background:var(--border-md);margin:0 8px}
+.hdr-section{font-size:14px;color:var(--t2);font-weight:500}
+.live-dot{width:9px;height:9px;background:var(--green);border-radius:50%;animation:pulse 2s infinite;box-shadow:0 0 10px var(--green);margin-left:10px}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.15)}}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:18px}
+.clock{font-family:'DM Mono',monospace;font-size:18px;color:var(--t1);font-weight:600}
+.clock-date{font-size:11px;color:var(--t3);margin-left:10px;font-family:'Inter',sans-serif}
+.btn-tv{background:transparent;border:1px solid var(--border-md);color:var(--t2);padding:7px 14px;border-radius:7px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:500}
+.btn-tv:hover{background:var(--bg-card);color:var(--t1);border-color:var(--accent)}
+
+/* MAIN */
+.main{padding:108px 1.5rem 2rem;max-width:1900px;margin:0 auto}
+
+/* FILTROS BAR */
+.filters-bar{background:var(--bg-surface);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.filter-lbl{font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+.seg{display:inline-flex;background:var(--bg-input);border-radius:8px;padding:3px;gap:3px}
+.seg-btn{background:transparent;border:none;color:var(--t2);padding:7px 16px;font-size:13px;font-weight:500;cursor:pointer;border-radius:6px;font-family:inherit}
+.seg-btn:hover{color:var(--t1)}
+.seg-btn.on{background:var(--accent);color:#0a0c12;font-weight:700}
+.seg-btn:disabled{opacity:.35;cursor:not-allowed}
+
+/* SECCIONES */
+.section{margin-bottom:24px}
+.section-hdr{display:flex;align-items:center;gap:12px;margin-bottom:10px;padding:0 4px}
+.section-icon{font-size:24px}
+.section-title{font-size:17px;font-weight:700;color:var(--t1);letter-spacing:.2px}
+.section-sub{font-size:11.5px;color:var(--t3);margin-left:auto;font-weight:500;text-align:right}
+
+/* STATUS PILL Y BOTÓN REFRESH (sección live) */
+.status-pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:11px;font-size:10.5px;font-weight:600;font-family:'DM Mono',monospace;letter-spacing:.3px}
+.status-pill::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block}
+.status-pill.live{color:var(--green);background:var(--green-bg);border:1px solid rgba(34,197,94,.25)}
+.status-pill.live::before{animation:pulse 2s infinite}
+.status-pill.loading{color:var(--yellow);background:var(--yellow-bg);border:1px solid rgba(234,179,8,.25)}
+.status-pill.loading::before{animation:pulse 1s infinite}
+.status-pill.error{color:var(--red);background:var(--red-bg);border:1px solid rgba(239,68,68,.25)}
+.status-pill.cache{color:var(--blue);background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.25)}
+.btn-refresh{background:var(--bg-input);border:1px solid var(--border-md);color:var(--t2);width:28px;height:28px;border-radius:7px;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.btn-refresh:hover{background:var(--bg-card);color:var(--accent);border-color:var(--accent)}
+.btn-refresh:active{transform:scale(0.95)}
+.btn-refresh:disabled{opacity:.5;cursor:not-allowed}
+
+/* TABLA MATRIZ */
+.matrix-card{background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+table.matrix{width:100%;border-collapse:collapse}
+table.matrix th{background:var(--bg-card);color:var(--t2);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;padding:14px 16px;text-align:center;border-bottom:1px solid var(--border);border-right:1px solid var(--border)}
+table.matrix th:first-child{text-align:left;background:var(--bg-surface);color:var(--t1);font-weight:700;font-size:12px;text-transform:none;letter-spacing:0;width:240px}
+table.matrix th:last-child{border-right:none}
+table.matrix td{padding:0;border-bottom:1px solid var(--border);border-right:1px solid var(--border);text-align:center;cursor:pointer;transition:background .15s;position:relative}
+table.matrix td:first-child{cursor:default;text-align:left;padding:18px 16px;background:var(--bg-card);font-weight:600;color:var(--t1);font-size:13px}
+table.matrix td:last-child{border-right:none}
+table.matrix tr:last-child td{border-bottom:none}
+.cell-content{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px 12px;min-height:92px}
+.cell-icon{font-size:20px;margin-bottom:4px}
+.cell-value{font-family:'DM Mono',monospace;font-size:24px;font-weight:700;line-height:1;letter-spacing:-.5px}
+.cell-value.small{font-size:20px}
+.cell-value.xs{font-size:17px}
+.cell-meta{font-size:11px;color:var(--t3);margin-top:5px;font-family:'DM Mono',monospace;font-weight:500}
+.cell-row-label{display:flex;align-items:center;gap:8px}
+.cell-row-label .row-ico{font-size:18px}
+
+/* COLORES SEMÁFORO */
+td.sem-green{background:var(--green-bg)}
+td.sem-green:hover{background:var(--green-dim)}
+td.sem-green .cell-value{color:var(--green)}
+td.sem-yellow{background:var(--yellow-bg)}
+td.sem-yellow:hover{background:var(--yellow-dim)}
+td.sem-yellow .cell-value{color:var(--yellow)}
+td.sem-orange{background:var(--orange-bg)}
+td.sem-orange:hover{background:var(--orange-dim)}
+td.sem-orange .cell-value{color:var(--orange)}
+td.sem-red{background:var(--red-bg)}
+td.sem-red:hover{background:var(--red-dim)}
+td.sem-red .cell-value{color:var(--red)}
+td.sem-red{box-shadow:inset 0 0 0 2px rgba(239,68,68,0.3)}
+td.sem-red::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--red)}
+td.sem-empty{background:var(--bg-card)}
+td.sem-empty .cell-value{color:var(--t3)}
+td.sem-info{background:var(--bg-card)}
+td.sem-info .cell-value{color:var(--t1)}
+
+/* DELTA */
+.delta{font-size:10.5px;font-family:'DM Mono',monospace;font-weight:600;margin-left:4px}
+.delta.up{color:var(--green)}
+.delta.down{color:var(--red)}
+.delta.flat{color:var(--t3)}
+
+/* CLICK HINT */
+td.sem-red::after,td.sem-orange::after{content:'→';position:absolute;top:8px;right:10px;font-size:14px;color:var(--t1);opacity:.5;font-weight:600}
+td.sem-red:hover::after,td.sem-orange:hover::after{opacity:1;transform:translateX(3px);transition:all .2s}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:300;display:none;align-items:flex-start;justify-content:center;padding:60px 20px;overflow-y:auto;backdrop-filter:blur(4px)}
+.modal-overlay.on{display:flex}
+.modal{background:var(--bg-surface);border:1px solid var(--border-md);border-radius:14px;max-width:1100px;width:100%;max-height:calc(100vh - 80px);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.6)}
+.modal-hdr{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--border);background:var(--bg-card)}
+.modal-icon{font-size:28px}
+.modal-title{font-size:18px;font-weight:700;color:var(--t1);flex:1}
+.modal-sub{font-size:12px;color:var(--t3);margin-top:2px;font-weight:400}
+.modal-close{background:var(--bg-input);border:none;color:var(--t2);width:34px;height:34px;border-radius:7px;font-size:18px;cursor:pointer}
+.modal-close:hover{background:var(--red-dim);color:var(--red)}
+.modal-body{padding:20px 22px;overflow-y:auto;flex:1}
+.modal-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+.modal-kpi{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+.modal-kpi-lbl{font-size:10.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.modal-kpi-val{font-size:22px;font-weight:700;font-family:'DM Mono',monospace;color:var(--t1)}
+.modal-kpi-val.red{color:var(--red)}
+.modal-kpi-val.orange{color:var(--orange)}
+.modal-kpi-val.green{color:var(--green)}
+.modal-kpi-val.yellow{color:var(--yellow)}
+.modal-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
+.modal-table th{background:var(--bg-card);color:var(--t3);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:10px 12px;text-align:left;border-bottom:1px solid var(--border)}
+.modal-table th.num{text-align:right}
+.modal-table td{padding:10px 12px;border-bottom:1px solid var(--border);color:var(--t1)}
+.modal-table td.num{text-align:right;font-family:'DM Mono',monospace}
+.modal-table tbody tr:hover{background:var(--bg-card)}
+.badge-mini{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10.5px;font-weight:600;font-family:'DM Mono',monospace}
+.badge-mini.red{background:var(--red-bg);color:var(--red)}
+.badge-mini.orange{background:var(--orange-bg);color:var(--orange)}
+.badge-mini.yellow{background:var(--yellow-bg);color:var(--yellow)}
+.badge-mini.green{background:var(--green-bg);color:var(--green)}
+.modal-footer{padding:14px 22px;border-top:1px solid var(--border);background:var(--bg-card);font-size:11.5px;color:var(--t3);display:flex;justify-content:space-between;align-items:center}
+.modal-footer-link{color:var(--accent);text-decoration:none;font-weight:500}
+.modal-footer-link:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+
+<div class="mockup-banner">v4 · Transporte: LIVE (M3Link) · Producción/Comercial/Alertas/Costos: datos Mayo 2026 (próxima iteración)</div>
+
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-box">R</div>
+    <div class="logo-name">REDTEC</div>
+  </div>
+  <div class="logo-sep"></div>
+  <span class="hdr-section">Centro Operacional Gerencial</span>
+  <span class="live-dot"></span>
+
+  <div class="topbar-right">
+    <button class="btn-tv">📺 Modo TV</button>
+    <div class="clock"><span id="clk">14:35:22</span><span class="clock-date" id="clk-d">Mar 11 jun 2026</span></div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- FILTROS -->
+  <div class="filters-bar">
+    <span class="filter-lbl">Planta:</span>
+    <div class="seg" id="seg-plant">
+      <button class="seg-btn on" onclick="setPlant('todas',this)">Todas</button>
+      <button class="seg-btn" onclick="setPlant('stgo',this)">Santiago</button>
+      <button class="seg-btn" onclick="setPlant('talca',this)">Talca</button>
+    </div>
+    <span class="filter-lbl" style="margin-left:16px">Período:</span>
+    <div class="seg" id="seg-period">
+      <button class="seg-btn on" onclick="setPeriod('mensual',this)">Mensual (Mayo)</button>
+      <button class="seg-btn" onclick="setPeriod('semanal',this)">Semanal</button>
+      <button class="seg-btn" onclick="setPeriod('hoy',this)">Hoy 🟢</button>
+    </div>
+    <select class="seg-btn" id="week-sel" style="display:none;background:var(--bg-input);color:var(--t1);padding:7px 12px;border:1px solid var(--border-md)" onchange="onChangeWeek()">
+      <option value="22">S22 · 25-31 may</option>
+      <option value="21">S21 · 18-24 may</option>
+      <option value="20">S20 · 11-17 may</option>
+      <option value="19">S19 · 4-10 may</option>
+    </select>
+    <div style="flex:1"></div>
+    <span style="font-size:11.5px;color:var(--t3)">Auto-refresh 5 min · Última: <strong style="color:var(--t1);font-family:'DM Mono',monospace">14:32:15</strong></span>
+  </div>
+
+  <!-- ═════════════════════════════════════ -->
+  <!-- TRANSPORTE: VIAJES EFICIENCIA        -->
+  <!-- ═════════════════════════════════════ -->
+  <div class="section">
+    <div class="section-hdr">
+      <span class="section-icon">🚛</span>
+      <span class="section-title">Transporte · Eficiencia de viajes</span>
+      <span id="trp-status-pill" class="status-pill loading">Cargando…</span>
+      <button class="btn-refresh" onclick="cargarTransporteLive()" title="Refrescar datos">🔄</button>
+      <span class="section-sub">Plena carga: cantidadConfirmada = capacidad camión · Click rojo/naranja para detalle</span>
+    </div>
+    <div class="matrix-card">
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Total</th>
+            <th>Emisión <span style="opacity:.5;font-weight:400">(ida)</span></th>
+            <th>Retiro <span style="opacity:.5;font-weight:400">(vuelta)</span></th>
+            <th>Devoluciones</th>
+            <th>Relocalización</th>
+          </tr>
+        </thead>
+        <tbody id="trp-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═════════════════════════════════════ -->
+  <!-- PRODUCCIÓN (NUEVA SECCIÓN)            -->
+  <!-- ═════════════════════════════════════ -->
+  <div class="section">
+    <div class="section-hdr">
+      <span class="section-icon">🏭</span>
+      <span class="section-title">Producción · Flujo y calidad</span>
+      <span class="section-sub">Flujo: Recepción → Inspección → Reparación → Pintura · ICC obj <1.0 · Rechazo obj <0.1%</span>
+    </div>
+    <div class="matrix-card">
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Inspeccionados</th>
+            <th>% Buenos</th>
+            <th>% Reparables</th>
+            <th>Reparados</th>
+            <th>Tasa rechazo</th>
+            <th>ICC · IUC</th>
+          </tr>
+        </thead>
+        <tbody id="prd-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═════════════════════════════════════ -->
+  <!-- COMERCIAL · FACTURACIÓN Y CONCENTRACIÓN -->
+  <!-- ═════════════════════════════════════ -->
+  <div class="section">
+    <div class="section-hdr">
+      <span class="section-icon">💰</span>
+      <span class="section-title">Comercial · Facturación y concentración</span>
+      <span class="section-sub">Concentración top 5: obj <25% verde / >50% rojo · Riesgo de dependencia</span>
+    </div>
+    <div class="matrix-card">
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Total facturado</th>
+            <th>% Emisión</th>
+            <th>% Arriendo</th>
+            <th>% Transferencias</th>
+            <th>Concentración top 5</th>
+            <th>Concentración top 10</th>
+          </tr>
+        </thead>
+        <tbody id="com-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═════════════════════════════════════ -->
+  <!-- ALERTAS CLIENTES (lo más crítico)    -->
+  <!-- ═════════════════════════════════════ -->
+  <div class="section">
+    <div class="section-hdr">
+      <span class="section-icon">⚠</span>
+      <span class="section-title">Clientes en alerta · Sin emisión en el período</span>
+      <span class="section-sub">Click en rojo/naranja para ver lista completa y datos comerciales</span>
+    </div>
+    <div class="matrix-card">
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Cantidad clientes</th>
+            <th>% del portafolio</th>
+            <th>$ Arriendo parado</th>
+            <th>Mayor caso</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody id="ale-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═════════════════════════════════════ -->
+  <!-- COSTOS TRANSPORTE (NUEVA)            -->
+  <!-- ═════════════════════════════════════ -->
+  <div class="section">
+    <div class="section-hdr">
+      <span class="section-icon">💵</span>
+      <span class="section-title">Costos transporte · Mayo 2026</span>
+      <span class="section-sub">Cruce viaje × tarifario polígonos · Alerta si cobertura tarifaria <60%</span>
+    </div>
+    <div class="matrix-card">
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Costo total</th>
+            <th>Cobertura tarifaria</th>
+            <th>Costo/pallet</th>
+            <th>% Santiago</th>
+            <th>% Talca</th>
+            <th>Top polígono</th>
+          </tr>
+        </thead>
+        <tbody id="cos-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═════════════════════════════════════ -->
+  <!-- OPERACIONES · REVERSAS               -->
+  <!-- ═════════════════════════════════════ -->
+  <div class="section">
+    <div class="section-hdr">
+      <span class="section-icon">📋</span>
+      <span class="section-title">Operaciones · Estado transferencias</span>
+      <span class="section-sub">Regla 30 días · Pendiente de endpoint live (placeholder)</span>
+    </div>
+    <div class="matrix-card">
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Confirmadas</th>
+            <th>Pendientes <span style="opacity:.5;font-weight:400">(0-25 días)</span></th>
+            <th>Riesgo <span style="opacity:.5;font-weight:400">(25-29 días)</span></th>
+            <th>Reversa <span style="opacity:.5;font-weight:400">(30+ días)</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><div class="cell-row-label"><span class="row-ico">📦</span>Operaciones</div></td>
+            <td class="sem-green"><div class="cell-content"><span class="cell-icon">🟢</span><span class="cell-value">303</span><span class="cell-meta">cerradas OK</span></div></td>
+            <td class="sem-green"><div class="cell-content"><span class="cell-icon">🟢</span><span class="cell-value">80</span><span class="cell-meta">en plazo</span></div></td>
+            <td class="sem-orange" onclick="abrirModalOps('Riesgo',12)"><div class="cell-content"><span class="cell-icon">🟠</span><span class="cell-value">12</span><span class="cell-meta">gestión urgente</span></div></td>
+            <td class="sem-red" onclick="abrirModalOps('Reversa',45)"><div class="cell-content"><span class="cell-icon">🔴</span><span class="cell-value">45</span><span class="cell-meta">→ Cleaner Chile</span></div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- MODAL DRILL-DOWN -->
+<div class="modal-overlay" id="modal" onclick="cerrarModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-hdr">
+      <span class="modal-icon" id="modal-icon">🔴</span>
+      <div style="flex:1">
+        <div class="modal-title" id="modal-title">—</div>
+        <div class="modal-sub" id="modal-sub">—</div>
+      </div>
+      <button class="modal-close" onclick="cerrarModal()">×</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer">
+      <span>Datos reales <strong style="color:var(--t1)">Mayo 2026</strong></span>
+      <a href="#" class="modal-footer-link" id="modal-link">Ver dashboard completo →</a>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// DATOS REALES MAYO 2026 — del reporte de tu jefa
+// ═══════════════════════════════════════════════════════════════
+
+const dataOp = {
+  stgo: {
+    19:{em_v:48,em_p:18468,em_cap:19008,em_full:46, ret_v:76,ret_p:20648,ret_cap:24900,ret_full:31, devol_v:6,devol_p:1292, reloc_v:0,reloc_p:0},
+    20:{em_v:58,em_p:21888,em_cap:21816,em_full:58, ret_v:71,ret_p:21007,ret_cap:25092,ret_full:29, devol_v:6,devol_p:1401, reloc_v:1,reloc_p:540},
+    21:{em_v:46,em_p:18036,em_cap:18504,em_full:45, ret_v:61,ret_p:18825,ret_cap:20556,ret_full:31, devol_v:3,devol_p:804,  reloc_v:1,reloc_p:540},
+    22:{em_v:50,em_p:19260,em_cap:19224,em_full:50, ret_v:66,ret_p:18003,ret_cap:22104,ret_full:26, devol_v:4,devol_p:558,  reloc_v:2,reloc_p:1080},
+  },
+  talca: {
+    19:{em_v:15,em_p:2120,em_cap:8100, em_full:1, ret_v:2,ret_p:1056,ret_cap:1080,ret_full:1, devol_v:8,devol_p:1322, reloc_v:0,reloc_p:0},
+    20:{em_v:17,em_p:2558,em_cap:9180, em_full:1, ret_v:4,ret_p:1398,ret_cap:2160,ret_full:0, devol_v:8,devol_p:1595, reloc_v:0,reloc_p:0},
+    21:{em_v:18,em_p:2602,em_cap:9720, em_full:1, ret_v:3,ret_p:1002,ret_cap:1620,ret_full:1, devol_v:7,devol_p:1534, reloc_v:0,reloc_p:0},
+    22:{em_v:19,em_p:2759,em_cap:10260,em_full:1, ret_v:2,ret_p:1056,ret_cap:1080,ret_full:1, devol_v:7,devol_p:1418, reloc_v:0,reloc_p:0},
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// CATÁLOGO CAMIONES — SYNC con transportes-pagos.html
+// Las 11 patentes de Santiago son idénticas a transportes-pagos.html
+// Las 4 de Talca son adicionales (no existen aún en transportes-pagos.html)
+// ═══════════════════════════════════════════════════════════════
+const CAMIONES = {
+  // Santiago - SPOT y arrendados
+  'BJCL13': {chofer:'ISMAEL CAMPOS',         capacidad:252, planta:'stgo', tipo:'SPOT'},
+  'CCRC36': {chofer:'JUAN CARLOS VEGA',      capacidad:540, planta:'stgo', tipo:'SPOT'},
+  'CPVW43': {chofer:'CRISTOBAL ECHEVERRIA',  capacidad:540, planta:'stgo', tipo:'ARRENDADO'},
+  'FV2792': {chofer:'EMILIO CAULLE',         capacidad:540, planta:'stgo', tipo:'ARRENDADO'},
+  'LS3119': {chofer:'ANTONIO VEGA',          capacidad:252, planta:'stgo', tipo:'SPOT'},
+  'NC8771': {chofer:'JULIO BULNES',          capacidad:540, planta:'stgo', tipo:'SPOT'},
+  'RW5303': {chofer:'GONZALO CAMPOS',        capacidad:540, planta:'stgo', tipo:'SPOT'},
+  'SP3393': {chofer:'CESAR ANABALON',        capacidad:252, planta:'stgo', tipo:'SPOT'},
+  'VG1943': {chofer:'VICTOR VEGA',           capacidad:540, planta:'stgo', tipo:'SPOT'},
+  'XC9869': {chofer:'ALEJANDRO PENDOLA',     capacidad:540, planta:'stgo', tipo:'ARRENDADO'},
+  'YG5106': {chofer:'MIGUEL GOMEZ',          capacidad:540, planta:'stgo', tipo:'SPOT'},
+  // Talca - arrendados
+  'GXVL58': {chofer:'CRISTIAN GUZMAN',       capacidad:540, planta:'talca', tipo:'ARRENDADO'},
+  'GXVL57': {chofer:'CLAUDIO MORALES',       capacidad:540, planta:'talca', tipo:'ARRENDADO'},
+  'CKWR19': {chofer:'CRISTIAN GUZMAN',       capacidad:540, planta:'talca', tipo:'ARRENDADO'},
+  'GXVL60': {chofer:'CLAUDIO MORALES',       capacidad:540, planta:'talca', tipo:'ARRENDADO'},
+};
+
+// ═══════════════════════════════════════════════════════════════
+// ESTADO LIVE TRANSPORTE
+// ═══════════════════════════════════════════════════════════════
+let transporteLive = null;           // null = modo mockup, objeto = datos procesados
+let transporteLiveMeta = null;        // { totalViajes, sinPatente, sinCatalogo, cacheStatus, ... }
+let transporteLiveStatus = 'idle';    // 'idle' | 'loading' | 'live' | 'error'
+let transporteLiveError = null;
+const VIAJES_RAW_CACHE = { key: null, viajes: [] };  // Mantiene viajes crudos para drill-downs
+
+const dataProd = {
+  stgo: {
+    19:{insp:22781,buenos:6881,reparables:15868,reparados:18179,rechazo:2,pintados:23932,litros:1512,icc:1.038,iuc:0.0594},
+    20:{insp:20456,buenos:5844,reparables:14587,reparados:16643,rechazo:5,pintados:23274,litros:1424,icc:1.002,iuc:0.0571},
+    21:{insp:19365,buenos:4775,reparables:14561,reparados:13393,rechazo:3,pintados:17630,litros:1056,icc:0.911,iuc:0.0500},
+    22:{insp:23922,buenos:5827,reparables:18068,reparados:16884,rechazo:9,pintados:23211,litros:1384,icc:0.942,iuc:0.0471},
+  },
+  talca: {
+    19:{insp:2355,buenos:689,reparables:1666,reparados:3188,rechazo:28,pintados:4042,litros:285,icc:1.25,iuc:0.06},
+    20:{insp:2438,buenos:737,reparables:1701,reparados:3919,rechazo:45,pintados:3898,litros:285,icc:1.18,iuc:0.05},
+    21:{insp:1342,buenos:353,reparables:989, reparados:2475,rechazo:17,pintados:2892,litros:195,icc:1.58,iuc:0.07},
+    22:{insp:1698,buenos:475,reparables:1223,reparados:3223,rechazo:26,pintados:3642,litros:240,icc:1.34,iuc:0.07},
+  }
+};
+
+const reparadoresTop = [
+  {n:'Steven Aucapuclla', pallets:6941, icc:1.028, iuc:0.0509},
+  {n:'Nelson Gutiérrez',  pallets:6204, icc:1.029, iuc:0.0564},
+  {n:'Javier Briceño',    pallets:5838, icc:0.901, iuc:0.0509},
+  {n:'Wilmer Ruíz',       pallets:5801, icc:0.911, iuc:0.0548},
+  {n:'Omar Febres',       pallets:5656, icc:0.929, iuc:0.0601},
+  {n:'José Ramírez',      pallets:5627, icc:0.789, iuc:0.0558},
+  {n:'Felipe Serrano',    pallets:5558, icc:1.190, iuc:0.0457},
+  {n:'Sharon Garcilazo',  pallets:5453, icc:1.027, iuc:0.0479},
+  {n:'Camilo Catrilaf',   pallets:4182, icc:1.088, iuc:0.0844},
+  {n:'Luis Rentería',     pallets:4096, icc:1.039, iuc:0.0630},
+];
+
+const tarifaPorSemana = {
+  18:{arriendo:16120000,comp:260000,devol:0,emision:0,transf:1400000,walmart:1390000,traspaso:20000},
+  19:{arriendo:39390000,comp:8190000,devol:3470000,emision:64900000,transf:12120000,walmart:10000000,traspaso:650000},
+  20:{arriendo:40240000,comp:9080000,devol:2700000,emision:72840000,transf:14060000,walmart:9540000,traspaso:580000},
+  21:{arriendo:39370000,comp:7910000,devol:2660000,emision:62220000,transf:12800000,walmart:9000000,traspaso:250000},
+  22:{arriendo:41500000,comp:8830000,devol:2650000,emision:66780000,transf:17190000,walmart:9910000,traspaso:420000},
+};
+const COM_WEEKS = [18,19,20,21,22];
+
+// Top 10 clientes mes mayo
+const topClientes = [
+  {n:'CAMBIASO HNOS S.A.C.',         total:56126383},
+  {n:'PRODUCTOS FERNANDEZ SA',       total:53007744},
+  {n:'ILKO CHILE S.A.',              total:30329121},
+  {n:'LAB. BALLERINA LTDA.',         total:29962511},
+  {n:'LATIN AMERICAN FOODS S.A.',    total:27749003},
+  {n:'HAMBURGO S.A.',                total:26506121},
+  {n:'MOLINO PUENTE ALTO SA',        total:26339146},
+  {n:'IND. CLEANER CHILE S.A.',      total:24823329},
+  {n:'EMPRESAS DEMARIA S.A.',        total:22778784},
+  {n:'COLGATE PALMOLIVE CHILE SA',   total:22468938},
+];
+
+// Clientes sin emisión en mayo — separados por jefa
+const clientesCriticos = [
+  {n:'ACONCAGUA FOODS S.A.',      total:564059,  desc:'Solo arriendo. Pallets parados en bodega cliente.'},
+  {n:'ORIZON S.A.',               total:102000,  desc:'Solo arriendo. Sin movimiento en mayo.'},
+  {n:'LA FUENTE NATURAL SA',      total:76226,   desc:'Solo arriendo. Sin movimiento en mayo.'},
+  {n:'MOLINO BIO BIO S.A.',       total:27820,   desc:'Solo arriendo. Sin movimiento en mayo.'},
+  {n:'NESTLÉ CHILE S.A.',         total:19477,   desc:'Muy baja actividad. Solo arriendo residual.'},
+  {n:'BALEARES SPA.',             total:10021,   desc:'Solo arriendo. Sin movimiento en mayo.'},
+  {n:'ELABORADORA ALIM. FRUTALE', total:0,       desc:'Sin ningún registro en mayo. Posible cierre de relación.'},
+];
+const clientesSeguimiento = [
+  {n:'EMBOT. METROPOLITANA S.A.', total:9023658, desc:'$9,0M en arriendo + transferencias. No emitió pero sí transfirió a retail.'},
+  {n:'COMERCIAL FG CORP SPA',     total:549609,  desc:'Pequeño volumen de transferencias activas. Sin nueva emisión.'},
+  {n:'CONFITES MERELLO S.A.',     total:259967,  desc:'Transferencias menores activas. Sin nueva emisión.'},
+];
+
+// Costos transporte
+const costosTransporte = {
+  total:22000000,
+  cobertura:61.6,
+  viajesConTarifa:376,
+  viajesTotal:610,
+  costoPalletSpot:190,
+  costoPalletArr:190,
+  pctSantiago:90.4,
+  pctTalca:9.6,
+  topPoligonos:[
+    {p:'P13',v:4673098},{p:'P2',v:3377522},{p:'P4',v:3240455},
+    {p:'P29',v:1939756},{p:'P26',v:1515175},{p:'P1',v:1300125},
+    {p:'P15',v:898710},{p:'P16',v:806244},{p:'P10',v:735052},{p:'P27',v:640200},
+  ],
+  retailers:[
+    {n:'Walmart',  v:31183},{n:'Cencosud',v:24108},
+    {n:'Unimarc',  v:10344},{n:'Tottus',  v:4959},{n:'Otros',v:12797},
+  ]
+};
+
+// Flota mayo
+const flotaData = [
+  {pat:'BJCL13', cond:'Ismael Campos',      tipo:'SPOT',      planta:'stgo',  cap:252, viajes:65, pallets:15903},
+  {pat:'SP3393', cond:'César Anabalón',     tipo:'SPOT',      planta:'stgo',  cap:252, viajes:65, pallets:17386},
+  {pat:'GXVL58', cond:'Cristián Guzmán',    tipo:'ARRENDADO', planta:'talca', cap:540, viajes:64, pallets:12816},
+  {pat:'FV2792', cond:'Emilio Caulle',      tipo:'ARRENDADO', planta:'stgo',  cap:252, viajes:62, pallets:6956},
+  {pat:'LS3119', cond:'Antonio Vega',       tipo:'SPOT',      planta:'stgo',  cap:252, viajes:59, pallets:15921},
+  {pat:'CPVW43', cond:'Cristóbal Echeverría',tipo:'ARRENDADO',planta:'stgo',  cap:252, viajes:54, pallets:7540},
+  {pat:'NC8771', cond:'Julio Bulnes',       tipo:'SPOT',      planta:'stgo',  cap:540, viajes:44, pallets:22045},
+  {pat:'XC9869', cond:'Alejandro Pendola',  tipo:'ARRENDADO', planta:'stgo',  cap:540, viajes:42, pallets:21492},
+  {pat:'VG1943', cond:'Víctor Vega',        tipo:'SPOT',      planta:'stgo',  cap:540, viajes:34, pallets:18050},
+  {pat:'RW5303', cond:'Gonzalo Campos',     tipo:'SPOT',      planta:'stgo',  cap:540, viajes:33, pallets:18054},
+  {pat:'CCRC36', cond:'Juan Carlos Vega',   tipo:'SPOT',      planta:'stgo',  cap:540, viajes:31, pallets:16435},
+  {pat:'GXVL57', cond:'Claudio Morales',    tipo:'ARRENDADO', planta:'talca', cap:540, viajes:20, pallets:2982},
+  {pat:'CKWR19', cond:'Cristián Guzmán',    tipo:'ARRENDADO', planta:'talca', cap:540, viajes:18, pallets:3587},
+  {pat:'GXVL60', cond:'Claudio Morales',    tipo:'ARRENDADO', planta:'talca', cap:540, viajes:4,  pallets:675},
+];
+flotaData.forEach(f=>{f.ocup=Math.round(f.pallets/(f.viajes*f.cap)*100*10)/10;});
+
+const WEEKS=[19,20,21,22];
+
+// ═══════════════════════════════════════════════════════════════
+// ESTADO
+// ═══════════════════════════════════════════════════════════════
+let plant='todas', period='mensual', currentWeek=22;
+
+// ═══════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════
+const fmtM = v => '$'+(v/1e6).toFixed(1)+'M';
+const fmtK = v => v.toLocaleString('es-CL');
+const periodLabel = () => period==='mensual' ? 'Mayo 2026' : 'S'+currentWeek+' · '+ranges[currentWeek];
+const ranges = {19:'4-10 may',20:'11-17 may',21:'18-24 may',22:'25-31 may'};
+
+// ═══════════════════════════════════════════════════════════════
+// LIVE TRANSPORTE — fetch, procesar, agregar
+// ═══════════════════════════════════════════════════════════════
+
+function semanaISO(d){
+  const date = new Date(d);
+  if(isNaN(date)) return null;
+  const target = new Date(date.valueOf());
+  const dayNr = (date.getDay() + 6) % 7;
+  target.setDate(target.getDate() - dayNr + 3);
+  const firstThursday = target.valueOf();
+  target.setMonth(0, 1);
+  if(target.getDay() !== 4) target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+  return 1 + Math.ceil((firstThursday - target) / 604800000);
+}
+
+function isoWeekToDates(year, week){
+  // Devuelve {lunes, domingo} en formato YYYY-MM-DD para una semana ISO dada
+  const simple = new Date(Date.UTC(year, 0, 1 + (week-1) * 7));
+  const dow = simple.getUTCDay();
+  const monday = new Date(simple);
+  if (dow <= 4) monday.setUTCDate(simple.getUTCDate() - simple.getUTCDay() + 1);
+  else monday.setUTCDate(simple.getUTCDate() + 8 - simple.getUTCDay());
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
+  return {
+    lunes:   monday.toISOString().slice(0,10),
+    domingo: sunday.toISOString().slice(0,10)
+  };
+}
+
+function calcularRangoFechas(){
+  if (period === 'hoy') {
+    const hoy = new Date().toISOString().slice(0,10);
+    return { desde: hoy, hasta: hoy };
+  }
+  if (period === 'semanal') {
+    const w = isoWeekToDates(2026, currentWeek);
+    return { desde: w.lunes, hasta: w.domingo };
+  }
+  // Mensual: por ahora Mayo 2026 (cuando habilitemos selector de mes lo extendemos)
+  return { desde: '2026-05-01', hasta: '2026-05-31' };
+}
+
+function clasificarOperacion(opStr){
+  const op = (opStr||'').trim();
+  if (op.startsWith('Emision')) return 'em';        // Emision, Emision 24 horas, Emision LD, Emision Retiro Cliente
+  if (op === 'Retiro') return 'ret';
+  if (op === 'Devolucion' || op === 'Devolución') return 'devol';
+  if (op === 'Relocalizacion' || op === 'Relocalización') return 'reloc';
+  return null; // Transferencias y otros se excluyen de esta sección
+}
+
+function procesarViajesTransporte(rawArr){
+  // Estructura compatible con dataOp: { stgo:{ [semana]: {...} }, talca:{...} }
+  const out = { stgo: {}, talca: {} };
+  let sinPatente = 0, sinCatalogo = 0, sinFecha = 0, otrasOps = 0, procesados = 0;
+  const sinCatalogoSet = new Set();
+
+  rawArr.forEach(raw => {
+    const patente = (raw.patente || '').trim().toUpperCase();
+    if (!patente) { sinPatente++; return; }
+    const camion = CAMIONES[patente];
+    if (!camion) { sinCatalogo++; sinCatalogoSet.add(patente); return; }
+
+    const fecha = raw.fechaConfirmacion || raw.fechaDespacho || raw.horaIngreso;
+    if (!fecha) { sinFecha++; return; }
+
+    const semana = semanaISO(fecha);
+    const cat = clasificarOperacion(raw.operacion);
+    if (!cat) { otrasOps++; return; }
+
+    const planta = camion.planta;
+    if (!out[planta][semana]) {
+      out[planta][semana] = {
+        em_v:0, em_p:0, em_cap:0, em_full:0,
+        ret_v:0, ret_p:0, ret_cap:0, ret_full:0,
+        devol_v:0, devol_p:0,
+        reloc_v:0, reloc_p:0
+      };
+    }
+    const acc = out[planta][semana];
+    const cantidad = Number(raw.cantidadConfirmada) || 0;
+    const cap = camion.capacidad;
+    const esPlena = cantidad === cap ? 1 : 0;
+
+    if (cat === 'em') {
+      acc.em_v++; acc.em_p += cantidad; acc.em_cap += cap; acc.em_full += esPlena;
+    } else if (cat === 'ret') {
+      acc.ret_v++; acc.ret_p += cantidad; acc.ret_cap += cap; acc.ret_full += esPlena;
+    } else if (cat === 'devol') {
+      acc.devol_v++; acc.devol_p += cantidad;
+    } else if (cat === 'reloc') {
+      acc.reloc_v++; acc.reloc_p += cantidad;
+    }
+    procesados++;
+  });
+
+  return {
+    data: out,
+    meta: {
+      total: rawArr.length,
+      procesados,
+      sinPatente,
+      sinCatalogo,
+      sinCatalogoLista: [...sinCatalogoSet],
+      sinFecha,
+      otrasOps
+    }
+  };
+}
+
+async function cargarTransporteLive(){
+  transporteLiveStatus = 'loading';
+  transporteLiveError = null;
+  actualizarStatusPill();
+
+  const { desde, hasta } = calcularRangoFechas();
+  const url = `/api/m3link-viajes-proxy?fechaInicial=${desde}&fechaFinal=${hasta}`;
+
+  try {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('HTTP ' + r.status + ' - ' + (await r.text()).slice(0,200));
+    const arr = await r.json();
+    const viajes = Array.isArray(arr) ? arr : (arr.items || arr.data || []);
+
+    // Guardamos viajes crudos para drill-downs
+    VIAJES_RAW_CACHE.key = `${desde}_${hasta}`;
+    VIAJES_RAW_CACHE.viajes = viajes;
+
+    const procesado = procesarViajesTransporte(viajes);
+    transporteLive = procesado.data;
+    transporteLiveMeta = {
+      ...procesado.meta,
+      desde, hasta,
+      cacheStatus: r.headers.get('X-Cache') || '—',
+      cacheAge: r.headers.get('X-Cache-Age') || '',
+      lastUpdate: new Date()
+    };
+    transporteLiveStatus = 'live';
+  } catch (err) {
+    console.error('Error cargando transporte live:', err);
+    transporteLiveError = err.message;
+    transporteLiveStatus = 'error';
+    // No nullificamos transporteLive: dejamos los datos previos si los había
+  }
+
+  actualizarStatusPill();
+  renderTransporte();
+}
+
+function actualizarStatusPill(){
+  const pill = document.getElementById('trp-status-pill');
+  if (!pill) return;
+  pill.className = 'status-pill';
+
+  if (transporteLiveStatus === 'loading') {
+    pill.classList.add('loading');
+    pill.textContent = 'Cargando…';
+  } else if (transporteLiveStatus === 'error') {
+    pill.classList.add('error');
+    pill.title = transporteLiveError || '';
+    pill.textContent = 'Error · ' + (transporteLiveError || '').slice(0,40);
+  } else if (transporteLiveStatus === 'live' && transporteLiveMeta) {
+    const m = transporteLiveMeta;
+    if (m.cacheStatus === 'HIT') {
+      pill.classList.add('cache');
+      pill.textContent = `Cache ${m.cacheAge} · ${m.procesados} viajes`;
+    } else if (m.cacheStatus === 'STALE') {
+      pill.classList.add('cache');
+      pill.title = 'Upstream falló - usando cache expirado';
+      pill.textContent = `Stale ${m.cacheAge} · ${m.procesados} viajes`;
+    } else {
+      pill.classList.add('live');
+      pill.textContent = `Live · ${m.procesados} viajes`;
+    }
+    pill.title = `Período: ${m.desde} → ${m.hasta}\n` +
+                 `Total upstream: ${m.total}\n` +
+                 `Procesados: ${m.procesados}\n` +
+                 `Sin patente (excluidos): ${m.sinPatente}\n` +
+                 `Patentes fuera de catálogo: ${m.sinCatalogo}` +
+                 (m.sinCatalogoLista.length ? ` (${m.sinCatalogoLista.join(', ')})` : '') +
+                 `\nSin fecha válida: ${m.sinFecha}\n` +
+                 `Otras operaciones (no em/ret/devol/reloc): ${m.otrasOps}`;
+  } else {
+    pill.classList.add('cache');
+    pill.textContent = 'Mockup';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AGGOP — usa live si está disponible, sino fallback mockup
+// ═══════════════════════════════════════════════════════════════
+function aggOp(){
+  const plantas = plant==='todas' ? ['stgo','talca'] : [plant];
+  const tot = {em_v:0,em_p:0,em_cap:0,em_full:0,ret_v:0,ret_p:0,ret_cap:0,ret_full:0,devol_v:0,devol_p:0,reloc_v:0,reloc_p:0};
+
+  if (transporteLive) {
+    // === MODO LIVE ===
+    let weeks;
+    if (period === 'hoy') {
+      weeks = [semanaISO(new Date())];
+    } else if (period === 'semanal') {
+      weeks = [currentWeek];
+    } else {
+      // Mensual: usar todas las semanas presentes en los datos
+      const setW = new Set();
+      plantas.forEach(pl => Object.keys(transporteLive[pl] || {}).forEach(w => setW.add(Number(w))));
+      weeks = [...setW];
+    }
+    plantas.forEach(pl => weeks.forEach(w => {
+      const d = (transporteLive[pl] || {})[w];
+      if (d) Object.keys(tot).forEach(k => tot[k] += d[k]);
+    }));
+    return tot;
+  }
+
+  // === MODO MOCKUP (fallback) ===
+  const weeks = period==='mensual' ? WEEKS : [currentWeek];
+  plantas.forEach(pl => weeks.forEach(w => {
+    const d = dataOp[pl][w];
+    if (d) Object.keys(tot).forEach(k => tot[k]+=d[k]);
+  }));
+  return tot;
+}
+
+function aggProd(){
+  const plantas = plant==='todas' ? ['stgo','talca'] : [plant];
+  const weeks = period==='mensual' ? WEEKS : [currentWeek];
+  const tot = {insp:0,buenos:0,reparables:0,reparados:0,rechazo:0,pintados:0,litros:0,iccNum:0,iucNum:0};
+  plantas.forEach(pl => weeks.forEach(w => {
+    const d = dataProd[pl][w];
+    tot.insp+=d.insp; tot.buenos+=d.buenos; tot.reparables+=d.reparables;
+    tot.reparados+=d.reparados; tot.rechazo+=d.rechazo; tot.pintados+=d.pintados;
+    tot.litros+=d.litros;
+    tot.iccNum += d.icc * d.reparados;
+    tot.iucNum += d.iuc * d.reparados;
+  }));
+  tot.icc = tot.reparados ? tot.iccNum/tot.reparados : 0;
+  tot.iuc = tot.reparados ? tot.iucNum/tot.reparados : 0;
+  return tot;
+}
+
+function aggCom(){
+  // Comercial siempre es agregado mensual (la concentración por cliente se mide a fin de mes)
+  // En vista semanal mostramos proporcional
+  const weeks = period==='mensual' ? COM_WEEKS : [currentWeek];
+  const tot = {arriendo:0,comp:0,devol:0,emision:0,transf:0,walmart:0,traspaso:0};
+  weeks.forEach(w => {
+    const d = tarifaPorSemana[w];
+    if (d) Object.keys(tot).forEach(k => tot[k]+=d[k]);
+  });
+  tot.total = Object.values(tot).reduce((a,b)=>a+b,0);
+  return tot;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SEMÁFORO — clasificación de umbrales calibrados con datos reales
+// ═══════════════════════════════════════════════════════════════
+function sem_plena_em(pct){
+  if (pct >= 95) return 'green';
+  if (pct >= 80) return 'yellow';
+  if (pct >= 60) return 'orange';
+  return 'red';
+}
+function sem_plena_ret(pct){
+  if (pct >= 80) return 'green';
+  if (pct >= 65) return 'yellow';
+  if (pct >= 50) return 'orange';
+  return 'red';
+}
+function sem_rechazo(pct){
+  if (pct < 0.1) return 'green';
+  if (pct < 0.5) return 'yellow';
+  if (pct < 1.0) return 'orange';
+  return 'red';
+}
+function sem_icc(v){
+  if (v < 1.0) return 'green';
+  if (v < 1.2) return 'yellow';
+  if (v < 1.4) return 'orange';
+  return 'red';
+}
+function sem_concentracion(pct, esTop10){
+  // top 5: <25 verde, 25-35 amarillo, 35-50 naranja, >50 rojo
+  // top 10: <50 verde, 50-65 amarillo, 65-80 naranja, >80 rojo
+  if (esTop10){
+    if (pct < 50) return 'green';
+    if (pct < 65) return 'yellow';
+    if (pct < 80) return 'orange';
+    return 'red';
+  } else {
+    if (pct < 25) return 'green';
+    if (pct < 35) return 'yellow';
+    if (pct < 50) return 'orange';
+    return 'red';
+  }
+}
+function sem_clientes_alerta(cant, esCritico){
+  if (esCritico){
+    if (cant === 0) return 'green';
+    if (cant <= 2) return 'yellow';
+    if (cant <= 5) return 'orange';
+    return 'red';
+  } else {
+    if (cant === 0) return 'green';
+    if (cant <= 3) return 'yellow';
+    if (cant <= 6) return 'orange';
+    return 'red';
+  }
+}
+
+const ICONS = {green:'🟢',yellow:'🟡',orange:'🟠',red:'🔴'};
+
+// Helper para construir celda
+function cell(sem, valor, meta, onclick){
+  const ic = ICONS[sem] || '';
+  const oc = onclick ? `onclick="${onclick}"` : '';
+  return `<td class="sem-${sem}" ${oc}><div class="cell-content">
+    <span class="cell-icon">${ic}</span>
+    <span class="cell-value">${valor}</span>
+    ${meta ? `<span class="cell-meta">${meta}</span>` : ''}
+  </div></td>`;
+}
+function cellInfo(valor, meta){
+  return `<td class="sem-info"><div class="cell-content">
+    <span class="cell-value small">${valor}</span>
+    ${meta ? `<span class="cell-meta">${meta}</span>` : ''}
+  </div></td>`;
+}
+function cellEmpty(){
+  return `<td class="sem-empty"><div class="cell-content"><span class="cell-value">—</span></div></td>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════════════
+function render(){
+  if (period==='semanal') currentWeek = parseInt(document.getElementById('week-sel').value);
+  renderTransporte();
+  renderProduccion();
+  renderComercial();
+  renderAlertas();
+  renderCostos();
+}
+
+function renderTransporte(){
+  const d = aggOp();
+  // Plena carga emisión
+  const pctEm = d.em_v ? d.em_full/d.em_v*100 : 0;
+  const pctRet = d.ret_v ? d.ret_full/d.ret_v*100 : 0;
+  const ocupEm = d.em_cap ? d.em_p/d.em_cap*100 : 0;
+  const ocupRet = d.ret_cap ? d.ret_p/d.ret_cap*100 : 0;
+
+  // Fila 1: Viajes totales + plena carga
+  let html = `<tr>
+    <td><div class="cell-row-label"><span class="row-ico">✅</span>Viajes a plena carga</div></td>
+    ${cell(
+      pctEm>=95 && pctRet>=80 ? 'green' : (pctEm<60 || pctRet<50 ? 'red' : 'yellow'),
+      `${d.em_full+d.ret_full}<span style="font-size:14px;color:var(--t3)">/${d.em_v+d.ret_v}</span>`,
+      `${((d.em_full+d.ret_full)/(d.em_v+d.ret_v)*100).toFixed(1)}%`
+    )}
+    ${cell(sem_plena_em(pctEm), `${d.em_full}<span style="font-size:14px;color:var(--t3)">/${d.em_v}</span>`, `${pctEm.toFixed(1)}%`,
+      pctEm<60 ? `abrirModalCarga('emision')` : null)}
+    ${cell(sem_plena_ret(pctRet), `${d.ret_full}<span style="font-size:14px;color:var(--t3)">/${d.ret_v}</span>`, `${pctRet.toFixed(1)}%`,
+      pctRet<50 ? `abrirModalCarga('retiro')` : null)}
+    ${cellInfo(d.devol_v, `${fmtK(d.devol_p)} pall`)}
+    ${cellInfo(d.reloc_v, `${fmtK(d.reloc_p)} pall`)}
+  </tr>`;
+
+  // Fila 2: % ocupación real
+  html += `<tr>
+    <td><div class="cell-row-label"><span class="row-ico">📊</span>% Ocupación real</div></td>
+    ${cellInfo(`${((d.em_p+d.ret_p)/(d.em_cap+d.ret_cap)*100).toFixed(1)}%`, `pall transp / cap`)}
+    ${cell(ocupEm>=95?'green':ocupEm>=80?'yellow':ocupEm>=60?'orange':'red', `${ocupEm.toFixed(1)}%`, `${fmtK(d.em_p)}/${fmtK(d.em_cap)} pall`)}
+    ${cell(ocupRet>=85?'green':ocupRet>=70?'yellow':ocupRet>=55?'orange':'red', `${ocupRet.toFixed(1)}%`, `${fmtK(d.ret_p)}/${fmtK(d.ret_cap)} pall`)}
+    ${cellInfo('—','')}
+    ${cellInfo('—','')}
+  </tr>`;
+
+  document.getElementById('trp-tbody').innerHTML = html;
+}
+
+function renderProduccion(){
+  const d = aggProd();
+  if (!d.insp){
+    document.getElementById('prd-tbody').innerHTML = `<tr><td><div class="cell-row-label"><span class="row-ico">🏭</span>Producción</div></td>${cellEmpty()}${cellEmpty()}${cellEmpty()}${cellEmpty()}${cellEmpty()}${cellEmpty()}</tr>`;
+    return;
+  }
+  const pctBuenos = d.buenos/d.insp*100;
+  const pctRep = d.reparables/d.insp*100;
+  const tasaRech = d.reparados ? d.rechazo/d.reparados*100 : 0;
+
+  // Verde para "buenos" si ≥30% (no requieren reparación)
+  // Rojo para "buenos" si <20%
+  const semBuenos = pctBuenos>=30 ? 'green' : pctBuenos>=25 ? 'yellow' : pctBuenos>=20 ? 'orange' : 'red';
+  const semReparados = 'info';
+
+  let html = `<tr>
+    <td><div class="cell-row-label"><span class="row-ico">🏭</span>Volumen procesado</div></td>
+    ${cellInfo(fmtK(d.insp), 'pallets')}
+    ${cell(semBuenos, `${pctBuenos.toFixed(1)}%`, `${fmtK(d.buenos)} pall`)}
+    ${cellInfo(`${pctRep.toFixed(1)}%`, `${fmtK(d.reparables)} pall`)}
+    ${cellInfo(fmtK(d.reparados), `pintados ${fmtK(d.pintados)}`)}
+    ${cell(sem_rechazo(tasaRech), `${tasaRech.toFixed(2)}%`, `${d.rechazo} pall`,
+      tasaRech>=0.5 ? `abrirModalRechazo()` : null)}
+    ${cell(sem_icc(d.icc), `${d.icc.toFixed(2)}<span style="font-size:13px;color:var(--t3)"> · ${d.iuc.toFixed(3)}</span>`, `obj ICC<1.0`,
+      d.icc>=1.2 ? `abrirModalReparadores()` : `abrirModalReparadores()`)}
+  </tr>`;
+
+  document.getElementById('prd-tbody').innerHTML = html;
+}
+
+function renderComercial(){
+  const t = aggCom();
+  const total = t.total;
+  const pctEmi = total ? t.emision/total*100 : 0;
+  const pctArr = total ? t.arriendo/total*100 : 0;
+  const pctTrans = total ? (t.transf+t.walmart)/total*100 : 0;
+
+  // Concentración top 5 / top 10 (mensual)
+  const totMes = COM_WEEKS.reduce((s,w)=>s+Object.values(tarifaPorSemana[w]).reduce((a,b)=>a+b,0),0);
+  const top5 = topClientes.slice(0,5).reduce((s,c)=>s+c.total,0);
+  const top10 = topClientes.reduce((s,c)=>s+c.total,0);
+  const pctTop5 = top5/totMes*100;
+  const pctTop10 = top10/totMes*100;
+
+  let html = `<tr>
+    <td><div class="cell-row-label"><span class="row-ico">💵</span>Mayo 2026</div></td>
+    ${cellInfo(fmtM(total), `${period==='mensual'?'55 clientes activos':'proporcional sem'}`)}
+    ${cell(pctEmi>=40 ? 'green' : pctEmi>=30 ? 'yellow' : 'orange', `${pctEmi.toFixed(1)}%`, fmtM(t.emision))}
+    ${cell(pctArr>=25 && pctArr<=40 ? 'green' : 'yellow', `${pctArr.toFixed(1)}%`, fmtM(t.arriendo))}
+    ${cellInfo(`${pctTrans.toFixed(1)}%`, fmtM(t.transf+t.walmart))}
+    ${cell(sem_concentracion(pctTop5,false), `${pctTop5.toFixed(1)}%`, fmtM(top5),
+      `abrirModalConcentracion(5)`)}
+    ${cell(sem_concentracion(pctTop10,true), `${pctTop10.toFixed(1)}%`, fmtM(top10),
+      `abrirModalConcentracion(10)`)}
+  </tr>`;
+
+  document.getElementById('com-tbody').innerHTML = html;
+}
+
+function renderAlertas(){
+  const totalClientes = 55;
+  const critCant = clientesCriticos.length;  // 7
+  const segCant = clientesSeguimiento.length; // 3
+  const critPallets = clientesCriticos.reduce((s,c)=>s+c.total,0);
+  const segPallets = clientesSeguimiento.reduce((s,c)=>s+c.total,0);
+  const mayorCrit = [...clientesCriticos].sort((a,b)=>b.total-a.total)[0];
+  const mayorSeg = [...clientesSeguimiento].sort((a,b)=>b.total-a.total)[0];
+
+  let html = `
+    <tr>
+      <td><div class="cell-row-label"><span class="row-ico">🚨</span>Crítico · sin emisión ni transferencias</div></td>
+      ${cell(sem_clientes_alerta(critCant,true), critCant, 'clientes parados', `abrirModalClientes('criticos')`)}
+      ${cell(sem_clientes_alerta(critCant,true), `${(critCant/totalClientes*100).toFixed(0)}%`, `del portafolio`, `abrirModalClientes('criticos')`)}
+      ${cellInfo(fmtM(critPallets), 'sólo arriendo')}
+      ${cellInfo(mayorCrit.n.split(' ')[0].substring(0,12), fmtM(mayorCrit.total))}
+      ${cellInfo('Contactar', 'visita comercial')}
+    </tr>
+    <tr>
+      <td><div class="cell-row-label"><span class="row-ico">⚠</span>Seguimiento · con transferencias pero sin emisión</div></td>
+      ${cell(sem_clientes_alerta(segCant,false), segCant, 'clientes', `abrirModalClientes('seguimiento')`)}
+      ${cell(sem_clientes_alerta(segCant,false), `${(segCant/totalClientes*100).toFixed(0)}%`, 'del portafolio', `abrirModalClientes('seguimiento')`)}
+      ${cellInfo(fmtM(segPallets), 'arriendo + transf')}
+      ${cellInfo('Embot. Metro.', fmtM(mayorSeg.total))}
+      ${cellInfo('Reactivar', 'gestión cliente')}
+    </tr>`;
+
+  document.getElementById('ale-tbody').innerHTML = html;
+}
+
+function renderCostos(){
+  const c = costosTransporte;
+  const semCobertura = c.cobertura>=80?'green':c.cobertura>=60?'yellow':c.cobertura>=40?'orange':'red';
+  const top = c.topPoligonos[0];
+
+  let html = `<tr>
+    <td><div class="cell-row-label"><span class="row-ico">💰</span>Mayo 2026</div></td>
+    ${cellInfo(fmtM(c.total), `${c.viajesConTarifa}/${c.viajesTotal} viajes con tarifa`)}
+    ${cell(semCobertura, `${c.cobertura.toFixed(1)}%`, `mapeo polígono`, c.cobertura<70 ? `abrirModalCobertura()` : null)}
+    ${cellInfo('$'+c.costoPalletSpot, 'por pallet')}
+    ${cellInfo(`${c.pctSantiago}%`, `${fmtM(c.total*c.pctSantiago/100)}`)}
+    ${cellInfo(`${c.pctTalca}%`, `${fmtM(c.total*c.pctTalca/100)}`)}
+    ${cell('info', top.p, fmtM(top.v), `abrirModalPoligonos()`)}
+  </tr>`;
+
+  document.getElementById('cos-tbody').innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MODALES (drill-downs con DATOS REALES)
+// ═══════════════════════════════════════════════════════════════
+function abrirModal(icon, title, sub, body, link){
+  document.getElementById('modal-icon').textContent = icon;
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-sub').textContent = sub;
+  document.getElementById('modal-body').innerHTML = body;
+  if (link) document.getElementById('modal-link').href = link;
+  document.getElementById('modal').classList.add('on');
+}
+
+function abrirModalCarga(tipo){
+  const d = aggOp();
+  const esRetiro = tipo==='retiro';
+  const v = esRetiro ? d.ret_v : d.em_v;
+  const f = esRetiro ? d.ret_full : d.em_full;
+  const p = esRetiro ? d.ret_p : d.em_p;
+  const cap = esRetiro ? d.ret_cap : d.em_cap;
+  const pct = v ? (f/v*100).toFixed(1) : '—';
+  const noLlenos = v - f;
+  const ocioso = cap - p;
+  const perdido = ocioso * 190;
+
+  let rows = '';
+  let fuente = 'mockup';
+
+  if (transporteLive && VIAJES_RAW_CACHE.viajes.length) {
+    // === MODO LIVE: agregar viajes reales no llenos por patente ===
+    fuente = 'live';
+    const opFiltro = esRetiro ? 'ret' : 'em';
+    const porPatente = new Map();
+
+    VIAJES_RAW_CACHE.viajes.forEach(raw => {
+      const patente = (raw.patente || '').trim().toUpperCase();
+      const camion = CAMIONES[patente];
+      if (!camion) return;
+      if (plant !== 'todas' && camion.planta !== plant) return;
+      const cat = clasificarOperacion(raw.operacion);
+      if (cat !== opFiltro) return;
+
+      // Filtrar por semana si el período es semanal
+      const fecha = raw.fechaConfirmacion || raw.fechaDespacho || raw.horaIngreso;
+      if (!fecha) return;
+      if (period === 'semanal' && semanaISO(fecha) !== currentWeek) return;
+      if (period === 'hoy' && semanaISO(fecha) !== semanaISO(new Date())) return;
+
+      const cantidad = Number(raw.cantidadConfirmada) || 0;
+      const esPlena = cantidad === camion.capacidad;
+      if (esPlena) return; // Solo mostramos los NO llenos
+
+      if (!porPatente.has(patente)) {
+        porPatente.set(patente, {
+          patente, chofer: camion.chofer, tipo: camion.tipo,
+          planta: camion.planta, cap: camion.capacidad,
+          viajes: 0, pallets: 0, ociosoTotal: 0
+        });
+      }
+      const acc = porPatente.get(patente);
+      acc.viajes++;
+      acc.pallets += cantidad;
+      acc.ociosoTotal += (camion.capacidad - cantidad);
+    });
+
+    const lista = [...porPatente.values()]
+      .map(x => ({ ...x, ocup: x.viajes ? Math.round(x.pallets/(x.viajes*x.cap)*100) : 0 }))
+      .sort((a,b) => b.ociosoTotal - a.ociosoTotal)
+      .slice(0, 12);
+
+    rows = lista.map(fl => {
+      const ocSem = fl.ocup>=85?'green':fl.ocup>=70?'yellow':fl.ocup>=50?'orange':'red';
+      return `<tr>
+        <td><strong>${fl.patente}</strong></td>
+        <td>${fl.chofer}</td>
+        <td><span class="badge-mini ${fl.tipo==='SPOT'?'orange':'green'}">${fl.tipo}</span></td>
+        <td>${fl.planta==='stgo'?'Santiago':'Talca'}</td>
+        <td class="num">${fl.viajes}</td>
+        <td class="num">${fmtK(fl.pallets)}</td>
+        <td class="num">${fmtK(fl.ociosoTotal)}</td>
+        <td class="num"><span class="badge-mini ${ocSem}">${fl.ocup}%</span></td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--t3);padding:24px">Sin viajes no llenos en el período seleccionado</td></tr>';
+  } else {
+    // === MODO MOCKUP (fallback) ===
+    const bajaOcup = flotaData.filter(fl=>fl.ocup<70 && (plant==='todas' || fl.planta===plant))
+                              .sort((a,b)=>a.ocup-b.ocup).slice(0,8);
+    rows = bajaOcup.map(fl=>{
+      const ocSem = fl.ocup>=85?'green':fl.ocup>=70?'yellow':fl.ocup>=50?'orange':'red';
+      return `<tr>
+        <td><strong>${fl.pat}</strong></td>
+        <td>${fl.cond}</td>
+        <td><span class="badge-mini ${fl.tipo==='SPOT'?'orange':'green'}">${fl.tipo}</span></td>
+        <td>${fl.planta==='stgo'?'Santiago':'Talca'}</td>
+        <td class="num">${fl.viajes}</td>
+        <td class="num">${fmtK(fl.pallets)}</td>
+        <td class="num">—</td>
+        <td class="num"><span class="badge-mini ${ocSem}">${fl.ocup}%</span></td>
+      </tr>`;
+    }).join('');
+  }
+
+  const headerExtra = fuente === 'live'
+    ? '<span class="badge-mini green" style="margin-left:8px">LIVE</span>'
+    : '<span class="badge-mini yellow" style="margin-left:8px">mockup</span>';
+
+  abrirModal('🚛', `Viajes no a plena carga · ${esRetiro?'Retiro':'Emisión'} · ${periodLabel()}`,
+    `${esRetiro?'Capacidad ociosa en viajes de retorno':'Pallets no entregados que podrían haber ido'} · Plena carga = cantidad == capacidad camión`,
+    `<div class="modal-kpis">
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Viajes no llenos</div><div class="modal-kpi-val red">${noLlenos}</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">% plena carga</div><div class="modal-kpi-val ${pct<60?'red':pct<80?'orange':'yellow'}">${pct}%</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Pallets ociosos</div><div class="modal-kpi-val orange">${fmtK(ocioso)}</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Costo no recuperado</div><div class="modal-kpi-val red">${fmtM(perdido)}</div></div>
+    </div>
+    <div style="margin:10px 0 6px;font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px">
+      Detalle por patente ${headerExtra}
+    </div>
+    <table class="modal-table">
+      <thead><tr><th>Patente</th><th>Conductor</th><th>Tipo</th><th>Planta</th><th class="num">Viajes no llenos</th><th class="num">Pallets</th><th class="num">Ociosos</th><th class="num">% Ocup.</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`,
+    'transportes-pagos.html');
+}
+
+function abrirModalRechazo(){
+  const d = aggProd();
+  const tasa = (d.rechazo/d.reparados*100).toFixed(2);
+  // Pallets rechazados por planta (en vista actual)
+  const stgo = aggProdFor('stgo');
+  const talca = aggProdFor('talca');
+  abrirModal('⚠', `Tasa de rechazo · ${periodLabel()}`,
+    `Pallets rechazados / reparados · Obj <0.1%`,
+    `<div class="modal-kpis">
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Rechazados (período)</div><div class="modal-kpi-val red">${d.rechazo}</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Tasa global</div><div class="modal-kpi-val ${tasa<0.5?'yellow':'orange'}">${tasa}%</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Tasa Santiago</div><div class="modal-kpi-val green">${(stgo.rechazo/stgo.reparados*100).toFixed(3)}%</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Tasa Talca</div><div class="modal-kpi-val orange">${(talca.rechazo/talca.reparados*100).toFixed(2)}%</div></div>
+    </div>
+    <table class="modal-table">
+      <thead><tr><th>Planta</th><th class="num">Reparados</th><th class="num">Rechazados</th><th class="num">Tasa</th><th>Estado</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Santiago</strong></td>
+          <td class="num">${fmtK(stgo.reparados)}</td>
+          <td class="num">${stgo.rechazo}</td>
+          <td class="num">${(stgo.rechazo/stgo.reparados*100).toFixed(3)}%</td>
+          <td><span class="badge-mini green">objetivo</span></td></tr>
+        <tr><td><strong>Talca</strong></td>
+          <td class="num">${fmtK(talca.reparados)}</td>
+          <td class="num">${talca.rechazo}</td>
+          <td class="num">${(talca.rechazo/talca.reparados*100).toFixed(2)}%</td>
+          <td><span class="badge-mini orange">~10× Santiago</span></td></tr>
+      </tbody>
+    </table>
+    <div style="font-size:11.5px;color:var(--t3);margin-top:14px;padding:10px 14px;background:var(--bg-card);border-radius:8px;border-left:3px solid var(--orange)">
+      <strong style="color:var(--t1)">Diagnóstico:</strong> Talca tiene tasa de rechazo significativamente mayor que Santiago. Posibles causas: insumos de menor calidad, procesos no estandarizados, o sub-registro en Santiago. Sugerir auditoría cruzada.
+    </div>`,
+    '#');
+}
+
+function aggProdFor(pl){
+  const weeks = period==='mensual' ? WEEKS : [currentWeek];
+  const tot = {insp:0,buenos:0,reparables:0,reparados:0,rechazo:0,pintados:0,iccNum:0,iucNum:0};
+  weeks.forEach(w => {
+    const d = dataProd[pl][w];
+    tot.insp+=d.insp; tot.buenos+=d.buenos; tot.reparables+=d.reparables;
+    tot.reparados+=d.reparados; tot.rechazo+=d.rechazo; tot.pintados+=d.pintados;
+    tot.iccNum += d.icc * d.reparados;
+    tot.iucNum += d.iuc * d.reparados;
+  });
+  tot.icc = tot.reparados ? tot.iccNum/tot.reparados : 0;
+  tot.iuc = tot.reparados ? tot.iucNum/tot.reparados : 0;
+  return tot;
+}
+
+function abrirModalReparadores(){
+  const d = aggProd();
+  const sorted = [...reparadoresTop].sort((a,b)=>b.pallets-a.pallets);
+  let rows = sorted.map(r=>{
+    const iccSem = r.icc<1.0?'green':r.icc<1.2?'yellow':'orange';
+    return `<tr>
+      <td><strong>${r.n}</strong></td>
+      <td class="num">${fmtK(r.pallets)}</td>
+      <td class="num"><span class="badge-mini ${iccSem}">${r.icc.toFixed(2)}</span></td>
+      <td class="num">${r.iuc.toFixed(4)}</td>
+    </tr>`;
+  }).join('');
+
+  abrirModal('🔨', `Top reparadores · Santiago · ${periodLabel()}`,
+    `ICC = índice clavos por clavo (menor es mejor) · IUC = clavos por pallet`,
+    `<div class="modal-kpis">
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Pallets reparados</div><div class="modal-kpi-val">${fmtK(d.reparados)}</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">ICC ponderado</div><div class="modal-kpi-val ${d.icc<1?'green':d.icc<1.2?'yellow':'orange'}">${d.icc.toFixed(3)}</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">IUC ponderado</div><div class="modal-kpi-val">${d.iuc.toFixed(4)}</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Litros pintura</div><div class="modal-kpi-val">${fmtK(Math.round(d.litros))}</div></div>
+    </div>
+    <table class="modal-table">
+      <thead><tr><th>Reparador</th><th class="num">Pallets</th><th class="num">ICC</th><th class="num">IUC</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`,
+    '#');
+}
+
+function abrirModalConcentracion(top){
+  const totMes = COM_WEEKS.reduce((s,w)=>s+Object.values(tarifaPorSemana[w]).reduce((a,b)=>a+b,0),0);
+  const lista = topClientes.slice(0, top);
+  const sumTop = lista.reduce((s,c)=>s+c.total,0);
+  const pct = (sumTop/totMes*100).toFixed(1);
+
+  let rows = lista.map((c,i)=>`<tr>
+    <td><strong>${i+1}</strong></td>
+    <td><strong>${c.n}</strong></td>
+    <td class="num">${fmtM(c.total)}</td>
+    <td class="num">${(c.total/totMes*100).toFixed(1)}%</td>
+    <td class="num">${(lista.slice(0,i+1).reduce((s,x)=>s+x.total,0)/totMes*100).toFixed(1)}%</td>
+  </tr>`).join('');
+
+  abrirModal('💼', `Concentración top ${top} · Mayo 2026`,
+    `Riesgo de dependencia comercial · Top ${top} concentran ${pct}% del ingreso mensual`,
+    `<div class="modal-kpis">
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Top ${top} facturación</div><div class="modal-kpi-val">${fmtM(sumTop)}</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">% del total</div><div class="modal-kpi-val ${pct>50?'red':pct>35?'orange':'yellow'}">${pct}%</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Total facturado</div><div class="modal-kpi-val">${fmtM(totMes)}</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Clientes activos</div><div class="modal-kpi-val">55</div></div>
+    </div>
+    <table class="modal-table">
+      <thead><tr><th>#</th><th>Cliente</th><th class="num">Facturado</th><th class="num">% solo</th><th class="num">% acumulado</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`,
+    'cartola-financiera.html');
+}
+
+function abrirModalClientes(tipo){
+  const esCrit = tipo==='criticos';
+  const lista = esCrit ? clientesCriticos : clientesSeguimiento;
+  const totSum = lista.reduce((s,c)=>s+c.total,0);
+
+  let rows = lista.map(c=>`<tr>
+    <td><strong>${c.n}</strong></td>
+    <td>${c.desc}</td>
+    <td class="num">${c.total>0?fmtM(c.total):'$0'}</td>
+    <td><span class="badge-mini ${esCrit?'red':'orange'}">${esCrit?'CRÍTICO':'SEGUIMIENTO'}</span></td>
+  </tr>`).join('');
+
+  abrirModal(esCrit?'🚨':'⚠',
+    `Clientes ${esCrit?'críticos':'de seguimiento'} · Mayo 2026`,
+    esCrit
+      ? 'Pallets parados en cliente · Solo arriendo, sin emisión ni transferencias'
+      : 'Sin nueva emisión pero con transferencias activas a retail',
+    `<div class="modal-kpis">
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Clientes</div><div class="modal-kpi-val ${esCrit?'red':'orange'}">${lista.length}</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Facturación período</div><div class="modal-kpi-val">${fmtM(totSum)}</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">% del portafolio</div><div class="modal-kpi-val orange">${(lista.length/55*100).toFixed(0)}%</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Mayor caso</div><div class="modal-kpi-val" style="font-size:13px">${[...lista].sort((a,b)=>b.total-a.total)[0].n.split(' ')[0]}</div></div>
+    </div>
+    <table class="modal-table">
+      <thead><tr><th>Cliente</th><th>Descripción</th><th class="num">Mayo 2026</th><th>Estado</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`,
+    'cartola-financiera.html');
+}
+
+function abrirModalPoligonos(){
+  const c = costosTransporte;
+  const totTop = c.topPoligonos.reduce((s,p)=>s+p.v,0);
+
+  let rows = c.topPoligonos.map((p,i)=>`<tr>
+    <td><strong>${i+1}</strong></td>
+    <td><strong>${p.p}</strong></td>
+    <td class="num">${fmtM(p.v)}</td>
+    <td class="num">${(p.v/c.total*100).toFixed(1)}%</td>
+  </tr>`).join('');
+
+  abrirModal('💵', 'Top 10 polígonos por costo · Mayo 2026',
+    `Costo total identificado $${(c.total/1e6).toFixed(1)}M · Tarifario cruzado con código de recinto`,
+    `<div class="modal-kpis">
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Costo total</div><div class="modal-kpi-val">${fmtM(c.total)}</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Top 10 polígonos</div><div class="modal-kpi-val">${fmtM(totTop)}</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">% del total</div><div class="modal-kpi-val">${(totTop/c.total*100).toFixed(1)}%</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Cobertura</div><div class="modal-kpi-val ${c.cobertura>=70?'yellow':'orange'}">${c.cobertura}%</div></div>
+    </div>
+    <table class="modal-table">
+      <thead><tr><th>#</th><th>Polígono</th><th class="num">Costo</th><th class="num">% del total</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`,
+    'transportes-pagos.html');
+}
+
+function abrirModalCobertura(){
+  const c = costosTransporte;
+  const sinTarifa = c.viajesTotal - c.viajesConTarifa;
+  abrirModal('🗺', 'Cobertura tarifaria · Polígonos sin mapear',
+    `${sinTarifa} viajes (${(sinTarifa/c.viajesTotal*100).toFixed(1)}%) no encontraron tarifa por código de recinto`,
+    `<div class="modal-kpis">
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Total viajes</div><div class="modal-kpi-val">${c.viajesTotal}</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Con tarifa</div><div class="modal-kpi-val green">${c.viajesConTarifa}</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Sin tarifa</div><div class="modal-kpi-val orange">${sinTarifa}</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Cobertura</div><div class="modal-kpi-val ${c.cobertura>=70?'yellow':'orange'}">${c.cobertura}%</div></div>
+    </div>
+    <div style="font-size:12px;color:var(--t2);padding:14px 16px;background:var(--bg-card);border-radius:8px;line-height:1.6">
+      <strong style="color:var(--t1)">Acciones sugeridas:</strong><br>
+      • Revisar maestro de recintos sin código de polígono asociado.<br>
+      • Trabajar con Comercial para asignar zonas a los clientes nuevos.<br>
+      • Mejorar la cobertura permite cuantificar el costo real del transporte (hoy invisible en ${sinTarifa} viajes).
+    </div>`,
+    'transportes-pagos.html');
+}
+
+function abrirModalOps(estado, cant){
+  abrirModal(estado==='Reversa'?'🔴':'🟠', `Operaciones en ${estado}`,
+    estado==='Reversa' ? '30+ días sin confirmación · pallets se reversan al stock cliente' : '25-29 días sin confirmación · gestión urgente para evitar reversa',
+    `<div class="modal-kpis">
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Operaciones</div><div class="modal-kpi-val ${estado==='Reversa'?'red':'orange'}">${cant}</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Pallets afectados</div><div class="modal-kpi-val orange">9.543</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Cliente top</div><div class="modal-kpi-val" style="font-size:14px">Cleaner Chile</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Antig. promedio</div><div class="modal-kpi-val red">42 días</div></div>
+    </div>
+    <div style="font-size:12px;color:var(--t3);padding:12px;background:var(--bg-card);border-radius:8px;margin-bottom:10px">
+      <strong style="color:var(--yellow)">Placeholder:</strong> esta sección queda con datos ejemplo hasta enchufar live a historial-proxy.
+    </div>
+    <table class="modal-table">
+      <thead><tr><th>N° Pedido</th><th>Cliente</th><th>Destino</th><th class="num">Pallets</th><th class="num">Días</th><th>Estado</th></tr></thead>
+      <tbody>
+        <tr><td><strong>1234</strong></td><td>Industrias Cleaner Chile</td><td>Pincoyano</td><td class="num">30</td><td class="num">60</td><td><span class="badge-mini red">REVERSA</span></td></tr>
+        <tr><td><strong>1235</strong></td><td>Industrias Cleaner Chile</td><td>Iman</td><td class="num">12</td><td class="num">60</td><td><span class="badge-mini red">REVERSA</span></td></tr>
+        <tr><td><strong>1236</strong></td><td>Industrias Cleaner Chile</td><td>Walmart</td><td class="num">28</td><td class="num">55</td><td><span class="badge-mini red">REVERSA</span></td></tr>
+      </tbody>
+    </table>`,
+    'transferencias-clientes.html');
+}
+
+function cerrarModal(ev){
+  if (ev && ev.target.id !== 'modal') return;
+  document.getElementById('modal').classList.remove('on');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONTROLES
+// ═══════════════════════════════════════════════════════════════
+function setPlant(p, el){
+  plant = p;
+  document.querySelectorAll('#seg-plant .seg-btn').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+  render();
+}
+function setPeriod(p, el){
+  period = p;
+  document.querySelectorAll('#seg-period .seg-btn').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+  document.getElementById('week-sel').style.display = p==='semanal'?'inline-block':'none';
+  render();
+  // Si cambió el período, recargamos transporte live (el rango de fechas cambió)
+  cargarTransporteLive();
+}
+
+function onChangeWeek(){
+  render();
+  if (period === 'semanal') cargarTransporteLive();
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarModal(); });
+
+// Reloj
+function tick(){
+  const d = new Date();
+  document.getElementById('clk').textContent = d.toTimeString().slice(0,8);
+}
+setInterval(tick, 1000);
+
+// Auto-refresh transporte cada 5 min (alineado con TTL del proxy)
+setInterval(() => {
+  cargarTransporteLive();
+}, 5 * 60 * 1000);
+
+// First render: paint mockup, luego cargar live (UX: usuario ve datos al toque)
+render();
+cargarTransporteLive();
+</script>
+
+</body>
+</html>

@@ -208,7 +208,7 @@ td.sem-red:hover::after,td.sem-orange:hover::after{opacity:1;transform:translate
       <span class="section-title">Transporte · Eficiencia de viajes</span>
       <span id="trp-status-pill" class="status-pill loading">Cargando…</span>
       <button class="btn-refresh" onclick="cargarTransporteLive()" title="Refrescar datos">🔄</button>
-      <span class="section-sub">Plena carga: cantidadConfirmada = capacidad camión · Click rojo/naranja para detalle</span>
+      <span class="section-sub">Plena carga: cantidadConfirmada ≥ capacidad camión · Click rojo/naranja para detalle</span>
     </div>
     <div class="matrix-card">
       <table class="matrix">
@@ -648,7 +648,7 @@ function procesarViajesTransporte(rawArr){
     const acc = out[planta][semana];
     const cantidad = Number(raw.cantidadConfirmada) || 0;
     const cap = camion.capacidad;
-    const esPlena = cantidad === cap ? 1 : 0;
+    const esPlena = cantidad >= cap ? 1 : 0;  // ≥ para contemplar doblado de pallets
 
     if (cat === 'em') {
       acc.em_v++; acc.em_p += cantidad; acc.em_cap += cap; acc.em_full += esPlena;
@@ -1102,8 +1102,7 @@ function abrirModalCarga(tipo){
       if (period === 'hoy' && semanaISO(fecha) !== semanaISO(new Date())) return;
 
       const cantidad = Number(raw.cantidadConfirmada) || 0;
-      const esPlena = cantidad === camion.capacidad;
-      if (esPlena) return; // Solo mostramos los NO llenos
+      if (cantidad >= camion.capacidad) return; // Solo mostramos los NO llenos (subutilizados)
 
       if (!porPatente.has(patente)) {
         porPatente.set(patente, {
@@ -1160,7 +1159,7 @@ function abrirModalCarga(tipo){
     : '<span class="badge-mini yellow" style="margin-left:8px">mockup</span>';
 
   abrirModal('🚛', `Viajes no a plena carga · ${esRetiro?'Retiro':'Emisión'} · ${periodLabel()}`,
-    `${esRetiro?'Capacidad ociosa en viajes de retorno':'Pallets no entregados que podrían haber ido'} · Plena carga = cantidad == capacidad camión`,
+    `${esRetiro?'Capacidad ociosa en viajes de retorno':'Pallets no entregados que podrían haber ido'} · Plena carga = cantidad ≥ capacidad camión`,
     `<div class="modal-kpis">
       <div class="modal-kpi"><div class="modal-kpi-lbl">Viajes no llenos</div><div class="modal-kpi-val red">${noLlenos}</div></div>
       <div class="modal-kpi"><div class="modal-kpi-lbl">% plena carga</div><div class="modal-kpi-val ${pct<60?'red':pct<80?'orange':'yellow'}">${pct}%</div></div>

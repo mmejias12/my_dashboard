@@ -390,7 +390,7 @@ td.sem-red:hover::after,td.sem-orange:hover::after{opacity:1;transform:translate
     </div>
     <div class="modal-body" id="modal-body"></div>
     <div class="modal-footer">
-      <span>Datos reales <strong style="color:var(--t1)">Mayo 2026</strong></span>
+      <span>Período <strong style="color:var(--t1)" id="modal-footer-period">Mayo 2026</strong></span>
       <a href="#" class="modal-footer-link" id="modal-link">Ver dashboard completo →</a>
     </div>
   </div>
@@ -914,17 +914,26 @@ function procesarOperaciones(viajes){
   // Identifica el estado de cada operación según etapaOperacion y cantidadPendiente
   // (Heurística inicial - revisar reglas con el equipo)
   const hoy = new Date();
-  let confirmadas=0, pendientes=0, riesgo=0, reversa=0;
+  let confirmadas=0, pendientes=0, riesgo=0, reversa=0, anulados=0;
   const detallesReversa = [];
+  const detallesRiesgo = [];
+  let procesados = 0;
 
   viajes.forEach(raw => {
+    const etapa = (raw.etapaOperacion || '').toLowerCase();
+    // Excluir anulados: solo inflarían el total y no representan operación real
+    if (etapa === 'anulado' || etapa.includes('anulad')) {
+      anulados++;
+      return;
+    }
+
     const cConf = Number(raw.cantidadConfirmada) || 0;
     const cPend = Number(raw.cantidadPendiente) || 0;
-    const etapa = (raw.etapaOperacion || '').toLowerCase();
     const fechaDespacho = raw.fechaDespacho || raw.horaIngreso;
     if (!fechaDespacho) return;
 
     const diasDesde = Math.floor((hoy - new Date(fechaDespacho)) / 86400000);
+    procesados++;
 
     // Regla heurística (ajustable):
     // - Reversa: cantidadPendiente < 0 (ya marcada) o etapa contiene "revers"
@@ -959,6 +968,15 @@ function procesarOperaciones(viajes){
         });
       } else if (diasDesde >= 25) {
         riesgo++;
+        if (detallesRiesgo.length < 50) detallesRiesgo.push({
+          nroPedido: raw.nroPedido,
+          dteNro: raw.dteNro,
+          cliente: raw.clienteDestinoStr || raw.clienteOrigenStr || '—',
+          destino: raw.bodegaDestinoStr || '—',
+          pallets: cPend || cConf,
+          dias: diasDesde,
+          fecha: fechaDespacho
+        });
       } else {
         pendientes++;
       }
@@ -967,7 +985,13 @@ function procesarOperaciones(viajes){
     }
   });
 
-  return { confirmadas, pendientes, riesgo, reversa, detallesReversa, total: viajes.length };
+  return {
+    confirmadas, pendientes, riesgo, reversa,
+    detallesReversa, detallesRiesgo,
+    anulados,
+    total: procesados,         // sin anulados
+    totalConAnulados: viajes.length  // por si lo necesitamos en tooltips
+  };
 }
 
 function cargarOperacionesLive(){
@@ -983,7 +1007,13 @@ function cargarOperacionesLive(){
   if (pill) {
     pill.className = 'status-pill live';
     pill.textContent = `Live · ${operacionesLive.total} ops`;
-    pill.title = `Período: ${transporteLiveMeta?transporteLiveMeta.desde+' → '+transporteLiveMeta.hasta:'—'}\nTotal procesado: ${operacionesLive.total}\nConfirmadas: ${operacionesLive.confirmadas}\nPendientes: ${operacionesLive.pendientes}\nRiesgo: ${operacionesLive.riesgo}\nReversa: ${operacionesLive.reversa}`;
+    pill.title = `Período: ${transporteLiveMeta?transporteLiveMeta.desde+' → '+transporteLiveMeta.hasta:'—'}\n` +
+                 `Total procesado: ${operacionesLive.total} (sin anulados)\n` +
+                 `Anulados excluidos: ${operacionesLive.anulados}\n` +
+                 `Confirmadas: ${operacionesLive.confirmadas}\n` +
+                 `Pendientes: ${operacionesLive.pendientes}\n` +
+                 `Riesgo: ${operacionesLive.riesgo}\n` +
+                 `Reversa: ${operacionesLive.reversa}`;
   }
   renderOperaciones();
   actualizarBadgesMockup();
@@ -1016,37 +1046,46 @@ function abrirModalOpsLive(tipo){
   const esReversa = tipo === 'reversa';
   const cant = esReversa ? o.reversa : o.riesgo;
   const titulo = esReversa ? 'Operaciones en Reversa (30+ días)' : 'Operaciones en Riesgo (25-29 días)';
+  const detalles = esReversa ? o.detallesReversa : o.detallesRiesgo;
+  const badgeColor = esReversa ? 'red' : 'orange';
 
-  // Para reversa tenemos detalles, para riesgo solo el conteo
   let rows = '';
-  if (esReversa && o.detallesReversa.length) {
-    const lista = [...o.detallesReversa].sort((a,b) => b.dias - a.dias).slice(0, 30);
+  if (detalles && detalles.length) {
+    const lista = [...detalles].sort((a,b) => b.dias - a.dias).slice(0, 30);
     rows = lista.map(d => `<tr>
       <td><strong>${d.nroPedido || '—'}</strong></td>
       <td>${d.cliente}</td>
       <td>${d.destino}</td>
       <td class="num">${fmtK(d.pallets)}</td>
-      <td class="num"><span class="badge-mini red">${d.dias}d</span></td>
+      <td class="num"><span class="badge-mini ${badgeColor}">${d.dias}d</span></td>
     </tr>`).join('');
   } else {
     rows = `<tr><td colspan="5" style="text-align:center;color:var(--t3);padding:24px">
-      ${esReversa ? 'No hay reversas detalladas' : 'Drill-down de riesgo se habilita con más datos'}
+      ${esReversa ? 'No hay reversas detalladas' : 'No hay operaciones en riesgo en este período'}
     </td></tr>`;
   }
 
-  const totalPallets = o.detallesReversa.reduce((s,d) => s + d.pallets, 0);
+  // Pallets totales del grupo (no del array de detalles, que está capado en 50)
+  const totalPallets = (detalles || []).reduce((s,d) => s + (d.pallets || 0), 0);
+  const notaCapado = (detalles && detalles.length === 50)
+    ? '<div style="font-size:11px;color:var(--t3);margin-top:8px">Mostrando los 30 más antiguos de los primeros 50 detectados. El conteo total es exacto.</div>'
+    : '';
+  const notaAnulados = o.anulados
+    ? `<div style="font-size:11px;color:var(--t3);margin-top:8px">${o.anulados} operaciones anuladas excluidas del análisis.</div>`
+    : '';
+
   abrirModal(esReversa ? '🔴' : '🟠', titulo + ' · ' + periodLabel(),
     `Regla: ${esReversa ? '30+ días desde despacho o cantidadPendiente<0' : '25-29 días sin confirmación'}`,
     `<div class="modal-kpis">
       <div class="modal-kpi"><div class="modal-kpi-lbl">Operaciones</div><div class="modal-kpi-val ${esReversa?'red':'orange'}">${cant}</div></div>
       <div class="modal-kpi"><div class="modal-kpi-lbl">Pallets afectados</div><div class="modal-kpi-val orange">${fmtK(totalPallets)}</div></div>
-      <div class="modal-kpi"><div class="modal-kpi-lbl">% del total</div><div class="modal-kpi-val">${(cant/o.total*100).toFixed(1)}%</div></div>
-      <div class="modal-kpi"><div class="modal-kpi-lbl">Total operaciones</div><div class="modal-kpi-val">${o.total}</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">% del total</div><div class="modal-kpi-val">${o.total ? (cant/o.total*100).toFixed(1) : '0.0'}%</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Total operaciones</div><div class="modal-kpi-val">${fmtK(o.total)}</div></div>
     </div>
     <table class="modal-table">
       <thead><tr><th>N° Pedido</th><th>Cliente</th><th>Destino</th><th class="num">Pallets</th><th class="num">Días</th></tr></thead>
       <tbody>${rows}</tbody>
-    </table>`,
+    </table>${notaCapado}${notaAnulados}`,
     '#');
 }
 
@@ -1515,6 +1554,8 @@ function abrirModal(icon, title, sub, body, link){
   document.getElementById('modal-sub').textContent = sub;
   document.getElementById('modal-body').innerHTML = body;
   if (link) document.getElementById('modal-link').href = link;
+  const periodEl = document.getElementById('modal-footer-period');
+  if (periodEl) periodEl.textContent = periodLabel();
   document.getElementById('modal').classList.add('on');
 }
 

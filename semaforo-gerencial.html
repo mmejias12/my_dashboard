@@ -160,7 +160,7 @@ td.sem-red:hover::after,td.sem-orange:hover::after{opacity:1;transform:translate
 </head>
 <body>
 
-<div class="mockup-banner">v4 · Transporte: LIVE (M3Link) · Producción/Comercial/Alertas/Costos: datos Mayo 2026 (próxima iteración)</div>
+<div class="mockup-banner">v5 · Transporte + Comercial + Alertas + Operaciones: LIVE · Producción + Costos: mockup (pendiente endpoints)</div>
 
 <div class="topbar">
   <div class="logo">
@@ -236,7 +236,7 @@ td.sem-red:hover::after,td.sem-orange:hover::after{opacity:1;transform:translate
   <!-- PRODUCCIÓN (NUEVA SECCIÓN)            -->
   <!-- ═════════════════════════════════════ -->
   <div class="section">
-    <div class="section-hdr" data-mockup="1">
+    <div class="section-hdr" data-section="produccion">
       <span class="section-icon">🏭</span>
       <span class="section-title">Producción · Flujo y calidad</span>
       <span class="section-sub">Flujo: Recepción → Inspección → Reparación → Pintura · ICC obj <1.0 · Rechazo obj <0.1%</span>
@@ -263,9 +263,11 @@ td.sem-red:hover::after,td.sem-orange:hover::after{opacity:1;transform:translate
   <!-- COMERCIAL · FACTURACIÓN Y CONCENTRACIÓN -->
   <!-- ═════════════════════════════════════ -->
   <div class="section">
-    <div class="section-hdr" data-mockup="1">
+    <div class="section-hdr" data-section="comercial">
       <span class="section-icon">💰</span>
       <span class="section-title">Comercial · Facturación y concentración</span>
+      <span id="com-status-pill" class="status-pill cache">Cargando…</span>
+      <button class="btn-refresh" onclick="cargarComercialLive()" title="Refrescar datos">🔄</button>
       <span class="section-sub">Concentración top 5: obj <25% verde / >50% rojo · Riesgo de dependencia</span>
     </div>
     <div class="matrix-card">
@@ -290,10 +292,10 @@ td.sem-red:hover::after,td.sem-orange:hover::after{opacity:1;transform:translate
   <!-- ALERTAS CLIENTES (lo más crítico)    -->
   <!-- ═════════════════════════════════════ -->
   <div class="section">
-    <div class="section-hdr" data-mockup="1">
+    <div class="section-hdr" data-section="alertas">
       <span class="section-icon">⚠</span>
       <span class="section-title">Clientes en alerta · Sin emisión en el período</span>
-      <span class="section-sub">Click en rojo/naranja para ver lista completa y datos comerciales</span>
+      <span class="section-sub">Comparte data con Comercial · Click en rojo/naranja para ver lista completa</span>
     </div>
     <div class="matrix-card">
       <table class="matrix">
@@ -316,7 +318,7 @@ td.sem-red:hover::after,td.sem-orange:hover::after{opacity:1;transform:translate
   <!-- COSTOS TRANSPORTE (NUEVA)            -->
   <!-- ═════════════════════════════════════ -->
   <div class="section">
-    <div class="section-hdr" data-mockup="1">
+    <div class="section-hdr" data-section="costos">
       <span class="section-icon">💵</span>
       <span class="section-title">Costos transporte · Mayo 2026</span>
       <span class="section-sub">Cruce viaje × tarifario polígonos · Alerta si cobertura tarifaria <60%</span>
@@ -342,11 +344,12 @@ td.sem-red:hover::after,td.sem-orange:hover::after{opacity:1;transform:translate
   <!-- ═════════════════════════════════════ -->
   <!-- OPERACIONES · REVERSAS               -->
   <!-- ═════════════════════════════════════ -->
-  <div class="section">
-    <div class="section-hdr" data-mockup="1">
+  <div class="section" id="section-operaciones">
+    <div class="section-hdr" data-section="operaciones">
       <span class="section-icon">📋</span>
       <span class="section-title">Operaciones · Estado transferencias</span>
-      <span class="section-sub">Regla 30 días · Pendiente de endpoint live (placeholder)</span>
+      <span id="ops-status-pill" class="status-pill cache">Cargando…</span>
+      <span class="section-sub">Reversa: cantidadPendiente&lt;0 o 30+ días desde despacho · Heurística inicial</span>
     </div>
     <div class="matrix-card">
       <table class="matrix">
@@ -446,6 +449,16 @@ let transporteLiveMeta = null;        // { totalViajes, sinPatente, sinCatalogo,
 let transporteLiveStatus = 'idle';    // 'idle' | 'loading' | 'live' | 'error'
 let transporteLiveError = null;
 const VIAJES_RAW_CACHE = { key: null, viajes: [] };  // Mantiene viajes crudos para drill-downs
+
+// === ESTADO LIVE COMERCIAL (cartola-proxy) ===
+let comercialLive = null;             // { totales, clientes, criticos, seguimiento, topClientes }
+let comercialLiveStatus = 'idle';
+let comercialLiveError = null;
+let comercialLiveMeta = null;
+
+// === ESTADO LIVE OPERACIONES (reusa cache de transporte: VIAJES_RAW_CACHE) ===
+let operacionesLive = null;           // { confirmadas, pendientes, riesgo, reversa, detallesReversa }
+let operacionesLiveStatus = 'idle';
 
 const dataProd = {
   stgo: {
@@ -607,7 +620,7 @@ function poblarSelectorMeses(){
 function onChangeMonth(){
   currentMonth = document.getElementById('month-sel').value;
   render();
-  cargarTransporteLive();
+  cargarTodoLive();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -687,7 +700,7 @@ function procesarViajesTransporte(rawArr){
     const camion = CAMIONES[patente];
     if (!camion) { sinCatalogo++; sinCatalogoSet.add(patente); return; }
 
-    const fecha = raw.fechaConfirmacion || raw.fechaDespacho || raw.horaIngreso;
+    const fecha = raw.horaIngreso || raw.fechaDespacho || raw.fechaConfirmacion;
     if (!fecha) { sinFecha++; return; }
 
     const semana = semanaISO(fecha);
@@ -771,12 +784,282 @@ async function cargarTransporteLive(){
 
   actualizarStatusPill();
   renderTransporte();
+  // Operaciones reusa el cache de viajes que acabamos de cargar
+  cargarOperacionesLive();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LIVE COMERCIAL — cartola-proxy
+// ═══════════════════════════════════════════════════════════════
+
+function procesarCartola(rawArr){
+  // Replica la lógica de cartola-financiera.html::agruparPorCliente()
+  const clientes = {};
+  const totales = {arriendo:0, emision:0, transferencia:0, twm:0, traspaso:0, relocaliza:0, otros:0, total:0, pallets:0};
+
+  rawArr.forEach(r => {
+    const code = r.cardCode || 'SIN_CODIGO';
+    if (!clientes[code]) {
+      clientes[code] = {
+        code, name: r.cardName || code,
+        arriendo:0, emision:0, transferencia:0, twm:0, traspaso:0, relocaliza:0, otros:0,
+        totalCLP:0, pallets:0, palletsEm:0,
+        tieneEmision:false, tieneTransf:false
+      };
+    }
+    const c = clientes[code];
+    const op = (r.operacion||'').toUpperCase().trim();
+    const clp = Number(r.netoCLP) || 0;
+    const qty = Number(r.cantidad) || 0;
+    c.totalCLP += clp; c.pallets += qty;
+    totales.total += clp; totales.pallets += qty;
+
+    if      (op === 'ARRIENDO DIAS PALLET')  { c.arriendo += clp;      totales.arriendo += clp; }
+    else if (op === 'EMISION')               { c.emision += clp; c.palletsEm += qty; c.tieneEmision = true; totales.emision += clp; }
+    else if (op === 'TRANSFERENCIA')         { c.transferencia += clp; c.tieneTransf = true; totales.transferencia += clp; }
+    else if (op === 'TRANSFERENCIA WALMART') { c.twm += clp;           c.tieneTransf = true; totales.twm += clp; }
+    else if (op === 'TRASPASO')              { c.traspaso += clp;      totales.traspaso += clp; }
+    else if (op === 'RELOCALIZA')            { c.relocaliza += clp;    totales.relocaliza += clp; }
+    else                                     { c.otros += clp;         totales.otros += clp; }
+  });
+
+  const clientesArr = Object.values(clientes).sort((a,b) => b.totalCLP - a.totalCLP);
+
+  // Críticos: solo arriendo, sin emisión ni transferencia
+  const criticos = clientesArr.filter(c => !c.tieneEmision && !c.tieneTransf && c.arriendo > 0);
+  // Seguimiento: sin emisión pero con transferencias
+  const seguimiento = clientesArr.filter(c => !c.tieneEmision && c.tieneTransf);
+
+  return {
+    totales,
+    clientes: clientesArr,
+    criticos,
+    seguimiento,
+    topClientes: clientesArr.slice(0, 10),
+    totalRegistros: rawArr.length,
+    clientesActivos: clientesArr.length
+  };
+}
+
+async function cargarComercialLive(){
+  comercialLiveStatus = 'loading';
+  comercialLiveError = null;
+  actualizarStatusPillComercial();
+
+  const { desde, hasta } = calcularRangoFechas();
+  // OJO: el proxy de cartola usa parámetros en minúsculas
+  const url = `/api/cartola-proxy?fechainicial=${desde}&fechafinal=${hasta}`;
+
+  try {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('HTTP ' + r.status + ' - ' + (await r.text()).slice(0,200));
+    const arr = await r.json();
+    const data = Array.isArray(arr) ? arr : [];
+    comercialLive = procesarCartola(data);
+    comercialLiveMeta = {
+      desde, hasta,
+      registros: data.length,
+      clientes: comercialLive.clientesActivos,
+      cacheStatus: r.headers.get('X-Cache') || '—',
+      cacheAge: r.headers.get('X-Cache-Age') || '',
+      lastUpdate: new Date()
+    };
+    comercialLiveStatus = 'live';
+  } catch (err) {
+    console.error('Error cargando comercial live:', err);
+    comercialLiveError = err.message;
+    comercialLiveStatus = 'error';
+  }
+
+  actualizarStatusPillComercial();
+  renderComercial();
+  renderAlertas();
+  actualizarBadgesMockup();
+}
+
+function actualizarStatusPillComercial(){
+  const pill = document.getElementById('com-status-pill');
+  if (!pill) return;
+  pill.className = 'status-pill';
+
+  if (comercialLiveStatus === 'loading') {
+    pill.classList.add('loading');
+    pill.textContent = 'Cargando…';
+  } else if (comercialLiveStatus === 'error') {
+    pill.classList.add('error');
+    pill.title = comercialLiveError || '';
+    pill.textContent = 'Error · ' + (comercialLiveError || '').slice(0,40);
+  } else if (comercialLiveStatus === 'live' && comercialLiveMeta) {
+    const m = comercialLiveMeta;
+    if (m.cacheStatus === 'HIT') {
+      pill.classList.add('cache');
+      pill.textContent = `Cache ${m.cacheAge} · ${m.clientes} clientes`;
+    } else {
+      pill.classList.add('live');
+      pill.textContent = `Live · ${m.clientes} clientes · ${m.registros} reg`;
+    }
+    pill.title = `Período: ${m.desde} → ${m.hasta}\nRegistros: ${m.registros}\nClientes activos: ${m.clientes}`;
+  } else {
+    pill.classList.add('cache');
+    pill.textContent = 'Mockup';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LIVE OPERACIONES — reusa cache de transporte (VIAJES_RAW_CACHE)
+// ═══════════════════════════════════════════════════════════════
+
+function procesarOperaciones(viajes){
+  // Identifica el estado de cada operación según etapaOperacion y cantidadPendiente
+  // (Heurística inicial - revisar reglas con el equipo)
+  const hoy = new Date();
+  let confirmadas=0, pendientes=0, riesgo=0, reversa=0;
+  const detallesReversa = [];
+
+  viajes.forEach(raw => {
+    const cConf = Number(raw.cantidadConfirmada) || 0;
+    const cPend = Number(raw.cantidadPendiente) || 0;
+    const etapa = (raw.etapaOperacion || '').toLowerCase();
+    const fechaDespacho = raw.fechaDespacho || raw.horaIngreso;
+    if (!fechaDespacho) return;
+
+    const diasDesde = Math.floor((hoy - new Date(fechaDespacho)) / 86400000);
+
+    // Regla heurística (ajustable):
+    // - Reversa: cantidadPendiente < 0 (ya marcada) o etapa contiene "revers"
+    // - Riesgo: pendiente y 25-29 días desde despacho
+    // - Pendiente: pendiente y <25 días
+    // - Confirmada: ya confirmada en algún grado
+    const esReversa = cPend < 0 || etapa.includes('revers');
+    const estaPendiente = cConf === 0 && !esReversa;
+
+    if (esReversa) {
+      reversa++;
+      if (detallesReversa.length < 50) detallesReversa.push({
+        nroPedido: raw.nroPedido,
+        dteNro: raw.dteNro,
+        cliente: raw.clienteDestinoStr || raw.clienteOrigenStr || '—',
+        destino: raw.bodegaDestinoStr || '—',
+        pallets: Math.abs(cPend) || cConf,
+        dias: diasDesde,
+        fecha: fechaDespacho
+      });
+    } else if (estaPendiente) {
+      if (diasDesde >= 30) {
+        reversa++;
+        if (detallesReversa.length < 50) detallesReversa.push({
+          nroPedido: raw.nroPedido,
+          dteNro: raw.dteNro,
+          cliente: raw.clienteDestinoStr || raw.clienteOrigenStr || '—',
+          destino: raw.bodegaDestinoStr || '—',
+          pallets: cPend || cConf,
+          dias: diasDesde,
+          fecha: fechaDespacho
+        });
+      } else if (diasDesde >= 25) {
+        riesgo++;
+      } else {
+        pendientes++;
+      }
+    } else {
+      confirmadas++;
+    }
+  });
+
+  return { confirmadas, pendientes, riesgo, reversa, detallesReversa, total: viajes.length };
+}
+
+function cargarOperacionesLive(){
+  // No hace fetch propio: reusa los viajes del cache de transporte
+  const pill = document.getElementById('ops-status-pill');
+  if (!VIAJES_RAW_CACHE.viajes.length) {
+    operacionesLive = null;
+    if (pill) { pill.className='status-pill cache'; pill.textContent='Mockup'; }
+    return;
+  }
+  operacionesLiveStatus = 'live';
+  operacionesLive = procesarOperaciones(VIAJES_RAW_CACHE.viajes);
+  if (pill) {
+    pill.className = 'status-pill live';
+    pill.textContent = `Live · ${operacionesLive.total} ops`;
+    pill.title = `Período: ${transporteLiveMeta?transporteLiveMeta.desde+' → '+transporteLiveMeta.hasta:'—'}\nTotal procesado: ${operacionesLive.total}\nConfirmadas: ${operacionesLive.confirmadas}\nPendientes: ${operacionesLive.pendientes}\nRiesgo: ${operacionesLive.riesgo}\nReversa: ${operacionesLive.reversa}`;
+  }
+  renderOperaciones();
+  actualizarBadgesMockup();
+}
+
+function renderOperaciones(){
+  if (!operacionesLive) return;
+  // Re-render la sección de Operaciones · Reversas con datos reales
+  const tbody = document.querySelector('#section-operaciones tbody');
+  if (!tbody) return;
+
+  const o = operacionesLive;
+  const semConf = 'green';
+  const semPend = o.pendientes > 100 ? 'yellow' : 'green';
+  const semRiesgo = o.riesgo === 0 ? 'green' : o.riesgo < 10 ? 'yellow' : 'orange';
+  const semReversa = o.reversa === 0 ? 'green' : o.reversa < 5 ? 'yellow' : o.reversa < 20 ? 'orange' : 'red';
+
+  tbody.innerHTML = `<tr>
+    <td><div class="cell-row-label"><span class="row-ico">📦</span>Operaciones del período</div></td>
+    ${cell(semConf, o.confirmadas, 'cerradas OK')}
+    ${cell(semPend, o.pendientes, 'en plazo')}
+    ${cell(semRiesgo, o.riesgo, 'gestión urgente', o.riesgo > 0 ? "abrirModalOpsLive('riesgo')" : null)}
+    ${cell(semReversa, o.reversa, '30+ días', o.reversa > 0 ? "abrirModalOpsLive('reversa')" : null)}
+  </tr>`;
+}
+
+function abrirModalOpsLive(tipo){
+  if (!operacionesLive) return;
+  const o = operacionesLive;
+  const esReversa = tipo === 'reversa';
+  const cant = esReversa ? o.reversa : o.riesgo;
+  const titulo = esReversa ? 'Operaciones en Reversa (30+ días)' : 'Operaciones en Riesgo (25-29 días)';
+
+  // Para reversa tenemos detalles, para riesgo solo el conteo
+  let rows = '';
+  if (esReversa && o.detallesReversa.length) {
+    const lista = [...o.detallesReversa].sort((a,b) => b.dias - a.dias).slice(0, 30);
+    rows = lista.map(d => `<tr>
+      <td><strong>${d.nroPedido || '—'}</strong></td>
+      <td>${d.cliente}</td>
+      <td>${d.destino}</td>
+      <td class="num">${fmtK(d.pallets)}</td>
+      <td class="num"><span class="badge-mini red">${d.dias}d</span></td>
+    </tr>`).join('');
+  } else {
+    rows = `<tr><td colspan="5" style="text-align:center;color:var(--t3);padding:24px">
+      ${esReversa ? 'No hay reversas detalladas' : 'Drill-down de riesgo se habilita con más datos'}
+    </td></tr>`;
+  }
+
+  const totalPallets = o.detallesReversa.reduce((s,d) => s + d.pallets, 0);
+  abrirModal(esReversa ? '🔴' : '🟠', titulo + ' · ' + periodLabel(),
+    `Regla: ${esReversa ? '30+ días desde despacho o cantidadPendiente<0' : '25-29 días sin confirmación'}`,
+    `<div class="modal-kpis">
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Operaciones</div><div class="modal-kpi-val ${esReversa?'red':'orange'}">${cant}</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Pallets afectados</div><div class="modal-kpi-val orange">${fmtK(totalPallets)}</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">% del total</div><div class="modal-kpi-val">${(cant/o.total*100).toFixed(1)}%</div></div>
+      <div class="modal-kpi"><div class="modal-kpi-lbl">Total operaciones</div><div class="modal-kpi-val">${o.total}</div></div>
+    </div>
+    <table class="modal-table">
+      <thead><tr><th>N° Pedido</th><th>Cliente</th><th>Destino</th><th class="num">Pallets</th><th class="num">Días</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`,
+    '#');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ORQUESTADOR: cargarTodoLive()
+// ═══════════════════════════════════════════════════════════════
+async function cargarTodoLive(){
+  // Transporte primero (porque Operaciones reusa su cache)
+  await cargarTransporteLive();
+  cargarComercialLive();
+  cargarOperacionesLive();
 }
 
 function actualizarStatusPill(){
-  const pill = document.getElementById('trp-status-pill');
-  if (!pill) return;
-  pill.className = 'status-pill';
 
   if (transporteLiveStatus === 'loading') {
     pill.classList.add('loading');
@@ -970,13 +1253,26 @@ function render(){
 }
 
 function actualizarBadgesMockup(){
-  // Las secciones marcadas data-mockup="1" muestran datos hardcoded de Mayo 2026.
-  // Mostramos un badge "mockup · mayo" cuando el usuario eligió otro mes.
-  const mostrarBadge = period === 'mensual' && currentMonth !== '2026-05';
-  document.querySelectorAll('.section-hdr[data-mockup="1"]').forEach(h => {
+  // Cada sección decide si muestra badge "mockup · mes" según su estado live
+  document.querySelectorAll('.section-hdr[data-section]').forEach(h => {
+    const seccion = h.dataset.section;
     const existing = h.querySelector('.mockup-badge');
     if (existing) existing.remove();
-    if (mostrarBadge) {
+
+    // ¿Esta sección está en mockup ahora mismo?
+    let enMockup = false;
+    if (seccion === 'comercial' || seccion === 'alertas') {
+      enMockup = !comercialLive;  // hay live si cargó comercial
+    } else if (seccion === 'operaciones') {
+      enMockup = !operacionesLive; // depende del cache de viajes
+    } else if (seccion === 'produccion' || seccion === 'costos') {
+      enMockup = true;             // siguen 100% mockup hasta que conectemos endpoints
+    }
+
+    if (!enMockup) return;
+
+    // Si está en mockup y el usuario eligió otro mes que no sea mayo → badge
+    if (period === 'mensual' && currentMonth !== '2026-05') {
       const title = h.querySelector('.section-title');
       if (title) {
         const badge = document.createElement('span');
@@ -1057,13 +1353,40 @@ function renderProduccion(){
 }
 
 function renderComercial(){
+  // === MODO LIVE ===
+  if (comercialLive) {
+    const cl = comercialLive;
+    const total = cl.totales.total;
+    const pctEmi = total ? cl.totales.emision/total*100 : 0;
+    const pctArr = total ? cl.totales.arriendo/total*100 : 0;
+    const transTotal = cl.totales.transferencia + cl.totales.twm;
+    const pctTrans = total ? transTotal/total*100 : 0;
+
+    const top5sum = cl.topClientes.slice(0,5).reduce((s,c)=>s+c.totalCLP,0);
+    const top10sum = cl.topClientes.reduce((s,c)=>s+c.totalCLP,0);
+    const pctTop5 = total ? top5sum/total*100 : 0;
+    const pctTop10 = total ? top10sum/total*100 : 0;
+
+    let html = `<tr>
+      <td><div class="cell-row-label"><span class="row-ico">💵</span>${periodLabel()}</div></td>
+      ${cellInfo(fmtM(total), `${cl.clientesActivos} clientes activos`)}
+      ${cell(pctEmi>=40 ? 'green' : pctEmi>=30 ? 'yellow' : 'orange', `${pctEmi.toFixed(1)}%`, fmtM(cl.totales.emision))}
+      ${cell(pctArr>=25 && pctArr<=40 ? 'green' : 'yellow', `${pctArr.toFixed(1)}%`, fmtM(cl.totales.arriendo))}
+      ${cellInfo(`${pctTrans.toFixed(1)}%`, fmtM(transTotal))}
+      ${cell(sem_concentracion(pctTop5,false), `${pctTop5.toFixed(1)}%`, fmtM(top5sum), `abrirModalConcentracion(5)`)}
+      ${cell(sem_concentracion(pctTop10,true), `${pctTop10.toFixed(1)}%`, fmtM(top10sum), `abrirModalConcentracion(10)`)}
+    </tr>`;
+    document.getElementById('com-tbody').innerHTML = html;
+    return;
+  }
+
+  // === MODO MOCKUP (fallback) ===
   const t = aggCom();
   const total = t.total;
   const pctEmi = total ? t.emision/total*100 : 0;
   const pctArr = total ? t.arriendo/total*100 : 0;
   const pctTrans = total ? (t.transf+t.walmart)/total*100 : 0;
 
-  // Concentración top 5 / top 10 (mensual)
   const totMes = COM_WEEKS.reduce((s,w)=>s+Object.values(tarifaPorSemana[w]).reduce((a,b)=>a+b,0),0);
   const top5 = topClientes.slice(0,5).reduce((s,c)=>s+c.total,0);
   const top10 = topClientes.reduce((s,c)=>s+c.total,0);
@@ -1086,9 +1409,42 @@ function renderComercial(){
 }
 
 function renderAlertas(){
+  // === MODO LIVE ===
+  if (comercialLive) {
+    const cl = comercialLive;
+    const totalClientes = cl.clientesActivos || 1;
+    const critCant = cl.criticos.length;
+    const segCant = cl.seguimiento.length;
+    const critPallets = cl.criticos.reduce((s,c)=>s+c.arriendo,0);
+    const segPallets = cl.seguimiento.reduce((s,c)=>s+c.totalCLP,0);
+    const mayorCrit = cl.criticos[0]; // ya ordenado por totalCLP desc
+    const mayorSeg = cl.seguimiento[0];
+
+    let html = `
+      <tr>
+        <td><div class="cell-row-label"><span class="row-ico">🚨</span>Crítico · sin emisión ni transferencias</div></td>
+        ${cell(sem_clientes_alerta(critCant,true), critCant, 'clientes parados', critCant>0?`abrirModalClientes('criticos')`:null)}
+        ${cell(sem_clientes_alerta(critCant,true), `${(critCant/totalClientes*100).toFixed(0)}%`, `del portafolio`, critCant>0?`abrirModalClientes('criticos')`:null)}
+        ${cellInfo(fmtM(critPallets), 'sólo arriendo')}
+        ${mayorCrit ? cellInfo((mayorCrit.name||'').split(' ').slice(0,2).join(' ').substring(0,15), fmtM(mayorCrit.totalCLP)) : cellEmpty()}
+        ${cellInfo('Contactar', 'visita comercial')}
+      </tr>
+      <tr>
+        <td><div class="cell-row-label"><span class="row-ico">⚠</span>Seguimiento · con transferencias pero sin emisión</div></td>
+        ${cell(sem_clientes_alerta(segCant,false), segCant, 'clientes', segCant>0?`abrirModalClientes('seguimiento')`:null)}
+        ${cell(sem_clientes_alerta(segCant,false), `${(segCant/totalClientes*100).toFixed(0)}%`, 'del portafolio', segCant>0?`abrirModalClientes('seguimiento')`:null)}
+        ${cellInfo(fmtM(segPallets), 'arriendo + transf')}
+        ${mayorSeg ? cellInfo((mayorSeg.name||'').split(' ').slice(0,2).join(' ').substring(0,15), fmtM(mayorSeg.totalCLP)) : cellEmpty()}
+        ${cellInfo('Reactivar', 'gestión cliente')}
+      </tr>`;
+    document.getElementById('ale-tbody').innerHTML = html;
+    return;
+  }
+
+  // === MODO MOCKUP (fallback) ===
   const totalClientes = 55;
-  const critCant = clientesCriticos.length;  // 7
-  const segCant = clientesSeguimiento.length; // 3
+  const critCant = clientesCriticos.length;
+  const segCant = clientesSeguimiento.length;
   const critPallets = clientesCriticos.reduce((s,c)=>s+c.total,0);
   const segPallets = clientesSeguimiento.reduce((s,c)=>s+c.total,0);
   const mayorCrit = [...clientesCriticos].sort((a,b)=>b.total-a.total)[0];
@@ -1175,7 +1531,7 @@ function abrirModalCarga(tipo){
       if (cat !== opFiltro) return;
 
       // Filtrar por semana si el período es semanal
-      const fecha = raw.fechaConfirmacion || raw.fechaDespacho || raw.horaIngreso;
+      const fecha = raw.horaIngreso || raw.fechaDespacho || raw.fechaConfirmacion;
       if (!fecha) return;
       if (period === 'semanal' && semanaISO(fecha) !== currentWeek) return;
       if (period === 'hoy' && semanaISO(fecha) !== semanaISO(new Date())) return;
@@ -1334,6 +1690,39 @@ function abrirModalReparadores(){
 }
 
 function abrirModalConcentracion(top){
+  // === MODO LIVE ===
+  if (comercialLive) {
+    const cl = comercialLive;
+    const totMes = cl.totales.total;
+    const lista = cl.topClientes.slice(0, top);
+    const sumTop = lista.reduce((s,c)=>s+c.totalCLP,0);
+    const pct = totMes ? (sumTop/totMes*100).toFixed(1) : '0';
+
+    let rows = lista.map((c,i)=>`<tr>
+      <td><strong>${i+1}</strong></td>
+      <td><strong>${c.name}</strong></td>
+      <td class="num">${fmtM(c.totalCLP)}</td>
+      <td class="num">${totMes?(c.totalCLP/totMes*100).toFixed(1):'0'}%</td>
+      <td class="num">${totMes?(lista.slice(0,i+1).reduce((s,x)=>s+x.totalCLP,0)/totMes*100).toFixed(1):'0'}%</td>
+    </tr>`).join('');
+
+    abrirModal('💼', `Concentración top ${top} · ${periodLabel()}`,
+      `Riesgo de dependencia comercial · Top ${top} concentran ${pct}% del ingreso del período`,
+      `<div class="modal-kpis">
+        <div class="modal-kpi"><div class="modal-kpi-lbl">Top ${top} facturación</div><div class="modal-kpi-val">${fmtM(sumTop)}</div></div>
+        <div class="modal-kpi"><div class="modal-kpi-lbl">% del total</div><div class="modal-kpi-val ${pct>50?'red':pct>35?'orange':'yellow'}">${pct}%</div></div>
+        <div class="modal-kpi"><div class="modal-kpi-lbl">Total facturado</div><div class="modal-kpi-val">${fmtM(totMes)}</div></div>
+        <div class="modal-kpi"><div class="modal-kpi-lbl">Clientes activos</div><div class="modal-kpi-val">${cl.clientesActivos}</div></div>
+      </div>
+      <table class="modal-table">
+        <thead><tr><th>#</th><th>Cliente</th><th class="num">Facturado</th><th class="num">% solo</th><th class="num">% acumulado</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`,
+      'cartola-financiera.html');
+    return;
+  }
+
+  // === MOCKUP (fallback) ===
   const totMes = COM_WEEKS.reduce((s,w)=>s+Object.values(tarifaPorSemana[w]).reduce((a,b)=>a+b,0),0);
   const lista = topClientes.slice(0, top);
   const sumTop = lista.reduce((s,c)=>s+c.total,0);
@@ -1364,6 +1753,47 @@ function abrirModalConcentracion(top){
 
 function abrirModalClientes(tipo){
   const esCrit = tipo==='criticos';
+
+  // === MODO LIVE ===
+  if (comercialLive) {
+    const cl = comercialLive;
+    const lista = esCrit ? cl.criticos : cl.seguimiento;
+    const totSum = lista.reduce((s,c)=>s+(esCrit?c.arriendo:c.totalCLP),0);
+
+    let rows = lista.slice(0, 30).map(c=>{
+      const monto = esCrit ? c.arriendo : c.totalCLP;
+      const desc = esCrit
+        ? `Solo arriendo · ${c.pallets || 0} pallets · ${c.code}`
+        : `Transf $${(c.transferencia/1e6).toFixed(1)}M + Walmart $${(c.twm/1e6).toFixed(1)}M · ${c.code}`;
+      return `<tr>
+        <td><strong>${c.name}</strong></td>
+        <td>${desc}</td>
+        <td class="num">${monto>0?fmtM(monto):'$0'}</td>
+        <td><span class="badge-mini ${esCrit?'red':'orange'}">${esCrit?'CRÍTICO':'SEGUIMIENTO'}</span></td>
+      </tr>`;
+    }).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--t3);padding:24px">Sin clientes en esta categoría</td></tr>`;
+
+    const mayor = lista[0];
+    abrirModal(esCrit?'🚨':'⚠',
+      `Clientes ${esCrit?'críticos':'de seguimiento'} · ${periodLabel()}`,
+      esCrit
+        ? 'Pallets parados en cliente · Solo arriendo, sin emisión ni transferencias'
+        : 'Sin nueva emisión pero con transferencias activas a retail',
+      `<div class="modal-kpis">
+        <div class="modal-kpi"><div class="modal-kpi-lbl">Clientes</div><div class="modal-kpi-val ${esCrit?'red':'orange'}">${lista.length}</div></div>
+        <div class="modal-kpi"><div class="modal-kpi-lbl">Facturación período</div><div class="modal-kpi-val">${fmtM(totSum)}</div></div>
+        <div class="modal-kpi"><div class="modal-kpi-lbl">% del portafolio</div><div class="modal-kpi-val orange">${(lista.length/cl.clientesActivos*100).toFixed(0)}%</div></div>
+        <div class="modal-kpi"><div class="modal-kpi-lbl">Mayor caso</div><div class="modal-kpi-val" style="font-size:13px">${mayor ? mayor.name.split(' ').slice(0,2).join(' ') : '—'}</div></div>
+      </div>
+      <table class="modal-table">
+        <thead><tr><th>Cliente</th><th>Descripción</th><th class="num">${periodLabel()}</th><th>Estado</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`,
+      'cartola-financiera.html');
+    return;
+  }
+
+  // === MOCKUP (fallback) ===
   const lista = esCrit ? clientesCriticos : clientesSeguimiento;
   const totSum = lista.reduce((s,c)=>s+c.total,0);
 
@@ -1482,13 +1912,13 @@ function setPeriod(p, el){
   document.getElementById('week-sel').style.display = p==='semanal'?'inline-block':'none';
   document.getElementById('month-sel').style.display = p==='mensual'?'inline-block':'none';
   render();
-  // Si cambió el período, recargamos transporte live (el rango de fechas cambió)
-  cargarTransporteLive();
+  // Si cambió el período, recargamos todo (el rango de fechas cambió)
+  cargarTodoLive();
 }
 
 function onChangeWeek(){
   render();
-  if (period === 'semanal') cargarTransporteLive();
+  if (period === 'semanal') cargarTodoLive();
 }
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarModal(); });
@@ -1503,16 +1933,16 @@ function tick(){
 }
 setInterval(tick, 1000);
 
-// Auto-refresh transporte cada 5 min (alineado con TTL del proxy)
+// Auto-refresh cada 5 min (alineado con TTL del proxy)
 setInterval(() => {
-  cargarTransporteLive();
+  cargarTodoLive();
 }, 5 * 60 * 1000);
 
 // First render: paint mockup, luego cargar live (UX: usuario ve datos al toque)
 poblarSelectorMeses();
 tick();
 render();
-cargarTransporteLive();
+cargarTodoLive();
 </script>
 
 </body>

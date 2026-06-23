@@ -450,6 +450,12 @@ let transporteLiveStatus = 'idle';    // 'idle' | 'loading' | 'live' | 'error'
 let transporteLiveError = null;
 const VIAJES_RAW_CACHE = { key: null, viajes: [] };  // Mantiene viajes crudos para drill-downs
 
+// === ESTADO LIVE COMERCIAL (cartola) ===
+let comercialLive = null;             // { porTipo:{emision,arriendo,...}, clientes:[...], top10:[...] }
+let comercialLiveStatus = 'idle';
+let comercialLiveError = null;
+let comercialLiveMeta = null;
+
 // === ESTADO LIVE COMERCIAL (cartola-proxy) ===
 let comercialLive = null;             // { totales, clientes, criticos, seguimiento, topClientes }
 let comercialLiveStatus = 'idle';
@@ -746,6 +752,7 @@ function procesarViajesTransporte(rawArr){
     }
   };
 }
+
 
 async function cargarTransporteLive(){
   transporteLiveStatus = 'loading';
@@ -1060,6 +1067,9 @@ async function cargarTodoLive(){
 }
 
 function actualizarStatusPill(){
+  const pill = document.getElementById('trp-status-pill');
+  if (!pill) return;
+  pill.className = 'status-pill';
 
   if (transporteLiveStatus === 'loading') {
     pill.classList.add('loading');
@@ -1149,8 +1159,21 @@ function aggProd(){
 }
 
 function aggCom(){
-  // Comercial siempre es agregado mensual (la concentración por cliente se mide a fin de mes)
-  // En vista semanal mostramos proporcional
+  // === MODO LIVE ===
+  if (comercialLive) {
+    const t = comercialLive.totales;
+    return {
+      arriendo: t.arriendo || 0,
+      comp:     0, // Compensación logística no existe en cartola estructurada
+      devol:    0, // Devoluciones no están en el catálogo de tipos de cartola
+      emision:  t.emision || 0,
+      transf:   t.transferencia || 0,
+      walmart:  t.twm || 0,
+      traspaso: t.traspaso || 0,
+      total:    t.total || 0
+    };
+  }
+  // === MODO MOCKUP (fallback) ===
   const weeks = period==='mensual' ? COM_WEEKS : [currentWeek];
   const tot = {arriendo:0,comp:0,devol:0,emision:0,transf:0,walmart:0,traspaso:0};
   weeks.forEach(w => {

@@ -70,6 +70,10 @@ html,body{font-family:'Inter',sans-serif;background:var(--bg-page);color:var(--t
 .btn-refresh:active{transform:scale(0.95)}
 .btn-refresh:disabled{opacity:.5;cursor:not-allowed}
 
+/* Badge de aviso cuando una sección sigue en mockup pero el mes seleccionado cambió */
+.mockup-badge{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:11px;font-size:10px;font-weight:600;font-family:'DM Mono',monospace;letter-spacing:.3px;color:var(--yellow);background:var(--yellow-bg);border:1px solid rgba(234,179,8,.25);margin-left:8px}
+.mockup-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
+
 /* TABLA MATRIZ */
 .matrix-card{background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;overflow:hidden}
 table.matrix{width:100%;border-collapse:collapse}
@@ -185,10 +189,11 @@ td.sem-red:hover::after,td.sem-orange:hover::after{opacity:1;transform:translate
     </div>
     <span class="filter-lbl" style="margin-left:16px">Período:</span>
     <div class="seg" id="seg-period">
-      <button class="seg-btn on" onclick="setPeriod('mensual',this)">Mensual (Mayo)</button>
+      <button class="seg-btn on" onclick="setPeriod('mensual',this)">Mensual</button>
       <button class="seg-btn" onclick="setPeriod('semanal',this)">Semanal</button>
       <button class="seg-btn" onclick="setPeriod('hoy',this)">Hoy 🟢</button>
     </div>
+    <select class="seg-btn" id="month-sel" style="background:var(--bg-input);color:var(--t1);padding:7px 12px;border:1px solid var(--border-md);font-weight:600" onchange="onChangeMonth()"></select>
     <select class="seg-btn" id="week-sel" style="display:none;background:var(--bg-input);color:var(--t1);padding:7px 12px;border:1px solid var(--border-md)" onchange="onChangeWeek()">
       <option value="22">S22 · 25-31 may</option>
       <option value="21">S21 · 18-24 may</option>
@@ -231,7 +236,7 @@ td.sem-red:hover::after,td.sem-orange:hover::after{opacity:1;transform:translate
   <!-- PRODUCCIÓN (NUEVA SECCIÓN)            -->
   <!-- ═════════════════════════════════════ -->
   <div class="section">
-    <div class="section-hdr">
+    <div class="section-hdr" data-mockup="1">
       <span class="section-icon">🏭</span>
       <span class="section-title">Producción · Flujo y calidad</span>
       <span class="section-sub">Flujo: Recepción → Inspección → Reparación → Pintura · ICC obj <1.0 · Rechazo obj <0.1%</span>
@@ -258,7 +263,7 @@ td.sem-red:hover::after,td.sem-orange:hover::after{opacity:1;transform:translate
   <!-- COMERCIAL · FACTURACIÓN Y CONCENTRACIÓN -->
   <!-- ═════════════════════════════════════ -->
   <div class="section">
-    <div class="section-hdr">
+    <div class="section-hdr" data-mockup="1">
       <span class="section-icon">💰</span>
       <span class="section-title">Comercial · Facturación y concentración</span>
       <span class="section-sub">Concentración top 5: obj <25% verde / >50% rojo · Riesgo de dependencia</span>
@@ -285,7 +290,7 @@ td.sem-red:hover::after,td.sem-orange:hover::after{opacity:1;transform:translate
   <!-- ALERTAS CLIENTES (lo más crítico)    -->
   <!-- ═════════════════════════════════════ -->
   <div class="section">
-    <div class="section-hdr">
+    <div class="section-hdr" data-mockup="1">
       <span class="section-icon">⚠</span>
       <span class="section-title">Clientes en alerta · Sin emisión en el período</span>
       <span class="section-sub">Click en rojo/naranja para ver lista completa y datos comerciales</span>
@@ -311,7 +316,7 @@ td.sem-red:hover::after,td.sem-orange:hover::after{opacity:1;transform:translate
   <!-- COSTOS TRANSPORTE (NUEVA)            -->
   <!-- ═════════════════════════════════════ -->
   <div class="section">
-    <div class="section-hdr">
+    <div class="section-hdr" data-mockup="1">
       <span class="section-icon">💵</span>
       <span class="section-title">Costos transporte · Mayo 2026</span>
       <span class="section-sub">Cruce viaje × tarifario polígonos · Alerta si cobertura tarifaria <60%</span>
@@ -338,7 +343,7 @@ td.sem-red:hover::after,td.sem-orange:hover::after{opacity:1;transform:translate
   <!-- OPERACIONES · REVERSAS               -->
   <!-- ═════════════════════════════════════ -->
   <div class="section">
-    <div class="section-hdr">
+    <div class="section-hdr" data-mockup="1">
       <span class="section-icon">📋</span>
       <span class="section-title">Operaciones · Estado transferencias</span>
       <span class="section-sub">Regla 30 días · Pendiente de endpoint live (placeholder)</span>
@@ -556,12 +561,65 @@ const WEEKS=[19,20,21,22];
 // ═══════════════════════════════════════════════════════════════
 let plant='todas', period='mensual', currentWeek=22;
 
+// Mes seleccionado en formato 'YYYY-MM' (default = mes actual)
+const _hoy = new Date();
+let currentMonth = `${_hoy.getFullYear()}-${String(_hoy.getMonth()+1).padStart(2,'0')}`;
+
+const MES_NOMBRES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+function monthLabel(monthStr){
+  const [y, m] = monthStr.split('-').map(Number);
+  return `${MES_NOMBRES[m-1]} ${y}`;
+}
+
+function monthRange(monthStr){
+  // Devuelve { desde, hasta } para el mes indicado.
+  // Si es el mes actual, hasta = hoy. Si es pasado, hasta = último día del mes.
+  const [y, m] = monthStr.split('-').map(Number);
+  const desde = `${y}-${String(m).padStart(2,'0')}-01`;
+  const today = new Date();
+  const esActual = (y === today.getFullYear() && m === today.getMonth()+1);
+  let hasta;
+  if (esActual) {
+    hasta = today.toISOString().slice(0,10);
+  } else {
+    const lastDay = new Date(y, m, 0).getDate();
+    hasta = `${y}-${String(m).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+  }
+  return { desde, hasta };
+}
+
+function poblarSelectorMeses(){
+  const sel = document.getElementById('month-sel');
+  if (!sel) return;
+  const today = new Date();
+  const opciones = [];
+  // Últimos 6 meses incluyendo el actual
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    const ms = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const esActual = i === 0 ? ' (en curso)' : '';
+    opciones.push(`<option value="${ms}"${ms===currentMonth?' selected':''}>${monthLabel(ms)}${esActual}</option>`);
+  }
+  sel.innerHTML = opciones.join('');
+}
+
+function onChangeMonth(){
+  currentMonth = document.getElementById('month-sel').value;
+  render();
+  cargarTransporteLive();
+}
+
 // ═══════════════════════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════════════════════
 const fmtM = v => '$'+(v/1e6).toFixed(1)+'M';
 const fmtK = v => v.toLocaleString('es-CL');
-const periodLabel = () => period==='mensual' ? 'Mayo 2026' : 'S'+currentWeek+' · '+ranges[currentWeek];
+const periodLabel = () => {
+  if (period === 'mensual') return monthLabel(currentMonth);
+  if (period === 'semanal') return 'S'+currentWeek+' · '+(ranges[currentWeek]||'');
+  return 'Hoy ' + new Date().toLocaleDateString('es-CL');
+};
 const ranges = {19:'4-10 may',20:'11-17 may',21:'18-24 may',22:'25-31 may'};
 
 // ═══════════════════════════════════════════════════════════════
@@ -604,8 +662,8 @@ function calcularRangoFechas(){
     const w = isoWeekToDates(2026, currentWeek);
     return { desde: w.lunes, hasta: w.domingo };
   }
-  // Mensual: por ahora Mayo 2026 (cuando habilitemos selector de mes lo extendemos)
-  return { desde: '2026-05-01', hasta: '2026-05-31' };
+  // Mensual: usa el mes seleccionado
+  return monthRange(currentMonth);
 }
 
 function clasificarOperacion(opStr){
@@ -908,6 +966,27 @@ function render(){
   renderComercial();
   renderAlertas();
   renderCostos();
+  actualizarBadgesMockup();
+}
+
+function actualizarBadgesMockup(){
+  // Las secciones marcadas data-mockup="1" muestran datos hardcoded de Mayo 2026.
+  // Mostramos un badge "mockup · mayo" cuando el usuario eligió otro mes.
+  const mostrarBadge = period === 'mensual' && currentMonth !== '2026-05';
+  document.querySelectorAll('.section-hdr[data-mockup="1"]').forEach(h => {
+    const existing = h.querySelector('.mockup-badge');
+    if (existing) existing.remove();
+    if (mostrarBadge) {
+      const title = h.querySelector('.section-title');
+      if (title) {
+        const badge = document.createElement('span');
+        badge.className = 'mockup-badge';
+        badge.textContent = 'mockup · mayo';
+        badge.title = `Esta sección aún no está conectada a live. Los datos visibles son de Mayo 2026, no del mes seleccionado (${monthLabel(currentMonth)}).`;
+        title.insertAdjacentElement('afterend', badge);
+      }
+    }
+  });
 }
 
 function renderTransporte(){
@@ -1401,6 +1480,7 @@ function setPeriod(p, el){
   document.querySelectorAll('#seg-period .seg-btn').forEach(b=>b.classList.remove('on'));
   el.classList.add('on');
   document.getElementById('week-sel').style.display = p==='semanal'?'inline-block':'none';
+  document.getElementById('month-sel').style.display = p==='mensual'?'inline-block':'none';
   render();
   // Si cambió el período, recargamos transporte live (el rango de fechas cambió)
   cargarTransporteLive();
@@ -1417,6 +1497,9 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarModal(
 function tick(){
   const d = new Date();
   document.getElementById('clk').textContent = d.toTimeString().slice(0,8);
+  const fecha = d.toLocaleDateString('es-CL', { weekday:'short', day:'2-digit', month:'short', year:'numeric' });
+  const elD = document.getElementById('clk-d');
+  if (elD) elD.textContent = fecha;
 }
 setInterval(tick, 1000);
 
@@ -1426,6 +1509,8 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 // First render: paint mockup, luego cargar live (UX: usuario ve datos al toque)
+poblarSelectorMeses();
+tick();
 render();
 cargarTransporteLive();
 </script>

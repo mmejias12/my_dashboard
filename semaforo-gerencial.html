@@ -762,22 +762,37 @@ async function cargarTransporteLive(){
     const r = await fetch(url);
     if (!r.ok) throw new Error('HTTP ' + r.status + ' - ' + (await r.text()).slice(0,200));
     const arr = await r.json();
-    const viajes = Array.isArray(arr) ? arr : (arr.items || arr.data || []);
+    const viajesRaw = Array.isArray(arr) ? arr : (arr.items || arr.data || []);
     const dt = Math.round(performance.now() - t0);
-    console.log(`[TRANSPORTE] ${viajes.length} viajes · cache=${r.headers.get('X-Cache')||'—'} · ${dt}ms`);
+    console.log(`[TRANSPORTE] ${viajesRaw.length} viajes recibidos · cache=${r.headers.get('X-Cache')||'—'} · ${dt}ms`);
 
-    // Sanity check: comparar primeras y últimas fechas vs rango pedido
-    if (viajes.length) {
-      const fechas = viajes.map(v => v.horaIngreso || v.fechaDespacho || v.fechaConfirmacion).filter(Boolean).sort();
-      const min = fechas[0]?.slice(0,10);
-      const max = fechas[fechas.length-1]?.slice(0,10);
-      console.log(`[TRANSPORTE] rango real recibido: ${min} → ${max} (pedido: ${desde} → ${hasta})`);
-      if (min && (min < desde || max > hasta)) {
-        console.warn(`[TRANSPORTE] ⚠ Upstream devolvió viajes FUERA del rango pedido. El proxy o el upstream están ignorando los parámetros de fecha.`);
-      }
+    // El upstream M3Link ignora los parámetros de fecha y devuelve siempre
+    // los últimos ~2 meses. Filtramos en cliente para respetar el rango pedido.
+    let rangoUpstream = { min: null, max: null };
+    if (viajesRaw.length) {
+      const fechas = viajesRaw.map(v => v.horaIngreso || v.fechaDespacho || v.fechaConfirmacion).filter(Boolean).sort();
+      rangoUpstream.min = fechas[0]?.slice(0,10);
+      rangoUpstream.max = fechas[fechas.length-1]?.slice(0,10);
+      console.log(`[TRANSPORTE] rango real upstream: ${rangoUpstream.min} → ${rangoUpstream.max} (pedido: ${desde} → ${hasta})`);
     }
 
-    // Guardamos viajes crudos para drill-downs
+    const viajes = viajesRaw.filter(v => {
+      const fecha = v.horaIngreso || v.fechaDespacho || v.fechaConfirmacion;
+      if (!fecha) return false;
+      const fechaISO = fecha.slice(0,10);
+      return fechaISO >= desde && fechaISO <= hasta;
+    });
+
+    // Detectar si el rango pedido está FUERA del rango disponible upstream
+    let fueraDeRango = false;
+    if (viajesRaw.length && rangoUpstream.min && rangoUpstream.max) {
+      // Si el rango pedido termina antes del primer dato disponible, o empieza después del último
+      fueraDeRango = (hasta < rangoUpstream.min) || (desde > rangoUpstream.max);
+    }
+
+    console.log(`[TRANSPORTE] filtrados en cliente: ${viajes.length}/${viajesRaw.length} viajes en rango ${desde} → ${hasta}${fueraDeRango ? ' ⚠ FUERA DE RANGO DISPONIBLE' : ''}`);
+
+    // Guardamos viajes crudos FILTRADOS para drill-downs (consistente con la vista)
     VIAJES_RAW_CACHE.key = `${desde}_${hasta}`;
     VIAJES_RAW_CACHE.viajes = viajes;
 
@@ -786,22 +801,23 @@ async function cargarTransporteLive(){
     transporteLiveMeta = {
       ...procesado.meta,
       desde, hasta,
+      totalUpstream: viajesRaw.length,
+      rangoUpstream,
+      fueraDeRango,
       cacheStatus: r.headers.get('X-Cache') || '—',
       cacheAge: r.headers.get('X-Cache-Age') || '',
       lastUpdate: new Date()
     };
-    transporteLiveStatus = 'live';
+    transporteLiveStatus = fueraDeRango ? 'out-of-range' : 'live';
     actualizarUltimaActualizacion();
   } catch (err) {
     console.error('Error cargando transporte live:', err);
     transporteLiveError = err.message;
     transporteLiveStatus = 'error';
-    // No nullificamos transporteLive: dejamos los datos previos si los había
   }
 
   actualizarStatusPill();
   renderTransporte();
-  // Operaciones reusa el cache de viajes que acabamos de cargar
   cargarOperacionesLive();
 }
 
@@ -1143,25 +1159,36 @@ function actualizarStatusPill(){
     pill.classList.add('error');
     pill.title = transporteLiveError || '';
     pill.textContent = 'Error · ' + (transporteLiveError || '').slice(0,40);
-  } else if (transporteLiveStatus === 'live' && transporteLiveMeta) {
+  } else if (transporteLiveStatus === 'out-of-range' && transporteLiveMeta) {
     const m = transporteLiveMeta;
+    pill.classList.add('error');
+    pill.textContent = `Fuera de rango · upstream solo tiene ${m.rangoUpstream.min} → ${m.rangoUpstream.max}`;
+    pill.title = `El upstream M3Link solo retorna los últimos ~2 meses.\n` +
+                 `Pediste: ${m.desde} → ${m.hasta}\n` +
+                 `Disponible: ${m.rangoUpstream.min} → ${m.rangoUpstream.max}`;
+  } else if ((transporteLiveStatus === 'live' || transporteLiveStatus === 'out-of-range') && transporteLiveMeta) {
+    const m = transporteLiveMeta;
+    const detalleFiltro = m.totalUpstream && m.totalUpstream !== m.total
+      ? ` (filtrado ${m.procesados}/${m.totalUpstream})`
+      : '';
     if (m.cacheStatus === 'HIT') {
       pill.classList.add('cache');
-      pill.textContent = `Cache ${m.cacheAge} · ${m.procesados} viajes`;
+      pill.textContent = `Cache ${m.cacheAge} · ${m.procesados} viajes${detalleFiltro}`;
     } else if (m.cacheStatus === 'STALE') {
       pill.classList.add('cache');
       pill.title = 'Upstream falló - usando cache expirado';
-      pill.textContent = `Stale ${m.cacheAge} · ${m.procesados} viajes`;
+      pill.textContent = `Stale ${m.cacheAge} · ${m.procesados} viajes${detalleFiltro}`;
     } else {
       pill.classList.add('live');
-      pill.textContent = `Live · ${m.procesados} viajes`;
+      pill.textContent = `Live · ${m.procesados} viajes${detalleFiltro}`;
     }
-    pill.title = `Período: ${m.desde} → ${m.hasta}\n` +
-                 `Total upstream: ${m.total}\n` +
-                 `Procesados: ${m.procesados}\n` +
-                 `Sin patente (excluidos): ${m.sinPatente}\n` +
-                 `Patentes fuera de catálogo: ${m.sinCatalogo}` +
-                 (m.sinCatalogoLista.length ? ` (${m.sinCatalogoLista.join(', ')})` : '') +
+    pill.title = `Período pedido: ${m.desde} → ${m.hasta}\n` +
+                 `Disponible upstream: ${m.rangoUpstream ? m.rangoUpstream.min+' → '+m.rangoUpstream.max : '—'}\n` +
+                 `Total upstream: ${m.totalUpstream || m.total}\n` +
+                 `Procesados en rango: ${m.procesados}\n` +
+                 `Sin patente: ${m.sinPatente}\n` +
+                 `Fuera de catálogo: ${m.sinCatalogo}` +
+                 (m.sinCatalogoLista && m.sinCatalogoLista.length ? ` (${m.sinCatalogoLista.join(', ')})` : '') +
                  `\nSin fecha válida: ${m.sinFecha}\n` +
                  `Otras operaciones (no em/ret/devol/reloc): ${m.otrasOps}`;
   } else {

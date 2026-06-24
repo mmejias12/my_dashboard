@@ -911,7 +911,7 @@ function actualizarStatusPillComercial(){
 // ═══════════════════════════════════════════════════════════════
 
 function procesarOperaciones(viajes){
-  // Identifica el estado de cada operación según etapaOperacion y cantidadPendiente
+  // Identifica el estado de cada operación según etapaOperacion y cantidades.
   // (Heurística inicial - revisar reglas con el equipo)
   const hoy = new Date();
   let confirmadas=0, pendientes=0, riesgo=0, reversa=0, anulados=0;
@@ -919,9 +919,22 @@ function procesarOperaciones(viajes){
   const detallesRiesgo = [];
   let procesados = 0;
 
+  // Cálculo robusto de pallets afectados para operaciones en riesgo/reversa.
+  // M3Link no siempre setea cantidadPendiente; usamos el flujo despacho→confirmación.
+  function palletsAfectados(raw) {
+    const cSol = Number(raw.cantidadSolicitada) || 0;
+    const cDesp = Number(raw.cantidadDespachada) || 0;
+    const cConf = Number(raw.cantidadConfirmada) || 0;
+    const cPend = Number(raw.cantidadPendiente) || 0;
+    // Prioridad: pendiente explícito > brecha despacho-confirmación > solicitud original
+    if (Math.abs(cPend) > 0) return Math.abs(cPend);
+    if (cDesp > cConf) return cDesp - cConf;
+    return cSol;
+  }
+
   viajes.forEach(raw => {
     const etapa = (raw.etapaOperacion || '').toLowerCase();
-    // Excluir anulados: solo inflarían el total y no representan operación real
+    // Excluir anulados
     if (etapa === 'anulado' || etapa.includes('anulad')) {
       anulados++;
       return;
@@ -935,11 +948,6 @@ function procesarOperaciones(viajes){
     const diasDesde = Math.floor((hoy - new Date(fechaDespacho)) / 86400000);
     procesados++;
 
-    // Regla heurística (ajustable):
-    // - Reversa: cantidadPendiente < 0 (ya marcada) o etapa contiene "revers"
-    // - Riesgo: pendiente y 25-29 días desde despacho
-    // - Pendiente: pendiente y <25 días
-    // - Confirmada: ya confirmada en algún grado
     const esReversa = cPend < 0 || etapa.includes('revers');
     const estaPendiente = cConf === 0 && !esReversa;
 
@@ -950,7 +958,7 @@ function procesarOperaciones(viajes){
         dteNro: raw.dteNro,
         cliente: raw.clienteDestinoStr || raw.clienteOrigenStr || '—',
         destino: raw.bodegaDestinoStr || '—',
-        pallets: Math.abs(cPend) || cConf,
+        pallets: palletsAfectados(raw),
         dias: diasDesde,
         fecha: fechaDespacho
       });
@@ -962,7 +970,7 @@ function procesarOperaciones(viajes){
           dteNro: raw.dteNro,
           cliente: raw.clienteDestinoStr || raw.clienteOrigenStr || '—',
           destino: raw.bodegaDestinoStr || '—',
-          pallets: cPend || cConf,
+          pallets: palletsAfectados(raw),
           dias: diasDesde,
           fecha: fechaDespacho
         });
@@ -973,7 +981,7 @@ function procesarOperaciones(viajes){
           dteNro: raw.dteNro,
           cliente: raw.clienteDestinoStr || raw.clienteOrigenStr || '—',
           destino: raw.bodegaDestinoStr || '—',
-          pallets: cPend || cConf,
+          pallets: palletsAfectados(raw),
           dias: diasDesde,
           fecha: fechaDespacho
         });
@@ -989,8 +997,8 @@ function procesarOperaciones(viajes){
     confirmadas, pendientes, riesgo, reversa,
     detallesReversa, detallesRiesgo,
     anulados,
-    total: procesados,         // sin anulados
-    totalConAnulados: viajes.length  // por si lo necesitamos en tooltips
+    total: procesados,
+    totalConAnulados: viajes.length
   };
 }
 
@@ -1348,29 +1356,36 @@ function renderTransporte(){
   const pctRet = d.ret_v ? d.ret_full/d.ret_v*100 : 0;
   const ocupEm = d.em_cap ? d.em_p/d.em_cap*100 : 0;
   const ocupRet = d.ret_cap ? d.ret_p/d.ret_cap*100 : 0;
+  const totV = d.em_v + d.ret_v;
+  const hayDatos = totV > 0;
 
   // Fila 1: Viajes totales + plena carga
   let html = `<tr>
     <td><div class="cell-row-label"><span class="row-ico">✅</span>Viajes a plena carga</div></td>
     ${cell(
       pctEm>=95 && pctRet>=80 ? 'green' : (pctEm<60 || pctRet<50 ? 'red' : 'yellow'),
-      `${d.em_full+d.ret_full}<span style="font-size:14px;color:var(--t3)">/${d.em_v+d.ret_v}</span>`,
-      `${((d.em_full+d.ret_full)/(d.em_v+d.ret_v)*100).toFixed(1)}%`
+      `${d.em_full+d.ret_full}<span style="font-size:14px;color:var(--t3)">/${totV}</span>`,
+      hayDatos ? `${((d.em_full+d.ret_full)/totV*100).toFixed(1)}%` : '—',
+      hayDatos ? `abrirModalCarga('total')` : null
     )}
     ${cell(sem_plena_em(pctEm), `${d.em_full}<span style="font-size:14px;color:var(--t3)">/${d.em_v}</span>`, `${pctEm.toFixed(1)}%`,
-      pctEm<60 ? `abrirModalCarga('emision')` : null)}
+      d.em_v > 0 ? `abrirModalCarga('emision')` : null)}
     ${cell(sem_plena_ret(pctRet), `${d.ret_full}<span style="font-size:14px;color:var(--t3)">/${d.ret_v}</span>`, `${pctRet.toFixed(1)}%`,
-      pctRet<50 ? `abrirModalCarga('retiro')` : null)}
-    ${cellInfo(d.devol_v, `${fmtK(d.devol_p)} pall`)}
-    ${cellInfo(d.reloc_v, `${fmtK(d.reloc_p)} pall`)}
+      d.ret_v > 0 ? `abrirModalCarga('retiro')` : null)}
+    ${cell('info', d.devol_v, `${fmtK(d.devol_p)} pall`,
+      d.devol_v > 0 ? `abrirModalCarga('devolucion')` : null)}
+    ${cell('info', d.reloc_v, `${fmtK(d.reloc_p)} pall`,
+      d.reloc_v > 0 ? `abrirModalCarga('relocalizacion')` : null)}
   </tr>`;
 
   // Fila 2: % ocupación real
   html += `<tr>
     <td><div class="cell-row-label"><span class="row-ico">📊</span>% Ocupación real</div></td>
-    ${cellInfo(`${((d.em_p+d.ret_p)/(d.em_cap+d.ret_cap)*100).toFixed(1)}%`, `pall transp / cap`)}
-    ${cell(ocupEm>=95?'green':ocupEm>=80?'yellow':ocupEm>=60?'orange':'red', `${ocupEm.toFixed(1)}%`, `${fmtK(d.em_p)}/${fmtK(d.em_cap)} pall`)}
-    ${cell(ocupRet>=85?'green':ocupRet>=70?'yellow':ocupRet>=55?'orange':'red', `${ocupRet.toFixed(1)}%`, `${fmtK(d.ret_p)}/${fmtK(d.ret_cap)} pall`)}
+    ${cellInfo(hayDatos ? `${((d.em_p+d.ret_p)/(d.em_cap+d.ret_cap)*100).toFixed(1)}%` : '—', `pall transp / cap`)}
+    ${cell(ocupEm>=95?'green':ocupEm>=80?'yellow':ocupEm>=60?'orange':'red', `${ocupEm.toFixed(1)}%`, `${fmtK(d.em_p)}/${fmtK(d.em_cap)} pall`,
+      d.em_v > 0 ? `abrirModalCarga('emision')` : null)}
+    ${cell(ocupRet>=85?'green':ocupRet>=70?'yellow':ocupRet>=55?'orange':'red', `${ocupRet.toFixed(1)}%`, `${fmtK(d.ret_p)}/${fmtK(d.ret_cap)} pall`,
+      d.ret_v > 0 ? `abrirModalCarga('retiro')` : null)}
     ${cellInfo('—','')}
     ${cellInfo('—','')}
   </tr>`;
@@ -1561,23 +1576,27 @@ function abrirModal(icon, title, sub, body, link){
 
 function abrirModalCarga(tipo){
   const d = aggOp();
-  const esRetiro = tipo==='retiro';
-  const v = esRetiro ? d.ret_v : d.em_v;
-  const f = esRetiro ? d.ret_full : d.em_full;
-  const p = esRetiro ? d.ret_p : d.em_p;
-  const cap = esRetiro ? d.ret_cap : d.em_cap;
-  const pct = v ? (f/v*100).toFixed(1) : '—';
-  const noLlenos = v - f;
-  const ocioso = cap - p;
+
+  // Configuración por tipo
+  const CFG = {
+    total:          { titulo:'Eficiencia global',     desc:'Emisión + Retiro juntos',                                v:d.em_v+d.ret_v, f:d.em_full+d.ret_full, p:d.em_p+d.ret_p, cap:d.em_cap+d.ret_cap, opFiltro:['em','ret'],  conPlenaCarga:true  },
+    emision:        { titulo:'Emisión (ida)',         desc:'Pallets no entregados que podrían haber ido',           v:d.em_v,         f:d.em_full,            p:d.em_p,        cap:d.em_cap,           opFiltro:['em'],        conPlenaCarga:true  },
+    retiro:         { titulo:'Retiro (vuelta)',       desc:'Capacidad ociosa en viajes de retorno',                  v:d.ret_v,        f:d.ret_full,           p:d.ret_p,       cap:d.ret_cap,          opFiltro:['ret'],       conPlenaCarga:true  },
+    devolucion:     { titulo:'Devoluciones',          desc:'Devoluciones de pallets desde cliente',                  v:d.devol_v,      f:0,                    p:d.devol_p,     cap:0,                  opFiltro:['devol'],     conPlenaCarga:false },
+    relocalizacion: { titulo:'Relocalización',        desc:'Traslados internos entre recintos REDTEC',               v:d.reloc_v,      f:0,                    p:d.reloc_p,     cap:0,                  opFiltro:['reloc'],     conPlenaCarga:false },
+  };
+  const cfg = CFG[tipo] || CFG.emision;
+  const { v, f, p, cap, opFiltro, conPlenaCarga } = cfg;
+  const pct = (v && conPlenaCarga) ? (f/v*100).toFixed(1) : '—';
+  const noLlenos = conPlenaCarga ? v - f : 0;
+  const ocioso = conPlenaCarga && cap ? cap - p : 0;
   const perdido = ocioso * 190;
 
   let rows = '';
   let fuente = 'mockup';
 
   if (transporteLive && VIAJES_RAW_CACHE.viajes.length) {
-    // === MODO LIVE: agregar viajes reales no llenos por patente ===
     fuente = 'live';
-    const opFiltro = esRetiro ? 'ret' : 'em';
     const porPatente = new Map();
 
     VIAJES_RAW_CACHE.viajes.forEach(raw => {
@@ -1586,16 +1605,17 @@ function abrirModalCarga(tipo){
       if (!camion) return;
       if (plant !== 'todas' && camion.planta !== plant) return;
       const cat = clasificarOperacion(raw.operacion);
-      if (cat !== opFiltro) return;
+      if (!opFiltro.includes(cat)) return;
 
-      // Filtrar por semana si el período es semanal
       const fecha = raw.horaIngreso || raw.fechaDespacho || raw.fechaConfirmacion;
       if (!fecha) return;
       if (period === 'semanal' && semanaISO(fecha) !== currentWeek) return;
       if (period === 'hoy' && semanaISO(fecha) !== semanaISO(new Date())) return;
 
       const cantidad = Number(raw.cantidadConfirmada) || 0;
-      if (cantidad >= camion.capacidad) return; // Solo mostramos los NO llenos (subutilizados)
+
+      // Para emisión/retiro: solo mostrar viajes NO llenos. Para devol/reloc: todos.
+      if (conPlenaCarga && cantidad >= camion.capacidad) return;
 
       if (!porPatente.has(patente)) {
         porPatente.set(patente, {
@@ -1607,12 +1627,12 @@ function abrirModalCarga(tipo){
       const acc = porPatente.get(patente);
       acc.viajes++;
       acc.pallets += cantidad;
-      acc.ociosoTotal += (camion.capacidad - cantidad);
+      acc.ociosoTotal += Math.max(0, camion.capacidad - cantidad);
     });
 
     const lista = [...porPatente.values()]
       .map(x => ({ ...x, ocup: x.viajes ? Math.round(x.pallets/(x.viajes*x.cap)*100) : 0 }))
-      .sort((a,b) => b.ociosoTotal - a.ociosoTotal)
+      .sort((a,b) => conPlenaCarga ? b.ociosoTotal - a.ociosoTotal : b.viajes - a.viajes)
       .slice(0, 12);
 
     rows = lista.map(fl => {
@@ -1624,12 +1644,12 @@ function abrirModalCarga(tipo){
         <td>${fl.planta==='stgo'?'Santiago':'Talca'}</td>
         <td class="num">${fl.viajes}</td>
         <td class="num">${fmtK(fl.pallets)}</td>
-        <td class="num">${fmtK(fl.ociosoTotal)}</td>
+        <td class="num">${conPlenaCarga ? fmtK(fl.ociosoTotal) : '—'}</td>
         <td class="num"><span class="badge-mini ${ocSem}">${fl.ocup}%</span></td>
       </tr>`;
-    }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--t3);padding:24px">Sin viajes no llenos en el período seleccionado</td></tr>';
+    }).join('') || `<tr><td colspan="8" style="text-align:center;color:var(--t3);padding:24px">Sin viajes ${conPlenaCarga?'no llenos':'de este tipo'} en el período seleccionado</td></tr>`;
   } else {
-    // === MODO MOCKUP (fallback) ===
+    // Fallback mockup (solo emisión/retiro tienen sentido aquí)
     const bajaOcup = flotaData.filter(fl=>fl.ocup<70 && (plant==='todas' || fl.planta===plant))
                               .sort((a,b)=>a.ocup-b.ocup).slice(0,8);
     rows = bajaOcup.map(fl=>{
@@ -1651,19 +1671,29 @@ function abrirModalCarga(tipo){
     ? '<span class="badge-mini green" style="margin-left:8px">LIVE</span>'
     : '<span class="badge-mini yellow" style="margin-left:8px">mockup</span>';
 
-  abrirModal('🚛', `Viajes no a plena carga · ${esRetiro?'Retiro':'Emisión'} · ${periodLabel()}`,
-    `${esRetiro?'Capacidad ociosa en viajes de retorno':'Pallets no entregados que podrían haber ido'} · Plena carga = cantidad ≥ capacidad camión`,
-    `<div class="modal-kpis">
-      <div class="modal-kpi"><div class="modal-kpi-lbl">Viajes no llenos</div><div class="modal-kpi-val red">${noLlenos}</div></div>
-      <div class="modal-kpi"><div class="modal-kpi-lbl">% plena carga</div><div class="modal-kpi-val ${pct<60?'red':pct<80?'orange':'yellow'}">${pct}%</div></div>
-      <div class="modal-kpi"><div class="modal-kpi-lbl">Pallets ociosos</div><div class="modal-kpi-val orange">${fmtK(ocioso)}</div></div>
-      <div class="modal-kpi"><div class="modal-kpi-lbl">Costo no recuperado</div><div class="modal-kpi-val red">${fmtM(perdido)}</div></div>
-    </div>
+  // KPIs distintos según si la categoría tiene plena carga o no
+  const kpis = conPlenaCarga
+    ? `<div class="modal-kpis">
+        <div class="modal-kpi"><div class="modal-kpi-lbl">Viajes no llenos</div><div class="modal-kpi-val red">${noLlenos}</div></div>
+        <div class="modal-kpi"><div class="modal-kpi-lbl">% plena carga</div><div class="modal-kpi-val ${pct<60?'red':pct<80?'orange':'yellow'}">${pct}%</div></div>
+        <div class="modal-kpi"><div class="modal-kpi-lbl">Pallets ociosos</div><div class="modal-kpi-val orange">${fmtK(ocioso)}</div></div>
+        <div class="modal-kpi"><div class="modal-kpi-lbl">Costo no recuperado</div><div class="modal-kpi-val red">${fmtM(perdido)}</div></div>
+      </div>`
+    : `<div class="modal-kpis">
+        <div class="modal-kpi"><div class="modal-kpi-lbl">Viajes</div><div class="modal-kpi-val">${v}</div></div>
+        <div class="modal-kpi"><div class="modal-kpi-lbl">Pallets movidos</div><div class="modal-kpi-val">${fmtK(p)}</div></div>
+        <div class="modal-kpi"><div class="modal-kpi-lbl">Promedio/viaje</div><div class="modal-kpi-val">${v?Math.round(p/v):'—'}</div></div>
+        <div class="modal-kpi"><div class="modal-kpi-lbl">Período</div><div class="modal-kpi-val" style="font-size:14px">${periodLabel()}</div></div>
+      </div>`;
+
+  abrirModal('🚛', `${conPlenaCarga ? 'Viajes no a plena carga · ' : ''}${cfg.titulo} · ${periodLabel()}`,
+    `${cfg.desc}${conPlenaCarga ? ' · Plena carga = cantidad ≥ capacidad camión' : ''}`,
+    `${kpis}
     <div style="margin:10px 0 6px;font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px">
       Detalle por patente ${headerExtra}
     </div>
     <table class="modal-table">
-      <thead><tr><th>Patente</th><th>Conductor</th><th>Tipo</th><th>Planta</th><th class="num">Viajes no llenos</th><th class="num">Pallets</th><th class="num">Ociosos</th><th class="num">% Ocup.</th></tr></thead>
+      <thead><tr><th>Patente</th><th>Conductor</th><th>Tipo</th><th>Planta</th><th class="num">Viajes</th><th class="num">Pallets</th><th class="num">Ociosos</th><th class="num">% Ocup.</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`,
     'transportes-pagos.html');

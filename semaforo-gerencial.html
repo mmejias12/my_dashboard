@@ -691,16 +691,21 @@ function clasificarOperacion(opStr){
 function procesarViajesTransporte(rawArr){
   // Estructura compatible con dataOp: { stgo:{ [semana]: {...} }, talca:{...} }
   const out = { stgo: {}, talca: {} };
-  let sinPatente = 0, sinCatalogo = 0, sinFecha = 0, otrasOps = 0, procesados = 0;
+  let sinPatente = 0, sinCatalogo = 0, sinFecha = 0, otrasOps = 0, procesados = 0, anulados = 0;
   const sinCatalogoSet = new Set();
 
   rawArr.forEach(raw => {
+    // Excluir anulados (igual que en Operaciones; consistente con el reporte de la jefa)
+    const etapa = (raw.etapaOperacion || '').toLowerCase();
+    if (etapa === 'anulado' || etapa.includes('anulad')) { anulados++; return; }
+
     const patente = (raw.patente || '').trim().toUpperCase();
     if (!patente) { sinPatente++; return; }
     const camion = CAMIONES[patente];
     if (!camion) { sinCatalogo++; sinCatalogoSet.add(patente); return; }
 
-    const fecha = raw.horaIngreso || raw.fechaDespacho || raw.fechaConfirmacion;
+    // Prioridad: fechaDespacho (cuando físicamente ocurrió) > fechaConfirmacion > horaIngreso
+    const fecha = raw.fechaDespacho || raw.fechaConfirmacion || raw.horaIngreso;
     if (!fecha) { sinFecha++; return; }
 
     const semana = semanaISO(fecha);
@@ -742,7 +747,8 @@ function procesarViajesTransporte(rawArr){
       sinCatalogo,
       sinCatalogoLista: [...sinCatalogoSet],
       sinFecha,
-      otrasOps
+      otrasOps,
+      anulados
     }
   };
 }
@@ -770,14 +776,14 @@ async function cargarTransporteLive(){
     // los últimos ~2 meses. Filtramos en cliente para respetar el rango pedido.
     let rangoUpstream = { min: null, max: null };
     if (viajesRaw.length) {
-      const fechas = viajesRaw.map(v => v.horaIngreso || v.fechaDespacho || v.fechaConfirmacion).filter(Boolean).sort();
+      const fechas = viajesRaw.map(v => v.fechaDespacho || v.fechaConfirmacion || v.horaIngreso).filter(Boolean).sort();
       rangoUpstream.min = fechas[0]?.slice(0,10);
       rangoUpstream.max = fechas[fechas.length-1]?.slice(0,10);
       console.log(`[TRANSPORTE] rango real upstream: ${rangoUpstream.min} → ${rangoUpstream.max} (pedido: ${desde} → ${hasta})`);
     }
 
     const viajes = viajesRaw.filter(v => {
-      const fecha = v.horaIngreso || v.fechaDespacho || v.fechaConfirmacion;
+      const fecha = v.fechaDespacho || v.fechaConfirmacion || v.horaIngreso;
       if (!fecha) return false;
       const fechaISO = fecha.slice(0,10);
       return fechaISO >= desde && fechaISO <= hasta;
@@ -1185,12 +1191,14 @@ function actualizarStatusPill(){
     pill.title = `Período pedido: ${m.desde} → ${m.hasta}\n` +
                  `Disponible upstream: ${m.rangoUpstream ? m.rangoUpstream.min+' → '+m.rangoUpstream.max : '—'}\n` +
                  `Total upstream: ${m.totalUpstream || m.total}\n` +
-                 `Procesados en rango: ${m.procesados}\n` +
+                 `En rango pedido: ${m.total}\n` +
+                 `Procesados (em/ret/devol/reloc): ${m.procesados}\n` +
+                 `Anulados excluidos: ${m.anulados || 0}\n` +
                  `Sin patente: ${m.sinPatente}\n` +
                  `Fuera de catálogo: ${m.sinCatalogo}` +
                  (m.sinCatalogoLista && m.sinCatalogoLista.length ? ` (${m.sinCatalogoLista.join(', ')})` : '') +
                  `\nSin fecha válida: ${m.sinFecha}\n` +
-                 `Otras operaciones (no em/ret/devol/reloc): ${m.otrasOps}`;
+                 `Otras operaciones (transferencias, traspasos, etc): ${m.otrasOps}`;
   } else {
     pill.classList.add('cache');
     pill.textContent = 'Mockup';
@@ -1658,7 +1666,7 @@ function abrirModalCarga(tipo){
       const cat = clasificarOperacion(raw.operacion);
       if (!opFiltro.includes(cat)) return;
 
-      const fecha = raw.horaIngreso || raw.fechaDespacho || raw.fechaConfirmacion;
+      const fecha = raw.fechaDespacho || raw.fechaConfirmacion || raw.horaIngreso;
       if (!fecha) return;
       if (period === 'semanal' && semanaISO(fecha) !== currentWeek) return;
       if (period === 'hoy' && semanaISO(fecha) !== semanaISO(new Date())) return;

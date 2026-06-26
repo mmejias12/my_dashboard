@@ -446,6 +446,44 @@ function agregar(items, rangoFin) {
     };
   });
 
+  // ────────────────────────────────────────────────────────────────────────
+  // v10: TERCER PASE — Actualizar planta de retails en calendario con datos
+  // de retiros reales (bodegaDestinoStr = planta REDTEC que RECIBE el retiro).
+  // ────────────────────────────────────────────────────────────────────────
+  var retailPlantaFromRetiros = {};
+  Object.keys(retirosOut).forEach(function(dateKey) {
+    var dayRetiros = retirosOut[dateKey];
+    if (!dayRetiros || !dayRetiros.retails) return;
+    dayRetiros.retails.forEach(function(ret) {
+      var rName = ret.retail;
+      if (!retailPlantaFromRetiros[rName]) {
+        retailPlantaFromRetiros[rName] = { santiago: 0, talca: 0, coquimbo: 0 };
+      }
+      (ret.items || []).forEach(function(item) {
+        var bd = (item.bodegaDestino || '').toUpperCase();
+        var pk = bd.indexOf('COQUIMBO') >= 0 ? 'coquimbo' : bd.indexOf('TALCA') >= 0 ? 'talca' : 'santiago';
+        var cant = item.cantidadSolicitada || item.cantidadConfirmada || 1;
+        retailPlantaFromRetiros[rName][pk] += cant;
+      });
+    });
+  });
+  var retailPlantaMap = {};
+  Object.keys(retailPlantaFromRetiros).forEach(function(rName) {
+    retailPlantaMap[rName] = dominantPlanta(retailPlantaFromRetiros[rName]);
+  });
+  context.log('[Planta] Mapeo retiros: ' + Object.keys(retailPlantaMap).length + ' retails');
+
+  // Actualizar planta en calOut
+  Object.keys(calOut).forEach(function(dateKey) {
+    var day = calOut[dateKey];
+    if (!day || !day.retails) return;
+    day.retails.forEach(function(ret) {
+      if (retailPlantaMap[ret.retail]) {
+        ret.planta = retailPlantaMap[ret.retail];
+      }
+    });
+  });
+
   return {
     calendario: calOut,
     retirosReales: retirosOut,

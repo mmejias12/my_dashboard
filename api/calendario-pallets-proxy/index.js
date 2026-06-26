@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────
 // Azure Function: calendario-pallets-proxy
-// VERSION: v10-RDTOut-migration-jun-2026
+// VERSION: v10-RDTOut-migration-jun-2026 V3
 // ─────────────────────────────────────────────────────────────────────────
 // Llama al API M3Link (token-based, mismo patrón que /proxy/ops), filtra
 // transferencias cerradas, cruza con la tabla de retención y devuelve datos
@@ -444,59 +444,6 @@ function agregar(items, rangoFin) {
       total_trf: b.trf,
       retails: retArr
     };
-  });
-
-  // ────────────────────────────────────────────────────────────────────────
-  // v10: TERCER PASE — Actualizar planta de retails en calendario con datos
-  // de retiros reales (bodegaDestinoStr = planta REDTEC que RECIBE el retiro).
-  //
-  // El campo bodegaOrigenStr de las transferencias casi siempre es "Santiago"
-  // (hub central), así que no sirve para saber la planta destino del retiro.
-  // En cambio, bodegaDestinoStr de los retiros SÍ dice "REDTEC TALCA", etc.
-  //
-  // Lógica: por cada retail con retiros, determinar la planta dominante
-  // (la que recibe más pallets). Luego aplicar ese mapeo al calendario.
-  // ────────────────────────────────────────────────────────────────────────
-  var retailPlantaFromRetiros = {};
-  Object.keys(retirosOut).forEach(function(dateKey) {
-    var dayRetiros = retirosOut[dateKey];
-    if (!dayRetiros || !dayRetiros.retails) return;
-    // retails es un array de { retail, pallets, palletsConfirmado, trf, items }
-    var retArr2 = Array.isArray(dayRetiros.retails) ? dayRetiros.retails : [];
-    retArr2.forEach(function(ret) {
-      var rName = ret.retail;
-      if (!retailPlantaFromRetiros[rName]) {
-        retailPlantaFromRetiros[rName] = { santiago: 0, talca: 0, coquimbo: 0 };
-      }
-      (ret.items || []).forEach(function(item) {
-        var bd = (item.bodegaDestino || '').toUpperCase();
-        var pk = bd.indexOf('COQUIMBO') >= 0 ? 'coquimbo' : bd.indexOf('TALCA') >= 0 ? 'talca' : 'santiago';
-        var cant = item.cantidadSolicitada || item.cantidadConfirmada || 1;
-        retailPlantaFromRetiros[rName][pk] += cant;
-      });
-    });
-  });
-  // Mapeo final: retail → planta dominante (desde retiros)
-  var retailPlantaMap = {};
-  Object.keys(retailPlantaFromRetiros).forEach(function(rName) {
-    retailPlantaMap[rName] = dominantPlanta(retailPlantaFromRetiros[rName]);
-  });
-  context.log('[Planta] Mapeo desde retiros: ' + Object.keys(retailPlantaMap).length + ' retails → ' +
-    Object.values(retailPlantaMap).filter(function(v){return v==='santiago'}).length + ' Stgo, ' +
-    Object.values(retailPlantaMap).filter(function(v){return v==='talca'}).length + ' Talca, ' +
-    Object.values(retailPlantaMap).filter(function(v){return v==='coquimbo'}).length + ' Coquimbo');
-
-  // Actualizar planta en calOut (retails del calendario estimado)
-  Object.keys(calOut).forEach(function(dateKey) {
-    var day = calOut[dateKey];
-    if (!day || !day.retails) return;
-    day.retails.forEach(function(ret) {
-      // Prioridad: retiros (más preciso) > transferencias (fallback)
-      if (retailPlantaMap[ret.retail]) {
-        ret.planta = retailPlantaMap[ret.retail];
-      }
-      // Si no hay retiros para ese retail, mantener planta del transfer (ya asignada)
-    });
   });
 
   return {

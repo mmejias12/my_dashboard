@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pausas Activas · REDTEC</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; }
+        .modal-transition { transition: opacity 0.25s ease, transform 0.25s ease; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen antialiased pb-24">
+
+    <!-- ENCABEZADO FIJO (Optimizado para móviles) -->
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-40 px-4 py-3 shadow-sm">
+        <div class="max-w-md mx-auto flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-sm" style="background-color: #C0170C;">
+                    R
+                </div>
+                <div>
+                    <h1 class="text-base font-bold text-gray-900 leading-tight">Pausas Activas</h1>
+                    <p class="text-xs text-gray-500">Control de Asistencia Digital</p>
+                </div>
+            </div>
+            <span class="text-[9px] font-bold tracking-widest text-white uppercase px-1.5 py-0.5 rounded" style="background-color: #C0170C;">
+                REDTEC
+            </span>
+        </div>
+    </header>
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="max-w-md mx-auto px-4 pt-4 space-y-5">
+
+        <!-- NAVEGACIÓN Y BOTÓN CALENDARIO HISTÓRICO -->
+        <div class="flex items-center space-x-2">
+            <div class="bg-gray-200/70 p-1 rounded-xl flex gap-1 shadow-inner text-xs w-full">
+                <button onclick="cambiarVista('registro')" id="btn-vista-registro" class="w-full py-2 font-semibold rounded-lg bg-white text-gray-900 shadow-sm transition-all">
+                    Pase de Lista
+                </button>
+                <button onclick="cambiarVista('admin')" id="btn-vista-admin" class="w-full py-2 font-semibold rounded-lg text-gray-600 hover:text-gray-900 transition-all">
+                    Configuración
+                </button>
+            </div>
+            <!-- Botón de Historial Mensual -->
+            <button onclick="abrirCalendario()" class="p-2.5 bg-gray-900 text-white rounded-xl hover:bg-gray-800 shadow-sm transition-colors" title="Ver Historial del Mes">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- ================= VISTA 1: REGISTRO DE ASISTENCIA ================= -->
+        <div id="vista-registro" class="space-y-4">
+            
+            <!-- MINI DASHBOARD / KPIS GENERALES -->
+            <div class="grid grid-cols-3 gap-2">
+                <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm text-center">
+                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Asistencia</p>
+                    <p class="text-lg font-black text-emerald-600 mt-0.5">84%</p>
+                </div>
+                <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm text-center">
+                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Top Área</p>
+                    <p class="text-xs font-bold text-gray-800 truncate mt-1">Operaciones</p>
+                </div>
+                <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm text-center">
+                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Días Libres</p>
+                    <p class="text-lg font-black text-gray-900 mt-0.5">18 / 22</p>
+                </div>
+            </div>
+
+            <!-- Selector de Área, Horario y Ministro de Fe -->
+            <div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-3">
+                <div>
+                    <label class="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Área y Horario asignado</label>
+                    <select id="selector-area" onchange="actualizarListaArea()" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-800 focus:outline-none">
+                        <option value="Logistica">Logística Inversa (Horario: 11:00 hrs)</option>
+                        <option value="Comercial">Comercial (Horario: 12:30 hrs)</option>
+                        <option value="Operaciones">Operaciones (Horario: 15:30 hrs)</option>
+                        <option value="Planta">Planta (Horario: 16:30 hrs)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Monitor Encargado (Ministro de Fe)</label>
+                    <select id="selector-monitor" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 focus:outline-none">
+                        <option value="Daniel Quijada">Daniel Quijada</option>
+                        <option value="Mauricio Mejias">Mauricio Mejias</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Listado de Funcionarios -->
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div class="bg-gray-50 px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+                    <span id="txt-contador-funcionarios" class="text-xs font-bold text-gray-500 uppercase tracking-wider">Cargando...</span>
+                    <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">Validación Monitor</span>
+                </div>
+                
+                <div id="lista-funcionarios" class="divide-y divide-gray-100">
+                    <!-- Dinámico con JS -->
+                </div>
+            </div>
+
+            <!-- Botón de Envío y Sincronización Azure -->
+            <button onclick="abrirModalCierre()" class="w-full bg-gray-900 text-white font-bold text-sm py-3 rounded-2xl hover:bg-gray-800 transition-all shadow-md flex items-center justify-center space-x-2">
+                <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                <span>Finalizar Día y Guardar Balance</span>
+            </button>
+        </div>
+
+        <!-- ================= VISTA 2: ACCESO ADMIN / NUEVOS FUNCIONARIOS ================= -->
+        <div id="vista-admin" class="hidden space-y-4">
+            <div id="admin-login-box" class="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+                <div class="text-center">
+                    <h3 class="font-bold text-gray-800 text-sm">Acceso Requerido</h3>
+                    <p class="text-xs text-gray-400 mt-0.5">Ingrese credenciales de monitor.</p>
+                </div>
+                <div class="space-y-3">
+                    <input type="password" id="admin-pass" value="1234" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm text-center font-bold tracking-widest focus:outline-none" placeholder="PIN SEGURIDAD">
+                    <button onclick="simularLogin()" class="w-full text-white text-xs font-bold py-2.5 rounded-xl transition-all" style="background-color: #C0170C;">
+                        Validar Identidad
+                    </button>
+                </div>
+            </div>
+
+            <div id="admin-content-box" class="hidden bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+                <div class="border-b border-gray-100 pb-2">
+                    <h3 class="font-bold text-gray-900 text-sm">Registrar Nuevo Funcionario</h3>
+                </div>
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-[11px] font-bold text-gray-400 uppercase mb-1">Nombre Completo</label>
+                        <input type="text" id="reg-nombre" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-800 focus:outline-none" placeholder="Ej: Nuevo Trabajador">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-gray-400 uppercase mb-1">Área Asignada</label>
+                        <select id="reg-area" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-800 focus:outline-none">
+                            <option value="Logistica">Logística Inversa</option>
+                            <option value="Comercial">Comercial</option>
+                            <option value="Operaciones">Operaciones</option>
+                            <option value="Planta">Planta</option>
+                        </select>
+                    </div>
+                    <button onclick="agregarFuncionario()" class="w-full bg-gray-900 text-white text-sm font-bold py-2.5 rounded-xl hover:bg-gray-800 transition-colors">
+                        Agregar a la Base de Datos
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ================= POPUP 1: CALENDARIO DE COMPORTAMIENTO MENSUAL ================= -->
+    <div id="modalCalendario" class="fixed inset-0 bg-gray-950/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4 opacity-0 pointer-events-none modal-transition">
+        <div class="bg-white rounded-t-3xl sm:rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl border border-gray-100 max-h-[85vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-gray-100 pb-2">
+                <div>
+                    <h3 class="font-bold text-gray-900 text-sm">Histórico de Asistencia</h3>
+                    <p class="text-[11px] text-gray-400">Comportamiento del mes de Junio 2026</p>
+                </div>
+                <button onclick="cerrarCalendario()" class="text-gray-400 hover:text-gray-600 text-sm font-bold">✕</button>
+            </div>
+
+            <!-- Días de Semana -->
+            <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-gray-400 uppercase">
+                <div>Lu</div><div>Ma</div><div>Mi</div><div>Ju</div><div>Vi</div><div>Sá</div><div>Do</div>
+            </div>
+
+            <!-- Grilla del Mes con Datos de Simulación -->
+            <div class="grid grid-cols-7 gap-1.5 text-center text-xs font-semibold">
+                <!-- Junio 2026 arranca Lunes 1 -->
+                <div class="p-1.5 bg-emerald-100 text-emerald-800 rounded-lg flex flex-col items-center">1<span class="text-[8px] opacity-70">90%</span></div>
+                <div class="p-1.5 bg-emerald-100 text-emerald-800 rounded-lg flex flex-col items-center">2<span class="text-[8px] opacity-70">85%</span></div>
+                <div class="p-1.5 bg-emerald-50 text-emerald-700 rounded-lg flex flex-col items-center">3<span class="text-[8px] opacity-70">74%</span></div>
+                <div class="p-1.5 bg-emerald-100 text-emerald-800 rounded-lg flex flex-col items-center">4<span class="text-[8px] opacity-70">92%</span></div>
+                <div class="p-1.5 bg-amber-100 text-amber-800 rounded-lg flex flex-col items-center" title="Baja participación">5<span class="text-[8px] font-bold">55%</span></div>
+                <div class="p-1.5 bg-gray-100 text-gray-300 rounded-lg flex flex-col items-center">6<span class="text-[8px] opacity-0">-</span></div>
+                <div class="p-1.5 bg-gray-100 text-gray-300 rounded-lg flex flex-col items-center">7<span class="text-[8px] opacity-0">-</span></div>
+
+                <div class="p-1.5 bg-emerald-100 text-emerald-800 rounded-lg flex flex-col items-center">8<span class="text-[8px] opacity-70">88%</span></div>
+                <div class="p-1.5 bg-emerald-100 text-emerald-800 rounded-lg flex flex-col items-center">9<span class="text-[8px] opacity-70">84%</span></div>
+                <div class="p-1.5 bg-emerald-100 text-emerald-800 rounded-lg flex flex-col items-center">10<span class="text-[8px] opacity-70">90%</span></div>
+                <div class="p-1.5 bg-emerald-50 text-emerald-700 rounded-lg flex flex-col items-center">11<span class="text-[8px] opacity-70">79%</span></div>
+                <div class="p-1.5 bg-emerald-100 text-emerald-800 rounded-lg flex flex-col items-center">12<span class="text-[8px] opacity-70">86%</span></div>
+                <div class="p-1.5 bg-gray-100 text-gray-300 rounded-lg flex flex-col items-center">13</div><div class="p-1.5 bg-gray-100 text-gray-300 rounded-lg flex flex-col items-center">14</div>
+
+                <div class="p-1.5 bg-emerald-100 text-emerald-800 rounded-lg flex flex-col items-center">15<span class="text-[8px] opacity-70">94%</span></div>
+                <div class="p-1.5 bg-emerald-100 text-emerald-800 rounded-lg flex flex-col items-center">16<span class="text-[8px] opacity-70">85%</span></div>
+                <div class="p-1.5 bg-emerald-50 text-emerald-700 rounded-lg flex flex-col items-center">17<span class="text-[8px] opacity-70">76%</span></div>
+                <div class="p-1.5 bg-emerald-100 text-emerald-800 rounded-lg flex flex-col items-center">18<span class="text-[8px] opacity-70">89%</span></div>
+                <div class="p-1.5 bg-amber-100 text-amber-800 rounded-lg flex flex-col items-center">19<span class="text-[8px] font-bold">58%</span></div>
+                <div class="p-1.5 bg-gray-100 text-gray-300 rounded-lg flex flex-col items-center">20</div><div class="p-1.5 bg-gray-100 text-gray-300 rounded-lg flex flex-col items-center">21</div>
+
+                <!-- Día de Hoy (22 de Junio destacado) -->
+                <div class="p-1.5 bg-blue-600 text-white border-2 border-blue-400 shadow rounded-lg flex flex-col items-center" title="Día en curso">22<span class="text-[7px] font-bold uppercase tracking-tighter text-blue-100">Hoy</span></div>
+                <div class="p-1.5 bg-gray-50 text-gray-300 border border-dashed border-gray-200 rounded-lg flex flex-col items-center">23</div>
+                <div class="p-1.5 bg-gray-50 text-gray-300 border border-dashed border-gray-200 rounded-lg flex flex-col items-center">24</div>
+                <div class="p-1.5 bg-gray-50 text-gray-300 border border-dashed border-gray-200 rounded-lg flex flex-col items-center">25</div>
+                <div class="p-1.5 bg-gray-50 text-gray-300 border border-dashed border-gray-200 rounded-lg flex flex-col items-center">26</div>
+                <div class="p-1.5 bg-gray-100 text-gray-300 rounded-lg flex flex-col items-center">27</div><div class="p-1.5 bg-gray-100 text-gray-300 rounded-lg flex flex-col items-center">28</div>
+
+                <div class="p-1.5 bg-gray-50 text-gray-300 border border-dashed border-gray-200 rounded-lg flex flex-col items-center">29</div>
+                <div class="p-1.5 bg-gray-50 text-gray-300 border border-dashed border-gray-200 rounded-lg flex flex-col items-center">30</div>
+            </div>
+
+            <div class="text-[10px] bg-gray-50 p-2.5 rounded-lg text-gray-500 space-y-1">
+                <p>💡 <strong>Análisis Mensual:</strong> Los días viernes (5 y 19) muestran bajas históricas de asistencia. Se recomienda adelantar alertas automatizadas por correo los jueves en la tarde.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= POPUP 2: CONSTANCIA VIRTUAL AZURE ================= -->
+    <div id="modalCierre" class="fixed inset-0 bg-gray-950/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4 opacity-0 pointer-events-none modal-transition">
+        <div class="bg-white rounded-t-3xl sm:rounded-2xl max-w-sm w-full p-6 space-y-5 shadow-2xl border border-gray-100">
+            <div class="text-center space-y-2">
+                <div class="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+                </div>
+                <h3 class="text-lg font-bold text-gray-900">Guardar Constancia</h3>
+                <p class="text-xs text-gray-500">Se enviará el reporte firmado digitalmente a Azure.</p>
+            </div>
+
+            <div class="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-2 text-xs">
+                <div class="flex justify-between text-gray-600">
+                    <span>Ministro Activo:</span>
+                    <span id="txt-monitor-firma" class="font-bold text-gray-900">-</span>
+                </div>
+                <div class="flex justify-between text-gray-600">
+                    <span>Destino de Datos:</span>
+                    <span class="font-mono bg-white px-1 border rounded text-blue-600 font-semibold">Azure Blob Storage</span>
+                </div>
+                <div class="flex justify-between text-gray-600">
+                    <span>Alertas de Correo:</span>
+                    <span class="text-emerald-700 font-bold">Listas para Disparar ✔</span>
+                </div>
+            </div>
+
+            <div class="space-y-2 pt-2">
+                <button onclick="confirmarEnvioAzure()" class="w-full text-white font-bold text-sm py-2.5 rounded-xl shadow-sm transition-all" style="background-color: #C0170C;">
+                    Firmar y Enviar a Azure
+                </button>
+                <button onclick="cerrarModalCierre()" class="w-full bg-gray-100 text-gray-600 text-xs font-semibold py-2 rounded-xl">
+                    Volver
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT NATIVO -->
+    <script>
+        // Datos Base Oficiales entregados por el usuario
+        let baseFuncionarios = [
+            { id: 1, nombre: "Juan Carlos Pérez", area: "Logistica", asistio: true },
+            { id: 2, nombre: "Isabel Navarro", area: "Logistica", asistio: true },
+            { id: 3, nombre: "Monica Cantos", area: "Logistica", asistio: false },
+            { id: 4, nombre: "Juan Ramirez", area: "Comercial", asistio: true },
+            { id: 5, nombre: "Jaqueline Migliardi", area: "Comercial", asistio: false },
+            { id: 6, nombre: "Rodrigo Silva", area: "Comercial", asistio: true },
+            { id: 7, nombre: "Enrique Landskron", area: "Operaciones", asistio: true },
+            { id: 8, nombre: "Rodrigo Salinas", area: "Operaciones", asistio: true },
+            { id: 9, nombre: "Felipe Callejas", area: "Operaciones", asistio: true },
+            { id: 10, nombre: "EFRAÍN EPUL NAHUELPÁN", area: "Planta", asistio: true },
+            { id: 11, nombre: "WILMER RUIZ HUERTA", area: "Planta", asistio: false },
+            { id: 12, nombre: "STEVEN AUCAPUCLLA HUERTAS", area: "Planta", asistio: true }
+        ];
+
+        function cambiarVista(vista) {
+            const vRegistro = document.getElementById('vista-registro');
+            const vAdmin = document.getElementById('vista-admin');
+            const btnReg = document.getElementById('btn-vista-registro');
+            const btnAdm = document.getElementById('btn-vista-admin');
+
+            if (vista === 'registro') {
+                vRegistro.classList.remove('hidden');
+                vAdmin.classList.add('hidden');
+                btnReg.className = "w-full py-2 font-semibold rounded-lg bg-white text-gray-900 shadow-sm transition-all";
+                btnAdm.className = "w-full py-2 font-semibold rounded-lg text-gray-600 hover:text-gray-900 transition-all";
+            } else {
+                vRegistro.classList.add('hidden');
+                vAdmin.classList.remove('hidden');
+                btnReg.className = "w-full py-2 font-semibold rounded-lg text-gray-600 hover:text-gray-900 transition-all";
+                btnAdm.className = "w-full py-2 font-semibold rounded-lg bg-white text-gray-900 shadow-sm transition-all";
+            }
+        }
+
+        function actualizarListaArea() {
+            const areaSeleccionada = document.getElementById('selector-area').value;
+            const contenedor = document.getElementById('lista-funcionarios');
+            const contadorText = document.getElementById('txt-contador-funcionarios');
+            
+            const filtrados = baseFuncionarios.filter(f => f.area === areaSeleccionada);
+            contadorText.textContent = `${filtrados.length} Funcionarios del Área`;
+
+            contenedor.innerHTML = "";
+
+            filtrados.forEach(f => {
+                const itemDom = document.createElement('div');
+                itemDom.className = "px-4 py-3.5 flex items-center justify-between bg-white hover:bg-gray-50 transition-colors";
+                itemDom.innerHTML = `
+                    <div class="flex items-center space-x-3 max-w-[70%]">
+                        <div class="w-8 h-8 rounded-full bg-gray-100 text-gray-700 font-bold text-xs flex items-center justify-center shrink-0">
+                            ${f.nombre.split(' ')[0][0]}${f.nombre.split(' ').length > 1 ? f.nombre.split(' ')[1][0] : ''}
+                        </div>
+                        <div class="truncate">
+                            <p class="text-sm font-semibold text-gray-800 truncate">${f.nombre}</p>
+                            <p class="text-[9px] text-gray-400 font-bold uppercase tracking-wider">${f.area}</p>
+                        </div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer select-none">
+                        <input type="checkbox" ${f.asistio ? 'checked' : ''} onchange="toggleAsistencia(${f.id})" class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                    </label>
+                `;
+                contenedor.appendChild(itemDom);
+            });
+        }
+
+        function toggleAsistencia(id) {
+            const funcionario = baseFuncionarios.find(f => f.id === id);
+            if (funcionario) { funcionario.asistio = !funcionario.asistio; }
+        }
+
+        function simularLogin() {
+            if (document.getElementById('admin-pass').value === "1234") {
+                document.getElementById('admin-login-box').classList.add('hidden');
+                document.getElementById('admin-content-box').classList.remove('hidden');
+            } else { alert("Código incorrecto (Usa 1234)"); }
+        }
+
+        function agregarFuncionario() {
+            const nombre = document.getElementById('reg-nombre').value.trim();
+            const area = document.getElementById('reg-area').value;
+            if (!nombre) return;
+
+            baseFuncionarios.push({ id: baseFuncionarios.length + 1, nombre: nombre, area: area, asistio: true });
+            alert(`¡${nombre} registrado con éxito!`);
+            document.getElementById('reg-nombre').value = "";
+            document.getElementById('selector-area').value = area;
+            cambiarVista('registro');
+            actualizarListaArea();
+        }
+
+        // Modales de control
+        const modalCal = document.getElementById('modalCalendario');
+        const modalCie = document.getElementById('modalCierre');
+
+        function abrirCalendario() { modalCal.classList.remove('opacity-0', 'pointer-events-none'); }
+        function cerrarCalendario() { modalCal.classList.add('opacity-0', 'pointer-events-none'); }
+        
+        function abrirModalCierre() { 
+            document.getElementById('txt-monitor-firma').textContent = document.getElementById('selector-monitor').value;
+            modalCie.classList.remove('opacity-0', 'pointer-events-none'); 
+        }
+        function cerrarModalCierre() { modalCie.classList.add('opacity-0', 'pointer-events-none'); }
+
+        function confirmarEnvioAzure() {
+            alert(`Ministro de fe (${document.getElementById('selector-monitor').value}) validó la lista.\n\nConstancia enviada a Azure Storage con éxito.`);
+            cerrarModalCierre();
+        }
+
+        actualizarListaArea();
+    </script>
+</body>
+</html>

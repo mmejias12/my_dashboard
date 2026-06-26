@@ -8,7 +8,7 @@
     • Tarjeta del día con 2 líneas (Solicitado arriba, retirado abajo si difiere)
     • KPIs en 3 columnas: Solicitado (destacado) · Retirado · Estimado
     • Modal con bodegas como dropdown + fechas dd-mm-aaaa
-  Validar deploy: buscar "Solicitado p/retiro" en el source. 2026 V2
+  Validar deploy: buscar "Solicitado p/retiro" en el source.
   ────────────────────────────────────────────────────────────────────
 -->
 <html lang="es">
@@ -994,7 +994,7 @@ function renderCalendar() {
 
     var div = document.createElement('div');
     div.className = 'day';
-    var totalDia = estimadoMostrar;  // v9: ya incluye carry en lunes y cap en sábado
+    var totalDia = estimadoMostrar;
     if (info || totalDia > 0) {
       div.classList.add('has-data');
       div.classList.add(heatClass(totalDia));
@@ -1003,90 +1003,82 @@ function renderCalendar() {
 
     var html = '<div class="day-num">' + d + '</div>';
 
-    // v9: badge verde — proyección gerencial (lun..vie)
-    if (proyGerencia > 0) {
-      html += '<div class="day-gerencia" title="Proyección gerencial: ' + fmtNum(proyGerencia) +
-              ' (87% Stgo + 10% Talca, distribuido por día sobre ' + fmtNum(monthlyTotal) + ' del mes)">🎯 ' +
-              fmtNum(proyGerencia) + '</div>';
+    // v10: Badge "forecast" (reemplaza proyección gerencial) — muestra estimadoFinal
+    if (estimadoMostrar > 0) {
+      html += '<div class="day-gerencia" title="Forecast: estimado de retiro basado en transferencias + retención.">forecast <span style=\"font-weight:700;\">' +
+              fmtNum(estimadoMostrar) + '</span></div>';
+    }
+
+    // v10: Retiros reales — solicitado PRIMERO (antes del número grande)
+    var real = getDayRetiros(key, plantaActiva);
+    var confirmado = real ? (real.total_palletsConfirmado || 0) : 0;
+    var retirado   = real ? (real.total_pallets || 0) : 0;
+    if (real && (confirmado > 0 || retirado > 0)) {
+      html += '<div class="day-real past" style="cursor:pointer;" onclick="event.stopPropagation(); abrirModalRetiros(\'' + key + '\')" title="Click para ver detalle de retiros">' +
+                '<span class="dr-ico">📋</span>' +
+                '<span class="dr-num">' + fmtNum(confirmado) + '</span>' +
+                '<span class="dr-nota">solicitado</span>' +
+              '</div>';
     }
 
     if (info) {
-      // v10: contar solo retails que mapean a la planta activa
+      // v10: Número grande = Proyección (estimado del calendario)
       var filtRetCount = 0;
       for (var ri = 0; ri < info.retails.length; ri++) {
         var rp = info.retails[ri].planta || RETAIL_PLANTA[info.retails[ri].retail] || 'santiago';
         if (plantaActiva === 'todos' || rp === plantaActiva) filtRetCount++;
       }
       if (estimadoMostrar > 0) {
-        html += '<div class="day-data"><div class="day-pallets">' + fmtNum(estimadoMostrar) + '</div>' +
+        html += '<div class="day-data"><div class="day-pallets" title="Proyección de retiro estimado">' + fmtNum(estimadoMostrar) + '</div>' +
                 '<div class="day-retails">' + filtRetCount + ' retail' + (filtRetCount>1?'s':'') + '</div></div>';
       }
-      // v8: reversa del día
-      if (info.total_reversa && info.total_reversa > 0) {
-        html += '<div class="day-reversa" title="Pallets reversados (confirmados en cero). La proyección pudo ser mayor.">' +
-                  '↩ ' + fmtNum(info.total_reversa) + ' reversa</div>';
-      }
     } else if (carryDom > 0 || carryExc > 0) {
-      // Lunes sin transferencias propias pero con carry desde el fin de semana
       html += '<div class="day-data"><div class="day-pallets">' + fmtNum(estimadoMostrar) + '</div>' +
               '<div class="day-retails">desde fin de semana</div></div>';
     }
 
-    // v9: badges en rojo — carry-over al lunes
-    if (carryDom > 0) {
-      html += '<div class="day-carry" title="Domingo no operativo: ' + fmtNum(carryDom) + ' pallets pasan a este lunes">' +
-              '↶ ' + fmtNum(carryDom) + ' dom</div>';
-    }
-    if (carryExc > 0) {
-      html += '<div class="day-carry" title="Exceso del sábado anterior sobre el tope ' + fmtNum(SABADO_MAX) + ': ' + fmtNum(carryExc) + ' pallets">' +
-              '↶ ' + fmtNum(carryExc) + ' sáb</div>';
-    }
-    // v9: indicador en sábado — cuánto excede el tope (va al lunes siguiente)
-    if (satExcess > 0) {
-      html += '<div class="day-cap" title="Tope sábado ' + fmtNum(SABADO_MAX) + ' · exceso ' + fmtNum(satExcess) + ' va al lunes siguiente">' +
-              '⤴ ' + fmtNum(satExcess) + ' → lun</div>';
-    }
-
-    // Real M3Link: confirmado / retirado — filtrado por planta activa
-    var real = getDayRetiros(key, plantaActiva);
-    var confirmado = real ? (real.total_palletsConfirmado || 0) : 0;
-    var retirado   = real ? (real.total_pallets || 0) : 0;
+    // v10: Real retirado + % cumplido (DESPUÉS del número grande)
     if (real && (confirmado > 0 || retirado > 0)) {
-      var palletsEst = estimadoMostrar;
-      var pct = palletsEst > 0 && confirmado > 0 ? Math.round((confirmado / palletsEst) * 100) : null;
-      var estadoCls = 'day-real';
       var nota = '';
       if (key > todayStr) {
-        estadoCls += ' future';
         nota = 'programado';
       } else if (key === todayStr) {
-        estadoCls += ' today';
         var pctEjec = confirmado > 0 ? Math.round((retirado / confirmado) * 100) : 0;
         nota = pctEjec + '% ejecutado';
       } else {
-        estadoCls += ' past';
         var pctCumpl = confirmado > 0 ? Math.round((retirado / confirmado) * 100) : 0;
         nota = pctCumpl + '% cumplido';
       }
-      html += '<div class="' + estadoCls + '">' +
-                '<span class="dr-ico">📋</span>' +
-                '<span class="dr-num">' + fmtNum(confirmado) + '</span>' +
-                '<span class="dr-nota">solicitado</span>' +
-              '</div>';
-      if (retirado !== confirmado && retirado > 0) {
+      if (retirado > 0) {
         html += '<div class="day-real-sub">' +
                   '<span class="drs-ico">✅</span>' +
                   '<span class="drs-num">' + fmtNum(retirado) + '</span>' +
-                  '<span class="drs-nota">' + nota + '</span>' +
-                '</div>';
-      } else if (nota && retirado === confirmado) {
-        html += '<div class="day-real-sub">' +
-                  '<span class="drs-nota" style="margin-left:18px">' + nota + '</span>' +
+                  '<span class="drs-nota"> real retirado</span>' +
                 '</div>';
       }
+      if (nota) {
+        html += '<div class="day-real-sub"><span class="drs-nota" style="margin-left:18px">' + nota + '</span></div>';
+      }
+    }
+
+    // v10: Reversa y carry al FINAL (más pequeños)
+    if (info && info.total_reversa && info.total_reversa > 0) {
+      html += '<div class="day-reversa" title="Pallets reversados (confirmados en cero).">' +
+                '↩ ' + fmtNum(info.total_reversa) + ' reversa</div>';
+    }
+    if (carryDom > 0) {
+      html += '<div class="day-carry" title="Domingo: ' + fmtNum(carryDom) + ' pallets pasan a este lunes">' +
+              '↶ ' + fmtNum(carryDom) + ' dom</div>';
+    }
+    if (carryExc > 0) {
+      html += '<div class="day-carry">' +
+              '↶ ' + fmtNum(carryExc) + ' sáb</div>';
+    }
+    if (satExcess > 0) {
+      html += '<div class="day-cap">' +
+              '⤴ ' + fmtNum(satExcess) + ' → lun</div>';
     }
     div.innerHTML = html;
-    // Click funciona si hay info, retiros, o carry
     if (info || (real && (confirmado > 0 || retirado > 0)) || carryDom > 0 || carryExc > 0) {
       if (!info) div.classList.add('only-real');
       (function(k) { div.onclick = function() { selectDate(k); }; })(key);
@@ -1094,6 +1086,7 @@ function renderCalendar() {
     grid.appendChild(div);
   }
 }
+
 
 function changeMonth(delta) {
   viewMonth += delta;
@@ -1498,15 +1491,23 @@ console.log('%cCalendario HTML cargado: ' + window.__VERSION__, 'color:#4ade80;f
    Fetch desde /proxy/ops para la fecha seleccionada, filtra operacion=Retiro
    y muestra la tabla con Nro Pedido, Cliente, Etapa, Cantidades, etc.
    ==================================================================== */
+/* ====================================================================
+   MODAL: Detalle retiros solicitados con FILTROS
+   v10: filtros por Cliente Origen y Bodega Destino.
+   Al filtrar, el resumen superior se recalcula.
+   ==================================================================== */
+var _modalRetiros = [];   // almacén global para re-filtrar sin re-fetch
+var _modalDateKey = '';
+
 function abrirModalRetiros(dateKey) {
+  _modalDateKey = dateKey;
   var body = $('modal-retiros-body');
   body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-secondary);">Cargando retiros para ' + dateKey + '...</div>';
 
   $('modal-retiros-title').textContent = '📋 Retiros solicitados — ' + dateKey;
-  $('modal-retiros-sub').textContent = 'Operación: Retiro · Todos las etapas del día seleccionado';
+  $('modal-retiros-sub').textContent = 'Operación: Retiro · Todas las etapas del día seleccionado';
   $('modal-retiros-backdrop').classList.add('visible');
 
-  /* Fetch de operaciones del día */
   var url = '/proxy/ops?fechaInicio=' + dateKey + '&fechaFin=' + dateKey;
   fetch(url, { headers: { 'Accept': 'application/json' } })
     .then(function(r) {
@@ -1515,78 +1516,144 @@ function abrirModalRetiros(dateKey) {
     })
     .then(function(data) {
       var rows = Array.isArray(data) ? data : (data.items || [data]);
-      /* Filtrar solo operaciones tipo Retiro */
-      var retiros = rows.filter(function(r) {
+      _modalRetiros = rows.filter(function(r) {
         return (r.operacion || '').toLowerCase() === 'retiro';
       });
 
-      if (!retiros.length) {
+      if (!_modalRetiros.length) {
         body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-secondary);">No se encontraron retiros para ' + dateKey + '</div>';
         return;
       }
 
-      /* Ordenar por horaIngreso descendente */
-      retiros.sort(function(a, b) {
+      _modalRetiros.sort(function(a, b) {
         return (b.horaIngreso || '').localeCompare(a.horaIngreso || '');
       });
 
-      /* Calcular totales */
-      var totalSol = 0, totalDesp = 0, totalConf = 0;
-      retiros.forEach(function(r) {
-        totalSol  += Number(r.cantidadSolicitada)  || 0;
-        totalDesp += Number(r.cantidadDespachada)   || 0;
-        totalConf += Number(r.cantidadConfirmada)   || 0;
-      });
-
-      var html = '<div style="margin-bottom:10px;font-size:12px;color:var(--text-secondary);">' +
-                 retiros.length + ' retiro' + (retiros.length > 1 ? 's' : '') +
-                 ' · Sol: <strong style="color:var(--accent);">' + fmtNum(totalSol) + '</strong>' +
-                 ' · Desp: <strong>' + fmtNum(totalDesp) + '</strong>' +
-                 ' · Conf: <strong>' + fmtNum(totalConf) + '</strong></div>';
-
-      html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">' +
-              '<thead><tr style="background:var(--bg-input);border-bottom:1px solid var(--border);">' +
-              '<th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-secondary);">Nro Pedido</th>' +
-              '<th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-secondary);">Cliente Origen</th>' +
-              '<th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-secondary);">Bodega Destino</th>' +
-              '<th style="padding:8px 10px;text-align:center;font-size:11px;color:var(--text-secondary);">Etapa</th>' +
-              '<th style="padding:8px 10px;text-align:right;font-size:11px;color:var(--text-secondary);">Sol.</th>' +
-              '<th style="padding:8px 10px;text-align:right;font-size:11px;color:var(--text-secondary);">Desp.</th>' +
-              '<th style="padding:8px 10px;text-align:right;font-size:11px;color:var(--text-secondary);">Conf.</th>' +
-              '<th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-secondary);">Hora Ingreso</th>' +
-              '<th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-secondary);">Usuario</th>' +
-              '</tr></thead><tbody>';
-
-      retiros.forEach(function(r, idx) {
-        var etapa = r.etapaOperacion || '—';
-        var etapaColor = 'var(--text-secondary)';
-        var etapaBg = 'var(--bg-input)';
-        if (etapa.toLowerCase().indexOf('solicitud') >= 0) { etapaColor = '#fbbf24'; etapaBg = 'rgba(251,191,36,0.15)'; }
-        else if (etapa.toLowerCase().indexOf('cerrado') >= 0) { etapaColor = '#4ade80'; etapaBg = 'rgba(74,222,128,0.15)'; }
-        else if (etapa.toLowerCase().indexOf('anulad') >= 0) { etapaColor = '#f87171'; etapaBg = 'rgba(248,113,113,0.15)'; }
-
-        var hora = (r.horaIngreso || '').replace('T', ' ').substring(0, 19);
-        var bgRow = idx % 2 === 0 ? 'transparent' : 'var(--bg-input)';
-
-        html += '<tr style="border-bottom:1px solid var(--border);background:' + bgRow + ';">' +
-                '<td style="padding:7px 10px;font-family:\'JetBrains Mono\',monospace;color:var(--accent);font-weight:600;">' + (r.nroPedido || '—') + '</td>' +
-                '<td style="padding:7px 10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeAttr(r.clienteOrigenStr) + '">' + (r.clienteOrigenStr || '—') + '</td>' +
-                '<td style="padding:7px 10px;white-space:nowrap;font-weight:600;" title="' + escapeAttr(r.bodegaDestinoStr) + '">' + (r.bodegaDestinoStr || '—') + '</td>' +
-                '<td style="padding:7px 10px;text-align:center;"><span style="background:' + etapaBg + ';color:' + etapaColor + ';padding:2px 8px;border-radius:4px;font-weight:600;font-size:11px;">' + etapa + '</span></td>' +
-                '<td style="padding:7px 10px;text-align:right;font-family:\'JetBrains Mono\',monospace;font-weight:600;">' + fmtNum(Number(r.cantidadSolicitada) || 0) + '</td>' +
-                '<td style="padding:7px 10px;text-align:right;font-family:\'JetBrains Mono\',monospace;">' + fmtNum(Number(r.cantidadDespachada) || 0) + '</td>' +
-                '<td style="padding:7px 10px;text-align:right;font-family:\'JetBrains Mono\',monospace;">' + fmtNum(Number(r.cantidadConfirmada) || 0) + '</td>' +
-                '<td style="padding:7px 10px;font-size:11px;color:var(--text-secondary);white-space:nowrap;">' + hora + '</td>' +
-                '<td style="padding:7px 10px;font-size:11px;color:var(--text-secondary);">' + (r.usuario || '—') + '</td>' +
-                '</tr>';
-      });
-
-      html += '</tbody></table>';
-      body.innerHTML = html;
+      renderModalRetirosFiltrados();
     })
     .catch(function(err) {
       body.innerHTML = '<div style="text-align:center;padding:30px;color:#f87171;">Error: ' + err.message + '</div>';
     });
+}
+
+function renderModalRetirosFiltrados() {
+  var body = $('modal-retiros-body');
+  var retiros = _modalRetiros;
+
+  /* Obtener valores únicos para los filtros */
+  var clientes = [], bodegas = [];
+  var clienteSet = {}, bodegaSet = {};
+  retiros.forEach(function(r) {
+    var c = r.clienteOrigenStr || '—';
+    var b = r.bodegaDestinoStr || '—';
+    if (!clienteSet[c]) { clienteSet[c] = true; clientes.push(c); }
+    if (!bodegaSet[b])  { bodegaSet[b] = true;  bodegas.push(b); }
+  });
+  clientes.sort();
+  bodegas.sort();
+
+  /* Leer filtros actuales (si existen) */
+  var fCliente = document.getElementById('filtRetCliente');
+  var fBodega  = document.getElementById('filtRetBodega');
+  var filtCli  = fCliente ? fCliente.value : '';
+  var filtBod  = fBodega  ? fBodega.value  : '';
+
+  /* Aplicar filtros */
+  var filtered = retiros.filter(function(r) {
+    if (filtCli && (r.clienteOrigenStr || '—') !== filtCli) return false;
+    if (filtBod && (r.bodegaDestinoStr || '—') !== filtBod) return false;
+    return true;
+  });
+
+  /* Calcular totales filtrados */
+  var totalSol = 0, totalDesp = 0, totalConf = 0;
+  filtered.forEach(function(r) {
+    totalSol  += Number(r.cantidadSolicitada)  || 0;
+    totalDesp += Number(r.cantidadDespachada)   || 0;
+    totalConf += Number(r.cantidadConfirmada)   || 0;
+  });
+
+  /* Construir HTML: filtros + resumen + tabla */
+  var html = '';
+
+  /* Barra de filtros */
+  html += '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:10px 0 12px;border-bottom:1px solid var(--border);margin-bottom:10px;">';
+  html += '<label style="font-size:10px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Filtrar:</label>';
+  /* Select Cliente Origen */
+  html += '<select id="filtRetCliente" onchange="renderModalRetirosFiltrados()" style="background:var(--bg-input);border:1px solid var(--border-md);color:var(--text-primary);padding:5px 8px;border-radius:5px;font-size:11px;font-family:inherit;max-width:220px;">';
+  html += '<option value="">Todos los clientes (' + clientes.length + ')</option>';
+  clientes.forEach(function(c) {
+    var sel = filtCli === c ? ' selected' : '';
+    html += '<option value="' + escapeAttr(c) + '"' + sel + '>' + c + '</option>';
+  });
+  html += '</select>';
+  /* Select Bodega Destino */
+  html += '<select id="filtRetBodega" onchange="renderModalRetirosFiltrados()" style="background:var(--bg-input);border:1px solid var(--border-md);color:var(--text-primary);padding:5px 8px;border-radius:5px;font-size:11px;font-family:inherit;">';
+  html += '<option value="">Todas las bodegas (' + bodegas.length + ')</option>';
+  bodegas.forEach(function(b) {
+    var sel = filtBod === b ? ' selected' : '';
+    html += '<option value="' + escapeAttr(b) + '"' + sel + '>' + b + '</option>';
+  });
+  html += '</select>';
+  /* Botón limpiar */
+  if (filtCli || filtBod) {
+    html += '<button onclick="document.getElementById(\'filtRetCliente\').value=\'\';document.getElementById(\'filtRetBodega\').value=\'\';renderModalRetirosFiltrados();" style="background:rgba(248,113,113,0.15);border:1px solid rgba(248,113,113,0.3);color:#f87171;padding:4px 10px;border-radius:5px;font-size:11px;cursor:pointer;font-family:inherit;">✕ Limpiar filtros</button>';
+  }
+  html += '</div>';
+
+  /* Resumen con totales filtrados */
+  html += '<div style="margin-bottom:10px;font-size:12px;color:var(--text-secondary);">' +
+           filtered.length + ' retiro' + (filtered.length > 1 ? 's' : '') +
+           (filtCli || filtBod ? ' <span style="color:#fbbf24;">(filtrado)</span>' : '') +
+           ' · Sol: <strong style="color:var(--accent);">' + fmtNum(totalSol) + '</strong>' +
+           ' · Desp: <strong>' + fmtNum(totalDesp) + '</strong>' +
+           ' · Conf: <strong>' + fmtNum(totalConf) + '</strong></div>';
+
+  /* Tabla */
+  html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">' +
+          '<thead><tr style="background:var(--bg-input);border-bottom:1px solid var(--border);">' +
+          '<th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-secondary);">Nro Pedido</th>' +
+          '<th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-secondary);">Cliente Origen</th>' +
+          '<th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-secondary);">Bodega Destino</th>' +
+          '<th style="padding:8px 10px;text-align:center;font-size:11px;color:var(--text-secondary);">Etapa</th>' +
+          '<th style="padding:8px 10px;text-align:right;font-size:11px;color:var(--text-secondary);">Sol.</th>' +
+          '<th style="padding:8px 10px;text-align:right;font-size:11px;color:var(--text-secondary);">Desp.</th>' +
+          '<th style="padding:8px 10px;text-align:right;font-size:11px;color:var(--text-secondary);">Conf.</th>' +
+          '<th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-secondary);">Hora Ingreso</th>' +
+          '<th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-secondary);">Usuario</th>' +
+          '</tr></thead><tbody>';
+
+  if (!filtered.length) {
+    html += '<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--text-secondary);">Sin resultados para el filtro seleccionado</td></tr>';
+  } else {
+    filtered.forEach(function(r, idx) {
+      var etapa = r.etapaOperacion || '—';
+      var etapaColor = 'var(--text-secondary)';
+      var etapaBg = 'var(--bg-input)';
+      if (etapa.toLowerCase().indexOf('solicitud') >= 0) { etapaColor = '#fbbf24'; etapaBg = 'rgba(251,191,36,0.15)'; }
+      else if (etapa.toLowerCase().indexOf('cerrado') >= 0) { etapaColor = '#4ade80'; etapaBg = 'rgba(74,222,128,0.15)'; }
+      else if (etapa.toLowerCase().indexOf('inspeccion') >= 0) { etapaColor = '#60a5fa'; etapaBg = 'rgba(96,165,250,0.15)'; }
+      else if (etapa.toLowerCase().indexOf('anulad') >= 0) { etapaColor = '#f87171'; etapaBg = 'rgba(248,113,113,0.15)'; }
+
+      var hora = (r.horaIngreso || '').replace('T', ' ').substring(0, 19);
+      var bgRow = idx % 2 === 0 ? 'transparent' : 'var(--bg-input)';
+
+      html += '<tr style="border-bottom:1px solid var(--border);background:' + bgRow + ';">' +
+              '<td style="padding:7px 10px;font-family:\'JetBrains Mono\',monospace;color:var(--accent);font-weight:600;">' + (r.nroPedido || '—') + '</td>' +
+              '<td style="padding:7px 10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeAttr(r.clienteOrigenStr) + '">' + (r.clienteOrigenStr || '—') + '</td>' +
+              '<td style="padding:7px 10px;white-space:nowrap;font-weight:600;" title="' + escapeAttr(r.bodegaDestinoStr) + '">' + (r.bodegaDestinoStr || '—') + '</td>' +
+              '<td style="padding:7px 10px;text-align:center;"><span style="background:' + etapaBg + ';color:' + etapaColor + ';padding:2px 8px;border-radius:4px;font-weight:600;font-size:11px;">' + etapa + '</span></td>' +
+              '<td style="padding:7px 10px;text-align:right;font-family:\'JetBrains Mono\',monospace;font-weight:600;">' + fmtNum(Number(r.cantidadSolicitada) || 0) + '</td>' +
+              '<td style="padding:7px 10px;text-align:right;font-family:\'JetBrains Mono\',monospace;">' + fmtNum(Number(r.cantidadDespachada) || 0) + '</td>' +
+              '<td style="padding:7px 10px;text-align:right;font-family:\'JetBrains Mono\',monospace;">' + fmtNum(Number(r.cantidadConfirmada) || 0) + '</td>' +
+              '<td style="padding:7px 10px;font-size:11px;color:var(--text-secondary);white-space:nowrap;">' + hora + '</td>' +
+              '<td style="padding:7px 10px;font-size:11px;color:var(--text-secondary);">' + (r.usuario || '—') + '</td>' +
+              '</tr>';
+    });
+  }
+
+  html += '</tbody></table>';
+  body.innerHTML = html;
 }
 
 function cerrarModalRetirosDirect() {

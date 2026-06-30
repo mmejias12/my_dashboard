@@ -1003,22 +1003,13 @@ function renderCalendar() {
 
     var html = '<div class="day-num">' + d + '</div>';
 
-    // v10: Badge "forecast" (reemplaza proyección gerencial) — muestra estimadoFinal
-    if (estimadoMostrar > 0) {
-      html += '<div class="day-gerencia" title="Forecast: estimado de retiro basado en transferencias + retención.">forecast <span style=\"font-weight:700;\">' +
-              fmtNum(estimadoMostrar) + '</span></div>';
-    }
-
-    // v10: Retiros reales — solicitado PRIMERO (antes del número grande)
+    // v10: Badge superior = Solicitado (clickable, abre popup)
     var real = getDayRetiros(key, plantaActiva);
     var confirmado = real ? (real.total_palletsConfirmado || 0) : 0;
     var retirado   = real ? (real.total_pallets || 0) : 0;
-    if (real && (confirmado > 0 || retirado > 0)) {
-      html += '<div class="day-real past" style="cursor:pointer;" onclick="event.stopPropagation(); abrirModalRetiros(\'' + key + '\')" title="Click para ver detalle de retiros">' +
-                '<span class="dr-ico">📋</span>' +
-                '<span class="dr-num">' + fmtNum(confirmado) + '</span>' +
-                '<span class="dr-nota">solicitado</span>' +
-              '</div>';
+    if (real && confirmado > 0) {
+      html += '<div class="day-gerencia" style="cursor:pointer;" onclick="event.stopPropagation(); abrirModalRetiros(\'' + key + '\')" title="Solicitado p/retiro. Click para ver detalle.">📋 ' +
+              fmtNum(confirmado) + ' <span style="font-weight:400;font-size:9px;opacity:.7;">solicitado</span></div>';
     }
 
     if (info) {
@@ -1688,11 +1679,13 @@ function buildRetailPlantaMap() {
   for (var i = 0; i < keys.length; i++) {
     var bucket = RETIROS_REALES[keys[i]];
     if (!bucket || !bucket.retails) continue;
-    var retNames = Object.keys(bucket.retails);
-    for (var j = 0; j < retNames.length; j++) {
-      var rName = retNames[j];
-      var rData = bucket.retails[rName];
+    // retails es un ARRAY de objetos {retail, pallets, items:[...]}
+    var retArr = Array.isArray(bucket.retails) ? bucket.retails : [];
+    for (var j = 0; j < retArr.length; j++) {
+      var rData = retArr[j];
       if (!rData || !rData.items) continue;
+      var rName = rData.retail;  // nombre real del retail
+      if (!rName) continue;
       if (!conteo[rName]) conteo[rName] = { santiago: 0, talca: 0, coquimbo: 0 };
       for (var k = 0; k < rData.items.length; k++) {
         var pl = plantaDeCalendario(rData.items[k].bodegaDestino);
@@ -1738,17 +1731,17 @@ function getDayRetiros(key, planta) {
   var real = RETIROS_REALES[key];
   if (!real) return null;
   if (!planta || planta === 'todos') return real;
-  /* Filtrar retails por planta */
-  var filtrado = { total_pallets: 0, total_palletsConfirmado: 0, total_trf: 0, retails: {} };
-  var retNames = Object.keys(real.retails || {});
-  for (var i = 0; i < retNames.length; i++) {
-    var p = RETAIL_PLANTA[retNames[i]] || 'santiago';
+  /* Filtrar retails por planta — retails es un ARRAY */
+  var filtrado = { total_pallets: 0, total_palletsConfirmado: 0, total_trf: 0, retails: [] };
+  var retArr = Array.isArray(real.retails) ? real.retails : [];
+  for (var i = 0; i < retArr.length; i++) {
+    var rName = retArr[i].retail;
+    var p = RETAIL_PLANTA[rName] || 'santiago';
     if (p !== planta) continue;
-    var r = real.retails[retNames[i]];
-    filtrado.retails[retNames[i]] = r;
-    filtrado.total_pallets += r.pallets || 0;
-    filtrado.total_palletsConfirmado += r.palletsConfirmado || 0;
-    filtrado.total_trf += r.trf || 0;
+    filtrado.retails.push(retArr[i]);
+    filtrado.total_pallets += retArr[i].pallets || 0;
+    filtrado.total_palletsConfirmado += retArr[i].palletsConfirmado || 0;
+    filtrado.total_trf += retArr[i].trf || 0;
   }
   return (filtrado.total_trf > 0 || filtrado.total_palletsConfirmado > 0) ? filtrado : null;
 }

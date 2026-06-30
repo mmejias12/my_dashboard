@@ -137,6 +137,14 @@ html, body {
 .btn-planta:hover { color:var(--text-primary);background:var(--bg-hover); }
 .btn-planta.active { background:rgba(74,222,128,0.15);color:var(--accent); }
 
+/* Diccionario */
+.dict-section { font-size:12px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.8px;padding:14px 0 6px;border-bottom:1px solid var(--border);margin-top:8px; }
+.dict-item { padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.03); }
+.dict-term { font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:3px; }
+.dict-def { font-size:12px;color:var(--text-secondary);line-height:1.5; }
+.dict-def em { color:#fbbf24;font-style:normal; }
+.dict-def strong { color:var(--accent); }
+
 /* v10: Badge resumen semanal (span completo de la fila del calendario) */
 .week-badge { grid-column: 1 / -1; display:flex; justify-content:space-between; align-items:center; padding:4px 10px; background:rgba(74,222,128,0.06); border-left:3px solid var(--accent); border-radius:0 4px 4px 0; margin:2px 0; font-size:11px; }
 .week-badge span { color:var(--text-secondary); font-family:'JetBrains Mono',monospace; font-size:10px; }
@@ -625,6 +633,113 @@ html, body {
       <div class="stat-value" id="stat-reversa" style="color:var(--warn)">—</div>
       <div class="stat-sub">confirmado en cero (no justificado)</div>
     </div>
+    <div class="stat-card" style="cursor:pointer;border:1px dashed rgba(74,222,128,0.3);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;" onclick="$('modal-dict-backdrop').classList.add('visible')">
+      <div style="font-size:28px;">📖</div>
+      <div style="font-size:13px;font-weight:700;color:var(--accent);">Diccionario</div>
+      <div style="font-size:10px;color:var(--text-secondary);">¿Qué significa cada dato?</div>
+    </div>
+  </div>
+
+  <!-- Modal Diccionario -->
+  <div class="modal-backdrop" id="modal-dict-backdrop" onclick="if(event.target.id==='modal-dict-backdrop') this.classList.remove('visible')">
+    <div class="modal" id="modal-dict" onclick="event.stopPropagation()" style="max-width:700px;">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">📖 Diccionario de métricas</div>
+          <div class="modal-subtitle">Qué significa cada dato del Calendario de Retiro</div>
+        </div>
+        <button class="modal-close" onclick="$('modal-dict-backdrop').classList.remove('visible')">✕</button>
+      </div>
+      <div class="modal-body" style="max-height:65vh;overflow-y:auto;padding:8px 20px 20px;">
+
+        <div class="dict-section">📊 Tarjetas superiores</div>
+
+        <div class="dict-item">
+          <div class="dict-term">Total Pallets a Retirar</div>
+          <div class="dict-def">Suma de todos los retiros estimados en el período consultado. Es la proyección total de pallets que deberían volver desde los retails a REDTEC.</div>
+        </div>
+        <div class="dict-item">
+          <div class="dict-term">Transferencias</div>
+          <div class="dict-def">Cantidad de transferencias cerradas (despachos confirmados) que se procesaron para calcular las proyecciones. Cada transferencia genera un retiro estimado futuro.</div>
+        </div>
+        <div class="dict-item">
+          <div class="dict-term">Días con Retiros</div>
+          <div class="dict-def">Cantidad de días en el período donde hay al menos un retiro proyectado o real.</div>
+        </div>
+        <div class="dict-item">
+          <div class="dict-term">Cola Pendiente</div>
+          <div class="dict-def">Pallets que ya fueron despachados pero cuyo retiro estimado cae fuera del rango de fechas consultado. Representan retiros que aún no se visualizan en el calendario.</div>
+        </div>
+        <div class="dict-item">
+          <div class="dict-term">Reversa</div>
+          <div class="dict-def">Retiros que fueron confirmados con cantidad CERO (sin justificación). El pallet se envió al retail pero no volvió. Puede indicar pérdida, error, o pallet aún en uso.</div>
+        </div>
+
+        <div class="dict-section">📅 Celda del calendario (cada día)</div>
+
+        <div class="dict-item">
+          <div class="dict-term">📋 Solicitado p/retiro</div>
+          <div class="dict-def">Cantidad de pallets que REDTEC solicitó retirar del retail ese día. Es la solicitud formal registrada en M3Link. <strong>Click para ver el detalle</strong> de cada pedido con cliente, bodega destino, etapa y usuario.</div>
+        </div>
+        <div class="dict-item">
+          <div class="dict-term">Número grande (centro)</div>
+          <div class="dict-def">Proyección de retiro basada en el calendario de retención. Se calcula así: por cada transferencia confirmada, se suma la cantidad despachada × 0.94 al día estimado de retiro (fecha de confirmación + días de retención del retail).</div>
+        </div>
+        <div class="dict-item">
+          <div class="dict-term">N retails</div>
+          <div class="dict-def">Cantidad de cadenas retail distintas (Cencosud, Walmart, Rendic, etc.) que tienen retiros proyectados para ese día.</div>
+        </div>
+        <div class="dict-item">
+          <div class="dict-term">✅ Real retirado</div>
+          <div class="dict-def">Pallets que efectivamente se retiraron del retail y llegaron a REDTEC. Es el dato confirmado real de M3Link (cantidadConfirmada de retiros cerrados).</div>
+        </div>
+        <div class="dict-item">
+          <div class="dict-term">% cumplido</div>
+          <div class="dict-def">Porcentaje de cumplimiento: cuánto del solicitado se retiró realmente. <em>Ejemplo: 95% cumplido = se solicitaron 4.000 y se retiraron 3.800.</em></div>
+        </div>
+        <div class="dict-item">
+          <div class="dict-term">↩ Reversa</div>
+          <div class="dict-def">Retiros de ese día que fueron confirmados en cero. El pallet se envió al retail pero el retiro se cerró sin recuperar nada.</div>
+        </div>
+        <div class="dict-item">
+          <div class="dict-term">↶ Dom</div>
+          <div class="dict-def">Pallets del domingo anterior (que no opera) que se suman al lunes siguiente. El domingo no tiene actividad, así que su estimado pasa al primer día hábil.</div>
+        </div>
+
+        <div class="dict-section">📊 Panel lateral (al seleccionar un día)</div>
+
+        <div class="dict-item">
+          <div class="dict-term">Estimado semanal</div>
+          <div class="dict-def">Suma de todos los retiros estimados de lunes a sábado de la semana del día seleccionado. Indica cuánto se debería retirar esa semana completa.</div>
+        </div>
+        <div class="dict-item">
+          <div class="dict-term">Pallets a retirar</div>
+          <div class="dict-def">Proyección de retiro para el día seleccionado (mismo número grande de la celda). Incluye carry del domingo si es lunes.</div>
+        </div>
+        <div class="dict-item">
+          <div class="dict-term">Transferencias</div>
+          <div class="dict-def">Cantidad de transferencias cerradas que generaron retiros estimados para ese día específico.</div>
+        </div>
+
+        <div class="dict-section">🔘 Filtro por planta</div>
+
+        <div class="dict-item">
+          <div class="dict-term">Santiago / Talca / Coquimbo</div>
+          <div class="dict-def">Filtra los datos por planta REDTEC destino. Se determina por la bodega destino de los retiros reales (ej: "REDTEC TALCA"). Si un retail no tiene retiros aún, se asume Santiago por defecto.</div>
+        </div>
+
+        <div class="dict-section">📋 Badge semanal (en la grilla)</div>
+
+        <div class="dict-item">
+          <div class="dict-term">01/06 → 06/06  21.771</div>
+          <div class="dict-def">Resumen semanal: suma de estimados de lunes a sábado de esa semana. Permite comparar semanas rápidamente sin seleccionar cada día.</div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="$('modal-dict-backdrop').classList.remove('visible')">Cerrar</button>
+      </div>
+    </div>
   </div>
 
   <div class="layout">
@@ -1016,7 +1131,7 @@ function renderCalendar() {
       // v10: Número grande = Proyección (estimado del calendario)
       var filtRetCount = 0;
       for (var ri = 0; ri < info.retails.length; ri++) {
-        var rp = info.retails[ri].planta || RETAIL_PLANTA[info.retails[ri].retail] || 'santiago';
+        var rp = RETAIL_PLANTA[info.retails[ri].retail] || info.retails[ri].planta || 'santiago';
         if (plantaActiva === 'todos' || rp === plantaActiva) filtRetCount++;
       }
       if (estimadoMostrar > 0) {
@@ -1110,7 +1225,7 @@ function selectDate(key) {
   var filteredTrf = 0;
   if (info && info.retails) {
     for (var i = 0; i < info.retails.length; i++) {
-      var p = info.retails[i].planta || RETAIL_PLANTA[info.retails[i].retail] || 'santiago';
+      var p = RETAIL_PLANTA[info.retails[i].retail] || info.retails[i].planta || 'santiago';
       if (plantaActiva === 'todos' || p === plantaActiva) filteredTrf += info.retails[i].trf;
     }
   }
@@ -1125,7 +1240,7 @@ function selectDate(key) {
   var filteredRetails = [];
   if (info && info.retails) {
     for (var fi = 0; fi < info.retails.length; fi++) {
-      var fp = info.retails[fi].planta || RETAIL_PLANTA[info.retails[fi].retail] || 'santiago';
+      var fp = RETAIL_PLANTA[info.retails[fi].retail] || info.retails[fi].planta || 'santiago';
       if (plantaActiva === 'todos' || fp === plantaActiva) filteredRetails.push(info.retails[fi]);
     }
   }
@@ -1459,7 +1574,7 @@ $('search-input').addEventListener('input', function (e) {
     var sr = DATA[selectedDate].retails || [];
     var sfr = [];
     for (var si = 0; si < sr.length; si++) {
-      var sp = sr[si].planta || RETAIL_PLANTA[sr[si].retail] || 'santiago';
+      var sp = RETAIL_PLANTA[sr[si].retail] || sr[si].planta || 'santiago';
       if (plantaActiva === 'todos' || sp === plantaActiva) sfr.push(sr[si]);
     }
     renderRetails(sfr, e.target.value);
@@ -1709,8 +1824,8 @@ function buildRetailPlantaMap() {
 }
 
 /* Obtener el estimado de un día filtrado por planta.
-   Usa el campo 'planta' que viene directo del proxy (basado en bodegaOrigen
-   de la transferencia). Si no existe, fallback a RETAIL_PLANTA (retiros reales). */
+   Prioridad: RETAIL_PLANTA (construido desde retiros reales, más preciso)
+   antes que r.planta (del proxy, basado en bodegaOrigen que casi siempre es Santiago). */
 function getDayEstimado(key, planta) {
   var info = DATA[key];
   if (!info) return 0;
@@ -1719,7 +1834,7 @@ function getDayEstimado(key, planta) {
   if (info.retails) {
     for (var i = 0; i < info.retails.length; i++) {
       var r = info.retails[i];
-      var p = r.planta || RETAIL_PLANTA[r.retail] || 'santiago';
+      var p = RETAIL_PLANTA[r.retail] || r.planta || 'santiago';
       if (p === planta) total += r.pallets;
     }
   }

@@ -1,23 +1,36 @@
-name: Snapshot Stocks RDTOut
+name: Snapshot Stocks SAP
 
-# Genera cierre-ayer.json con el stock de cierre (CLIENTES) desde el API
-# RDTOut/cuadrerojosxrangofechas. Ya no depende del proxy SAP.
-#
-# Cuando el API de RETAIL esté disponible, el script lo incorpora
-# automáticamente (solo descomentar las líneas TODO en generar-snapshots.js).
+# Genera snapshots del stock actual y los movimientos 2026 desde el proxy
+# SAP, los guarda como JSON en el repo y los despliega a producción.
 #
 # Frecuencia: 8 veces al día (estrategia de REDUNDANCIA).
-# Necesitamos GARANTIZAR que el dato esté listo ANTES de la reunión 8:30 AM.
 #
-# HORAS (UTC → Chile UTC-4):
-#   05:17 ≈ 01:17 Chile · 07:17 ≈ 03:17 · 09:17 ≈ 05:17 · 11:17 ≈ 07:17
-#   13:17 ≈ 09:17 · 15:17 ≈ 11:17 · 19:17 ≈ 15:17 · 23:17 ≈ 19:17
+# Justificación: GitHub Actions tiene delays variables impredecibles
+# en los crones programados (a veces se retrasan 1-3 horas, a veces
+# se saltan por completo). Como necesitamos GARANTIZAR que el dato
+# del cierre del día anterior esté listo ANTES de la reunión de 8:30 AM,
+# programamos múltiples crones nocturnos y de madrugada. Mientras al
+# menos UNO corra antes de las 8:30, el archivo cierre-ayer.json
+# queda listo.
+#
+# HORAS PROGRAMADAS (UTC → Chile UTC-4):
+#   05:17 UTC ≈ 01:17 Chile  → redundancia madrugada
+#   07:17 UTC ≈ 03:17 Chile  → redundancia madrugada
+#   09:17 UTC ≈ 05:17 Chile  → redundancia madrugada
+#   11:17 UTC ≈ 07:17 Chile  → último intento antes de la reunión 8:30
+#   13:17 UTC ≈ 09:17 Chile  → corrección postreunión si delay
+#   15:17 UTC ≈ 11:17 Chile  → refresh media mañana
+#   19:17 UTC ≈ 15:17 Chile  → refresh tarde
+#   23:17 UTC ≈ 19:17 Chile  → refresh fin de día
+#
+# El minuto 17 (en lugar de 00) reduce probabilidad de pico de carga
+# global en GitHub Actions.
 
 on:
   schedule:
     - cron: '17 5,7,9,11,13 * * *'
     - cron: '17 15,19,23 * * *'
-  workflow_dispatch:
+  workflow_dispatch:  # permite ejecutar manualmente desde GitHub UI
 
 permissions:
   contents: write
@@ -25,7 +38,7 @@ permissions:
 jobs:
   snapshot:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -38,7 +51,7 @@ jobs:
       - name: Generar snapshots
         run: node scripts/generar-snapshots.js
         env:
-          REDTEC_API_KEY: ${{ secrets.REDTEC_API_KEY }}
+          STATIC_WEB_APP_URL: https://ashy-island-0089d900f.2.azurestaticapps.net
 
       - name: Commit y push (si hubo cambios)
         run: |

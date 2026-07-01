@@ -1,176 +1,192 @@
 // ─────────────────────────────────────────────────────────────────────────
-// generar-snapshots.js  (v2 — RDTOut API)
+// generar-snapshots.js
 // ─────────────────────────────────────────────────────────────────────────
-// Genera data/cierre-ayer.json con el saldo de cierre (23:59) del día
-// anterior, consumiendo el API RDTOut/cuadrerojosxrangofechas.
+// Llama al sap-stock-proxy en producción y genera 3 archivos JSON:
+//   data/stocks-actual.json     → snapshot del stock actual por cliente/bodega
+//   data/movimientos-2026.json  → movimientos individuales del año 2026
+//   data/cierre-ayer.json       → cierre del día anterior (Clientes/Retail)
 //
-// Este API ya entrega saldoFinal directamente — no necesitamos descargar
-// el stock completo ni los movimientos como hacíamos con SAP.
+// Estos archivos se sirven desde el repo (Azure Static Web Apps los expone
+// como assets estáticos), permitiendo que el frontend los lea en <100ms en
+// lugar de esperar el cold start del Function App (~30s).
 //
-// Cuando el API de RETAIL esté disponible, se agrega aquí como paso 2.
+// El cierre-ayer.json se calcula localmente desde los otros dos JSON,
+// sin llamadas extra a SAP.
 //
-// Se ejecuta desde GitHub Actions (cron) varias veces al día.
+// Se ejecuta desde GitHub Actions 3 veces al día.
 // ─────────────────────────────────────────────────────────────────────────
 
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
+const BASE = process.env.STATIC_WEB_APP_URL || 'https://ashy-island-0089d900f.2.azurestaticapps.net';
 const OUT_DIR = path.join(__dirname, '..', 'data');
-const API_HOST = 'apirdt1.azurewebsites.net';
-const API_KEY = process.env.REDTEC_API_KEY || 'm2s_live_ORA0CGEE3oowJ7gc2xYNqTOWmbYS8kMdD-l7hlAxvmE';
-const TIMEOUT_MS = 30000;
+const TIMEOUT_MS = 120000; // 2 minutos por llamada
 const MAX_RETRIES = 3;
 
+// Asegurar carpeta data/
 if (!fs.existsSync(OUT_DIR)) {
   fs.mkdirSync(OUT_DIR, { recursive: true });
+  console.log(`✓ Creada carpeta ${OUT_DIR}`);
 }
 
-// ─── Helpers ───────────────────────────────────────────────────────────
-
-function fetchJSON(apiPath) {
-  return new Promise(function(resolve, reject) {
-    var options = {
-      hostname: API_HOST,
-      port: 443,
-      path: apiPath,
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'X-Api-Key': API_KEY
-      }
-    };
-    var req = https.request(options, function(res) {
-      var chunks = [];
-      res.on('data', function(c) { chunks.push(c); });
-      res.on('end', function() {
-        var body = Buffer.concat(chunks).toString('utf8');
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          try { resolve(JSON.parse(body)); }
-          catch(e) { reject(new Error('JSON inválido: ' + body.substring(0, 200))); }
-        } else {
-          reject(new Error('HTTP ' + res.statusCode + ': ' + body.substring(0, 200)));
+// ─── Helper: fetch JSON con retry ────────────────────────────────────────
+function fetchJSON(url, intento = 1) {
+  return new Promise((resolve, reject) => {
+    console.log(`  → GET ${url} (intento ${intento}/${MAX_RETRIES})`);
+    const inicio = Date.now();
+    const req = https.get(url, (res) => {
+      let chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => {
+        const seg = ((Date.now() - inicio) / 1000).toFixed(1);
+        const body = Buffer.concat(chunks).toString('utf8');
+        if (res.statusCode !== 200) {
+          const snippet = body.substring(0, 200).replace(/\s+/g, ' ').trim();
+          return reject(new Error(`HTTP ${res.statusCode} (${seg}s): ${snippet}`));
+        }
+        try {
+          const data = JSON.parse(body);
+          console.log(`    ✓ ${seg}s · ${(body.length / 1024).toFixed(1)} KB`);
+          resolve(data);
+        } catch (e) {
+          reject(new Error(`JSON inválido: ${e.message}`));
         }
       });
     });
-    req.on('error', function(e) { reject(e); });
-    req.setTimeout(TIMEOUT_MS, function() { req.destroy(); reject(new Error('Timeout')); });
-    req.end();
+    req.on('error', reject);
+    req.setTimeout(TIMEOUT_MS, () => {
+      req.destroy(new Error(`Timeout ${TIMEOUT_MS / 1000}s`));
+    });
+  }).catch((err) => {
+    if (intento < MAX_RETRIES) {
+      console.warn(`    ⚠ Falló (${err.message}). Reintentando en 5s...`);
+      return new Promise((r) => setTimeout(r, 5000)).then(() => fetchJSON(url, intento + 1));
+    }
+    throw err;
   });
 }
 
-async function fetchWithRetry(apiPath) {
-  for (var attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      console.log('  → GET ' + API_HOST + apiPath + ' (intento ' + attempt + '/' + MAX_RETRIES + ')');
-      var t0 = Date.now();
-      var data = await fetchJSON(apiPath);
-      var elapsed = ((Date.now() - t0) / 1000).toFixed(1);
-      console.log('    ✓ ' + elapsed + 's');
-      return data;
-    } catch(err) {
-      console.log('    ⚠ Falló (' + err.message + ')' + (attempt < MAX_RETRIES ? '. Reintentando en 5s...' : ''));
-      if (attempt === MAX_RETRIES) throw err;
-      await new Promise(function(r) { setTimeout(r, 5000); });
-    }
-  }
-}
-
-function writeSnapshot(filename, data, meta) {
-  var payload = {
-    _meta: Object.assign({
+// ─── Generar JSON con metadata ───────────────────────────────────────────
+function writeSnapshot(nombre, payload, metadata = {}) {
+  const json = {
+    _meta: {
       generadoEn: new Date().toISOString(),
-      generadoPor: 'github-actions · scripts/generar-snapshots.js v2 (RDTOut)'
-    }, meta || {}),
+      generadoPor: 'github-actions · scripts/generar-snapshots.js',
+      ...metadata
+    },
+    ...payload
   };
-  Object.assign(payload, data);
-  var filepath = path.join(OUT_DIR, filename);
-  var json = JSON.stringify(payload, null, 2);
-  fs.writeFileSync(filepath, json, 'utf8');
-  console.log('✓ ' + filename + ' guardado (' + (json.length / 1024).toFixed(1) + ' KB)');
+  const filepath = path.join(OUT_DIR, nombre);
+  fs.writeFileSync(filepath, JSON.stringify(json, null, 2));
+  const kb = (fs.statSync(filepath).size / 1024).toFixed(1);
+  console.log(`✓ ${nombre} guardado (${kb} KB)`);
+  return filepath;
 }
 
-function ayerChile() {
-  var now = new Date();
-  var chile = new Date(now.getTime() - 4 * 3600000);
-  chile.setDate(chile.getDate() - 1);
-  return chile.toISOString().substring(0, 10);
-}
-
-function hoyChile() {
-  var now = new Date();
-  var chile = new Date(now.getTime() - 4 * 3600000);
-  return chile.toISOString().substring(0, 10);
-}
-
-// ─── Main ──────────────────────────────────────────────────────────────
-
+// ─── Main ────────────────────────────────────────────────────────────────
 (async () => {
-  var hoy = hoyChile();
-  var ayer = ayerChile();
-
-  console.log('Snapshot Stocks RDTOut · ' + new Date().toISOString());
   console.log('═══════════════════════════════════════════════════════');
-  console.log('Hoy (Chile): ' + hoy + ' · Ayer: ' + ayer);
+  console.log(' Snapshot Stocks SAP · ' + new Date().toISOString());
+  console.log('═══════════════════════════════════════════════════════');
 
   try {
-    // ── 1. Stock CLIENTES — cierre de ayer ──
-    console.log('\n[1/2] Stock Clientes (cuadrerojosxrangofechas)...');
-    var apiPath = '/api/RDTOut/cuadrerojosxrangofechas?desde=' + ayer + '&hasta=' + ayer;
-    var cuadre = await fetchWithRetry(apiPath);
+    // 1. Stock actual (forceRefresh para que el proxy llame fresco al SAP)
+    console.log('\n[1/3] Stock actual...');
+    const urlStock = `${BASE}/api/sap-stock-proxy?modo=actual&forceRefresh=1`;
+    const stockData = await fetchJSON(urlStock);
+    writeSnapshot('stocks-actual.json', stockData, {
+      fuente: 'sap-stock-proxy?modo=actual',
+      total_combinaciones: stockData.total || (stockData.items || []).length
+    });
 
-    var cierreClientes = cuadre.saldoFinal;
-    var saldoInicial   = cuadre.saldoInicial;
-    var completo       = cuadre.completo;
+    // 2. Movimientos 2026 (para filtro de fecha de corte)
+    console.log('\n[2/3] Movimientos 2026...');
+    const hoy = new Date().toISOString().substring(0, 10);
+    const urlMovs = `${BASE}/api/sap-stock-proxy?modo=movimientos&desde=2026-01-01&hasta=${hoy}`;
+    const movsData = await fetchJSON(urlMovs);
+    writeSnapshot('movimientos-2026.json', movsData, {
+      fuente: 'sap-stock-proxy?modo=movimientos',
+      rango: { desde: '2026-01-01', hasta: hoy },
+      total_movimientos: (movsData.items || movsData.data || []).length
+    });
 
-    console.log('    Saldo inicial: ' + (saldoInicial || 0).toLocaleString());
-    console.log('    Saldo final (cierre): ' + (cierreClientes || 0).toLocaleString());
-    console.log('    Completo: ' + completo);
+    // 3. Cierre de AYER (calculado sin llamadas extra a SAP).
+    //
+    // Lógica: stocks-actual.json es la foto al momento del cron, y trae los
+    // totales por tipo. Pero esa foto puede tener movimientos del día actual
+    // ya contabilizados (si el cron corre después de medianoche y SAP ya recibió
+    // operaciones del día). Para obtener el cierre de AYER 23:59:
+    //
+    //   cierre_ayer = total_actual_snapshot − movimientos_netos_de_hoy
+    //
+    // Donde:
+    //   total_actual_snapshot: viene de stocks-actual.json (totales_por_tipo)
+    //   movimientos_netos_de_hoy: suma de (entrada - salida) en movimientos-2026.json
+    //                              filtrando fecha == hoy
+    //
+    // Resultado: número estable que representa el cierre 23:59 de ayer,
+    // independiente de cuándo corre el cron durante el día.
+    console.log('\n[3/3] Cierre del día anterior...');
+    const ayer = new Date(Date.now() - 86400000).toISOString().substring(0, 10);
 
-    if (!completo) {
-      console.log('    ⚠ Datos del día NO están completos aún');
+    // Total actual desde stockData (ya descargado en paso 1)
+    let totalActualC = 0;
+    let totalActualR = 0;
+    if (stockData && stockData.totales_por_tipo) {
+      totalActualC = Number((stockData.totales_por_tipo.CLIENTES || {}).total_pallets) || 0;
+      totalActualR = Number((stockData.totales_por_tipo.RETAIL   || {}).total_pallets) || 0;
+    } else if (stockData && stockData.items) {
+      // Fallback: sumar fila por fila
+      for (const row of stockData.items) {
+        const tipo = String(row.cliente || '').toUpperCase();
+        const qty = Number(row.stock) || 0;
+        if (tipo === 'CLIENTES')    totalActualC += qty;
+        else if (tipo === 'RETAIL') totalActualR += qty;
+      }
     }
 
-    // ── 2. Stock RETAIL — pendiente (API aún no disponible) ──
-    console.log('\n[2/2] Stock Retail...');
-    var cierreRetail = null;
-    // TODO: cuando TI entregue el API de retail, agregar aquí:
-    // var apiRetail = '/api/RDTOut/cuadreretailxrangofechas?desde=' + ayer + '&hasta=' + ayer;
-    // var cuadreR = await fetchWithRetry(apiRetail);
-    // cierreRetail = cuadreR.saldoFinal;
-    console.log('    ⏳ API Retail no disponible aún — se omite');
+    // Movimientos netos de hoy desde movsData (ya descargado en paso 2)
+    const items = (movsData && movsData.items) ? movsData.items : (Array.isArray(movsData) ? movsData : []);
+    let netoHoyC = 0;
+    let netoHoyR = 0;
+    for (const m of items) {
+      const f = String(m.fecha || '').substring(0, 10);
+      if (f !== hoy) continue;
+      const delta = (Number(m.entrada) || 0) - (Number(m.salida) || 0);
+      const tipo = String(m.cliente || '').toUpperCase();
+      if (tipo === 'CLIENTES')    netoHoyC += delta;
+      else if (tipo === 'RETAIL') netoHoyR += delta;
+    }
 
-    // ── 3. Escribir cierre-ayer.json ──
+    const cierreC = totalActualC - netoHoyC;
+    const cierreR = totalActualR - netoHoyR;
+
+    console.log(`    Total actual Clientes: ${totalActualC.toLocaleString()} · Neto hoy: ${netoHoyC >= 0 ? '+' : ''}${netoHoyC.toLocaleString()} · Cierre ayer: ${cierreC.toLocaleString()}`);
+    console.log(`    Total actual Retail:   ${totalActualR.toLocaleString()} · Neto hoy: ${netoHoyR >= 0 ? '+' : ''}${netoHoyR.toLocaleString()} · Cierre ayer: ${cierreR.toLocaleString()}`);
+
     writeSnapshot('cierre-ayer.json', {
       ok: true,
       fechaCierre: ayer,
       totales_por_tipo: {
-        CLIENTES: { total_pallets: cierreClientes || 0 },
-        RETAIL:   { total_pallets: cierreRetail }
+        CLIENTES: { total_pallets: cierreC },
+        RETAIL:   { total_pallets: cierreR }
       },
       detalle: {
-        saldoInicial_clientes: saldoInicial,
-        saldoFinal_clientes: cierreClientes,
-        emision: cuadre.emision || 0,
-        devolucion: cuadre.devolucion || 0,
-        transferencias: cuadre.transferencias || 0,
-        diferencia: cuadre.diferencia || 0,
-        completo: completo,
-        fecha_calculo: hoy,
-        retail_disponible: false
+        total_actual_snapshot: { CLIENTES: totalActualC, RETAIL: totalActualR },
+        neto_movimientos_hoy:  { CLIENTES: netoHoyC,     RETAIL: netoHoyR },
+        fecha_calculo:         hoy
       }
     }, {
-      fuente: 'RDTOut/cuadrerojosxrangofechas',
+      fuente: 'calculado desde stocks-actual + movimientos-2026',
       fechaCierre: ayer,
-      nota: 'RETAIL pendiente — API en desarrollo'
+      formula: 'total_actual_snapshot − movimientos_netos_de_hoy'
     });
 
     console.log('\n═══════════════════════════════════════════════════════');
     console.log(' ✓ Snapshot completado');
-    console.log('   Clientes: ' + (cierreClientes || 0).toLocaleString());
-    console.log('   Retail:   ' + (cierreRetail !== null ? cierreRetail.toLocaleString() : 'pendiente'));
     console.log('═══════════════════════════════════════════════════════');
-
   } catch (err) {
     console.error('\n✗ ERROR:', err.message);
     console.error(err.stack);

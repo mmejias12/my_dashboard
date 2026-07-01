@@ -5,6 +5,24 @@
       "rewrite": "/api/ops"
     }
   ],
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": [
+      "/data/*",
+      "/api/*",
+      "/assets/*",
+      "/images/*",
+      "/*.html",
+      "/**/*.html",
+      "/*.{json,xml,txt,ico,png,jpg,jpeg,svg,gif,webp,css,js,map,woff,woff2,ttf,eot}"
+    ]
+  },
+  "responseOverrides": {
+    "404": {
+      "rewrite": "/index.html",
+      "statusCode": 200
+    }
+  },
   "mimeTypes": {
     ".json": "application/json"
   },

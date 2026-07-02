@@ -907,10 +907,13 @@ function recalcularHeatThresholds() {
 }
 
 // ─── Defaults: 1 enero del año en curso → hoy ──────────────────────────
+var MAX_RANGO_DIAS = 180;
+
 function setDefaultRange() {
   var hoy = new Date();
-  var primerDiaAno = new Date(hoy.getFullYear(), 0, 1);
-  $('fechaDesde').value = fmtISO(primerDiaAno);
+  var desde = new Date(hoy);
+  desde.setDate(desde.getDate() - MAX_RANGO_DIAS);
+  $('fechaDesde').value = fmtISO(desde);
   $('fechaHasta').value = fmtISO(hoy);
 }
 
@@ -920,6 +923,20 @@ function cargarDatos() {
   var hasta = $('fechaHasta').value;
   if (!desde || !hasta) { setStatus('err','Selecciona ambas fechas'); return; }
   if (desde > hasta)    { setStatus('err','Fecha "desde" debe ser anterior a "hasta"'); return; }
+
+  // v10: validar rango máximo 180 días (límite del API)
+  var d1 = new Date(desde + 'T00:00:00');
+  var d2 = new Date(hasta + 'T00:00:00');
+  var diffDias = Math.round((d2 - d1) / 86400000);
+  if (diffDias > MAX_RANGO_DIAS) {
+    alert('⚠️ Rango máximo permitido: ' + MAX_RANGO_DIAS + ' días.\n\n' +
+          'Seleccionaste ' + diffDias + ' días (' + desde + ' → ' + hasta + ').\n\n' +
+          'Por favor reduce el rango. Se ajustará la fecha "desde" automáticamente.');
+    var nuevaDesde = new Date(d2);
+    nuevaDesde.setDate(nuevaDesde.getDate() - MAX_RANGO_DIAS);
+    $('fechaDesde').value = fmtISO(nuevaDesde);
+    return;
+  }
 
   $('btnCargar').disabled = true;
   setStatus('loading', 'Consultando M3Link…');
@@ -1721,6 +1738,7 @@ function renderModalRetirosFiltrados() {
           '<th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-secondary);">Nro Pedido</th>' +
           '<th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-secondary);">Cliente Origen</th>' +
           '<th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-secondary);">Bodega Destino</th>' +
+          '<th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-secondary);">CD Retail</th>' +
           '<th style="padding:8px 10px;text-align:center;font-size:11px;color:var(--text-secondary);">Etapa</th>' +
           '<th style="padding:8px 10px;text-align:right;font-size:11px;color:var(--text-secondary);">Sol.</th>' +
           '<th style="padding:8px 10px;text-align:right;font-size:11px;color:var(--text-secondary);">Desp.</th>' +
@@ -1730,7 +1748,7 @@ function renderModalRetirosFiltrados() {
           '</tr></thead><tbody>';
 
   if (!filtered.length) {
-    html += '<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--text-secondary);">Sin resultados para el filtro seleccionado</td></tr>';
+    html += '<tr><td colspan="10" style="padding:20px;text-align:center;color:var(--text-secondary);">Sin resultados para el filtro seleccionado</td></tr>';
   } else {
     filtered.forEach(function(r, idx) {
       var etapa = r.etapaOperacion || '—';
@@ -1748,6 +1766,7 @@ function renderModalRetirosFiltrados() {
               '<td style="padding:7px 10px;font-family:\'JetBrains Mono\',monospace;color:var(--accent);font-weight:600;">' + (r.nroPedido || '—') + '</td>' +
               '<td style="padding:7px 10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeAttr(r.clienteOrigenStr) + '">' + (r.clienteOrigenStr || '—') + '</td>' +
               '<td style="padding:7px 10px;white-space:nowrap;font-weight:600;" title="' + escapeAttr(r.bodegaDestinoStr) + '">' + (r.bodegaDestinoStr || '—') + '</td>' +
+              '<td style="padding:7px 10px;font-size:11px;white-space:nowrap;" title="' + escapeAttr(r.bodegaOrigenStr) + '">' + (r.bodegaOrigenStr || '—') + '</td>' +
               '<td style="padding:7px 10px;text-align:center;"><span style="background:' + etapaBg + ';color:' + etapaColor + ';padding:2px 8px;border-radius:4px;font-weight:600;font-size:11px;">' + etapa + '</span></td>' +
               '<td style="padding:7px 10px;text-align:right;font-family:\'JetBrains Mono\',monospace;font-weight:600;">' + fmtNum(Number(r.cantidadSolicitada) || 0) + '</td>' +
               '<td style="padding:7px 10px;text-align:right;font-family:\'JetBrains Mono\',monospace;">' + fmtNum(Number(r.cantidadDespachada) || 0) + '</td>' +

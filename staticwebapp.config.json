@@ -3,23 +3,42 @@
     {
       "route": "/proxy/ops",
       "rewrite": "/api/ops"
+    },
+    {
+      "route": "/login.html",
+      "allowedRoles": ["anonymous", "authenticated"]
+    },
+    {
+      "route": "/.auth/*",
+      "allowedRoles": ["anonymous", "authenticated"]
+    },
+    {
+      "route": "/logout",
+      "redirect": "/.auth/logout?post_logout_redirect_uri=/login.html"
+    },
+    {
+      "route": "/*",
+      "allowedRoles": ["authenticated"]
     }
   ],
+  "responseOverrides": {
+    "401": {
+      "redirect": "/login.html",
+      "statusCode": 302
+    },
+    "404": {
+      "rewrite": "/index.html",
+      "statusCode": 200
+    }
+  },
   "navigationFallback": {
     "rewrite": "/index.html",
     "exclude": [
       "/data/*",
       "/api/*",
-      "/assets/*",
       "/images/*",
       "/*.{html,json,xml,txt,ico,png,jpg,jpeg,svg,gif,webp,css,js,map,woff,woff2,ttf,eot}"
     ]
-  },
-  "responseOverrides": {
-    "404": {
-      "rewrite": "/index.html",
-      "statusCode": 200
-    }
   },
   "mimeTypes": {
     ".json": "application/json"

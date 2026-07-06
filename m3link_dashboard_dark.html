@@ -74,7 +74,36 @@
   .layout { display:flex;padding-top:50px;min-height:100vh; }
 
   /* SIDEBAR */
-  .sidebar { width:230px;min-width:230px;background:var(--bg-surface);border-right:1px solid var(--border);padding:.75rem 0;position:sticky;top:50px;height:calc(100vh - 50px);overflow-y:auto; }
+  .sidebar { width:230px;min-width:230px;background:var(--bg-surface);border-right:1px solid var(--border);padding:.75rem 0;position:sticky;top:50px;height:calc(100vh - 50px);overflow-y:auto;overflow-x:hidden;transition:width .2s ease,min-width .2s ease; }
+  /* ═══ SIDEBAR COLAPSADO: solo íconos ═══ */
+  .sidebar.collapsed { width:46px;min-width:46px; }
+  .sidebar.collapsed .s-label { display:none; }
+  .sidebar.collapsed .s-search { padding:0 0 6px;display:flex;justify-content:center; }
+  .sidebar.collapsed .s-search input { display:none; }
+  .sidebar.collapsed .s-search kbd { display:none; }
+  .sidebar.collapsed .s-search i.s-search-ico { position:static;font-size:16px;cursor:pointer;padding:6px;border-radius:6px;transition:background .15s; }
+  .sidebar.collapsed .s-search i.s-search-ico:hover { background:var(--bg-hover); }
+  .sidebar.collapsed .s-sub { max-height:0 !important; }
+  .sidebar.collapsed .s-divider { margin:.5rem 6px; }
+  /* Headers: solo ícono */
+  .sidebar.collapsed .s-hdr { font-size:0;line-height:0;padding:8px 0;margin:1px 4px;justify-content:center;gap:0;border-radius:6px;overflow:hidden;white-space:nowrap;position:relative; }
+  .sidebar.collapsed .s-hdr i.s-leading { font-size:18px;line-height:1; }
+  .sidebar.collapsed .s-hdr .s-chevron { display:none; }
+  /* Items: solo ícono */
+  .sidebar.collapsed .s-item { font-size:0;line-height:0;padding:7px 0;margin:1px 4px;justify-content:center;gap:0;border-radius:6px;overflow:hidden;white-space:nowrap; }
+  .sidebar.collapsed .s-item i:first-child { font-size:15px;line-height:1; }
+  .sidebar.collapsed .s-item .dup-tag,
+  .sidebar.collapsed .s-item .soon-tag,
+  .sidebar.collapsed .s-item .fav-star { display:none; }
+  /* Tooltip al hover en colapsado */
+  .sidebar.collapsed .s-hdr::after { content:attr(data-tip);position:absolute;left:48px;top:50%;transform:translateY(-50%);background:#1a2141;color:white;padding:5px 12px;border-radius:6px;font-size:11px;line-height:1.3;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s;z-index:100;border:1px solid rgba(255,255,255,0.1);box-shadow:0 4px 16px rgba(0,0,0,0.4); }
+  .sidebar.collapsed .s-hdr:hover::after { opacity:1; }
+  /* Botón toggle */
+  .sb-toggle { width:100%;background:transparent;border:none;border-top:1px solid var(--border);color:var(--text-muted);padding:10px 0;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;font-size:11px;font-family:inherit;transition:all .15s;margin-top:8px; }
+  .sb-toggle:hover { color:#ff6b70;background:rgba(227,30,36,0.06); }
+  .sb-toggle i { font-size:16px;transition:transform .2s; }
+  .sidebar.collapsed .sb-toggle i { transform:rotate(180deg); }
+  .sidebar.collapsed .sb-toggle span { display:none; }
   .s-label { font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--text-muted);padding:1rem 1rem .4rem; }
   .s-hdr { display:flex;align-items:center;gap:10px;padding:.55rem .875rem;margin:1px .5rem;font-size:12.5px;font-weight:500;color:var(--text-secondary);cursor:pointer;transition:all .15s;user-select:none;border-radius:6px; }
   .s-hdr:hover { background:var(--bg-hover);color:var(--text-primary); }
@@ -613,7 +642,7 @@
 </div>
 
 <div class="layout">
-  <div class="sidebar">
+  <div class="sidebar" id="mainSidebar" style="position:relative;">
     <div class="s-search">
       <i class="ti ti-search s-search-ico"></i>
       <input type="text" id="sbSearch" placeholder="Buscar módulo..." oninput="filterSidebar(this.value)">
@@ -626,8 +655,8 @@
 
     <div class="s-label">Áreas</div>
 
-    <div class="s-hdr open" onclick="tog('g-comercial',this)" data-cat="cat"><i class="ti ti-truck-delivery s-leading"></i> Comercial <i class="ti ti-chevron-right s-chevron"></i></div>
-    <div class="s-sub" id="g-comercial" style="max-height:500px">
+    <div class="s-hdr" onclick="tog('g-comercial',this)" data-cat="cat" data-tip="Comercial"><i class="ti ti-truck-delivery s-leading"></i> Comercial <i class="ti ti-chevron-right s-chevron"></i></div>
+    <div class="s-sub" id="g-comercial" style="max-height:0">
       <a href="?vista=ops" onclick="setVista(this,'ops');return false" class="s-item active"><i class="ti ti-chart-line"></i> Ops x rango fechas <span class="dup-tag">↔</span></a>
       <a href="analisis-transferencias.html" class="s-item"><i class="ti ti-chart-bar"></i> Emisiones vs transferencias</a>
       <a href="transferencias-clientes.html" class="s-item"><i class="ti ti-alert-triangle"></i> Transferencias clientes</a>
@@ -636,7 +665,7 @@
       <div class="s-item s-item-soon"><i class="ti ti-flag"></i> Flujo operacional <span class="soon-tag">próx.</span></div>
     </div>
 
-    <div class="s-hdr" onclick="tog('g-logistica',this)" data-cat="cat"><i class="ti ti-arrow-back-up s-leading"></i> Logística inversa <i class="ti ti-chevron-right s-chevron"></i></div>
+    <div class="s-hdr" onclick="tog('g-logistica',this)" data-cat="cat" data-tip="Logística inversa"><i class="ti ti-arrow-back-up s-leading"></i> Logística inversa <i class="ti ti-chevron-right s-chevron"></i></div>
     <div class="s-sub" id="g-logistica" style="max-height:0">
       <a href="/calendario-retiro-pallets.html" class="s-item"><i class="ti ti-calendar"></i> Calendario retiro pallets</a>
       <a href="?vista=ops" onclick="setVista(this,'ops');return false" class="s-item"><i class="ti ti-chart-line"></i> Ops x rango fechas <span class="dup-tag">↔</span></a>
@@ -645,31 +674,32 @@
       <a href="kpi-diario.html" class="s-item"><i class="ti ti-chart-histogram"></i> KPI diario</a>
     </div>
 
-    <div class="s-hdr" onclick="tog('g-gerencia',this)" data-cat="cat"><i class="ti ti-briefcase s-leading"></i> Gerencia <i class="ti ti-chevron-right s-chevron"></i></div>
+    <div class="s-hdr" onclick="tog('g-gerencia',this)" data-cat="cat" data-tip="Gerencia"><i class="ti ti-briefcase s-leading"></i> Gerencia <i class="ti ti-chevron-right s-chevron"></i></div>
     <div class="s-sub" id="g-gerencia" style="max-height:0">
       <a href="cartola-financiera.html" class="s-item"><i class="ti ti-file-invoice"></i> Cartola financiera</a>
       <div class="s-item s-item-soon"><i class="ti ti-traffic-lights"></i> Semáforo gerencial <span class="soon-tag">próx.</span></div>
       <div class="s-item s-item-soon"><i class="ti ti-dashboard"></i> Dashboard ejecutivo <span class="soon-tag">próx.</span></div>
     </div>
 
-    <div class="s-hdr" onclick="tog('g-stocks',this)" data-cat="cat"><i class="ti ti-package s-leading"></i> Stock SAP <i class="ti ti-chevron-right s-chevron"></i></div>
+    <div class="s-hdr" onclick="tog('g-stocks',this)" data-cat="cat" data-tip="Stock SAP"><i class="ti ti-package s-leading"></i> Stock SAP <i class="ti ti-chevron-right s-chevron"></i></div>
     <div class="s-sub" id="g-stocks" style="max-height:0">
       <a href="stocks-clientes.html" class="s-item"><i class="ti ti-box"></i> Stock actual</a>
       <a href="stocks-historico.html" class="s-item"><i class="ti ti-calendar-stats"></i> Stock por fecha</a>
       <div class="s-item s-item-soon"><i class="ti ti-list-details"></i> Movimientos crudos <span class="soon-tag">próx.</span></div>
     </div>
 
-    <div class="s-hdr" onclick="tog('g-trans',this)" data-cat="cat"><i class="ti ti-truck s-leading"></i> Transportes <i class="ti ti-chevron-right s-chevron"></i></div>
+    <div class="s-hdr" onclick="tog('g-trans',this)" data-cat="cat" data-tip="Transportes"><i class="ti ti-truck s-leading"></i> Transportes <i class="ti ti-chevron-right s-chevron"></i></div>
     <div class="s-sub" id="g-trans" style="max-height:0">
       <a href="transportes-tiempos.html" class="s-item"><i class="ti ti-clock"></i> Tiempos en puntos</a>
       <a href="transportes-pagos.html" class="s-item"><i class="ti ti-cash"></i> Pagos SPOT</a>
     </div>
 
-    <div class="s-hdr" onclick="tog('g-rrhh',this)" data-cat="cat"><i class="ti ti-users s-leading"></i> Recursos humanos <i class="ti ti-chevron-right s-chevron"></i></div>
+    <div class="s-hdr" onclick="tog('g-rrhh',this)" data-cat="cat" data-tip="Recursos humanos"><i class="ti ti-users s-leading"></i> Recursos humanos <i class="ti ti-chevron-right s-chevron"></i></div>
     <div class="s-sub" id="g-rrhh" style="max-height:0">
       <a href="rrhh-dashboard.html" class="s-item"><i class="ti ti-user"></i> Personas y dotación</a>
       <a href="workera-dashboard.html" class="s-item"><i class="ti ti-clock-check"></i> Asistencia Workera</a>
     </div>
+    <button class="sb-toggle" onclick="toggleSidebar()" title="Colapsar / expandir menú"><i class="ti ti-chevrons-left"></i><span>Colapsar</span></button>
   </div>
 
   <div class="main">
@@ -877,6 +907,23 @@ var activeTags = [];
 
 /* SIDEBAR */
 function tog(id, hdr) {
+  var sb = document.getElementById('mainSidebar');
+  /* Si está colapsado, expandir sidebar primero y abrir este grupo */
+  if (sb && sb.classList.contains('collapsed')) {
+    sb.classList.remove('collapsed');
+    localStorage.setItem('m3link_sidebar_collapsed', '0');
+    /* Esperar la transición y expandir el grupo clickeado */
+    setTimeout(function() {
+      var subs = document.querySelectorAll('.s-sub');
+      for (var i=0;i<subs.length;i++) subs[i].style.maxHeight = '0';
+      var hdrs = document.querySelectorAll('.s-hdr');
+      for (var i=0;i<hdrs.length;i++) hdrs[i].classList.remove('open');
+      var el = document.getElementById(id);
+      el.style.maxHeight = (el.scrollHeight + 200) + 'px';
+      hdr.classList.add('open');
+    }, 220);
+    return;
+  }
   var el = document.getElementById(id);
   var isOpen = el.style.maxHeight && el.style.maxHeight !== '0px';
   var subs = document.querySelectorAll('.s-sub');
@@ -885,6 +932,20 @@ function tog(id, hdr) {
   for (var i=0;i<hdrs.length;i++) hdrs[i].classList.remove('open');
   if (!isOpen) { el.style.maxHeight = (el.scrollHeight + 200) + 'px'; hdr.classList.add('open'); }
 }
+
+/* v11: Toggle sidebar colapsado/expandido */
+function toggleSidebar() {
+  var sb = document.getElementById('mainSidebar');
+  sb.classList.toggle('collapsed');
+  localStorage.setItem('m3link_sidebar_collapsed', sb.classList.contains('collapsed') ? '1' : '0');
+}
+/* Restaurar estado al cargar */
+(function() {
+  if (localStorage.getItem('m3link_sidebar_collapsed') === '1') {
+    var sb = document.getElementById('mainSidebar');
+    if (sb) sb.classList.add('collapsed');
+  }
+})();
 function act(el) {
   var items = document.querySelectorAll('.s-item');
   for (var i=0;i<items.length;i++) items[i].classList.remove('active');

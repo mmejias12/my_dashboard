@@ -195,7 +195,7 @@ var BODEGAS = {
   "ZTT01 CD TOTTUS LA FARFANA":[-70.7654,-33.4801,"TT","La Farfana"],
   "ZUN01 CD UNIMARC LO AGUIRRE":[-70.7756,-33.4812,"SM","Lo Aguirre"],
   "ZAL03 CD ALVI AEROPARQUE":[-70.7923,-33.3845,"SM","Aeroparque"],
-  "REDTEC SANTIAGO":[-70.6534,-33.4401,"RT","Santiago"],
+  "REDTEC SANTIAGO":[-70.76679,-33.45791,"RT","Santiago"],
   "REDTEC TALCA":[-71.6554,-35.4264,"RT","Talca"],
   "LAF CD RENCA":[-70.7234,-33.4123,"OT","Renca"],
   "PUNTO AZUL TIL-TIL":[-70.9234,-33.0934,"OT","Til-Til"],
@@ -260,14 +260,14 @@ function jitter(seed){
 }
 var agrupStgo='comuna', metricaStgo='pallets';
 var modoVista='cols';           // 'cols' | 'flow'
-var REDTEC_STGO=[-70.6534,-33.4401], REDTEC_TALCA=[-71.6554,-35.4264];
+var REDTEC_STGO=[-70.76679,-33.45791], REDTEC_TALCA=[-71.6554,-35.4264]; // Av. Américo Vespucio Norte 170, Pudahuel
 var FLOW_LOOP=2.0, FLOW_VEL=0.55, FLOW_SEGS=36;
 var flowPaths=[], animRAF=null, animT0=0;
 
 
 /* Bounding box RM: lat -33.1 a -33.9 / lng -71.0 a -70.4 */
 var VISTA_CHILE = {longitude:-70.65,latitude:-34.5,zoom:5.8,pitch:50,bearing:-12};
-var VISTA_STGO  = {longitude:-70.67,latitude:-33.47,zoom:9.5,pitch:55,bearing:-8};
+var VISTA_STGO  = {longitude:-70.72,latitude:-33.46,zoom:9.8,pitch:55,bearing:-8};
 var vistaActual = "chile";
 
 var API_PROXY="/api/ops",API_DIRECT="https://apirdt1.azurewebsites.net/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRangoFechas";
@@ -518,7 +518,17 @@ function buildFlowLayers(t){
     getPosition:function(d){return d.c;},
     getFillColor:[192,23,12,230],getLineColor:[255,255,255,200],lineWidthMinPixels:2
   });
-  return [baseTiles(),rutas,pulsos,plantas];
+  var plantasLbl=new deck.TextLayer({
+    id:"flow-plantas-lbl",data:[{c:REDTEC_STGO,n:"REDTEC · Vespucio 170"},{c:REDTEC_TALCA,n:"REDTEC Talca"}],
+    pickable:false,
+    getPosition:function(d){return[d.c[0],d.c[1],1200];},
+    getText:function(d){return d.n;},
+    getSize:12,getColor:[255,255,255,235],
+    getTextAnchor:"middle",getAlignmentBaseline:"bottom",
+    fontFamily:"JetBrains Mono, monospace",fontWeight:700,
+    background:true,getBackgroundColor:[192,23,12,160],backgroundPadding:[5,2,5,2]
+  });
+  return [baseTiles(),rutas,pulsos,plantas,plantasLbl];
 }
 
 function startAnim(){

@@ -147,6 +147,11 @@ html,body { height:100%; font-family:"Inter",sans-serif; font-size:13px;
       <div class="vbtn active" id="vbtn-chile" onclick="setVista('chile')">🇨🇱 Chile</div>
       <div class="vbtn" id="vbtn-stgo" onclick="setVista('stgo')">🏙 Santiago</div>
     </div>
+    <div class="ctrl-label" style="margin-top:8px">Modo de vista</div>
+    <div class="view-btns">
+      <div class="vbtn active" id="vmode-cols" onclick="setModo('cols')">⬛ Columnas</div>
+      <div class="vbtn" id="vmode-flow" onclick="setModo('flow')">✨ Flujo animado</div>
+    </div>
     <div id="stgo-controls" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
       <div class="ctrl-label">Agrupar Santiago por</div>
       <div class="view-btns">
@@ -254,6 +259,10 @@ function jitter(seed){
   return [a*0.045, b*0.045];
 }
 var agrupStgo='comuna', metricaStgo='pallets';
+var modoVista='cols';           // 'cols' | 'flow'
+var REDTEC_STGO=[-70.6534,-33.4401], REDTEC_TALCA=[-71.6554,-35.4264];
+var FLOW_LOOP=2.0, FLOW_VEL=0.55, FLOW_SEGS=36;
+var flowPaths=[], animRAF=null, animT0=0;
 
 
 /* Bounding box RM: lat -33.1 a -33.9 / lng -71.0 a -70.4 */
@@ -443,6 +452,88 @@ function puntosComuna(base){
   return out;
 }
 
+function setModo(m){
+  modoVista=m;
+  document.getElementById("vmode-cols").className="vbtn"+(m==="cols"?" active":"");
+  document.getElementById("vmode-flow").className="vbtn"+(m==="flow"?" active":"");
+  if(puntos.length){ renderLayers(); }
+}
+
+/* Planta destino según latitud del origen */
+function plantaDestino(coords){ return coords[1] < -34.5 ? REDTEC_TALCA : REDTEC_STGO; }
+
+/* Muestrea un arco 3D origen->destino con altura proporcional a la distancia */
+function sampleArc(s,t){
+  var dlat=t[1]-s[1], dlon=(t[0]-s[0])*Math.cos(s[1]*Math.PI/180);
+  var dKm=111*Math.sqrt(dlat*dlat+dlon*dlon);
+  var h=Math.min(200000, Math.max(6000, dKm*180)); // metros
+  var path=[];
+  for(var i=0;i<=FLOW_SEGS;i++){
+    var k=i/FLOW_SEGS;
+    path.push([ s[0]+(t[0]-s[0])*k, s[1]+(t[1]-s[1])*k, Math.sin(Math.PI*k)*h ]);
+  }
+  return path;
+}
+
+/* Construye rutas de flujo desde datosVista() hacia la planta REDTEC */
+function buildFlowPaths(){
+  var vis=datosVista();
+  var maxV=vis.length?Math.max.apply(null,vis.map(metVal)):1;
+  if(maxV<=0)maxV=1;
+  flowPaths=vis.map(function(p){
+    var dest=plantaDestino(p.coords);
+    var path=sampleArc(p.coords,dest);
+    var j=jitter(p.nombre||p.comuna||"x");
+    var offset=Math.abs(j[0])*22 % (FLOW_LOOP-1.0); // stagger 0..1
+    var ts=[]; for(var i=0;i<=FLOW_SEGS;i++){ ts.push(offset+(i/FLOW_SEGS)); }
+    var o=Object.assign({},p);
+    o.path=path; o.timestamps=ts; o.w=Math.max(1.5,(metVal(p)/maxV)*9);
+    return o;
+  });
+}
+
+function buildFlowLayers(t){
+  var rutas=new deck.PathLayer({
+    id:"flow-rutas",data:flowPaths,pickable:true,billboard:false,
+    widthUnits:"pixels",getWidth:function(d){return Math.max(1,d.w*0.35);},
+    getPath:function(d){return d.path;},
+    getColor:function(d){var c=RC[d.retailer]||RC.OT;return[c[0],c[1],c[2],55];},
+    onHover:function(info){showTip(info);},
+    updateTriggers:{getColor:[agrupStgo],getWidth:[metricaStgo,agrupStgo,vistaActual]}
+  });
+  var pulsos=new deck.TripsLayer({
+    id:"flow-pulsos",data:flowPaths,pickable:false,billboard:false,
+    widthUnits:"pixels",getWidth:function(d){return d.w;},
+    getPath:function(d){return d.path;},
+    getTimestamps:function(d){return d.timestamps;},
+    getColor:function(d){var c=RC[d.retailer]||RC.OT;return[c[0],c[1],c[2]];},
+    currentTime:t,trailLength:0.32,fadeTrail:true,capRounded:true,jointRounded:true,
+    updateTriggers:{getWidth:[metricaStgo,agrupStgo,vistaActual]}
+  });
+  // marcador de plantas destino
+  var plantas=new deck.ScatterplotLayer({
+    id:"flow-plantas",data:[{c:REDTEC_STGO,n:"REDTEC Santiago"},{c:REDTEC_TALCA,n:"REDTEC Talca"}],
+    pickable:false,stroked:true,filled:true,
+    radiusUnits:"pixels",getRadius:7,
+    getPosition:function(d){return d.c;},
+    getFillColor:[192,23,12,230],getLineColor:[255,255,255,200],lineWidthMinPixels:2
+  });
+  return [baseTiles(),rutas,pulsos,plantas];
+}
+
+function startAnim(){
+  if(animRAF)return;
+  animT0=performance.now();
+  function frame(now){
+    if(modoVista!=="flow"||!deckInst){animRAF=null;return;}
+    var t=((now-animT0)/1000*FLOW_VEL)%FLOW_LOOP;
+    deckInst.setProps({layers:buildFlowLayers(t)});
+    animRAF=requestAnimationFrame(frame);
+  }
+  animRAF=requestAnimationFrame(frame);
+}
+function stopAnim(){ if(animRAF){cancelAnimationFrame(animRAF);animRAF=null;} }
+
 function datosVista(){
   // base filtrada por retailer activo
   var base=puntos.filter(function(p){return activeR[p.retailer];});
@@ -455,6 +546,13 @@ function datosVista(){
 
 function renderLayers(){
   if(!deckInst)return;
+  if(modoVista==="flow"){
+    buildFlowPaths();
+    deckInst.setProps({layers:buildFlowLayers(0)});
+    startAnim();
+    return;
+  }
+  stopAnim();
   var vis=datosVista();
   var esComuna = vistaActual==="stgo" && agrupStgo==="comuna";
   var maxV = vis.length ? Math.max.apply(null, vis.map(metVal)) : 1;

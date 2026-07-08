@@ -32,7 +32,7 @@
   .logout-btn{color:#f87171;text-decoration:none;font-size:12px;font-weight:600;padding:4px 10px;border-radius:6px;background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.2);}
   .back-btn{font-size:11.5px;color:var(--text-secondary);text-decoration:none;padding:5px 11px;border:1px solid var(--border-md);border-radius:6px;transition:all .15s;display:flex;align-items:center;gap:5px;}
   .back-btn:hover{color:var(--text-primary);background:var(--bg-hover);}
-  .wrap{max-width:1200px;margin:0 auto;padding:70px 1.5rem 3rem;}
+  .wrap{max-width:1200px;margin:0 auto;padding:0 1.5rem 3rem;}
   .page-title{font-size:20px;font-weight:700;letter-spacing:-.3px;}
   .page-title .em{color:var(--accent);}
   .breadcrumb{font-size:11.5px;color:var(--text-muted);margin-top:5px;margin-bottom:18px;}
@@ -48,6 +48,11 @@
   .mes-nav button:hover:not(:disabled){background:var(--accent);color:#0f1117;}
   .mes-nav button:disabled{opacity:.4;cursor:wait;}
   .mes-titulo{font-size:15px;font-weight:600;min-width:150px;text-align:center;}
+  .status-pill{font-size:10.5px;padding:3px 9px;border-radius:10px;font-weight:600;letter-spacing:.3px;display:inline-flex;align-items:center;gap:4px;}
+  .status-pill.live{background:rgba(74,222,128,.12);color:var(--accent);}
+  .status-pill.cache{background:rgba(129,140,248,.15);color:#a5b4fc;}
+  .refresh-btn{width:30px;height:30px;border-radius:6px;background:var(--bg-input);border:1px solid var(--border-md);color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;transition:all .15s;}
+  .refresh-btn:hover{background:var(--bg-hover);color:var(--accent);}
 
   .resumen{display:none;gap:22px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px 18px;margin-bottom:16px;flex-wrap:wrap;}
   .res-item{display:flex;flex-direction:column;gap:2px;}
@@ -95,6 +100,64 @@
   .mval{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;min-width:70px;text-align:right;}
   .sign-in{color:var(--accent);} .sign-out{color:var(--out-devol);}
   .uni-badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:8px;background:var(--accent-dim);color:var(--accent);}
+
+  /* LAYOUT con sidebar m3link */
+  .layout { display:flex; padding-top:50px; }
+  .sidebar { position:sticky; top:50px; height:calc(100vh - 50px); }
+  .main-col { flex:1; min-width:0; }
+  .main-col .wrap { padding-top:1.5rem; }
+/* SIDEBAR (idéntico a m3link_dashboard_dark.html) */
+.sidebar { width:230px;min-width:230px;background:var(--bg-surface);border-right:1px solid var(--border);padding:.75rem 0;position:sticky;top:50px;height:calc(100vh - 50px);overflow-y:auto;overflow-x:hidden;transition:width .2s ease,min-width .2s ease; }
+.sidebar.collapsed { width:46px;min-width:46px; }
+.sidebar.collapsed .s-label { display:none; }
+.sidebar.collapsed .s-search { padding:0 0 6px;display:flex;justify-content:center; }
+.sidebar.collapsed .s-search input { display:none; }
+.sidebar.collapsed .s-search kbd { display:none; }
+.sidebar.collapsed .s-search i.s-search-ico { position:static;font-size:16px;cursor:pointer;padding:6px;border-radius:6px;transition:background .15s; }
+.sidebar.collapsed .s-search i.s-search-ico:hover { background:var(--bg-hover); }
+.sidebar.collapsed .s-sub { max-height:0 !important; }
+.sidebar.collapsed .s-divider { margin:.5rem 6px; }
+.sidebar.collapsed .s-hdr { font-size:0;line-height:0;padding:8px 0;margin:1px 4px;justify-content:center;gap:0;border-radius:6px;overflow:hidden;white-space:nowrap;position:relative; }
+.sidebar.collapsed .s-hdr i.s-leading { font-size:18px;line-height:1; }
+.sidebar.collapsed .s-hdr .s-chevron { display:none; }
+.sidebar.collapsed .s-item { font-size:0;line-height:0;padding:7px 0;margin:1px 4px;justify-content:center;gap:0;border-radius:6px;overflow:hidden;white-space:nowrap;border-left:0; }
+.sidebar.collapsed .s-item i:first-child { font-size:15px;line-height:1; }
+.sidebar.collapsed .s-item .dup-tag,
+.sidebar.collapsed .s-item .soon-tag,
+.sidebar.collapsed .s-item .fav-star { display:none; }
+.sidebar.collapsed .s-hdr::after { content:attr(data-tip);position:absolute;left:48px;top:50%;transform:translateY(-50%);background:#1a2141;color:white;padding:5px 12px;border-radius:6px;font-size:11px;line-height:1.3;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s;z-index:100;border:1px solid rgba(255,255,255,0.1);box-shadow:0 4px 16px rgba(0,0,0,0.4); }
+.sidebar.collapsed .s-hdr:hover::after { opacity:1; }
+.sb-toggle { width:100%;background:transparent;border:none;border-top:1px solid var(--border);color:var(--text-muted);padding:10px 0;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;font-size:11px;font-family:inherit;transition:all .15s;margin-top:8px; }
+.sb-toggle:hover { color:#ff6b70;background:rgba(227,30,36,0.06); }
+.sb-toggle i { font-size:16px;transition:transform .2s; }
+.sidebar.collapsed .sb-toggle i { transform:rotate(180deg); }
+.sidebar.collapsed .sb-toggle span { display:none; }
+.s-label { font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--text-muted);padding:1rem 1rem .4rem; }
+.s-hdr { display:flex;align-items:center;gap:10px;padding:.55rem .875rem;margin:1px .5rem;font-size:12.5px;font-weight:500;color:var(--text-sec);cursor:pointer;transition:all .15s;user-select:none;border-radius:6px; }
+.s-hdr:hover { background:var(--bg-hover);color:var(--text-primary); }
+.s-hdr.open { background:rgba(227,30,36,0.08);color:#ff6b70; }
+.s-hdr i.s-leading { font-size:15px;width:18px; }
+.s-chevron { font-size:11px;transition:transform .2s;color:var(--text-muted);margin-left:auto; }
+.s-hdr.open .s-chevron { transform:rotate(90deg); }
+.s-sub { overflow:hidden;transition:max-height .25s ease; }
+.s-item { display:flex !important;align-items:center;gap:8px;padding:.35rem .875rem .35rem 2.375rem;margin:1px .5rem;font-size:11.5px;color:var(--text-sec);cursor:pointer;border-radius:5px;transition:all .12s;text-decoration:none;border-left:0; }
+.s-item i { font-size:13px;opacity:.7; }
+.s-item:hover { background:var(--bg-hover);color:var(--text-primary); }
+.s-item.active { color:var(--accent);background:var(--bg-active);font-weight:500; }
+.s-item.active i { opacity:1; }
+.s-item-soon { color:var(--text-muted)!important;cursor:default;font-style:italic;justify-content:space-between; }
+.s-item-soon:hover { background:transparent!important;color:var(--text-muted)!important; }
+.soon-tag { font-size:9px;color:var(--text-muted);background:var(--bg-hover);padding:1px 6px;border-radius:8px;font-style:normal;letter-spacing:.3px;margin-left:auto; }
+.dup-tag { font-size:9px;color:#7c93b3;margin-left:auto; }
+.fav-star { color:#fbbf24;font-size:11px;margin-left:auto; }
+.s-divider { height:1px;background:var(--border);margin:.5rem 1rem; }
+.s-search { padding:0 .75rem .5rem;position:relative; }
+.s-search input { width:100%;background:var(--bg-hover);border:1px solid var(--border);border-radius:6px;padding:7px 10px 7px 30px;color:var(--text-primary);font-size:11.5px;font-family:inherit;box-sizing:border-box;outline:none;transition:border-color .15s; }
+.s-search input:focus { border-color:var(--accent);background:var(--bg-active); }
+.s-search i.s-search-ico { position:absolute;left:20px;top:9px;color:var(--text-muted);font-size:13px; }
+.s-search kbd { position:absolute;right:16px;top:8px;font-size:9.5px;background:var(--bg-active);padding:2px 5px;border-radius:3px;color:var(--text-muted);font-family:monospace; }
+
+
 </style>
 </head>
 <body>
@@ -112,6 +175,67 @@
   </div>
 </div>
 
+<div class="layout">
+  <div class="sidebar" id="mainSidebar">
+    <div class="s-search">
+      <i class="ti ti-search s-search-ico"></i>
+      <input type="text" id="sbSearch" placeholder="Buscar módulo..." oninput="filterSidebar(this.value)">
+      <kbd>Ctrl K</kbd>
+    </div>
+
+    <div class="s-label">Favoritos</div>
+    <a href="m3link_dashboard_dark.html?vista=ops" class="s-item"><i class="ti ti-chart-line"></i> Ops x rango fechas <i class="ti ti-star-filled fav-star"></i></a>
+    <a href="/calendario-retiro-pallets.html" class="s-item"><i class="ti ti-calendar"></i> Calendario retiro <i class="ti ti-star-filled fav-star"></i></a>
+
+    <div class="s-label">Áreas</div>
+
+    <div class="s-hdr" onclick="tog('g-comercial',this)" data-cat="cat" data-tip="Comercial"><i class="ti ti-truck-delivery s-leading"></i> Comercial <i class="ti ti-chevron-right s-chevron"></i></div>
+    <div class="s-sub" id="g-comercial" style="max-height:0">
+      <a href="m3link_dashboard_dark.html?vista=ops" class="s-item"><i class="ti ti-chart-line"></i> Ops x rango fechas <span class="dup-tag">↔</span></a>
+      <a href="analisis-transferencias.html" class="s-item"><i class="ti ti-chart-bar"></i> Emisiones vs transferencias</a>
+      <a href="transferencias-clientes.html" class="s-item"><i class="ti ti-alert-triangle"></i> Transferencias clientes</a>
+      <a href="top10.html" class="s-item"><i class="ti ti-trophy"></i> Top 10 emisiones</a>
+      <a href="analisis-cliente.html" class="s-item"><i class="ti ti-user-search"></i> Análisis por cliente</a>
+      <div class="s-item s-item-soon"><i class="ti ti-flag"></i> Flujo operacional <span class="soon-tag">próx.</span></div>
+    </div>
+
+    <div class="s-hdr" onclick="tog('g-logistica',this)" data-cat="cat" data-tip="Logística inversa"><i class="ti ti-arrow-back-up s-leading"></i> Logística inversa <i class="ti ti-chevron-right s-chevron"></i></div>
+    <div class="s-sub" id="g-logistica" style="max-height:0">
+      <a href="/calendario-retiro-pallets.html" class="s-item"><i class="ti ti-calendar"></i> Calendario retiro pallets</a>
+      <a href="m3link_dashboard_dark.html?vista=ops" class="s-item"><i class="ti ti-chart-line"></i> Ops x rango fechas <span class="dup-tag">↔</span></a>
+      <a href="comparativo-retiros.html" class="s-item"><i class="ti ti-arrows-left-right"></i> Comparativo retiros</a>
+      <a href="mapa-retiros.html" class="s-item"><i class="ti ti-map-pin"></i> Mapa de retiros</a>
+      <a href="kpi-diario.html" class="s-item"><i class="ti ti-chart-histogram"></i> KPI diario</a>
+    </div>
+
+    <div class="s-hdr" onclick="tog('g-gerencia',this)" data-cat="cat" data-tip="Gerencia"><i class="ti ti-briefcase s-leading"></i> Gerencia <i class="ti ti-chevron-right s-chevron"></i></div>
+    <div class="s-sub" id="g-gerencia" style="max-height:0">
+      <a href="cartola-financiera.html" class="s-item"><i class="ti ti-file-invoice"></i> Cartola financiera</a>
+      <a href="semaforo-gerencial.html" class="s-item"><i class="ti ti-traffic-lights"></i> Semáforo gerencial</a>
+      <div class="s-item s-item-soon"><i class="ti ti-dashboard"></i> Dashboard ejecutivo <span class="soon-tag">próx.</span></div>
+    </div>
+
+    <div class="s-hdr open" onclick="tog('g-stocks',this)" data-cat="cat" data-tip="Stock SAP"><i class="ti ti-package s-leading"></i> Stock SAP <i class="ti ti-chevron-right s-chevron"></i></div>
+    <div class="s-sub" id="g-stocks" style="max-height:500px">
+      <a href="stocks-unificado.html" class="s-item"><i class="ti ti-box"></i> Stock Sistema</a>
+      <a href="stock-calendario.html" class="s-item active"><i class="ti ti-calendar-stats"></i> Calendario de stock</a>
+      <div class="s-item s-item-soon"><i class="ti ti-list-details"></i> Movimientos crudos <span class="soon-tag">próx.</span></div>
+    </div>
+
+    <div class="s-hdr" onclick="tog('g-trans',this)" data-cat="cat" data-tip="Transportes"><i class="ti ti-truck s-leading"></i> Transportes <i class="ti ti-chevron-right s-chevron"></i></div>
+    <div class="s-sub" id="g-trans" style="max-height:0">
+      <a href="transportes-tiempos.html" class="s-item"><i class="ti ti-clock"></i> Tiempos en puntos</a>
+      <a href="transportes-pagos.html" class="s-item"><i class="ti ti-cash"></i> Pagos SPOT</a>
+    </div>
+
+    <div class="s-hdr" onclick="tog('g-rrhh',this)" data-cat="cat" data-tip="Recursos humanos"><i class="ti ti-users s-leading"></i> Recursos humanos <i class="ti ti-chevron-right s-chevron"></i></div>
+    <div class="s-sub" id="g-rrhh" style="max-height:0">
+      <a href="rrhh-dashboard.html" class="s-item"><i class="ti ti-user"></i> Personas y dotación</a>
+      <a href="workera-dashboard.html" class="s-item"><i class="ti ti-clock-check"></i> Asistencia Workera</a>
+    </div>
+    <button class="sb-toggle" onclick="toggleSidebar()" title="Colapsar / expandir menú"><i class="ti ti-chevrons-left"></i><span>Colapsar</span></button>
+  </div>
+  <div class="main-col">
 <div class="wrap">
   <div class="page-title">Calendario <span class="em">diario</span> de stock</div>
   <div class="breadcrumb">Operaciones › Stock SAP › Detalle día por día · clic en un día para ver su desglose</div>
@@ -127,6 +251,8 @@
       <span class="mes-titulo" id="mes-titulo">—</span>
       <button id="btn-hoy" onclick="cambiarMes(1)" title="Mes siguiente">›</button>
     </div>
+    <span class="status-pill" id="cache-badge" style="display:none"></span>
+    <button class="refresh-btn" onclick="refrescar()" title="Volver a consultar el API (ignorar memoria)"><i class="ti ti-refresh"></i></button>
   </div>
 
   <div class="resumen" id="resumen">
@@ -138,6 +264,8 @@
 
   <div class="cal-grid" id="cal-grid"></div>
 </div>
+  </div><!-- main-col -->
+</div><!-- layout -->
 
 <div class="overlay" id="overlay">
   <div class="spinner"></div>
@@ -159,6 +287,105 @@
 </div>
 
 <script>
+function tog(id, hdr) {
+  var sb = document.getElementById('mainSidebar');
+  if (sb && sb.classList.contains('collapsed')) {
+    sb.classList.remove('collapsed');
+    localStorage.setItem('m3link_sidebar_collapsed', '0');
+    setTimeout(function() {
+      var subs = document.querySelectorAll('.s-sub');
+      for (var i=0;i<subs.length;i++) subs[i].style.maxHeight = '0';
+      var hdrs = document.querySelectorAll('.s-hdr');
+      for (var i=0;i<hdrs.length;i++) hdrs[i].classList.remove('open');
+      var el = document.getElementById(id);
+      el.style.maxHeight = (el.scrollHeight + 200) + 'px';
+      hdr.classList.add('open');
+    }, 220);
+    return;
+  }
+  var el = document.getElementById(id);
+  var isOpen = el.style.maxHeight && el.style.maxHeight !== '0px';
+  var subs = document.querySelectorAll('.s-sub');
+  for (var i=0;i<subs.length;i++) subs[i].style.maxHeight = '0';
+  var hdrs = document.querySelectorAll('.s-hdr');
+  for (var i=0;i<hdrs.length;i++) hdrs[i].classList.remove('open');
+  if (!isOpen) { el.style.maxHeight = (el.scrollHeight + 200) + 'px'; hdr.classList.add('open'); }
+}
+
+function toggleSidebar() {
+  var sb = document.getElementById('mainSidebar');
+  sb.classList.toggle('collapsed');
+  localStorage.setItem('m3link_sidebar_collapsed', sb.classList.contains('collapsed') ? '1' : '0');
+}
+(function() {
+  if (localStorage.getItem('m3link_sidebar_collapsed') === '1') {
+    var sb = document.getElementById('mainSidebar');
+    if (sb) sb.classList.add('collapsed');
+  }
+})();
+
+function filterSidebar(q) {
+  q = (q || '').toLowerCase().trim();
+  var groups = document.querySelectorAll('.s-hdr');
+  var subs = document.querySelectorAll('.s-sub');
+
+  if (!q) {
+    for (var s = 0; s < subs.length; s++) {
+      var isComercial = subs[s].id === 'g-comercial';
+      subs[s].style.maxHeight = isComercial ? '500px' : '0';
+      var allItems = subs[s].querySelectorAll('.s-item');
+      for (var ai = 0; ai < allItems.length; ai++) allItems[ai].style.display = '';
+    }
+    for (var g = 0; g < groups.length; g++) {
+      groups[g].style.display = '';
+      if (groups[g].getAttribute('onclick') && groups[g].getAttribute('onclick').indexOf('g-comercial') >= 0) {
+        groups[g].classList.add('open');
+      } else {
+        groups[g].classList.remove('open');
+      }
+    }
+    return;
+  }
+
+  for (var si = 0; si < subs.length; si++) {
+    var items = subs[si].querySelectorAll('.s-item');
+    var anyVisible = false;
+    for (var i = 0; i < items.length; i++) {
+      var txt = items[i].textContent.toLowerCase();
+      if (txt.indexOf(q) >= 0) {
+        items[i].style.display = '';
+        anyVisible = true;
+      } else {
+        items[i].style.display = 'none';
+      }
+    }
+    subs[si].style.maxHeight = anyVisible ? '500px' : '0';
+    var hdrEl = subs[si].previousElementSibling;
+    if (hdrEl && hdrEl.classList.contains('s-hdr')) {
+      hdrEl.style.display = anyVisible ? '' : 'none';
+      if (anyVisible) hdrEl.classList.add('open');
+    }
+  }
+}
+
+document.addEventListener('keydown', function(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    var s = document.getElementById('sbSearch');
+    if (s) s.focus();
+  }
+  if (e.key === 'Escape') {
+    var s = document.getElementById('sbSearch');
+    if (s && document.activeElement === s) {
+      s.value = '';
+      filterSidebar('');
+      s.blur();
+    }
+  }
+});
+
+// Cargar usuario autenticado desde Microsoft Entra ID
+
 /* =====================================================================
    CALENDARIO DIARIO DE STOCK — detalle día por día de un mes
    Consulta cada día como rango (desde=hasta=día) a los APIs RDTOut.
@@ -173,6 +400,8 @@ var RET_PROXY='/api/stock-retail-proxy';
 var universo='clientes';
 var anio, mes;              // mes 0-11
 var diasData={};            // 'YYYY-MM-DD' -> objeto normalizado | null
+var forzarRefresh=false;
+function refrescar(){ forzarRefresh=true; cargar(); }
 
 var FLUJOS={
   clientes:[
@@ -242,6 +471,27 @@ async function cargar(){
   var limite = (anio===hoy.getFullYear()&&mes===hoy.getMonth()) ? hoy.getDate()-1 : ultimoDia;
   if(anio>hoy.getFullYear()||(anio===hoy.getFullYear()&&mes>hoy.getMonth())) limite=0;
 
+  // ── Caché de sesión: universo + mes ──
+  var cacheKey='calStock_'+universo+'_'+anio+'-'+pad(mes+1);
+  var esMesActual=(anio===hoy.getFullYear()&&mes===hoy.getMonth());
+  if(!forzarRefresh){
+    try {
+      var cached=sessionStorage.getItem(cacheKey);
+      if(cached){
+        var parsed=JSON.parse(cached);
+        // meses pasados nunca cambian → cache siempre válido.
+        // mes actual: válido solo si cubre hasta el último día vencido.
+        if(!esMesActual || parsed.limite>=limite){
+          diasData=parsed.dias; render();
+          setCacheBadge(true);
+          console.log('[Calendario] cache '+cacheKey);
+          return;
+        }
+      }
+    } catch(e){}
+  }
+  forzarRefresh=false;
+
   diasData={};
   document.getElementById('btn-hoy').disabled=true;
   ov(true,'Consultando '+NOMBRE_MES[mes]+'…',0);
@@ -260,7 +510,15 @@ async function cargar(){
   }
   ov(false);
   document.getElementById('btn-hoy').disabled=false;
+  // guardar en cache
+  try { sessionStorage.setItem(cacheKey, JSON.stringify({dias:diasData, limite:limite, guardado:new Date().toISOString()})); } catch(e){}
+  setCacheBadge(false);
   render();
+}
+function setCacheBadge(fromCache){
+  var b=document.getElementById('cache-badge'); if(!b)return;
+  if(fromCache){ b.style.display='inline-flex'; b.className='status-pill cache'; b.innerHTML='<i class="ti ti-clock-check" style="font-size:12px"></i> desde memoria'; }
+  else { b.style.display='inline-flex'; b.className='status-pill live'; b.innerHTML='<i class="ti ti-cloud-download" style="font-size:12px"></i> datos frescos'; }
 }
 
 function render(){

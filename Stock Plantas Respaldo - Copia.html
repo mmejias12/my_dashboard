@@ -152,7 +152,7 @@
   <span class="logo-sep"></span>
   <span class="topbar-title">
     <span class="live-dot"></span>
-    Stock Plantas Respaldo
+    Stock Plantas Respaldo - Copia
   </span>
   <div class="topbar-right">
     <div class="avatar" id="at-avatar" title="Cargando...">?</div>
@@ -705,8 +705,8 @@ function pintarStockDesdeCache(cache){
 
 /* ====================================================================
    STOCK DE CIERRE — desde APIs RDTOut (día vencido)
-   - RETAIL:   cuadrepalletsrojosretail?fecha=YYYY-MM-DD
-   - CLIENTES: cuadrerojosxrangofechas?desde=YYYY-MM-DD&hasta=YYYY-MM-DD
+   - RETAIL:   cuadrerojosretailxrangofechas?desde=YYYY-MM-DD&hasta=YYYY-MM-DD
+   - CLIENTES: cuadrerojosclientesxrangofechas?desde=YYYY-MM-DD&hasta=YYYY-MM-DD
    Respuesta: objeto con "saldoFinal" (confirmado en Postman).
 
    Cada endpoint pasa por su proxy dedicado, que inyecta X-Api-Key
@@ -714,8 +714,8 @@ function pintarStockDesdeCache(cache){
      - dev local  → API directo
      - producción → /api/stock-*-proxy
    ==================================================================== */
-var RETAIL_DIRECT   = 'https://apirdt1.azurewebsites.net/api/RDTOut/cuadrepalletsrojosretail';
-var CLIENTES_DIRECT = 'https://apirdt1.azurewebsites.net/api/RDTOut/cuadrerojosxrangofechas';
+var RETAIL_DIRECT   = 'https://apirdt1.azurewebsites.net/api/RDTOut/cuadrerojosretailxrangofechas';
+var CLIENTES_DIRECT = 'https://apirdt1.azurewebsites.net/api/RDTOut/cuadrerojosclientesxrangofechas';
 var RETAIL_PROXY    = '/api/stock-retail-proxy';
 var CLIENTES_PROXY  = '/api/stock-clientes-proxy';
 
@@ -776,7 +776,7 @@ function cargarStock(forceRefresh){
   if (dot) { dot.style.background = '#fcd34d'; dot.title = 'Consultando RDTOut…'; }
   if (pending) pending.textContent = 'Consultando cierre ' + fechaCierre + '…';
 
-  var qsRetail   = '?fecha=' + fechaCierre;
+  var qsRetail   = '?desde=' + fechaCierre + '&hasta=' + fechaCierre;
   var qsClientes = '?desde=' + fechaCierre + '&hasta=' + fechaCierre;
 
   var pRetail   = fetchSaldo(RETAIL_DIRECT,   RETAIL_PROXY,   qsRetail)

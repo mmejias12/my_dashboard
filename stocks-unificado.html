@@ -347,14 +347,17 @@ function ov(show,txt,sub,pct){
 function setStatus(cls,txt){ var s=document.getElementById('status'); s.className='status-pill '+cls; s.textContent=txt; }
 
 /* ---------- Controles ---------- */
+function hayDatos(){ return (datos.clientes && datos.clientes.length) || (datos.retail && datos.retail.length); }
 function setUniverso(u){
   universo=u;
   document.querySelectorAll('#seg-universo button').forEach(function(b){ b.classList.toggle('on', b.dataset.u===u); });
+  if(hayDatos()) cargar();   // recarga (usa caché si ya se consultó)
 }
 function setPeriodo(p){
   periodo=p;
   document.querySelectorAll('#seg-periodo button').forEach(function(b){ b.classList.toggle('on', b.dataset.p===p); });
   document.getElementById('custom-range').style.display = (p==='custom')?'inline-flex':'none';
+  if(p!=='custom' && hayDatos()) cargar();   // recarga (usa caché si ya se consultó)
 }
 
 /* Resuelve rango [desde,hasta] Date según período elegido */
@@ -433,8 +436,18 @@ async function cargar(){
       return;
     }
 
-    // guardar en cache
+    // guardar en cache (clave del universo actual)
     try { sessionStorage.setItem(cacheKey, JSON.stringify({datos:datos, guardado:new Date().toISOString()})); } catch(e){}
+    // si se consultó 'ambos', cachear también clientes y retail por separado
+    // para que cambiar de universo sea instantáneo
+    if(universo==='ambos'){
+      try {
+        var kc='uniStock_clientes_'+periodo+'_'+iso(desde)+'_'+iso(hasta);
+        var kr='uniStock_retail_'+periodo+'_'+iso(desde)+'_'+iso(hasta);
+        sessionStorage.setItem(kc, JSON.stringify({datos:{clientes:datos.clientes,retail:[]}, guardado:new Date().toISOString()}));
+        sessionStorage.setItem(kr, JSON.stringify({datos:{clientes:[],retail:datos.retail}, guardado:new Date().toISOString()}));
+      } catch(e){}
+    }
 
     document.getElementById('empty').style.display='none';
     document.getElementById('content').style.display='block';

@@ -1,7 +1,7 @@
 const https = require('https');
 
 const API_HOST = 'apirdt1.azurewebsites.net';
-const API_PATH = '/api/RDTOut/cuadrerojosxrangofechas';
+const API_PATH = '/api/RDTOut/cuadrerojosclientesxrangofechas';
 
 // La API Key se lee desde Application Settings de Azure Static Web Apps.
 // Configuration -> Application settings -> REDTEC_API_KEY = m2s_live_...

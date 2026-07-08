@@ -64,6 +64,7 @@
   .status-pill.live { background:rgba(74,222,128,.12);color:var(--accent); }
   .status-pill.load { background:rgba(251,191,36,.12);color:#fbbf24; }
   .status-pill.err  { background:rgba(248,113,113,.12);color:#f87171; }
+  .status-pill.cache { background:rgba(129,140,248,.15);color:#a5b4fc; }
 
   /* KPI CARDS */
   .kpi-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:16px; }
@@ -180,6 +181,7 @@
     </span>
 
     <button class="btn" id="btn-cargar" onclick="cargar()">Cargar</button>
+    <button class="btn btn-ghost" onclick="refrescar()" title="Volver a consultar el API (ignorar memoria)"><i class="ti ti-refresh"></i></button>
     <span class="status-pill load" id="status">Sin cargar</span>
   </div>
 
@@ -262,6 +264,8 @@ var RET_PROXY ='/api/stock-retail-proxy';
 var universo='clientes', periodo='ytd';
 var datos={ clientes:[], retail:[] };   // arreglos de {mes, ...campos}
 var chartEvo=null, chartFlujos=null;
+var forzarRefresh=false;
+function refrescar(){ forzarRefresh=true; cargar(); }
 
 /* Definición de flujos por universo (signo, color, etiqueta, campo API) */
 var FLUJOS = {
@@ -374,6 +378,25 @@ async function cargar(){
   var bloques=bloquesMensuales(desde,hasta);
   if(bloques.length===0){ alert('Rango inválido'); return; }
 
+  // ── Caché de sesión: universo + período + rango exacto ──
+  var cacheKey='uniStock_'+universo+'_'+periodo+'_'+iso(desde)+'_'+iso(hasta);
+  if(!forzarRefresh){
+    try {
+      var cached=sessionStorage.getItem(cacheKey);
+      if(cached){
+        var parsed=JSON.parse(cached);
+        datos=parsed.datos;
+        document.getElementById('empty').style.display='none';
+        document.getElementById('content').style.display='block';
+        render();
+        setStatus('cache','En memoria · '+iso(hasta));
+        console.log('[Stock unificado] cache '+cacheKey);
+        return;
+      }
+    } catch(e){}
+  }
+  forzarRefresh=false;
+
   document.getElementById('btn-cargar').disabled=true;
   setStatus('load','Cargando…');
   datos={ clientes:[], retail:[] };
@@ -409,6 +432,9 @@ async function cargar(){
       document.getElementById('btn-cargar').disabled=false;
       return;
     }
+
+    // guardar en cache
+    try { sessionStorage.setItem(cacheKey, JSON.stringify({datos:datos, guardado:new Date().toISOString()})); } catch(e){}
 
     document.getElementById('empty').style.display='none';
     document.getElementById('content').style.display='block';

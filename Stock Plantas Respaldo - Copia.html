@@ -707,33 +707,19 @@ function pintarStockDesdeCache(cache){
    STOCK DE CIERRE — desde APIs RDTOut (día vencido)
    - RETAIL:   cuadrepalletsrojosretail?fecha=YYYY-MM-DD
    - CLIENTES: cuadrerojosxrangofechas?desde=YYYY-MM-DD&hasta=YYYY-MM-DD
-   Ambos devuelven un objeto con el saldo final directo.
+   Respuesta: objeto con "saldoFinal" (confirmado en Postman).
 
-   MISMO proxy que las operaciones (/proxy/ops), que inyecta X-Api-Key
-   server-side y enruta cualquier endpoint RDTOut por parámetro.
-     - dev local  → API directo apirdt1.azurewebsites.net/api/RDTOut/<endpoint>
-     - producción → /proxy/ops?<PARAM>=<endpoint>&<query>
-   ⚠️ Si el proxy espera el endpoint con otro nombre de parámetro,
-      cambia SOLO esta línea (ruta | path | endpoint | op):
+   Cada endpoint pasa por su proxy dedicado, que inyecta X-Api-Key
+   (REDTEC_API_KEY) server-side — igual criterio que /proxy/ops.
+     - dev local  → API directo
+     - producción → /api/stock-*-proxy
    ==================================================================== */
-var RDTOUT_BASE      = 'https://apirdt1.azurewebsites.net/api/RDTOut';
-var PROXY_BASE       = '/proxy/ops';
-var PROXY_RUTA_PARAM = 'ruta';   // ← nombre del parámetro que el proxy usa para el endpoint
-var RETAIL_ENDPOINT   = 'cuadrepalletsrojosretail';
-var CLIENTES_ENDPOINT = 'cuadrerojosxrangofechas';
+var RETAIL_DIRECT   = 'https://apirdt1.azurewebsites.net/api/RDTOut/cuadrepalletsrojosretail';
+var CLIENTES_DIRECT = 'https://apirdt1.azurewebsites.net/api/RDTOut/cuadrerojosxrangofechas';
+var RETAIL_PROXY    = '/api/stock-retail-proxy';
+var CLIENTES_PROXY  = '/api/stock-clientes-proxy';
 
-/* Construye la URL final. qs empieza con '?' (ej "?fecha=2026-07-01") */
-function urlRDTOut(endpoint, qs){
-  if (isDev){
-    return RDTOUT_BASE + '/' + endpoint + qs;
-  }
-  /* prod: /proxy/ops?ruta=<endpoint>&<params-sin-?> */
-  return PROXY_BASE + '?' + PROXY_RUTA_PARAM + '=' + encodeURIComponent(endpoint)
-         + '&' + qs.replace(/^\?/, '');
-}
-
-/* Extrae el "saldo final" de la respuesta, tolerante a variantes de nombre
-   (saldoFinal, saldo_final, SaldoFinal, stockFinal…) y a arreglos de filas. */
+/* Extrae "saldoFinal" de la respuesta (tolerante a variantes y a arreglos). */
 function extraerSaldoFinal(obj){
   if (obj === null || obj === undefined) return null;
   if (typeof obj === 'number') return obj;
@@ -748,8 +734,7 @@ function extraerSaldoFinal(obj){
   if (obj.data      && typeof obj.data === 'object')      { var d  = extraerSaldoFinal(obj.data);      if (d  !== null) return d;  }
   if (obj.resultado && typeof obj.resultado === 'object') { var rr = extraerSaldoFinal(obj.resultado); if (rr !== null) return rr; }
   var claves = ['saldoFinal','saldo_final','SaldoFinal','saldofinal',
-                'stockFinal','stock_final','StockFinal',
-                'saldoFinalDia','saldo','final','total'];
+                'stockFinal','stock_final','StockFinal','saldoFinalDia','saldo'];
   for (var i = 0; i < claves.length; i++){
     if (obj[claves[i]] !== undefined && obj[claves[i]] !== null && !isNaN(Number(obj[claves[i]]))){
       return Number(obj[claves[i]]);
@@ -758,9 +743,9 @@ function extraerSaldoFinal(obj){
   return null;
 }
 
-/* Consulta un endpoint RDTOut → saldo final */
-function fetchSaldo(endpoint, qs){
-  var url = urlRDTOut(endpoint, qs) + '&_=' + Date.now();
+/* Consulta un endpoint RDTOut (dev directo / prod proxy) → saldo final */
+function fetchSaldo(directUrl, proxyUrl, qs){
+  var url = (isDev ? directUrl : proxyUrl) + qs + '&_=' + Date.now();
   return fetch(url, { cache:'no-cache', headers:{ 'Accept':'application/json' } })
     .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
     .then(function(json){ return extraerSaldoFinal(json); });
@@ -773,7 +758,6 @@ function cargarStock(forceRefresh){
   /* Día vencido: si hoy es lunes → viernes; resto → ayer */
   var fechaCierre = fmtDate(ayerLaboral());
 
-  /* Cache de sesión válido solo si coincide la fecha de cierre */
   if (!forceRefresh) {
     try {
       var cachedRaw = sessionStorage.getItem(SS_CACHE_KEY);
@@ -792,13 +776,12 @@ function cargarStock(forceRefresh){
   if (dot) { dot.style.background = '#fcd34d'; dot.title = 'Consultando RDTOut…'; }
   if (pending) pending.textContent = 'Consultando cierre ' + fechaCierre + '…';
 
-  /* Ambos endpoints piden el mismo día vencido */
   var qsRetail   = '?fecha=' + fechaCierre;
   var qsClientes = '?desde=' + fechaCierre + '&hasta=' + fechaCierre;
 
-  var pRetail   = fetchSaldo(RETAIL_ENDPOINT,   qsRetail)
+  var pRetail   = fetchSaldo(RETAIL_DIRECT,   RETAIL_PROXY,   qsRetail)
                     .catch(function(e){ console.warn('RETAIL falló:', e.message); return null; });
-  var pClientes = fetchSaldo(CLIENTES_ENDPOINT, qsClientes)
+  var pClientes = fetchSaldo(CLIENTES_DIRECT, CLIENTES_PROXY, qsClientes)
                     .catch(function(e){ console.warn('CLIENTES falló:', e.message); return null; });
 
   Promise.all([pClientes, pRetail]).then(function(res){

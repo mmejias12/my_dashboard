@@ -703,81 +703,129 @@ function pintarStockDesdeCache(cache){
   }
 }
 
+/* ====================================================================
+   STOCK DE CIERRE — desde APIs RDTOut (día vencido)
+   - RETAIL:   cuadrepalletsrojosretail?fecha=YYYY-MM-DD
+   - CLIENTES: cuadrerojosxrangofechas?desde=YYYY-MM-DD&hasta=YYYY-MM-DD
+   Ambos devuelven un objeto con el saldo final directo.
+
+   MISMO proxy que las operaciones (/proxy/ops), que inyecta X-Api-Key
+   server-side y enruta cualquier endpoint RDTOut por parámetro.
+     - dev local  → API directo apirdt1.azurewebsites.net/api/RDTOut/<endpoint>
+     - producción → /proxy/ops?<PARAM>=<endpoint>&<query>
+   ⚠️ Si el proxy espera el endpoint con otro nombre de parámetro,
+      cambia SOLO esta línea (ruta | path | endpoint | op):
+   ==================================================================== */
+var RDTOUT_BASE      = 'https://apirdt1.azurewebsites.net/api/RDTOut';
+var PROXY_BASE       = '/proxy/ops';
+var PROXY_RUTA_PARAM = 'ruta';   // ← nombre del parámetro que el proxy usa para el endpoint
+var RETAIL_ENDPOINT   = 'cuadrepalletsrojosretail';
+var CLIENTES_ENDPOINT = 'cuadrerojosxrangofechas';
+
+/* Construye la URL final. qs empieza con '?' (ej "?fecha=2026-07-01") */
+function urlRDTOut(endpoint, qs){
+  if (isDev){
+    return RDTOUT_BASE + '/' + endpoint + qs;
+  }
+  /* prod: /proxy/ops?ruta=<endpoint>&<params-sin-?> */
+  return PROXY_BASE + '?' + PROXY_RUTA_PARAM + '=' + encodeURIComponent(endpoint)
+         + '&' + qs.replace(/^\?/, '');
+}
+
+/* Extrae el "saldo final" de la respuesta, tolerante a variantes de nombre
+   (saldoFinal, saldo_final, SaldoFinal, stockFinal…) y a arreglos de filas. */
+function extraerSaldoFinal(obj){
+  if (obj === null || obj === undefined) return null;
+  if (typeof obj === 'number') return obj;
+  if (Array.isArray(obj)){
+    var s = 0, hubo = false;
+    for (var k = 0; k < obj.length; k++){
+      var v = extraerSaldoFinal(obj[k]);
+      if (v !== null){ s += v; hubo = true; }
+    }
+    return hubo ? s : null;
+  }
+  if (obj.data      && typeof obj.data === 'object')      { var d  = extraerSaldoFinal(obj.data);      if (d  !== null) return d;  }
+  if (obj.resultado && typeof obj.resultado === 'object') { var rr = extraerSaldoFinal(obj.resultado); if (rr !== null) return rr; }
+  var claves = ['saldoFinal','saldo_final','SaldoFinal','saldofinal',
+                'stockFinal','stock_final','StockFinal',
+                'saldoFinalDia','saldo','final','total'];
+  for (var i = 0; i < claves.length; i++){
+    if (obj[claves[i]] !== undefined && obj[claves[i]] !== null && !isNaN(Number(obj[claves[i]]))){
+      return Number(obj[claves[i]]);
+    }
+  }
+  return null;
+}
+
+/* Consulta un endpoint RDTOut → saldo final */
+function fetchSaldo(endpoint, qs){
+  var url = urlRDTOut(endpoint, qs) + '&_=' + Date.now();
+  return fetch(url, { cache:'no-cache', headers:{ 'Accept':'application/json' } })
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(function(json){ return extraerSaldoFinal(json); });
+}
+
 function cargarStock(forceRefresh){
   var dot = document.getElementById('stock-status');
   var pending = document.getElementById('stock-pending');
 
-  var ayerStr = fmtDate(diasOffset(-1));
+  /* Día vencido: si hoy es lunes → viernes; resto → ayer */
+  var fechaCierre = fmtDate(ayerLaboral());
 
-  /* Cache solo se usa si:
-     1. forceRefresh NO está activo (auto-refresh siempre fuerza)
-     2. La fecha del cache coincide con "ayer real" del cliente */
+  /* Cache de sesión válido solo si coincide la fecha de cierre */
   if (!forceRefresh) {
     try {
       var cachedRaw = sessionStorage.getItem(SS_CACHE_KEY);
       if (cachedRaw) {
         var cached = JSON.parse(cachedRaw);
-        if (cached && cached.fecha === ayerStr) {
+        if (cached && cached.fecha === fechaCierre) {
           pintarStockDesdeCache(cached);
-          console.log('[Stock cierre] Cache sessionStorage OK:', ayerStr,
-                      '| Clientes:', cached.clientes, '| Retail:', cached.retail);
+          console.log('[Stock cierre] Cache OK', fechaCierre, '| Clientes:', cached.clientes, '| Retail:', cached.retail);
           return;
         }
-        console.log('[Stock cierre] Cache descartado: fecha cache =', cached && cached.fecha, '≠ ayer =', ayerStr);
         sessionStorage.removeItem(SS_CACHE_KEY);
       }
     } catch(e){ console.warn('sessionStorage no disponible:', e); }
-  } else {
-    console.log('[Stock cierre] Refresh forzado, ignorando cache');
   }
 
-  /* Sin cache: leer el JSON estático */
-  if (dot) { dot.style.background = '#fcd34d'; dot.title = 'Leyendo snapshot…'; }
-  if (pending) pending.textContent = 'Cargando cierre…';
+  if (dot) { dot.style.background = '#fcd34d'; dot.title = 'Consultando RDTOut…'; }
+  if (pending) pending.textContent = 'Consultando cierre ' + fechaCierre + '…';
 
-  var url = CIERRE_JSON + '?_=' + Date.now();
+  /* Ambos endpoints piden el mismo día vencido */
+  var qsRetail   = '?fecha=' + fechaCierre;
+  var qsClientes = '?desde=' + fechaCierre + '&hasta=' + fechaCierre;
 
-  fetch(url, { cache: 'no-cache', headers: { 'Accept': 'application/json' } })
-    .then(function(r){
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    })
-    .then(function(data){
-      if (!data || !data.totales_por_tipo) {
-        throw new Error('Snapshot inválido (sin totales_por_tipo)');
-      }
+  var pRetail   = fetchSaldo(RETAIL_ENDPOINT,   qsRetail)
+                    .catch(function(e){ console.warn('RETAIL falló:', e.message); return null; });
+  var pClientes = fetchSaldo(CLIENTES_ENDPOINT, qsClientes)
+                    .catch(function(e){ console.warn('CLIENTES falló:', e.message); return null; });
 
-      var totC = Number((data.totales_por_tipo.CLIENTES || {}).total_pallets) || 0;
-      var totR = Number((data.totales_por_tipo.RETAIL   || {}).total_pallets) || 0;
-      var retailDisponible = !(data.detalle && data.detalle.retail_disponible === false);
+  Promise.all([pClientes, pRetail]).then(function(res){
+    var totC = res[0];
+    var totR = res[1];
 
-      var fechaCierre = data.fechaCierre || ayerStr;
-
-      try {
-        sessionStorage.setItem(SS_CACHE_KEY, JSON.stringify({
-          fecha:    fechaCierre,
-          clientes: totC,
-          retail:   retailDisponible ? totR : null,
-          retailPendiente: !retailDisponible,
-          leidoEn:  new Date().toISOString()
-        }));
-      } catch(e){ console.warn('No se pudo guardar en sessionStorage:', e); }
-
-      pintarStockDesdeCache({ fecha: fechaCierre, clientes: totC, retail: retailDisponible ? totR : null, retailPendiente: !retailDisponible });
-
-      var generado = data._meta && data._meta.generadoEn ? data._meta.generadoEn : 'n/d';
-      console.log('[Stock cierre]', fechaCierre,
-                  '| Clientes:', totC, '| Retail:', totR,
-                  '| Snapshot generado:', generado);
-    })
-    .catch(function(err){
-      console.error('Error leyendo cierre-ayer.json:', err);
+    if (totC === null && totR === null){
       setStock('stk-clientes', null);
       setStock('stk-retail',   null);
       setStock('stk-total',    null);
-      if (dot) { dot.style.background = '#f87171'; dot.title = 'Error: ' + err.message; }
-      if (pending) pending.textContent = 'Snapshot no disponible';
-    });
+      if (dot) { dot.style.background = '#f87171'; dot.title = 'Sin datos de RDTOut'; }
+      if (pending) pending.textContent = 'RDTOut no disponible';
+      return;
+    }
+
+    var cache = {
+      fecha:    fechaCierre,
+      clientes: totC,
+      retail:   totR,
+      retailPendiente: (totR === null),
+      leidoEn:  new Date().toISOString()
+    };
+    try { sessionStorage.setItem(SS_CACHE_KEY, JSON.stringify(cache)); } catch(e){}
+    pintarStockDesdeCache(cache);
+
+    console.log('[Stock cierre]', fechaCierre, '| Clientes:', totC, '| Retail:', totR);
+  });
 }
 
 /* ----- Iframe del Excel ----- */

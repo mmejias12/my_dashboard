@@ -1,7 +1,7 @@
 const https = require('https');
 
 const API_HOST = 'apirdt1.azurewebsites.net';
-const API_PATH = '/api/RDTOut/cuadrepalletsrojosretail';
+const API_PATH = '/api/RDTOut/cuadrerojosretailxrangofechas';
 
 // La API Key se lee desde Application Settings de Azure Static Web Apps.
 // Configuration -> Application settings -> REDTEC_API_KEY = m2s_live_...
@@ -21,9 +21,10 @@ module.exports = async function (context, req) {
     return;
   }
 
-  // Stock RETAIL del día vencido: el HTML manda fecha.
-  var f = (req.query && req.query.fecha) ? req.query.fecha : '';
-  var query = '?fecha=' + encodeURIComponent(f);
+  // Stock RETAIL: ahora por rango (endpoint xrangofechas). HTML manda desde/hasta.
+  var d1 = (req.query && req.query.desde) ? req.query.desde : '';
+  var d2 = (req.query && req.query.hasta) ? req.query.hasta : '';
+  var query = '?desde=' + encodeURIComponent(d1) + '&hasta=' + encodeURIComponent(d2);
 
   try {
     var data = await fetchData(API_HOST, API_PATH + query);

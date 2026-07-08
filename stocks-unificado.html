@@ -153,6 +153,7 @@
       <div class="page-title">Stock &amp; <span class="em">Flujos</span> de pallets</div>
       <div class="breadcrumb">Operaciones › Stock SAP › Vista unificada Clientes + Retail · fuente RDTOut</div>
     </div>
+    <a href="stock-calendario.html" class="btn" style="text-decoration:none;display:inline-flex;align-items:center;gap:7px"><i class="ti ti-calendar-month"></i> Calendario diario</a>
   </div>
 
   <!-- CONTROLES -->
@@ -252,8 +253,8 @@
    ===================================================================== */
 var isDev = (location.hostname==='localhost'||location.hostname==='127.0.0.1');
 
-var CLI_DIRECT='https://apirdt1.azurewebsites.net/api/RDTOut/cuadrerojosxrangofechas';
-var RET_DIRECT='https://apirdt1.azurewebsites.net/api/RDTOut/cuadrepalletsrojosretail';
+var CLI_DIRECT='https://apirdt1.azurewebsites.net/api/RDTOut/cuadrerojosclientesxrangofechas';
+var RET_DIRECT='https://apirdt1.azurewebsites.net/api/RDTOut/cuadrerojosretailxrangofechas';
 var CLI_PROXY ='/api/stock-clientes-proxy';
 var RET_PROXY ='/api/stock-retail-proxy';
 
@@ -321,12 +322,12 @@ function fetchCli(desde,hasta){
   return fetch(url,{cache:'no-cache',headers:{'Accept':'application/json'}})
     .then(function(r){ if(!r.ok)throw new Error('HTTP '+r.status); return r.json(); });
 }
-/* RETAIL es por día único; para un mes pedimos el ÚLTIMO día del bloque (saldo de cierre)
-   y los flujos del bloque los aproximamos consultando el mismo día de cierre.
-   Nota: si el API retail soportara rango, se cambia aquí. */
-function fetchRet(fecha){
+/* RETAIL ahora acepta rango (endpoint xrangofechas): pedimos el MES completo,
+   igual que clientes, para que los flujos (transferencias, retiros…) sean del mes
+   entero y no de un solo día. */
+function fetchRet(desde,hasta){
   var base=isDev?RET_DIRECT:RET_PROXY;
-  var url=base+'?fecha='+fecha+'&_='+Date.now();
+  var url=base+'?desde='+desde+'&hasta='+hasta+'&_='+Date.now();
   return fetch(url,{cache:'no-cache',headers:{'Accept':'application/json'}})
     .then(function(r){ if(!r.ok)throw new Error('HTTP '+r.status); return r.json(); });
 }
@@ -392,7 +393,7 @@ async function cargar(){
       }
       if(universo==='retail'||universo==='ambos'){
         ov(true,'Retail · '+b.label, (i+1)+'/'+bloques.length, Math.round(paso/totalPasos*100));
-        try { var jr=await fetchRet(b.hasta); datos.retail.push(normRet(jr,b)); }
+        try { var jr=await fetchRet(b.desde,b.hasta); datos.retail.push(normRet(jr,b)); }
         catch(e){ console.warn('RET '+b.label+' falló:',e.message); }
         paso++;
       }

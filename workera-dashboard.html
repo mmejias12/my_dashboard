@@ -244,6 +244,76 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
   .modal{max-width:100%;max-height:none;border:none;color:#000;background:#fff}
   body{background:#fff;color:#000}
 }
+
+/* ───────── CALENDARIO WORKERA AL DÍA ───────── */
+.cal-monthbar{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.cal-navbtn{width:28px;height:28px;border-radius:6px;background:var(--s3);border:1px solid var(--brm);color:var(--t1);cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.cal-navbtn:hover{background:var(--s4);color:var(--cyan)}
+.cal-mestitulo{font-size:13px;font-weight:600;min-width:130px;text-align:center;text-transform:capitalize}
+.cal-weekbar{display:flex;gap:5px;margin-left:8px;flex-wrap:wrap}
+.cal-weekchip{font-size:10px;padding:3px 10px;border-radius:12px;background:var(--s3);border:1px solid var(--brm);color:var(--t2);cursor:pointer;transition:all .15s;white-space:nowrap}
+.cal-weekchip:hover{color:var(--t1);border-color:var(--brh)}
+.cal-weekchip.on{background:var(--cyan-bg);color:var(--cyan);border-color:rgba(34,212,212,.35);font-weight:600}
+.cal-legend-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px;padding:8px 0;border-bottom:1px dashed var(--br)}
+.cal-lg{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--t2)}
+.cal-wrap{overflow-x:auto;border:1px solid var(--br);border-radius:8px;background:var(--s1)}
+.cal-matrix{display:inline-block;min-width:100%}
+.cal-hrow{display:flex;position:sticky;top:0;z-index:3;background:var(--s3)}
+.cal-corner{width:190px;min-width:190px;padding:8px 12px;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--t3);font-weight:600;position:sticky;left:0;z-index:4;background:var(--s3);border-right:1px solid var(--brm);display:flex;align-items:center}
+.cal-daycol{width:38px;min-width:38px;padding:5px 0;text-align:center;border-right:1px solid var(--br);display:flex;flex-direction:column;align-items:center;gap:1px}
+.cal-daycol.finde{background:rgba(255,255,255,.02)}
+.cal-daycol.hoy{background:var(--cyan-bg)}
+.cal-dow{font-size:8.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.3px}
+.cal-dnum{font-size:12px;font-weight:600;color:var(--t2);font-family:'DM Mono',monospace}
+.cal-daycol.hoy .cal-dnum{color:var(--cyan)}
+.cal-prow{display:flex;border-top:1px solid var(--br)}
+.cal-prow:hover{background:rgba(255,255,255,.015)}
+.cal-pname{width:190px;min-width:190px;padding:6px 12px;position:sticky;left:0;z-index:2;background:var(--s2);border-right:1px solid var(--brm);display:flex;flex-direction:column;justify-content:center}
+.cal-prow:hover .cal-pname{background:var(--s3)}
+.cal-pn{font-size:11.5px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:166px}
+.cal-pr{font-size:9.5px;color:var(--t3);font-family:'DM Mono',monospace}
+.cal-cell{width:38px;min-width:38px;height:34px;border-right:1px solid var(--br);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .12s;position:relative}
+.cal-cell:hover{transform:scale(1.12);z-index:5;box-shadow:0 0 0 2px var(--cyan)}
+.cal-cell.finde{background:rgba(255,255,255,.015)}
+.cal-cell.vacio{cursor:default}
+.cal-cell.vacio:hover{transform:none;box-shadow:none}
+.cal-mini{width:26px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;font-family:'DM Mono',monospace;letter-spacing:.2px}
+.cal-mini.p{background:var(--green-bg);color:var(--green)}
+.cal-mini.a{background:var(--red-bg);color:var(--red)}
+.cal-mini.pe{background:var(--amber-bg);color:var(--amber)}
+.cal-mini.ps{background:var(--purple-bg);color:var(--purple)}
+.cal-mini.lic{background:var(--blue-bg);color:var(--blue)}
+.cal-mini.vac{background:var(--cyan-bg);color:var(--cyan)}
+.cal-mini.empty{background:transparent;color:var(--t4)}
+.cal-cell.alerta .cal-mini{box-shadow:0 0 0 1.5px var(--red)}
+.cal-cell.alerta::after{content:'';position:absolute;top:3px;right:3px;width:5px;height:5px;border-radius:50%;background:var(--red);box-shadow:0 0 5px var(--red)}
+.cal-modal{position:fixed;inset:0;background:rgba(5,5,10,.78);backdrop-filter:blur(4px);z-index:1100;display:none;align-items:center;justify-content:center;padding:20px}
+.cal-modal.show{display:flex}
+.cal-modal-card{background:var(--s2);border:1px solid var(--brm);border-radius:13px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,.55);overflow:hidden}
+.cal-modal-head{padding:15px 18px;border-bottom:1px solid var(--br);display:flex;align-items:center;gap:12px}
+.cal-modal-head h3{font-size:15px;font-weight:700;color:var(--t1)}
+.cm-sub{font-size:11px;color:var(--t3);margin-top:2px}
+.cal-modal-close{background:transparent;border:none;color:var(--t3);font-size:22px;cursor:pointer;line-height:1;margin-left:auto}
+.cal-modal-close:hover{color:var(--t1)}
+.cal-modal-body{padding:16px 18px 18px}
+.cm-alert{padding:9px 12px;border-radius:7px;font-size:11.5px;margin-bottom:14px;display:flex;align-items:center;gap:8px;font-weight:500}
+.cm-alert.rojo{background:var(--red-bg);color:var(--red);border:1px solid rgba(245,96,96,.3)}
+.cm-alert.ambar{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(245,166,35,.3)}
+.cm-marcas{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:16px}
+.cm-marca{background:var(--s1);border:1px solid var(--br);border-radius:8px;padding:9px 11px}
+.cm-marca.destacar{border-color:rgba(245,96,96,.4);background:rgba(245,96,96,.05)}
+.cm-marca-lbl{font-size:9.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.4px;font-weight:600;margin-bottom:3px}
+.cm-marca-val{font-size:16px;font-weight:600;font-family:'DM Mono',monospace;color:var(--t1)}
+.cm-marca-val.rojo{color:var(--red)}
+.cm-marca-val.pend{color:var(--t3);font-style:italic;font-size:13px}
+.cm-marca-sub{font-size:9.5px;color:var(--t3);margin-top:2px}
+.cm-coment-wrap{border-top:1px solid var(--br);padding-top:14px}
+.cm-coment-lbl{font-size:10.5px;color:var(--t2);font-weight:600;display:block;margin-bottom:6px}
+.cm-coment{width:100%;background:var(--s1);border:1px solid var(--brm);border-radius:7px;color:var(--t1);padding:8px 10px;font-size:12px;font-family:inherit;resize:vertical;min-height:56px;outline:none}
+.cm-coment:focus{border-color:var(--cyan)}
+.cm-guardar{margin-top:9px;background:var(--cyan-bg);color:var(--cyan);border:1px solid rgba(34,212,212,.35);border-radius:6px;padding:6px 14px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s}
+.cm-guardar:hover{background:var(--cyan);color:var(--bg)}
+.cm-saved{margin-left:10px;font-size:11px;color:var(--green);font-weight:600}
 </style>
 </head>
 <body>
@@ -288,6 +358,7 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 
 <div class="tabs">
   <button class="tab on" onclick="tab('hoy')">📊 Hoy</button>
+  <button class="tab" onclick="tab('cal')">📅 Workera al día</button>
   <button class="tab" onclick="tab('emp')">Trabajadores</button>
   <button class="tab" onclick="tab('ast')">Marcaciones</button>
   <button class="tab" onclick="tab('ano')">Anomalías <span id="badge-ano" class="tab-badge" style="display:none">0</span></button>
@@ -629,6 +700,76 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
       </div>
     </div>
   </div>
+
+  <!-- WORKERA AL DÍA (calendario mensual) -->
+  <div id="v-cal" class="view">
+    <div class="card">
+      <div class="ct">
+        <span>📅 Workera al día</span>
+        <span class="card-actions">
+          <button class="btn-mini" onclick="calHoyMes()">Mes actual</button>
+          <button class="btn-mini" onclick="renderCalendario()">↻ Refrescar</button>
+        </span>
+      </div>
+      <div class="cs">Calendario mensual de asistencia. Cada celda día×trabajador muestra el estado. Clic en una celda para ver marcas y comentar. <span style="color:var(--red)">Rojo</span> = no marcó salida.</div>
+
+      <div class="local-filters">
+        <span class="ctrl-lbl">Estado:</span>
+        <span class="filter-chip on" data-edo="todos" onclick="calToggleChip(this)">Todos</span>
+        <span class="filter-chip" data-edo="p" onclick="calToggleChip(this)">P</span>
+        <span class="filter-chip" data-edo="a" onclick="calToggleChip(this)">A</span>
+        <span class="filter-chip" data-edo="pe" onclick="calToggleChip(this)">P/E</span>
+        <span class="filter-chip" data-edo="ps" onclick="calToggleChip(this)">P/S</span>
+        <span class="filter-chip" data-edo="lic" onclick="calToggleChip(this)">Lic</span>
+        <span class="filter-chip" data-edo="vac" onclick="calToggleChip(this)">Vac</span>
+        <input id="cal-busca" placeholder="Buscar por nombre o RUT..." oninput="renderCalendario()" style="flex:1;min-width:200px">
+      </div>
+
+      <div class="cal-monthbar">
+        <button class="cal-navbtn" onclick="cambiarMesCal(-1)" title="Mes anterior">‹</button>
+        <span class="cal-mestitulo" id="cal-mestitulo">—</span>
+        <button class="cal-navbtn" onclick="cambiarMesCal(1)" title="Mes siguiente">›</button>
+        <div class="cal-weekbar" id="cal-weekbar"></div>
+      </div>
+
+      <div class="cal-legend-row">
+        <span class="cal-lg"><span class="cal-mini p">P</span> Presente</span>
+        <span class="cal-lg"><span class="cal-mini a">A</span> Ausente</span>
+        <span class="cal-lg"><span class="cal-mini pe">P/E</span> Sin entrada</span>
+        <span class="cal-lg"><span class="cal-mini ps">P/S</span> Sin salida</span>
+        <span class="cal-lg"><span class="cal-mini lic">Lic</span> Licencia</span>
+        <span class="cal-lg"><span class="cal-mini vac">Vac</span> Vacaciones</span>
+      </div>
+
+      <div class="cal-wrap" id="cal-wrap">
+        <div class="cal-matrix" id="cal-matrix"><div class="empty" style="padding:30px">Carga los datos con el botón "Cargar" de arriba para ver el calendario.</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL detalle de día (calendario) -->
+<div class="cal-modal" id="cal-modal" onclick="if(event.target===this)cerrarCalModal()">
+  <div class="cal-modal-card">
+    <div class="cal-modal-head">
+      <div>
+        <h3 id="cm-nombre">—</h3>
+        <div class="cm-sub"><span id="cm-fecha">—</span> · <span id="cm-turno">—</span></div>
+      </div>
+      <span id="cm-pill"></span>
+      <button class="cal-modal-close" onclick="cerrarCalModal()">&times;</button>
+    </div>
+    <div class="cal-modal-body">
+      <div id="cm-alert" class="cm-alert" style="display:none"></div>
+      <div class="cm-marcas" id="cm-marcas"></div>
+      <div class="cm-coment-wrap">
+        <label class="cm-coment-lbl">Comentario / observación</label>
+        <textarea id="cm-coment" class="cm-coment" placeholder="Escribe una observación para este día..."></textarea>
+        <button class="cm-guardar" onclick="guardarComentarioCal()">Guardar comentario</button>
+        <span class="cm-saved" id="cm-saved" style="display:none">✓ Guardado</span>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- MODAL DETALLE TRABAJADOR -->
@@ -896,10 +1037,11 @@ function tab(t) {
   event.currentTarget.classList.add('on');
   document.querySelectorAll('.view').forEach(function(el) { el.classList.remove('on'); });
   $('v-' + t).classList.add('on');
-  document.body.classList.remove('tab-hoy','tab-emp','tab-ast','tab-ano','tab-tur','tab-per','tab-suc','tab-dep');
+  document.body.classList.remove('tab-hoy','tab-cal','tab-emp','tab-ast','tab-ano','tab-tur','tab-per','tab-suc','tab-dep');
   document.body.classList.add('tab-' + t);
   // Render diferido por pestaña
   if (t === 'hoy') renderHoy();
+  if (t === 'cal') renderCalendario();
   if (t === 'emp') aplicarFiltrosYRender();
   if (t === 'ast') renderMarcaciones();
   if (t === 'ano') renderAnomalias();
@@ -2588,6 +2730,215 @@ function exportarHoy(tipo) {
   if (!window._hoyData) actualizarKPIsHoy();
   exportarHoyExcel();
 }
+
+
+/* ════════════ WORKERA AL DÍA — calendario mensual productivo ════════════ */
+var calAnio, calMes;               // mes visible (0-11)
+var calChipEstado = 'todos';
+var calModalCtx = null;
+var calComentarios = {};           // 'code|fecha' -> comentario manual (sesión + localStorage)
+var CAL_COMENT_KEY = 'workera_cal_coment_v1';
+var CAL_NMES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+var CAL_DOW  = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+
+try { calComentarios = JSON.parse(localStorage.getItem(CAL_COMENT_KEY) || '{}'); } catch(e){ calComentarios = {}; }
+
+function calPad(n){ return n<10?'0'+n:''+n; }
+function calIso(y,m,d){ return y+'-'+calPad(m+1)+'-'+calPad(d); }
+
+/* Licencia/permiso vigente para un empleado en una fecha */
+function calLicencia(code, fecha){
+  return cachePermisos.find(function(p){
+    var pc = p.employeeCode || (p.employee && p.employee.code);
+    if (String(pc) !== String(code)) return false;
+    var ini = (p.start || p.startDate || '').substring(0,10);
+    var fin = (p.end || p.endDate || '').substring(0,10);
+    return ini && fin && ini <= fecha && fin >= fecha;
+  });
+}
+/* ¿El texto del permiso parece vacaciones? */
+function esVacacion(lic){
+  var t = ((lic.permissionTypeName||lic.type||'')+'').toLowerCase();
+  return t.indexOf('vacac') >= 0;
+}
+
+/* Deriva el estado (p/a/pe/ps/lic/vac) de un empleado en una fecha, usando datos REALES */
+function calEstadoDia(code, fecha){
+  // 1) Licencia / vacaciones tienen prioridad
+  var lic = calLicencia(code, fecha);
+  if (lic){
+    var esVac = esVacacion(lic);
+    return { edo: esVac?'vac':'lic', et:'', er:'', st:'', sr:'', atr:'',
+             turno: (lic.permissionTypeName||lic.type||(esVac?'Vacaciones':'Licencia')),
+             com: (lic.permissionTypeName||lic.type||'') + (lic.start?(' · '+(lic.start||'').substring(0,10)+' → '+(lic.end||'').substring(0,10)):'') };
+  }
+  // 2) Resumen real de marcas vs horario teórico
+  var r = calcularResumenDia(code, fecha);
+  // sin horario teórico ese día → no tenía turno (celda vacía)
+  if (!r.horario) return null;
+  var et = fmtHora(r.horario.start), st = fmtHora(r.horario.end);
+  var er = r.primeraDt ? fmtHora(r.primeraDt) : '—';
+  var sr = (r.ultimaDt && r.marcasCount >= 2) ? fmtHora(r.ultimaDt) : '—';
+  var turno = r.horario.workshiftName || 'Turno';
+  var edo, com='';
+  if (!r.primera){ edo='a'; com='Sin marca ni licencia'; }              // no marcó nada
+  else if (er==='—'){ edo='pe'; com='No registra marca de entrada'; }   // (raro, fallback)
+  else if (sr==='—'){ edo='ps'; com='No marcó salida'; }                // marcó entrada, no salida
+  else if (r.atrasoMin > 0){ edo='p'; com='Atraso de '+r.atrasoMin+' min'; }
+  else { edo='p'; }
+  return { edo:edo, et:et, er:er, st:st, sr:sr, atr:(r.atrasoMin>0?r.atrasoMin+' min':''), turno:turno, com:com };
+}
+
+function calEmpleadosActivos(){
+  return cacheEmpleados.filter(function(e){ return empActivo(e); });
+}
+
+function pillTxt(edo){ return {p:'P',a:'A',pe:'P/E',ps:'P/S',lic:'Lic',vac:'Vac'}[edo]||'·'; }
+
+function renderCalendario(){
+  var cont = $('cal-matrix');
+  if (!cacheEmpleados || !cacheEmpleados.length){
+    cont.innerHTML = '<div class="empty" style="padding:30px">Aún no hay datos. Presiona <b>Cargar</b> arriba para traer empleados y marcas.</div>';
+    return;
+  }
+  if (calAnio === undefined){ var h=new Date(); calAnio=h.getFullYear(); calMes=h.getMonth(); }
+
+  var ultimo = new Date(calAnio, calMes+1, 0).getDate();
+  var hoyD = new Date(); hoyD.setHours(12,0,0,0);
+  var q = ($('cal-busca').value||'').toLowerCase().trim();
+
+  $('cal-mestitulo').textContent = CAL_NMES[calMes] + ' ' + calAnio;
+
+  var personas = calEmpleadosActivos().filter(function(e){
+    if(!q) return true;
+    return empNombreCompleto(e).toLowerCase().indexOf(q)>=0 || (e.identification||'').toLowerCase().indexOf(q)>=0;
+  });
+
+  // encabezado días
+  var head = '<div class="cal-hrow"><div class="cal-corner">Trabajador \\ Día</div>';
+  for (var dia=1; dia<=ultimo; dia++){
+    var f = new Date(calAnio, calMes, dia); var dow=f.getDay();
+    var esHoy = (f.getFullYear()===hoyD.getFullYear()&&f.getMonth()===hoyD.getMonth()&&f.getDate()===hoyD.getDate());
+    var cls='cal-daycol'+((dow===0||dow===6)?' finde':'')+(esHoy?' hoy':'');
+    head += '<div class="'+cls+'" id="daycol-'+dia+'"><span class="cal-dow">'+CAL_DOW[dow]+'</span><span class="cal-dnum">'+dia+'</span></div>';
+  }
+  head += '</div>';
+
+  // filas por persona
+  var body = '';
+  personas.forEach(function(e){
+    var code = e.code, nombre = empNombreCompleto(e), rut = e.identification||'—';
+    body += '<div class="cal-prow"><div class="cal-pname"><span class="cal-pn" title="'+nombre+'">'+nombre+'</span><span class="cal-pr">'+rut+'</span></div>';
+    for (var dia=1; dia<=ultimo; dia++){
+      var fecha = calIso(calAnio, calMes, dia);
+      var f = new Date(calAnio, calMes, dia); var dow=f.getDay(); var finde=(dow===0||dow===6);
+      if (f > hoyD){ body += '<div class="cal-cell vacio'+(finde?' finde':'')+'"><span class="cal-mini empty">·</span></div>'; continue; }
+      var st = calEstadoDia(code, fecha);
+      if (!st){ body += '<div class="cal-cell vacio'+(finde?' finde':'')+'"><span class="cal-mini empty">·</span></div>'; continue; }
+      var visible = (calChipEstado==='todos' || st.edo===calChipEstado);
+      var alerta = (st.edo==='ps');
+      var op = visible?'':'opacity:.16;';
+      body += '<div class="cal-cell'+(finde?' finde':'')+(alerta?' alerta':'')+'" style="'+op+'" '+
+              'onclick="abrirCalModal(\''+code+'\',\''+fecha+'\')">'+
+              '<span class="cal-mini '+st.edo+'">'+pillTxt(st.edo)+'</span></div>';
+    }
+    body += '</div>';
+  });
+
+  cont.innerHTML = head + body;
+  renderWeekbarCal(ultimo);
+  scrollSemanaActualCal();
+}
+
+function renderWeekbarCal(ultimo){
+  var bar=$('cal-weekbar'); var html=''; var sem=1;
+  for(var dia=1; dia<=ultimo; dia+=7){
+    var fin=Math.min(dia+6,ultimo);
+    html+='<span class="cal-weekchip" data-dia="'+dia+'" onclick="scrollADiaCal('+dia+',this)">Sem '+sem+' · '+dia+'-'+fin+'</span>';
+    sem++;
+  }
+  bar.innerHTML=html;
+}
+function scrollADiaCal(dia,chip){
+  var col=$('daycol-'+dia), wrap=$('cal-wrap');
+  if(col) wrap.scrollTo({left:col.offsetLeft-200,behavior:'smooth'});
+  document.querySelectorAll('.cal-weekchip').forEach(function(c){c.classList.remove('on');});
+  if(chip) chip.classList.add('on');
+}
+function scrollSemanaActualCal(){
+  var h=new Date();
+  if(h.getFullYear()===calAnio && h.getMonth()===calMes){
+    var ini=h.getDate()-((h.getDay()+6)%7); if(ini<1)ini=1;
+    var target=null;
+    document.querySelectorAll('.cal-weekchip').forEach(function(ch){ if(parseInt(ch.dataset.dia)<=h.getDate()) target=ch; });
+    scrollADiaCal(ini, target);
+  } else { scrollADiaCal(1, document.querySelector('.cal-weekchip')); }
+}
+function cambiarMesCal(delta){
+  if(calAnio===undefined){ var h=new Date(); calAnio=h.getFullYear(); calMes=h.getMonth(); }
+  calMes+=delta; if(calMes<0){calMes=11;calAnio--;} if(calMes>11){calMes=0;calAnio++;}
+  renderCalendario();
+}
+function calHoyMes(){ var h=new Date(); calAnio=h.getFullYear(); calMes=h.getMonth(); renderCalendario(); }
+function calToggleChip(el){
+  document.querySelectorAll('#v-cal .filter-chip').forEach(function(c){c.classList.remove('on');});
+  el.classList.add('on'); calChipEstado=el.dataset.edo||'todos'; renderCalendario();
+}
+
+/* ── Modal contextual ── */
+function abrirCalModal(code, fecha){
+  var st = calEstadoDia(code, fecha); if(!st) return;
+  var emp = cacheEmpleados.find(function(e){ return String(e.code)===String(code); });
+  var nombre = emp ? empNombreCompleto(emp) : code;
+  calModalCtx = { code:code, fecha:fecha };
+  var partes = fecha.split('-');
+  $('cm-nombre').textContent = nombre;
+  $('cm-fecha').textContent = partes[2]+' '+CAL_NMES[parseInt(partes[1])-1]+' '+partes[0];
+  $('cm-turno').textContent = st.turno||'—';
+  $('cm-pill').innerHTML = '<span class="cal-mini '+st.edo+'" style="width:auto;padding:2px 8px">'+pillTxt(st.edo)+'</span>';
+
+  var alertEl = $('cm-alert');
+  if(st.edo==='ps'){ alertEl.style.display='flex'; alertEl.className='cm-alert rojo'; alertEl.innerHTML='⚠ No marcó salida — jornada sin cierre'; }
+  else if(st.edo==='pe'){ alertEl.style.display='flex'; alertEl.className='cm-alert ambar'; alertEl.innerHTML='⚠ No registró marca de entrada'; }
+  else if(st.edo==='a'){ alertEl.style.display='flex'; alertEl.className='cm-alert rojo'; alertEl.innerHTML='⚠ Ausente — sin marca ni licencia'; }
+  else if(st.atr){ alertEl.style.display='flex'; alertEl.className='cm-alert ambar'; alertEl.innerHTML='⏱ Atraso de '+st.atr; }
+  else { alertEl.style.display='none'; }
+
+  var m='';
+  if(st.edo==='lic'||st.edo==='vac'){
+    m='<div class="cm-marca" style="grid-column:1/-1"><div class="cm-marca-lbl">'+(st.edo==='vac'?'Vacaciones':'Licencia')+'</div><div class="cm-marca-val pend">'+(st.com||'—')+'</div></div>';
+  } else {
+    m+='<div class="cm-marca"><div class="cm-marca-lbl">Entrada teórica</div><div class="cm-marca-val">'+(st.et||'—')+'</div></div>';
+    if(st.edo==='pe'){
+      m+='<div class="cm-marca destacar"><div class="cm-marca-lbl">Entrada real</div><div class="cm-marca-val pend">sin marca</div><div class="cm-marca-sub">no registró entrada</div></div>';
+    } else {
+      m+='<div class="cm-marca'+(st.atr?' destacar':'')+'"><div class="cm-marca-lbl">Entrada real</div><div class="cm-marca-val'+(st.atr?' rojo':'')+'">'+(st.er||'—')+'</div>'+(st.atr?'<div class="cm-marca-sub">atraso '+st.atr+'</div>':'')+'</div>';
+    }
+    m+='<div class="cm-marca"><div class="cm-marca-lbl">Salida teórica</div><div class="cm-marca-val">'+(st.st||'—')+'</div></div>';
+    if(st.edo==='ps'){
+      m+='<div class="cm-marca destacar"><div class="cm-marca-lbl">Salida real</div><div class="cm-marca-val pend rojo">pendiente</div><div class="cm-marca-sub">no marcó salida</div></div>';
+    } else {
+      m+='<div class="cm-marca"><div class="cm-marca-lbl">Salida real</div><div class="cm-marca-val">'+(st.sr||'—')+'</div></div>';
+    }
+  }
+  $('cm-marcas').innerHTML = m;
+
+  var ckey = code+'|'+fecha;
+  $('cm-coment').value = calComentarios[ckey] || '';
+  $('cm-saved').style.display='none';
+  $('cal-modal').classList.add('show');
+}
+function cerrarCalModal(){ $('cal-modal').classList.remove('show'); }
+function guardarComentarioCal(){
+  if(!calModalCtx) return;
+  var ckey = calModalCtx.code+'|'+calModalCtx.fecha;
+  calComentarios[ckey] = $('cm-coment').value;
+  try { localStorage.setItem(CAL_COMENT_KEY, JSON.stringify(calComentarios)); } catch(e){}
+  $('cm-saved').style.display='inline';
+  setTimeout(function(){ $('cm-saved').style.display='none'; }, 1800);
+}
+document.addEventListener('keydown', function(e){ if(e.key==='Escape') cerrarCalModal(); });
+
 
 </script>
 </body>

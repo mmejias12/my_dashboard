@@ -1,0 +1,2745 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Asistencia Workera · REDTEC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#09090f;--s1:#0f1018;--s2:#14151f;--s3:#1a1b28;--s4:#22243a;
+  --br:rgba(255,255,255,.06);--brm:rgba(255,255,255,.1);--brh:rgba(255,255,255,.18);
+  --t1:#f0f1f5;--t2:#8b90a8;--t3:#4a4f66;--t4:#2c3045;
+  --green:#22d47a;--blue:#4f8ef7;--amber:#f5a623;--red:#f56060;
+  --purple:#a78bfa;--cyan:#22d4d4;--pink:#f472b6;
+  --green-bg:rgba(34,212,122,.12);--blue-bg:rgba(79,142,247,.12);
+  --amber-bg:rgba(245,166,35,.12);--red-bg:rgba(245,96,96,.12);
+  --purple-bg:rgba(167,139,250,.12);--cyan-bg:rgba(34,212,212,.12);
+}
+html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;background:var(--bg);color:var(--t1);-webkit-font-smoothing:antialiased}
+
+/* HDR */
+.hdr{height:52px;background:var(--s1);border-bottom:1px solid var(--br);display:flex;align-items:center;padding:0 20px;gap:12px;position:sticky;top:0;z-index:100}
+.logo{width:28px;height:28px;background:#c0392b;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:11px;text-decoration:none;flex-shrink:0}
+.hdr-title{font-size:13px;font-weight:600}
+.hdr-sub{font-size:11px;color:var(--t3)}
+.sep{width:1px;height:18px;background:var(--brm)}
+.pill{display:flex;align-items:center;gap:5px;background:var(--cyan-bg);border:1px solid rgba(34,212,212,.25);border-radius:20px;padding:3px 10px;font-size:10.5px;color:var(--cyan);font-weight:500}
+.pill-dot{width:6px;height:6px;background:var(--cyan);border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.hdr-r{margin-left:auto;display:flex;align-items:center;gap:8px}
+.back{font-size:11px;color:var(--t3);text-decoration:none;padding:4px 10px;border:1px solid var(--brm);border-radius:6px}
+.back:hover{color:var(--t2)}
+
+/* CONTROLS */
+.ctrls{background:var(--s1);border-bottom:1px solid var(--br);padding:11px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ctrl-lbl{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;font-weight:500}
+.ctrl-inp,.ctrl-sel{background:var(--s2);border:1px solid var(--brm);color:var(--t1);padding:5px 9px;border-radius:6px;font-size:12px;font-family:inherit;outline:none;transition:border-color .15s}
+.ctrl-inp:focus,.ctrl-sel:focus{border-color:var(--cyan)}
+.load-btn{font-size:12px;padding:6px 16px;background:var(--cyan);color:#09090f;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-family:'DM Sans',sans-serif;transition:opacity .15s}
+.load-btn:hover{opacity:.88}
+.load-btn:disabled{opacity:.4;cursor:not-allowed}
+.tol-inp{width:48px;text-align:center}
+
+/* STATUS */
+.status-bar{background:var(--s1);border-bottom:1px solid var(--br);padding:7px 20px;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--t3)}
+.sdot{width:7px;height:7px;border-radius:50%;background:var(--t3);flex-shrink:0}
+.sdot.ok{background:var(--green)}.sdot.load{background:var(--amber);animation:pulse 1s infinite}
+.sdot.err{background:var(--red)}.sdot.warn{background:var(--amber)}
+
+/* TABS */
+.tabs{display:flex;background:var(--s1);border-bottom:1px solid var(--br);padding:0 20px;overflow-x:auto}
+.tab{font-size:12px;padding:10px 16px;color:var(--t3);cursor:pointer;border:none;background:none;font-family:'DM Sans',sans-serif;border-bottom:2px solid transparent;transition:all .13s;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.tab:hover{color:var(--t2)}
+.tab.on{color:var(--t1);border-bottom-color:var(--cyan);font-weight:500}
+.tab-badge{display:inline-block;min-width:18px;padding:1px 6px;font-size:10px;font-weight:600;border-radius:9px;background:var(--red);color:#fff;font-family:'DM Mono',monospace;line-height:1.4}
+.tab-badge.amber{background:var(--amber);color:#09090f}
+.tab-badge.cyan{background:var(--cyan);color:#09090f}
+
+/* MAIN */
+.main{padding:16px 20px;max-width:1700px}
+.view{display:none}
+.view.on{display:block}
+
+/* KPI STRIP */
+.krow{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;margin-bottom:13px}
+@media(max-width:1300px){.krow{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:700px){.krow{grid-template-columns:repeat(2,1fr)}}
+.kpi{background:var(--s2);border:1px solid var(--br);border-radius:10px;padding:11px 14px;position:relative;overflow:hidden;transition:transform .15s,border-color .15s;cursor:default}
+.kpi.clickable{cursor:pointer}
+.kpi.clickable:hover{transform:translateY(-1px);border-color:var(--brh)}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:currentColor;opacity:.75}
+.kpi.blue{color:var(--blue)}.kpi.green{color:var(--green)}.kpi.amber{color:var(--amber)}
+.kpi.red{color:var(--red)}.kpi.purple{color:var(--purple)}.kpi.cyan{color:var(--cyan)}
+.kpi.pink{color:var(--pink)}
+.kl{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--t3);margin-bottom:5px;font-weight:500}
+.kv{font-size:22px;font-weight:600;line-height:1;font-family:'DM Mono',monospace;color:currentColor}
+.ks{font-size:10px;color:var(--t3);margin-top:4px}
+
+/* CARD */
+.card{background:var(--s2);border:1px solid var(--br);border-radius:10px;padding:14px;margin-bottom:11px}
+.ct{font-size:11.5px;font-weight:600;color:var(--t2);margin-bottom:3px;display:flex;align-items:center;gap:8px}
+.cs{font-size:10.5px;color:var(--t3);margin-bottom:11px}
+.card-actions{margin-left:auto;display:flex;gap:6px;align-items:center}
+
+/* FILTRO LOCAL */
+.local-filters{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;padding:8px 0;border-bottom:1px dashed var(--br)}
+.local-filters input,.local-filters select{background:var(--s3);border:1px solid var(--brm);color:var(--t1);padding:4px 8px;border-radius:5px;font-size:11.5px;font-family:inherit;outline:none}
+.local-filters input:focus,.local-filters select:focus{border-color:var(--cyan)}
+.btn-mini{font-size:11px;padding:3px 10px;background:var(--s3);color:var(--t2);border:1px solid var(--brm);border-radius:5px;cursor:pointer;font-family:inherit;transition:all .15s}
+.btn-mini:hover{color:var(--t1);border-color:var(--brh)}
+.btn-mini.green{background:var(--green-bg);color:var(--green);border-color:rgba(34,212,122,.3)}
+.btn-mini.green:hover{background:rgba(34,212,122,.18)}
+.btn-mini.cyan{background:var(--cyan-bg);color:var(--cyan);border-color:rgba(34,212,212,.3)}
+.btn-mini.cyan:hover{background:rgba(34,212,212,.18)}
+
+/* TABLA */
+.tw{overflow-x:auto;border-radius:6px;border:1px solid var(--br)}
+.tbl{width:100%;border-collapse:collapse;font-size:12px;min-width:700px}
+.tbl th{background:var(--s3);color:var(--t2);font-weight:500;text-align:left;padding:8px 10px;border-bottom:1px solid var(--br);font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;position:sticky;top:0;z-index:1}
+.tbl th.sortable{cursor:pointer;user-select:none}
+.tbl th.sortable:hover{color:var(--t1)}
+.tbl th.sorted-asc::after{content:'↑';margin-left:4px;color:var(--cyan)}
+.tbl th.sorted-desc::after{content:'↓';margin-left:4px;color:var(--cyan)}
+.tbl td{padding:7px 10px;border-bottom:1px solid var(--br);color:var(--t1);font-size:11.5px}
+.tbl tr:hover td{background:rgba(255,255,255,.02)}
+.tbl tr.row-alert td{background:rgba(245,96,96,.04)}
+.tbl tr.row-alert:hover td{background:rgba(245,96,96,.08)}
+.tbl tr.row-warn td{background:rgba(245,166,35,.04)}
+.tbl tr.row-warn:hover td{background:rgba(245,166,35,.08)}
+.tbl .num{font-family:'DM Mono',monospace;font-size:11px}
+
+/* Estado pills */
+.s-pill{display:inline-block;padding:1.5px 7px;border-radius:10px;font-size:10px;font-weight:500;font-family:'DM Mono',monospace}
+.s-pill.act{background:var(--green-bg);color:var(--green)}
+.s-pill.ina{background:var(--red-bg);color:var(--red)}
+.s-pill.atraso{background:var(--red-bg);color:var(--red)}
+.s-pill.warn{background:var(--amber-bg);color:var(--amber)}
+.s-pill.ok{background:var(--green-bg);color:var(--green)}
+.s-pill.extra{background:var(--purple-bg);color:var(--purple)}
+.s-pill.permiso{background:var(--blue-bg);color:var(--blue)}
+.s-pill.no-marca{background:var(--red-bg);color:var(--red);border:1px solid rgba(245,96,96,.4)}
+
+/* Empleado link */
+.emp-link{color:var(--cyan);cursor:pointer;text-decoration:none;font-weight:500}
+.emp-link:hover{text-decoration:underline}
+
+/* Empty / Loading state */
+.empty{padding:30px;text-align:center;color:var(--t3);font-size:11.5px}
+.loading-shim{padding:30px;text-align:center;color:var(--amber);font-size:11.5px}
+
+/* EMPLEADO BANNER */
+.emp-banner{background:rgba(34,211,238,.07);border:1px solid rgba(34,211,238,.3);
+  border-radius:6px;padding:10px 14px;margin:8px 0 14px;font-size:11.5px;
+  color:var(--t2);line-height:1.55}
+.emp-banner code{background:var(--s2);padding:1px 6px;border-radius:3px;
+  font-family:'DM Mono',monospace;font-size:10.5px;color:var(--cyan)}
+.emp-banner strong{color:var(--t1)}
+
+/* MODAL */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;display:none;align-items:flex-start;justify-content:center;overflow-y:auto;padding:30px 20px}
+.modal-bg.on{display:flex}
+.modal{background:var(--s2);border:1px solid var(--brm);border-radius:12px;width:100%;max-width:900px;padding:24px;position:relative;max-height:calc(100vh - 60px);overflow-y:auto}
+.modal-close{position:absolute;top:14px;right:14px;background:none;border:none;color:var(--t2);font-size:20px;cursor:pointer;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:all .15s}
+.modal-close:hover{background:var(--s3);color:var(--t1)}
+.modal h2{font-size:18px;margin-bottom:4px;color:var(--t1)}
+.modal h3{font-size:11.5px;margin:0 0 10px;color:var(--cyan);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.modal-sub{font-size:11.5px;color:var(--t2);margin-bottom:20px}
+.modal-section{margin-bottom:22px}
+.modal-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px 16px}
+.modal-grid .lbl{color:var(--t3);font-size:10px;text-transform:uppercase;letter-spacing:.4px}
+.modal-grid .val{color:var(--t1);font-size:12.5px;margin-bottom:6px;font-family:'DM Mono',monospace}
+
+/* ALERTA BOX */
+.alert-box{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:6px;margin-bottom:8px;font-size:11.5px;line-height:1.5}
+.alert-box.danger{background:var(--red-bg);border-left:3px solid var(--red);color:var(--t1)}
+.alert-box.warn{background:var(--amber-bg);border-left:3px solid var(--amber);color:var(--t1)}
+.alert-box.info{background:var(--cyan-bg);border-left:3px solid var(--cyan);color:var(--t1)}
+.alert-box.success{background:var(--green-bg);border-left:3px solid var(--green);color:var(--t1)}
+.alert-icon{font-size:14px;line-height:1}
+
+/* HOY / DASHBOARD HOY */
+.hoy-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:11px;margin-bottom:13px}
+
+/* FERIADOS */
+.feriado-banner{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:8px;margin-bottom:11px;
+  font-size:12px;line-height:1.5;
+  background:linear-gradient(90deg,rgba(245,166,35,.15),rgba(167,139,250,.10));
+  border-left:3px solid var(--amber);color:var(--t1)}
+.feriado-banner-icon{font-size:18px;line-height:1}
+.proximos-feriados{margin-top:14px;padding:10px 12px;background:var(--s2);border:1px solid var(--br);
+  border-radius:8px;font-size:11px;color:var(--t3);display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+.proximos-feriados strong{color:var(--amber);font-weight:500}
+.prox-fer-item{display:inline-flex;align-items:center;gap:6px;color:var(--t2);
+  font-family:'DM Mono',monospace;font-size:10.5px;padding:3px 8px;background:var(--s3);
+  border-radius:4px;border:1px solid var(--br)}
+.prox-fer-item .nm{color:var(--t1);font-family:'DM Sans',sans-serif;font-weight:500}
+.prox-fer-item.hoy{background:var(--amber-bg);border-color:rgba(245,166,35,.4);color:var(--amber)}
+.prox-fer-item.hoy .nm{color:var(--amber)}
+
+/* Filas de feriado en tablas */
+.tbl tr.row-feriado td{background:rgba(245,166,35,.05)}
+.tbl tr.row-feriado:hover td{background:rgba(245,166,35,.1)}
+.hoy-card{background:var(--s2);border:1px solid var(--br);border-radius:10px;padding:14px}
+.hoy-card-title{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--t3);margin-bottom:8px;font-weight:500;display:flex;align-items:center;justify-content:space-between}
+.hoy-list{max-height:300px;overflow-y:auto;margin:0 -6px;padding:0 6px}
+.hoy-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--br);font-size:11.5px;transition:background .12s}
+.hoy-row[onclick]:hover{background:rgba(255,255,255,.04);padding-left:6px;padding-right:6px;margin:0 -6px;border-radius:4px;border-bottom-color:transparent}
+.hoy-row:last-child{border-bottom:none}
+.hoy-row .name{flex:1;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hoy-row .meta{color:var(--t3);font-family:'DM Mono',monospace;font-size:10.5px;flex-shrink:0}
+.hoy-row.alert{color:var(--red)}
+.hoy-row.alert .name{color:var(--t1)}
+
+/* FERIADOS */
+.feriado-cell{position:relative;background:linear-gradient(135deg,rgba(167,139,250,.10) 0%,rgba(245,166,35,.06) 100%)!important}
+.feriado-cell::after{content:'🎉';position:absolute;top:2px;right:6px;font-size:11px;opacity:.7}
+.feriado-row td{background:linear-gradient(135deg,rgba(167,139,250,.06) 0%,rgba(245,166,35,.03) 100%)!important}
+.feriado-banner{background:linear-gradient(90deg,var(--purple-bg),var(--amber-bg));
+  border:1px solid rgba(167,139,250,.4);border-left:4px solid var(--purple);
+  border-radius:8px;padding:11px 16px;margin-bottom:13px;display:flex;
+  align-items:center;gap:11px;font-size:13px}
+.feriado-banner-icon{font-size:22px;line-height:1}
+.feriado-banner strong{color:var(--purple)}
+.feriado-tag{display:inline-block;font-size:9.5px;font-weight:600;
+  background:var(--purple-bg);color:var(--purple);padding:1.5px 7px;
+  border-radius:8px;margin-left:6px;vertical-align:middle}
+.proximos-feriados{margin-top:13px;padding:10px 14px;background:var(--s2);
+  border:1px dashed var(--brm);border-radius:8px;font-size:11.5px;color:var(--t2)}
+.proximos-feriados strong{color:var(--purple);margin-right:8px}
+.prox-fer-item{display:inline-block;margin:0 10px 0 0;padding:2px 8px;
+  background:var(--s3);border-radius:6px;font-family:'DM Mono',monospace;font-size:11px}
+.prox-fer-item .nm{color:var(--t1);font-family:'DM Sans',sans-serif;margin-left:5px}
+
+/* SCROLLBAR personalizado */
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:var(--s1)}
+::-webkit-scrollbar-thumb{background:var(--s4);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:var(--brh)}
+
+/* Tooltips simples */
+[title]{cursor:help}
+
+/* FERIADOS */
+.feriado-banner{background:linear-gradient(135deg,rgba(167,139,250,.15),rgba(245,166,35,.12));border:1px solid rgba(167,139,250,.3);border-radius:8px;padding:11px 14px;margin-bottom:11px;display:flex;align-items:center;gap:10px;font-size:12px}
+.feriado-banner .ico{font-size:18px}
+.feriado-banner strong{color:var(--purple)}
+.feriado-cell{position:relative}
+.feriado-cell::after{content:'🎉';position:absolute;top:50%;right:6px;transform:translateY(-50%);font-size:11px;opacity:.85}
+.tbl tr.row-feriado td{background:rgba(167,139,250,.06)!important}
+.tbl tr.row-feriado:hover td{background:rgba(167,139,250,.10)!important}
+.feriado-pill{display:inline-block;background:rgba(167,139,250,.15);color:var(--purple);border:1px solid rgba(167,139,250,.3);padding:1px 8px;border-radius:10px;font-size:9.5px;font-weight:500;margin-left:6px}
+.proximos-feriados{font-size:10.5px;color:var(--t3);padding:8px 12px;background:var(--s2);border:1px dashed var(--brm);border-radius:6px;margin-top:8px}
+.proximos-feriados strong{color:var(--purple)}
+.proximos-feriados .pf-item{display:inline-block;margin:0 8px}
+.proximos-feriados .pf-item .pf-d{color:var(--t1);font-weight:500}
+
+/* Print */
+@media print{
+  .hdr,.ctrls,.status-bar,.tabs,.local-filters,.modal-close,.card-actions{display:none!important}
+  .modal-bg{position:static;background:#fff;padding:0}
+  .modal{max-width:100%;max-height:none;border:none;color:#000;background:#fff}
+  body{background:#fff;color:#000}
+}
+
+/* ───────── CALENDARIO WORKERA AL DÍA ───────── */
+.cal-monthbar{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.cal-navbtn{width:28px;height:28px;border-radius:6px;background:var(--s3);border:1px solid var(--brm);color:var(--t1);cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.cal-navbtn:hover{background:var(--s4);color:var(--cyan)}
+.cal-mestitulo{font-size:13px;font-weight:600;min-width:130px;text-align:center;text-transform:capitalize}
+.cal-weekbar{display:flex;gap:5px;margin-left:8px;flex-wrap:wrap}
+.cal-weekchip{font-size:10px;padding:3px 10px;border-radius:12px;background:var(--s3);border:1px solid var(--brm);color:var(--t2);cursor:pointer;transition:all .15s;white-space:nowrap}
+.cal-weekchip:hover{color:var(--t1);border-color:var(--brh)}
+.cal-weekchip.on{background:var(--cyan-bg);color:var(--cyan);border-color:rgba(34,212,212,.35);font-weight:600}
+.cal-legend-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px;padding:8px 0;border-bottom:1px dashed var(--br)}
+.cal-lg{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--t2)}
+.cal-wrap{overflow-x:auto;border:1px solid var(--br);border-radius:8px;background:var(--s1)}
+.cal-matrix{display:inline-block;min-width:100%}
+.cal-hrow{display:flex;position:sticky;top:0;z-index:3;background:var(--s3)}
+.cal-corner{width:190px;min-width:190px;padding:8px 12px;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--t3);font-weight:600;position:sticky;left:0;z-index:4;background:var(--s3);border-right:1px solid var(--brm);display:flex;align-items:center}
+.cal-daycol{width:38px;min-width:38px;padding:5px 0;text-align:center;border-right:1px solid var(--br);display:flex;flex-direction:column;align-items:center;gap:1px}
+.cal-daycol.finde{background:rgba(255,255,255,.02)}
+.cal-daycol.hoy{background:var(--cyan-bg)}
+.cal-dow{font-size:8.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.3px}
+.cal-dnum{font-size:12px;font-weight:600;color:var(--t2);font-family:'DM Mono',monospace}
+.cal-daycol.hoy .cal-dnum{color:var(--cyan)}
+.cal-prow{display:flex;border-top:1px solid var(--br)}
+.cal-prow:hover{background:rgba(255,255,255,.015)}
+.cal-pname{width:190px;min-width:190px;padding:6px 12px;position:sticky;left:0;z-index:2;background:var(--s2);border-right:1px solid var(--brm);display:flex;flex-direction:column;justify-content:center}
+.cal-prow:hover .cal-pname{background:var(--s3)}
+.cal-pn{font-size:11.5px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:166px}
+.cal-pr{font-size:9.5px;color:var(--t3);font-family:'DM Mono',monospace}
+.cal-cell{width:38px;min-width:38px;height:34px;border-right:1px solid var(--br);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .12s;position:relative}
+.cal-cell:hover{transform:scale(1.12);z-index:5;box-shadow:0 0 0 2px var(--cyan)}
+.cal-cell.finde{background:rgba(255,255,255,.015)}
+.cal-cell.vacio{cursor:default}
+.cal-cell.vacio:hover{transform:none;box-shadow:none}
+.cal-mini{width:26px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;font-family:'DM Mono',monospace;letter-spacing:.2px}
+.cal-mini.p{background:var(--green-bg);color:var(--green)}
+.cal-mini.a{background:var(--red-bg);color:var(--red)}
+.cal-mini.pe{background:var(--amber-bg);color:var(--amber)}
+.cal-mini.ps{background:var(--purple-bg);color:var(--purple)}
+.cal-mini.lic{background:var(--blue-bg);color:var(--blue)}
+.cal-mini.vac{background:var(--cyan-bg);color:var(--cyan)}
+.cal-mini.empty{background:transparent;color:var(--t4)}
+.cal-cell.alerta .cal-mini{box-shadow:0 0 0 1.5px var(--red)}
+.cal-cell.alerta::after{content:'';position:absolute;top:3px;right:3px;width:5px;height:5px;border-radius:50%;background:var(--red);box-shadow:0 0 5px var(--red)}
+.cal-modal{position:fixed;inset:0;background:rgba(5,5,10,.78);backdrop-filter:blur(4px);z-index:1100;display:none;align-items:center;justify-content:center;padding:20px}
+.cal-modal.show{display:flex}
+.cal-modal-card{background:var(--s2);border:1px solid var(--brm);border-radius:13px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,.55);overflow:hidden}
+.cal-modal-head{padding:15px 18px;border-bottom:1px solid var(--br);display:flex;align-items:center;gap:12px}
+.cal-modal-head h3{font-size:15px;font-weight:700;color:var(--t1)}
+.cm-sub{font-size:11px;color:var(--t3);margin-top:2px}
+.cal-modal-close{background:transparent;border:none;color:var(--t3);font-size:22px;cursor:pointer;line-height:1;margin-left:auto}
+.cal-modal-close:hover{color:var(--t1)}
+.cal-modal-body{padding:16px 18px 18px}
+.cm-alert{padding:9px 12px;border-radius:7px;font-size:11.5px;margin-bottom:14px;display:flex;align-items:center;gap:8px;font-weight:500}
+.cm-alert.rojo{background:var(--red-bg);color:var(--red);border:1px solid rgba(245,96,96,.3)}
+.cm-alert.ambar{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(245,166,35,.3)}
+.cm-marcas{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:16px}
+.cm-marca{background:var(--s1);border:1px solid var(--br);border-radius:8px;padding:9px 11px}
+.cm-marca.destacar{border-color:rgba(245,96,96,.4);background:rgba(245,96,96,.05)}
+.cm-marca-lbl{font-size:9.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.4px;font-weight:600;margin-bottom:3px}
+.cm-marca-val{font-size:16px;font-weight:600;font-family:'DM Mono',monospace;color:var(--t1)}
+.cm-marca-val.rojo{color:var(--red)}
+.cm-marca-val.pend{color:var(--t3);font-style:italic;font-size:13px}
+.cm-marca-sub{font-size:9.5px;color:var(--t3);margin-top:2px}
+.cm-coment-wrap{border-top:1px solid var(--br);padding-top:14px}
+.cm-coment-lbl{font-size:10.5px;color:var(--t2);font-weight:600;display:block;margin-bottom:6px}
+.cm-coment{width:100%;background:var(--s1);border:1px solid var(--brm);border-radius:7px;color:var(--t1);padding:8px 10px;font-size:12px;font-family:inherit;resize:vertical;min-height:56px;outline:none}
+.cm-coment:focus{border-color:var(--cyan)}
+.cm-guardar{margin-top:9px;background:var(--cyan-bg);color:var(--cyan);border:1px solid rgba(34,212,212,.35);border-radius:6px;padding:6px 14px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s}
+.cm-guardar:hover{background:var(--cyan);color:var(--bg)}
+.cm-saved{margin-left:10px;font-size:11px;color:var(--green);font-weight:600}
+
+/* Chips de filtro de estado (botones) */
+.local-filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0}
+.filter-chip{font-size:11.5px;padding:4px 13px;border-radius:16px;background:var(--s3);border:1px solid var(--brm);color:var(--t2);cursor:pointer;transition:all .14s;user-select:none;font-weight:500;font-family:inherit}
+.filter-chip:hover{color:var(--t1);border-color:var(--brh);background:var(--s4)}
+.filter-chip.on{background:var(--cyan-bg);color:var(--cyan);border-color:rgba(34,212,212,.45);font-weight:600}
+.local-filters input{background:var(--s3);border:1px solid var(--brm);color:var(--t1);padding:5px 10px;border-radius:6px;font-size:12px;font-family:inherit;outline:none}
+.local-filters input:focus{border-color:var(--cyan)}
+.local-filters .ctrl-lbl{font-size:11px;color:var(--t3);font-weight:500}
+
+/* ── Panel KPI del día (Workera al día) ── */
+.dia-counters{display:flex;align-items:center;gap:12px;margin-bottom:13px}
+.dia-count{display:flex;align-items:center;gap:10px;background:var(--s2);border:1px solid var(--brm);border-radius:22px;padding:8px 18px}
+.dc-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--t3);font-weight:600}
+.dc-val{font-size:19px;font-weight:700;font-family:'DM Mono',monospace;color:var(--t1)}
+.dia-count.green .dc-val{color:var(--green)}
+.dia-fecha{margin-left:auto;font-size:11px;color:var(--t3)}
+.kpi-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;margin-bottom:16px}
+@media(max-width:1100px){.kpi-cards{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.kpi-cards{grid-template-columns:1fr}}
+.kcard{background:var(--s2);border:1px solid var(--br);border-radius:10px;padding:0;overflow:hidden;position:relative}
+.kcard::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:currentColor;opacity:.85}
+.kcard.blue{color:var(--blue)}.kcard.cyan{color:var(--cyan)}.kcard.red{color:var(--red)}
+.kcard.amber{color:var(--amber)}.kcard.purple{color:var(--purple)}.kcard.pink{color:var(--pink)}
+.kcard-head{display:flex;align-items:center;justify-content:space-between;padding:11px 14px 9px}
+.kcard-title{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--t2);font-weight:600}
+.kcard-count{font-size:12px;font-weight:700;font-family:'DM Mono',monospace;color:currentColor;background:currentColor;width:22px;height:20px;border-radius:6px;display:flex;align-items:center;justify-content:center}
+.kcard-count{color:#0a0a10}
+.kcard-list{padding:0 12px 12px;display:flex;flex-direction:column;gap:6px;max-height:150px;overflow-y:auto}
+.kperson{display:flex;align-items:center;gap:9px;padding:6px 8px;background:var(--s1);border:1px solid var(--br);border-radius:7px}
+.kav{width:26px;height:26px;border-radius:50%;background:var(--s4);color:currentColor;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:'DM Mono',monospace}
+.kp-info{flex:1;min-width:0}
+.kp-name{font-size:11.5px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kp-sub{font-size:9.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kp-detail{font-size:10.5px;font-weight:600;font-family:'DM Mono',monospace;color:currentColor;white-space:nowrap}
+.kpi-empty{font-size:11px;color:var(--t4);font-style:italic;padding:8px 4px;text-align:center}
+</style>
+</head>
+<body class="tab-cal">
+<header class="hdr">
+  <a href="m3link_dashboard_dark.html" class="logo" title="Volver al panel M3LINK"><img src="data:image/png;base64,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" alt="REDTEC" style="width:30px;height:30px;object-fit:contain;filter:drop-shadow(0 1px 2px rgba(0,0,0,.3))"></a>
+  <div>
+    <div class="hdr-title">Workera al día</div>
+    <div class="hdr-sub">Asistencia por área · REDTEC</div>
+  </div>
+  <div class="sep"></div>
+  <div class="pill"><div class="pill-dot"></div>API Workera</div>
+  <div class="hdr-r">
+    <a href="m3link_dashboard_dark.html" class="back">← Panel</a>
+  </div>
+</header>
+
+<div class="ctrls">
+  <span class="ctrl-lbl">Empresa:</span>
+  <select id="empresa" class="ctrl-sel">
+    <option value="SURTEC">SURTEC</option>
+  </select>
+  <span class="ctrl-lbl">Mes:</span>
+  <select id="mes-sel" class="ctrl-sel" onchange="seleccionarMes()"></select>
+  <button id="btn-load" class="load-btn" onclick="cargar()">🔄 Cargar mes</button>
+  <!-- controles ocultos que la maquinaria de datos sigue usando internamente -->
+  <input type="date" id="d1" style="display:none">
+  <input type="date" id="d2" style="display:none">
+  <input type="number" id="tolerancia" value="0" style="display:none">
+  <select id="sucursal" style="display:none"><option value="">Todas</option></select>
+  <select id="depto" style="display:none"><option value="">Todos</option></select>
+</div>
+
+<div class="status-bar">
+  <div id="sdot" class="sdot"></div>
+  <span id="status-txt">Selecciona un mes y presiona «Cargar mes».</span>
+</div>
+
+<div class="main">
+  <!-- RESUMEN DEL DÍA (hoy) -->
+  <div class="dia-counters" id="dia-counters">
+    <div class="dia-count"><span class="dc-lbl">Activos hoy</span><span class="dc-val" id="dc-act">—</span></div>
+    <div class="dia-count green"><span class="dc-lbl">Presentes (P)</span><span class="dc-val" id="dc-pres">—</span></div>
+    <span class="dia-fecha" id="dia-fecha"></span>
+  </div>
+
+  <div class="kpi-cards" id="kpi-cards">
+    <div class="kcard blue">
+      <div class="kcard-head"><span class="kcard-title">● Licencias</span><span class="kcard-count" id="kc-lic">0</span></div>
+      <div class="kcard-list" id="kl-lic"></div>
+    </div>
+    <div class="kcard cyan">
+      <div class="kcard-head"><span class="kcard-title">● Vacaciones</span><span class="kcard-count" id="kc-vac">0</span></div>
+      <div class="kcard-list" id="kl-vac"></div>
+    </div>
+    <div class="kcard red">
+      <div class="kcard-head"><span class="kcard-title">● Ausencias</span><span class="kcard-count" id="kc-a">0</span></div>
+      <div class="kcard-list" id="kl-a"></div>
+    </div>
+    <div class="kcard amber">
+      <div class="kcard-head"><span class="kcard-title">● No marcó entrada</span><span class="kcard-count" id="kc-pe">0</span></div>
+      <div class="kcard-list" id="kl-pe"></div>
+    </div>
+    <div class="kcard purple">
+      <div class="kcard-head"><span class="kcard-title">● No marcó salida</span><span class="kcard-count" id="kc-ps">0</span></div>
+      <div class="kcard-list" id="kl-ps"></div>
+    </div>
+    <div class="kcard pink">
+      <div class="kcard-head"><span class="kcard-title">● Atrasos</span><span class="kcard-count" id="kc-atra">0</span></div>
+      <div class="kcard-list" id="kl-atra"></div>
+    </div>
+  </div>
+
+  <!-- WORKERA AL DÍA (calendario mensual) -->
+  <div id="v-cal" class="view on">
+    <div class="card">
+      <div class="ct">
+        <span>📅 Workera al día</span>
+        <span class="card-actions">
+          <button class="btn-mini" onclick="calHoyMes()">Mes actual</button>
+          <button class="btn-mini" onclick="cargar()">↻ Refrescar</button>
+        </span>
+      </div>
+      <div class="cs">Calendario mensual de asistencia. Cada celda día×trabajador muestra el estado. Clic en una celda para ver marcas y comentar. <span style="color:var(--red)">Rojo</span> = no marcó salida.</div>
+
+      <div class="local-filters">
+        <span class="ctrl-lbl">Estado:</span>
+        <span class="filter-chip on" data-edo="todos" onclick="calToggleChip(this)">Todos</span>
+        <span class="filter-chip" data-edo="p" onclick="calToggleChip(this)">P</span>
+        <span class="filter-chip" data-edo="a" onclick="calToggleChip(this)">A</span>
+        <span class="filter-chip" data-edo="pe" onclick="calToggleChip(this)">P/E</span>
+        <span class="filter-chip" data-edo="ps" onclick="calToggleChip(this)">P/S</span>
+        <span class="filter-chip" data-edo="lic" onclick="calToggleChip(this)">Lic</span>
+        <span class="filter-chip" data-edo="vac" onclick="calToggleChip(this)">Vac</span>
+        <input id="cal-busca" placeholder="Buscar por nombre o RUT..." oninput="renderCalendario()" style="flex:1;min-width:200px">
+      </div>
+
+      <div class="cal-monthbar">
+        <button class="cal-navbtn" onclick="cambiarMesCal(-1)" title="Mes anterior">‹</button>
+        <span class="cal-mestitulo" id="cal-mestitulo">—</span>
+        <button class="cal-navbtn" onclick="cambiarMesCal(1)" title="Mes siguiente">›</button>
+        <div class="cal-weekbar" id="cal-weekbar"></div>
+      </div>
+
+      <div class="cal-legend-row">
+        <span class="cal-lg"><span class="cal-mini p">P</span> Presente</span>
+        <span class="cal-lg"><span class="cal-mini a">A</span> Ausente</span>
+        <span class="cal-lg"><span class="cal-mini pe">P/E</span> Sin entrada</span>
+        <span class="cal-lg"><span class="cal-mini ps">P/S</span> Sin salida</span>
+        <span class="cal-lg"><span class="cal-mini lic">Lic</span> Licencia</span>
+        <span class="cal-lg"><span class="cal-mini vac">Vac</span> Vacaciones</span>
+      </div>
+
+      <div class="cal-wrap" id="cal-wrap">
+        <div class="cal-matrix" id="cal-matrix"><div class="empty" style="padding:30px">Carga los datos con el botón "Cargar" de arriba para ver el calendario.</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- MODAL detalle de día (calendario) -->
+<div class="cal-modal" id="cal-modal" onclick="if(event.target===this)cerrarCalModal()">
+  <div class="cal-modal-card">
+    <div class="cal-modal-head">
+      <div>
+        <h3 id="cm-nombre">—</h3>
+        <div class="cm-sub"><span id="cm-fecha">—</span> · <span id="cm-turno">—</span></div>
+      </div>
+      <span id="cm-pill"></span>
+      <button class="cal-modal-close" onclick="cerrarCalModal()">&times;</button>
+    </div>
+    <div class="cal-modal-body">
+      <div id="cm-alert" class="cm-alert" style="display:none"></div>
+      <div class="cm-marcas" id="cm-marcas"></div>
+      <div class="cm-coment-wrap">
+        <label class="cm-coment-lbl">Comentario / observación</label>
+        <textarea id="cm-coment" class="cm-coment" placeholder="Escribe una observación para este día..."></textarea>
+        <button class="cm-guardar" onclick="guardarComentarioCal()">Guardar comentario</button>
+        <span class="cm-saved" id="cm-saved" style="display:none">✓ Guardado</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DETALLE TRABAJADOR -->
+<div id="modal-bg" class="modal-bg" onclick="if(event.target===this)cerrarModal()">
+  <div class="modal" id="modal-content">
+    <button class="modal-close" onclick="cerrarModal()">×</button>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+/* ─── ESTADO GLOBAL ─── */
+var PROXY = '/api/workera-proxy';
+var tabActivo = 'hoy';
+var modalEmpleadoActual = null;
+
+/* ─── FERIADOS CHILE ─────────────────────────────────────────────
+   Ley 19.973 + decretos anuales. Fechas fijas + móviles (Pascua).
+   Tipo: 'legal' | 'irrenunciable' | 'eventual'
+   ─────────────────────────────────────────────────────────────── */
+function calcularPascua(anio) {
+  // Algoritmo de Gauss para Domingo de Pascua
+  var a = anio % 19;
+  var b = Math.floor(anio / 100);
+  var c = anio % 100;
+  var d = Math.floor(b / 4);
+  var e = b % 4;
+  var f = Math.floor((b + 8) / 25);
+  var g = Math.floor((b - f + 1) / 3);
+  var h = (19 * a + b - d - g + 15) % 30;
+  var i = Math.floor(c / 4);
+  var k = c % 4;
+  var L = (32 + 2 * e + 2 * i - h - k) % 7;
+  var m = Math.floor((a + 11 * h + 22 * L) / 451);
+  var mes = Math.floor((h + L - 7 * m + 114) / 31);
+  var dia = ((h + L - 7 * m + 114) % 31) + 1;
+  return new Date(anio, mes - 1, dia);
+}
+function fechaISO(d) {
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+}
+function generarFeriadosAnio(anio) {
+  var lista = [];
+  // Fijos
+  lista.push({ date: anio + '-01-01', name: 'Año Nuevo', type: 'irrenunciable' });
+  lista.push({ date: anio + '-05-01', name: 'Día del Trabajador', type: 'irrenunciable' });
+  lista.push({ date: anio + '-05-21', name: 'Glorias Navales', type: 'legal' });
+  lista.push({ date: anio + '-06-20', name: 'Día Nacional Pueblos Indígenas', type: 'legal' });
+  lista.push({ date: anio + '-06-29', name: 'San Pedro y San Pablo', type: 'legal' });
+  lista.push({ date: anio + '-07-16', name: 'Virgen del Carmen', type: 'legal' });
+  lista.push({ date: anio + '-08-15', name: 'Asunción de la Virgen', type: 'legal' });
+  lista.push({ date: anio + '-09-18', name: 'Independencia Nacional', type: 'irrenunciable' });
+  lista.push({ date: anio + '-09-19', name: 'Glorias del Ejército', type: 'irrenunciable' });
+  lista.push({ date: anio + '-10-12', name: 'Encuentro de Dos Mundos', type: 'legal' });
+  lista.push({ date: anio + '-10-31', name: 'Día de las Iglesias Evangélicas', type: 'legal' });
+  lista.push({ date: anio + '-11-01', name: 'Día de Todos los Santos', type: 'legal' });
+  lista.push({ date: anio + '-12-08', name: 'Inmaculada Concepción', type: 'legal' });
+  lista.push({ date: anio + '-12-25', name: 'Navidad', type: 'irrenunciable' });
+
+  // Móviles (Pascua)
+  var pascua = calcularPascua(anio);
+  var viernes = new Date(pascua); viernes.setDate(pascua.getDate() - 2);
+  var sabado = new Date(pascua); sabado.setDate(pascua.getDate() - 1);
+  lista.push({ date: fechaISO(viernes), name: 'Viernes Santo', type: 'legal' });
+  lista.push({ date: fechaISO(sabado), name: 'Sábado Santo', type: 'legal' });
+
+  return lista;
+}
+// Construir catálogo 2024-2028 en lazy-init (después de que pad() esté definido)
+var FERIADOS_CHILE = [];
+var FERIADOS_INDEX = {};
+function inicializarFeriados() {
+  FERIADOS_CHILE = [];
+  [2024, 2025, 2026, 2027, 2028].forEach(function(a) {
+    FERIADOS_CHILE = FERIADOS_CHILE.concat(generarFeriadosAnio(a));
+  });
+  FERIADOS_INDEX = {};
+  FERIADOS_CHILE.forEach(function(f) { FERIADOS_INDEX[f.date] = f; });
+}
+
+function esFeriado(fecha) {
+  // fecha en formato YYYY-MM-DD
+  return !!FERIADOS_INDEX[fecha];
+}
+function nombreFeriado(fecha) {
+  return FERIADOS_INDEX[fecha] ? FERIADOS_INDEX[fecha].name : '';
+}
+function feriadoBadge(fecha) {
+  // Devuelve span con icono + tooltip si es feriado, vacío si no
+  if (!esFeriado(fecha)) return '';
+  return '<span title="' + nombreFeriado(fecha) + '" style="color:var(--amber);margin-left:4px;font-size:11px">🎉</span>';
+}
+function proximosFeriados(n) {
+  // Devuelve los próximos N feriados desde hoy (ordenados por fecha ascendente)
+  var h = hoy();
+  return FERIADOS_CHILE
+    .filter(function(f) { return f.date >= h; })
+    .sort(function(a, b) { return a.date.localeCompare(b.date); })
+    .slice(0, n || 5);
+}
+
+// Caches
+var cacheEmpleados = [];
+var cacheSucursales = [];
+var cacheDepartamentos = [];
+var cacheAsignaciones = [];      // /workshift/assign
+var cacheHorarios = [];          // /workshift/schedules (uno por empleado-día)
+var cachePermisos = [];
+var cacheMarcacionesEnriquecimiento = [];
+var cacheMarcacionesRango = '';
+var cargaIncremental = { paginasPedidas: 0, totalPages: 0, totalResult: 0, enProgreso: false };
+
+// Cache persistente
+var CACHE_KEY = 'workera_marcas_v1';
+var cacheMarcasPorDia = {};
+var BLOQUE_PAGINAS = 5;
+
+/* ─── HELPERS ─── */
+function $(id) { return document.getElementById(id); }
+function pad(n) { return n < 10 ? '0' + n : '' + n; }
+function fmtFecha(d) {
+  if (!d) return '—';
+  if (typeof d === 'string') {
+    // Tomar solo "YYYY-MM-DD" si viene con tiempo
+    var s = d.substring(0, 10);
+    var parts = s.split('-');
+    if (parts.length === 3) return parts[2] + '-' + parts[1] + '-' + parts[0];
+    return d;
+  }
+  return pad(d.getDate()) + '-' + pad(d.getMonth()+1) + '-' + d.getFullYear();
+}
+function fmtHora(d) {
+  if (!d) return '—';
+  if (typeof d === 'string') {
+    if (d.indexOf('T') > 0) return d.substring(11, 16);
+    return d.substring(0, 5);
+  }
+  return pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+function diaSemana(fecha) {
+  var dias = ['DOM','LUN','MAR','MIE','JUE','VIE','SAB'];
+  var d = new Date(fecha + 'T12:00:00');
+  return dias[d.getDay()];
+}
+
+/* ─── FERIADOS LEGALES DE CHILE ─── */
+// Cálculo del Domingo de Pascua (algoritmo de Meeus/Jones/Butcher)
+function calcularPascua(anio) {
+  var a = anio % 19;
+  var b = Math.floor(anio / 100);
+  var c = anio % 100;
+  var d = Math.floor(b / 4);
+  var e = b % 4;
+  var f = Math.floor((b + 8) / 25);
+  var g = Math.floor((b - f + 1) / 3);
+  var h = (19 * a + b - d - g + 15) % 30;
+  var i = Math.floor(c / 4);
+  var k = c % 4;
+  var L = (32 + 2 * e + 2 * i - h - k) % 7;
+  var m = Math.floor((a + 11 * h + 22 * L) / 451);
+  var mes = Math.floor((h + L - 7 * m + 114) / 31);
+  var dia = ((h + L - 7 * m + 114) % 31) + 1;
+  return new Date(anio, mes - 1, dia);
+}
+function fmtFechaISO(d) {
+  return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+}
+// Genera el catálogo de feriados para un año dado
+function generarFeriadosAnio(anio) {
+  var pascua = calcularPascua(anio);
+  var viernesSanto = new Date(pascua); viernesSanto.setDate(pascua.getDate() - 2);
+  var sabadoSanto = new Date(pascua); sabadoSanto.setDate(pascua.getDate() - 1);
+
+  return [
+    { fecha: anio + '-01-01', nombre: 'Año Nuevo' },
+    { fecha: fmtFechaISO(viernesSanto), nombre: 'Viernes Santo' },
+    { fecha: fmtFechaISO(sabadoSanto), nombre: 'Sábado Santo' },
+    { fecha: anio + '-05-01', nombre: 'Día Nacional del Trabajo' },
+    { fecha: anio + '-05-21', nombre: 'Día de las Glorias Navales' },
+    { fecha: anio + '-06-20', nombre: 'Día Nacional de los Pueblos Indígenas' },
+    { fecha: anio + '-06-29', nombre: 'San Pedro y San Pablo' },
+    { fecha: anio + '-07-16', nombre: 'Virgen del Carmen' },
+    { fecha: anio + '-08-15', nombre: 'Asunción de la Virgen' },
+    { fecha: anio + '-09-18', nombre: 'Independencia Nacional' },
+    { fecha: anio + '-09-19', nombre: 'Día de las Glorias del Ejército' },
+    { fecha: anio + '-09-20', nombre: 'Feriado adicional Fiestas Patrias' },
+    { fecha: anio + '-10-12', nombre: 'Encuentro de Dos Mundos' },
+    { fecha: anio + '-10-31', nombre: 'Día de las Iglesias Evangélicas' },
+    { fecha: anio + '-11-01', nombre: 'Día de Todos los Santos' },
+    { fecha: anio + '-12-08', nombre: 'Inmaculada Concepción' },
+    { fecha: anio + '-12-25', nombre: 'Navidad' }
+  ];
+}
+// Cache de feriados por año (se llena bajo demanda)
+var feriadosCache = {};
+function obtenerFeriadosAnio(anio) {
+  if (!feriadosCache[anio]) feriadosCache[anio] = generarFeriadosAnio(anio);
+  return feriadosCache[anio];
+}
+// Devuelve el nombre del feriado si la fecha (YYYY-MM-DD) lo es, o null
+function nombreFeriado(fecha) {
+  if (!fecha || fecha.length < 10) return null;
+  var anio = parseInt(fecha.substring(0, 4), 10);
+  if (!anio || isNaN(anio)) return null;
+  var lista = obtenerFeriadosAnio(anio);
+  for (var i = 0; i < lista.length; i++) {
+    if (lista[i].fecha === fecha.substring(0, 10)) return lista[i].nombre;
+  }
+  return null;
+}
+function esFeriado(fecha) {
+  return nombreFeriado(fecha) !== null;
+}
+function feriadoBadge(fecha) {
+  var nombre = nombreFeriado(fecha);
+  if (!nombre) return '';
+  return ' <span class="feriado-pill" title="' + nombre + '">🎉 FERIADO</span>';
+}
+// Próximos N feriados a partir de hoy
+function proximosFeriados(n) {
+  n = n || 3;
+  var hoyStr = hoy();
+  var anio = parseInt(hoyStr.substring(0, 4), 10);
+  var resultado = [];
+  for (var y = anio; y <= anio + 1; y++) {
+    var lista = obtenerFeriadosAnio(y);
+    for (var i = 0; i < lista.length; i++) {
+      if (lista[i].fecha >= hoyStr && resultado.length < n) resultado.push(lista[i]);
+    }
+    if (resultado.length >= n) break;
+  }
+  return resultado;
+}
+
+function parsearHHMMSS(s) {
+  // "08:00:00" o "08:00" → minutos desde medianoche
+  if (!s) return null;
+  var p = s.split(':');
+  return parseInt(p[0],10)*60 + parseInt(p[1]||0,10);
+}
+function parseFechaHora(s) {
+  // ISO o "yyyy-MM-dd HH:mm:ss"
+  if (!s) return null;
+  var iso = s.replace(' ', 'T');
+  var d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d;
+}
+function diffMin(a, b) {
+  // a-b en minutos (a, b: Date)
+  if (!a || !b) return 0;
+  return Math.round((a.getTime() - b.getTime()) / 60000);
+}
+function hoy() {
+  var d = new Date();
+  return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+}
+function setStatus(level, msg) {
+  var dot = $('sdot'), txt = $('status-txt');
+  if (dot) dot.className = 'sdot ' + (level || '');
+  if (txt) txt.innerHTML = msg;
+}
+function tab(t) {
+  tabActivo = t;
+  document.querySelectorAll('.tab').forEach(function(el) { el.classList.remove('on'); });
+  event.currentTarget.classList.add('on');
+  document.querySelectorAll('.view').forEach(function(el) { el.classList.remove('on'); });
+  $('v-' + t).classList.add('on');
+  document.body.classList.remove('tab-hoy','tab-cal','tab-emp','tab-ast','tab-ano','tab-tur','tab-per','tab-suc','tab-dep');
+  document.body.classList.add('tab-' + t);
+  // Render diferido por pestaña
+  if (t === 'hoy') renderHoy();
+  if (t === 'cal') renderCalendario();
+  if (t === 'emp') aplicarFiltrosYRender();
+  if (t === 'ast') renderMarcaciones();
+  if (t === 'ano') renderAnomalias();
+  if (t === 'tur') { renderTurnos(); renderHorarios(); }
+  if (t === 'per') renderPermisos();
+  if (t === 'suc') renderSucursales();
+  if (t === 'dep') renderDepartamentos();
+}
+
+function empNombreCompleto(e) {
+  if (!e) return '—';
+  var p = e.name || '';
+  if (e.lastName) p += ' ' + e.lastName;
+  if (e.secondLastName && (!e.lastName || e.lastName.indexOf(e.secondLastName) < 0))
+    p += ' ' + e.secondLastName;
+  return p.trim().replace(/\s+/g, ' ') || '—';
+}
+function empActivo(e) {
+  return (e.employeeStatus || '').toUpperCase() === 'ACTIVO';
+}
+function empSucursalAdmin(e) { return e.branchOfficeName || e.branchOffice || '—'; }
+function empDepartamento(e) { return e.departmentName || e.department || '—'; }
+
+function cacheCargarDeDisco() {
+  try {
+    var raw = localStorage.getItem(CACHE_KEY);
+    if (raw) {
+      cacheMarcasPorDia = JSON.parse(raw);
+      var dias = Object.keys(cacheMarcasPorDia).length;
+      var total = Object.values(cacheMarcasPorDia).reduce(function(a, b) { return a + b.length; }, 0);
+      console.log('[Workera] Cache: ' + dias + ' días, ' + total + ' marcas');
+      return { dias: dias, marcas: total };
+    }
+  } catch (e) { cacheMarcasPorDia = {}; }
+  return { dias: 0, marcas: 0 };
+}
+function cacheGuardarEnDisco() {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(cacheMarcasPorDia)); }
+  catch (e) { setStatus('warn', '⚠ Cache lleno'); }
+}
+function cacheLimpiar() {
+  if (!confirm('¿Borrar TODAS las marcaciones cacheadas?')) return;
+  cacheMarcasPorDia = {};
+  cacheMarcacionesEnriquecimiento = [];
+  cacheMarcacionesRango = '';
+  cargaIncremental = { paginasPedidas: 0, totalPages: 0, totalResult: 0, enProgreso: false };
+  try { localStorage.removeItem(CACHE_KEY); } catch(e) {}
+  setStatus('ok', 'Cache limpiado');
+  renderMarcaciones();
+}
+function cacheMarcasDelRango(d1, d2) {
+  var fechas = diasEnRango(d1, d2);
+  var marcas = [];
+  fechas.forEach(function(f) {
+    if (cacheMarcasPorDia[f]) marcas = marcas.concat(cacheMarcasPorDia[f]);
+  });
+  return marcas;
+}
+function cacheFechasEnRango(d1, d2) {
+  var fechas = diasEnRango(d1, d2);
+  return fechas.filter(function(f) { return cacheMarcasPorDia[f] && cacheMarcasPorDia[f].length > 0; });
+}
+function diasEnRango(d1, d2) {
+  var fechas = [];
+  var ini = new Date(d1 + 'T00:00:00'), fin = new Date(d2 + 'T00:00:00');
+  while (ini <= fin) {
+    fechas.push(ini.getFullYear() + '-' + pad(ini.getMonth()+1) + '-' + pad(ini.getDate()));
+    ini.setDate(ini.getDate() + 1);
+  }
+  return fechas;
+}
+
+/* ─── INICIALIZACIÓN ─── */
+window.addEventListener('DOMContentLoaded', function() {
+  // Inicializar catálogo de feriados (necesita pad() definido)
+  inicializarFeriados();
+  cacheCargarDeDisco();
+  document.body.classList.add('tab-cal');
+
+  // Poblar selector de meses (últimos 12 meses hasta el actual) y seleccionar el mes en curso
+  poblarMeses();
+  seleccionarMes(true);   // fija d1/d2 al mes actual sin cargar aún
+
+  // Auto-cargar el mes en curso al iniciar
+  setTimeout(cargar, 200);
+});
+
+/* Rellena el <select id="mes-sel"> con los últimos 12 meses (más reciente arriba) */
+function poblarMeses(){
+  var sel = $('mes-sel'); if(!sel) return;
+  var nombres = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  var h = new Date(); var y = h.getFullYear(), m = h.getMonth();
+  var html = '';
+  for (var i=0; i<12; i++){
+    var yy = y, mm = m - i;
+    while (mm < 0){ mm += 12; yy--; }
+    var val = yy + '-' + pad(mm+1);
+    var label = nombres[mm].charAt(0).toUpperCase()+nombres[mm].slice(1) + ' ' + yy;
+    html += '<option value="'+val+'"'+(i===0?' selected':'')+'>'+label+'</option>';
+  }
+  sel.innerHTML = html;
+}
+
+/* Cuando cambia el mes: fija el rango d1..d2 del mes (hasta hoy si es el mes actual)
+   y, salvo en el arranque, dispara la carga automáticamente. */
+function seleccionarMes(soloFijar){
+  var val = $('mes-sel').value;               // 'YYYY-MM'
+  var partes = val.split('-');
+  var yy = parseInt(partes[0]), mm = parseInt(partes[1]) - 1;
+  calAnio = yy; calMes = mm;                   // sincroniza el calendario
+  var primer = yy + '-' + pad(mm+1) + '-01';
+  var ultimoDia = new Date(yy, mm+1, 0).getDate();
+  var hoyStr = hoy();
+  var hoyD = new Date(); var esMesActual = (yy===hoyD.getFullYear() && mm===hoyD.getMonth());
+  var ultimo = esMesActual ? hoyStr : (yy + '-' + pad(mm+1) + '-' + pad(ultimoDia));
+  $('d1').value = primer;
+  $('d2').value = ultimo;
+  if (!soloFijar) cargar();                    // recarga datos del mes elegido
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   API CALLS — vía proxy /api/workera-proxy
+   ═══════════════════════════════════════════════════════════════════════ */
+async function apiCall(endpoint, params) {
+  var qs = 'endpoint=' + encodeURIComponent(endpoint);
+  if (params) {
+    Object.keys(params).forEach(function(k) {
+      if (params[k] !== undefined && params[k] !== null && params[k] !== '')
+        qs += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+    });
+  }
+  var url = PROXY + '?' + qs;
+  var r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+  if (!r.ok) {
+    var txt = await r.text();
+    throw new Error('HTTP ' + r.status + ': ' + txt.substring(0, 200));
+  }
+  return r.json();
+}
+function extraerLista(resp) {
+  if (!resp) return [];
+  if (Array.isArray(resp)) return resp;
+  if (Array.isArray(resp.data)) return resp.data;
+  return [];
+}
+
+async function fetchTodasLasPaginas(endpoint, paramsBase, maxPages) {
+  // Pide pagina 1, mira totalPages, y pide el resto en paralelo (de a 5)
+  maxPages = maxPages || 50;
+  var p1 = await apiCall(endpoint, Object.assign({page:1}, paramsBase));
+  var resultados = extraerLista(p1);
+  var total = Math.min(p1.totalPages || 1, maxPages);
+  if (total > 1) {
+    for (var p = 2; p <= total; p += 5) {
+      var lote = [];
+      for (var k = p; k < p + 5 && k <= total; k++) {
+        lote.push(apiCall(endpoint, Object.assign({page:k}, paramsBase)));
+      }
+      var rs = await Promise.all(lote);
+      rs.forEach(function(r) { resultados = resultados.concat(extraerLista(r)); });
+    }
+  }
+  return resultados;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CARGA PRINCIPAL — orquesta todos los endpoints
+   ═══════════════════════════════════════════════════════════════════════ */
+async function cargar() {
+  $('btn-load').disabled = true;
+  try {
+    setStatus('load', 'Cargando sucursales y departamentos...');
+    await Promise.all([cargarSucursales(), cargarDepartamentos()]);
+
+    setStatus('load', 'Cargando trabajadores...');
+    await cargarTrabajadores();
+
+    var d1 = $('d1').value, d2 = $('d2').value;
+
+    setStatus('load', 'Cargando turnos asignados...');
+    await cargarAsignaciones(d1, d2);
+
+    setStatus('load', 'Cargando horarios programados (' + d1 + ' al ' + d2 + ')...');
+    await cargarHorarios(d1, d2);
+
+    setStatus('load', 'Cargando marcaciones...');
+    await cargarSiguienteBloque();
+
+    setStatus('load', 'Cargando permisos...');
+    await cargarPermisos(d1, d2);
+
+    setStatus('ok', '✓ Datos cargados · ' + cacheEmpleados.length + ' empleados · ' +
+              cacheHorarios.length + ' horarios · ' +
+              cacheMarcacionesEnriquecimiento.length + ' marcas · ' +
+              cachePermisos.length + ' permisos');
+
+    // Vista única: calendario del mes + panel del día
+    renderPanelDia();
+    renderCalendario();
+  } catch (e) {
+    console.error(e);
+    setStatus('err', '⚠ Error: ' + e.message);
+  } finally {
+    $('btn-load').disabled = false;
+  }
+}
+
+async function cargarSucursales() {
+  if (cacheSucursales.length) return cacheSucursales;
+  var lista = await fetchTodasLasPaginas('/branchOffice');
+  cacheSucursales = lista;
+  // Poblar select
+  var sel = $('sucursal');
+  sel.innerHTML = '<option value="">Todas</option>';
+  lista.forEach(function(s) {
+    var opt = document.createElement('option');
+    opt.value = s.code || s.name;
+    opt.textContent = s.name || s.code;
+    sel.appendChild(opt);
+  });
+  return lista;
+}
+
+async function cargarDepartamentos() {
+  if (cacheDepartamentos.length) return cacheDepartamentos;
+  var lista = await fetchTodasLasPaginas('/department');
+  cacheDepartamentos = lista;
+  var sel = $('depto');
+  sel.innerHTML = '<option value="">Todos</option>';
+  lista.forEach(function(d) {
+    var opt = document.createElement('option');
+    opt.value = d.code || d.name;
+    opt.textContent = d.name || d.code;
+    sel.appendChild(opt);
+  });
+  return lista;
+}
+
+async function cargarTrabajadores() {
+  // Paginar /employee con branchOffice y department obligatorios:
+  // pero el endpoint también funciona sin filtros si se pide por defecto MATRIZ+INICIAL.
+  // Mejor estrategia: pedir SIN filtros y ver si responde con todos.
+  // Workera devuelve 43 empleados sin filtros, así que NO necesitamos branchOffice/department aquí.
+  var lista = await fetchTodasLasPaginas('/employee');
+  // Filtrar empleados de prueba (código 12345678 / "PRUEBA WORKERA APP")
+  cacheEmpleados = lista.filter(function(e) {
+    var c = String(e.code || '');
+    var n = (e.name || '').toUpperCase();
+    if (c === '12345678') return false;
+    if (n.indexOf('PRUEBA') >= 0 && n.indexOf('WORKERA') >= 0) return false;
+    return true;
+  });
+  return cacheEmpleados;
+}
+async function recargarEmpleados() {
+  cacheEmpleados = [];
+  await cargarTrabajadores();
+  aplicarFiltrosYRender();
+}
+
+async function cargarAsignaciones(d1, d2) {
+  // /workshift/assign requiere branchOffice + department obligatoriamente
+  // Iteramos por TODAS las sucursales y departamentos y agregamos resultados
+  cacheAsignaciones = [];
+  var combinaciones = [];
+  for (var i = 0; i < cacheSucursales.length; i++) {
+    var sCode = cacheSucursales[i].code;
+    for (var j = 0; j < cacheDepartamentos.length; j++) {
+      combinaciones.push({ branchOffice: sCode, department: cacheDepartamentos[j].code });
+    }
+  }
+  // Si no hay sucursales/departamentos cargados, intentar con MATRIZ/INICIAL
+  if (combinaciones.length === 0) {
+    combinaciones = [{ branchOffice: 'MATRIZ', department: 'INICIAL' }];
+  }
+  for (var c = 0; c < combinaciones.length; c++) {
+    try {
+      var lista = await fetchTodasLasPaginas('/workshift/assign', {
+        start: d1, end: d2,
+        branchOffice: combinaciones[c].branchOffice,
+        department: combinaciones[c].department
+      });
+      cacheAsignaciones = cacheAsignaciones.concat(lista);
+    } catch(e) {
+      console.warn('[asignaciones]', combinaciones[c], e.message);
+    }
+  }
+  // Eliminar duplicados por id
+  var seen = {};
+  cacheAsignaciones = cacheAsignaciones.filter(function(a) {
+    if (seen[a.id]) return false; seen[a.id] = true;
+    // Excluir empleado de prueba
+    if (a.employee && (String(a.employee.code) === '12345678' ||
+        ((a.employee.name || '').toUpperCase().indexOf('PRUEBA') >= 0))) return false;
+    return true;
+  });
+  return cacheAsignaciones;
+}
+
+async function cargarHorarios(d1, d2) {
+  // /workshift/schedules: máximo 60 días por consulta. Si el rango es más largo, partirlo
+  cacheHorarios = [];
+  var bloques = bloques60Dias(d1, d2);
+  for (var i = 0; i < bloques.length; i++) {
+    for (var s = 0; s < cacheSucursales.length; s++) {
+      var sCode = cacheSucursales[s].code;
+      for (var dp = 0; dp < cacheDepartamentos.length; dp++) {
+        try {
+          var resp = await fetchTodasLasPaginas('/workshift/schedules', {
+            start: bloques[i].d1, end: bloques[i].d2,
+            branchOffice: sCode,
+            department: cacheDepartamentos[dp].code
+          });
+          // Cada elem es { employee, schedules: [...] }. Aplanamos.
+          resp.forEach(function(r) {
+            // Excluir empleado de prueba
+            if (!r.employee) return;
+            var c = String(r.employee.code || '');
+            var n = (r.employee.name || '').toUpperCase();
+            if (c === '12345678') return;
+            if (n.indexOf('PRUEBA') >= 0 && n.indexOf('WORKERA') >= 0) return;
+            if (r.schedules && r.schedules.length) {
+              r.schedules.forEach(function(sch) {
+                cacheHorarios.push({
+                  employeeCode: r.employee.code,
+                  employeeName: r.employee.name + ' ' + r.employee.lastName,
+                  rut: r.employee.identification,
+                  date: sch.date,
+                  workshiftCode: sch.workshiftCode,
+                  workshiftName: sch.workshiftName,
+                  scheduleName: sch.scheduleName,
+                  start: sch.start,
+                  end: sch.end
+                });
+              });
+            }
+          });
+        } catch(e) { console.warn('[horarios]', e.message); }
+      }
+    }
+  }
+  return cacheHorarios;
+}
+
+function bloques60Dias(d1, d2) {
+  var bloques = [];
+  var ini = new Date(d1 + 'T00:00:00');
+  var fin = new Date(d2 + 'T00:00:00');
+  while (ini <= fin) {
+    var bloqFin = new Date(ini);
+    bloqFin.setDate(bloqFin.getDate() + 59);
+    if (bloqFin > fin) bloqFin = fin;
+    bloques.push({
+      d1: ini.getFullYear() + '-' + pad(ini.getMonth()+1) + '-' + pad(ini.getDate()),
+      d2: bloqFin.getFullYear() + '-' + pad(bloqFin.getMonth()+1) + '-' + pad(bloqFin.getDate())
+    });
+    ini = new Date(bloqFin);
+    ini.setDate(ini.getDate() + 1);
+  }
+  return bloques;
+}
+
+async function cargarPermisos(d1, d2) {
+  try {
+    cachePermisos = await fetchTodasLasPaginas('/permission', { start: d1, end: d2 });
+  } catch(e) {
+    console.warn('[permisos]', e.message);
+    cachePermisos = [];
+  }
+  return cachePermisos;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MARCACIONES — carga incremental con cache persistente (preservada)
+   ═══════════════════════════════════════════════════════════════════════ */
+async function apiFetchMarcaciones(d1, d2, page) {
+  return apiCall('/attendanceData', { start: d1, end: d2, page: page });
+}
+async function cargarSiguienteBloque() {
+  var d1 = $('d1').value, d2 = $('d2').value;
+  var rango = d1 + '|' + d2;
+  if (cacheMarcacionesRango !== rango) {
+    cacheMarcacionesEnriquecimiento = cacheMarcasDelRango(d1, d2);
+    cacheMarcacionesRango = rango;
+    cargaIncremental = { paginasPedidas: 0, totalPages: 0, totalResult: 0, enProgreso: false };
+
+    var fechasCacheadas = cacheFechasEnRango(d1, d2);
+    var fechasTotal = diasEnRango(d1, d2);
+    if (cacheMarcacionesEnriquecimiento.length > 0 && fechasCacheadas.length === fechasTotal.length) {
+      cargaIncremental.totalPages = 1;
+      cargaIncremental.paginasPedidas = 1;
+      return cacheMarcacionesEnriquecimiento;
+    }
+  }
+  if (cargaIncremental.enProgreso) return cacheMarcacionesEnriquecimiento;
+  cargaIncremental.enProgreso = true;
+  try {
+    var primerPagina = cargaIncremental.paginasPedidas + 1;
+    if (primerPagina === 1) {
+      var data1 = await apiFetchMarcaciones(d1, d2, 1);
+      var primera = extraerLista(data1);
+      cargaIncremental.totalPages = data1.totalPages || 1;
+      cargaIncremental.totalResult = data1.totalResult || primera.length;
+      mergearMarcasNuevas(primera);
+      cargaIncremental.paginasPedidas = 1;
+      primerPagina = 2;
+    }
+    var totalPages = cargaIncremental.totalPages;
+    var ultimaPagina = Math.min(primerPagina + BLOQUE_PAGINAS - 2, totalPages);
+    if (primerPagina <= ultimaPagina) {
+      var lote = [];
+      for (var p = primerPagina; p <= ultimaPagina; p++) {
+        lote.push(apiFetchMarcaciones(d1, d2, p));
+      }
+      var resultados = await Promise.all(lote);
+      resultados.forEach(function(r) { mergearMarcasNuevas(extraerLista(r)); });
+      cargaIncremental.paginasPedidas = ultimaPagina;
+    }
+    var faltan = cargaIncremental.totalPages - cargaIncremental.paginasPedidas;
+    if (faltan > 0) {
+      // Disparar carga del resto en background, sin await
+      setTimeout(cargarSiguienteBloque, 100);
+    }
+    return cacheMarcacionesEnriquecimiento;
+  } finally {
+    cargaIncremental.enProgreso = false;
+  }
+}
+function mergearMarcasNuevas(nuevas) {
+  if (!nuevas || !nuevas.length) return;
+  // Filtrar empleados de prueba
+  nuevas = nuevas.filter(function(m) {
+    if (!m.employee) return true;
+    var c = String(m.employee.code || '');
+    var n = (m.employee.name || '').toUpperCase();
+    if (c === '12345678') return false;
+    if (n.indexOf('PRUEBA') >= 0 && n.indexOf('WORKERA') >= 0) return false;
+    return true;
+  });
+  if (!nuevas.length) return;
+  var checksums = {};
+  cacheMarcacionesEnriquecimiento.forEach(function(m) { if (m.checksum) checksums[m.checksum] = true; });
+  var nuevasUnicas = nuevas.filter(function(m) { return !m.checksum || !checksums[m.checksum]; });
+  cacheMarcacionesEnriquecimiento = cacheMarcacionesEnriquecimiento.concat(nuevasUnicas);
+
+  // DIAGNÓSTICO: imprimir estructura de la primera marca solo una vez
+  if (!window._marcaDebugDone && nuevasUnicas.length > 0) {
+    window._marcaDebugDone = true;
+    console.log('[DEBUG MARCA] Estructura del primer objeto de marca recibido:');
+    console.log('[DEBUG MARCA] Keys:', Object.keys(nuevasUnicas[0]));
+    console.log('[DEBUG MARCA] Objeto completo:', nuevasUnicas[0]);
+    console.log('[DEBUG MARCA] JSON:', JSON.stringify(nuevasUnicas[0], null, 2));
+  }
+
+  // Persistir agrupadas por día
+  // Estructura real Workera: m.attendanceDate = "2026-05-04T06:09:29" (ISO con T)
+  //                          m.employee.code  = "9828794"
+  nuevasUnicas.forEach(function(m) {
+    var fecha = obtenerFechaMarca(m);
+    if (!fecha) return;
+    if (!cacheMarcasPorDia[fecha]) cacheMarcasPorDia[fecha] = [];
+    cacheMarcasPorDia[fecha].push(m);
+  });
+  cacheGuardarEnDisco();
+}
+
+/* Helpers para extraer datos de una marca con la estructura real de Workera */
+function obtenerFechaMarca(m) {
+  // attendanceDate viene como "2026-05-04T06:09:29"
+  var s = m.attendanceDate || m.date || m.markDate || '';
+  return s.substring(0, 10);  // "2026-05-04"
+}
+function obtenerHoraMarca(m) {
+  var s = m.attendanceDate || m.date || m.markDate || '';
+  if (s.indexOf('T') > 0) return s.substring(11, 19);  // "06:09:29"
+  return m.markTime || m.time || m.hour || '';
+}
+function obtenerCodeMarca(m) {
+  // employee viene anidado
+  if (m.employee && m.employee.code) return String(m.employee.code);
+  return String(m.employeeCode || m.code || m.deviceCode || '');
+}
+function obtenerEmpDeMarca(m) {
+  // El propio objeto de marca trae todos los datos del empleado anidados
+  return m.employee || null;
+}
+function obtenerTipoMarca(m, horario) {
+  // En Workera el campo attendanceType siempre devuelve 0, no es confiable.
+  // Heurística: usar horario teórico para clasificar la marca.
+  // Si no hay horario, usar primera/última marca del día como fallback.
+  if (!horario) return null;
+
+  var dt = obtenerDateTimeMarca(m);
+  if (!dt) return null;
+
+  var entradaTeo = parseFechaHora(horario.start);
+  var salidaTeo = parseFechaHora(horario.end);
+  if (!entradaTeo || !salidaTeo) return null;
+
+  // Calcular distancia (en minutos) a entrada vs a salida teórica
+  var distEntrada = Math.abs(diffMin(dt, entradaTeo));
+  var distSalida = Math.abs(diffMin(dt, salidaTeo));
+
+  // La marca pertenece al evento (entrada o salida) más cercano
+  return distEntrada <= distSalida ? 'ENTRADA' : 'SALIDA';
+}
+function obtenerTipoMarcaFallback(m, marcasMismoDia) {
+  // Si no hay horario, usar primera = entrada / última = salida
+  if (!marcasMismoDia || marcasMismoDia.length === 0) return null;
+  var ord = marcasMismoDia.slice().sort(function(a, b) {
+    return (obtenerHoraMarca(a) || '').localeCompare(obtenerHoraMarca(b) || '');
+  });
+  if (m === ord[0]) return 'ENTRADA';
+  if (m === ord[ord.length - 1] && ord.length > 1) return 'SALIDA';
+  return 'INTERMEDIA';
+}
+function obtenerDateTimeMarca(m) {
+  // Devuelve un objeto Date a partir de attendanceDate
+  var s = m.attendanceDate || m.date || m.markDate;
+  if (!s) return null;
+  var d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ANÁLISIS / CRUCE: marcaciones reales vs horario teórico
+   ═══════════════════════════════════════════════════════════════════════ */
+function getTolerancia() { return parseInt($('tolerancia').value || 0, 10) || 0; }
+
+function indexHorariosPorEmpDia() {
+  // { 'CODE_EMP|YYYY-MM-DD': horario }
+  var idx = {};
+  cacheHorarios.forEach(function(h) {
+    idx[h.employeeCode + '|' + h.date] = h;
+  });
+  return idx;
+}
+function indexMarcasPorEmpDia() {
+  // { 'CODE|YYYY-MM-DD': [marcas...] }
+  var idx = {};
+  cacheMarcacionesEnriquecimiento.forEach(function(m) {
+    var emp = obtenerCodeMarca(m);
+    var fecha = obtenerFechaMarca(m);
+    if (!emp || !fecha) return;
+    var k = emp + '|' + fecha;
+    if (!idx[k]) idx[k] = [];
+    idx[k].push(m);
+  });
+  return idx;
+}
+
+function calcularResumenDia(empleadoCode, fecha) {
+  // Devuelve { horario, primeraEntrada, ultimaSalida, atrasoMin, hhEEMin, salidaTempMin, sinMarca, tipo }
+  var horario = null;
+  for (var i = 0; i < cacheHorarios.length; i++) {
+    if (cacheHorarios[i].employeeCode == empleadoCode && cacheHorarios[i].date === fecha) {
+      horario = cacheHorarios[i]; break;
+    }
+  }
+
+  var marcasDelDia = cacheMarcacionesEnriquecimiento.filter(function(m) {
+    return obtenerCodeMarca(m) == empleadoCode && obtenerFechaMarca(m) === fecha;
+  });
+
+  // Separar entradas y salidas usando horario teórico (más confiable que attendanceType)
+  var entradas = [];
+  var salidas = [];
+  marcasDelDia.forEach(function(m) {
+    var tipo = obtenerTipoMarca(m, horario);
+    if (tipo === 'ENTRADA') entradas.push(m);
+    else if (tipo === 'SALIDA') salidas.push(m);
+  });
+
+  // Si no hay horario teórico, usar primera/última como fallback
+  if (!horario && marcasDelDia.length > 0) {
+    var ord = marcasDelDia.slice().sort(function(a, b) {
+      return (obtenerHoraMarca(a) || '').localeCompare(obtenerHoraMarca(b) || '');
+    });
+    entradas = [ord[0]];
+    if (ord.length > 1) salidas = [ord[ord.length - 1]];
+  }
+
+  // Tomar la PRIMERA entrada del día (la más temprana) y la ÚLTIMA salida
+  entradas.sort(function(a, b) {
+    return (obtenerHoraMarca(a) || '').localeCompare(obtenerHoraMarca(b) || '');
+  });
+  salidas.sort(function(a, b) {
+    return (obtenerHoraMarca(a) || '').localeCompare(obtenerHoraMarca(b) || '');
+  });
+
+  var primera = entradas[0] || null;
+  var ultima  = salidas[salidas.length - 1] || null;
+
+  var primeraDt = primera ? obtenerDateTimeMarca(primera) : null;
+  var ultimaDt  = ultima  ? obtenerDateTimeMarca(ultima)  : null;
+
+  var entradaTeoDt = horario ? parseFechaHora(horario.start) : null;
+  var salidaTeoDt  = horario ? parseFechaHora(horario.end)   : null;
+
+  var tol = getTolerancia();
+
+  var atrasoMin = 0, hhEEMin = 0, salidaTempMin = 0, hhEEEntradaMin = 0;
+  if (horario && primeraDt && entradaTeoDt) {
+    var d = diffMin(primeraDt, entradaTeoDt);
+    if (d > tol) atrasoMin = d;
+    else if (d < -tol) hhEEEntradaMin = -d;
+  }
+  if (horario && ultimaDt && salidaTeoDt) {
+    var d2 = diffMin(ultimaDt, salidaTeoDt);
+    if (d2 > tol) hhEEMin = d2;
+    else if (d2 < -tol) salidaTempMin = -d2;
+  }
+
+  return {
+    horario: horario,
+    primera: primera, ultima: ultima,
+    primeraDt: primeraDt, ultimaDt: ultimaDt,
+    entradaTeoDt: entradaTeoDt, salidaTeoDt: salidaTeoDt,
+    atrasoMin: atrasoMin,
+    hhEEMin: hhEEMin + hhEEEntradaMin,
+    salidaTempMin: salidaTempMin,
+    sinMarca: !primera && !!horario,
+    marcasCount: marcasDelDia.length
+  };
+}
+
+function getFullMarcaDate(m, fechaFallback) {
+  // Construye una Date a partir de campos comunes en la respuesta de Workera
+  if (m.markDate) {
+    var s = m.markDate;
+    if (s.indexOf('T') > 0) return s;
+    if (m.markTime) return s.substring(0,10) + 'T' + m.markTime;
+    return s;
+  }
+  if (m.date) {
+    if (m.date.indexOf('T') > 0) return m.date;
+    var hr = m.markTime || m.time || m.hour;
+    return m.date.substring(0,10) + (hr ? 'T' + hr : '');
+  }
+  if (fechaFallback && (m.markTime || m.time)) {
+    return fechaFallback + 'T' + (m.markTime || m.time);
+  }
+  return null;
+}
+
+function detectarTipoMarca(m, fecha, empleadoCode) {
+  // ¿Es entrada o salida? Lo deducimos: la primera marca del día es entrada, la última salida.
+  var hora = m.markTime || m.time || (m.date && m.date.indexOf('T') > 0 ? m.date.substring(11,19) : '');
+  var marcas = cacheMarcacionesEnriquecimiento.filter(function(x) {
+    var e = x.employeeCode || x.code || x.deviceCode;
+    var f = (x.date || x.markDate || '').substring(0, 10);
+    return e == empleadoCode && f === fecha;
+  });
+  if (marcas.length === 0) return '—';
+  var horas = marcas.map(function(x) { return x.markTime || x.time || ''; }).sort();
+  if (hora === horas[0]) return 'ENTRADA';
+  if (hora === horas[horas.length-1]) return 'SALIDA';
+  return 'INTERMEDIA';
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   VISTA HOY — el corazón del dashboard según RRHH
+   ═══════════════════════════════════════════════════════════════════════ */
+function actualizarKPIsHoy() {
+  var fechaHoy = hoy();
+  var hoyEsFeriado = esFeriado(fechaHoy);
+  var activos = cacheEmpleados.filter(empActivo);
+  var asignacionesHoy = cacheAsignaciones.filter(function(a) {
+    return a.start <= fechaHoy && a.end >= fechaHoy && a.employee && empActivo(a.employee);
+  });
+  var conTurno = {};
+  asignacionesHoy.forEach(function(a) { conTurno[a.employee.code] = true; });
+
+  var resumenes = activos.map(function(e) {
+    return { emp: e, tieneAsignacion: !!conTurno[e.code], r: calcularResumenDia(e.code, fechaHoy) };
+  });
+
+  var marcaron = resumenes.filter(function(x) { return x.r.primera; });
+  // Si es feriado, NO contamos atrasos ni no-marcaron (todo es informativo)
+  var noMarcaron = hoyEsFeriado ? [] :
+                   resumenes.filter(function(x) { return x.tieneAsignacion && !x.r.primera; });
+  var atrasos = hoyEsFeriado ? [] :
+                resumenes.filter(function(x) { return x.r.atrasoMin > 0; });
+  var hhEE = resumenes.reduce(function(a, x) { return a + (x.r.hhEEMin || 0); }, 0);
+  var permHoy = cachePermisos.filter(function(p) {
+    var ini = (p.start || p.startDate || '').substring(0, 10);
+    var fin = (p.end || p.endDate || '').substring(0, 10);
+    return ini && fin && ini <= fechaHoy && fin >= fechaHoy;
+  });
+
+  $('hoy-k-act').textContent = activos.length;
+  $('hoy-k-act-sub').textContent = Object.keys(conTurno).length + ' con turno hoy';
+  $('hoy-k-marc').textContent = marcaron.length;
+  $('hoy-k-marc-sub').textContent = activos.length ? Math.round(marcaron.length/activos.length*100) + '% del personal' : '—';
+  $('hoy-k-nomarc').textContent = hoyEsFeriado ? '—' : noMarcaron.length;
+  $('hoy-k-atra').textContent = hoyEsFeriado ? '—' : atrasos.length;
+  var sumAtra = atrasos.reduce(function(a, x) { return a + x.r.atrasoMin; }, 0);
+  $('hoy-k-atra-sub').textContent = hoyEsFeriado ? 'Feriado · sin alertas' :
+                                    (sumAtra ? sumAtra + ' min totales' : '—');
+  $('hoy-k-ext').textContent = (hhEE / 60).toFixed(1) + ' h';
+  $('hoy-k-per').textContent = permHoy.length;
+
+  // Guardar para listas
+  window._hoyData = { resumenes: resumenes, marcaron: marcaron, noMarcaron: noMarcaron,
+                      atrasos: atrasos, permHoy: permHoy, hoyEsFeriado: hoyEsFeriado };
+}
+
+function renderHoy() {
+  actualizarKPIsHoy();
+  if (!window._hoyData) return;
+  var d = window._hoyData;
+  var fechaHoy = hoy();
+  var nombreFer = nombreFeriado(fechaHoy);
+
+  // Banner si hoy es feriado (en su contenedor dedicado arriba de los KPIs)
+  var bannerEl = $('hoy-feriado-banner');
+  if (bannerEl) {
+    if (nombreFer) {
+      bannerEl.innerHTML = '<div class="feriado-banner">' +
+        '<span class="ico">🎉</span>' +
+        '<div><strong>Hoy es feriado:</strong> ' + nombreFer + '. ' +
+        '<span style="color:var(--t3)">Los atrasos y ausencias no se cuentan como anomalías. ' +
+        'Las marcaciones de trabajadores en turno son solo informativas.</span></div></div>';
+    } else {
+      bannerEl.innerHTML = '';
+    }
+  }
+
+  // Helper para chequear si un empleado tiene licencia vigente hoy
+  function licenciaHoy(empCode) {
+    return cachePermisos.find(function(p) {
+      var pc = p.employeeCode || (p.employee && p.employee.code);
+      if (String(pc) !== String(empCode)) return false;
+      var ini = (p.start || p.startDate || '').substring(0, 10);
+      var fin = (p.end || p.endDate || '').substring(0, 10);
+      return ini <= fechaHoy && fin >= fechaHoy;
+    });
+  }
+
+  // Listas resumen — TODAS clickeables y mostrando licencia si aplica
+  renderHoyList('hoy-nomarc-list', d.noMarcaron, function(x) {
+    var horaTeo = x.r.horario ? fmtHora(x.r.horario.start) : '—';
+    var lic = licenciaHoy(x.emp.code);
+    var meta = lic
+      ? '<span class="s-pill permiso" title="' + (lic.permissionTypeName || 'LICENCIA') + '">📋 ' + (lic.permissionTypeName || lic.type || 'LICENCIA') + '</span>'
+      : '<span style="color:var(--red)">esperaba ' + horaTeo + '</span>';
+    return '<div class="hoy-row alert" onclick="abrirModalEmpleado(\'' + x.emp.code + '\')" style="cursor:pointer">' +
+           '<span class="name">' + empNombreCompleto(x.emp) + '</span>' +
+           '<span class="meta">' + meta + '</span></div>';
+  });
+  renderHoyList('hoy-atra-list', d.atrasos.sort(function(a,b){return b.r.atrasoMin - a.r.atrasoMin}), function(x) {
+    return '<div class="hoy-row" onclick="abrirModalEmpleado(\'' + x.emp.code + '\')" style="cursor:pointer">' +
+           '<span class="name">' + empNombreCompleto(x.emp) + '</span>' +
+           '<span class="meta" style="color:var(--red)">+' + x.r.atrasoMin + ' min</span></div>';
+  });
+  renderHoyList('hoy-marc-list', d.marcaron, function(x) {
+    var hora = x.r.primeraDt ? fmtHora(x.r.primeraDt) : '—';
+    return '<div class="hoy-row" onclick="abrirModalEmpleado(\'' + x.emp.code + '\')" style="cursor:pointer">' +
+           '<span class="name">' + empNombreCompleto(x.emp) + '</span>' +
+           '<span class="meta" style="color:var(--green)">' + hora + '</span></div>';
+  });
+
+  // Alertas top — si hoy es feriado, omitir alertas de atraso/no-marcó
+  var alertsHtml = '';
+  if (!nombreFer) {
+    if (d.noMarcaron.length > 0) {
+      alertsHtml += '<div class="alert-box danger"><span class="alert-icon">🚨</span><div>' +
+        '<strong>' + d.noMarcaron.length + ' trabajadores no marcaron entrada hoy.</strong> ' +
+        'Revisa la columna "No han marcado" para ver quiénes y a qué hora se esperaban.</div></div>';
+    }
+    if (d.atrasos.length > 0) {
+      alertsHtml += '<div class="alert-box warn"><span class="alert-icon">⚠️</span><div>' +
+        '<strong>' + d.atrasos.length + ' atrasos detectados hoy.</strong> ' +
+        'Tolerancia configurada: ' + getTolerancia() + ' min.</div></div>';
+    }
+    if (d.noMarcaron.length === 0 && d.atrasos.length === 0 && d.marcaron.length > 0) {
+      alertsHtml += '<div class="alert-box success"><span class="alert-icon">✅</span><div>' +
+        '<strong>Día sin alertas.</strong> Todos los trabajadores con turno asignado marcaron a tiempo.</div></div>';
+    }
+  }
+  $('hoy-alerts').innerHTML = alertsHtml;
+
+  // Tabla detalle
+  renderTablaHoy(d.resumenes);
+
+  // Mini-leyenda de próximos feriados
+  var pf = proximosFeriados(3);
+  var pfEl = $('proximos-feriados-info');
+  if (pfEl) {
+    if (pf.length) {
+      pfEl.innerHTML = '<strong>📅 Próximos feriados:</strong> ' +
+        pf.map(function(f) {
+          var dt = new Date(f.fecha + 'T12:00:00');
+          var diaPalabra = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'][dt.getDay()];
+          return '<span class="pf-item"><span class="pf-d">' + fmtFecha(f.fecha) + ' (' + diaPalabra + ')</span> · ' + f.nombre + '</span>';
+        }).join(' ');
+    } else {
+      pfEl.innerHTML = '';
+    }
+  }
+}
+
+// Función obsoleta - reemplazada por la mini-leyenda dentro de renderHoy
+function renderProximosFeriados() {
+  // Mantener stub vacío por compatibilidad
+}
+
+function renderHoyList(id, items, fnRow) {
+  var el = $(id);
+  if (!el) return;
+  if (items.length === 0) {
+    el.innerHTML = '<div class="empty">— Ninguno —</div>';
+    return;
+  }
+  el.innerHTML = items.slice(0, 50).map(fnRow).join('');
+}
+
+function renderTablaHoy(resumenes) {
+  var filtro = $('hoy-filtro').value;
+  var q = ($('hoy-busca').value || '').toLowerCase();
+  var lista = resumenes.slice();
+
+  if (filtro === 'atraso') lista = lista.filter(function(x) { return x.r.atrasoMin > 0; });
+  if (filtro === 'nomarca') lista = lista.filter(function(x) { return x.tieneAsignacion && !x.r.primera; });
+  if (filtro === 'ok') lista = lista.filter(function(x) { return x.r.primera && x.r.atrasoMin === 0; });
+  if (q) {
+    lista = lista.filter(function(x) {
+      return empNombreCompleto(x.emp).toLowerCase().indexOf(q) >= 0 ||
+             (x.emp.identification || '').toLowerCase().indexOf(q) >= 0;
+    });
+  }
+
+  var tb = $('tbody-hoy');
+  if (lista.length === 0) {
+    tb.innerHTML = '<tr><td colspan="10"><div class="empty">— Sin datos —</div></td></tr>';
+    return;
+  }
+
+  tb.innerHTML = lista.map(function(x) {
+    var r = x.r;
+    var entradaTeo = r.horario ? fmtHora(r.horario.start) : '—';
+    var salidaTeo = r.horario ? fmtHora(r.horario.end) : '—';
+    var entradaReal = r.primeraDt ? fmtHora(r.primeraDt) : '<span class="s-pill no-marca">NO MARCÓ</span>';
+    var salidaReal = (r.ultimaDt && r.marcasCount >= 2) ? fmtHora(r.ultimaDt) : '—';
+    var atraso = r.atrasoMin > 0 ? '<span class="s-pill atraso">+' + r.atrasoMin + ' min</span>' : '—';
+    var hhEE = r.hhEEMin > 0 ? '<span class="s-pill extra">' + (r.hhEEMin/60).toFixed(1) + ' h</span>' : '—';
+    var estado;
+    if (!x.tieneAsignacion) estado = '<span class="s-pill" style="background:var(--s4);color:var(--t3)">SIN TURNO</span>';
+    else if (!r.primera) estado = '<span class="s-pill no-marca">NO MARCÓ</span>';
+    else if (r.atrasoMin > 0) estado = '<span class="s-pill atraso">ATRASO</span>';
+    else estado = '<span class="s-pill ok">A TIEMPO</span>';
+
+    var rowClass = '';
+    if (!r.primera && x.tieneAsignacion) rowClass = 'row-alert';
+    else if (r.atrasoMin > 0) rowClass = 'row-warn';
+
+    return '<tr class="' + rowClass + '">' +
+      '<td><a class="emp-link" onclick="abrirModalEmpleado(\'' + x.emp.code + '\')">' + empNombreCompleto(x.emp) + '</a></td>' +
+      '<td class="num">' + (x.emp.identification || '—') + '</td>' +
+      '<td>' + (r.horario ? r.horario.workshiftName : '—') + '</td>' +
+      '<td class="num">' + entradaTeo + '</td>' +
+      '<td class="num">' + entradaReal + '</td>' +
+      '<td class="num">' + salidaTeo + '</td>' +
+      '<td class="num">' + salidaReal + '</td>' +
+      '<td>' + atraso + '</td>' +
+      '<td>' + hhEE + '</td>' +
+      '<td>' + estado + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function actualizarHoy() {
+  // Recargar solo lo del día de hoy (rápido)
+  setStatus('load', 'Actualizando datos del día...');
+  cargar();
+}
+
+function actualizarBadgeAnomalias() {
+  // Contar anomalías totales en el período cargado
+  var anomalias = generarAnomalias();
+  var b = $('badge-ano');
+  if (anomalias.length > 0) {
+    b.textContent = anomalias.length;
+    b.style.display = '';
+  } else {
+    b.style.display = 'none';
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   VISTA TRABAJADORES
+   ═══════════════════════════════════════════════════════════════════════ */
+function aplicarFiltrosYRender() {
+  var sucFiltro = $('sucursal').value;
+  var depFiltro = $('depto').value;
+  var qBusca = ($('emp-busca') ? $('emp-busca').value : '').toLowerCase().trim();
+  var estadoFiltro = ($('emp-estado') ? $('emp-estado').value : '');
+  var lista = cacheEmpleados.slice();
+
+  if (sucFiltro) lista = lista.filter(function(e) { return e.branchOfficeCode === sucFiltro; });
+  if (depFiltro) lista = lista.filter(function(e) { return e.departmentCode === depFiltro; });
+  if (estadoFiltro === 'ACTIVO') lista = lista.filter(empActivo);
+  else if (estadoFiltro === 'INACTIVO') lista = lista.filter(function(e) { return !empActivo(e); });
+  if (qBusca) {
+    lista = lista.filter(function(e) {
+      var n = empNombreCompleto(e).toLowerCase();
+      var r = (e.identification || '').toLowerCase();
+      var c = (e.code || '').toLowerCase();
+      return n.indexOf(qBusca) >= 0 || r.indexOf(qBusca) >= 0 || c.indexOf(qBusca) >= 0;
+    });
+  }
+
+  // KPIs
+  var act = lista.filter(empActivo).length;
+  var ina = lista.length - act;
+  var sucs = {}, deps = {}, conTur = 0;
+  var asigSet = {};
+  cacheAsignaciones.forEach(function(a) { if (a.employee) asigSet[a.employee.code] = true; });
+  lista.forEach(function(e) {
+    sucs[empSucursalAdmin(e)] = true;
+    deps[empDepartamento(e)] = true;
+    if (asigSet[e.code]) conTur++;
+  });
+  $('k-emp-total').textContent = lista.length;
+  $('k-emp-act').textContent = act;
+  $('k-emp-ina').textContent = ina;
+  $('k-emp-suc').textContent = Object.keys(sucs).length;
+  $('k-emp-dep').textContent = Object.keys(deps).length;
+  $('k-emp-tur').textContent = conTur;
+
+  // Tabla
+  var asigPorEmp = {};
+  cacheAsignaciones.forEach(function(a) {
+    if (a.employee) asigPorEmp[a.employee.code] = a;
+  });
+
+  var tb = $('tbody-emp');
+  if (lista.length === 0) {
+    tb.innerHTML = '<tr><td colspan="7"><div class="empty">— Sin resultados —</div></td></tr>';
+    return;
+  }
+  tb.innerHTML = lista.map(function(e) {
+    var asg = asigPorEmp[e.code];
+    var turno = asg ? (asg.workshiftName + ' (' + asg.period + ')') : '—';
+    var estado = empActivo(e)
+      ? '<span class="s-pill act">ACTIVO</span>'
+      : '<span class="s-pill ina">INACTIVO</span>';
+    return '<tr>' +
+      '<td class="num">' + (e.code || '—') + '</td>' +
+      '<td><a class="emp-link" onclick="abrirModalEmpleado(\'' + e.code + '\')">' + empNombreCompleto(e) + '</a></td>' +
+      '<td class="num">' + (e.identification || '—') + '</td>' +
+      '<td>' + empSucursalAdmin(e) + '</td>' +
+      '<td>' + empDepartamento(e) + '</td>' +
+      '<td>' + turno + '</td>' +
+      '<td>' + estado + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   VISTA MARCACIONES
+   ═══════════════════════════════════════════════════════════════════════ */
+function renderMarcaciones() {
+  var q = ($('ast-busca').value || '').toLowerCase();
+  var sucFil = ($('ast-sucursal') ? $('ast-sucursal').value : '');
+  var tipoFil = $('ast-tipo').value;
+  var anoFil = $('ast-anomalia').value;
+
+  // Poblar select de sucursales (de las marcas reales)
+  poblarSelectSucursalesAst();
+
+  var horarioByEmpDia = indexHorariosPorEmpDia();
+
+  // Para detectar ENT/SAL necesitamos también la primera/última marca por empleado-día (fallback)
+  var marcasPorEmpDia = {};
+  cacheMarcacionesEnriquecimiento.forEach(function(m) {
+    var k = obtenerCodeMarca(m) + '|' + obtenerFechaMarca(m);
+    if (!marcasPorEmpDia[k]) marcasPorEmpDia[k] = [];
+    marcasPorEmpDia[k].push(m);
+  });
+
+  var marcasEnriquecidas = cacheMarcacionesEnriquecimiento.map(function(m) {
+    var emp = obtenerEmpDeMarca(m) || {};
+    var fecha = obtenerFechaMarca(m);
+    var hora = obtenerHoraMarca(m);
+    var horario = horarioByEmpDia[emp.code + '|' + fecha];
+    // Detectar tipo: con horario usa proximidad, sin horario usa primera/última
+    var tipo = obtenerTipoMarca(m, horario);
+    if (!tipo) {
+      tipo = obtenerTipoMarcaFallback(m, marcasPorEmpDia[emp.code + '|' + fecha]);
+    }
+    var horaTeo = '—', deltaMin = null, esAtraso = false, esTemprano = false, esExtra = false;
+    if (horario) {
+      var dt = obtenerDateTimeMarca(m);
+      if (tipo === 'ENTRADA') {
+        horaTeo = fmtHora(horario.start);
+        var dteo = parseFechaHora(horario.start);
+        if (dt && dteo) {
+          deltaMin = diffMin(dt, dteo);
+          if (deltaMin > getTolerancia()) esAtraso = true;
+          else if (deltaMin < -getTolerancia()) esExtra = true;
+        }
+      } else if (tipo === 'SALIDA') {
+        horaTeo = fmtHora(horario.end);
+        var dteo2 = parseFechaHora(horario.end);
+        if (dt && dteo2) {
+          deltaMin = diffMin(dt, dteo2);
+          if (deltaMin > getTolerancia()) esExtra = true;
+          else if (deltaMin < -getTolerancia()) esTemprano = true;
+        }
+      }
+    }
+    return {
+      m: m, emp: emp, fecha: fecha, hora: hora,
+      tipo: tipo, horaTeo: horaTeo, deltaMin: deltaMin,
+      esAtraso: esAtraso, esTemprano: esTemprano, esExtra: esExtra
+    };
+  });
+
+  // Filtros
+  var lista = marcasEnriquecidas;
+  if (q) {
+    lista = lista.filter(function(x) {
+      return empNombreCompleto(x.emp).toLowerCase().indexOf(q) >= 0 ||
+             (x.emp.identification || '').toLowerCase().indexOf(q) >= 0;
+    });
+  }
+  if (sucFil) {
+    lista = lista.filter(function(x) {
+      var suc = x.emp.branchOffice || x.emp.branchOfficeName || '';
+      return suc === sucFil;
+    });
+  }
+  if (tipoFil === 'entrada') lista = lista.filter(function(x) { return x.tipo === 'ENTRADA'; });
+  if (tipoFil === 'salida') lista = lista.filter(function(x) { return x.tipo === 'SALIDA'; });
+  if (anoFil === 'atraso') lista = lista.filter(function(x) { return x.esAtraso; });
+  if (anoFil === 'extra') lista = lista.filter(function(x) { return x.esExtra; });
+  if (anoFil === 'temp') lista = lista.filter(function(x) { return x.esTemprano; });
+
+  // Ordenar por fecha + hora desc
+  lista.sort(function(a, b) {
+    var fa = (a.fecha || '') + (a.hora || ''), fb = (b.fecha || '') + (b.hora || '');
+    return fb.localeCompare(fa);
+  });
+
+  // KPIs
+  var diasUnicos = {}, trabUnicos = {}, atra = 0, ext = 0, temp = 0;
+  marcasEnriquecidas.forEach(function(x) {
+    diasUnicos[x.fecha] = true;
+    trabUnicos[x.emp.code] = true;
+    if (x.esAtraso) atra++;
+    if (x.esExtra && x.deltaMin > 0) ext += x.deltaMin;
+    if (x.esTemprano) temp++;
+  });
+  $('k-ast-total').textContent = marcasEnriquecidas.length;
+  $('k-ast-rango').textContent = $('d1').value + ' al ' + $('d2').value;
+  $('k-ast-dias').textContent = Object.keys(diasUnicos).length;
+  $('k-ast-trab').textContent = Object.keys(trabUnicos).length;
+  $('k-ast-atra').textContent = atra;
+  $('k-ast-ext').textContent = (ext / 60).toFixed(1);
+  $('k-ast-temp').textContent = temp;
+
+  // Tabla
+  var tb = $('tbody-ast');
+  if (lista.length === 0) {
+    tb.innerHTML = '<tr><td colspan="8"><div class="empty">— Sin marcaciones —</div></td></tr>';
+    return;
+  }
+  // Limitar a 1000 filas para no morir
+  var maxRender = 1000;
+  var truncated = lista.length > maxRender;
+  lista = lista.slice(0, maxRender);
+
+  // Orden de columnas: Fecha · Trabajador · RUT · Hora teórica · Tipo · Hora real · Δ min · Sucursal
+  tb.innerHTML = lista.map(function(x) {
+    var deltaTxt = '—';
+    var feriado = esFeriado(x.fecha);
+    if (x.deltaMin !== null && !feriado) {
+      var sign = x.deltaMin > 0 ? '+' : '';
+      var color = x.esAtraso ? 'var(--red)' : x.esExtra ? 'var(--purple)' : x.esTemprano ? 'var(--amber)' : 'var(--t2)';
+      deltaTxt = '<span style="color:' + color + ';font-weight:500">' + sign + x.deltaMin + ' min</span>';
+    }
+    var rowClass = feriado ? 'row-feriado' :
+                   (x.esAtraso ? 'row-alert' : (x.esExtra || x.esTemprano) ? 'row-warn' : '');
+    var tipoCol = x.tipo === 'ENTRADA' ? '<span class="s-pill ok">ENT</span>' :
+                  x.tipo === 'SALIDA' ? '<span class="s-pill" style="background:var(--blue-bg);color:var(--blue)">SAL</span>' :
+                  x.tipo === 'INTERMEDIA' ? '<span class="s-pill" style="background:var(--s4);color:var(--t3)">INT</span>' :
+                  '<span class="s-pill" style="background:var(--s4);color:var(--t3)">—</span>';
+    return '<tr class="' + rowClass + '">' +
+      '<td class="num">' + fmtFecha(x.fecha) + feriadoBadge(x.fecha) + '</td>' +
+      '<td><a class="emp-link" onclick="abrirModalEmpleado(\'' + (x.emp.code || '') + '\')">' + empNombreCompleto(x.emp) + '</a></td>' +
+      '<td class="num">' + (x.emp.identification || '—') + '</td>' +
+      '<td class="num">' + x.horaTeo + '</td>' +
+      '<td>' + tipoCol + '</td>' +
+      '<td class="num">' + (x.hora ? x.hora.substring(0,5) : '—') + '</td>' +
+      '<td>' + deltaTxt + '</td>' +
+      '<td>' + (x.emp.branchOffice || x.emp.branchOfficeName || '—') + '</td>' +
+    '</tr>';
+  }).join('') + (truncated ? '<tr><td colspan="8"><div class="empty">Mostrando ' + maxRender + ' (refina filtros para ver más)</div></td></tr>' : '');
+
+  window._astData = marcasEnriquecidas;
+}
+
+function poblarSelectSucursalesAst() {
+  var sel = $('ast-sucursal');
+  if (!sel) return;
+  // Si ya tiene opciones (más allá de "Todas"), no repoblar
+  if (sel.options.length > 1) return;
+  var sucs = {};
+  cacheMarcacionesEnriquecimiento.forEach(function(m) {
+    var emp = obtenerEmpDeMarca(m);
+    if (emp) {
+      var s = emp.branchOffice || emp.branchOfficeName;
+      if (s) sucs[s] = true;
+    }
+  });
+  Object.keys(sucs).sort().forEach(function(s) {
+    var opt = document.createElement('option');
+    opt.value = s; opt.textContent = s;
+    sel.appendChild(opt);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   VISTA ANOMALÍAS
+   ═══════════════════════════════════════════════════════════════════════ */
+function generarAnomalias() {
+  // Por cada empleado activo y cada día del rango con horario asignado, generar evento
+  var anomalias = [];
+  var d1 = $('d1').value, d2 = $('d2').value;
+  if (!d1 || !d2) return [];
+  var fechas = diasEnRango(d1, d2);
+  var activos = cacheEmpleados.filter(empActivo);
+
+  activos.forEach(function(e) {
+    fechas.forEach(function(f) {
+      // EXCLUIR feriados del cálculo de anomalías
+      if (esFeriado(f)) return;
+
+      var r = calcularResumenDia(e.code, f);
+      // Solo generar anomalía si tiene horario teórico ese día
+      if (!r.horario) return;
+
+      if (r.atrasoMin > 0) {
+        anomalias.push({
+          fecha: f, emp: e, tipo: 'atraso', min: r.atrasoMin,
+          teorica: fmtHora(r.horario.start),
+          real: r.primeraDt ? fmtHora(r.primeraDt) : '—',
+          turno: r.horario.workshiftName
+        });
+      }
+      if (r.salidaTempMin > 0) {
+        anomalias.push({
+          fecha: f, emp: e, tipo: 'temp', min: r.salidaTempMin,
+          teorica: fmtHora(r.horario.end),
+          real: r.ultimaDt ? fmtHora(r.ultimaDt) : '—',
+          turno: r.horario.workshiftName
+        });
+      }
+      if (r.hhEEMin > 0) {
+        anomalias.push({
+          fecha: f, emp: e, tipo: 'extra', min: r.hhEEMin,
+          teorica: fmtHora(r.horario.end),
+          real: r.ultimaDt ? fmtHora(r.ultimaDt) : '—',
+          turno: r.horario.workshiftName
+        });
+      }
+      if (r.sinMarca) {
+        // Solo contar como "no marcó" si la fecha es <= hoy (no futuro)
+        if (f <= hoy()) {
+          anomalias.push({
+            fecha: f, emp: e, tipo: 'nomarca', min: 0,
+            teorica: fmtHora(r.horario.start),
+            real: '—',
+            turno: r.horario.workshiftName
+          });
+        }
+      }
+    });
+  });
+  return anomalias;
+}
+
+function renderAnomalias() {
+  var anomalias = generarAnomalias();
+
+  var q = ($('ano-busca').value || '').toLowerCase();
+  var tipoFil = $('ano-tipo').value;
+  var orden = $('ano-orden').value || 'fecha';
+
+  var lista = anomalias.slice();
+  if (q) {
+    lista = lista.filter(function(a) {
+      return empNombreCompleto(a.emp).toLowerCase().indexOf(q) >= 0 ||
+             (a.emp.identification || '').toLowerCase().indexOf(q) >= 0;
+    });
+  }
+  if (tipoFil) lista = lista.filter(function(a) { return a.tipo === tipoFil; });
+
+  if (orden === 'fecha') lista.sort(function(a, b) { return b.fecha.localeCompare(a.fecha); });
+  if (orden === 'trab') lista.sort(function(a, b) {
+    return empNombreCompleto(a.emp).localeCompare(empNombreCompleto(b.emp));
+  });
+  if (orden === 'min') lista.sort(function(a, b) { return b.min - a.min; });
+
+  // KPIs
+  var atra = anomalias.filter(function(a) { return a.tipo === 'atraso'; });
+  var temp = anomalias.filter(function(a) { return a.tipo === 'temp'; });
+  var ext = anomalias.filter(function(a) { return a.tipo === 'extra'; });
+  var nom = anomalias.filter(function(a) { return a.tipo === 'nomarca'; });
+  var trabSet = {};
+  anomalias.forEach(function(a) { trabSet[a.emp.code] = true; });
+  var sumAtra = atra.reduce(function(a, x) { return a + x.min; }, 0);
+
+  $('k-ano-atra').textContent = atra.length;
+  $('k-ano-temp').textContent = temp.length;
+  $('k-ano-ext').textContent = (ext.reduce(function(a,x){return a+x.min},0) / 60).toFixed(1);
+  $('k-ano-nomarc').textContent = nom.length;
+  $('k-ano-trab').textContent = Object.keys(trabSet).length;
+  $('k-ano-prom').textContent = atra.length ? Math.round(sumAtra / atra.length) : 0;
+
+  // Tabla
+  var tb = $('tbody-ano');
+  if (lista.length === 0) {
+    tb.innerHTML = '<tr><td colspan="9"><div class="empty">— Sin anomalías —</div></td></tr>';
+    return;
+  }
+  tb.innerHTML = lista.slice(0, 1000).map(function(a) {
+    var tipoLbl, tipoColor, severidad;
+    if (a.tipo === 'atraso') { tipoLbl = 'ATRASO'; tipoColor = 'atraso'; }
+    if (a.tipo === 'temp') { tipoLbl = 'SALIDA TEMPRANA'; tipoColor = 'warn'; }
+    if (a.tipo === 'extra') { tipoLbl = 'HORAS EXTRA'; tipoColor = 'extra'; }
+    if (a.tipo === 'nomarca') { tipoLbl = 'NO MARCÓ'; tipoColor = 'no-marca'; }
+
+    if (a.tipo === 'nomarca') severidad = 'CRÍTICA';
+    else if (a.min >= 60) severidad = 'ALTA';
+    else if (a.min >= 30) severidad = 'MEDIA';
+    else severidad = 'BAJA';
+
+    var sevColor = severidad === 'CRÍTICA' ? 'var(--red)' :
+                   severidad === 'ALTA' ? 'var(--red)' :
+                   severidad === 'MEDIA' ? 'var(--amber)' : 'var(--t2)';
+
+    var diff = a.tipo === 'nomarca' ? '—' : (a.min + ' min');
+    return '<tr>' +
+      '<td class="num">' + fmtFecha(a.fecha) + ' <span style="color:var(--t3);font-size:10px">' + diaSemana(a.fecha) + '</span></td>' +
+      '<td><a class="emp-link" onclick="abrirModalEmpleado(\'' + a.emp.code + '\')">' + empNombreCompleto(a.emp) + '</a></td>' +
+      '<td class="num">' + (a.emp.identification || '—') + '</td>' +
+      '<td>' + a.turno + '</td>' +
+      '<td><span class="s-pill ' + tipoColor + '">' + tipoLbl + '</span></td>' +
+      '<td class="num">' + a.teorica + '</td>' +
+      '<td class="num">' + a.real + '</td>' +
+      '<td class="num" style="font-weight:600">' + diff + '</td>' +
+      '<td><span style="color:' + sevColor + ';font-weight:500">' + severidad + '</span></td>' +
+    '</tr>';
+  }).join('');
+
+  window._anoData = anomalias;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   VISTA TURNOS & HORARIOS
+   ═══════════════════════════════════════════════════════════════════════ */
+function renderTurnos() {
+  var q = ($('tur-busca').value || '').toLowerCase();
+  var perFil = $('tur-period').value;
+  var lista = cacheAsignaciones.slice();
+  if (q) {
+    lista = lista.filter(function(a) {
+      var n = (a.employee.name + ' ' + a.employee.lastName).toLowerCase();
+      var rut = (a.employee.identification || '').toLowerCase();
+      var t = (a.workshiftName || '').toLowerCase();
+      return n.indexOf(q) >= 0 || rut.indexOf(q) >= 0 || t.indexOf(q) >= 0;
+    });
+  }
+  if (perFil) lista = lista.filter(function(a) { return a.period === perFil; });
+
+  // KPIs
+  var turUnicos = {}, trabSet = {};
+  cacheAsignaciones.forEach(function(a) {
+    turUnicos[a.workshiftCode] = true;
+    if (a.employee) trabSet[a.employee.code] = true;
+  });
+  var d1 = $('d1').value, d2 = $('d2').value;
+  var diasRango = (d1 && d2) ? diasEnRango(d1, d2).length : 0;
+
+  // Activos sin turno
+  var conTur = {};
+  cacheAsignaciones.forEach(function(a) { if (a.employee) conTur[a.employee.code] = true; });
+  var activosSinTur = cacheEmpleados.filter(function(e) { return empActivo(e) && !conTur[e.code]; });
+
+  $('k-tur-asig').textContent = cacheAsignaciones.length;
+  $('k-tur-unic').textContent = Object.keys(turUnicos).length;
+  $('k-tur-trab').textContent = Object.keys(trabSet).length;
+  $('k-tur-dias').textContent = diasRango;
+  $('k-tur-hor').textContent = cacheHorarios.length;
+  $('k-tur-sin').textContent = activosSinTur.length;
+
+  var tb = $('tbody-tur');
+  if (lista.length === 0) {
+    tb.innerHTML = '<tr><td colspan="7"><div class="empty">— Sin asignaciones —</div></td></tr>';
+    return;
+  }
+  // Ordenar por nombre
+  lista.sort(function(a, b) {
+    return (a.employee.name + a.employee.lastName).localeCompare(b.employee.name + b.employee.lastName);
+  });
+  tb.innerHTML = lista.map(function(a) {
+    var estado = empActivo(a.employee) ? '<span class="s-pill act">ACTIVO</span>' : '<span class="s-pill ina">INACTIVO</span>';
+    return '<tr>' +
+      '<td><a class="emp-link" onclick="abrirModalEmpleado(\'' + a.employee.code + '\')">' + a.employee.name + ' ' + a.employee.lastName + '</a></td>' +
+      '<td class="num">' + (a.employee.identification || '—') + '</td>' +
+      '<td>' + (a.workshiftName || a.workshiftCode) + '</td>' +
+      '<td>' + (a.period || '—') + '</td>' +
+      '<td class="num">' + fmtFecha(a.start) + '</td>' +
+      '<td class="num">' + fmtFecha(a.end) + '</td>' +
+      '<td>' + estado + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function renderHorarios() {
+  var q = ($('hor-busca').value || '').toLowerCase();
+  var lista = cacheHorarios.slice();
+  if (q) {
+    lista = lista.filter(function(h) {
+      return (h.employeeName || '').toLowerCase().indexOf(q) >= 0 ||
+             (h.rut || '').toLowerCase().indexOf(q) >= 0;
+    });
+  }
+  // Ordenar por fecha desc + nombre
+  lista.sort(function(a, b) {
+    if (a.date !== b.date) return b.date.localeCompare(a.date);
+    return (a.employeeName || '').localeCompare(b.employeeName || '');
+  });
+
+  var tb = $('tbody-hor');
+  if (lista.length === 0) {
+    tb.innerHTML = '<tr><td colspan="9"><div class="empty">— Sin horarios programados —</div></td></tr>';
+    return;
+  }
+  tb.innerHTML = lista.slice(0, 1000).map(function(h) {
+    var ini = parseFechaHora(h.start);
+    var fin = parseFechaHora(h.end);
+    var horas = (ini && fin) ? ((fin - ini) / 3600000).toFixed(1) : '—';
+    var feriado = esFeriado(h.date);
+    var rowClass = feriado ? ' class="row-feriado"' : '';
+    return '<tr' + rowClass + '>' +
+      '<td class="num">' + fmtFecha(h.date) + (feriado ? feriadoBadge(h.date) : '') + '</td>' +
+      '<td>' + diaSemana(h.date) + '</td>' +
+      '<td><a class="emp-link" onclick="abrirModalEmpleado(\'' + h.employeeCode + '\')">' + h.employeeName + '</a></td>' +
+      '<td class="num">' + (h.rut || '—') + '</td>' +
+      '<td>' + h.workshiftName + '</td>' +
+      '<td>' + h.scheduleName + '</td>' +
+      '<td class="num">' + fmtHora(h.start) + '</td>' +
+      '<td class="num">' + fmtHora(h.end) + '</td>' +
+      '<td class="num">' + horas + ' h</td>' +
+    '</tr>';
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   VISTA PERMISOS
+   ═══════════════════════════════════════════════════════════════════════ */
+function renderPermisos() {
+  var q = ($('per-busca').value || '').toLowerCase();
+  var lista = cachePermisos.slice();
+  if (q) {
+    lista = lista.filter(function(p) {
+      var n = ((p.employeeName || '') + ' ' + (p.employee && p.employee.name || '')).toLowerCase();
+      return n.indexOf(q) >= 0;
+    });
+  }
+
+  var fechaHoy = hoy();
+  var tipos = {}, trab = {}, vigentes = 0, dias = 0, proximos = 0;
+  var fechaProxLimite = (function() {
+    var d = new Date();
+    d.setDate(d.getDate() + 7);
+    return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+  })();
+  lista.forEach(function(p) {
+    var ini = (p.start || p.startDate || '').substring(0, 10);
+    var fin = (p.end || p.endDate || '').substring(0, 10);
+    var t = p.permissionTypeName || p.type || p.permissionType || '—';
+    tipos[t] = true;
+    var emp = p.employeeCode || (p.employee && p.employee.code);
+    if (emp) trab[emp] = true;
+    if (ini <= fechaHoy && fin >= fechaHoy) vigentes++;
+    if (fin >= fechaHoy && fin <= fechaProxLimite) proximos++;
+    if (ini && fin) {
+      var di = new Date(ini), df = new Date(fin);
+      dias += Math.round((df - di) / (1000*60*60*24)) + 1;
+    }
+  });
+  $('k-per-total').textContent = cachePermisos.length;
+  $('k-per-trab').textContent = Object.keys(trab).length;
+  $('k-per-hoy').textContent = vigentes;
+  $('k-per-tipos').textContent = Object.keys(tipos).length;
+  $('k-per-dias').textContent = dias;
+  $('k-per-proxi').textContent = proximos;
+
+  var tb = $('tbody-per');
+  if (lista.length === 0) {
+    tb.innerHTML = '<tr><td colspan="7"><div class="empty">— Sin permisos —</div></td></tr>';
+    return;
+  }
+  tb.innerHTML = lista.map(function(p) {
+    var ini = (p.start || p.startDate || '').substring(0, 10);
+    var fin = (p.end || p.endDate || '').substring(0, 10);
+    var nombre = p.employeeName || (p.employee ? (p.employee.name + ' ' + p.employee.lastName) : '—');
+    var rut = p.identification || (p.employee && p.employee.identification) || '—';
+    var tipo = p.permissionTypeName || p.type || p.permissionType || '—';
+    var diasP = (ini && fin) ? Math.round((new Date(fin) - new Date(ini)) / (1000*60*60*24)) + 1 : '—';
+    var vigencia;
+    if (ini && fin) {
+      if (ini <= fechaHoy && fin >= fechaHoy) vigencia = '<span class="s-pill permiso">VIGENTE</span>';
+      else if (fin < fechaHoy) vigencia = '<span class="s-pill" style="background:var(--s4);color:var(--t3)">FINALIZADO</span>';
+      else vigencia = '<span class="s-pill warn">FUTURO</span>';
+    } else vigencia = '—';
+    return '<tr>' +
+      '<td>' + nombre + '</td>' +
+      '<td class="num">' + rut + '</td>' +
+      '<td>' + tipo + '</td>' +
+      '<td class="num">' + fmtFecha(ini) + '</td>' +
+      '<td class="num">' + fmtFecha(fin) + '</td>' +
+      '<td class="num">' + diasP + '</td>' +
+      '<td>' + vigencia + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   VISTAS SUCURSALES Y DEPARTAMENTOS
+   ═══════════════════════════════════════════════════════════════════════ */
+function renderSucursales() {
+  var tb = $('tbody-suc');
+  if (cacheSucursales.length === 0) {
+    tb.innerHTML = '<tr><td colspan="4"><div class="empty">— Sin sucursales —</div></td></tr>';
+    return;
+  }
+  // Contar empleados por sucursal
+  var conteo = {};
+  cacheEmpleados.forEach(function(e) {
+    var c = e.branchOfficeCode;
+    conteo[c] = (conteo[c] || 0) + 1;
+  });
+  tb.innerHTML = cacheSucursales.map(function(s) {
+    var status = '<span class="s-pill act">ACTIVA</span>';
+    return '<tr>' +
+      '<td class="num">' + (s.code || '—') + '</td>' +
+      '<td>' + (s.name || '—') + '</td>' +
+      '<td class="num">' + (conteo[s.code] || 0) + '</td>' +
+      '<td>' + status + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function renderDepartamentos() {
+  var tb = $('tbody-dep');
+  if (cacheDepartamentos.length === 0) {
+    tb.innerHTML = '<tr><td colspan="5"><div class="empty">— Sin departamentos —</div></td></tr>';
+    return;
+  }
+  var conteo = {};
+  cacheEmpleados.forEach(function(e) {
+    var c = e.departmentCode;
+    conteo[c] = (conteo[c] || 0) + 1;
+  });
+  tb.innerHTML = cacheDepartamentos.map(function(d) {
+    var status = (d.status || 'ACTIVO').toUpperCase() === 'ACTIVO'
+      ? '<span class="s-pill act">ACTIVO</span>'
+      : '<span class="s-pill ina">' + (d.status || '—') + '</span>';
+    var def = d.defaultDepartment ? '✓' : '—';
+    return '<tr>' +
+      '<td class="num">' + (d.code || '—') + '</td>' +
+      '<td>' + (d.name || '—') + '</td>' +
+      '<td class="num">' + (d.employeesCount !== undefined ? d.employeesCount : (conteo[d.code] || 0)) + '</td>' +
+      '<td>' + def + '</td>' +
+      '<td>' + status + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MODAL DETALLE DE EMPLEADO
+   ═══════════════════════════════════════════════════════════════════════ */
+function abrirModalEmpleado(code) {
+  var emp = cacheEmpleados.find(function(e) { return e.code == code; });
+  if (!emp) {
+    // Buscar en asignaciones u horarios
+    var ah = cacheAsignaciones.find(function(a) { return a.employee && a.employee.code == code; });
+    if (ah) emp = ah.employee;
+  }
+  if (!emp) return;
+  modalEmpleadoActual = emp;
+
+  var asig = cacheAsignaciones.filter(function(a) { return a.employee && a.employee.code == code; });
+  var horarios = cacheHorarios.filter(function(h) { return h.employeeCode == code; });
+  var marcas = cacheMarcacionesEnriquecimiento.filter(function(m) {
+    return obtenerCodeMarca(m) == code;
+  });
+  var permisos = cachePermisos.filter(function(p) {
+    var pc = p.employeeCode || (p.employee && p.employee.code);
+    return pc == code;
+  });
+
+  // Construir HTML
+  var html = '';
+  html += '<h2>' + empNombreCompleto(emp) + '</h2>';
+  html += '<div class="modal-sub">RUT: ' + (emp.identification || '—') + ' · Código: ' + (emp.code || '—') + '</div>';
+
+  // Datos personales
+  html += '<div class="modal-section"><h3>Datos personales</h3><div class="modal-grid">';
+  html += '<div><div class="lbl">Sucursal</div><div class="val">' + empSucursalAdmin(emp) + '</div></div>';
+  html += '<div><div class="lbl">Departamento</div><div class="val">' + empDepartamento(emp) + '</div></div>';
+  html += '<div><div class="lbl">Estado</div><div class="val">' + (emp.employeeStatus || '—') + '</div></div>';
+  html += '<div><div class="lbl">Género</div><div class="val">' + (emp.genre || '—') + '</div></div>';
+  html += '<div><div class="lbl">Email</div><div class="val">' + (emp.personalMail || '—') + '</div></div>';
+  html += '<div><div class="lbl">Teléfono</div><div class="val">' + (emp.personalPhone || '—') + '</div></div>';
+  html += '</div></div>';
+
+  // Turnos asignados
+  if (asig.length) {
+    html += '<div class="modal-section"><h3>Turnos asignados (' + asig.length + ')</h3>';
+    html += '<div class="tw"><table class="tbl">';
+    html += '<thead><tr><th>Turno</th><th>Período</th><th>Inicio</th><th>Término</th></tr></thead><tbody>';
+    asig.forEach(function(a) {
+      html += '<tr><td>' + a.workshiftName + '</td><td>' + a.period + '</td>' +
+              '<td class="num">' + fmtFecha(a.start) + '</td><td class="num">' + fmtFecha(a.end) + '</td></tr>';
+    });
+    html += '</tbody></table></div></div>';
+  }
+
+  // Resumen de asistencia (si hay horarios y marcas)
+  if (horarios.length) {
+    var atrasos = 0, sumAtra = 0, hhEE = 0, sinMarca = 0;
+    var fechas = [];
+    horarios.forEach(function(h) { if (fechas.indexOf(h.date) < 0) fechas.push(h.date); });
+    fechas.forEach(function(f) {
+      var r = calcularResumenDia(emp.code, f);
+      if (r.atrasoMin > 0) { atrasos++; sumAtra += r.atrasoMin; }
+      if (r.hhEEMin > 0) hhEE += r.hhEEMin;
+      if (r.sinMarca && f <= hoy()) sinMarca++;
+    });
+    html += '<div class="modal-section"><h3>Resumen de asistencia (' + fechas.length + ' días con horario)</h3>';
+    html += '<div class="modal-grid">';
+    html += '<div><div class="lbl">Atrasos</div><div class="val" style="color:var(--red)">' + atrasos + ' (' + sumAtra + ' min)</div></div>';
+    html += '<div><div class="lbl">Horas extra</div><div class="val" style="color:var(--purple)">' + (hhEE/60).toFixed(1) + ' h</div></div>';
+    html += '<div><div class="lbl">No marcó</div><div class="val" style="color:var(--red)">' + sinMarca + ' días</div></div>';
+    html += '<div><div class="lbl">Marcas totales</div><div class="val">' + marcas.length + '</div></div>';
+    html += '</div></div>';
+
+    // Detalle día a día
+    html += '<div class="modal-section"><h3>Detalle día a día</h3><div class="tw">';
+    html += '<table class="tbl"><thead><tr><th>Fecha</th><th>Día</th><th>Horario</th><th>Entrada teó.</th><th>Entrada real</th><th>Salida real</th><th>Atraso</th><th>HH.EE.</th></tr></thead><tbody>';
+    fechas.sort().reverse().forEach(function(f) {
+      var r = calcularResumenDia(emp.code, f);
+      var feriado = esFeriado(f);
+      var entReal = r.primeraDt ? fmtHora(r.primeraDt) : (feriado ? '—' : '<span style="color:var(--red)">—</span>');
+      var salReal = (r.ultimaDt && r.marcasCount >= 2) ? fmtHora(r.ultimaDt) : '—';
+      var atr = (r.atrasoMin > 0 && !feriado) ? '<span style="color:var(--red);font-weight:600">+' + r.atrasoMin + 'm</span>' : '—';
+      var ee = r.hhEEMin > 0 ? '<span style="color:var(--purple);font-weight:600">' + (r.hhEEMin/60).toFixed(1) + 'h</span>' : '—';
+      var rowClass = feriado ? ' class="row-feriado"' : '';
+      var ferIcon = feriado ? feriadoBadge(f) : '';
+      html += '<tr' + rowClass + '><td class="num">' + fmtFecha(f) + ferIcon + '</td><td>' + diaSemana(f) + '</td>' +
+              '<td>' + (r.horario ? r.horario.scheduleName : '—') + '</td>' +
+              '<td class="num">' + (r.horario ? fmtHora(r.horario.start) : '—') + '</td>' +
+              '<td class="num">' + entReal + '</td><td class="num">' + salReal + '</td>' +
+              '<td>' + atr + '</td><td>' + ee + '</td></tr>';
+    });
+    html += '</tbody></table></div></div>';
+  }
+
+  if (permisos.length) {
+    html += '<div class="modal-section"><h3>Licencias (' + permisos.length + ')</h3><div class="tw">';
+    html += '<table class="tbl"><thead><tr><th>Tipo</th><th>Inicio</th><th>Término</th><th>Días</th></tr></thead><tbody>';
+    permisos.forEach(function(p) {
+      var ini = (p.start || p.startDate || '').substring(0, 10);
+      var fin = (p.end || p.endDate || '').substring(0, 10);
+      var diasP = (ini && fin) ? Math.round((new Date(fin) - new Date(ini)) / (1000*60*60*24)) + 1 : '—';
+      var tipo = p.permissionTypeName || p.type || p.permissionType || 'LICENCIA';
+      html += '<tr><td>' + tipo + '</td>' +
+              '<td class="num">' + fmtFecha(ini) + '</td>' +
+              '<td class="num">' + fmtFecha(fin) + '</td>' +
+              '<td class="num">' + diasP + '</td></tr>';
+    });
+    html += '</tbody></table></div></div>';
+  }
+
+  $('modal-body').innerHTML = html;
+  $('modal-bg').classList.add('on');
+}
+
+function cerrarModal() {
+  $('modal-bg').classList.remove('on');
+  modalEmpleadoActual = null;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   EXPORTAR A EXCEL
+   ═══════════════════════════════════════════════════════════════════════ */
+function exportXLSX(filename, sheetName, rows) {
+  if (typeof XLSX === 'undefined') { alert('XLSX no disponible'); return; }
+  var ws = XLSX.utils.json_to_sheet(rows);
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.writeFile(wb, filename);
+}
+function exportarTrabajadoresExcel() {
+  var asigPorEmp = {};
+  cacheAsignaciones.forEach(function(a) { if (a.employee) asigPorEmp[a.employee.code] = a; });
+  var rows = cacheEmpleados.map(function(e) {
+    var asg = asigPorEmp[e.code];
+    return {
+      Codigo: e.code, RUT: e.identification, Nombre: empNombreCompleto(e),
+      Sucursal: empSucursalAdmin(e), Departamento: empDepartamento(e),
+      Turno: asg ? asg.workshiftName : '', Periodo: asg ? asg.period : '',
+      Estado: e.employeeStatus, Email: e.personalMail, Telefono: e.personalPhone,
+      Genero: e.genre, FechaNac: e.birthDate
+    };
+  });
+  exportXLSX('trabajadores_workera.xlsx', 'Trabajadores', rows);
+}
+function exportarMarcacionesExcel() {
+  if (!window._astData) renderMarcaciones();
+  var rows = (window._astData || []).map(function(x) {
+    return {
+      Fecha: x.fecha, Hora: x.hora, Trabajador: empNombreCompleto(x.emp),
+      RUT: x.emp.identification, Tipo: x.tipo, HoraTeorica: x.horaTeo,
+      DiferenciaMin: x.deltaMin, EsAtraso: x.esAtraso ? 'SI' : '',
+      EsHorasExtra: x.esExtra ? 'SI' : '', EsSalidaTemprana: x.esTemprano ? 'SI' : '',
+      Sucursal: x.emp.branchOfficeName || ''
+    };
+  });
+  exportXLSX('marcaciones_workera.xlsx', 'Marcaciones', rows);
+}
+function exportarAnomaliasExcel() {
+  if (!window._anoData) renderAnomalias();
+  var rows = (window._anoData || []).map(function(a) {
+    return {
+      Fecha: a.fecha, Dia: diaSemana(a.fecha), Trabajador: empNombreCompleto(a.emp),
+      RUT: a.emp.identification, Turno: a.turno,
+      Tipo: a.tipo === 'atraso' ? 'ATRASO' : a.tipo === 'temp' ? 'SALIDA TEMPRANA' :
+            a.tipo === 'extra' ? 'HORAS EXTRA' : 'NO MARCO',
+      HoraTeorica: a.teorica, HoraReal: a.real, Minutos: a.min
+    };
+  });
+  exportXLSX('anomalias_workera.xlsx', 'Anomalias', rows);
+}
+function exportarTurnosExcel() {
+  var rows = cacheAsignaciones.map(function(a) {
+    return {
+      Trabajador: a.employee.name + ' ' + a.employee.lastName,
+      RUT: a.employee.identification, Turno: a.workshiftName,
+      Periodo: a.period, Inicio: a.start, Termino: a.end,
+      Estado: a.employee.employeeStatus
+    };
+  });
+  exportXLSX('turnos_workera.xlsx', 'Turnos', rows);
+}
+function exportarHorariosExcel() {
+  var rows = cacheHorarios.map(function(h) {
+    return {
+      Fecha: h.date, Dia: diaSemana(h.date),
+      Trabajador: h.employeeName, RUT: h.rut,
+      Turno: h.workshiftName, Horario: h.scheduleName,
+      Entrada: fmtHora(h.start), Salida: fmtHora(h.end)
+    };
+  });
+  exportXLSX('horarios_workera.xlsx', 'Horarios', rows);
+}
+function exportarPermisosExcel() {
+  var rows = cachePermisos.map(function(p) {
+    var nombre = p.employeeName || (p.employee ? (p.employee.name + ' ' + p.employee.lastName) : '—');
+    return {
+      Trabajador: nombre,
+      RUT: p.identification || (p.employee && p.employee.identification) || '',
+      Tipo: p.permissionTypeName || p.type || p.permissionType || '',
+      Inicio: p.start || p.startDate, Termino: p.end || p.endDate
+    };
+  });
+  exportXLSX('permisos_workera.xlsx', 'Permisos', rows);
+}
+function exportarHoyExcel() {
+  if (!window._hoyData) actualizarKPIsHoy();
+  var d = window._hoyData; if (!d) return;
+  var rows = d.resumenes.map(function(x) {
+    return {
+      Trabajador: empNombreCompleto(x.emp), RUT: x.emp.identification,
+      Turno: x.r.horario ? x.r.horario.workshiftName : '',
+      EntradaTeorica: x.r.horario ? fmtHora(x.r.horario.start) : '',
+      EntradaReal: x.r.primeraDt ? fmtHora(x.r.primeraDt) : 'NO MARCO',
+      SalidaTeorica: x.r.horario ? fmtHora(x.r.horario.end) : '',
+      SalidaReal: (x.r.ultimaDt && x.r.marcasCount >= 2) ? fmtHora(x.r.ultimaDt) : '',
+      AtrasoMin: x.r.atrasoMin, HorasExtra: (x.r.hhEEMin/60).toFixed(2),
+      Estado: !x.tieneAsignacion ? 'SIN TURNO' :
+              !x.r.primera ? 'NO MARCO' :
+              x.r.atrasoMin > 0 ? 'ATRASO' : 'A TIEMPO'
+    };
+  });
+  exportXLSX('resumen_hoy_workera.xlsx', 'Hoy_' + hoy(), rows);
+}
+function exportarHoy(tipo) {
+  // Atajo desde las cards. tipo: 'nomarc' | 'atrasos' | 'marcaron'
+  if (!window._hoyData) actualizarKPIsHoy();
+  exportarHoyExcel();
+}
+
+
+/* ════════════ WORKERA AL DÍA — calendario mensual productivo ════════════ */
+var calAnio, calMes;               // mes visible (0-11)
+var calChipEstado = 'todos';
+var calModalCtx = null;
+var calComentarios = {};           // 'code|fecha' -> comentario manual (sesión + localStorage)
+var CAL_COMENT_KEY = 'workera_cal_coment_v1';
+var CAL_NMES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+var CAL_DOW  = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+
+try { calComentarios = JSON.parse(localStorage.getItem(CAL_COMENT_KEY) || '{}'); } catch(e){ calComentarios = {}; }
+
+function calPad(n){ return n<10?'0'+n:''+n; }
+function calIso(y,m,d){ return y+'-'+calPad(m+1)+'-'+calPad(d); }
+
+/* Licencia/permiso vigente para un empleado en una fecha */
+function calLicencia(code, fecha){
+  return cachePermisos.find(function(p){
+    var pc = p.employeeCode || (p.employee && p.employee.code);
+    if (String(pc) !== String(code)) return false;
+    var ini = (p.start || p.startDate || '').substring(0,10);
+    var fin = (p.end || p.endDate || '').substring(0,10);
+    return ini && fin && ini <= fecha && fin >= fecha;
+  });
+}
+/* ¿El texto del permiso parece vacaciones? */
+function esVacacion(lic){
+  var t = ((lic.permissionTypeName||lic.type||'')+'').toLowerCase();
+  return t.indexOf('vacac') >= 0;
+}
+
+/* Deriva el estado (p/a/pe/ps/lic/vac) de un empleado en una fecha, usando datos REALES */
+function calEstadoDia(code, fecha){
+  // 1) Licencia / vacaciones tienen prioridad
+  var lic = calLicencia(code, fecha);
+  if (lic){
+    var esVac = esVacacion(lic);
+    return { edo: esVac?'vac':'lic', et:'', er:'', st:'', sr:'', atr:'',
+             turno: (lic.permissionTypeName||lic.type||(esVac?'Vacaciones':'Licencia')),
+             com: (lic.permissionTypeName||lic.type||'') + (lic.start?(' · '+(lic.start||'').substring(0,10)+' → '+(lic.end||'').substring(0,10)):'') };
+  }
+  // 2) Resumen real de marcas vs horario teórico
+  var r = calcularResumenDia(code, fecha);
+  // sin horario teórico ese día → no tenía turno (celda vacía)
+  if (!r.horario) return null;
+  var et = fmtHora(r.horario.start), st = fmtHora(r.horario.end);
+  var er = r.primeraDt ? fmtHora(r.primeraDt) : '—';
+  var sr = (r.ultimaDt && r.marcasCount >= 2) ? fmtHora(r.ultimaDt) : '—';
+  var turno = r.horario.workshiftName || 'Turno';
+  var edo, com='';
+  if (!r.primera){ edo='a'; com='Sin marca ni licencia'; }              // no marcó nada
+  else if (er==='—'){ edo='pe'; com='No registra marca de entrada'; }   // (raro, fallback)
+  else if (sr==='—'){ edo='ps'; com='No marcó salida'; }                // marcó entrada, no salida
+  else if (r.atrasoMin > 0){ edo='p'; com='Atraso de '+r.atrasoMin+' min'; }
+  else { edo='p'; }
+  return { edo:edo, et:et, er:er, st:st, sr:sr, atr:(r.atrasoMin>0?r.atrasoMin+' min':''), turno:turno, com:com };
+}
+
+function calEmpleadosActivos(){
+  return cacheEmpleados.filter(function(e){ return empActivo(e); });
+}
+
+function pillTxt(edo){ return {p:'P',a:'A',pe:'P/E',ps:'P/S',lic:'Lic',vac:'Vac'}[edo]||'·'; }
+
+function renderCalendario(){
+  var cont = $('cal-matrix');
+  if (!cacheEmpleados || !cacheEmpleados.length){
+    cont.innerHTML = '<div class="empty" style="padding:30px">Aún no hay datos. Presiona <b>Cargar</b> arriba para traer empleados y marcas.</div>';
+    return;
+  }
+  if (calAnio === undefined){ var h=new Date(); calAnio=h.getFullYear(); calMes=h.getMonth(); }
+
+  var ultimo = new Date(calAnio, calMes+1, 0).getDate();
+  var hoyD = new Date(); hoyD.setHours(12,0,0,0);
+  var q = ($('cal-busca').value||'').toLowerCase().trim();
+
+  $('cal-mestitulo').textContent = CAL_NMES[calMes] + ' ' + calAnio;
+
+  var personas = calEmpleadosActivos().filter(function(e){
+    if(!q) return true;
+    return empNombreCompleto(e).toLowerCase().indexOf(q)>=0 || (e.identification||'').toLowerCase().indexOf(q)>=0;
+  });
+
+  // encabezado días
+  var head = '<div class="cal-hrow"><div class="cal-corner">Trabajador \\ Día</div>';
+  for (var dia=1; dia<=ultimo; dia++){
+    var f = new Date(calAnio, calMes, dia); var dow=f.getDay();
+    var esHoy = (f.getFullYear()===hoyD.getFullYear()&&f.getMonth()===hoyD.getMonth()&&f.getDate()===hoyD.getDate());
+    var cls='cal-daycol'+((dow===0||dow===6)?' finde':'')+(esHoy?' hoy':'');
+    head += '<div class="'+cls+'" id="daycol-'+dia+'"><span class="cal-dow">'+CAL_DOW[dow]+'</span><span class="cal-dnum">'+dia+'</span></div>';
+  }
+  head += '</div>';
+
+  // filas por persona
+  var body = '';
+  personas.forEach(function(e){
+    var code = e.code, nombre = empNombreCompleto(e), rut = e.identification||'—';
+    body += '<div class="cal-prow"><div class="cal-pname"><span class="cal-pn" title="'+nombre+'">'+nombre+'</span><span class="cal-pr">'+rut+'</span></div>';
+    for (var dia=1; dia<=ultimo; dia++){
+      var fecha = calIso(calAnio, calMes, dia);
+      var f = new Date(calAnio, calMes, dia); var dow=f.getDay(); var finde=(dow===0||dow===6);
+      if (f > hoyD){ body += '<div class="cal-cell vacio'+(finde?' finde':'')+'"><span class="cal-mini empty">·</span></div>'; continue; }
+      var st = calEstadoDia(code, fecha);
+      if (!st){ body += '<div class="cal-cell vacio'+(finde?' finde':'')+'"><span class="cal-mini empty">·</span></div>'; continue; }
+      var visible = (calChipEstado==='todos' || st.edo===calChipEstado);
+      var alerta = (st.edo==='ps');
+      var op = visible?'':'opacity:.16;';
+      body += '<div class="cal-cell'+(finde?' finde':'')+(alerta?' alerta':'')+'" style="'+op+'" '+
+              'onclick="abrirCalModal(\''+code+'\',\''+fecha+'\')">'+
+              '<span class="cal-mini '+st.edo+'">'+pillTxt(st.edo)+'</span></div>';
+    }
+    body += '</div>';
+  });
+
+  cont.innerHTML = head + body;
+  renderWeekbarCal(ultimo);
+  scrollSemanaActualCal();
+}
+
+function renderWeekbarCal(ultimo){
+  var bar=$('cal-weekbar'); var html=''; var sem=1;
+  for(var dia=1; dia<=ultimo; dia+=7){
+    var fin=Math.min(dia+6,ultimo);
+    html+='<span class="cal-weekchip" data-dia="'+dia+'" onclick="scrollADiaCal('+dia+',this)">Sem '+sem+' · '+dia+'-'+fin+'</span>';
+    sem++;
+  }
+  bar.innerHTML=html;
+}
+function scrollADiaCal(dia,chip){
+  var col=$('daycol-'+dia), wrap=$('cal-wrap');
+  if(col) wrap.scrollTo({left:col.offsetLeft-200,behavior:'smooth'});
+  document.querySelectorAll('.cal-weekchip').forEach(function(c){c.classList.remove('on');});
+  if(chip) chip.classList.add('on');
+}
+function scrollSemanaActualCal(){
+  var h=new Date();
+  if(h.getFullYear()===calAnio && h.getMonth()===calMes){
+    var ini=h.getDate()-((h.getDay()+6)%7); if(ini<1)ini=1;
+    var target=null;
+    document.querySelectorAll('.cal-weekchip').forEach(function(ch){ if(parseInt(ch.dataset.dia)<=h.getDate()) target=ch; });
+    scrollADiaCal(ini, target);
+  } else { scrollADiaCal(1, document.querySelector('.cal-weekchip')); }
+}
+function cambiarMesCal(delta){
+  if(calAnio===undefined){ var h=new Date(); calAnio=h.getFullYear(); calMes=h.getMonth(); }
+  calMes+=delta; if(calMes<0){calMes=11;calAnio--;} if(calMes>11){calMes=0;calAnio++;}
+  // reflejar en el selector de mes y recargar datos de ese mes
+  var sel=$('mes-sel');
+  if(sel){
+    var val=calAnio+'-'+calPad(calMes+1);
+    var existe=Array.prototype.some.call(sel.options,function(o){return o.value===val;});
+    if(existe){ sel.value=val; seleccionarMes(); return; }
+  }
+  renderCalendario();
+}
+function calHoyMes(){
+  var h=new Date(); var val=h.getFullYear()+'-'+calPad(h.getMonth()+1);
+  var sel=$('mes-sel');
+  if(sel){ sel.value=val; seleccionarMes(); }
+  else { calAnio=h.getFullYear(); calMes=h.getMonth(); renderCalendario(); }
+}
+
+/* ── Panel KPI del día de HOY (datos reales) ── */
+function calIniciales(nombre){
+  var p=(nombre||'').trim().split(/\s+/);
+  return ((p[0]||'')[0]||'?').toUpperCase() + ((p[1]||'')[0]||'').toUpperCase();
+}
+function calPersonRow(emp, detalle){
+  var nombre=empNombreCompleto(emp);
+  var suc=(emp.branchOfficeName||emp.branchOffice||'—');
+  var dep=(emp.departmentName||emp.department||'');
+  var sub=suc+(dep?(' · '+dep):'');
+  return '<div class="kperson">'+
+    '<div class="kav">'+calIniciales(nombre)+'</div>'+
+    '<div class="kp-info"><div class="kp-name">'+nombre+'</div><div class="kp-sub">'+sub+'</div></div>'+
+    '<div class="kp-detail">'+(detalle||'')+'</div></div>';
+}
+function calFillCard(listId, countId, items){
+  var el=$(listId); if(!el)return;
+  $(countId).textContent=items.length;
+  el.innerHTML = items.length ? items.join('') : '<div class="kpi-empty">— ninguno —</div>';
+}
+function renderPanelDia(){
+  if(!cacheEmpleados || !cacheEmpleados.length) return;
+  var hoyStr = hoy();
+  var lic=[], vac=[], aus=[], pe=[], ps=[], atra=[], presentes=0, activos=0;
+  calEmpleadosActivos().forEach(function(e){
+    var st = calEstadoDia(e.code, hoyStr);
+    if(!st) return;              // sin turno hoy → no cuenta
+    activos++;
+    if(st.edo==='lic') lic.push(calPersonRow(e, st.com? 'hasta '+((st.com.match(/→\s*(\d{4}-\d{2}-\d{2})/)||[])[1]||'') : ''));
+    else if(st.edo==='vac') vac.push(calPersonRow(e, st.com? 'hasta '+((st.com.match(/→\s*(\d{4}-\d{2}-\d{2})/)||[])[1]||'') : ''));
+    else if(st.edo==='a') aus.push(calPersonRow(e, 'Sin marca'));
+    else if(st.edo==='pe') pe.push(calPersonRow(e, 'Salió '+(st.sr||'—')));
+    else if(st.edo==='ps') ps.push(calPersonRow(e, 'Entró '+(st.er||'—')));
+    else if(st.edo==='p'){ presentes++; if(st.atr) atra.push(calPersonRow(e, st.atr)); }
+  });
+  $('dc-act').textContent = activos;
+  $('dc-pres').textContent = presentes;
+  var hd = new Date();
+  var nombres=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+  $('dia-fecha').textContent = 'Hoy · '+nombres[hd.getDay()]+' '+hd.getDate()+' '+CAL_NMES[hd.getMonth()]+' '+hd.getFullYear();
+  calFillCard('kl-lic','kc-lic', lic);
+  calFillCard('kl-vac','kc-vac', vac);
+  calFillCard('kl-a','kc-a', aus);
+  calFillCard('kl-pe','kc-pe', pe);
+  calFillCard('kl-ps','kc-ps', ps);
+  calFillCard('kl-atra','kc-atra', atra);
+}
+function calToggleChip(el){
+  document.querySelectorAll('#v-cal .filter-chip').forEach(function(c){c.classList.remove('on');});
+  el.classList.add('on'); calChipEstado=el.dataset.edo||'todos'; renderCalendario();
+}
+
+/* ── Modal contextual ── */
+function abrirCalModal(code, fecha){
+  var st = calEstadoDia(code, fecha); if(!st) return;
+  var emp = cacheEmpleados.find(function(e){ return String(e.code)===String(code); });
+  var nombre = emp ? empNombreCompleto(emp) : code;
+  calModalCtx = { code:code, fecha:fecha };
+  var partes = fecha.split('-');
+  $('cm-nombre').textContent = nombre;
+  $('cm-fecha').textContent = partes[2]+' '+CAL_NMES[parseInt(partes[1])-1]+' '+partes[0];
+  $('cm-turno').textContent = st.turno||'—';
+  $('cm-pill').innerHTML = '<span class="cal-mini '+st.edo+'" style="width:auto;padding:2px 8px">'+pillTxt(st.edo)+'</span>';
+
+  var alertEl = $('cm-alert');
+  if(st.edo==='ps'){ alertEl.style.display='flex'; alertEl.className='cm-alert rojo'; alertEl.innerHTML='⚠ No marcó salida — jornada sin cierre'; }
+  else if(st.edo==='pe'){ alertEl.style.display='flex'; alertEl.className='cm-alert ambar'; alertEl.innerHTML='⚠ No registró marca de entrada'; }
+  else if(st.edo==='a'){ alertEl.style.display='flex'; alertEl.className='cm-alert rojo'; alertEl.innerHTML='⚠ Ausente — sin marca ni licencia'; }
+  else if(st.atr){ alertEl.style.display='flex'; alertEl.className='cm-alert ambar'; alertEl.innerHTML='⏱ Atraso de '+st.atr; }
+  else { alertEl.style.display='none'; }
+
+  var m='';
+  if(st.edo==='lic'||st.edo==='vac'){
+    m='<div class="cm-marca" style="grid-column:1/-1"><div class="cm-marca-lbl">'+(st.edo==='vac'?'Vacaciones':'Licencia')+'</div><div class="cm-marca-val pend">'+(st.com||'—')+'</div></div>';
+  } else {
+    m+='<div class="cm-marca"><div class="cm-marca-lbl">Entrada teórica</div><div class="cm-marca-val">'+(st.et||'—')+'</div></div>';
+    if(st.edo==='pe'){
+      m+='<div class="cm-marca destacar"><div class="cm-marca-lbl">Entrada real</div><div class="cm-marca-val pend">sin marca</div><div class="cm-marca-sub">no registró entrada</div></div>';
+    } else {
+      m+='<div class="cm-marca'+(st.atr?' destacar':'')+'"><div class="cm-marca-lbl">Entrada real</div><div class="cm-marca-val'+(st.atr?' rojo':'')+'">'+(st.er||'—')+'</div>'+(st.atr?'<div class="cm-marca-sub">atraso '+st.atr+'</div>':'')+'</div>';
+    }
+    m+='<div class="cm-marca"><div class="cm-marca-lbl">Salida teórica</div><div class="cm-marca-val">'+(st.st||'—')+'</div></div>';
+    if(st.edo==='ps'){
+      m+='<div class="cm-marca destacar"><div class="cm-marca-lbl">Salida real</div><div class="cm-marca-val pend rojo">pendiente</div><div class="cm-marca-sub">no marcó salida</div></div>';
+    } else {
+      m+='<div class="cm-marca"><div class="cm-marca-lbl">Salida real</div><div class="cm-marca-val">'+(st.sr||'—')+'</div></div>';
+    }
+  }
+  $('cm-marcas').innerHTML = m;
+
+  var ckey = code+'|'+fecha;
+  $('cm-coment').value = calComentarios[ckey] || '';
+  $('cm-saved').style.display='none';
+  $('cal-modal').classList.add('show');
+}
+function cerrarCalModal(){ $('cal-modal').classList.remove('show'); }
+function guardarComentarioCal(){
+  if(!calModalCtx) return;
+  var ckey = calModalCtx.code+'|'+calModalCtx.fecha;
+  calComentarios[ckey] = $('cm-coment').value;
+  try { localStorage.setItem(CAL_COMENT_KEY, JSON.stringify(calComentarios)); } catch(e){}
+  $('cm-saved').style.display='inline';
+  setTimeout(function(){ $('cm-saved').style.display='none'; }, 1800);
+}
+document.addEventListener('keydown', function(e){ if(e.key==='Escape') cerrarCalModal(); });
+
+
+</script>
+</body>
+</html>

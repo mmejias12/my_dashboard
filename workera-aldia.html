@@ -23,7 +23,8 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 
 /* HDR */
 .hdr{height:52px;background:var(--s1);border-bottom:1px solid var(--br);display:flex;align-items:center;padding:0 20px;gap:12px;position:sticky;top:0;z-index:100}
-.logo{width:28px;height:28px;background:#c0392b;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:11px;text-decoration:none;flex-shrink:0}
+.logo{display:flex;align-items:center;justify-content:center;text-decoration:none;flex-shrink:0;cursor:pointer}
+.logo img{width:30px;height:30px;object-fit:contain;filter:drop-shadow(0 1px 2px rgba(0,0,0,.3))}
 .hdr-title{font-size:13px;font-weight:600}
 .hdr-sub{font-size:11px;color:var(--t3)}
 .sep{width:1px;height:18px;background:var(--brm)}
@@ -256,7 +257,7 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 .cal-weekchip.on{background:var(--cyan-bg);color:var(--cyan);border-color:rgba(34,212,212,.35);font-weight:600}
 .cal-legend-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px;padding:8px 0;border-bottom:1px dashed var(--br)}
 .cal-lg{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--t2)}
-.cal-wrap{overflow-x:auto;border:1px solid var(--br);border-radius:8px;background:var(--s1)}
+.cal-wrap{overflow:auto;border:1px solid var(--br);border-radius:8px;background:var(--s1);max-height:420px}
 .cal-matrix{display:inline-block;min-width:100%}
 .cal-hrow{display:flex;position:sticky;top:0;z-index:3;background:var(--s3)}
 .cal-corner{width:190px;min-width:190px;padding:8px 12px;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--t3);font-weight:600;position:sticky;left:0;z-index:4;background:var(--s3);border-right:1px solid var(--brm);display:flex;align-items:center}
@@ -279,6 +280,7 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 .cal-cell.vacio:hover{transform:none;box-shadow:none}
 .cal-mini{width:26px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;font-family:'DM Mono',monospace;letter-spacing:.2px}
 .cal-mini.p{background:var(--green-bg);color:var(--green)}
+.cal-mini.p.p-atras{background:var(--red-bg);color:var(--red)}
 .cal-mini.a{background:var(--red-bg);color:var(--red)}
 .cal-mini.pe{background:var(--amber-bg);color:var(--amber)}
 .cal-mini.ps{background:var(--purple-bg);color:var(--purple)}
@@ -373,13 +375,15 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
   </select>
   <span class="ctrl-lbl">Mes:</span>
   <select id="mes-sel" class="ctrl-sel" onchange="seleccionarMes()"></select>
+  <span class="ctrl-lbl">Sucursal:</span>
+  <select id="sucursal" class="ctrl-sel" onchange="renderCalendario();renderPanelDia()"><option value="">Todas</option></select>
+  <span class="ctrl-lbl">Depto:</span>
+  <select id="depto" class="ctrl-sel" onchange="renderCalendario();renderPanelDia()"><option value="">Todos</option></select>
   <button id="btn-load" class="load-btn" onclick="cargar()">🔄 Cargar mes</button>
   <!-- controles ocultos que la maquinaria de datos sigue usando internamente -->
   <input type="date" id="d1" style="display:none">
   <input type="date" id="d2" style="display:none">
   <input type="number" id="tolerancia" value="0" style="display:none">
-  <select id="sucursal" style="display:none"><option value="">Todas</option></select>
-  <select id="depto" style="display:none"><option value="">Todos</option></select>
 </div>
 
 <div class="status-bar">
@@ -959,6 +963,7 @@ async function cargar() {
               cachePermisos.length + ' permisos');
 
     // Vista única: calendario del mes + panel del día
+    poblarFiltrosArea();
     renderPanelDia();
     renderCalendario();
   } catch (e) {
@@ -2520,17 +2525,44 @@ function calEstadoDia(code, fecha){
   var er = r.primeraDt ? fmtHora(r.primeraDt) : '—';
   var sr = (r.ultimaDt && r.marcasCount >= 2) ? fmtHora(r.ultimaDt) : '—';
   var turno = r.horario.workshiftName || 'Turno';
+  var atrasado = (r.atrasoMin > 0);
   var edo, com='';
   if (!r.primera){ edo='a'; com='Sin marca ni licencia'; }              // no marcó nada
   else if (er==='—'){ edo='pe'; com='No registra marca de entrada'; }   // (raro, fallback)
   else if (sr==='—'){ edo='ps'; com='No marcó salida'; }                // marcó entrada, no salida
-  else if (r.atrasoMin > 0){ edo='p'; com='Atraso de '+r.atrasoMin+' min'; }
+  else if (atrasado){ edo='p'; com='Atraso de '+r.atrasoMin+' min'; }
   else { edo='p'; }
-  return { edo:edo, et:et, er:er, st:st, sr:sr, atr:(r.atrasoMin>0?r.atrasoMin+' min':''), turno:turno, com:com };
+  // Post-marcación: si no marcó salida, mostrar la hora ACTUAL como "salida al momento de la consulta"
+  var srPost = null;
+  if (edo==='ps'){
+    var hoyStr = hoy();
+    if (fecha === hoyStr){
+      var now = new Date();
+      srPost = pad(now.getHours())+':'+pad(now.getMinutes());   // hora actual
+    }
+  }
+  return { edo:edo, et:et, er:er, st:st, sr:sr, srPost:srPost, atr:(atrasado?r.atrasoMin+' min':''),
+           atrasado:atrasado, turno:turno, com:com };
 }
 
 function calEmpleadosActivos(){
-  return cacheEmpleados.filter(function(e){ return empActivo(e); });
+  var suc = ($('sucursal') && $('sucursal').value) || '';
+  var dep = ($('depto') && $('depto').value) || '';
+  return cacheEmpleados.filter(function(e){
+    if(!empActivo(e)) return false;
+    if(suc && empSucursalAdmin(e) !== suc) return false;
+    if(dep && empDepartamento(e) !== dep) return false;
+    return true;
+  });
+}
+/* Puebla los selects de sucursal y departamento con los valores presentes en los datos */
+function poblarFiltrosArea(){
+  var activos = cacheEmpleados.filter(empActivo);
+  var sucs = {}, deps = {};
+  activos.forEach(function(e){ var s=empSucursalAdmin(e); if(s&&s!=='—')sucs[s]=1; var d=empDepartamento(e); if(d&&d!=='—')deps[d]=1; });
+  var selS=$('sucursal'), selD=$('depto');
+  if(selS){ var v=selS.value; selS.innerHTML='<option value="">Todas</option>'+Object.keys(sucs).sort().map(function(x){return '<option>'+x+'</option>';}).join(''); selS.value=v; }
+  if(selD){ var v2=selD.value; selD.innerHTML='<option value="">Todos</option>'+Object.keys(deps).sort().map(function(x){return '<option>'+x+'</option>';}).join(''); selD.value=v2; }
 }
 
 function pillTxt(edo){ return {p:'P',a:'A',pe:'P/E',ps:'P/S',lic:'Lic',vac:'Vac'}[edo]||'·'; }
@@ -2578,9 +2610,11 @@ function renderCalendario(){
       var visible = (calChipEstado==='todos' || st.edo===calChipEstado);
       var alerta = (st.edo==='ps');
       var op = visible?'':'opacity:.16;';
-      body += '<div class="cal-cell'+(finde?' finde':'')+(alerta?' alerta':'')+'" style="'+op+'" '+
+      // P atrasado: pill en rojo aunque esté presente
+      var miniCls = st.edo + (st.atrasado ? ' p-atras' : '');
+      body += '<div class="cal-cell'+(finde?' finde':'')+(alerta?' alerta':'')+(st.atrasado?' con-atraso':'')+'" style="'+op+'" '+
               'onclick="abrirCalModal(\''+code+'\',\''+fecha+'\')">'+
-              '<span class="cal-mini '+st.edo+'">'+pillTxt(st.edo)+'</span></div>';
+              '<span class="cal-mini '+miniCls+'">'+pillTxt(st.edo)+'</span></div>';
     }
     body += '</div>';
   });
@@ -2716,7 +2750,11 @@ function abrirCalModal(code, fecha){
     }
     m+='<div class="cm-marca"><div class="cm-marca-lbl">Salida teórica</div><div class="cm-marca-val">'+(st.st||'—')+'</div></div>';
     if(st.edo==='ps'){
-      m+='<div class="cm-marca destacar"><div class="cm-marca-lbl">Salida real</div><div class="cm-marca-val pend rojo">pendiente</div><div class="cm-marca-sub">no marcó salida</div></div>';
+      if(st.srPost){
+        m+='<div class="cm-marca destacar"><div class="cm-marca-lbl">Salida real</div><div class="cm-marca-val rojo">'+st.srPost+'*</div><div class="cm-marca-sub">al momento de la consulta · aún sin marca</div></div>';
+      } else {
+        m+='<div class="cm-marca destacar"><div class="cm-marca-lbl">Salida real</div><div class="cm-marca-val pend rojo">sin marca</div><div class="cm-marca-sub">no marcó salida</div></div>';
+      }
     } else {
       m+='<div class="cm-marca"><div class="cm-marca-lbl">Salida real</div><div class="cm-marca-val">'+(st.sr||'—')+'</div></div>';
     }

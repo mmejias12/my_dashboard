@@ -4,7 +4,7 @@ const API_HOST = 'apirdt1.azurewebsites.net';
 const API_PATH = '/api/RDTOut/facturacionconguias';
 
 // La API Key se lee desde Application Settings de Azure Static Web Apps.
-// Configuration -> Application settings -> REDTEC_API_KEY = m2s_live_...
+// Configuration -> Application settings -> REDTEC_API_KEY = m2s_live_...ok
 const API_KEY = process.env.REDTEC_API_KEY || 'm2s_live_ORA0CGEE3oowJ7gc2xYNqTOWmbYS8kMdD-l7hlAxvmE';
 
 module.exports = async function (context, req) {

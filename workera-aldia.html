@@ -301,6 +301,8 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 .cm-alert{padding:9px 12px;border-radius:7px;font-size:11.5px;margin-bottom:14px;display:flex;align-items:center;gap:8px;font-weight:500}
 .cm-alert.rojo{background:var(--red-bg);color:var(--red);border:1px solid rgba(245,96,96,.3)}
 .cm-alert.ambar{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(245,166,35,.3)}
+.cm-alert.info{background:var(--green-bg);color:var(--green);border:1px solid rgba(74,222,128,.3)}
+.cm-marca.pend{border-style:dashed}
 .cm-marcas{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:16px}
 .cm-marca{background:var(--s1);border:1px solid var(--br);border-radius:8px;padding:9px 11px}
 .cm-marca.destacar{border-color:rgba(245,96,96,.4);background:rgba(245,96,96,.05)}
@@ -417,7 +419,7 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
       <div class="kcard-list" id="kl-pe"></div>
     </div>
     <div class="kcard purple">
-      <div class="kcard-head"><span class="kcard-title">● No marcó salida</span><span class="kcard-count" id="kc-ps">0</span></div>
+      <div class="kcard-head"><span class="kcard-title">● No marcó salida <span id="kt-ps-fecha" style="opacity:.65;font-weight:500;text-transform:none;letter-spacing:0"></span></span><span class="kcard-count" id="kc-ps">0</span></div>
       <div class="kcard-list" id="kl-ps"></div>
     </div>
     <div class="kcard pink">
@@ -436,7 +438,7 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
           <button class="btn-mini" onclick="cargar()">↻ Refrescar</button>
         </span>
       </div>
-      <div class="cs">Calendario mensual de asistencia. Cada celda día×trabajador muestra el estado. Clic en una celda para ver marcas y comentar. <span style="color:var(--red)">Rojo</span> = no marcó salida.</div>
+      <div class="cs">Calendario mensual de asistencia. Clic en una celda para ver marcas y comentar. <b style="color:var(--red)">P en rojo</b> = presente con atraso · <b style="color:var(--purple)">P/S</b> = turno cerrado sin marca de salida (se valida a día vencido) · <b style="color:var(--red)">A</b> = sin ninguna marca en todo el turno.</div>
 
       <div class="local-filters">
         <span class="ctrl-lbl">Estado:</span>
@@ -459,6 +461,7 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 
       <div class="cal-legend-row">
         <span class="cal-lg"><span class="cal-mini p">P</span> Presente</span>
+        <span class="cal-lg"><span class="cal-mini p p-atras">P</span> Presente c/atraso</span>
         <span class="cal-lg"><span class="cal-mini a">A</span> Ausente</span>
         <span class="cal-lg"><span class="cal-mini pe">P/E</span> Sin entrada</span>
         <span class="cal-lg"><span class="cal-mini ps">P/S</span> Sin salida</span>
@@ -1189,6 +1192,10 @@ async function cargarSiguienteBloque() {
     if (faltan > 0) {
       // Disparar carga del resto en background, sin await
       setTimeout(cargarSiguienteBloque, 100);
+    } else {
+      // Ya llegaron TODAS las páginas de marcas → repintar (las marcas de hoy
+      // suelen venir en las últimas páginas, y el calendario se pintó antes).
+      setTimeout(refrescarVistasCal, 0);
     }
     return cacheMarcacionesEnriquecimiento;
   } finally {
@@ -2517,32 +2524,120 @@ function calEstadoDia(code, fecha){
              turno: (lic.permissionTypeName||lic.type||(esVac?'Vacaciones':'Licencia')),
              com: (lic.permissionTypeName||lic.type||'') + (lic.start?(' · '+(lic.start||'').substring(0,10)+' → '+(lic.end||'').substring(0,10)):'') };
   }
-  // 2) Resumen real de marcas vs horario teórico
+  // 2) Turno teórico del día
   var r = calcularResumenDia(code, fecha);
-  // sin horario teórico ese día → no tenía turno (celda vacía)
-  if (!r.horario) return null;
+  if (!r.horario) return null;                     // sin turno ese día → celda vacía
   var et = fmtHora(r.horario.start), st = fmtHora(r.horario.end);
-  var er = r.primeraDt ? fmtHora(r.primeraDt) : '—';
-  var sr = (r.ultimaDt && r.marcasCount >= 2) ? fmtHora(r.ultimaDt) : '—';
   var turno = r.horario.workshiftName || 'Turno';
-  var atrasado = (r.atrasoMin > 0);
-  var edo, com='';
-  if (!r.primera){ edo='a'; com='Sin marca ni licencia'; }              // no marcó nada
-  else if (er==='—'){ edo='pe'; com='No registra marca de entrada'; }   // (raro, fallback)
-  else if (sr==='—'){ edo='ps'; com='No marcó salida'; }                // marcó entrada, no salida
-  else if (atrasado){ edo='p'; com='Atraso de '+r.atrasoMin+' min'; }
-  else { edo='p'; }
-  // Post-marcación: si no marcó salida, mostrar la hora ACTUAL como "salida al momento de la consulta"
-  var srPost = null;
-  if (edo==='ps'){
-    var hoyStr = hoy();
-    if (fecha === hoyStr){
-      var now = new Date();
-      srPost = pad(now.getHours())+':'+pad(now.getMinutes());   // hora actual
-    }
+
+  // 3) TODAS las marcas reales del día (sin depender de la clasificación entrada/salida)
+  var marcas = calMarcasDia(code, fecha);
+  var n = marcas.length;
+
+  // ── REGLA 1: "A" (ausente) SÓLO si no hubo NINGUNA marca durante el turno ──
+  if (n === 0){
+    return { edo:'a', et:et, st:st, er:'—', sr:'—', srPost:null, atr:'', atrasado:false,
+             enTurno:false, turno:turno, com:'Sin marca en todo el turno' };
   }
-  return { edo:edo, et:et, er:er, st:st, sr:sr, srPost:srPost, atr:(atrasado?r.atrasoMin+' min':''),
-           atrasado:atrasado, turno:turno, com:com };
+
+  // Hubo al menos una marca → la persona estuvo presente (predomina la P)
+  var entradaDt = obtenerDateTimeMarca(marcas[0]);
+  var salidaDt  = (n >= 2) ? obtenerDateTimeMarca(marcas[n-1]) : null;
+
+  // Caso raro: única marca y corresponde a la salida → no registró entrada
+  var soloSalida = false;
+  if (n === 1 && obtenerTipoMarca(marcas[0], r.horario) === 'SALIDA'){
+    soloSalida = true; salidaDt = entradaDt; entradaDt = null;
+  }
+
+  var er = entradaDt ? fmtHora(entradaDt) : '—';
+  var sr = salidaDt  ? fmtHora(salidaDt)  : '—';
+
+  // Atraso: entrada real vs entrada teórica (con tolerancia). Marcar antes de la hora NO es atraso.
+  var atrasoMin = 0, etDt = calIniTurnoDt(fecha, r.horario);
+  if (entradaDt && etDt){
+    var dm = diffMin(entradaDt, etDt);
+    if (dm > getTolerancia()) atrasoMin = dm;
+  }
+  var atrasado = atrasoMin > 0;
+
+  // ── REGLA 2: el turno se considera CERRADO sólo cuando ya pasó la salida teórica
+  //            (o el día ya venció). Antes de eso NO se marca P/S.
+  var cerrado = calTurnoCerrado(fecha, r.horario);
+
+  var edo, com='', srPost=null, enTurno=false;
+  if (soloSalida){
+    edo='pe'; com='No registra marca de entrada';
+  } else if (salidaDt){
+    edo='p'; if(atrasado) com='Atraso de '+atrasoMin+' min';
+  } else if (!cerrado){
+    // ── REGLA 3: aún dentro del turno → PRESENTE (todavía no es P/S) ──
+    edo='p'; enTurno=true;
+    com = atrasado ? ('Atraso de '+atrasoMin+' min · en turno') : 'En turno · aún no corresponde salida';
+    srPost = calHoraActual();
+  } else {
+    // Turno vencido sin marca de salida → P/S (RRHH lo valida al día siguiente)
+    edo='ps'; com='No marcó salida';
+    if (fecha === hoy()) srPost = calHoraActual();
+  }
+  return { edo:edo, et:et, er:er, st:st, sr:sr, srPost:srPost, atr:(atrasado?atrasoMin+' min':''),
+           atrasado:atrasado, enTurno:enTurno, cerrado:cerrado, turno:turno, com:com };
+}
+
+/* Todas las marcas reales de un empleado en una fecha, ordenadas cronológicamente */
+function calMarcasDia(code, fecha){
+  var arr = cacheMarcacionesEnriquecimiento.filter(function(m){
+    return obtenerCodeMarca(m) == code && obtenerFechaMarca(m) === fecha;
+  });
+  arr.sort(function(a,b){
+    var da=obtenerDateTimeMarca(a), db=obtenerDateTimeMarca(b);
+    return (da?da.getTime():0) - (db?db.getTime():0);
+  });
+  return arr;
+}
+/* Datetime real del INICIO de turno de ese día (robusto a ambos formatos del API) */
+function calIniTurnoDt(fecha, horario){
+  if(!horario || !horario.start) return null;
+  var hIni = fmtHora(horario.start);
+  if(!hIni || hIni==='—') return null;
+  var dt = new Date(fecha + 'T' + hIni + ':00');
+  return isNaN(dt.getTime()) ? null : dt;
+}
+/* Datetime real del fin de turno de ese día.
+   Robusto: sirve tanto si el API manda "2026-07-13T17:00:00" como "17:00:00". */
+function calFinTurnoDt(fecha, horario){
+  if(!horario || !horario.end) return null;
+  var hFin = fmtHora(horario.end);          // "17:00" en ambos formatos
+  if(!hFin || hFin==='—') return null;
+  var dt = new Date(fecha + 'T' + hFin + ':00');
+  if(isNaN(dt.getTime())) return null;
+  // Turno nocturno: si la salida teórica es anterior a la entrada, cierra al día siguiente
+  var hIni = horario.start ? fmtHora(horario.start) : null;
+  if(hIni && hIni!=='—' && hFin < hIni) dt.setDate(dt.getDate()+1);
+  return dt;
+}
+/* ¿Ya terminó el turno de ese día? (día vencido, o ya pasó la salida teórica si es hoy) */
+function calTurnoCerrado(fecha, horario){
+  var hoyStr = hoy();
+  if (fecha < hoyStr) return true;    // día vencido
+  if (fecha > hoyStr) return false;   // futuro
+  var fin = calFinTurnoDt(fecha, horario);
+  if (!fin) return false;             // sin hora de fin fiable → NO cerrar (predomina la P)
+  return (new Date()) > fin;          // hoy: cerrado sólo si ya pasó la salida teórica
+}
+function calHoraActual(){
+  var n=new Date(); return pad(n.getHours())+':'+pad(n.getMinutes());
+}
+/* Último día vencido con turnos (para validar los P/S del día anterior) */
+function calDiaVencido(){
+  var d = new Date(); d.setHours(12,0,0,0);
+  for (var i=1; i<=7; i++){
+    var x = new Date(d); x.setDate(x.getDate()-i);
+    var fs = x.getFullYear()+'-'+pad(x.getMonth()+1)+'-'+pad(x.getDate());
+    var hay = cacheHorarios.some(function(h){ return h.date === fs; });
+    if (hay) return fs;
+  }
+  return null;
 }
 
 function calEmpleadosActivos(){
@@ -2567,7 +2662,20 @@ function poblarFiltrosArea(){
 
 function pillTxt(edo){ return {p:'P',a:'A',pe:'P/E',ps:'P/S',lic:'Lic',vac:'Vac'}[edo]||'·'; }
 
-function renderCalendario(){
+/* Repinta panel + calendario conservando el scroll (usado tras carga en background) */
+var calScrollLeft=0, calScrollTop=0, calChipSemana=null;
+function refrescarVistasCal(){
+  if(!cacheEmpleados || !cacheEmpleados.length) return;
+  var w=$('cal-wrap');
+  if(w){ calScrollLeft=w.scrollLeft; calScrollTop=w.scrollTop; }
+  var chips=document.querySelectorAll('.cal-weekchip');
+  calChipSemana=null;
+  for(var i=0;i<chips.length;i++){ if(chips[i].classList.contains('on')) { calChipSemana=i; break; } }
+  renderPanelDia();
+  renderCalendario(true);
+}
+
+function renderCalendario(preservarScroll){
   var cont = $('cal-matrix');
   if (!cacheEmpleados || !cacheEmpleados.length){
     cont.innerHTML = '<div class="empty" style="padding:30px">Aún no hay datos. Presiona <b>Cargar</b> arriba para traer empleados y marcas.</div>';
@@ -2621,7 +2729,15 @@ function renderCalendario(){
 
   cont.innerHTML = head + body;
   renderWeekbarCal(ultimo);
-  scrollSemanaActualCal();
+  if (preservarScroll){
+    // repintado en background: mantener la posición de scroll del usuario
+    var w=$('cal-wrap');
+    if(w){ w.scrollLeft = calScrollLeft||0; w.scrollTop = calScrollTop||0; }
+    var chips=document.querySelectorAll('.cal-weekchip');
+    if(calChipSemana!==null && chips[calChipSemana]) chips[calChipSemana].classList.add('on');
+  } else {
+    scrollSemanaActualCal();
+  }
 }
 
 function renderWeekbarCal(ultimo){
@@ -2690,18 +2806,43 @@ function calFillCard(listId, countId, items){
 function renderPanelDia(){
   if(!cacheEmpleados || !cacheEmpleados.length) return;
   var hoyStr = hoy();
-  var lic=[], vac=[], aus=[], pe=[], ps=[], atra=[], presentes=0, activos=0;
-  calEmpleadosActivos().forEach(function(e){
+  var lic=[], vac=[], aus=[], pe=[], atra=[], presentes=0, activos=0;
+  var personas = calEmpleadosActivos();
+
+  // ── Tarjetas del DÍA DE HOY ──
+  personas.forEach(function(e){
     var st = calEstadoDia(e.code, hoyStr);
     if(!st) return;              // sin turno hoy → no cuenta
     activos++;
     if(st.edo==='lic') lic.push(calPersonRow(e, st.com? 'hasta '+((st.com.match(/→\s*(\d{4}-\d{2}-\d{2})/)||[])[1]||'') : ''));
     else if(st.edo==='vac') vac.push(calPersonRow(e, st.com? 'hasta '+((st.com.match(/→\s*(\d{4}-\d{2}-\d{2})/)||[])[1]||'') : ''));
     else if(st.edo==='a') aus.push(calPersonRow(e, 'Sin marca'));
-    else if(st.edo==='pe') pe.push(calPersonRow(e, 'Salió '+(st.sr||'—')));
-    else if(st.edo==='ps') ps.push(calPersonRow(e, 'Entró '+(st.er||'—')));
-    else if(st.edo==='p'){ presentes++; if(st.atr) atra.push(calPersonRow(e, st.atr)); }
+    else if(st.edo==='pe'){ presentes++; pe.push(calPersonRow(e, 'Salió '+(st.sr||'—'))); }
+    else if(st.edo==='p'){
+      presentes++;   // P cuenta como presente, esté en turno o ya cerrado
+      if(st.atrasado) atra.push(calPersonRow(e, st.atr));
+    }
+    else if(st.edo==='ps'){ presentes++; }   // marcó entrada → igual estuvo presente
   });
+
+  // ── Tarjeta "No marcó salida": corresponde al DÍA ANTERIOR VENCIDO ──
+  // (P/S sólo tiene sentido a día cerrado; RRHH lo valida al día siguiente)
+  var dv = calDiaVencido(), ps=[];
+  if(dv){
+    personas.forEach(function(e){
+      var sv = calEstadoDia(e.code, dv);
+      if(sv && sv.edo==='ps') ps.push(calPersonRow(e, 'Entró '+(sv.er||'—')));
+    });
+  }
+  var lblPs = $('kt-ps-fecha');
+  if(lblPs){
+    if(dv){
+      var pv = dv.split('-'); var dw = new Date(dv+'T12:00:00');
+      var dias=['dom','lun','mar','mié','jue','vie','sáb'];
+      lblPs.textContent = '· '+dias[dw.getDay()]+' '+parseInt(pv[2],10)+'/'+parseInt(pv[1],10)+' (día vencido)';
+    } else lblPs.textContent = '';
+  }
+
   $('dc-act').textContent = activos;
   $('dc-pres').textContent = presentes;
   var hd = new Date();
@@ -2729,13 +2870,14 @@ function abrirCalModal(code, fecha){
   $('cm-nombre').textContent = nombre;
   $('cm-fecha').textContent = partes[2]+' '+CAL_NMES[parseInt(partes[1])-1]+' '+partes[0];
   $('cm-turno').textContent = st.turno||'—';
-  $('cm-pill').innerHTML = '<span class="cal-mini '+st.edo+'" style="width:auto;padding:2px 8px">'+pillTxt(st.edo)+'</span>';
+  $('cm-pill').innerHTML = '<span class="cal-mini '+st.edo+(st.atrasado?' p-atras':'')+'" style="width:auto;padding:2px 8px">'+pillTxt(st.edo)+'</span>';
 
   var alertEl = $('cm-alert');
-  if(st.edo==='ps'){ alertEl.style.display='flex'; alertEl.className='cm-alert rojo'; alertEl.innerHTML='⚠ No marcó salida — jornada sin cierre'; }
+  if(st.edo==='ps'){ alertEl.style.display='flex'; alertEl.className='cm-alert rojo'; alertEl.innerHTML='⚠ No marcó salida — turno cerrado sin salida (validar)'; }
   else if(st.edo==='pe'){ alertEl.style.display='flex'; alertEl.className='cm-alert ambar'; alertEl.innerHTML='⚠ No registró marca de entrada'; }
-  else if(st.edo==='a'){ alertEl.style.display='flex'; alertEl.className='cm-alert rojo'; alertEl.innerHTML='⚠ Ausente — sin marca ni licencia'; }
-  else if(st.atr){ alertEl.style.display='flex'; alertEl.className='cm-alert ambar'; alertEl.innerHTML='⏱ Atraso de '+st.atr; }
+  else if(st.edo==='a'){ alertEl.style.display='flex'; alertEl.className='cm-alert rojo'; alertEl.innerHTML='⚠ Ausente — sin ninguna marca en todo el turno'; }
+  else if(st.atrasado){ alertEl.style.display='flex'; alertEl.className='cm-alert ambar'; alertEl.innerHTML='⏱ Atraso de '+st.atr+(st.enTurno?' · aún en turno':''); }
+  else if(st.enTurno){ alertEl.style.display='flex'; alertEl.className='cm-alert info'; alertEl.innerHTML='🟢 En turno — sale a las '+st.st+', aún no corresponde marcar salida'; }
   else { alertEl.style.display='none'; }
 
   var m='';
@@ -2755,6 +2897,8 @@ function abrirCalModal(code, fecha){
       } else {
         m+='<div class="cm-marca destacar"><div class="cm-marca-lbl">Salida real</div><div class="cm-marca-val pend rojo">sin marca</div><div class="cm-marca-sub">no marcó salida</div></div>';
       }
+    } else if(st.enTurno){
+      m+='<div class="cm-marca pend"><div class="cm-marca-lbl">Salida real</div><div class="cm-marca-val pend">en turno</div><div class="cm-marca-sub">'+(st.srPost?('son las '+st.srPost+' · '):'')+'sale '+st.st+'</div></div>';
     } else {
       m+='<div class="cm-marca"><div class="cm-marca-lbl">Salida real</div><div class="cm-marca-val">'+(st.sr||'—')+'</div></div>';
     }

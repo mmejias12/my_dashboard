@@ -270,6 +270,11 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 .cal-prow{display:flex;border-top:1px solid var(--br)}
 .cal-prow:hover{background:rgba(255,255,255,.015)}
 .cal-pname{width:190px;min-width:190px;padding:6px 12px;position:sticky;left:0;z-index:2;background:var(--s2);border-right:1px solid var(--brm);display:flex;flex-direction:column;justify-content:center}
+.cal-pname-click{cursor:pointer;transition:background .13s}
+.cal-pname-click:hover{background:var(--s4)!important}
+.cal-pname-click:hover .cal-pn{color:var(--cyan)}
+.cal-pname-click::after{content:"\203A";position:absolute;right:8px;top:50%;transform:translateY(-50%);color:var(--t4);font-size:15px;opacity:0;transition:opacity .13s}
+.cal-pname-click:hover::after{opacity:1;color:var(--cyan)}
 .cal-prow:hover .cal-pname{background:var(--s3)}
 .cal-pn{font-size:11.5px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:166px}
 .cal-pr{font-size:9.5px;color:var(--t3);font-family:'DM Mono',monospace}
@@ -366,7 +371,7 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
   <div class="sep"></div>
   <div class="pill"><div class="pill-dot"></div>API Workera</div>
   <div class="hdr-r">
-    <a href="m3link_dashboard_dark.html" class="back">← Panel RRHH</a>
+    <a href="m3link_dashboard_dark.html" class="back">← Panel</a>
   </div>
 </header>
 
@@ -2708,7 +2713,7 @@ function renderCalendario(preservarScroll){
   var body = '';
   personas.forEach(function(e){
     var code = e.code, nombre = empNombreCompleto(e), rut = e.identification||'—';
-    body += '<div class="cal-prow"><div class="cal-pname"><span class="cal-pn" title="'+nombre+'">'+nombre+'</span><span class="cal-pr">'+rut+'</span></div>';
+    body += '<div class="cal-prow"><div class="cal-pname cal-pname-click" title="Ver ficha completa de '+nombre+'" onclick="abrirModalEmpleado(\''+code+'\')"><span class="cal-pn">'+nombre+'</span><span class="cal-pr">'+rut+'</span></div>';
     for (var dia=1; dia<=ultimo; dia++){
       var fecha = calIso(calAnio, calMes, dia);
       var f = new Date(calAnio, calMes, dia); var dow=f.getDay(); var finde=(dow===0||dow===6);

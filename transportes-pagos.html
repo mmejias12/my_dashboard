@@ -729,10 +729,27 @@ async function cargarViajes(){
       const todosProc = arr.map(procesarViaje);
       // Excluir viajes sin patente asignada (estados "Por Confirmar"/"Despachar" en M3Link
       // que aún no fueron asignados a un camión y no son facturables)
-      VIAJES_PROC = todosProc.filter(v => v.patente && v.patente.trim().length > 0);
-      const excluidos = todosProc.length - VIAJES_PROC.length;
+      let conPatente = todosProc.filter(v => v.patente && v.patente.trim().length > 0);
+      const sinPatente = todosProc.length - conPatente.length;
+
+      // El API puede devolver viajes fuera del rango exacto (expande a semanas ISO completas
+      // y/o incluye confirmaciones de fechas anteriores). Filtramos al rango solicitado
+      // usando la MISMA fecha que se muestra en la prefactura (fechaConfirmacion).
+      const desdeT = new Date(desde + 'T00:00:00').getTime();
+      const hastaT = new Date(hasta + 'T23:59:59').getTime();
+      VIAJES_PROC = conPatente.filter(v => {
+        if(!v.fechaConfirmacion) return false;
+        const t = new Date(v.fechaConfirmacion).getTime();
+        if(isNaN(t)) return false;
+        return t >= desdeT && t <= hastaT;
+      });
+      const fueraRango = conPatente.length - VIAJES_PROC.length;
+
       let msg = `✓ ${VIAJES_PROC.length} viajes cargados`;
-      if(excluidos > 0) msg += ` (${excluidos} sin patente excluidos)`;
+      const detalles = [];
+      if(sinPatente > 0) detalles.push(`${sinPatente} sin patente`);
+      if(fueraRango > 0) detalles.push(`${fueraRango} fuera del rango`);
+      if(detalles.length) msg += ` (${detalles.join(', ')} excluidos)`;
       setAlerta(msg, 'ok');
       setBadge('verde', `${VIAJES_PROC.length} viajes`);
     }

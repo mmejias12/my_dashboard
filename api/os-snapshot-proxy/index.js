@@ -6,7 +6,8 @@
 const { BlobServiceClient } = require('@azure/storage-blob');
 
 const CONN      = process.env.OS_STORAGE_CONN;                 // connection string
-const CONTAINER = process.env.OS_CONTAINER || 'os';           // contenedor
+// Azure exige 3-63 caracteres para el nombre de contenedor: 'os' es inválido.
+const CONTAINER = process.env.OS_CONTAINER || 'redtec-os';           // contenedor
 const BLOB      = process.env.OS_BLOB || 'os-snapshot.json';  // archivo
 
 const CORS = {
@@ -14,6 +15,17 @@ const CORS = {
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type'
 };
+
+// Valida el nombre de contenedor antes de llamar a Azure, para dar un error
+// entendible en vez del críptico "resource name length is not within limits".
+function validarContenedor(nombre) {
+  if (!/^[a-z0-9]([a-z0-9-]{1,61})[a-z0-9]$/.test(nombre || '')) {
+    throw new Error(
+      `OS_CONTAINER inválido: "${nombre}". Azure exige 3-63 caracteres, ` +
+      `minúsculas, números o guiones, empezando y terminando en alfanumérico.`
+    );
+  }
+}
 
 async function streamToString(readable) {
   const chunks = [];
@@ -27,6 +39,7 @@ module.exports = async function (context, req) {
     return;
   }
   try {
+    validarContenedor(CONTAINER);
     const svc = BlobServiceClient.fromConnectionString(CONN);
     const blob = svc.getContainerClient(CONTAINER).getBlobClient(BLOB);
     const dl = await blob.download();

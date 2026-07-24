@@ -5,6 +5,7 @@
 //  en sus Functions gestionadas. Hace exactamente lo mismo que os-ingesta:
 //  refresca las galaxias y escribe el snapshot en Blob (estrategia patch).
 //
+//  Usa la lógica compartida de shared/ingesta-core.js.
 //  Se dispara con POST. Protegido por secreto compartido para que no quede
 //  abierto al mundo (escribe datos).
 //
@@ -14,7 +15,7 @@
 //  Para agendarlo, apúntale cualquier scheduler externo, o mejor: usa la
 //  versión timer (carpeta os-ingesta) dentro del Function App redtecagente.
 // ============================================================================
-const { runIngesta } = require('../os-ingesta/index.js');
+const { runIngesta } = require('../shared/ingesta-core.js');
 
 const KEY = process.env.OS_INGESTA_KEY;
 

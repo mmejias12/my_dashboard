@@ -114,6 +114,15 @@ function agregarMovimientos(filas) {
   return acc;
 }
 
+// Número de semana ISO-8601 a partir de una fecha 'YYYY-MM-DD'.
+function numeroSemanaISO(iso) {
+  const d = new Date(iso + 'T00:00:00Z');
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - day);            // jueves de esa semana
+  const yStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d - yStart) / 86400000) + 1) / 7);
+}
+
 // Semana en curso, lunes a sábado (igual que el modelo de KPIs del Excel).
 function semanaEnCurso(hoyIso) {
   const d = new Date(hoyIso + 'T00:00:00Z');
@@ -244,6 +253,18 @@ async function runIngesta(ctx) {
   snap.meta.generado = new Date().toISOString();
   snap.meta.zona_horaria = 'America/Santiago';
   snap.meta.refrescadas = refreshed;
+
+  // El periodo vigente lo manda la galaxia pallet (el movimiento define la
+  // semana en curso). Se sube a meta para que buildCtx calcule bien la
+  // antigüedad; si pallet aún no refrescó, se conserva el que hubiera.
+  const perPallet = snap.galaxias.pallet && snap.galaxias.pallet.periodo_semana;
+  if (perPallet && perPallet.desde && perPallet.hasta) {
+    snap.meta.periodo_semana = {
+      numero: numeroSemanaISO(perPallet.desde),
+      desde: perPallet.desde,
+      hasta: perPallet.hasta
+    };
+  }
 
   const body = JSON.stringify(snap, null, 2);
   const blockBlob = container.getBlockBlobClient(BLOB);

@@ -1,0 +1,104 @@
+{
+  "meta": {
+    "generado": "2026-07-06T14:32:00-04:00",
+    "zona_horaria": "America/Santiago",
+    "periodo_semana": { "numero": 27, "desde": "2026-06-29", "hasta": "2026-07-04" },
+    "nota": "Modelo de lectura curado (read model). Agregados precalculados por la Function de ingesta. NO es la fuente cruda de SAP/Workera/GPS."
+  },
+  "galaxias": {
+    "pallet": {
+      "titulo": "Movimiento de Pallets",
+      "area": "Operaciones",
+      "fuente": ["SAP B1", "RDTOut"],
+      "estado": "conectado",
+      "unidad": "pallets",
+      "semana": {
+        "emisiones": { "total": 19706, "santiago": 17444, "talca": 2262 },
+        "retiros":   { "total": 19366, "santiago": 16985, "talca": 2381 },
+        "recogida": 21507,
+        "devoluciones": 2141,
+        "transferencias": 0
+      },
+      "acumulado_2026": {
+        "emisiones": 654055,
+        "transferencias": 562399,
+        "recogidas": 632725,
+        "reparaciones": 465075
+      }
+    },
+    "pool": {
+      "titulo": "Estado del Pool",
+      "area": "Operaciones",
+      "fuente": ["Stock SAP"],
+      "estado": "conectado",
+      "unidad": "pallets",
+      "foto": "2026-07-06",
+      "disponibles": 12290,
+      "por_pintar": 3029,
+      "por_reparar": 2312,
+      "por_inspeccionar": 6170,
+      "en_redtec": 23801,
+      "en_clientes": 200815,
+      "en_retail": 547374,
+      "total": 771990
+    },
+    "reparacion": {
+      "titulo": "Reparación",
+      "area": "Log. Inversa",
+      "fuente": ["RDTOut"],
+      "estado": "conectado",
+      "semana": {
+        "disponibilizados": 16303,
+        "reparados": { "total": 12632, "santiago": 10028, "talca": 2604 }
+      },
+      "calidad": {
+        "indice_cambio_componentes": 1.47,
+        "reparaciones_sobre_retiros": 0.65
+      },
+      "dano": { "santiago": 0.62, "talca": 0.60, "promedio": 0.61 }
+    },
+    "cliente": {
+      "titulo": "Clientes",
+      "area": "Comercial",
+      "fuente": ["Facturación", "Cliente"],
+      "estado": "demo",
+      "nota": "Ejemplo hasta conectar facturación; reemplazar por cálculo real desde RDTOut/facturacionconguias.",
+      "crecimiento_mes": [
+        { "nombre": "Ballerina", "var_pct": 18, "de": 1240, "a": 1463 },
+        { "nombre": "Intercos", "var_pct": 11, "de": 0, "a": 0 },
+        { "nombre": "LAF", "var_pct": 7, "de": 0, "a": 0 }
+      ]
+    },
+    "transporte": {
+      "titulo": "Transporte / Flota",
+      "area": "Transporte",
+      "fuente": ["GPS Condor"],
+      "estado": "demo",
+      "nota": "Ejemplo; conectar a transportes-tiempos / gps-stops-proxy (11 camiones reales).",
+      "flota": {
+        "total": 11,
+        "en_ruta": 8,
+        "en_planta": 2,
+        "sin_gps": [ { "patente": "BJCL13", "ultima_senal_h": 3 } ]
+      }
+    },
+    "colaborador": {
+      "titulo": "Colaboradores",
+      "area": "RRHH",
+      "fuente": ["Workera"],
+      "estado": "parcial",
+      "nota": "Dotación real; asistencia del día es ejemplo hasta cablear Workera en vivo.",
+      "dotacion": { "total": 87.5, "empleados": 85.8, "honorarios": 1.7 },
+      "asistencia_hoy": {
+        "a_tiempo": 246,
+        "atrasos": { "cantidad": 2, "planta": "Talca" },
+        "licencias": 1
+      }
+    }
+  },
+  "pulso": [
+    { "tipo": "alerta", "galaxia": "pool", "texto": "Zona Sur cerró en 0 pallets disponibles, bajo el umbral operativo." },
+    { "tipo": "alerta", "galaxia": "colaborador", "texto": "2 atrasos de asistencia en Planta Talca." },
+    { "tipo": "alerta", "galaxia": "transporte", "texto": "Camión BJCL13 sin señal GPS hace 3 horas." }
+  ]
+}

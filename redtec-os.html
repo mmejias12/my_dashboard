@@ -78,6 +78,12 @@ body{font-family:var(--body);background:var(--void);color:var(--text);-webkit-fo
 .dom{font-size:12px;color:var(--dim);display:flex;align-items:center;gap:6px}
 .dom .d{width:6px;height:6px;border-radius:50%}
 .msg.a .body p{margin:0 0 10px}
+.msg.a .body .mdh{font-family:var(--disp);font-weight:600;font-size:15.5px;letter-spacing:-.2px;margin:16px 0 8px;color:var(--text)}
+.msg.a .body .mdh:first-child{margin-top:0}
+.msg.a .body .mdl{margin:0 0 10px;padding-left:17px}
+.msg.a .body .mdl li{margin:4px 0}
+.msg.a .body .mdq{border-left:2px solid var(--g-tra);background:rgba(245,178,60,.07);padding:9px 13px;border-radius:0 8px 8px 0;margin:12px 0;font-size:13.5px;color:var(--dim)}
+.msg.a .body code{font-family:var(--mono);font-size:12.5px;background:var(--surface-3);padding:1px 5px;border-radius:4px}
 .msg.a .body p:last-child{margin-bottom:0}
 .w-suggest{width:100%;max-width:720px;margin-top:26px}
 .w-suggest .sh{font-family:var(--mono);font-size:10.5px;letter-spacing:1.5px;text-transform:uppercase;color:var(--mute);margin-bottom:12px}
@@ -272,11 +278,25 @@ function parseFuentes(txt){
   return {texto:txt.slice(0,m.index).trim(), fuentes:f};
 }
 
+// Renderiza el subconjunto de markdown que usa el asistente: títulos, viñetas,
+// citas (los avisos de antigüedad), negritas y código.
+function mdInline(s){
+  return s.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')
+          .replace(/`([^`]+)`/g,'<code>$1</code>');
+}
 function fmtTexto(t){
-  return '<p>'+esc(t)
-    .replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')
-    .replace(/\n{2,}/g,'</p><p>')
-    .replace(/\n/g,'<br>')+'</p>';
+  var out=[], lista=null;
+  function cerrar(){ if(lista){ out.push('<ul class="mdl">'+lista.join('')+'</ul>'); lista=null; } }
+  esc(t).split('\n').forEach(function(ln){
+    var s=ln.trim(), m;
+    if(!s){ cerrar(); return; }
+    if(m=s.match(/^#{1,4}\s+(.*)$/)){ cerrar(); out.push('<div class="mdh">'+mdInline(m[1])+'</div>'); return; }
+    if(m=s.match(/^[-*\u2022]\s+(.*)$/)){ (lista=lista||[]).push('<li>'+mdInline(m[1])+'</li>'); return; }
+    if(m=s.match(/^&gt;\s*(.*)$/)){ cerrar(); out.push('<div class="mdq">'+mdInline(m[1])+'</div>'); return; }
+    cerrar(); out.push('<p>'+mdInline(s)+'</p>');
+  });
+  cerrar();
+  return out.join('');
 }
 
 var started=false;

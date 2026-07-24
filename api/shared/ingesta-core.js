@@ -53,7 +53,12 @@ async function fetchJson(url, opts = {}) {
 // 'operacion' viene como texto legible ("retiro", "Emisión", ...), así que se
 // compara normalizado (sin tildes, minúsculas) en vez de por código: resiste
 // cambios de mayúsculas y acentos en el origen.
-const OPS_PATH = process.env.OS_OPS_PATH || '/api/ops';
+// Llama DIRECTO a RDTOut, no al proxy /api/ops de la SWA: la ingesta corre en
+// el servidor y no tiene la sesión Entra ID del portal, así que /api/* le
+// respondería con el login. La API remota usa X-Api-Key y ?desde=&hasta=.
+const OPS_HOST = process.env.OS_OPS_HOST || 'https://apirdt1.azurewebsites.net';
+const OPS_PATH = process.env.OS_OPS_PATH || '/api/RDTOut/opsxrangofechas';
+const RDT_KEY  = process.env.REDTEC_API_KEY || 'm2s_live_ORA0CGEE3oowJ7gc2xYNqTOWmbYS8kMdD-l7hlAxvmE';
 
 const norm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
                                  .trim().toLowerCase();
@@ -135,9 +140,9 @@ async function refreshPool(prev, ctx) {
 
 async function refreshPallet(prev, ctx) {
   // OpsXRangoFechas se cuelga con rangos > 180 días: rangos.js trocea siempre.
-  const url = (d, h) => `${SITE}${OPS_PATH}?fechaInicio=${d}&fechaFin=${h}`;
+  const url = (d, h) => `${OPS_HOST}${OPS_PATH}?desde=${d}&hasta=${h}`;
   const pedir = async (d, h) => {
-    const r = await fetchJson(url(d, h));
+    const r = await fetchJson(url(d, h), { headers: { 'X-Api-Key': RDT_KEY } });
     return agregarMovimientos(Array.isArray(r) ? r : [r]);
   };
 

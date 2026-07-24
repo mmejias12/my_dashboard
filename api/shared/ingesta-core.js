@@ -13,7 +13,8 @@
 const { BlobServiceClient } = require('@azure/storage-blob');
 
 const CONN      = process.env.OS_STORAGE_CONN;
-const CONTAINER = process.env.OS_CONTAINER || 'os';
+// Azure exige 3-63 caracteres para el nombre de contenedor: 'os' es inválido.
+const CONTAINER = process.env.OS_CONTAINER || 'redtec-os';
 const BLOB      = process.env.OS_BLOB || 'os-snapshot.json';
 // Base del sitio para llamar a los proxies que YA existen (stock, facturación, gps, workera).
 const SITE      = process.env.OS_SITE_BASE || 'https://black-river-0b5a28810.7.azurestaticapps.net';
@@ -23,6 +24,17 @@ const DEFAULT_SNAPSHOT = require('./default-snapshot.json');
 const rangos = require('./rangos.js'); // troceo <=180d y acumulación incremental
 
 // --- helpers ---------------------------------------------------------------
+// Valida el nombre de contenedor antes de llamar a Azure, para dar un error
+// entendible en vez del críptico "resource name length is not within limits".
+function validarContenedor(nombre) {
+  if (!/^[a-z0-9]([a-z0-9-]{1,61})[a-z0-9]$/.test(nombre || '')) {
+    throw new Error(
+      `OS_CONTAINER inválido: "${nombre}". Azure exige 3-63 caracteres, ` +
+      `minúsculas, números o guiones, empezando y terminando en alfanumérico.`
+    );
+  }
+}
+
 async function streamToString(readable) {
   const chunks = [];
   for await (const c of readable) chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c));
@@ -91,6 +103,7 @@ async function loadCurrent(container) {
 }
 
 async function runIngesta(ctx) {
+  validarContenedor(CONTAINER);
   const svc = BlobServiceClient.fromConnectionString(CONN);
   const container = svc.getContainerClient(CONTAINER);
   await container.createIfNotExists();

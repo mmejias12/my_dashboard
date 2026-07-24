@@ -46,6 +46,79 @@ async function fetchJson(url, opts = {}) {
   return r.json();
 }
 
+
+// ── Movimientos: /api/ops -> pbi/OpsXRangoFechas ────────────────────────────
+// Cada fila trae (confirmado en mapa-retiros.html):
+//   { operacion, cantidadConfirmada, bodegaOrigenStr, ... }
+// 'operacion' viene como texto legible ("retiro", "Emisión", ...), así que se
+// compara normalizado (sin tildes, minúsculas) en vez de por código: resiste
+// cambios de mayúsculas y acentos en el origen.
+const OPS_PATH = process.env.OS_OPS_PATH || '/api/ops';
+
+const norm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                                 .trim().toLowerCase();
+
+// Orden importa: se toma la primera coincidencia por substring.
+const CONCEPTOS = [
+  ['transferencias', ['transferencia']],
+  ['devoluciones',   ['devolucion']],
+  ['recogida',       ['recogida', 'recoleccion']],
+  ['emisiones',      ['emision']],
+  ['retiros',        ['retiro']]
+];
+
+function conceptoDe(operacion) {
+  const o = norm(operacion);
+  if (!o) return null;
+  for (const [concepto, claves] of CONCEPTOS) {
+    if (claves.some(k => o.includes(k))) return concepto;
+  }
+  return null;   // operación no mapeada: se ignora, nunca se adivina
+}
+
+// La planta sale de la bodega de origen.
+function plantaDe(fila) {
+  const b = norm(fila.bodegaOrigenStr);
+  if (b.includes('santiago') || b.includes('stgo')) return 'santiago';
+  if (b.includes('talca')) return 'talca';
+  return null;
+}
+
+// Suma las filas del API al shape que consume el asistente.
+function agregarMovimientos(filas) {
+  const z = () => ({ total: 0, santiago: 0, talca: 0 });
+  const acc = { emisiones: z(), retiros: z(), recogida: 0, devoluciones: 0,
+                transferencias: 0, _sinMapear: {} };
+
+  for (const f of filas) {
+    const concepto = conceptoDe(f.operacion);
+    const v = Number(f.cantidadConfirmada) || 0;
+    if (!concepto) {
+      const k = norm(f.operacion) || '(vacío)';
+      acc._sinMapear[k] = (acc._sinMapear[k] || 0) + v;   // queda visible en el log
+      continue;
+    }
+    if (concepto === 'emisiones' || concepto === 'retiros') {
+      acc[concepto].total += v;
+      const p = plantaDe(f);
+      if (p) acc[concepto][p] += v;
+    } else {
+      acc[concepto] += v;
+    }
+  }
+  return acc;
+}
+
+// Semana en curso, lunes a sábado (igual que el modelo de KPIs del Excel).
+function semanaEnCurso(hoyIso) {
+  const d = new Date(hoyIso + 'T00:00:00Z');
+  const dow = d.getUTCDay() || 7;
+  const lun = new Date(d); lun.setUTCDate(d.getUTCDate() - (dow - 1));
+  const sab = new Date(lun); sab.setUTCDate(lun.getUTCDate() + 5);
+  const iso = x => x.toISOString().slice(0, 10);
+  return { desde: iso(lun), hasta: iso(sab) };
+}
+
 // --- REFRESCADORES POR GALAXIA ---------------------------------------------
 // Cada uno devuelve el objeto de su galaxia YA agregado, o null para conservar
 // el valor previo. A medida que conectemos cada fuente, se completa el cuerpo.
@@ -61,9 +134,49 @@ async function refreshPool(prev, ctx) {
 }
 
 async function refreshPallet(prev, ctx) {
-  // FUENTE: RDTOut facturación/movimientos  ->  ${SITE}/api/facturacion-guias-proxy
-  //         (semana en curso: emisiones/retiros/recogida/devoluciones)
-  return null;
+  // OpsXRangoFechas se cuelga con rangos > 180 días: rangos.js trocea siempre.
+  const url = (d, h) => `${SITE}${OPS_PATH}?fechaInicio=${d}&fechaFin=${h}`;
+  const pedir = async (d, h) => {
+    const r = await fetchJson(url(d, h));
+    return agregarMovimientos(Array.isArray(r) ? r : [r]);
+  };
+
+  const hoy = new Date().toISOString().slice(0, 10);
+  const { desde, hasta } = semanaEnCurso(hoy);
+
+  // 1) Semana en curso: ventana corta, una sola consulta.
+  const semana = await pedir(desde, hasta);
+  const sm = Object.entries(semana._sinMapear || {});
+  if (sm.length) ctx.log.warn('operaciones sin mapear: ' + sm.map(([k, v]) => `${k}=${v}`).join(', '));
+  delete semana._sinMapear;
+
+  // 2) Acumulado del año: incremental; solo pide los días nuevos.
+  const sumaTrozo = async ({ desde, hasta }) => {
+    const a = await pedir(desde, hasta);
+    return { emisiones: a.emisiones.total, retiros: a.retiros.total,
+             transferencias: a.transferencias, recogidas: a.recogida,
+             devoluciones: a.devoluciones };
+  };
+  const combinar = (a, b) => ({
+    emisiones: a.emisiones + b.emisiones, retiros: a.retiros + b.retiros,
+    transferencias: a.transferencias + b.transferencias,
+    recogidas: a.recogidas + b.recogidas, devoluciones: a.devoluciones + b.devoluciones
+  });
+  const acum = await rangos.acumularIncremental(
+    (prev && prev._acum) || null, hoy, `${new Date().getUTCFullYear()}-01-01`,
+    sumaTrozo, combinar
+  );
+  ctx.log(`pallet: acumulado ${acum.modo} (consolidado al ${acum.consolidado_hasta})`);
+
+  return {
+    ...prev,
+    estado: 'conectado',
+    fuente: ['RDTOut · OpsXRangoFechas'],
+    periodo_semana: { desde, hasta },
+    semana,
+    acumulado_2026: acum.valor,
+    _acum: { valor: acum.valor, consolidado_hasta: acum.consolidado_hasta }
+  };
 }
 
 async function refreshTransporte(prev, ctx) {

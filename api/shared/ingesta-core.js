@@ -2,7 +2,7 @@
 //  shared/ingesta-core.js  ·  ESCRITURA del read model  (lógica compartida)
 //
 //  NO es una Function: no tiene function.json, así que Azure la ignora como
-//  función y la trata como librería. La usan:
+//  función y la trata como librería. La usan: (incluye coquimbo y talca)
 //    - api/os-ingesta-http/       (trigger HTTP, va en Static Web Apps)
 //    - os-ingesta/ del Function App (trigger timer, va en redtecagente)
 //

@@ -81,19 +81,32 @@ function conceptoDe(operacion) {
   return null;   // operación no mapeada: se ignora, nunca se adivina
 }
 
-// La planta sale de la bodega de origen.
-function plantaDe(fila) {
-  const b = norm(fila.bodegaOrigenStr);
-  if (b.includes('santiago') || b.includes('stgo')) return 'santiago';
-  if (b.includes('talca')) return 'talca';
+// Planta del movimiento. Orden de preferencia:
+//   1) campo 'planta' que ya entrega el proxy
+//   2) bodega de origen  (correcta para EMISIONES: sale de la planta REDTEC)
+//   3) bodega de destino (correcta para RETIROS: el pallet vuelve a la planta)
+// En retiros la bodega de origen es el cliente/retail, no la planta; por eso
+// no se puede depender solo de origen. Si nada resuelve, devuelve null y el
+// desglose no se inventa: el total igual queda correcto.
+function detectaPlanta(texto) {
+  const s = norm(texto);
+  if (!s) return null;
+  if (s.includes('santiago') || s.includes('stgo')) return 'santiago';
+  if (s.includes('talca')) return 'talca';
   return null;
+}
+function plantaDe(fila) {
+  return detectaPlanta(fila.planta)
+      || detectaPlanta(fila.bodegaOrigenStr)
+      || detectaPlanta(fila.bodegaDestinoStr)
+      || null;
 }
 
 // Suma las filas del API al shape que consume el asistente.
 function agregarMovimientos(filas) {
   const z = () => ({ total: 0, santiago: 0, talca: 0 });
   const acc = { emisiones: z(), retiros: z(), recogida: 0, devoluciones: 0,
-                transferencias: 0, _sinMapear: {} };
+                transferencias: 0, _sinMapear: {}, _sinPlanta: {} };
 
   for (const f of filas) {
     const concepto = conceptoDe(f.operacion);
@@ -105,8 +118,9 @@ function agregarMovimientos(filas) {
     }
     if (concepto === 'emisiones' || concepto === 'retiros') {
       acc[concepto].total += v;
-      const p = plantaDe(f);
-      if (p) acc[concepto][p] += v;
+      const pl = plantaDe(f);
+      if (pl) acc[concepto][pl] += v;
+      else acc._sinPlanta[concepto] = (acc._sinPlanta[concepto] || 0) + v;
     } else {
       acc[concepto] += v;
     }
@@ -162,19 +176,22 @@ async function refreshPallet(prev, ctx) {
   const semana = await pedir(desde, hasta);
   const sm = Object.entries(semana._sinMapear || {});
   if (sm.length) ctx.log.warn('operaciones sin mapear: ' + sm.map(([k, v]) => `${k}=${v}`).join(', '));
-  delete semana._sinMapear;
+  const sp = Object.entries(semana._sinPlanta || {});
+  if (sp.length) ctx.log.warn('sin planta identificada (suma al total, no al desglose): ' + sp.map(([k, v]) => `${k}=${v}`).join(', '));
+  delete semana._sinMapear; delete semana._sinPlanta;
 
   // 2) Acumulado del año: incremental; solo pide los días nuevos.
   const sumaTrozo = async ({ desde, hasta }) => {
     const a = await pedir(desde, hasta);
     return { emisiones: a.emisiones.total, retiros: a.retiros.total,
              transferencias: a.transferencias, recogidas: a.recogida,
-             devoluciones: a.devoluciones };
+             devoluciones: a.devoluciones, reparaciones: 0 };
   };
   const combinar = (a, b) => ({
     emisiones: a.emisiones + b.emisiones, retiros: a.retiros + b.retiros,
     transferencias: a.transferencias + b.transferencias,
-    recogidas: a.recogidas + b.recogidas, devoluciones: a.devoluciones + b.devoluciones
+    recogidas: a.recogidas + b.recogidas, devoluciones: a.devoluciones + b.devoluciones,
+    reparaciones: (a.reparaciones || 0) + (b.reparaciones || 0)
   });
   const acum = await rangos.acumularIncremental(
     (prev && prev._acum) || null, hoy, `${new Date().getUTCFullYear()}-01-01`,

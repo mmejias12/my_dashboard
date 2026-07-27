@@ -88,25 +88,26 @@ function conceptoDe(operacion) {
 // En retiros la bodega de origen es el cliente/retail, no la planta; por eso
 // no se puede depender solo de origen. Si nada resuelve, devuelve null y el
 // desglose no se inventa: el total igual queda correcto.
-function detectaPlanta(texto) {
-  const s = norm(texto);
-  if (!s) return null;
-  if (s.includes('santiago') || s.includes('stgo')) return 'santiago';
-  if (s.includes('talca')) return 'talca';
-  return null;
+// Misma regla que calendario-retiro-pallets.html: Talca / Coquimbo por nombre,
+// y TODO lo demás cae en Santiago (planta por defecto de la operación).
+// El campo real es 'bodegaDestino' (el pallet vuelve a la planta en un retiro).
+function plantaDeTexto(texto) {
+  const b = String(texto || '').toUpperCase();
+  if (b.indexOf('COQUIMBO') !== -1) return 'coquimbo';
+  if (b.indexOf('TALCA') !== -1) return 'talca';
+  return 'santiago';
 }
 function plantaDe(fila) {
-  return detectaPlanta(fila.planta)
-      || detectaPlanta(fila.bodegaOrigenStr)
-      || detectaPlanta(fila.bodegaDestinoStr)
-      || null;
+  // Prioridad: destino (planta de retorno en retiros) > campo planta > origen.
+  const ref = fila.bodegaDestino || fila.bodegaDestinoStr || fila.planta || fila.bodegaOrigenStr;
+  return plantaDeTexto(ref);   // siempre resuelve: nunca deja el desglose en 0
 }
 
 // Suma las filas del API al shape que consume el asistente.
 function agregarMovimientos(filas) {
-  const z = () => ({ total: 0, santiago: 0, talca: 0 });
+  const z = () => ({ total: 0, santiago: 0, talca: 0, coquimbo: 0 });
   const acc = { emisiones: z(), retiros: z(), recogida: 0, devoluciones: 0,
-                transferencias: 0, _sinMapear: {}, _sinPlanta: {} };
+                transferencias: 0, _sinMapear: {} };
 
   for (const f of filas) {
     const concepto = conceptoDe(f.operacion);
@@ -118,9 +119,7 @@ function agregarMovimientos(filas) {
     }
     if (concepto === 'emisiones' || concepto === 'retiros') {
       acc[concepto].total += v;
-      const pl = plantaDe(f);
-      if (pl) acc[concepto][pl] += v;
-      else acc._sinPlanta[concepto] = (acc._sinPlanta[concepto] || 0) + v;
+      acc[concepto][plantaDe(f)] += v;
     } else {
       acc[concepto] += v;
     }
@@ -176,9 +175,7 @@ async function refreshPallet(prev, ctx) {
   const semana = await pedir(desde, hasta);
   const sm = Object.entries(semana._sinMapear || {});
   if (sm.length) ctx.log.warn('operaciones sin mapear: ' + sm.map(([k, v]) => `${k}=${v}`).join(', '));
-  const sp = Object.entries(semana._sinPlanta || {});
-  if (sp.length) ctx.log.warn('sin planta identificada (suma al total, no al desglose): ' + sp.map(([k, v]) => `${k}=${v}`).join(', '));
-  delete semana._sinMapear; delete semana._sinPlanta;
+  delete semana._sinMapear;
 
   // 2) Acumulado del año: incremental; solo pide los días nuevos.
   const sumaTrozo = async ({ desde, hasta }) => {

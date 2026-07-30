@@ -26,6 +26,26 @@ async function loadSnapshot() {
 const _nf = new Intl.NumberFormat('es-CL');
 const n = v => (v === null || v === undefined) ? '—' : _nf.format(v);
 
+// ── CONOCIMIENTO BASE ───────────────────────────────────────────────────────
+// Hechos DURABLES y VERIFICADOS de la operación. Viajan en cada sesión, así el
+// asistente no hay que re-enseñarlos. Agrega aquí solo lo confirmado — nunca lo
+// que el chat "supuso" en una conversación, o repetirá errores con seguridad.
+const CONOCIMIENTO = [
+  // — Negocio —
+  'REDTEC tiene dos líneas: (1) Arriendo de Pallets ROJOS, la línea principal — contratos con clientes, facturación semanal a 30 días, pool propio, absorbe los costos fijos; (2) Comercialización de Pallets BLANCOS/VERDES, marginal — venta spot sin contrato, solo costos directos, con una sub-línea de reparación de blancos de muy bajo movimiento.',
+  // — Ciclo del pallet rojo —
+  'Ciclo del pallet rojo: Redtec EMITE al cliente → el cliente TRANSFIERE al retailer → Redtec RETIRA desde el retailer de vuelta. En paralelo, el cliente puede DEVOLVER directo a Redtec.',
+  'Movimientos: EMISIONES (Redtec→cliente), TRANSFERENCIAS (cliente→retailer), RETIROS (retailer→Redtec, es recuperación), DEVOLUCIONES (cliente→Redtec), RECOGIDA. Facturables: emisión, transferencia y devolución. El retiro NO se factura (es recuperación).',
+  'Regla de equilibrio de volúmenes: en el largo plazo las transferencias deben ser mayores o iguales a los retiros (no se puede retirar del retailer más de lo transferido). Si en un periodo los retiros superan a las transferencias, es stock de periodos anteriores que se está recuperando.',
+  // — Transferencias: estados —
+  'Las transferencias se registran en REDLINK (portal de clientes) y siguen estados: REGISTRADA → CONFIRMADA (el cliente confirma recepción del retailer; número definitivo, generará un retiro futuro) o REVERSADA/ANULADA (el pallet queda en el cliente; NO se contabiliza).',
+  'Se cuentan por fecha requerida y cantidad confirmada. Un periodo reciente puede tener transferencias sin confirmar aún, así que su número puede VARIAR (subir por confirmaciones o bajar por reversas) hasta ~40 días. Con transferencias_provisional=true es provisorio; con false es definitivo.',
+  // — Plantas y cobertura —
+  'Plantas de operación actuales: Santiago, Talca y Coquimbo. Temuco fue una cuarta planta solo durante 2024: aparece en datos de ese año, pero ya no opera.',
+  'Cobertura de datos: hay registros desde el 20-03-2023. Antes de esa fecha no hay datos; dilo con franqueza si preguntan por periodos anteriores.'
+  // El equipo agrega aquí hechos nuevos ya confirmados (durables y verificados).
+];
+
 // Convierte el snapshot en un bloque de texto compacto y legible por el modelo.
 function resumen(s) {
   const g = s.galaxias;
@@ -104,13 +124,16 @@ async function buildCtx() {
 
 REGLAS
 - Responde con los datos entregados abajo. Para PERIODOS HISTÓRICOS que no estén aquí (un día puntual, una semana pasada, un mes, un año — hay datos desde 2023-03-20), usa la herramienta consultar_operacion con el rango en fechas YYYY-MM-DD. Nunca inventes cifras: si ni el contexto ni la herramienta lo cubren, dilo con franqueza.
-- Si el resultado de la herramienta trae transferencias_provisional en true, advierte que las transferencias de ese rango están sujetas a confirmación y pueden aumentar.
+- Si el resultado de la herramienta trae transferencias_provisional en true, advierte que las transferencias de ese rango están sujetas a confirmación y aún pueden variar (subir por confirmaciones o bajar por reversas).
 - OJO CON LAS FECHAS: el snapshot se escribió el ${v.escrito}, pero las cifras operacionales corresponden a la ${v.periodo}. NO son datos de hoy.${v.desfasado ? ` El dato tiene ${v.diasAtras} días de antigüedad: adviértelo cuando entregues cifras.` : ''}
 - Si preguntan por "hoy", "ahora" o "esta semana", responde con lo que tienes pero aclara explícitamente a qué periodo corresponde. Nunca presentes una cifra de un periodo pasado como si fuera actual.
 - Números en formato chileno (miles con punto). Sé conciso; no vuelques toda la información salvo que la pidan.
 - Cierra SIEMPRE tu respuesta con una última línea con este formato exacto, indicando qué galaxias usaste:
   [FUENTES: pallet, pool]
   Claves válidas: pallet, pool, reparacion, cliente, transporte, colaborador. Usa solo las que realmente consultaste. La interfaz convierte esa línea en chips de trazabilidad, así que no la omitas ni cambies su formato.
+
+CONOCIMIENTO BASE
+${CONOCIMIENTO.map(x => '- ' + x).join('\n')}
 
 DATOS DE LA OPERACIÓN
 ${datos}`;

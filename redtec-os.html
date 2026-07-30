@@ -264,6 +264,20 @@ var GNOMBRE={pallet:'Pallet',pool:'Pool',reparacion:'Reparación',
              cliente:'Cliente',transporte:'Transporte',colaborador:'Colaborador'};
 
 var hist=[];  // historial de la conversación (se envía completo en cada turno)
+var HKEY='redtecos_hist';  // memoria de la conversación entre refrescos (por navegador)
+function guardarHist(){ try{ localStorage.setItem(HKEY, JSON.stringify(hist.slice(-24))); }catch(e){} }
+function restaurarHist(){
+  var raw; try{ raw=localStorage.getItem(HKEY); }catch(e){ return; }
+  if(!raw) return;
+  try{ hist=JSON.parse(raw)||[]; }catch(e){ hist=[]; return; }
+  if(!hist.length) return;
+  enterChat();
+  hist.forEach(function(m){
+    if(m.role==='user'){ addUser(m.content); return; }
+    var p=parseFuentes(m.content);
+    addAssistant(fmtTexto(p.texto)+(p.fuentes.length?srcHtml(p.fuentes):''));
+  });
+}
 
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
@@ -309,6 +323,7 @@ function enterChat(){
   document.getElementById('composer').classList.add('show');
 }
 function newChat(){
+  hist=[]; try{ localStorage.removeItem(HKEY); }catch(e){}
   started=false;
   document.getElementById('thread').innerHTML='';
   document.getElementById('welcome').classList.remove('hidden');
@@ -345,7 +360,7 @@ async function ask(q){
   document.getElementById('wIn').style.height='auto';document.getElementById('cIn').style.height='auto';
   enterChat();
   addUser(q);
-  hist.push({role:'user',content:q});
+  hist.push({role:'user',content:q}); guardarHist();
   var t=addTyping();
   try{
     var system=await buildCtx();                       // lee el snapshot del read model
@@ -359,13 +374,13 @@ async function ask(q){
     var texto=(data.content||[]).filter(function(b){return b.type==='text';})
                                 .map(function(b){return b.text;}).join('\n').trim();
     if(!texto) throw new Error('respuesta vacía');
-    hist.push({role:'assistant',content:texto});
+    hist.push({role:'assistant',content:texto}); guardarHist();
     t.remove();
     var p=parseFuentes(texto);
     addAssistant(fmtTexto(p.texto)+(p.fuentes.length?srcHtml(p.fuentes):''));
   }catch(e){
     t.remove();
-    hist.pop();   // no dejar la pregunta colgada en el historial
+    hist.pop(); guardarHist();   // no dejar la pregunta colgada en el historial
     addAssistant('<p>No pude consultar los datos de la operación en este momento.</p>'+
                  '<p class="hl">'+esc(e.message||e)+'</p>');
   }
@@ -383,6 +398,7 @@ async function init(){
     var s=await loadSnapshot();
     var per=s.meta.periodo_semana;
     st.textContent='Datos de la semana '+(per?per.numero:'—')+' · SAP · Workera · GPS · RDTOut';
+    restaurarHist();   // recupera la conversación si venía de un refresco
 
     var box=document.getElementById('dayChips');
     if(box && s.pulso && s.pulso.length){

@@ -42,11 +42,15 @@ function conceptoDe(operacion) {
 
 // Planta: Talca/Coquimbo por nombre, resto Santiago (regla de M3LINK).
 // El pallet vuelve a la planta en un retiro, por eso destino manda.
+// Plantas conocidas. Temuco operó solo durante 2024; se mantiene para no
+// contar sus movimientos como Santiago en los datos de ese año.
+const PLANTAS = ['santiago', 'talca', 'coquimbo', 'temuco'];
 function plantaDeTexto(t) {
   const b = String(t || '').toUpperCase();
+  if (b.indexOf('TEMUCO') !== -1) return 'temuco';
   if (b.indexOf('COQUIMBO') !== -1) return 'coquimbo';
   if (b.indexOf('TALCA') !== -1) return 'talca';
-  return 'santiago';
+  return 'santiago';   // default histórico de la operación
 }
 function plantaDe(fila) {
   return plantaDeTexto(
@@ -61,7 +65,7 @@ function fechaDe(fila) {
 }
 
 function nuevoAcc() {
-  const z = () => ({ total: 0, santiago: 0, talca: 0, coquimbo: 0 });
+  const z = () => { const o = { total: 0 }; for (const p of PLANTAS) o[p] = 0; return o; };
   return { emisiones: z(), retiros: z(), recogida: 0, devoluciones: 0,
            transferencias: 0, _sinMapear: {} };
 }
@@ -119,11 +123,11 @@ function paraCache(acc) {
 
 // Suma varios días (leídos del caché) en el movimiento de un rango.
 function combinarDias(lista) {
-  const z = () => ({ total: 0, santiago: 0, talca: 0, coquimbo: 0 });
+  const z = () => { const o = { total: 0 }; for (const p of PLANTAS) o[p] = 0; return o; };
   const out = { emisiones: z(), retiros: z(), devoluciones: 0, recogida: 0, transferencias: 0 };
   for (const d of lista) {
     if (!d) continue;
-    for (const p of ['total', 'santiago', 'talca', 'coquimbo']) {
+    for (const p of ['total', ...PLANTAS]) {
       out.emisiones[p] += (d.emisiones && d.emisiones[p]) || 0;
       out.retiros[p]   += (d.retiros   && d.retiros[p])   || 0;
     }
@@ -140,8 +144,8 @@ function combinarDias(lista) {
 const VENTANA_TRANSFER_DIAS = 40;
 
 module.exports = {
-  norm, conceptoDe, plantaDe, plantaDeTexto, fechaDe,
+  norm, conceptoDe, nuevoAcc, plantaDe, plantaDeTexto, fechaDe,
   agregarMovimientos, agregarPorDia, agregarPorDiaEn,
   paraCache, combinarDias, VENTANA_TRANSFER_DIAS,
-  ESTABLES, CONCEPTOS
+  ESTABLES, CONCEPTOS, PLANTAS
 };

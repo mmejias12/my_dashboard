@@ -24,12 +24,13 @@ const CONCEPTOS = [
   ['devoluciones',   ['devolucion']],
   ['recogida',       ['recogida', 'recoleccion']],
   ['emisiones',      ['emision']],
+  ['reparacion',     ['reparacion']],   // 'Retiro - Reparación' NO es retiro del pool rojo
   ['retiros',        ['retiro']]
 ];
 
 // Conceptos que se congelan al cerrar el día (se guardan en caché).
 // Transferencias NO está: sube por confirmación tardía, va aparte.
-const ESTABLES = ['emisiones', 'retiros', 'devoluciones', 'recogida'];
+const ESTABLES = ['emisiones', 'retiros', 'devoluciones', 'recogida', 'reparacion'];
 
 function conceptoDe(operacion) {
   const o = norm(operacion);
@@ -67,7 +68,7 @@ function fechaDe(fila) {
 function nuevoAcc() {
   const z = () => { const o = { total: 0 }; for (const p of PLANTAS) o[p] = 0; return o; };
   return { emisiones: z(), retiros: z(), recogida: 0, devoluciones: 0,
-           transferencias: 0, _sinMapear: {} };
+           transferencias: 0, reparacion: 0, _sinMapear: {} };
 }
 
 // Suma una fila dentro de un acumulador.
@@ -117,14 +118,14 @@ function paraCache(acc) {
   return {
     emisiones: acc.emisiones, retiros: acc.retiros,
     devoluciones: acc.devoluciones, recogida: acc.recogida,
-    transferencias: acc.transferencias
+    transferencias: acc.transferencias, reparacion: acc.reparacion
   };
 }
 
 // Suma varios días (leídos del caché) en el movimiento de un rango.
 function combinarDias(lista) {
   const z = () => { const o = { total: 0 }; for (const p of PLANTAS) o[p] = 0; return o; };
-  const out = { emisiones: z(), retiros: z(), devoluciones: 0, recogida: 0, transferencias: 0 };
+  const out = { emisiones: z(), retiros: z(), devoluciones: 0, recogida: 0, transferencias: 0, reparacion: 0 };
   for (const d of lista) {
     if (!d) continue;
     for (const p of ['total', ...PLANTAS]) {
@@ -134,6 +135,7 @@ function combinarDias(lista) {
     out.devoluciones   += d.devoluciones || 0;
     out.recogida       += d.recogida || 0;
     out.transferencias += d.transferencias || 0;
+    out.reparacion     += d.reparacion || 0;
   }
   return out;
 }

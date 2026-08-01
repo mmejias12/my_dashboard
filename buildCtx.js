@@ -36,6 +36,7 @@ const CONOCIMIENTO = [
   // — Ciclo del pallet rojo —
   'Ciclo del pallet rojo: Redtec EMITE al cliente → el cliente TRANSFIERE al retailer → Redtec RETIRA desde el retailer de vuelta. En paralelo, el cliente puede DEVOLVER directo a Redtec.',
   'Movimientos: EMISIONES (Redtec→cliente), TRANSFERENCIAS (cliente→retailer), RETIROS (retailer→Redtec, es recuperación), DEVOLUCIONES (cliente→Redtec), RECOGIDA. Facturables: emisión, transferencia y devolución. El retiro NO se factura (es recuperación).',
+  'REPARACIÓN es una operación aparte (Retiro - Reparación), de la línea de blancos, NO del pool rojo: no se cuenta como retiro operacional. Se reporta como su propio concepto "reparacion".',
   'Regla de equilibrio de volúmenes: en el largo plazo las transferencias deben ser mayores o iguales a los retiros (no se puede retirar del retailer más de lo transferido). Si en un periodo los retiros superan a las transferencias, es stock de periodos anteriores que se está recuperando.',
   // — Transferencias: estados —
   'Las transferencias se registran en REDLINK (portal de clientes) y siguen estados: REGISTRADA → CONFIRMADA (el cliente confirma recepción del retailer; número definitivo, generará un retiro futuro) o REVERSADA/ANULADA (el pallet queda en el cliente; NO se contabiliza).',

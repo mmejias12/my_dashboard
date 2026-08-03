@@ -36,15 +36,21 @@ async function obtenerDia(fecha, opts) {
   const nombre = nombreDia(fecha);
   if (!opts.forzar) {
     const cache = await leerBlob(cont, nombre);
-    if (cache) return Object.assign({}, cache, { _origen: 'cache' });
+    // Solo se considera válido un día con al menos un universo con dato.
+    if (cache && (cache.clientes || cache.retail)) return Object.assign({}, cache, { _origen: 'cache' });
   }
   const dia = { fecha: fecha };
   for (const u of UNIVERSOS) {
     try { dia[u] = await cuadreDia(fecha, u); }
     catch (e) { dia[u] = null; dia['_error_' + u] = e.message; }
   }
-  await escribirBlob(cont, nombre, dia);
-  return Object.assign({}, dia, { _origen: 'vivo' });
+  // NO cachear un día 100% fallido: evita envenenar el caché y evita pisar dato
+  // bueno con null si RDTOut falla en un run posterior.
+  if (dia.clientes || dia.retail) {
+    await escribirBlob(cont, nombre, dia);
+    return Object.assign({}, dia, { _origen: 'vivo' });
+  }
+  return Object.assign({}, dia, { _origen: 'error' });
 }
 
 // Arma un rango SIN sumar saldos: saldoInicial del primer día con dato,
@@ -52,6 +58,12 @@ async function obtenerDia(fecha, opts) {
 async function existeDia(fecha) {
   const cont = contenedor();
   return cont.getBlockBlobClient(nombreDia(fecha)).exists();
+}
+
+async function diaValido(fecha) {
+  const cont = contenedor();
+  const cache = await leerBlob(cont, nombreDia(fecha));
+  return !!(cache && (cache.clientes || cache.retail));
 }
 
 async function leerRango(desde, hasta, universo) {
@@ -90,4 +102,4 @@ function fechasEntre(desde, hasta) {
 }
 function p2(n) { return n < 10 ? '0' + n : '' + n; }
 
-module.exports = { obtenerDia, existeDia, leerRango, fechasEntre, CONTENEDOR, UNIVERSOS };
+module.exports = { obtenerDia, existeDia, diaValido, leerRango, fechasEntre, CONTENEDOR, UNIVERSOS };

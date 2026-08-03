@@ -108,6 +108,12 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 .multi-panel.open{display:flex}
 .multi-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:4px;cursor:pointer;font-size:12px;color:var(--t2);transition:background .1s}
 .multi-item:hover{background:var(--s3);color:var(--t1)}
+
+/* CHIPS FILTRO PATENTES */
+.pat-chip-wrap{display:flex;gap:4px;flex-wrap:wrap;align-items:center;overflow:hidden;max-width:190px}
+.pat-chip{background:var(--blue-d);color:var(--blue);border:1px solid rgba(75,141,248,.25);border-radius:12px;padding:2px 7px;font-size:10px;font-weight:600;display:inline-flex;align-items:center;gap:4px;line-height:1.2;max-width:82px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pat-chip .x{opacity:.55;font-size:10px;margin-left:1px}
+.pat-chip-more{background:var(--s4);color:var(--t2);border:1px solid var(--border-md);border-radius:12px;padding:2px 7px;font-size:10px;font-weight:600;line-height:1.2;white-space:nowrap}
 .multi-item input[type=checkbox]{accent-color:var(--blue);cursor:pointer}
 .multi-actions{display:flex;gap:6px;padding:6px 4px;border-bottom:1px solid var(--border);margin-bottom:4px}
 .multi-action{flex:1;font-size:10.5px;color:var(--blue);background:transparent;border:1px solid var(--border-md);border-radius:4px;padding:4px 8px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:background .1s}
@@ -424,11 +430,17 @@ thead th.center{text-align:center}
         <input type="date" class="dinput" id="ff" />
       </div>
       <button class="btn-go" id="btnCargar">▶ Cargar viajes</button>
-      <div class="field">
-        <label>Patente</label>
-        <select class="sinput" id="filtroPatente"><option value="">Todas</option></select>
-      </div>
-      <div class="field">
+      <div class="field">  
+        <label>Patente</label>  
+        <div class="multi-wrap">  
+          <button type="button" class="multi-btn" id="btnPatentes" style="min-width:190px">  
+            <span id="lblPatentes">Todas</span>  
+            <span style="opacity:.6;font-size:10px">▾</span>  
+          </button>  
+          <div class="multi-panel" id="panelPatentes"></div>  
+        </div>  
+      </div>  
+<div class="field">
         <label>Semanas</label>
         <div class="multi-wrap">
           <button type="button" class="multi-btn" id="btnSemanas">
@@ -812,6 +824,7 @@ function setEmpty(id, ico, txt, sub){
 // ============================================================
 
 let SEMANAS_SEL = new Set();  // semanas seleccionadas (vacío = todas)
+let PATENTES_SEL = new Set();  // patentes seleccionadas (vacío = todas)
 
 function construirFiltros(){
   const patentes = [...new Set(VIAJES_PROC.map(v=>v.patente).filter(Boolean))].sort();
@@ -820,16 +833,32 @@ function construirFiltros(){
 
   const fillSel = (id, items, lbl) => {
     const sel = document.getElementById(id);
+    if(!sel) return;
     const cur = sel.value;
     sel.innerHTML = '<option value="">'+lbl+'</option>' + items.map(x=>`<option value="${x}">${x}</option>`).join('');
     if(items.includes(cur)) sel.value = cur;
   };
-  fillSel('filtroPatente', patentes, 'Todas');
+
+  // Multi-select patentes con chips
+  const panelPat = document.getElementById('panelPatentes');
+  PATENTES_SEL = new Set([...PATENTES_SEL].filter(p => patentes.includes(p)));
+  if(panelPat){
+    let htmlPat = '<div class="multi-actions">';
+    htmlPat += '<button class="multi-action" onclick="selPatentesAll(true)">Todas</button>';
+    htmlPat += '<button class="multi-action" onclick="selPatentesAll(false)">Ninguna</button>';
+    htmlPat += '</div>';
+    patentes.forEach(p => {
+      const checked = PATENTES_SEL.has(p) ? 'checked' : '';
+      htmlPat += `<label class="multi-item"><input type="checkbox" value="${p}" ${checked} onchange="togglePatente('${p}', this.checked)"> ${p}</label>`;
+    });
+    panelPat.innerHTML = htmlPat;
+    updatePatentesLabel();
+  }
+
   fillSel('filtroLinea', lineas, 'Todas');
 
   // Multi-select semanas
   const panel = document.getElementById('panelSemanas');
-  // Conservar selección si las semanas siguen existiendo
   SEMANAS_SEL = new Set([...SEMANAS_SEL].filter(s => semanas.includes(s)));
   let panelHTML = '<div class="multi-actions">';
   panelHTML += '<button class="multi-action" onclick="selSemanasAll(true)">Todas</button>';
@@ -885,14 +914,51 @@ function updateSemanasLabel(){
   }
 }
 
+
+function togglePatente(patente, checked){  
+  if(checked) PATENTES_SEL.add(patente);  
+  else PATENTES_SEL.delete(patente);  
+  updatePatentesLabel();  
+  renderTodo();  
+}  
+function selPatentesAll(all){  
+  const patentes = [...new Set(VIAJES_PROC.map(v=>v.patente).filter(Boolean))];  
+  PATENTES_SEL = all ? new Set(patentes) : new Set();  
+  document.querySelectorAll('#panelPatentes input[type=checkbox]').forEach(cb=>{  
+    cb.checked = PATENTES_SEL.has(cb.value);  
+  });  
+  updatePatentesLabel();  
+  renderTodo();  
+}  
+function updatePatentesLabel(){  
+  const todas = [...new Set(VIAJES_PROC.map(v=>v.patente).filter(Boolean))];  
+  const btn = document.getElementById('btnPatentes');  
+  const lbl = document.getElementById('lblPatentes');  
+  if(!btn || !lbl) return;  
+  if(!PATENTES_SEL.size || PATENTES_SEL.size === todas.length){  
+    lbl.textContent = 'Todas';  
+    btn.classList.remove('has-selection');  
+    return;  
+  }  
+  btn.classList.add('has-selection');  
+  const seleccionadas = [...PATENTES_SEL].sort();  
+  let html = '<div class="pat-chip-wrap">';  
+  seleccionadas.slice(0,2).forEach(p=>{  
+    html += `<span class="pat-chip">${p}<span class="x">×</span></span>`;  
+  });  
+  if(seleccionadas.length > 2){  
+    html += `<span class="pat-chip-more">+${seleccionadas.length - 2}</span>`;  
+  }  
+  html += '</div>';  
+  lbl.innerHTML = html;  
+}  
 function aplicarFiltros(){
-  const p = document.getElementById('filtroPatente').value;
   const l = document.getElementById('filtroLinea').value;
   const q = normalize(document.getElementById('busqueda').value);
   const filtroPorSemana = SEMANAS_SEL.size > 0;
-
+  const filtroPorPatente = PATENTES_SEL.size > 0;
   return VIAJES_PROC.filter(v => {
-    if(p && v.patente !== p) return false;
+    if(filtroPorPatente && !PATENTES_SEL.has(v.patente)) return false;
     if(filtroPorSemana && !SEMANAS_SEL.has(v.semana)) return false;
     if(l && v.lineaNegocios !== l) return false;
     if(q){
@@ -1462,7 +1528,7 @@ document.getElementById('btnImprimirPF').addEventListener('click', ()=>{
   window.print();
 });
 
-['filtroPatente','filtroLinea','busqueda'].forEach(id=>{
+['filtroLinea','busqueda'].forEach(id=>{
   document.getElementById(id).addEventListener('change', renderTodo);
   document.getElementById(id).addEventListener('input', renderTodo);
 });
@@ -1472,12 +1538,23 @@ document.getElementById('btnSemanas').addEventListener('click', (e)=>{
   e.stopPropagation();
   document.getElementById('panelSemanas').classList.toggle('open');
 });
+
+document.getElementById('btnPatentes').addEventListener('click', (e)=>{
+  e.stopPropagation();
+  document.getElementById('panelPatentes').classList.toggle('open');
+});
 // Cerrar al click fuera
 document.addEventListener('click', (e)=>{
-  const panel = document.getElementById('panelSemanas');
-  const btn = document.getElementById('btnSemanas');
-  if(panel && !panel.contains(e.target) && !btn.contains(e.target)){
-    panel.classList.remove('open');
+  const panelSem = document.getElementById('panelSemanas');
+  const btnSem = document.getElementById('btnSemanas');
+  if(panelSem && !panelSem.contains(e.target) && !btnSem.contains(e.target)){
+    panelSem.classList.remove('open');
+  }
+
+  const panelPat = document.getElementById('panelPatentes');
+  const btnPat = document.getElementById('btnPatentes');
+  if(panelPat && !panelPat.contains(e.target) && !btnPat.contains(e.target)){
+    panelPat.classList.remove('open');
   }
 });
 document.getElementById('selPrefactura').addEventListener('change', renderPrefactura);

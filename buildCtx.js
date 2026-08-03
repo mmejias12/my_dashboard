@@ -43,7 +43,7 @@ const CONOCIMIENTO = [
   'Se cuentan por fecha requerida y cantidad confirmada. Un periodo reciente puede tener transferencias sin confirmar aún, así que su número puede VARIAR (subir por confirmaciones o bajar por reversas) hasta ~40 días. Con transferencias_provisional=true es provisorio; con false es definitivo.',
   // — Plantas y cobertura —
   'Plantas de operación actuales: Santiago, Talca y Coquimbo. Temuco fue una cuarta planta solo durante 2024: aparece en datos de ese año, pero ya no opera.',
-  'Cobertura de datos: hay registros desde el 20-03-2023. Antes de esa fecha no hay datos; dilo con franqueza si preguntan por periodos anteriores.'
+  'Cobertura de datos: hay registros desde el 20-03-2023. Antes de esa fecha no hay datos; dilo con franqueza si preguntan por periodos anteriores.',
   // El equipo agrega aquí hechos nuevos ya confirmados (durables y verificados).
   //POOL / STOCK DE ROJOS
   'El "stock" del pool es saldoFinal: existencias de pallets rojos en poder de  clientes o de retail al cierre de un día. Es un NIVEL, no un flujo: no se suma  entre días. Para el stock actual se usa el último día cerrado (ayer). Dos universos: CLIENTES (rojos que Redtec despachó y aún están en clientes) y  RETAIL (rojos que pasaron de clientes a retailers, pendientes de retiro).',

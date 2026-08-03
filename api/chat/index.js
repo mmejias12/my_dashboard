@@ -17,6 +17,7 @@
 // ============================================================================
 
 const { consultarOperacion } = require('../shared/consulta-historico.js');
+const { consultarStock, TOOL_SCHEMA: STOCK_TOOL } = require('../shared/consulta-stock.js');
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
@@ -49,7 +50,7 @@ const TOOLS = [{
     },
     required: ['desde', 'hasta']
   }
-}];
+}, STOCK_TOOL];
 
 async function llamarClaude(body) {
   const r = await fetch(ANTHROPIC_URL, {
@@ -100,6 +101,11 @@ module.exports = async function (context, req) {
             out = await consultarOperacion(bloque.input, context);
             context.log(`tool consultar_operacion ${bloque.input.desde}..${bloque.input.hasta} ` +
                         `(${Date.now() - t0}ms, cache:${out._origen.cache_dias}d vivo:${out._origen.vivo_dias}d)`);
+          } else if (bloque.name === 'consultar_stock') {
+            const t0 = Date.now();
+            out = await consultarStock(bloque.input);
+            context.log(`tool consultar_stock ${bloque.input.desde}..${bloque.input.hasta} ` +
+                        `[${bloque.input.universo || 'ambos'}] (${Date.now() - t0}ms)`);
           } else {
             out = { error: 'herramienta desconocida: ' + bloque.name };
           }

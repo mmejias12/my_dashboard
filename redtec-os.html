@@ -155,7 +155,26 @@ body{font-family:var(--body);background:var(--void);color:var(--text);-webkit-fo
 .composer .chatbox{border-radius:15px}
 .composer .foot{text-align:center;font-family:var(--mono);font-size:10px;color:var(--mute);margin-top:9px}
 
-@media(max-width:820px){.sidebar{display:none}.sugg-grid{grid-template-columns:1fr}}
+/* ===== TABLAS DE DATOS (render de tablas markdown) ===== */
+.msg.a .body .tbl-wrap{margin:14px 0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface);box-shadow:0 8px 24px -18px rgba(0,0,0,.8)}
+.msg.a .body .tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+.msg.a .body .tbl th{font-family:var(--mono);font-weight:600;font-size:10px;letter-spacing:.7px;text-transform:uppercase;color:var(--mute);text-align:left;padding:10px 14px;background:var(--surface-2);border-bottom:1px solid var(--line);white-space:nowrap}
+.msg.a .body .tbl th.num{text-align:right}
+.msg.a .body .tbl td{padding:9px 14px;border-bottom:1px solid var(--line);color:var(--text);vertical-align:middle}
+.msg.a .body .tbl tbody tr:last-child td{border-bottom:none}
+.msg.a .body .tbl td.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.msg.a .body .tbl td.num .v{font-weight:600}
+.msg.a .body .tbl td.pos .v{color:var(--g-pla)}
+.msg.a .body .tbl td.neg .v{color:var(--red)}
+.msg.a .body .tbl tr.total td{background:rgba(229,52,42,.06);border-top:1px solid var(--line-2)}
+.msg.a .body .tbl tr.total td,.msg.a .body .tbl tr.total td .v{font-weight:700;color:var(--text)}
+.msg.a .body .tbl tr.total td.num .v{font-size:14.5px}
+.msg.a .body .tbl tbody tr:hover td{background:rgba(255,255,255,.02)}
+.msg.a .body .tbl tbody tr.total:hover td{background:rgba(229,52,42,.09)}
+.msg.a .body .tbl .minibar{display:block;height:4px;border-radius:3px;background:var(--surface-3);margin-top:6px;width:100%;overflow:hidden}
+.msg.a .body .tbl .minibar i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,rgba(91,157,255,.35),var(--g-cli))}
+@media(max-width:820px){.sidebar{display:none}.sugg-grid{grid-template-columns:1fr}
+  .msg.a .body .tbl{font-size:12.5px}.msg.a .body .tbl th,.msg.a .body .tbl td{padding:8px 10px}}
 </style>
 </head>
 <body>
@@ -298,17 +317,104 @@ function mdInline(s){
   return s.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')
           .replace(/`([^`]+)`/g,'<code>$1</code>');
 }
+// --- Utilidades num\u00e9ricas (formato chileno: miles con '.', decimales con ',') ---
+function signoTxt(str){
+  var s=String(str).trim();
+  if(/^[+\uff0b]/.test(s)) return 1;        // + o \uff0b
+  if(/^[-\u2212]/.test(s)) return -1;       // - o \u2212
+  return 0;
+}
+function parseNum(str){
+  var s=String(str).trim();
+  var neg=/^[-\u2212]/.test(s);
+  var d=s.replace(/[^\d,]/g,'');             // deja s\u00f3lo d\u00edgitos y coma decimal
+  if(!d) return null;
+  var n=parseFloat(d.replace(',','.'));
+  if(isNaN(n)) return null;
+  return neg? -n : n;
+}
+function esFilaTotal(lbl){ return /(^|\s)(total|saldo final|saldo de cierre|stock (de )?cierre)/i.test(String(lbl)); }
+function esSeparador(s){ return /-/.test(s) && /^[\s|:\-]+$/.test(s) && (s.match(/-/g)||[]).length>=2; }
+
+// Convierte una tabla markdown en una tabla HTML estilizada.
+// Si es una distribuci\u00f3n (sin signos +/\u2212) agrega mini-barras proporcionales;
+// si es un movimiento (filas que suman/restan) colorea los valores en verde/rojo.
+function fmtTabla(lines){
+  function celdas(row){
+    return row.trim().replace(/^\|/,'').replace(/\|$/,'').split('|').map(function(c){return c.trim();});
+  }
+  var head=celdas(lines[0]);
+  var body=lines.slice(2).map(celdas);
+  var ncol=head.length;
+
+  var isNum=[];
+  for(var c=0;c<ncol;c++){
+    var tot=0,ok=0;
+    body.forEach(function(r){ var v=r[c]; if(v!==undefined&&v!==''){ tot++; if(parseNum(v)!==null) ok++; } });
+    isNum[c]= tot>0 && ok/tot>=0.6;
+  }
+  var valCol=-1; for(var c=ncol-1;c>=0;c--){ if(isNum[c]){ valCol=c; break; } }
+
+  var movimiento=false;
+  body.forEach(function(r){
+    if(signoTxt(r[0]||'')!==0) movimiento=true;
+    if(valCol>=0 && signoTxt(r[valCol]||'')!==0) movimiento=true;
+  });
+
+  var maxv=0;
+  if(!movimiento && valCol>=0){
+    body.forEach(function(r){
+      if(esFilaTotal(r[0]||'')) return;
+      var v=parseNum(r[valCol]||''); if(v!==null && v>maxv) maxv=v;
+    });
+  }
+
+  var out='<div class="tbl-wrap"><table class="tbl"><thead><tr>';
+  head.forEach(function(h,c){ out+='<th class="'+(isNum[c]?'num':'')+'">'+mdInline(h)+'</th>'; });
+  out+='</tr></thead><tbody>';
+  body.forEach(function(r){
+    var esTot=esFilaTotal(r[0]||'');
+    out+='<tr class="'+(esTot?'total':'')+'">';
+    for(var c=0;c<ncol;c++){
+      var cell=(r[c]!==undefined)? r[c] : '';
+      if(c===valCol){
+        var v=parseNum(cell);
+        var sg=signoTxt(r[0]||'')||signoTxt(cell);
+        var cls='num'+(!esTot && sg>0?' pos':'')+(!esTot && sg<0?' neg':'');
+        var inner='<span class="v">'+mdInline(cell)+'</span>';
+        if(!movimiento && !esTot && v!==null && maxv>0){
+          var w=v>0? Math.max(3,Math.round(v/maxv*100)) : 0;
+          inner+='<span class="minibar"><i style="width:'+w+'%"></i></span>';
+        }
+        out+='<td class="'+cls+'">'+inner+'</td>';
+      } else {
+        out+='<td class="'+(isNum[c]?'num':'')+'">'+mdInline(cell)+'</td>';
+      }
+    }
+    out+='</tr>';
+  });
+  out+='</tbody></table></div>';
+  return out;
+}
+
 function fmtTexto(t){
   var out=[], lista=null;
   function cerrar(){ if(lista){ out.push('<ul class="mdl">'+lista.join('')+'</ul>'); lista=null; } }
-  esc(t).split('\n').forEach(function(ln){
-    var s=ln.trim(), m;
-    if(!s){ cerrar(); return; }
-    if(m=s.match(/^#{1,4}\s+(.*)$/)){ cerrar(); out.push('<div class="mdh">'+mdInline(m[1])+'</div>'); return; }
-    if(m=s.match(/^[-*\u2022]\s+(.*)$/)){ (lista=lista||[]).push('<li>'+mdInline(m[1])+'</li>'); return; }
-    if(m=s.match(/^&gt;\s*(.*)$/)){ cerrar(); out.push('<div class="mdq">'+mdInline(m[1])+'</div>'); return; }
+  var raw=esc(t).split('\n');
+  for(var i=0;i<raw.length;i++){
+    var s=raw[i].trim(), m;
+    // \u00bfEmpieza una tabla markdown? (l\u00ednea con | seguida de una l\u00ednea separadora ---)
+    if(s.indexOf('|')>=0 && i+1<raw.length && esSeparador(raw[i+1].trim())){
+      var tl=[s, raw[i+1].trim()], j=i+2;
+      while(j<raw.length && raw[j].indexOf('|')>=0 && raw[j].trim()){ tl.push(raw[j].trim()); j++; }
+      cerrar(); out.push(fmtTabla(tl)); i=j-1; continue;
+    }
+    if(!s){ cerrar(); continue; }
+    if(m=s.match(/^#{1,4}\s+(.*)$/)){ cerrar(); out.push('<div class="mdh">'+mdInline(m[1])+'</div>'); continue; }
+    if(m=s.match(/^[-*\u2022]\s+(.*)$/)){ (lista=lista||[]).push('<li>'+mdInline(m[1])+'</li>'); continue; }
+    if(m=s.match(/^&gt;\s*(.*)$/)){ cerrar(); out.push('<div class="mdq">'+mdInline(m[1])+'</div>'); continue; }
     cerrar(); out.push('<p>'+mdInline(s)+'</p>');
-  });
+  }
   cerrar();
   return out.join('');
 }

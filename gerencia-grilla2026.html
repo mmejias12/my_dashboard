@@ -447,6 +447,8 @@ render();
       raw: gran==='day'?r.Dr:r.Wr, disp: gran==='day'?r.D:r.W,
       lbls:(gran==='day'?DATA.days.map(function(d){return d.dd;}):DATA.weeks.map(function(w){return 'S'+w.n;})) };
   }
+  function win(gran){ var len=(gran==='day'?DATA.days.length:DATA.weeks.length); var r=bcfg.rng[gran]; var a=r?r[0]:0, b=r?r[1]:len-1; a=Math.max(0,Math.min(a,len-1)); b=Math.max(a,Math.min(b,len-1)); return [a,b]; }
+  function serW(idx,gran){ var s=ser(idx,gran), w=win(gran); return {label:s.label,area:s.area,raw:s.raw.slice(w[0],w[1]+1),disp:s.disp.slice(w[0],w[1]+1),lbls:s.lbls.slice(w[0],w[1]+1)}; }
 
   function frame(ymin,ymax,N,xlbls){
     var l=58,r=16,t=20,b=46,W=780,H=400,PW=W-l-r,PH=H-t-b,g='',i,val,yy;
@@ -474,7 +476,7 @@ render();
   function svgWrap(inner){ return '<svg viewBox="0 0 780 400" font-family="Inter,sans-serif">'+inner+'</svg>'; }
 
   function chartLine(c){
-    var gran=c.gran, S=c.ys.map(function(idx,k){ var s=ser(idx,gran); return {label:s.label,color:PAL[k%PAL.length],raw:s.raw,disp:s.disp,lbls:s.lbls}; });
+    var gran=c.gran, S=c.ys.map(function(idx,k){ var s=serW(idx,gran); return {label:s.label,color:PAL[k%PAL.length],raw:s.raw,disp:s.disp,lbls:s.lbls}; });
     if(!S.length) return {title:'Selecciona indicadores',svg:''};
     var N=S[0].raw.length, all=[]; S.forEach(function(s){ s.raw.forEach(function(v){ if(v!=null) all.push(v); }); });
     if(!all.length) return {title:'Sin datos',svg:''};
@@ -492,7 +494,7 @@ render();
   }
 
   function chartBar(c){
-    var gran=c.gran, S=c.ys.map(function(idx,k){ var s=ser(idx,gran); return {label:s.label,color:PAL[k%PAL.length],raw:s.raw,disp:s.disp,lbls:s.lbls}; });
+    var gran=c.gran, S=c.ys.map(function(idx,k){ var s=serW(idx,gran); return {label:s.label,color:PAL[k%PAL.length],raw:s.raw,disp:s.disp,lbls:s.lbls}; });
     if(!S.length) return {title:'Selecciona indicadores',svg:''};
     var N=S[0].raw.length, all=[0]; S.forEach(function(s){ s.raw.forEach(function(v){ if(v!=null) all.push(v); }); });
     var ymin=Math.min.apply(0,all), ymax=Math.max.apply(0,all); if(ymin>0)ymin=0; ymax+=(ymax-ymin)*0.08||1;
@@ -532,7 +534,7 @@ render();
 
   function chartScatter(c){
     if(c.yi==null||c.xi==null) return {title:'Elige eje Y y eje X',svg:''};
-    var A=ser(c.yi,c.gran), B=ser(c.xi,c.gran), pts=[],i;
+    var A=serW(c.yi,c.gran), B=serW(c.xi,c.gran), pts=[],i;
     for(i=0;i<A.raw.length;i++){ if(A.raw[i]!=null&&B.raw[i]!=null) pts.push({x:B.raw[i],y:A.raw[i],lb:A.lbls[i],ay:A.disp[i],bx:B.disp[i]}); }
     if(pts.length<2) return {title:'Sin pares suficientes',svg:''};
     var xs=pts.map(function(p){return p.x;}), ys=pts.map(function(p){return p.y;});
@@ -559,21 +561,21 @@ render();
   function heatColor(t){ return 'rgb('+lerp(24,78,t)+','+lerp(27,167,t)+','+lerp(34,46,t)+')'; }
   function chartHeat(c){
     var rows=c.ys; if(!rows.length) return {title:'Selecciona indicadores',svg:''};
-    var N=DATA.weeks.length, l=180,r=14,t=20,b=40,cellH=Math.min(26,(360-t-b)/rows.length), H=t+b+cellH*rows.length, PW=780-l-r, cw=PW/N, body='';
-    rows.forEach(function(idx,ri){ var r=DATA.rows[idx], vals=r.Wr.filter(function(v){return v!=null;});
+    var wv=win('week'), c0=wv[0], c1=wv[1], N=c1-c0+1;
+    var l=180,r=14,t=20,b=40,cellH=Math.min(26,(360-t-b)/rows.length), H=t+b+cellH*rows.length, PW=780-l-r, cw=PW/N, body='';
+    rows.forEach(function(idx,ri){ var rr=DATA.rows[idx], vals=[],q; for(q=c0;q<=c1;q++){ if(rr.Wr[q]!=null) vals.push(rr.Wr[q]); }
       var mn=vals.length?Math.min.apply(0,vals):0, mx=vals.length?Math.max.apply(0,vals):1, yy=t+ri*cellH;
-      var lb=r.l.length>26?r.l.slice(0,25)+'…':r.l;
+      var lb=rr.l.length>26?rr.l.slice(0,25)+'…':rr.l;
       body+='<text x="'+(l-8)+'" y="'+(yy+cellH/2+3).toFixed(1)+'" fill="#9DA3B4" font-size="10" text-anchor="end">'+esc(lb)+'</text>';
-      r.Wr.forEach(function(v,ci){ var xx=l+ci*cw, col= v==null?'#12141b':heatColor(mx===mn?0.5:(v-mn)/(mx-mn));
-        body+='<rect x="'+xx.toFixed(1)+'" y="'+yy.toFixed(1)+'" width="'+(cw-1).toFixed(1)+'" height="'+(cellH-1).toFixed(1)+'" fill="'+col+'"'+(v==null?'':' data-v="'+aEsc(r.l+' · S'+DATA.weeks[ci].n+': '+r.W[ci])+'"')+'/>';
-      });
+      var ci; for(ci=c0;ci<=c1;ci++){ var xi=ci-c0, v=rr.Wr[ci], xx=l+xi*cw, col= v==null?'#12141b':heatColor(mx===mn?0.5:(v-mn)/(mx-mn));
+        body+='<rect x="'+xx.toFixed(1)+'" y="'+yy.toFixed(1)+'" width="'+(cw-1).toFixed(1)+'" height="'+(cellH-1).toFixed(1)+'" fill="'+col+'"'+(v==null?'':' data-v="'+aEsc(rr.l+' · S'+DATA.weeks[ci].n+': '+rr.W[ci])+'"')+'/>';
+      }
     });
     var step=Math.max(1,Math.round(N/12)),i;
-    for(i=0;i<N;i+=step){ body+='<text x="'+(l+i*cw+cw/2).toFixed(1)+'" y="'+(t+cellH*rows.length+16)+'" fill="#5A6070" font-size="9" text-anchor="middle" font-family="JetBrains Mono,monospace">S'+DATA.weeks[i].n+'</text>'; }
-    body+='<text x="'+l+'" y="13" fill="#9DA3B4" font-size="10.5">Intensidad por fila (mín→máx de cada indicador) · semanas S1–S'+DATA.weeks[N-1].n+'</text>';
+    for(i=0;i<N;i+=step){ var cc=c0+i; body+='<text x="'+(l+i*cw+cw/2).toFixed(1)+'" y="'+(t+cellH*rows.length+16)+'" fill="#5A6070" font-size="9" text-anchor="middle" font-family="JetBrains Mono,monospace">S'+DATA.weeks[cc].n+'</text>'; }
+    body+='<text x="'+l+'" y="13" fill="#9DA3B4" font-size="10.5">Intensidad por fila (mín→máx en el rango) · semanas S'+DATA.weeks[c0].n+'–S'+DATA.weeks[c1].n+'</text>';
     return {title:'Mapa de calor · '+rows.length+' indicadores', svg:'<svg viewBox="0 0 780 '+Math.round(H)+'" font-family="Inter,sans-serif">'+body+'</svg>'};
   }
-
   function render(c){
     if(c.type==='line') return chartLine(c);
     if(c.type==='bar') return chartBar(c);
@@ -595,7 +597,7 @@ render();
     pie:'Composición: elige los componentes (porciones) y la semana. Muestra el % de cada uno.',
     scatter:'Mide un indicador contra otro: cada punto es una semana. Incluye recta de ajuste y correlación (r).',
     heat:'Mapa de calor: filas = indicadores, columnas = semanas, color = intensidad relativa de cada fila.'};
-  var bcfg={type:'line',gran:'week',ys:[],yi:null,xi:null,week:null};
+  var bcfg={type:'line',gran:'week',ys:[],yi:null,xi:null,week:null,rng:{week:null,day:null}};
   var PANEL=[];
   function loadPanel(){ try{ var s=window.localStorage.getItem('redtec_grilla_panel_v1'); if(s){ var p=JSON.parse(s); if(p&&p.length) PANEL=p; } }catch(e){} }
   function savePanel(){ try{ window.localStorage.setItem('redtec_grilla_panel_v1', JSON.stringify(PANEL)); }catch(e){} }
@@ -623,6 +625,14 @@ render();
     return h+'</select>';
   }
   function granRow(){ return '<div class="brow"><div class="bseg"><button class="'+(bcfg.gran==='week'?'on':'')+'" onclick="bgran(\'week\')">Semanas</button><button class="'+(bcfg.gran==='day'?'on':'')+'" onclick="bgran(\'day\')">Días</button></div>'+clearBtn()+'</div>'; }
+  function rangeRow(gran){
+    var arr=(gran==='day')?DATA.days.map(function(d,i){return {i:i,l:d.dd};}):DATA.weeks.map(function(w,i){return {i:i,l:'S'+w.n+' · '+w.short};});
+    var w=win(gran);
+    function opt(sel){ var h='',j; for(j=0;j<arr.length;j++) h+='<option value="'+arr[j].i+'"'+(arr[j].i===sel?' selected':'')+'>'+esc(arr[j].l)+'</option>'; return h; }
+    return '<div class="blbl" style="display:flex;justify-content:space-between;align-items:center">Rango a considerar<button class="bclear" onclick="brangeAll(\''+gran+'\')">Todo</button></div>'
+      +'<div class="brow"><select class="bsel" style="margin:0;flex:1;width:auto" onchange="brange(0,+this.value,\''+gran+'\')">'+opt(w[0])+'</select>'
+      +'<select class="bsel" style="margin:0;flex:1;width:auto" onchange="brange(1,+this.value,\''+gran+'\')">'+opt(w[1])+'</select></div>';
+  }
   function weekSel(){ var h='<div class="blbl">Semana</div><select class="bsel" onchange="bweek(+this.value)">'; DATA.weeks.forEach(function(w,i){ h+='<option value="'+i+'"'+((bcfg.week==null?lastWeekIdx():bcfg.week)===i?' selected':'')+'>S'+w.n+' · '+w.short+'</option>'; }); return h+'</select>'; }
   function lblRow(txt){ return '<div class="blbl" style="display:flex;justify-content:space-between;align-items:center">'+txt+clearBtn()+'</div>'; }
   function renderConf(){
@@ -630,13 +640,13 @@ render();
     if(bcfg.type==='scatter'){
       h+='<div class="blbl">Eje Y (qué medir)</div>'+selectOne(bcfg.yi,'bYi');
       h+='<div class="blbl">Eje X (contra qué)</div>'+selectOne(bcfg.xi,'bXi');
-      h+='<div class="blbl">Granularidad</div>'+granRow();
+      h+='<div class="blbl">Granularidad</div>'+granRow()+rangeRow(bcfg.gran);
     } else if(bcfg.type==='pie'){
       h+=lblRow('Componentes')+checklist(bcfg.ys)+weekSel();
     } else if(bcfg.type==='heat'){
-      h+=lblRow('Indicadores (filas)')+checklist(bcfg.ys);
+      h+=lblRow('Indicadores (filas)')+checklist(bcfg.ys)+rangeRow('week');
     } else {
-      h+='<div class="blbl">Indicadores (eje Y)</div>'+checklist(bcfg.ys)+'<div class="blbl">Eje X</div>'+granRow();
+      h+='<div class="blbl">Indicadores (eje Y)</div>'+checklist(bcfg.ys)+'<div class="blbl">Eje X</div>'+granRow()+rangeRow(bcfg.gran);
     }
     document.getElementById('bconf').innerHTML=h;
   }
@@ -652,6 +662,8 @@ render();
   window.btoggle=function(idx,on,el){ var p=bcfg.ys.indexOf(idx); if(on&&p<0)bcfg.ys.push(idx); if(!on&&p>=0)bcfg.ys.splice(p,1);
     if(el&&el.parentElement)el.parentElement.classList.toggle('sel',on); renderPrev(); };
   window.bgran=function(g){ bcfg.gran=g; refresh(); };
+  window.brange=function(which,val,gran){ var w=win(gran); if(which===0)w[0]=val; else w[1]=val; if(w[0]>w[1]){ if(which===0)w[1]=w[0]; else w[0]=w[1]; } bcfg.rng[gran]=[w[0],w[1]]; renderConf(); renderPrev(); };
+  window.brangeAll=function(gran){ bcfg.rng[gran]=null; renderConf(); renderPrev(); };
   window.bweek=function(w){ bcfg.week=w; renderPrev(); };
   window.bYi=function(v){ bcfg.yi=v<0?null:v; renderPrev(); };
   window.bXi=function(v){ bcfg.xi=v<0?null:v; renderPrev(); };

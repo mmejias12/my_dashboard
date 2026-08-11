@@ -291,6 +291,13 @@ var GNOMBRE={pallet:'Pallet',pool:'Pool',reparacion:'Reparación',
 // su propio nombre al entrar.
 var USER={nombre:'Usuario', nombreCompleto:'Usuario', iniciales:'', rol:'REDTEC OS'};
 function capitalizar(s){ s=String(s||'').toLowerCase(); return s.replace(/(^|[\s\-'])(\p{L})/gu,function(m,a,b){return a+b.toUpperCase();}); }
+// Nombres de pila por correo (opcional) — para las pruebas: fuerza el nombre
+// cuando el token de Entra no trae "givenname". Correos SIEMPRE en minúscula.
+var NOMBRES={
+  'mmejias@redtecsa.com':'Mauricio'
+  // ,'otro.correo@redtecsa.com':'Nombre'
+};
+function primerToken(s){ s=String(s||'').trim(); return s? s.split(/[\s._\-]+/)[0] : ''; }
 function saludoHora(){ var h=new Date().getHours(); if(h<12)return 'Buenos días'; if(h<20)return 'Buenas tardes'; return 'Buenas noches'; }
 async function cargarUsuario(){
   try{
@@ -301,16 +308,22 @@ async function cargarUsuario(){
     var claims=cp.claims||[];
     function claim(){ for(var k=0;k<arguments.length;k++){ var t=arguments[k]; var c=claims.find(function(x){var y=(x.typ||'').toLowerCase(); return y===t||y.split('/').pop()===t;}); if(c&&c.val) return c.val; } return ''; }
     var given=claim('givenname','given_name');
-    var full =claim('name','displayname')||'';
+    var displayName=claim('name','displayname');   // nombre completo, si el token lo trae
     var email=cp.userDetails||'';
-    if(!full) full=given||email;
-    var nombre=given || (full? full.split(/\s+/)[0] : '') || (email? email.split('@')[0].replace(/[._]/g,' ') : 'Usuario');
-    var partes=(full||'').trim().split(/\s+/).filter(Boolean), ini='';
-    if(partes.length>=2) ini=partes[0][0]+partes[1][0];
-    else if(partes.length===1) ini=partes[0].slice(0,2);
-    else if(email) ini=email.slice(0,2);
+    var override=NOMBRES[email.toLowerCase()]||'';
+    var emailLocal=email.split('@')[0]||'';
+    // Nombre de pila para el saludo (nunca el correo con dominio):
+    // override → givenname → 1er token del nombre completo → 1er token del correo
+    var nombre=override || given || primerToken(displayName) || primerToken(emailLocal) || 'Usuario';
+    var completo=displayName || override || nombre;   // ficha del panel (completo si existe)
+    var ini='';
+    var pn=(displayName||'').trim().split(/\s+/).filter(Boolean);
+    if(pn.length>=2) ini=pn[0][0]+pn[1][0];
+    else if(override) ini=override.slice(0,2);
+    else if(emailLocal) ini=emailLocal.slice(0,2);
+    else if(nombre) ini=nombre.slice(0,2);
     var rolesReales=(cp.userRoles||[]).filter(function(x){return x!=='anonymous'&&x!=='authenticated';});
-    USER={ nombre:capitalizar(nombre), nombreCompleto:(full?capitalizar(full):capitalizar(nombre)),
+    USER={ nombre:capitalizar(nombre), nombreCompleto:capitalizar(completo),
            iniciales:ini.toUpperCase(), rol:(rolesReales[0]||'REDTEC OS') };
     return true;
   }catch(e){ return false; }

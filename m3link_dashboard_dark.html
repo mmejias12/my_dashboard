@@ -694,7 +694,7 @@
     <div class="s-sub" id="g-gerencia" style="max-height:0">
       <a href="cartola-financiera.html" class="s-item"><i class="ti ti-file-invoice"></i> Cartola financiera</a>
       <a href="semaforo-gerencial.html" class="s-item"><i class="ti ti-traffic-lights"></i> Semáforo gerencial</a>
-      <div class="s-item s-item-soon"><i class="ti ti-dashboard"></i> Dashboard ejecutivo <span class="soon-tag">próx.</span></div>
+      <a href="gerenciagrilla2026.html" class="s-item"><i class="ti ti-dashboard"></i> Dashboard ejecutivo</a>
     </div>
 
     <div class="s-hdr" onclick="tog('g-finanzas',this)" data-cat="cat" data-tip="Finanzas"><i class="ti ti-cash-banknote s-leading"></i> Finanzas <i class="ti ti-chevron-right s-chevron"></i></div>
@@ -909,6 +909,38 @@ var isDev    = (window.location.hostname === 'localhost' || window.location.host
 var API_DIRECT = 'https://apirdt1.azurewebsites.net/api/RDTOut/opsxrangofechas';
 var API_PROXY  = '/proxy/ops';
 
+/* ═══ REGLA INTERNA: RETIROS POR FECHA DE CONFIRMACIÓN ═══
+   La API opsxrangofechas filtra TODO por fecha requerida (fechaInicio/fechaFin).
+   Para los retiros necesitamos contarlos por fecha de CONFIRMACIÓN. Como la API no
+   lo permite, ampliamos la ventana de consulta hacia atrás RETIRO_BUFFER_DIAS días
+   y luego filtramos localmente: los retiros por fechaConfirmacion dentro del rango
+   (o pendientes por fechaRequerida), y el resto de operaciones por fechaRequerida.
+   Ajusta RETIRO_BUFFER_DIAS si hay retiros con retención más larga que la ventana. */
+var RETIRO_BUFFER_DIAS = 30;
+function _fechaSolo(s){ return s ? String(s).substring(0,10) : ''; }
+function _enRango(s, lo, hi){ var d = _fechaSolo(s); return d !== '' && d >= lo && d <= hi; }
+function _desplazarDias(fechaStr, dias){
+  var p = fechaStr.split('-');
+  var dt = new Date(Date.UTC(+p[0], (+p[1]) - 1, +p[2]));
+  dt.setUTCDate(dt.getUTCDate() + dias);
+  var y = dt.getUTCFullYear();
+  var m = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  var d = String(dt.getUTCDate()).padStart(2, '0');
+  return y + '-' + m + '-' + d;
+}
+/* Decide si un registro pertenece al periodo [d1,d2] que se está mostrando. */
+function _perteneceAlPeriodo(r, d1, d2){
+  var op = (r.operacion || '').trim().toLowerCase();
+  if (op === 'retiro') {
+    // Retiro confirmado: cuenta si la fecha de confirmación cae en el rango.
+    if (r.fechaConfirmacion) return _enRango(r.fechaConfirmacion, d1, d2);
+    // Retiro pendiente (sin confirmar): se sigue mostrando si fue requerido en el rango.
+    return _enRango(r.fechaRequerida, d1, d2);
+  }
+  // Resto de operaciones: por fecha requerida, como siempre.
+  return _enRango(r.fechaRequerida, d1, d2);
+}
+
 
 /* Alias de bodegas */
 function aliasBodyDest(str) {
@@ -1107,7 +1139,10 @@ function loadData() {
 
   var d1  = document.getElementById('d1').value;
   var d2  = document.getElementById('d2').value;
-  var url = (isDev ? API_DIRECT : API_PROXY) + '?fechaInicio=' + d1 + '&fechaFin=' + d2;
+  // Retiros por fecha de confirmación: ampliamos el inicio de la consulta hacia atrás
+  // para traer también retiros requeridos antes del rango pero confirmados dentro de él.
+  var d1Consulta = _desplazarDias(d1, -RETIRO_BUFFER_DIAS);
+  var url = (isDev ? API_DIRECT : API_PROXY) + '?fechaInicio=' + d1Consulta + '&fechaFin=' + d2;
 
   fetch(url, { headers: { 'Accept': 'application/json' } })
     .then(function(res) {
@@ -1115,7 +1150,10 @@ function loadData() {
       return res.json();
     })
     .then(function(data) {
-      raw = Array.isArray(data) ? data : [data];
+      var dataApi = Array.isArray(data) ? data : [data];
+      // Regla interna del periodo: retiros por fecha de confirmación, resto por fecha
+      // requerida. Descarta los registros del buffer que no correspondan al rango real.
+      raw = dataApi.filter(function(r) { return _perteneceAlPeriodo(r, d1, d2); });
       if (raw.length === 0) {
         tbody.innerHTML = '<tr><td colspan="10"><div class="state-msg">Sin registros para el rango seleccionado</div></td></tr>';
         document.getElementById('tcnt').textContent = '0 registros';

@@ -18,6 +18,7 @@
 
 const { consultarOperacion } = require('../shared/consulta-historico.js');
 const { consultarStock, TOOL_SCHEMA: STOCK_TOOL } = require('../shared/consulta-stock.js');
+const { consultarCliente, TOOL_SCHEMA: CLIENTE_TOOL } = require('../shared/consulta-cliente.js');
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
@@ -41,16 +42,22 @@ const TOOLS = [{
     '"semana 20" o "marzo", convierte tú el periodo a fechas concretas. NO la ' +
     'uses para la semana en curso ni el acumulado del año: eso ya viene en el ' +
     'contexto. Si `transferencias_provisional` llega en true, advierte que ' +
-    'las transferencias del rango están sujetas a confirmación.',
+    'las transferencias del rango están sujetas a confirmación. Si el ' +
+    'usuario pregunta A QUÉ BODEGA o A QUÉ CLIENTE (destino u origen) de un ' +
+    'movimiento, pasa `desglose: true` y usa el objeto `desglose` de la ' +
+    'respuesta (top por concepto con clienteDestino/clienteOrigen/' +
+    'bodegaDestino/bodegaOrigen). Para emisiones interesa el DESTINO; para ' +
+    'retiros y devoluciones, el ORIGEN.',
   input_schema: {
     type: 'object',
     properties: {
       desde: { type: 'string', description: 'Inicio del rango, YYYY-MM-DD' },
-      hasta: { type: 'string', description: 'Fin del rango, YYYY-MM-DD' }
+      hasta: { type: 'string', description: 'Fin del rango, YYYY-MM-DD' },
+      desglose: { type: 'boolean', description: 'Si true, incluye el desglose por cliente y bodega (origen y destino) de cada concepto. Úsalo cuando pregunten "a qué bodega/cliente".' }
     },
     required: ['desde', 'hasta']
   }
-}, STOCK_TOOL];
+}, STOCK_TOOL, CLIENTE_TOOL];
 
 async function llamarClaude(body) {
   const r = await fetch(ANTHROPIC_URL, {
@@ -106,6 +113,11 @@ module.exports = async function (context, req) {
             out = await consultarStock(bloque.input);
             context.log(`tool consultar_stock ${bloque.input.desde}..${bloque.input.hasta} ` +
                         `[${bloque.input.universo || 'ambos'}] (${Date.now() - t0}ms)`);
+          } else if (bloque.name === 'consultar_cliente') {
+            const t0 = Date.now();
+            out = await consultarCliente(bloque.input, context);
+            context.log(`tool consultar_cliente "${bloque.input.entidad}" ${bloque.input.desde}..${bloque.input.hasta} ` +
+                        `(${Date.now() - t0}ms, ${out.total_operaciones} ops)`);
           } else {
             out = { error: 'herramienta desconocida: ' + bloque.name };
           }

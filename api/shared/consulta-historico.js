@@ -65,7 +65,7 @@ async function completarFaltantes(container, faltantes, ctx) {
 
 // ── LA CONSULTA ─────────────────────────────────────────────────────────────
 // Devuelve { desde, hasta, movimiento, transferencias_provisional, _origen }.
-async function consultarOperacion({ desde, hasta }, ctx) {
+async function consultarOperacion({ desde, hasta, desglose }, ctx) {
   // saneo básico
   const reISO = /^\d{4}-\d{2}-\d{2}$/;
   if (!reISO.test(desde || '') || !reISO.test(hasta || '')) {
@@ -116,12 +116,17 @@ async function consultarOperacion({ desde, hasta }, ctx) {
     }
   }
 
-  return {
+  const movimiento = mov.combinarDias(partes);
+  const resp = {
     desde, hasta,
-    movimiento: mov.combinarDias(partes),
+    movimiento,
     transferencias_provisional: hayCaliente,
     _origen: origen
   };
+  // Desglose por cliente/bodega solo si lo piden (para no inflar la respuesta).
+  if (desglose) resp.desglose = mov.topDetalle(movimiento.detalle, 8);
+  delete movimiento.detalle;   // los mapas completos no viajan al modelo
+  return resp;
 }
 
 module.exports = { consultarOperacion, agruparContiguas, VENTANA };

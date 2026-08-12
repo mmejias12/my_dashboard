@@ -68,7 +68,7 @@ function fechaDe(fila) {
 function nuevoAcc() {
   const z = () => { const o = { total: 0 }; for (const p of PLANTAS) o[p] = 0; return o; };
   return { emisiones: z(), retiros: z(), recogida: 0, devoluciones: 0,
-           transferencias: 0, reparacion: 0, _sinMapear: {} };
+           transferencias: 0, reparacion: 0, detalle: {}, _sinMapear: {} };
 }
 
 // Suma una fila dentro de un acumulador.
@@ -86,6 +86,7 @@ function sumarFila(acc, fila) {
   } else {
     acc[concepto] += v;
   }
+  sumarDetalle(acc, concepto, fila, v);   // desglose por cliente/bodega (origen y destino)
 }
 
 // Agrega TODAS las filas juntas (usado para un rango en vivo, incl. transferencias).
@@ -111,6 +112,56 @@ function agregarPorDiaEn(filas, dias) {
 }
 function agregarPorDia(filas) { return agregarPorDiaEn(filas, {}); }
 
+// Desglose por contraparte: los 4 lados que capturamos por cada concepto.
+const LADOS_DETALLE = ['clienteDestino', 'clienteOrigen', 'bodegaDestino', 'bodegaOrigen'];
+
+// Acumula un movimiento por cliente y bodega (origen y destino), para responder
+// "¿a qué bodega/cliente?". El lado relevante depende del concepto (emisión→
+// destino, retiro/devolución→origen); guardamos ambos y el asistente elige.
+function sumarDetalle(acc, concepto, fila, v) {
+  if (!v) return;
+  let d = acc.detalle[concepto];
+  if (!d) d = acc.detalle[concepto] = { clienteDestino: {}, clienteOrigen: {}, bodegaDestino: {}, bodegaOrigen: {} };
+  sumaEn(d.clienteDestino, fila.clienteDestinoStr);
+  sumaEn(d.clienteOrigen,  fila.clienteOrigenStr);
+  sumaEn(d.bodegaDestino,  fila.bodegaDestinoStr);
+  sumaEn(d.bodegaOrigen,   fila.bodegaOrigenStr);
+  function sumaEn(mapa, nombre) {
+    nombre = String(nombre || '').trim();
+    if (!nombre) return;
+    mapa[nombre] = (mapa[nombre] || 0) + v;
+  }
+}
+
+// Fusiona el detalle de un día dentro de un acumulador de rango.
+function fusionarDetalle(dst, src) {
+  for (const concepto in src) {
+    let d = dst[concepto];
+    if (!d) d = dst[concepto] = { clienteDestino: {}, clienteOrigen: {}, bodegaDestino: {}, bodegaOrigen: {} };
+    for (const lado of LADOS_DETALLE) {
+      const s = src[concepto][lado]; if (!s) continue;
+      for (const nombre in s) d[lado][nombre] = (d[lado][nombre] || 0) + s[nombre];
+    }
+  }
+}
+
+// Compacta el detalle a top-N por lado (arreglos ordenados desc), para no
+// inflar la respuesta que se manda al modelo.
+function topDetalle(detalle, n) {
+  n = n || 8;
+  const out = {};
+  for (const concepto in (detalle || {})) {
+    out[concepto] = {};
+    for (const lado of LADOS_DETALLE) {
+      const mapa = detalle[concepto][lado] || {};
+      const arr = Object.keys(mapa).map(k => ({ nombre: k, cantidad: mapa[k] }))
+                        .sort((a, b) => b.cantidad - a.cantidad);
+      if (arr.length) out[concepto][lado] = arr.slice(0, n);
+    }
+  }
+  return out;
+}
+
 // Subconjunto que se guarda en el blob diario: todos los conceptos de negocio,
 // INCLUIDAS transferencias. En días antiguos ya están confirmadas (definitivas);
 // la capa de lectura decide si un día reciente hay que refrescarlo en vivo.
@@ -118,14 +169,15 @@ function paraCache(acc) {
   return {
     emisiones: acc.emisiones, retiros: acc.retiros,
     devoluciones: acc.devoluciones, recogida: acc.recogida,
-    transferencias: acc.transferencias, reparacion: acc.reparacion
+    transferencias: acc.transferencias, reparacion: acc.reparacion,
+    detalle: acc.detalle
   };
 }
 
 // Suma varios días (leídos del caché) en el movimiento de un rango.
 function combinarDias(lista) {
   const z = () => { const o = { total: 0 }; for (const p of PLANTAS) o[p] = 0; return o; };
-  const out = { emisiones: z(), retiros: z(), devoluciones: 0, recogida: 0, transferencias: 0, reparacion: 0 };
+  const out = { emisiones: z(), retiros: z(), devoluciones: 0, recogida: 0, transferencias: 0, reparacion: 0, detalle: {} };
   for (const d of lista) {
     if (!d) continue;
     for (const p of ['total', ...PLANTAS]) {
@@ -136,6 +188,7 @@ function combinarDias(lista) {
     out.recogida       += d.recogida || 0;
     out.transferencias += d.transferencias || 0;
     out.reparacion     += d.reparacion || 0;
+    if (d.detalle) fusionarDetalle(out.detalle, d.detalle);
   }
   return out;
 }
@@ -148,6 +201,6 @@ const VENTANA_TRANSFER_DIAS = 40;
 module.exports = {
   norm, conceptoDe, nuevoAcc, plantaDe, plantaDeTexto, fechaDe,
   agregarMovimientos, agregarPorDia, agregarPorDiaEn,
-  paraCache, combinarDias, VENTANA_TRANSFER_DIAS,
+  paraCache, combinarDias, topDetalle, fusionarDetalle, VENTANA_TRANSFER_DIAS,
   ESTABLES, CONCEPTOS, PLANTAS
 };

@@ -19,10 +19,42 @@
 const { consultarOperacion } = require('../shared/consulta-historico.js');
 const { consultarStock, TOOL_SCHEMA: STOCK_TOOL } = require('../shared/consulta-stock.js');
 const { consultarCliente, TOOL_SCHEMA: CLIENTE_TOOL } = require('../shared/consulta-cliente.js');
+const finanzas = require('../shared/consulta-finanzas.js');
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 const MAX_VUELTAS   = 4;     // tope de idas y vueltas de herramienta
+
+// Roles autorizados a ver FINANZAS (configurable con la app setting FINANZAS_ROLES;
+// deben coincidir con los roles asignados en Entra/SWA). Sin uno de estos, la
+// galaxia Finanzas no existe para ese usuario (ni herramienta ni contexto).
+const FIN_ROLES = (process.env.FINANZAS_ROLES || 'Presidencia,Gerencia,Finanzas')
+  .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+
+// Roles del usuario logueado, desde el header que inyecta Static Web Apps.
+function rolesDe(req) {
+  try {
+    const h = req.headers && (req.headers['x-ms-client-principal'] || req.headers['X-MS-CLIENT-PRINCIPAL']);
+    if (!h) return [];
+    const p = JSON.parse(Buffer.from(h, 'base64').toString('utf8'));
+    return (p.userRoles || []).map(r => String(r).toLowerCase());
+  } catch (e) { return []; }
+}
+
+// Resumen de facturación del mes en curso, cacheado por instancia (TTL 30 min)
+// para no golpear la cartola en cada mensaje. Solo se usa para autorizados.
+let _finMes = { mes: null, texto: null, ts: 0 };
+async function bloqueFinanzasMes(context) {
+  try {
+    const hoy = new Date().toISOString().slice(0, 10);
+    const mes = hoy.slice(0, 7);
+    if (_finMes.mes === mes && (Date.now() - _finMes.ts) < 30 * 60 * 1000) return _finMes.texto;
+    const r = await finanzas.resumenMensual(hoy);
+    const txt = finanzas.formatoContextoMes(r);
+    _finMes = { mes, texto: txt, ts: Date.now() };
+    return txt;
+  } catch (e) { context.log.warn('finanzas mes: ' + e.message); return null; }
+}
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -84,6 +116,16 @@ module.exports = async function (context, req) {
     const { model, max_tokens, system, messages } = req.body || {};
     if (!Array.isArray(messages)) throw new Error('faltan messages');
 
+    // Galaxia Finanzas: solo para roles autorizados (dato sensible).
+    const roles = rolesDe(req);
+    const puedeFinanzas = roles.some(r => FIN_ROLES.includes(r));
+    const tools = puedeFinanzas ? [...TOOLS, finanzas.TOOL_SCHEMA] : TOOLS;
+    let sys = system;
+    if (puedeFinanzas) {
+      const bloque = await bloqueFinanzasMes(context);
+      if (bloque) sys = (system ? system + '\n\n' : '') + bloque;
+    }
+
     const convo = [...messages];
     let resp;
 
@@ -91,7 +133,7 @@ module.exports = async function (context, req) {
       resp = await llamarClaude({
         model: model || 'claude-sonnet-4-6',
         max_tokens: max_tokens || 1024,
-        system, messages: convo, tools: TOOLS
+        system: sys, messages: convo, tools
       });
 
       if (resp.stop_reason !== 'tool_use') break;   // respuesta final
@@ -118,6 +160,14 @@ module.exports = async function (context, req) {
             out = await consultarCliente(bloque.input, context);
             context.log(`tool consultar_cliente "${bloque.input.entidad}" ${bloque.input.desde}..${bloque.input.hasta} ` +
                         `(${Date.now() - t0}ms, ${out.total_operaciones} ops)`);
+          } else if (bloque.name === 'consultar_finanzas') {
+            if (!puedeFinanzas) { out = { error: 'sin autorización para datos financieros' }; }
+            else {
+              const t0 = Date.now();
+              out = await finanzas.consultarFinanzas(bloque.input, context);
+              context.log(`tool consultar_finanzas ${bloque.input.desde}..${bloque.input.hasta}` +
+                          `${bloque.input.entidad ? ' ["' + bloque.input.entidad + '"]' : ''} (${Date.now() - t0}ms)`);
+            }
           } else {
             out = { error: 'herramienta desconocida: ' + bloque.name };
           }

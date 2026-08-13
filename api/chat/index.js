@@ -20,6 +20,7 @@ const { consultarOperacion } = require('../shared/consulta-historico.js');
 const { consultarStock, TOOL_SCHEMA: STOCK_TOOL } = require('../shared/consulta-stock.js');
 const { consultarCliente, TOOL_SCHEMA: CLIENTE_TOOL } = require('../shared/consulta-cliente.js');
 const finanzas = require('../shared/consulta-finanzas.js');
+const resumenOps = require('../shared/resumen-operaciones.js');
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
@@ -120,10 +121,14 @@ module.exports = async function (context, req) {
     const roles = rolesDe(req);
     const puedeFinanzas = roles.some(r => FIN_ROLES.includes(r));
     const tools = puedeFinanzas ? [...TOOLS, finanzas.TOOL_SCHEMA] : TOOLS;
-    let sys = system;
+    let sys = system || '';
+    // Histórico precargado (comparaciones de años/meses sin leer cientos de días). Para todos.
+    const opsResumen = await resumenOps.bloqueContexto(context);
+    if (opsResumen) sys += (sys ? '\n\n' : '') + opsResumen;
+    // Facturación del mes en curso, solo para autorizados.
     if (puedeFinanzas) {
-      const bloque = await bloqueFinanzasMes(context);
-      if (bloque) sys = (system ? system + '\n\n' : '') + bloque;
+      const finBloque = await bloqueFinanzasMes(context);
+      if (finBloque) sys += (sys ? '\n\n' : '') + finBloque;
     }
 
     const convo = [...messages];

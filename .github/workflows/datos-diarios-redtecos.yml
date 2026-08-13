@@ -1,0 +1,64 @@
+name: Datos diarios REDTEC OS
+
+# Mantiene frescas las bases del asistente cada madrugada, sin intervención:
+#   1) Backfill pallet  · ventana de 45 días (cubre confirmaciones tardías de
+#      transferencias, cuya ventana de gracia es de 40 días) hasta ayer.
+#   2) Backfill stock/pool · últimos días; idempotente, salta los ya válidos.
+#   3) Rollup histórico · regenera resumen/operaciones.json con los días nuevos,
+#      para que el asistente compare años/meses al instante.
+#
+# Los tres escriben DIRECTO a Azure Blob (storage redtecos); NO tocan el repo.
+#
+# Secrets que deben existir en el repo (Settings → Secrets and variables → Actions):
+#   OS_STORAGE_CONN  · cadena de conexión del storage redtecos
+#   REDTEC_API_KEY   · llave de RDTOut (obligatoria para el stock)
+
+on:
+  schedule:
+    # Horas en UTC. Chile es UTC-4/-3, así que esto es ~04:20 / 06:20 / 08:20.
+    # Tres intentos por redundancia (Actions a veces atrasa o se salta un cron);
+    # con que corra UNO antes de la reunión de la mañana, queda todo fresco.
+    - cron: '20 8,10,12 * * *'
+  workflow_dispatch: {}   # permite ejecutarlo a mano desde la pestaña Actions
+
+concurrency:
+  group: datos-diarios-redtecos
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      OS_STORAGE_CONN: ${{ secrets.OS_STORAGE_CONN }}
+      REDTEC_API_KEY: ${{ secrets.REDTEC_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependencia de Azure Blob
+        run: npm install @azure/storage-blob@^12 --no-save
+
+      - name: Calcular fechas (zona Chile)
+        id: f
+        run: |
+          echo "ayer=$(TZ=America/Santiago date -d 'yesterday' +%F)" >> "$GITHUB_OUTPUT"
+          echo "desde45=$(TZ=America/Santiago date -d '45 days ago' +%F)" >> "$GITHUB_OUTPUT"
+          echo "desde10=$(TZ=America/Santiago date -d '10 days ago' +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: 1) Backfill pallet (ventana 45 días → ayer)
+        run: node backfill/backfill.js ${{ steps.f.outputs.desde45 }} ${{ steps.f.outputs.ayer }}
+
+      - name: 2) Backfill stock / pool (últimos días → ayer)
+        run: node backfill/backfill-stock.js ${{ steps.f.outputs.desde10 }}
+
+      - name: 3) Rollup histórico (resumen/operaciones.json)
+        run: node scripts/rollup-operaciones.js ${{ steps.f.outputs.ayer }}

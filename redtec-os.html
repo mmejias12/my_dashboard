@@ -189,6 +189,14 @@ body{font-family:var(--body);background:var(--void);color:var(--text);-webkit-fo
 .tb-gear{width:32px;height:32px;flex-shrink:0;border:1px solid var(--line-2);border-radius:8px;background:var(--surface);color:var(--mute);display:grid;place-items:center;cursor:pointer;transition:.15s;margin-left:2px}
 .tb-gear:hover{color:var(--text);border-color:rgba(229,52,42,.45)}
 .tb-gear svg{width:16px;height:16px}
+/* Botón instalar app (transparente, mismo lenguaje que el resto) */
+.tb-install{display:none;align-items:center;gap:7px;padding:6px 12px;border:1px solid rgba(229,52,42,.4);border-radius:9px;background:transparent;color:#ff6b70;font-family:var(--body);font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s;white-space:nowrap}
+.tb-install.show{display:inline-flex}
+.tb-install:hover{background:rgba(229,52,42,.1);border-color:rgba(229,52,42,.6)}
+.tb-install svg{width:15px;height:15px}
+.ios-tip{position:absolute;top:56px;right:16px;max-width:250px;background:var(--surface-2);border:1px solid var(--line-2);border-radius:12px;padding:12px 14px;font-size:12.5px;color:var(--dim);line-height:1.5;box-shadow:0 18px 44px -18px rgba(0,0,0,.9);z-index:45;display:none}
+.ios-tip.show{display:block}
+.ios-tip b{color:var(--text)}
 .app.sb-collapsed .sidebar{width:0;min-width:0;border:none;overflow:hidden}
 .app.sb-collapsed .sidebar *{opacity:0}
 /* ===== Popover de vistas (rueda de config) ===== */
@@ -256,10 +264,13 @@ body.vista-celular .composer-inner,body.vista-celular .w-input-wrap{max-width:56
       <div class="tb-title">Asistente REDTEC OS<span class="m">pregunta en lenguaje natural</span></div>
       <button class="tb-gear" id="gearTop" onclick="toggleVistas(event)" title="Vista: celular / tablet / computador" aria-label="Vista"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
       <div class="tb-sp"></div>
+      <button class="tb-install" id="btnInstalar" onclick="instalarApp()" title="Instalar como app"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>Instalar app</button>
       <div class="status-pill"><span class="dot"></span><span id="statusTxt">Conectando…</span></div>
     </div>
 
     <!-- Menú de vistas (se abre desde la rueda de la barra superior; vive aquí para verse aunque el panel esté oculto) -->
+    <div class="ios-tip" id="iosTip">Para instalar en iPhone: toca <b>Compartir</b> y luego <b>Agregar a pantalla de inicio</b>.</div>
+
     <div class="vistas-pop" id="vistasPop">
       <div class="vh">Vista</div>
       <button data-v="celular" onclick="setVista('celular')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/></svg>Celular<span class="vk">●</span></button>
@@ -631,7 +642,30 @@ function restaurarUI(){
 document.addEventListener('click', function(e){     // cerrar el popover al hacer clic afuera
   var pop=document.getElementById('vistasPop'), g=document.getElementById('gearBtn'), gt=document.getElementById('gearTop');
   if(pop && pop.classList.contains('open') && !pop.contains(e.target) && (!g||!g.contains(e.target)) && (!gt||!gt.contains(e.target))) pop.classList.remove('open');
+  var tip=document.getElementById('iosTip'), bi=document.getElementById('btnInstalar');
+  if(tip && tip.classList.contains('show') && !tip.contains(e.target) && bi && !bi.contains(e.target)) tip.classList.remove('show');
 });
+
+// ===== Instalar como app (PWA) =====
+var deferredPrompt=null;
+function appInstalada(){ return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone===true; }
+function esIOS(){ return /iphone|ipad|ipod/i.test(navigator.userAgent); }
+function mostrarInstalar(){ var b=document.getElementById('btnInstalar'); if(b && !appInstalada()) b.classList.add('show'); }
+window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); deferredPrompt=e; mostrarInstalar(); });
+window.addEventListener('appinstalled', function(){ deferredPrompt=null;
+  var b=document.getElementById('btnInstalar'); if(b) b.classList.remove('show');
+  var t=document.getElementById('iosTip'); if(t) t.classList.remove('show'); });
+async function instalarApp(){
+  if(deferredPrompt){                                  // Chrome/Edge/Android: instalación nativa
+    deferredPrompt.prompt();
+    try{ await deferredPrompt.userChoice; }catch(e){}
+    deferredPrompt=null;
+    var b=document.getElementById('btnInstalar'); if(b) b.classList.remove('show');
+    return;
+  }
+  var t=document.getElementById('iosTip'); if(t) t.classList.toggle('show');   // iOS u otros: instrucción
+}
+function initInstalar(){ if(!appInstalada() && esIOS()) mostrarInstalar(); }   // iOS no dispara beforeinstallprompt
 function srcHtml(arr){return '<div class="srcs"><span class="sl">Fuentes consultadas</span>'+arr.map(function(x){return '<span class="src"><span class="d" style="background:'+x[1]+'"></span>'+x[0]+'</span>';}).join('')+'</div>';}
 
 async function ask(q){
@@ -677,6 +711,7 @@ async function init(){
   await cargarUsuario(); aplicarUsuario();   // saludo + ficha según el usuario logueado
   renderRecientes(); restaurarUltima();      // conversaciones guardadas en este navegador
   restaurarUI();                              // vista (celular/tablet/pc) y estado del panel
+  initInstalar();                             // botón "Instalar app" (iOS)
   try{
     var s=await loadSnapshot();
     var per=s.meta.periodo_semana;

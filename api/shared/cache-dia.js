@@ -86,10 +86,14 @@ async function leerRango(container, desde, hasta) {
   const fechas = rangoDias(desde, hasta);
   const leidos = [];
   const faltantes = [];
-  for (const f of fechas) {
-    const dia = await leerDia(container, f);
-    if (dia) leidos.push(dia);
-    else faltantes.push(f);
+  // Lectura EN PARALELO por lotes: un rango largo (un año) ya no se lee día a
+  // día en serie, evitando timeouts en comparaciones anuales.
+  const LOTE = 24;
+  for (let i = 0; i < fechas.length; i += LOTE) {
+    const grupo = fechas.slice(i, i + LOTE);
+    const dias = await Promise.all(grupo.map(f =>
+      leerDia(container, f).then(d => ({ f, d })).catch(() => ({ f, d: null }))));
+    for (const { f, d } of dias) { if (d) leidos.push(d); else faltantes.push(f); }
   }
   return {
     movimiento: mov.combinarDias(leidos),

@@ -92,19 +92,47 @@ const TOOLS = [{
   }
 }, STOCK_TOOL, CLIENTE_TOOL];
 
-async function llamarClaude(body) {
-  const r = await fetch(ANTHROPIC_URL, {
-    method: 'POST',
-    headers: {
-      'x-api-key': ANTHROPIC_KEY,
-      'anthropic-version': '2023-06-01',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(body)
-  });
-  const data = await r.json();
-  if (!r.ok) throw new Error('Anthropic ' + r.status + ': ' + JSON.stringify(data).slice(0, 200));
-  return data;
+// Reintento con espera corta ante errores TRANSITORIOS (sobrecarga/límite/5xx/red).
+// Los errores "de verdad" (400 mal formada, 401 llave) NO se reintentan.
+const REINTENTOS    = 3;                                   // intentos totales
+const REINTENTABLES = new Set([408, 409, 429, 500, 502, 503, 504, 529]);
+const espera  = ms => new Promise(res => setTimeout(res, ms));
+const backoff = intento => ([0, 400, 1000, 2000][intento] || 2000) + Math.floor(Math.random() * 250);
+
+async function llamarClaude(body, context) {
+  let ultimo;
+  for (let intento = 1; intento <= REINTENTOS; intento++) {
+    let r;
+    try {
+      r = await fetch(ANTHROPIC_URL, {
+        method: 'POST',
+        headers: {
+          'x-api-key': ANTHROPIC_KEY,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+    } catch (e) {                                          // error de red: reintentable
+      ultimo = new Error('red: ' + e.message);
+      if (intento < REINTENTOS) { await espera(backoff(intento)); continue; }
+      throw ultimo;
+    }
+
+    if (r.ok) return r.json();
+
+    const texto = await r.text().catch(() => '');
+    if (REINTENTABLES.has(r.status) && intento < REINTENTOS) {
+      const ra   = Number(r.headers.get('retry-after'));
+      const wait = ra > 0 ? Math.min(ra * 1000, 5000) : backoff(intento);
+      if (context && context.log) context.log.warn(`Anthropic ${r.status}: reintento ${intento}/${REINTENTOS - 1} en ${wait}ms`);
+      await espera(wait);
+      ultimo = new Error('Anthropic ' + r.status + ': ' + texto.slice(0, 160));
+      continue;
+    }
+    throw new Error('Anthropic ' + r.status + ': ' + texto.slice(0, 200));   // no reintentable
+  }
+  throw ultimo || new Error('Anthropic: sin respuesta tras reintentos');
 }
 
 module.exports = async function (context, req) {
@@ -139,7 +167,7 @@ module.exports = async function (context, req) {
         model: model || 'claude-sonnet-4-6',
         max_tokens: max_tokens || 1024,
         system: sys, messages: convo, tools
-      });
+      }, context);
 
       if (resp.stop_reason !== 'tool_use') break;   // respuesta final
 

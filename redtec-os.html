@@ -49,6 +49,14 @@ body{font-family:var(--body);background:var(--void);color:var(--text);-webkit-fo
 .sb-item svg{width:15px;height:15px;flex-shrink:0;opacity:.6}
 .sb-item span{overflow:hidden;text-overflow:ellipsis}
 .sb-empty{padding:8px 12px;font-size:12px;color:var(--mute)}
+.sb-item-menu{margin-left:auto;flex-shrink:0;width:22px;height:22px;border:none;background:none;color:var(--mute);border-radius:6px;cursor:pointer;font-size:17px;line-height:1;opacity:.5;display:grid;place-items:center;padding:0;transition:.12s}
+.sb-item:hover .sb-item-menu{opacity:1}
+.sb-item-menu:hover{background:var(--surface-3);color:var(--text)}
+.conv-menu{position:fixed;display:none;flex-direction:column;gap:2px;background:var(--surface-2);border:1px solid var(--line-2);border-radius:10px;padding:5px;z-index:60;min-width:160px;box-shadow:0 18px 44px -18px rgba(0,0,0,.9)}
+.conv-menu.open{display:flex}
+.conv-menu button{display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;border:none;background:none;color:var(--dim);border-radius:7px;cursor:pointer;font-family:var(--body);font-size:13px;text-align:left}
+.conv-menu button:hover{background:var(--surface-3);color:var(--text)}
+.conv-menu button.danger:hover{color:var(--red)}
 .sb-foot{padding:12px;border-top:1px solid var(--line);display:flex;align-items:center;gap:10px}
 .avatar{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--red),var(--red-deep));display:grid;place-items:center;font-family:var(--disp);font-weight:600;font-size:12px;color:#fff;flex-shrink:0}
 .sb-foot .who{font-size:13px;font-weight:500}
@@ -244,7 +252,7 @@ body.vista-celular .composer-inner,body.vista-celular .w-input-wrap{max-width:56
       <div class="sb-group">Recientes</div>
       <div id="recientes"></div>
       <div class="sb-group">Consultas frecuentes</div>
-      <div class="sb-item" onclick="loadThread('¿Cuántos pallets emitimos y retiramos esta semana?',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>Pallets despachados hoy</span></div>
+      <div class="sb-item" onclick="loadThread('¿Cuántos pallets emitimos y retiramos ayer?',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>Pallets despachados ayer</span></div>
       <div class="sb-item" onclick="loadThread('¿Qué cliente creció más este mes?',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>Crecimiento de clientes</span></div>
       <div class="sb-item" onclick="loadThread('¿Cómo está la flota?',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>Estado de la flota ahora</span></div>
       <div class="sb-item" onclick="loadThread('¿Hay atrasos de asistencia?',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>Atrasos de asistencia</span></div>
@@ -271,6 +279,11 @@ body.vista-celular .composer-inner,body.vista-celular .w-input-wrap{max-width:56
     <!-- Menú de vistas (se abre desde la rueda de la barra superior; vive aquí para verse aunque el panel esté oculto) -->
     <div class="ios-tip" id="iosTip">Para instalar en iPhone: toca <b>Compartir</b> y luego <b>Agregar a pantalla de inicio</b>.</div>
 
+    <div class="conv-menu" id="convMenu">
+      <button onclick="menuRenombrar()"><svg viewBox="0 0 24 24" width="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Renombrar</button>
+      <button class="danger" onclick="menuEliminar()"><svg viewBox="0 0 24 24" width="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4h8v2m-1 0v14H9V6M10 10v6M14 10v6"/></svg>Eliminar</button>
+    </div>
+
     <div class="vistas-pop" id="vistasPop">
       <div class="vh">Vista</div>
       <button data-v="celular" onclick="setVista('celular')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/></svg>Celular<span class="vk">●</span></button>
@@ -286,7 +299,7 @@ body.vista-celular .composer-inner,body.vista-celular .w-input-wrap{max-width:56
 
       <div class="w-input-wrap">
         <div class="chatbox">
-          <textarea id="wIn" rows="1" placeholder="Escribe tu pregunta…  (ej: ¿cuántos pallets despachamos hoy?)" oninput="autogrow(this)" onkeydown="keyd(event,this)"></textarea>
+          <textarea id="wIn" rows="1" placeholder="Escribe tu pregunta…  (ej: ¿cuántos pallets despachamos ayer?)" oninput="autogrow(this)" onkeydown="keyd(event,this)"></textarea>
           <button class="send" onclick="ask(document.getElementById('wIn').value)">
             <svg viewBox="0 0 24 24" width="19" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M7 11l5-5 5 5M12 6v13"/></svg>
           </button>
@@ -304,7 +317,7 @@ body.vista-celular .composer-inner,body.vista-celular .w-input-wrap{max-width:56
       <div class="w-suggest">
         <div class="sh">Sugerencias</div>
         <div class="sugg-grid">
-          <button class="sugg" onclick="ask('¿Cuántos pallets despachamos hoy?')"><div class="q">¿Cuántos pallets despachamos hoy?</div><div class="h">Emisiones y retiros por planta</div></button>
+          <button class="sugg" onclick="ask('¿Cuántos pallets despachamos ayer?')"><div class="q">¿Cuántos pallets despachamos ayer?</div><div class="h">Emisiones y retiros por planta</div></button>
           <button class="sugg" onclick="ask('¿Qué cliente creció más este mes?')"><div class="q">¿Qué cliente creció más este mes?</div><div class="h">Ranking de despachos vs. mes anterior</div></button>
           <button class="sugg" onclick="ask('¿Hay atrasos de asistencia hoy?')"><div class="q">¿Hay atrasos de asistencia hoy?</div><div class="h">Turno actual · Workera</div></button>
           <button class="sugg" onclick="ask('Estado de la flota ahora')"><div class="q">Estado de la flota ahora</div><div class="h">Camiones en ruta y sin señal</div></button>
@@ -359,10 +372,7 @@ function capitalizar(s){ s=String(s||'').toLowerCase(); return s.replace(/(^|[\s
 // Nombres de pila por correo (opcional) — para las pruebas: fuerza el nombre
 // cuando el token de Entra no trae "givenname". Correos SIEMPRE en minúscula.
 var NOMBRES={
-  'mmejias@redtecsa.com':'Mauricio',
-  'c.jimenez@redtecsa.com':'Claudio',
-  'cham@redtecsa.com':'Claudio',
-  'r.ham@redtecsa.com':'Rodolfo',
+  'mmejias@redtecsa.com':'Mauricio'
   // ,'otro.correo@redtecsa.com':'Nombre'
 };
 function primerToken(s){ s=String(s||'').trim(); return s? s.split(/[\s._\-]+/)[0] : ''; }
@@ -422,11 +432,41 @@ function persistirActiva(){
   var list=cargarConvs();
   var i=list.findIndex(function(c){return c.id===convActivaId;});
   if(!hist.length){ if(i>=0){ list.splice(i,1); guardarConvs(list); renderRecientes(); } return; }
-  var conv={ id:convActivaId, titulo:tituloDe(hist), ts:Date.now(), mensajes:hist.slice(-40) };
+  var prev = i>=0 ? list[i] : null;                                  // preserva el nombre manual si lo renombraron
+  var conv={ id:convActivaId, titulo:(prev&&prev.manual)?prev.titulo:tituloDe(hist), manual:prev?!!prev.manual:false, ts:Date.now(), mensajes:hist.slice(-40) };
   if(i>=0) list[i]=conv; else list.unshift(conv);
   list.sort(function(a,b){return (b.ts||0)-(a.ts||0);});
   guardarConvs(list); renderRecientes();
 }
+// ===== Menú de cada conversación reciente (renombrar / eliminar) =====
+var convMenuId=null;
+function abrirConvMenu(e,id){
+  e.stopPropagation();
+  convMenuId=id;
+  var m=document.getElementById('convMenu'); if(!m) return;
+  var r=e.currentTarget.getBoundingClientRect();
+  m.style.top=(r.bottom+4)+'px';
+  m.style.left=Math.max(8,Math.min(r.right-160,(window.innerWidth||360)-168))+'px';
+  m.classList.add('open');
+}
+function cerrarConvMenu(){ var m=document.getElementById('convMenu'); if(m) m.classList.remove('open'); }
+function menuRenombrar(){ var id=convMenuId; cerrarConvMenu(); renombrarConv(id); }
+function menuEliminar(){ var id=convMenuId; cerrarConvMenu(); eliminarConv(id); }
+function renombrarConv(id){
+  var list=cargarConvs(), c=list.find(function(x){return x.id===id;}); if(!c) return;
+  var nombre=window.prompt('Nombre de la conversación:', c.titulo||'');
+  if(nombre===null) return;                                  // canceló
+  nombre=nombre.trim();
+  c.titulo = nombre || tituloDe(c.mensajes);                 // vacío → vuelve al automático
+  c.manual = !!nombre;
+  guardarConvs(list); renderRecientes();
+}
+function eliminarConv(id){
+  var list=cargarConvs().filter(function(x){return x.id!==id;});
+  guardarConvs(list);
+  if(id===convActivaId){ newChat(); } else { renderRecientes(); }   // si borró la activa, arranca en blanco
+}
+
 function renderRecientes(){
   var box=document.getElementById('recientes'); if(!box) return;
   var list=cargarConvs();
@@ -434,7 +474,8 @@ function renderRecientes(){
   box.innerHTML=list.map(function(c){
     return '<div class="sb-item'+(c.id===convActivaId?' active':'')+'" onclick="loadConv(\''+c.id+'\')" title="'+esc(c.titulo).replace(/"/g,'&quot;')+'">'
       +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'
-      +'<span>'+esc(c.titulo)+'</span></div>';
+      +'<span>'+esc(c.titulo)+'</span>'
+      +'<button class="sb-item-menu" title="Opciones" onclick="abrirConvMenu(event,\''+c.id+'\')">⋮</button></div>';
   }).join('');
 }
 function loadConv(id){
@@ -647,6 +688,8 @@ document.addEventListener('click', function(e){     // cerrar el popover al hace
   if(pop && pop.classList.contains('open') && !pop.contains(e.target) && (!g||!g.contains(e.target)) && (!gt||!gt.contains(e.target))) pop.classList.remove('open');
   var tip=document.getElementById('iosTip'), bi=document.getElementById('btnInstalar');
   if(tip && tip.classList.contains('show') && !tip.contains(e.target) && bi && !bi.contains(e.target)) tip.classList.remove('show');
+  var cm=document.getElementById('convMenu');
+  if(cm && cm.classList.contains('open') && !cm.contains(e.target)) cerrarConvMenu();
 });
 
 // ===== Instalar como app (PWA) =====

@@ -62,3 +62,19 @@ jobs:
 
       - name: 3) Rollup histórico (resumen/operaciones.json)
         run: node scripts/rollup-operaciones.js ${{ steps.f.outputs.ayer }}
+
+      - name: 4) Refrescar snapshot (semana en curso / flota / asistencia / stock)
+        env:
+          INGESTA_URL: ${{ secrets.INGESTA_URL }}
+          OS_INGESTA_KEY: ${{ secrets.OS_INGESTA_KEY }}
+        run: |
+          if [ -z "$INGESTA_URL" ] || [ -z "$OS_INGESTA_KEY" ]; then
+            echo "INGESTA_URL / OS_INGESTA_KEY no configurados aún; se omite el refresco del snapshot."
+            exit 0
+          fi
+          echo "Refrescando snapshot vía $INGESTA_URL ..."
+          curl -fsS -X POST "$INGESTA_URL" \
+            -H "X-Ingesta-Key: $OS_INGESTA_KEY" \
+            -H "Content-Type: application/json"
+          echo ""
+          echo "✓ Snapshot refrescado."

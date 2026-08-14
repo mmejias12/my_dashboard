@@ -124,9 +124,16 @@ async function buildCtx() {
            'con claridad y no entregues cifras.';
   }
 
+  // Fecha REAL (reloj del navegador, hora de Chile). El asistente resuelve
+  // "hoy/ayer/esta semana" con ESTO, no con la fecha en que se escribió el snapshot.
+  const hoyCL = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
+  const _ay = new Date(hoyCL + 'T12:00:00Z'); _ay.setUTCDate(_ay.getUTCDate() - 1);
+  const ayerCL = _ay.toISOString().slice(0, 10);
+
   return `Eres el asistente de REDTEC OS, el sistema de información de REDTEC (logística de pallets, Chile).
 
 REGLAS
+- FECHA ACTUAL: hoy es ${hoyCL} (hora de Chile); "ayer" = ${ayerCL}. Interpreta "hoy", "ayer", "esta semana", "este mes" y "este año" SIEMPRE respecto de ESTA fecha real, NO de cuándo se escribió el snapshot. El último día con datos operacionales cerrados es ayer (${ayerCL}); no existe dato del día en curso en tiempo real.
 - Responde con los datos entregados abajo. Para PERIODOS HISTÓRICOS que no estén aquí (un día puntual, una semana pasada, un mes, un año — hay datos desde 2023-03-20), usa la herramienta consultar_operacion con el rango en fechas YYYY-MM-DD. Nunca inventes cifras: si ni el contexto ni la herramienta lo cubren, dilo con franqueza.
 - Si el resultado de la herramienta trae transferencias_provisional en true, advierte que las transferencias de ese rango están sujetas a confirmación y aún pueden variar (subir por confirmaciones o bajar por reversas).
 - OJO CON LAS FECHAS: el snapshot se escribió el ${v.escrito}, pero las cifras operacionales corresponden a la ${v.periodo}. NO son datos de hoy.${v.desfasado ? ` El dato tiene ${v.diasAtras} días de antigüedad: adviértelo cuando entregues cifras.` : ''}

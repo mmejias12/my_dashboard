@@ -20,6 +20,7 @@ const { consultarOperacion } = require('../shared/consulta-historico.js');
 const { consultarStock, TOOL_SCHEMA: STOCK_TOOL } = require('../shared/consulta-stock.js');
 const { consultarCliente, TOOL_SCHEMA: CLIENTE_TOOL } = require('../shared/consulta-cliente.js');
 const finanzas = require('../shared/consulta-finanzas.js');
+const transporte = require('../shared/consulta-transporte.js');
 const resumenOps = require('../shared/resumen-operaciones.js');
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
@@ -55,6 +56,21 @@ async function bloqueFinanzasMes(context) {
     _finMes = { mes, texto: txt, ts: Date.now() };
     return txt;
   } catch (e) { context.log.warn('finanzas mes: ' + e.message); return null; }
+}
+
+// Costo de transporte del mes en curso, cacheado por instancia (TTL 30 min).
+// Mismo gating que Finanzas (dato sensible: pagos a transportistas).
+let _transpMes = { mes: null, texto: null, ts: 0 };
+async function bloqueTransporteMes(context) {
+  try {
+    const hoy = new Date().toISOString().slice(0, 10);
+    const mes = hoy.slice(0, 7);
+    if (_transpMes.mes === mes && (Date.now() - _transpMes.ts) < 30 * 60 * 1000) return _transpMes.texto;
+    const r = await transporte.resumenPeriodo(hoy);
+    const txt = transporte.formatoContextoTransporte(r);
+    _transpMes = { mes, texto: txt, ts: Date.now() };
+    return txt;
+  } catch (e) { context.log.warn('transporte mes: ' + e.message); return null; }
 }
 
 const CORS = {
@@ -158,7 +174,7 @@ module.exports = async function (context, req) {
     // Galaxia Finanzas: solo para roles autorizados (dato sensible).
     const roles = rolesDe(req);
     const puedeFinanzas = roles.some(r => FIN_ROLES.includes(r));
-    const tools = puedeFinanzas ? [...TOOLS, finanzas.TOOL_SCHEMA] : TOOLS;
+    const tools = puedeFinanzas ? [...TOOLS, finanzas.TOOL_SCHEMA, transporte.TOOL_SCHEMA] : TOOLS;
     const toolsCache = conCacheHerramientas(tools);   // caché de prompts (tools)
     let sys = system || '';
     // Histórico precargado (comparaciones de años/meses sin leer cientos de días). Para todos.
@@ -168,6 +184,8 @@ module.exports = async function (context, req) {
     if (puedeFinanzas) {
       const finBloque = await bloqueFinanzasMes(context);
       if (finBloque) sys += (sys ? '\n\n' : '') + finBloque;
+      const transpBloque = await bloqueTransporteMes(context);
+      if (transpBloque) sys += (sys ? '\n\n' : '') + transpBloque;
     }
 
     // Caché de prompts: el system (instrucciones + snapshot + histórico + finanzas)
@@ -222,6 +240,14 @@ module.exports = async function (context, req) {
               const t0 = Date.now();
               out = await finanzas.consultarFinanzas(bloque.input, context);
               context.log(`tool consultar_finanzas ${bloque.input.desde}..${bloque.input.hasta}` +
+                          `${bloque.input.entidad ? ' ["' + bloque.input.entidad + '"]' : ''} (${Date.now() - t0}ms)`);
+            }
+          } else if (bloque.name === 'consultar_transporte') {
+            if (!puedeFinanzas) { out = { error: 'sin autorización para datos de transporte' }; }
+            else {
+              const t0 = Date.now();
+              out = await transporte.consultarTransporte(bloque.input, context);
+              context.log(`tool consultar_transporte ${bloque.input.desde}..${bloque.input.hasta}` +
                           `${bloque.input.entidad ? ' ["' + bloque.input.entidad + '"]' : ''} (${Date.now() - t0}ms)`);
             }
           } else {

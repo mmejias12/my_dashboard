@@ -48,6 +48,14 @@ async function registrarUso(ev){
   } catch (e) { /* best-effort, no romper el chat */ }
 }
 
+function esNoExiste(e){
+  const cod = String((e && (e.code || e.errorCode)) || '');
+  const msg = String((e && e.message) || '');
+  return !!e && (e.statusCode === 404 ||
+    /BlobNotFound|ContainerNotFound/i.test(cod) ||
+    /BlobNotFound|ContainerNotFound|does not exist|not found/i.test(msg));
+}
+
 // ── Leer un mes completo (arreglo de eventos). ───────────────────────────────
 async function leerMes(mes){
   const c = contenedor();
@@ -56,7 +64,7 @@ async function leerMes(mes){
     const txt = await streamToString(dl.readableStreamBody);
     return txt.split('\n').filter(Boolean).map(l => { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean);
   } catch (e) {
-    if (/BlobNotFound|ContainerNotFound/.test(e.message)) return [];
+    if (esNoExiste(e)) return [];    // aún no hay datos → vacío, no error
     throw e;
   }
 }

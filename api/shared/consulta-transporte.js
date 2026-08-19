@@ -71,6 +71,15 @@ function esRedtec(b){
   return n.includes('REDTEC SANTIAGO') || n.includes('SANTIAGO INSPECCION');
 }
 
+// Según la operación, cuál es el CLIENTE al que se atribuye el viaje:
+// en emisión, el que recibe (destino); en retiro/devolución, el de origen.
+function clienteDe(v){
+  const op = (v.operacion||'').trim();
+  if(op === 'Emision' || op === 'Emision 24 horas') return v.clienteDestinoStr || v.clienteOrigenStr || '';
+  if(op === 'Retiro' || op === 'Devolucion')        return v.clienteOrigenStr || v.clienteDestinoStr || '';
+  return v.clienteDestinoStr || v.clienteOrigenStr || '';
+}
+
 // Según la operación, cuál bodega se tarifa.
 function getBodegaTarifable(v){
   const op = (v.operacion||'').trim();
@@ -132,6 +141,8 @@ function procesarViaje(raw){
     razonSocial: camion.razonSocial || '',
     capacidad,
     operacion: raw.operacion || '',
+    nroPedido: raw.nroPedido || '',
+    dteNro: raw.dteNro || raw.nroDocumento || '',
     clienteOrigenStr: raw.clienteOrigenStr || '',
     clienteDestinoStr: raw.clienteDestinoStr || '',
     bodegaOrigenStr: raw.bodegaOrigenStr || '',
@@ -181,7 +192,7 @@ async function viajesDelRango(desde, hasta){
 }
 
 // ── Herramienta: consultar_transporte ───────────────────────────────────────
-async function consultarTransporte({ desde, hasta, entidad }, ctx){
+async function consultarTransporte({ desde, hasta, entidad, cliente }, ctx){
   if(!reISO.test(desde||'') || !reISO.test(hasta||'')) throw new Error('fechas inválidas: YYYY-MM-DD');
   const hoy = hoyIso();
   if(hasta > hoy) hasta = hoy;
@@ -197,35 +208,65 @@ async function consultarTransporte({ desde, hasta, entidad }, ctx){
       normalize(v.patente).includes(term) ||
       normalize(v.chofer).includes(term));
   }
+  // Filtro opcional por CLIENTE (destino en emisión, origen en retiro).
+  const termCli = cliente ? normalize(cliente) : null;
+  if(termCli){
+    viajes = viajes.filter(v => normalize(clienteDe(v)).includes(termCli));
+  }
 
   const total = { viajes:0, pallets:0, neto:0 };
-  const porTransportista = {}, porPatente = {}, porZona = {}, porClase = {};
+  const porTransportista = {}, porPatente = {}, porZona = {}, porClase = {}, porCliente = {};
   const sinTarifa = [];
   for(const v of viajes){
     total.viajes += 1; total.pallets += v.cantidad; total.neto += num(v.total);
     const rs = v.razonSocial || '(sin transportista)';
+    const cli = clienteDe(v) || '(sin cliente)';
     acopiar(porTransportista, rs, { transportista: rs }, v);
     acopiar(porPatente, v.patente, { patente: v.patente, chofer: v.chofer, razonSocial: v.razonSocial, capacidad: v.capacidad }, v);
     acopiar(porZona, (v.zona || '(sin tarifa)'), { zona: v.zona || '(sin tarifa)' }, v);
     acopiar(porClase, (v.claseOp || '-'), { clase: v.claseOp || '-' }, v);
+    acopiar(porCliente, cli, { cliente: cli }, v);
     if(v.sinTarifa) sinTarifa.push({ patente: v.patente, bodega: v.bodegaTarif, operacion: v.operacion, pallets: v.cantidad });
   }
 
   const ordSuma = o => Object.values(o).sort((a,b) => b.neto - a.neto).map(x => ({...x, neto: Math.round(x.neto)}));
   const iva = Math.round(total.neto * IVA);
 
-  if(ctx && ctx.log) ctx.log(`transporte ${desde}..${hasta}${entidad?' ["'+entidad+'"]':''}: ${viajes.length} viajes, neto ${Math.round(total.neto)}`);
+  if(ctx && ctx.log) ctx.log(`transporte ${desde}..${hasta}${entidad?' ["'+entidad+'"]':''}${cliente?' cli["'+cliente+'"]':''}: ${viajes.length} viajes, neto ${Math.round(total.neto)}`);
 
   const out = {
-    desde, hasta, entidad: entidad || null,
+    desde, hasta, entidad: entidad || null, cliente: cliente || null,
     total: { viajes: total.viajes, pallets: total.pallets, neto: Math.round(total.neto), iva, total_con_iva: Math.round(total.neto) + iva },
     por_transportista: ordSuma(porTransportista).slice(0, 20),
+    por_cliente: termCli ? ordSuma(porCliente) : ordSuma(porCliente).slice(0, 20),
     por_zona: ordSuma(porZona).slice(0, 20),
     por_clase: ordSuma(porClase),
     sin_tarifa: { viajes: sinTarifa.length, muestra: sinTarifa.slice(0, 10) }
   };
   // Detalle por camión: completo si se filtró por entidad, si no el top 20.
   out.por_patente = term ? ordSuma(porPatente) : ordSuma(porPatente).slice(0, 20);
+  // Detalle envío por envío (con costo) cuando se filtra por cliente o transportista.
+  if(termCli || term){
+    out.detalle = viajes
+      .sort((a,b) => num(b.total) - num(a.total))
+      .slice(0, 80)
+      .map(v => ({
+        fecha: (v.fechaConfirmacion||'').slice(0,10),
+        operacion: v.operacion,
+        nroPedido: v.nroPedido,
+        dte: v.dteNro,
+        cliente: clienteDe(v),
+        bodega_destino: v.bodegaDestinoStr,
+        bodega_origen: v.bodegaOrigenStr,
+        zona: v.zona,
+        patente: v.patente,
+        transportista: v.razonSocial,
+        pallets: v.cantidad,
+        valor_unit: v.valorUnit,
+        costo: v.total == null ? null : Math.round(v.total),
+        sin_tarifa: v.sinTarifa || undefined
+      }));
+  }
   return out;
 }
 
@@ -261,19 +302,24 @@ const TOOL_SCHEMA = {
     'Consulta los COSTOS DE TRANSPORTE de REDTEC (lo que se PAGA a los ' +
     'transportistas por los viajes) EN VIVO para un rango: monto neto (CLP) e ' +
     'IVA, número de viajes y pallets, con desglose por transportista (razón ' +
-    'social), por patente/camión, por zona tarifaria y por clase de operación ' +
-    '(Rojo, Blanco comercialización, etc.). Úsala para "cuánto pagamos en ' +
-    'transporte", "cuánto le pagamos a <transportista>", "qué camión hizo más ' +
-    'viajes", "costo de flete por zona", "viajes sin tarifa". Si nombran un ' +
-    'transportista, patente o chofer, pásalo en `entidad`. NO la uses para el ' +
-    'mes en curso global: eso ya viene en el contexto. Al usar estos datos, ' +
-    'incluye \'transporte\' en la línea [FUENTES].',
+    'social), por CLIENTE (a quién se despachó), por patente/camión, por zona ' +
+    'tarifaria y por clase de operación (Rojo, Blanco comercialización, etc.). ' +
+    'Úsala para "cuánto pagamos en transporte", "cuánto le pagamos a ' +
+    '<transportista>", "cuánto costó el flete de despacharle a <cliente>", ' +
+    '"qué camión hizo más viajes", "costo de flete por zona", "viajes sin ' +
+    'tarifa". Si nombran un transportista/patente/chofer, pásalo en `entidad`; ' +
+    'si nombran un CLIENTE, pásalo en `cliente`. Al filtrar por cliente o ' +
+    'transportista se incluye además `detalle`: cada envío (fecha, pedido, DTE, ' +
+    'bodega, pallets) con su costo, para comparar una emisión con lo que costó ' +
+    'llevarla. NO la uses para el mes en curso global: eso ya viene en el ' +
+    'contexto. Al usar estos datos, incluye \'transporte\' en la línea [FUENTES].',
   input_schema: {
     type: 'object',
     properties: {
       desde:   { type: 'string', description: 'Inicio del rango, YYYY-MM-DD' },
       hasta:   { type: 'string', description: 'Fin del rango, YYYY-MM-DD' },
-      entidad: { type: 'string', description: 'Transportista (razón social), patente o chofer; opcional' }
+      entidad: { type: 'string', description: 'Transportista (razón social), patente o chofer; opcional' },
+      cliente: { type: 'string', description: 'Nombre (o parte) del cliente al que se despachó; opcional. Úsalo para el costo de flete de un cliente.' }
     },
     required: ['desde', 'hasta']
   }

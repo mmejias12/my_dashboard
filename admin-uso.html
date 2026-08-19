@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>REDTEC OS · Administración de uso</title>
+<link rel="icon" type="image/png" href="/icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --void:#07080e;--s1:#0c0d16;--s2:#11121c;--s3:#171824;--s4:#1e2030;
+  --line:rgba(255,255,255,.06);--line2:rgba(255,255,255,.11);
+  --t1:#eef0f8;--t2:#8b93ad;--t3:#4b5170;
+  --red:#e0483a;--redd:rgba(224,72,58,.14);
+  --green:#1ec96a;--blue:#4b8df8;--amber:#f4a836;--purple:#9b7dfa;--cyan:#2dd4d4;
+}
+body{font-family:'DM Sans',sans-serif;font-size:13px;background:var(--void);color:var(--t1);-webkit-font-smoothing:antialiased;line-height:1.5;min-height:100vh}
+a{color:inherit;text-decoration:none}
+.hdr{height:52px;background:var(--s1);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;padding:0 20px;position:sticky;top:0;z-index:10}
+.hdr .logo{width:30px;height:30px;border-radius:7px;object-fit:contain}
+.hdr .brand{font-weight:700;letter-spacing:.3px}
+.hdr .brand small{display:block;font-size:10px;font-weight:500;color:var(--t2);letter-spacing:.5px;text-transform:uppercase}
+.hdr .right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.hdr .who{font-size:11.5px;color:var(--t2)}
+.hdr .back{font-size:11.5px;color:var(--t2);border:1px solid var(--line2);padding:5px 11px;border-radius:7px;transition:.15s}
+.hdr .back:hover{background:var(--s3);color:var(--t1)}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 20px 60px}
+.bar{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.fld{display:flex;flex-direction:column;gap:4px}
+.fld label{font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+input[type=date]{background:var(--s3);border:1px solid var(--line2);border-radius:7px;color:var(--t1);font-size:12.5px;padding:7px 10px;font-family:'DM Sans',sans-serif;outline:none}
+input[type=date]:focus{border-color:var(--blue)}
+.presets{display:flex;gap:6px}
+.chip{background:var(--s3);border:1px solid var(--line2);border-radius:20px;color:var(--t2);font-size:11.5px;padding:6px 12px;cursor:pointer;font-family:inherit;transition:.15s}
+.chip:hover{color:var(--t1);border-color:var(--line2)}
+.chip.on{background:var(--redd);border-color:var(--red);color:var(--red);font-weight:600}
+.btn{background:var(--red);color:#fff;border:none;border-radius:7px;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;transition:.15s}
+.btn:hover{opacity:.9}.btn:disabled{opacity:.5;cursor:not-allowed}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:11px;margin-bottom:16px}
+.kpi{background:var(--s2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.kpi.a::before{background:var(--red)}.kpi.b::before{background:var(--blue)}.kpi.c::before{background:var(--purple)}.kpi.d::before{background:var(--green)}
+.kpi .lab{font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.kpi .val{font-size:24px;font-weight:700;font-family:'DM Mono',monospace;margin-top:5px;line-height:1.1}
+.kpi .sub{font-size:10.5px;color:var(--t3);margin-top:3px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:820px){.grid{grid-template-columns:1fr}}
+.card{background:var(--s2);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:14px}
+.card h3{font-size:12px;font-weight:600;padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+.card h3 .dot{width:7px;height:7px;border-radius:50%}
+.card .body{padding:6px 4px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;font-size:10px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;padding:8px 14px;border-bottom:1px solid var(--line)}
+th.r,td.r{text-align:right}
+td{padding:8px 14px;color:var(--t2);border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+td.b{color:var(--t1);font-weight:500}
+td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
+.q{color:var(--t1);max-width:520px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mbar{display:inline-block;height:5px;border-radius:3px;background:var(--blue);vertical-align:middle;min-width:2px}
+.trend{display:flex;align-items:flex-end;gap:3px;height:120px;padding:14px 16px}
+.trend .col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px;min-width:0}
+.trend .col i{width:70%;max-width:22px;background:var(--red);border-radius:3px 3px 0 0;display:block;transition:.2s;min-height:2px}
+.trend .col span{font-size:8.5px;color:var(--t3);white-space:nowrap;transform:rotate(-45deg);transform-origin:center;margin-top:5px}
+.msg{text-align:center;padding:60px 20px;color:var(--t2)}
+.msg .big{font-size:15px;color:var(--t1);font-weight:600;margin-bottom:6px}
+.spin{width:22px;height:22px;border:2px solid var(--line2);border-top-color:var(--red);border-radius:50%;animation:sp .7s linear infinite;display:inline-block}
+@keyframes sp{to{transform:rotate(360deg)}}
+.hidden{display:none}
+.foot{font-size:10.5px;color:var(--t3);padding:10px 16px;border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <img class="logo" src="/icons/icon-192.png" alt="R" onerror="this.style.display='none'">
+  <div class="brand">REDTEC OS<small>Administración de uso</small></div>
+  <div class="right">
+    <span class="who" id="who"></span>
+    <a class="back" href="/redtec-os.html">← Asistente</a>
+  </div>
+</div>
+
+<div class="wrap">
+  <div id="gate" class="msg hidden">
+    <div class="big">Acceso solo para administradores</div>
+    <div>Esta sección requiere el rol <b>admin</b>. Si crees que es un error, contacta al administrador del portal.</div>
+  </div>
+
+  <div id="app" class="hidden">
+    <div class="bar">
+      <div class="fld"><label>Desde</label><input type="date" id="desde"></div>
+      <div class="fld"><label>Hasta</label><input type="date" id="hasta"></div>
+      <div class="presets">
+        <button class="chip" data-p="hoy">Hoy</button>
+        <button class="chip on" data-p="mes">Mes en curso</button>
+        <button class="chip" data-p="30">Últimos 30 días</button>
+      </div>
+      <button class="btn" id="go">Actualizar</button>
+    </div>
+
+    <div id="estado" class="msg hidden"></div>
+
+    <div id="datos" class="hidden">
+      <div class="kpis" id="kpis"></div>
+      <div class="grid">
+        <div class="card">
+          <h3><span class="dot" style="background:var(--red)"></span> Ranking de usuarios</h3>
+          <div class="body"><table id="tUsers"><thead><tr><th>Usuario</th><th class="r">Consultas</th><th class="r">Tokens</th><th class="r">Costo</th></tr></thead><tbody></tbody></table></div>
+        </div>
+        <div class="card">
+          <h3><span class="dot" style="background:var(--blue)"></span> Preguntas más frecuentes</h3>
+          <div class="body"><table id="tQ"><thead><tr><th>Pregunta</th><th class="r">Veces</th></tr></thead><tbody></tbody></table></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3><span class="dot" style="background:var(--amber)"></span> Consultas por día</h3>
+        <div class="trend" id="trend"></div>
+      </div>
+      <div class="card">
+        <h3><span class="dot" style="background:var(--purple)"></span> Uso por galaxia / herramienta</h3>
+        <div class="body"><table id="tG"><thead><tr><th>Galaxia</th><th class="r">Consultas</th></tr></thead><tbody></tbody></table></div>
+        <div class="foot" id="foot"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var $=function(s){return document.querySelector(s);};
+function nfmt(n){return (Math.round(n||0)).toLocaleString('es-CL');}
+function usd(n){return '$'+(n||0).toLocaleString('es-CL',{minimumFractionDigits:2,maximumFractionDigits:2})+' USD';}
+function tokShort(n){n=n||0; if(n>=1e6) return (n/1e6).toFixed(2)+'M'; if(n>=1e3) return (n/1e3).toFixed(1)+'k'; return String(n);}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function iso(d){return d.toISOString().slice(0,10);}
+
+function setPreset(p){
+  var hoy=new Date(); var h=iso(hoy), d;
+  if(p==='hoy'){d=h;}
+  else if(p==='mes'){d=h.slice(0,8)+'01';}
+  else {var x=new Date(hoy); x.setDate(x.getDate()-29); d=iso(x);}
+  $('#desde').value=d; $('#hasta').value=h;
+}
+
+async function cargar(){
+  var desde=$('#desde').value, hasta=$('#hasta').value;
+  var est=$('#estado'), datos=$('#datos');
+  datos.classList.add('hidden');
+  est.classList.remove('hidden'); est.innerHTML='<span class="spin"></span>';
+  $('#go').disabled=true;
+  try{
+    var r=await fetch('/api/analytics-proxy?desde='+desde+'&hasta='+hasta);
+    if(r.status===403){ mostrarGate(); return; }
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    var d=await r.json();
+    render(d);
+    est.classList.add('hidden'); datos.classList.remove('hidden');
+  }catch(e){
+    est.innerHTML='<div class="big">No se pudo cargar</div><div>'+esc(e.message)+'</div>';
+  }finally{ $('#go').disabled=false; }
+}
+
+function render(d){
+  var t=d.totales||{};
+  $('#kpis').innerHTML=
+    kpi('a','Consultas',nfmt(t.consultas),'en el período')+
+    kpi('b','Usuarios activos',nfmt(t.usuarios),'distintos')+
+    kpi('c','Tokens totales',tokShort(t.tokens_total),'in '+tokShort(t.tokens_in)+' · out '+tokShort(t.tokens_out))+
+    kpi('d','Costo estimado',usd(t.costo_usd),'Sonnet 4.6');
+
+  // Usuarios
+  var maxC=Math.max.apply(null,(d.por_usuario||[]).map(function(u){return u.consultas;}).concat([1]));
+  $('#tUsers tbody').innerHTML=(d.por_usuario||[]).map(function(u){
+    var w=Math.max(2,Math.round(u.consultas/maxC*90));
+    return '<tr><td class="b">'+esc(u.email)+'</td>'+
+      '<td class="r mono">'+nfmt(u.consultas)+' <span class="mbar" style="width:'+w+'px"></span></td>'+
+      '<td class="r mono">'+tokShort((u.tokens_in||0)+(u.tokens_out||0))+'</td>'+
+      '<td class="r mono">'+usd(u.costo_usd)+'</td></tr>';
+  }).join('')||'<tr><td colspan="4" style="color:var(--t3);padding:20px 14px">Sin datos en el período.</td></tr>';
+
+  // Preguntas
+  var maxV=Math.max.apply(null,(d.top_preguntas||[]).map(function(q){return q.veces;}).concat([1]));
+  $('#tQ tbody').innerHTML=(d.top_preguntas||[]).map(function(q){
+    var w=Math.max(2,Math.round(q.veces/maxV*80));
+    return '<tr><td class="q" title="'+esc(q.pregunta)+'">'+esc(q.pregunta)+'</td>'+
+      '<td class="r mono">'+nfmt(q.veces)+' <span class="mbar" style="width:'+w+'px"></span></td></tr>';
+  }).join('')||'<tr><td colspan="2" style="color:var(--t3);padding:20px 14px">Sin preguntas registradas.</td></tr>';
+
+  // Tendencia
+  var dias=d.por_dia||[]; var maxD=Math.max.apply(null,dias.map(function(x){return x.consultas;}).concat([1]));
+  $('#trend').innerHTML=dias.map(function(x){
+    var h=Math.max(2,Math.round(x.consultas/maxD*90));
+    var et=x.dia.slice(5); // MM-DD
+    return '<div class="col" title="'+x.dia+': '+x.consultas+' consultas"><i style="height:'+h+'px"></i><span>'+et+'</span></div>';
+  }).join('')||'<div style="color:var(--t3);padding:20px">Sin actividad.</div>';
+
+  // Galaxia
+  $('#tG tbody').innerHTML=(d.por_galaxia||[]).map(function(g){
+    return '<tr><td class="b">'+esc(nombreGalaxia(g.galaxia))+'</td><td class="r mono">'+nfmt(g.consultas)+'</td></tr>';
+  }).join('')||'<tr><td colspan="2" style="color:var(--t3);padding:20px 14px">Sin datos.</td></tr>';
+
+  $('#foot').textContent='Período '+d.desde+' → '+d.hasta+'. Costo estimado con precios Claude Sonnet 4.6; el ahorro por caché ya está reflejado.';
+}
+function nombreGalaxia(g){
+  var m={'consultar_operacion':'Pallets (operación)','consultar_stock':'Stock / pool','consultar_cliente':'Cliente','consultar_finanzas':'Finanzas','consultar_transporte':'Transporte','(sin herramienta)':'Respuesta directa (contexto)'};
+  return m[g]||g;
+}
+function kpi(c,lab,val,sub){return '<div class="kpi '+c+'"><div class="lab">'+lab+'</div><div class="val">'+val+'</div><div class="sub">'+sub+'</div></div>';}
+
+function mostrarGate(){ $('#app').classList.add('hidden'); $('#gate').classList.remove('hidden'); }
+
+async function init(){
+  // Identidad + verificación de rol admin
+  try{
+    var me=await (await fetch('/.auth/me')).json();
+    var cp=(me&&me.clientPrincipal)||null;
+    var roles=(cp&&cp.userRoles||[]).map(function(r){return String(r).toLowerCase();});
+    if(cp) $('#who').textContent=cp.userDetails||'';
+    if(roles.indexOf('admin')===-1){ mostrarGate(); return; }
+  }catch(e){ /* si falla /.auth/me igual el proxy valida por rol */ }
+  $('#app').classList.remove('hidden');
+  setPreset('mes');
+  Array.prototype.forEach.call(document.querySelectorAll('.chip'),function(b){
+    b.addEventListener('click',function(){
+      document.querySelectorAll('.chip').forEach(function(x){x.classList.remove('on');});
+      b.classList.add('on'); setPreset(b.dataset.p); cargar();
+    });
+  });
+  $('#go').addEventListener('click',cargar);
+  cargar();
+}
+init();
+</script>
+</body>
+</html>

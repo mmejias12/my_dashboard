@@ -533,6 +533,17 @@ function parseNum(str){
   if(isNaN(n)) return null;
   return neg? -n : n;
 }
+// Una celda cuenta como NUMÉRICA (para alinear y para las mini-barras) sólo si es
+// un número de verdad: monto, cantidad, %. NO un código que contiene dígitos, como
+// una patente (NC8771), una fecha (03-ago) o un N° de pedido/DTE (P-1001). Esto evita
+// que el renderizador dibuje mini-barras sin sentido sobre columnas de códigos.
+function esNumCelda(str){
+  var s=String(str).trim();
+  if(!s) return false;
+  var t=s.replace(/\b(CLP|UF|pallets?|kg|un)\b/gi,'')   // quita unidades conocidas
+         .replace(/[$%\s]/g,'');                          // y símbolos/espacios
+  return /^[-−+]?[\d.,]+$/.test(t);                  // sólo dígitos + separadores + signo
+}
 function esFilaTotal(lbl){ return /(^|\s)(total|saldo final|saldo de cierre|stock (de )?cierre)/i.test(String(lbl)); }
 function esSeparador(s){ return /-/.test(s) && /^[\s|:\-]+$/.test(s) && (s.match(/-/g)||[]).length>=2; }
 
@@ -550,7 +561,7 @@ function fmtTabla(lines){
   var isNum=[];
   for(var c=0;c<ncol;c++){
     var tot=0,ok=0;
-    body.forEach(function(r){ var v=r[c]; if(v!==undefined&&v!==''){ tot++; if(parseNum(v)!==null) ok++; } });
+    body.forEach(function(r){ var v=r[c]; if(v!==undefined&&v!==''){ tot++; if(esNumCelda(v)) ok++; } });
     isNum[c]= tot>0 && ok/tot>=0.6;
   }
   var valCol=-1; for(var c=ncol-1;c>=0;c--){ if(isNum[c]){ valCol=c; break; } }

@@ -192,7 +192,7 @@ async function viajesDelRango(desde, hasta){
 }
 
 // ── Herramienta: consultar_transporte ───────────────────────────────────────
-async function consultarTransporte({ desde, hasta, entidad, cliente }, ctx){
+async function consultarTransporte({ desde, hasta, entidad, cliente, operacion }, ctx){
   if(!reISO.test(desde||'') || !reISO.test(hasta||'')) throw new Error('fechas inválidas: YYYY-MM-DD');
   const hoy = hoyIso();
   if(hasta > hoy) hasta = hoy;
@@ -213,9 +213,15 @@ async function consultarTransporte({ desde, hasta, entidad, cliente }, ctx){
   if(termCli){
     viajes = viajes.filter(v => normalize(clienteDe(v)).includes(termCli));
   }
+  // Filtro opcional por TIPO DE OPERACIÓN (retiro / emisión / devolución).
+  // 'emision' abarca también 'Emision 24 horas'.
+  const termOp = operacion ? normalize(operacion) : null;
+  if(termOp){
+    viajes = viajes.filter(v => normalize(v.operacion).includes(termOp));
+  }
 
   const total = { viajes:0, pallets:0, neto:0 };
-  const porTransportista = {}, porPatente = {}, porZona = {}, porClase = {}, porCliente = {};
+  const porTransportista = {}, porPatente = {}, porZona = {}, porClase = {}, porCliente = {}, porOperacion = {};
   const sinTarifa = [];
   for(const v of viajes){
     total.viajes += 1; total.pallets += v.cantidad; total.neto += num(v.total);
@@ -226,17 +232,19 @@ async function consultarTransporte({ desde, hasta, entidad, cliente }, ctx){
     acopiar(porZona, (v.zona || '(sin tarifa)'), { zona: v.zona || '(sin tarifa)' }, v);
     acopiar(porClase, (v.claseOp || '-'), { clase: v.claseOp || '-' }, v);
     acopiar(porCliente, cli, { cliente: cli }, v);
+    acopiar(porOperacion, (v.operacion || '(s/o)'), { operacion: v.operacion || '(s/o)' }, v);
     if(v.sinTarifa) sinTarifa.push({ patente: v.patente, bodega: v.bodegaTarif, operacion: v.operacion, pallets: v.cantidad });
   }
 
   const ordSuma = o => Object.values(o).sort((a,b) => b.neto - a.neto).map(x => ({...x, neto: Math.round(x.neto)}));
   const iva = Math.round(total.neto * IVA);
 
-  if(ctx && ctx.log) ctx.log(`transporte ${desde}..${hasta}${entidad?' ["'+entidad+'"]':''}${cliente?' cli["'+cliente+'"]':''}: ${viajes.length} viajes, neto ${Math.round(total.neto)}`);
+  if(ctx && ctx.log) ctx.log(`transporte ${desde}..${hasta}${entidad?' ["'+entidad+'"]':''}${cliente?' cli["'+cliente+'"]':''}${operacion?' op['+operacion+']':''}: ${viajes.length} viajes, neto ${Math.round(total.neto)}`);
 
   const out = {
-    desde, hasta, entidad: entidad || null, cliente: cliente || null,
+    desde, hasta, entidad: entidad || null, cliente: cliente || null, operacion: operacion || null,
     total: { viajes: total.viajes, pallets: total.pallets, neto: Math.round(total.neto), iva, total_con_iva: Math.round(total.neto) + iva },
+    por_operacion: ordSuma(porOperacion),
     por_transportista: ordSuma(porTransportista).slice(0, 20),
     por_cliente: termCli ? ordSuma(porCliente) : ordSuma(porCliente).slice(0, 20),
     por_zona: ordSuma(porZona).slice(0, 20),
@@ -311,15 +319,18 @@ const TOOL_SCHEMA = {
     'si nombran un CLIENTE, pásalo en `cliente`. Al filtrar por cliente o ' +
     'transportista se incluye además `detalle`: cada envío (fecha, pedido, DTE, ' +
     'bodega, pallets) con su costo, para comparar una emisión con lo que costó ' +
-    'llevarla. NO la uses para el mes en curso global: eso ya viene en el ' +
-    'contexto. Al usar estos datos, incluye \'transporte\' en la línea [FUENTES].',
+    'llevarla. Para separar RETIROS (desde retail) de EMISIONES (a cliente) o ' +
+    'DEVOLUCIONES, pasa `operacion` (ej. "retiro"); el desglose `por_operacion` ' +
+    'siempre viene en la respuesta. NO la uses para el mes en curso global: eso ' +
+    'ya viene en el contexto. Al usar estos datos, incluye \'transporte\' en la línea [FUENTES].',
   input_schema: {
     type: 'object',
     properties: {
-      desde:   { type: 'string', description: 'Inicio del rango, YYYY-MM-DD' },
-      hasta:   { type: 'string', description: 'Fin del rango, YYYY-MM-DD' },
-      entidad: { type: 'string', description: 'Transportista (razón social), patente o chofer; opcional' },
-      cliente: { type: 'string', description: 'Nombre (o parte) del cliente al que se despachó; opcional. Úsalo para el costo de flete de un cliente.' }
+      desde:     { type: 'string', description: 'Inicio del rango, YYYY-MM-DD' },
+      hasta:     { type: 'string', description: 'Fin del rango, YYYY-MM-DD' },
+      entidad:   { type: 'string', description: 'Transportista (razón social), patente o chofer; opcional' },
+      cliente:   { type: 'string', description: 'Nombre (o parte) del cliente al que se despachó/retiró; opcional. Úsalo para el costo de flete de un cliente/retail.' },
+      operacion: { type: 'string', description: 'Filtra por tipo: "retiro", "emision" o "devolucion"; opcional. "emision" incluye "Emision 24 horas".' }
     },
     required: ['desde', 'hasta']
   }

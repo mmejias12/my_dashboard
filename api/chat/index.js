@@ -92,6 +92,16 @@ const TOOLS = [{
   }
 }, STOCK_TOOL, CLIENTE_TOOL];
 
+// Caché de prompts: añade una marca de caché a la ÚLTIMA herramienta. Anthropic
+// cachea todo el bloque de definiciones de tools (que no cambia entre mensajes),
+// así no se re-cobra en cada ida y vuelta del loop. No muta el arreglo original.
+function conCacheHerramientas(arr) {
+  if (!Array.isArray(arr) || !arr.length) return arr;
+  const copia = arr.slice();
+  copia[copia.length - 1] = { ...copia[copia.length - 1], cache_control: { type: 'ephemeral' } };
+  return copia;
+}
+
 // Reintento con espera corta ante errores TRANSITORIOS (sobrecarga/límite/5xx/red).
 // Los errores "de verdad" (400 mal formada, 401 llave) NO se reintentan.
 const REINTENTOS    = 3;                                   // intentos totales
@@ -149,6 +159,7 @@ module.exports = async function (context, req) {
     const roles = rolesDe(req);
     const puedeFinanzas = roles.some(r => FIN_ROLES.includes(r));
     const tools = puedeFinanzas ? [...TOOLS, finanzas.TOOL_SCHEMA] : TOOLS;
+    const toolsCache = conCacheHerramientas(tools);   // caché de prompts (tools)
     let sys = system || '';
     // Histórico precargado (comparaciones de años/meses sin leer cientos de días). Para todos.
     const opsResumen = await resumenOps.bloqueContexto(context);
@@ -159,6 +170,13 @@ module.exports = async function (context, req) {
       if (finBloque) sys += (sys ? '\n\n' : '') + finBloque;
     }
 
+    // Caché de prompts: el system (instrucciones + snapshot + histórico + finanzas)
+    // es voluminoso y estable entre mensajes; se envía como un bloque efímero (TTL
+    // 5 min). Pega seguro dentro del loop de herramientas y entre mensajes seguidos.
+    const systemCache = sys
+      ? [{ type: 'text', text: sys, cache_control: { type: 'ephemeral' } }]
+      : undefined;
+
     const convo = [...messages];
     let resp;
 
@@ -166,8 +184,13 @@ module.exports = async function (context, req) {
       resp = await llamarClaude({
         model: model || 'claude-sonnet-4-6',
         max_tokens: max_tokens || 1024,
-        system: sys, messages: convo, tools
+        system: systemCache, messages: convo, tools: toolsCache
       }, context);
+
+      if (resp.usage) {   // verificación del caché: cacheW = escritura, cacheR = lectura (ahorro)
+        const u = resp.usage;
+        context.log(`claude v${vuelta}: in=${u.input_tokens} cacheW=${u.cache_creation_input_tokens || 0} cacheR=${u.cache_read_input_tokens || 0} out=${u.output_tokens}`);
+      }
 
       if (resp.stop_reason !== 'tool_use') break;   // respuesta final
 

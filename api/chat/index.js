@@ -22,6 +22,7 @@ const { consultarCliente, TOOL_SCHEMA: CLIENTE_TOOL } = require('../shared/consu
 const finanzas = require('../shared/consulta-finanzas.js');
 const transporte = require('../shared/consulta-transporte.js');
 const resumenOps = require('../shared/resumen-operaciones.js');
+const analytics = require('../shared/analytics.js');
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
@@ -41,6 +42,35 @@ function rolesDe(req) {
     const p = JSON.parse(Buffer.from(h, 'base64').toString('utf8'));
     return (p.userRoles || []).map(r => String(r).toLowerCase());
   } catch (e) { return []; }
+}
+
+// Identidad del usuario logueado (correo + id) desde el header de Static Web Apps.
+function principalDe(req) {
+  try {
+    const h = req.headers && (req.headers['x-ms-client-principal'] || req.headers['X-MS-CLIENT-PRINCIPAL']);
+    if (!h) return { email: null, userId: null };
+    const p = JSON.parse(Buffer.from(h, 'base64').toString('utf8'));
+    return { email: p.userDetails || null, userId: p.userId || null };
+  } catch (e) { return { email: null, userId: null }; }
+}
+
+// Texto de la última pregunta del usuario (para el panel de administración).
+function ultimaPregunta(messages) {
+  try {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (!m || m.role !== 'user') continue;
+      let txt = '';
+      if (typeof m.content === 'string') txt = m.content;
+      else if (Array.isArray(m.content)) {
+        txt = m.content.filter(b => b && (b.type === 'text' || typeof b === 'string'))
+                       .map(b => (typeof b === 'string' ? b : b.text)).join(' ');
+      }
+      txt = String(txt || '').trim();
+      if (txt) return txt.slice(0, 800);
+    }
+  } catch (e) {}
+  return '';
 }
 
 // Resumen de facturación del mes en curso, cacheado por instancia (TTL 30 min)
@@ -198,6 +228,12 @@ module.exports = async function (context, req) {
     const convo = [...messages];
     let resp;
 
+    // Analítica de uso (panel de administración): acumula tokens de todas las
+    // vueltas, herramientas usadas y latencia. Best-effort, no afecta la respuesta.
+    const t0Total = Date.now();
+    const uso = { in: 0, out: 0, cacheR: 0, cacheW: 0 };
+    const toolsUsados = new Set();
+
     for (let vuelta = 0; vuelta < MAX_VUELTAS; vuelta++) {
       resp = await llamarClaude({
         model: model || 'claude-sonnet-4-6',
@@ -207,6 +243,8 @@ module.exports = async function (context, req) {
 
       if (resp.usage) {   // verificación del caché: cacheW = escritura, cacheR = lectura (ahorro)
         const u = resp.usage;
+        uso.in += u.input_tokens || 0; uso.out += u.output_tokens || 0;
+        uso.cacheR += u.cache_read_input_tokens || 0; uso.cacheW += u.cache_creation_input_tokens || 0;
         context.log(`claude v${vuelta}: in=${u.input_tokens} cacheW=${u.cache_creation_input_tokens || 0} cacheR=${u.cache_read_input_tokens || 0} out=${u.output_tokens}`);
       }
 
@@ -217,6 +255,7 @@ module.exports = async function (context, req) {
       const resultados = [];
       for (const bloque of resp.content) {
         if (bloque.type !== 'tool_use') continue;
+        toolsUsados.add(bloque.name);
         let out;
         try {
           if (bloque.name === 'consultar_operacion') {
@@ -265,6 +304,21 @@ module.exports = async function (context, req) {
       }
       convo.push({ role: 'user', content: resultados });
     }
+
+    // Registrar el uso para el panel de administración (best-effort, no bloquea).
+    try {
+      const quien = principalDe(req);
+      await analytics.registrarUso({
+        ts: new Date().toISOString(),
+        email: quien.email, userId: quien.userId, roles,
+        pregunta: ultimaPregunta(messages),
+        model: model || 'claude-sonnet-4-6',
+        tokens: uso,
+        tools: Array.from(toolsUsados),
+        ms: Date.now() - t0Total,
+        stop: resp && resp.stop_reason || null
+      });
+    } catch (e) { context.log.warn('analytics: ' + e.message); }
 
     context.res = {
       status: 200,

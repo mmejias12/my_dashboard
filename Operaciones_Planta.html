@@ -264,6 +264,7 @@ function pipeline(raw){
   return {dedup:dedup, dups:raw.length-dedup.length};
 }
 function planta(r){ var b=(r.bodegaComponente||'').toUpperCase(); return b.indexOf('TAL')>=0?'Talca':'Santiago'; }
+function operName(r){ var n=r&&r.operarioNombre; return (n&&String(n).trim())?String(n).trim():'(sin reparador)'; }
 function esPintado(r){ return (r.prodName||'').toUpperCase().indexOf('PINTADO')>=0; }
 function dstr(r){ return (r.fechaContab||r.startDate||'').substring(0,10); }
 
@@ -283,7 +284,7 @@ function filtrar(){
   return DEDUP.filter(function(r){
     var d=dstr(r); if(d1&&d<d1)return false; if(d2&&d>d2)return false;
     if(pl!=='__ALL__'&&planta(r)!==pl)return false;
-    if(op!=='__ALL__'&&(r.operarioNombre||'')!==op)return false;
+    if(op!=='__ALL__'&&operName(r)!==op)return false;
     return true;
   });
 }
@@ -294,7 +295,7 @@ function agrupar(rows){
   var smVal=sm.filter(function(r){return r.cuentaWipCodigo!=null && num(r.importeWip)!==0;});
   var em=rows.filter(function(r){return r.origen==='EM';});
   var ot={};
-  function get(dn,ref){ if(!ot[dn]){ot[dn]={doc:dn,fecha:dstr(ref),oper:ref.operarioNombre,planta:planta(ref),pintado:esPintado(ref),pallets:0,fam:{},unid:0,clavos:0,litros:0,costo:0};} return ot[dn]; }
+  function get(dn,ref){ if(!ot[dn]){ot[dn]={doc:dn,fecha:dstr(ref),oper:operName(ref),planta:planta(ref),pintado:esPintado(ref),pallets:0,fam:{},unid:0,clavos:0,litros:0,costo:0};} return ot[dn]; }
   em.forEach(function(r){ var o=get(r.docNum,r); o.pallets+=num(r.cantidadEmision); });
   smVal.forEach(function(r){ var o=get(r.docNum,r); var f=familia(r.componenteNombre); var q=num(r.cantConsumida);
     o.fam[f]=(o.fam[f]||0)+q; o.costo+=num(r.importeWip);
@@ -505,7 +506,7 @@ function renderAll(){
 }
 function refreshOperFilter(){
   var sel=document.getElementById('f-oper'); var cur=sel.value;
-  var ops={}; DEDUP.forEach(function(x){if(x.operarioNombre)ops[x.operarioNombre]=1;});
+  var ops={}; DEDUP.forEach(function(x){ops[operName(x)]=1;});
   sel.innerHTML='<option value="__ALL__">Todos</option>';
   Object.keys(ops).sort().forEach(function(o){sel.appendChild(new Option(o,o));});
   if(cur&&ops[cur])sel.value=cur;
@@ -553,6 +554,25 @@ function mkpi(l,v,d,cls){return '<div class="m-kpi"><div class="l">'+l+'</div><d
 function grpFam(rows){var o={};FAMS.forEach(function(f){o[f]={u:0,c:0};});rows.forEach(function(r){var f=familia(r.componenteNombre);o[f].u+=num(r.cantConsumida);o[f].c+=num(r.importeWip);});return o;}
 function teamCPP(){var ag=window._ag;var rep=ag.ots.filter(function(o){return !o.pintado;});var c=rep.reduce(function(a,o){return a+o.costo;},0),p=rep.reduce(function(a,o){return a+o.pallets;},0);return p?c/p:0;}
 function dailyBy(rows,valfn){var by={};rows.forEach(function(o){by[o.fecha]=(by[o.fecha]||0)+valfn(o);});return Object.keys(by).sort().map(function(k){return by[k];});}
+/* Trazabilidad SAP por OT: producto, item padre y Nº de documentos de emisión/movimiento */
+function otTrace(doc){
+  var rs=(window._rows||[]).filter(function(r){return r.docNum==doc;});
+  var emis={},mov={},prod='',item='';
+  rs.forEach(function(r){
+    if(r.origen==='SM'){ if(r.numeroOrigen!=null)emis[r.numeroOrigen]=1; if(r.documentoMovimiento!=null)mov[r.documentoMovimiento]=1; }
+    if(!prod&&r.prodName)prod=r.prodName; if(!item&&r.itemPadre)item=r.itemPadre;
+  });
+  return {prod:prod,item:item,emis:Object.keys(emis).join(', '),mov:Object.keys(mov).join(', ')};
+}
+function exportModalOTs(){
+  var ots=window._modalOTs||[]; if(!ots.length){alert('No hay OT para exportar.');return;}
+  var head=['Fecha','NroOT','ItemPadre','Producto','Base','Tipo','NroEmision','DocMovimiento','Pallets','Costo','CostoPallet'];
+  var lines=[head.join(';')];
+  ots.forEach(function(o){var tr=o.trace||{};var c=o.pallets?o.costo/o.pallets:0;
+    lines.push([o.fecha,o.doc,'"'+((tr.item||'').replace(/"/g,'""'))+'"','"'+((tr.prod||'').replace(/"/g,'""'))+'"',o.planta,(o.pintado?'Pintado':'Reparado'),'"'+(tr.emis||'')+'"','"'+(tr.mov||'')+'"',Math.round(o.pallets),Math.round(o.costo),Math.round(c)].join(';'));});
+  var blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='OT_'+String(window._modalTitle||'reparador').replace(/[^a-z0-9]+/gi,'_')+'.csv';a.click();
+}
 
 /* ---- Reparador ---- */
 function modalReparador(oper){
@@ -566,16 +586,18 @@ function modalReparador(oper){
   var tcpp=teamCPP(); var dpct=tcpp?(cpp-tcpp)/tcpp:0;
   var cls=dpct<=-0.01?'up':(dpct>=0.01?'down':'flat');
   var dtxt=(dpct>0?'+':'')+(dpct*100).toFixed(1)+'% vs equipo ('+money(tcpp)+')';
-  var sm=smValAll().filter(function(r){return r.operarioNombre===oper;});
+  var sm=smValAll().filter(function(r){return operName(r)===oper;});
   var fam=grpFam(sm); var famMaxC=Math.max.apply(null,FAMS.map(function(f){return fam[f].c;}).concat([1]));
   var famBars=FAMS.filter(function(f){return fam[f].c>0;}).map(function(f){return barRow(f,fam[f].c,famMaxC,FAMCOL[f],money(fam[f].c)+' · '+fmt(fam[f].u)+' u');}).join('');
   // planta split
   var pl={}; rep.forEach(function(o){pl[o.planta]=(pl[o.planta]||0)+o.pallets;});
   var plMax=Math.max.apply(null,Object.values(pl).concat([1]));
   var plBars=Object.keys(pl).map(function(k){return barRow(k,pl[k],plMax,k==='Talca'?css('--s4'):css('--s1'),fmt(pl[k])+' pal');}).join('');
-  // OTs list
+  // OTs list (con trazabilidad SAP: producto + Nº emisión OIGE/OIGN)
   var otsSorted=ots.slice().sort(function(a,b){return b.costo-a.costo;});
-  var otRows=otsSorted.map(function(o){var c=o.pallets?o.costo/o.pallets:0;return '<tr class="clickable" onclick="modalOT('+o.doc+')"><td>'+o.fecha+'</td><td>'+o.doc+'</td><td>'+o.planta+'</td><td>'+(o.pintado?'Pintado':'Reparado')+'</td><td>'+fmt(o.pallets)+'</td><td>'+money(o.costo)+'</td><td>'+money(c)+'</td></tr>';}).join('');
+  window._modalOTs=otsSorted.map(function(o){var t={};for(var kk in o)t[kk]=o[kk];t.trace=otTrace(o.doc);return t;});
+  window._modalTitle=oper;
+  var otRows=window._modalOTs.map(function(o){var tr=o.trace||{};return '<tr class="clickable" onclick="modalOT('+o.doc+')"><td>'+o.fecha+'</td><td>'+o.doc+'</td><td>'+o.planta+'</td><td>'+(o.pintado?'Pintado':'Reparado')+'</td><td style="text-align:left">'+esc((tr.prod||'').replace('(INTERNO) ',''))+'</td><td>'+esc(tr.emis||'–')+'</td><td>'+fmt(o.pallets)+'</td><td>'+money(o.costo)+'</td></tr>';}).join('');
   var html=
     '<div class="m-kpis">'
     +mkpi('Pallets reparados',fmt(palRep))
@@ -588,8 +610,11 @@ function modalReparador(oper){
     +'<div class="m-sec"><div class="m-sec-t">Costo por familia de componente</div>'+(famBars||'<div class="m-hint">sin consumo valorizado</div>')+'</div>'
     +'<div class="m-sec"><div class="m-sec-t">Pallets por planta</div>'+(plBars||'<div class="m-hint">—</div>')+'</div>'
     +'<div class="m-sec"><div class="m-sec-t">Tendencia diaria · pallets reparados</div>'+miniLine(dailyBy(rep,function(o){return o.pallets;}),css('--green'))+'</div>'
-    +'<div class="m-sec"><div class="m-sec-t">Órdenes de este reparador ('+ots.length+') · clic para ver la OT</div>'
-    +'<table class="m-table"><thead><tr><th>Fecha</th><th>Nº OT</th><th>Base</th><th>Tipo</th><th>Pallets</th><th>Costo</th><th>$/pallet</th></tr></thead><tbody>'+otRows+'</tbody></table></div>';
+    +'<div class="m-sec"><div class="m-sec-t" style="display:flex;justify-content:space-between;align-items:center">'
+    +'<span>Órdenes de este reparador ('+ots.length+') · clic en una fila para ver la OT</span>'
+    +'<button class="btn" style="padding:5px 11px;font-size:11px" onclick="exportModalOTs()">⭳ Exportar OT para rastreo</button></div>'
+    +'<table class="m-table"><thead><tr><th>Fecha</th><th>Nº OT</th><th>Base</th><th>Tipo</th><th style="text-align:left">Producto</th><th>Nº emisión</th><th>Pallets</th><th>Costo</th></tr></thead><tbody>'+otRows+'</tbody></table>'
+    +'<div class="m-hint">Nº emisión = documento de salida de mercancía (OIGE en SM / OIGN en EM) — úsalo para ubicar la OT en SAP.</div></div>';
   openModal('Reparador · Operaciones',oper,html);
 }
 
@@ -602,7 +627,7 @@ function modalOT(doc){
   var smNo=lines.filter(function(r){return r.origen==='SM'&&(r.cuentaWipCodigo==null||num(r.importeWip)===0);});
   var cpp=o.pallets?o.costo/o.pallets:0, icc=(!o.pintado&&o.pallets)?o.unid/o.pallets:0;
   var rows=sm.slice().sort(function(a,b){return num(b.importeWip)-num(a.importeWip);}).map(function(r){
-    return '<tr><td>'+esc(r.componenteNombre)+'</td><td>'+familia(r.componenteNombre)+'</td><td>'+fmt1(num(r.cantConsumida))+'</td><td>'+money(num(r.costoArticulo))+'</td><td>'+money(num(r.importeWip))+'</td><td>'+esc(r.cuentaInvNombre||'–')+'</td></tr>';}).join('');
+    return '<tr><td>'+esc(r.componenteNombre||'—')+'</td><td>'+familia(r.componenteNombre)+'</td><td>'+fmt1(num(r.cantConsumida))+'</td><td>'+money(num(r.costoArticulo))+'</td><td>'+money(num(r.importeWip))+'</td><td>'+esc(r.cuentaInvNombre||'–')+'</td></tr>';}).join('');
   var pill=o.pintado?'<span class="m-badge pill-pin">Pintado</span>':'<span class="m-badge '+(o.planta==='Talca'?'pill-talca':'pill-stgo')+'">'+o.planta+'</span>';
   var html=
     '<div class="m-hint">'+o.fecha+' · Reparador '+esc(o.oper||'—')+' · '+pill+'</div>'
@@ -628,7 +653,7 @@ function modalFamilia(fam){
   var granTot=smValAll().reduce(function(a,r){return a+num(r.importeWip);},0)||1;
   var palRep=window._ag.ots.filter(function(o){return !o.pintado;}).reduce(function(a,o){return a+o.pallets;},0);
   // por reparador
-  var byOp={}; sm.forEach(function(r){byOp[r.operarioNombre]=(byOp[r.operarioNombre]||0)+num(r.importeWip);});
+  var byOp={}; sm.forEach(function(r){var k=operName(r);byOp[k]=(byOp[k]||0)+num(r.importeWip);});
   var opArr=Object.keys(byOp).map(function(k){return {k:k,v:byOp[k]};}).sort(function(a,b){return b.v-a.v;});
   var opMax=Math.max.apply(null,opArr.map(function(x){return x.v;}).concat([1]));
   var opBars=opArr.map(function(x){return '<div class="mrow"><span class="mrow-l clickable" onclick="modalReparador(\''+x.k.replace(/'/g,"\\'")+'\')">'+esc(x.k)+'</span><span class="mrow-bar"><i style="width:'+Math.max(1.5,100*x.v/opMax)+'%;background:'+FAMCOL[fam]+'"></i></span><span class="mrow-v">'+money(x.v)+'</span></div>';}).join('');

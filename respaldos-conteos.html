@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Respaldos — Clientes y Conteos | REDTEC</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --red:#E31E24;
+  --bg:#0a0e1a;
+  --panel:#12172b;
+  --panel-2:#1a2141;
+  --text:#ffffff;
+  --dim:#94a3b8;
+  --muted:#64748b;
+  --line:rgba(255,255,255,.08);
+  --ok:#4ade80;
+  --warn:#fbbf24;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  font-family:'DM Sans',sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  padding:32px 20px 60px;
+}
+.wrap{max-width:900px;margin:0 auto;}
+header{margin-bottom:28px;}
+.back{
+  display:inline-block;font-size:13px;color:var(--dim);
+  text-decoration:none;margin-bottom:14px;
+}
+.back:hover{color:var(--red);}
+h1{font-size:26px;font-weight:700;letter-spacing:-.5px;margin-bottom:8px;}
+.sub{font-size:14px;color:var(--dim);line-height:1.6;max-width:62ch;}
+.aviso{
+  margin-top:18px;background:rgba(251,191,36,.08);
+  border:1px solid rgba(251,191,36,.25);
+  border-radius:10px;padding:14px 16px;
+  font-size:13px;color:#fde68a;line-height:1.6;
+}
+.tabs{display:flex;gap:8px;margin:26px 0 18px;flex-wrap:wrap;}
+.tab{
+  background:var(--panel);border:1px solid var(--line);
+  color:var(--dim);padding:9px 18px;border-radius:9px;
+  font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;
+  transition:all .15s;
+}
+.tab:hover{border-color:rgba(227,30,36,.35);color:var(--text);}
+.tab.on{background:var(--red);border-color:var(--red);color:#fff;}
+.estado{
+  background:var(--panel);border:1px solid var(--line);
+  border-radius:12px;padding:16px 18px;margin-bottom:18px;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+}
+.estado .n{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;}
+.estado .l{font-size:13px;color:var(--dim);}
+.lista{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+.fila{
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:14px 18px;border-bottom:1px solid var(--line);
+}
+.fila:last-child{border-bottom:none;}
+.fila:hover{background:var(--panel-2);}
+.f-info{min-width:0;}
+.f-fecha{font-size:14px;font-weight:600;}
+.f-meta{font-size:12px;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:3px;word-break:break-all;}
+.btn{
+  background:transparent;border:1px solid rgba(227,30,36,.4);
+  color:var(--red);padding:7px 14px;border-radius:8px;
+  font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;
+  white-space:nowrap;transition:all .15s;
+}
+.btn:hover{background:var(--red);color:#fff;}
+.btn:disabled{opacity:.45;cursor:not-allowed;}
+.btn.confirmar{background:var(--red);color:#fff;}
+.vacio,.cargando{padding:34px 18px;text-align:center;color:var(--muted);font-size:14px;}
+.error{
+  background:rgba(227,30,36,.1);border:1px solid rgba(227,30,36,.3);
+  border-radius:10px;padding:14px 16px;font-size:13.5px;color:#fca5a5;line-height:1.6;
+}
+.toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  background:var(--panel-2);border:1px solid var(--line);
+  padding:13px 22px;border-radius:10px;font-size:14px;
+  box-shadow:0 14px 40px rgba(0,0,0,.5);opacity:0;pointer-events:none;
+  transition:opacity .2s;max-width:90vw;
+}
+.toast.ver{opacity:1;}
+.toast.ok{border-color:rgba(74,222,128,.4);color:var(--ok);}
+.toast.mal{border-color:rgba(227,30,36,.4);color:#fca5a5;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="back" href="/clientes-conteos.html">← Volver a Clientes y Conteos</a>
+    <h1>Respaldos</h1>
+    <p class="sub">
+      Cada vez que se guarda una hoja, el sistema archiva automáticamente la versión anterior.
+      Desde aquí puedes volver a cualquiera de ellas.
+    </p>
+    <div class="aviso">
+      Restaurar <strong>reemplaza por completo</strong> la hoja actual con el contenido del respaldo.
+      Antes de hacerlo se archiva el estado presente, así que la operación también se puede deshacer.
+    </div>
+  </header>
+
+  <div class="tabs" id="tabs"></div>
+  <div id="estado"></div>
+  <div id="contenido"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const HOJAS = ["Calendario", "Clientes", "Resultados"];
+const STORE = "/api/clientes-store";
+let hoja = "Calendario";
+let porConfirmar = null;
+
+const $ = id => document.getElementById(id);
+
+function toast(msg, tipo) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.className = "toast ver " + (tipo || "");
+  setTimeout(() => { t.className = "toast " + (tipo || ""); }, 4000);
+}
+
+function fechaLegible(id) {
+  // respaldos/Calendario/2026-08-26T15-04-05-123Z.json
+  const m = String(id).match(/(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})/);
+  if (!m) return id;
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]));
+  return d.toLocaleString("es-CL", {
+    day: "2-digit", month: "long", year: "numeric",
+    hour: "2-digit", minute: "2-digit"
+  });
+}
+
+function pintarTabs() {
+  $("tabs").innerHTML = "";
+  HOJAS.forEach(h => {
+    const b = document.createElement("button");
+    b.className = "tab" + (h === hoja ? " on" : "");
+    b.textContent = h;
+    b.onclick = () => { hoja = h; porConfirmar = null; cargar(); };
+    $("tabs").appendChild(b);
+  });
+}
+
+async function cargar() {
+  pintarTabs();
+  $("estado").innerHTML = "";
+  $("contenido").innerHTML = '<div class="lista"><div class="cargando">Cargando respaldos…</div></div>';
+
+  try {
+    const [rActual, rResp] = await Promise.all([
+      fetch(`${STORE}?sheet=${hoja}`),
+      fetch(`${STORE}?sheet=${hoja}&respaldos=1`)
+    ]);
+
+    if (rResp.status === 403) {
+      $("contenido").innerHTML =
+        '<div class="error">Tu usuario no tiene permiso para ver ni restaurar respaldos. ' +
+        'Necesitas el rol <strong>admin</strong> o <strong>conteos</strong> — pídelo al administrador.</div>';
+      return;
+    }
+    if (!rResp.ok) throw new Error("HTTP " + rResp.status);
+
+    const actual = rActual.ok ? await rActual.json() : [];
+    const { respaldos } = await rResp.json();
+
+    $("estado").innerHTML =
+      '<div class="estado"><span class="n">' + (actual.length || 0) + '</span>' +
+      '<span class="l">registros en <strong>' + hoja + '</strong> ahora mismo · ' +
+      (respaldos.length || 0) + ' respaldo(s) archivado(s)</span></div>';
+
+    if (!respaldos.length) {
+      $("contenido").innerHTML =
+        '<div class="lista"><div class="vacio">Todavía no hay respaldos de esta hoja. ' +
+        'Se genera uno automáticamente en el próximo guardado.</div></div>';
+      return;
+    }
+
+    const lista = document.createElement("div");
+    lista.className = "lista";
+    respaldos.forEach(r => {
+      const fila = document.createElement("div");
+      fila.className = "fila";
+
+      const info = document.createElement("div");
+      info.className = "f-info";
+      info.innerHTML =
+        '<div class="f-fecha">' + fechaLegible(r.id) + '</div>' +
+        '<div class="f-meta">' + Math.round((r.bytes || 0) / 1024) + ' KB</div>';
+
+      const btn = document.createElement("button");
+      btn.className = "btn" + (porConfirmar === r.id ? " confirmar" : "");
+      btn.textContent = porConfirmar === r.id ? "Confirmar restauración" : "Restaurar";
+      btn.onclick = () => {
+        if (porConfirmar !== r.id) { porConfirmar = r.id; cargar(); return; }
+        restaurar(r.id, btn);
+      };
+
+      fila.appendChild(info);
+      fila.appendChild(btn);
+      lista.appendChild(fila);
+    });
+
+    $("contenido").innerHTML = "";
+    $("contenido").appendChild(lista);
+
+  } catch (e) {
+    $("contenido").innerHTML =
+      '<div class="error">No se pudieron cargar los respaldos: ' + e.message + '</div>';
+  }
+}
+
+async function restaurar(id, btn) {
+  btn.disabled = true;
+  btn.textContent = "Restaurando…";
+  try {
+    const r = await fetch(STORE, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sheet: hoja, restaurar: id })
+    });
+    const res = await r.json();
+    if (!r.ok || res.error) throw new Error(res.error || ("HTTP " + r.status));
+    porConfirmar = null;
+    toast(`${hoja} restaurado — ${res.count} registros`, "ok");
+    cargar();
+  } catch (e) {
+    toast("No se pudo restaurar: " + e.message, "mal");
+    btn.disabled = false;
+    btn.textContent = "Restaurar";
+  }
+}
+
+cargar();
+</script>
+</body>
+</html>

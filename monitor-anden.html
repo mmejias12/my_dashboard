@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monitor de andén · Despacho · REDTEC</title>
+<style>
+:root{
+  color-scheme: dark;
+  --plane:#0A0C11; --surface:#12151C; --surface-2:#171B24; --surface-3:#1E2431;
+  --line:rgba(255,255,255,.09); --line-2:rgba(255,255,255,.05);
+  --text:#FFFFFF; --text-2:#AEB6C4; --muted:#79818F;
+  --series-1:#3987e5;
+  --good:#0ca30c; --warning:#fab219; --critical:#d03b3b;
+  --brand:#E02B20;
+  --r:12px;
+  --sans: system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+body{background:var(--plane);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased;overflow:hidden}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
+
+/* ---------- topbar ---------- */
+.top{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--surface);flex:none}
+.logo{width:30px;height:30px;border-radius:8px;background:var(--brand);display:grid;place-items:center;font-weight:800;font-size:16px;flex:none}
+.top h1{font-size:15px}
+.top .sub{font-size:11px;color:var(--muted)}
+.sp{flex:1}
+.reloj{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.pill{font-size:11px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);color:var(--text-2);white-space:nowrap;display:flex;align-items:center;gap:7px}
+.pill.demo{border-color:rgba(250,178,25,.45);color:var(--warning)}
+.viva{width:7px;height:7px;border-radius:50%;background:var(--good);animation:lat 2s infinite}
+@keyframes lat{0%,100%{opacity:1}50%{opacity:.25}}
+.btn{background:var(--surface-2);border:1px solid var(--line);color:var(--text);border-radius:9px;padding:7px 13px;font:inherit;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:7px;min-height:34px;white-space:nowrap}
+.btn:hover{border-color:rgba(255,255,255,.26)}
+.btn.on{background:rgba(57,135,229,.16);border-color:rgba(57,135,229,.5);color:#9cc4f5}
+.btn.urg{background:rgba(208,59,59,.16);border-color:rgba(208,59,59,.5);color:#f0a3a3}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* ---------- layout ---------- */
+.app{display:flex;flex-direction:column;height:100vh}
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--line-2);border-bottom:1px solid var(--line);flex:none}
+.kpi{background:var(--surface);padding:11px 18px}
+.kpi .lab{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.kpi .val{font-size:27px;font-weight:600;line-height:1.1;margin-top:2px}
+.kpi.mal .val{color:var(--critical)}
+.kpi.ok .val{color:var(--good)}
+
+.cols{display:grid;grid-template-columns:1.25fr 1fr;gap:14px;padding:14px;flex:1;min-height:0}
+@media(max-width:1050px){.cols{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;min-height:0}
+.phead{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line);flex:none}
+.phead h2{font-size:13px}
+.phead .cnt{font-size:11px;color:var(--muted);background:var(--surface-3);border-radius:999px;padding:2px 9px;font-variant-numeric:tabular-nums}
+.plist{overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:9px;flex:1}
+.vacio{color:var(--muted);text-align:center;padding:40px 16px;font-size:13px}
+
+/* ---------- tarjeta camión esperado ---------- */
+.esp{background:var(--surface-2);border:1px solid var(--line);border-left:2px solid var(--series-1);border-radius:10px;padding:11px 13px;display:flex;align-items:center;gap:14px}
+.esp.viejo{border-left-color:var(--warning)}
+.esp .izq{flex:1;min-width:0}
+.esp .pat{font-size:17px;font-weight:600;letter-spacing:.03em;font-variant-numeric:tabular-nums}
+.esp .meta{font-size:12px;color:var(--text-2)}
+.esp .meta b{color:var(--text);font-weight:500}
+.esp .der{text-align:right;flex:none}
+.esp .pal{font-size:23px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+.esp .pal small{font-size:11px;color:var(--muted);font-weight:400;display:block;margin-top:3px;letter-spacing:.04em}
+.esp .esperando{font-size:11px;color:var(--muted);margin-top:5px}
+.esp.viejo .esperando{color:var(--warning)}
+
+/* ---------- evento ---------- */
+.ev{background:var(--surface-2);border:1px solid var(--line);border-left:2px solid var(--good);border-radius:10px;padding:10px 13px;display:flex;align-items:center;gap:12px;animation:entra .3s ease}
+@keyframes entra{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.ev.faltante{border-left-color:var(--critical)}
+.ev.sobrante{border-left-color:var(--warning)}
+.ev.sin_guia,.ev.sin_patente{border-left-color:var(--muted)}
+.ev .gh{font-size:15px;width:20px;text-align:center;flex:none}
+.ev .pat{font-weight:600;letter-spacing:.03em;font-variant-numeric:tabular-nums}
+.ev .det{font-size:12px;color:var(--text-2)}
+.ev .hora{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;margin-left:auto;text-align:right;flex:none}
+.ev .dif{font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;flex:none}
+
+/* ---------- tira de filas (bultos) ---------- */
+.tira{display:flex;gap:3px;flex-wrap:wrap;margin:10px 0 4px}
+.fila{flex:1;min-width:34px;background:var(--surface-3);border:1px solid var(--line);border-radius:6px;padding:7px 3px;text-align:center}
+.fila .n{font-size:9px;color:var(--muted);letter-spacing:.04em}
+.fila .v{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.2}
+.fila.corta{background:rgba(208,59,59,.18);border-color:rgba(208,59,59,.65)}
+.fila.corta .v{color:#f08a8a}
+.fila.larga{background:rgba(250,178,25,.16);border-color:rgba(250,178,25,.6)}
+.fila.larga .v{color:#f5c95f}
+.fila.incog .v{color:var(--muted)}
+
+/* ---------- modal de alerta ---------- */
+.scrim{position:fixed;inset:0;background:rgba(4,6,10,.82);opacity:0;pointer-events:none;transition:opacity .16s;z-index:80;backdrop-filter:blur(2px)}
+.scrim.on{opacity:1;pointer-events:auto}
+.modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(.96);width:min(680px,calc(100% - 32px));max-height:88vh;overflow-y:auto;
+  background:var(--surface);border:1px solid rgba(255,255,255,.14);border-radius:16px;z-index:90;opacity:0;pointer-events:none;transition:opacity .16s,transform .16s;
+  box-shadow:0 30px 80px rgba(0,0,0,.7)}
+.modal.on{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1)}
+.modal.critica{border-color:rgba(208,59,59,.55);box-shadow:0 0 0 1px rgba(208,59,59,.25),0 30px 80px rgba(0,0,0,.7)}
+.mhead{padding:16px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
+.mhead .ico{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;font-size:19px;flex:none}
+.critica .mhead .ico{background:rgba(208,59,59,.18);color:#f08a8a}
+.aviso .mhead .ico{background:rgba(250,178,25,.16);color:#f5c95f}
+.mhead .tt{font-size:16px;font-weight:600}
+.mhead .st{font-size:12px;color:var(--muted);margin-top:1px}
+.mbody{padding:20px 22px}
+.gran{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px}
+.gran>div{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;text-align:center}
+.gran .lab{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
+.gran .v{font-size:30px;font-weight:600;line-height:1.05;margin-top:3px}
+.patgrande{font-size:38px;font-weight:700;letter-spacing:.06em;text-align:center;margin:2px 0 4px;font-variant-numeric:tabular-nums}
+.subpat{text-align:center;color:var(--text-2);font-size:13px;margin-bottom:16px}
+.mfoot{padding:14px 22px;border-top:1px solid var(--line);display:flex;gap:9px;flex-wrap:wrap}
+.aviso-fila{background:var(--surface-2);border:1px solid var(--line);border-left:2px solid var(--warning);border-radius:9px;padding:10px 13px;font-size:12px;color:var(--text-2);margin-top:4px}
+.aviso-fila b{color:var(--text)}
+.sec{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:16px 0 2px}
+.cola{font-size:12px;color:var(--muted);padding:9px 13px;background:var(--surface-2);border:1px solid var(--line);border-radius:9px;display:flex;align-items:center;gap:9px;margin-top:10px}
+.hide{display:none!important}
+.aud-aviso{background:rgba(250,178,25,.1);border:1px solid rgba(250,178,25,.35);color:#f5c95f;font-size:12px;padding:7px 13px;border-radius:9px;display:flex;align-items:center;gap:9px}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="top">
+    <div class="logo">R</div>
+    <div>
+      <h1>Monitor de andén · Despacho</h1>
+      <div class="sub">Guía emitida (RDTOut) → paso por túnel (SPOTVISION)</div>
+    </div>
+    <div class="sp"></div>
+    <div id="aud-aviso" class="aud-aviso">Sonido desactivado — el navegador exige un clic</div>
+    <button class="btn" id="btn-sonido">Activar sonido</button>
+    <button class="btn" id="btn-notif">Notificaciones</button>
+    <button class="btn" id="btn-detalle">Detalle por bulto: API actual</button>
+    <button class="btn on solo-demo" id="btn-demo">Simulación activa</button>
+    <button class="btn solo-demo" id="btn-paso">Simular paso</button>
+    <div class="pill demo solo-demo"><span class="viva"></span>DEMO</div>
+    <div class="pill hide" id="pill-vivo"><span class="viva"></span>EN LÍNEA</div>
+    <div class="reloj" id="reloj">--:--:--</div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="cols">
+    <div class="panel">
+      <div class="phead">
+        <h2>Camiones esperando el paso</h2>
+        <span class="cnt" id="cnt-esp">0</span>
+        <div class="sp"></div>
+        <span style="font-size:11px;color:var(--muted)">guías emitidas, aún sin cruzar el túnel</span>
+      </div>
+      <div class="plist" id="esperando"></div>
+    </div>
+
+    <div class="panel">
+      <div class="phead">
+        <h2>Pasos registrados</h2>
+        <span class="cnt" id="cnt-ev">0</span>
+        <div class="sp"></div>
+        <button class="btn" id="btn-limpiar" style="min-height:26px;padding:3px 10px">limpiar</button>
+      </div>
+      <div class="plist" id="eventos"></div>
+    </div>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<div class="modal" id="modal" role="alertdialog" aria-modal="true" aria-hidden="true"><div id="mcont"></div></div>
+
+<script>
+"use strict";
+
+/* =====================================================================
+   CONFIGURACIÓN
+   ===================================================================== */
+const DEMO = false;                                 // true = simulación local sin APIs
+const API_PASOS   = '/api/spotvision-conciliacion'; // pasos por el túnel
+const API_GUIAS   = '/api/guias-pendientes';        // guías emitidas del día
+const API_CORREO  = '/api/alerta-correo';           // envío de la alerta por correo
+const POLL_MS     = 15000;                          // sin webhook, cada cuánto preguntamos
+const VENCE_MIN   = 240;                            // guía sin paso: se marca demorada
+const TOLERANCIA  = 0;                              // pallets de diferencia aceptados
+
+/* Reglas de alerta. `sonido` sólo aplica si el operador lo activó. */
+const REGLAS = {
+  faltante:    {nivel:'critica', gh:'▼', tit:'Camión con menos pallets de los declarados',
+                acc:'Retener el camión y completar la carga', sonido:'critico', correo:true},
+  sobrante:    {nivel:'aviso',   gh:'▲', tit:'Camión con más pallets de los declarados',
+                acc:'Verificar la carga o corregir la guía', sonido:'aviso', correo:true},
+  sin_guia:    {nivel:'critica', gh:'?', tit:'Camión sin guía emitida',
+                acc:'Detener el camión: pasó sin documento asociado', sonido:'critico', correo:true},
+  sin_patente: {nivel:'aviso',   gh:'⊘', tit:'Patente no legible',
+                acc:'Validar manualmente contra la evidencia', sonido:'aviso', correo:false},
+  demorada:    {nivel:'aviso',   gh:'◷', tit:'Guía emitida sin paso registrado',
+                acc:'Confirmar si el camión sigue en planta', sonido:'aviso', correo:false},
+  ok:          {nivel:'ok',      gh:'✓', tit:'Carga conciliada', acc:'', sonido:null, correo:false},
+};
+
+const $  = (s,r=document)=>r.querySelector(s);
+const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
+const esc = s => String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+const n0 = v => (v==null||isNaN(v))?'—':Math.round(v).toLocaleString('es-CL');
+const hhmmss = d => d.toLocaleTimeString('es-CL',{hour12:false});
+const hhmm = d => d.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',hour12:false});
+
+/* =====================================================================
+   ESTADO
+   ===================================================================== */
+const S = {
+  esperando: [],        // guías emitidas sin paso
+  eventos: [],          // pasos evaluados, más reciente primero
+  colaCorreo: [],
+  sonidoOn: false,
+  notifOn: false,
+  demoOn: true,
+  detallePorBulto: false,   // el campo que le pedimos a SPOTVISION
+  vistos: new Set(),
+  arranque: true,           // primera sincronización: entra el histórico sin alertar
+};
+
+/* =====================================================================
+   SONIDO — generado con WebAudio, sin archivos externos
+   ===================================================================== */
+let ctx = null;
+function activarSonido(){
+  try{
+    ctx = ctx || new (window.AudioContext||window.webkitAudioContext)();
+    ctx.resume();
+    S.sonidoOn = true;
+    $('#btn-sonido').classList.add('on');
+    $('#btn-sonido').textContent = 'Sonido activo';
+    $('#aud-aviso').classList.add('hide');
+    pitido(660,.08,.10);                     // confirmación breve
+  }catch(e){ console.warn('Audio no disponible', e); }
+}
+function pitido(freq, dur, vol, cuando=0){
+  if(!ctx) return;
+  const t0 = ctx.currentTime + cuando;
+  const osc = ctx.createOscillator(), g = ctx.createGain();
+  osc.type='square'; osc.frequency.setValueAtTime(freq,t0);
+  g.gain.setValueAtTime(0,t0);
+  g.gain.linearRampToValueAtTime(vol,t0+.01);
+  g.gain.exponentialRampToValueAtTime(.0001,t0+dur);
+  osc.connect(g); g.connect(ctx.destination);
+  osc.start(t0); osc.stop(t0+dur+.02);
+}
+function sonar(tipo){
+  if(!S.sonidoOn||!ctx) return;
+  if(tipo==='critico'){                      // tres pares descendentes, insistente
+    for(let i=0;i<3;i++){ pitido(880,.16,.20,i*.42); pitido(620,.16,.20,i*.42+.19); }
+  }else if(tipo==='aviso'){
+    pitido(720,.12,.13,0); pitido(560,.14,.13,.16);
+  }
+}
+
+/* =====================================================================
+   NOTIFICACIÓN DE ESCRITORIO
+   ===================================================================== */
+async function activarNotif(){
+  if(!('Notification' in window)) return alert('Este navegador no soporta notificaciones de escritorio.');
+  const r = await Notification.requestPermission();
+  S.notifOn = r === 'granted';
+  $('#btn-notif').classList.toggle('on', S.notifOn);
+  $('#btn-notif').textContent = S.notifOn ? 'Notificaciones activas' : 'Notificaciones bloqueadas';
+}
+function notificar(v){
+  if(!S.notifOn) return;
+  const r = REGLAS[v.estado];
+  try{
+    new Notification(`${r.gh} ${v.patente||'Sin patente'} · ${r.tit}`, {
+      body: v.diferencia!=null ? `${v.diferencia>0?'+':''}${v.diferencia} pallets · ${r.acc}` : r.acc,
+      tag: v.carga_id, renotify: true,
+    });
+  }catch(e){ /* algunos navegadores exigen service worker */ }
+}
+
+/* =====================================================================
+   CORREO — la Function hace el envío real; acá sólo se encola
+   ===================================================================== */
+async function enviarCorreo(v){
+  const r = REGLAS[v.estado];
+  const payload = {
+    tipo: v.estado, nivel: r.nivel, patente: v.patente, carga_id: v.carga_id,
+    guia: v.guia?.numero ?? null, chofer: v.guia?.chofer ?? null,
+    declarados: v.guia?.pallets_declarados ?? null, detectados: v.total_pallets,
+    diferencia: v.diferencia, fila_afectada: v.filaAfectada?.n ?? null,
+    hora: v.fecha_hora_carga, accion: r.acc,
+  };
+  S.colaCorreo.unshift({...payload, enviado_en: new Date().toISOString(), estado_envio: DEMO?'simulado':'enviando'});
+  if(DEMO){ console.log('[correo simulado]', payload); return; }
+  try{
+    const res = await fetch(API_CORREO, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    S.colaCorreo[0].estado_envio = res.ok ? 'enviado' : 'error ' + res.status;
+  }catch(e){ S.colaCorreo[0].estado_envio = 'error de red'; }
+}
+
+/* =====================================================================
+   EVALUACIÓN — el corazón: paso por el túnel contra guía esperada
+   ===================================================================== */
+function evaluar(carga){
+  // 1. sin patente no hay forma de asociar el paso a una guía
+  if(!carga.patente){
+    return {...carga, guia:null, estado:'sin_patente', diferencia:null, filaAfectada:null};
+  }
+  // 2. match contra la tabla de camiones esperados
+  const i = S.esperando.findIndex(g => g.patente === carga.patente);
+  if(i < 0){
+    return {...carga, guia:null, estado:'sin_guia', diferencia:null, filaAfectada:null};
+  }
+  const guia = S.esperando.splice(i,1)[0];       // deja de esperar: ya pasó
+  const dif = carga.total_pallets - guia.pallets_declarados;
+  const estado = Math.abs(dif) <= TOLERANCIA ? 'ok' : (dif < 0 ? 'faltante' : 'sobrante');
+
+  // 3. ¿en qué fila está la diferencia? Sólo si el payload trae cantidad por bulto
+  let filaAfectada = null;
+  if(dif !== 0 && carga.bultos.every(b => typeof b.pallets_bulto === 'number')){
+    const nominal = guia.pallets_por_fila ?? Math.round(guia.pallets_declarados / carga.bultos.length);
+    let peor = null;
+    carga.bultos.forEach((b,idx)=>{
+      const d = b.pallets_bulto - nominal;
+      if(d !== 0 && (peor === null || Math.abs(d) > Math.abs(peor.d))) peor = {n:idx+1, d, b};
+    });
+    filaAfectada = peor;
+  }
+  return {...carga, guia, estado, diferencia:dif, filaAfectada};
+}
+
+function registrarPaso(carga){
+  if(S.vistos.has(carga.carga_id)) return;      // idempotente: el poll repite cargas
+  S.vistos.add(carga.carga_id);
+  const v = evaluar(carga);
+  S.eventos.unshift(v);
+  if(S.eventos.length > 60) S.eventos.pop();
+  const r = REGLAS[v.estado];
+  // En la primera sincronización del día entra el histórico completo: se
+  // muestra en el feed pero NO se alerta, o el operador recibiría una
+  // avalancha de pop-ups por camiones que ya se fueron hace horas.
+  if(r.nivel !== 'ok' && !S.arranque){
+    sonar(r.sonido);
+    notificar(v);
+    if(r.correo) enviarCorreo(v);
+    abrirModal(v);
+  }else if(r.nivel !== 'ok'){
+    v.atendida = true;
+    v.historico = true;
+  }
+  render();
+}
+
+/* =====================================================================
+   MODAL DE ALERTA
+   ===================================================================== */
+function tiraFilas(v){
+  const b = v.bultos;
+  const conDetalle = b.every(x => typeof x.pallets_bulto === 'number');
+  const nominal = v.guia ? (v.guia.pallets_por_fila ?? Math.round(v.guia.pallets_declarados/b.length)) : null;
+  const celdas = b.map((x,i)=>{
+    if(!conDetalle) return `<div class="fila incog"><div class="n">F${String(i+1).padStart(2,'0')}</div><div class="v">?</div></div>`;
+    const d = nominal!=null ? x.pallets_bulto - nominal : 0;
+    const cls = d<0?'corta':d>0?'larga':'';
+    return `<div class="fila ${cls}"><div class="n">F${String(i+1).padStart(2,'0')}</div><div class="v">${x.pallets_bulto}</div></div>`;
+  }).join('');
+  const pie = conDetalle
+    ? (v.filaAfectada
+        ? `<div class="aviso-fila" style="border-left-color:var(--critical)">La diferencia está en la <b>fila ${v.filaAfectada.n}</b>:
+             ${v.filaAfectada.d>0?'+':''}${v.filaAfectada.d} pallets respecto de las ${nominal} de una fila completa.</div>`
+        : '')
+    : `<div class="aviso-fila">La API no entrega la cantidad de pallets por bulto, así que <b>no es posible señalar la fila</b>.
+         Con el campo solicitado a SPOTVISION, acá se marcaría la fila exacta y el operador no tendría que revisar
+         ${b.length} fotografías. Usa el botón <b>Detalle por bulto</b> para ver cómo se vería.</div>`;
+  return `<div class="sec">Distribución por fila · ${b.length} bultos</div><div class="tira">${celdas}</div>${pie}`;
+}
+
+function abrirModal(v){
+  const r = REGLAS[v.estado];
+  const dec = v.guia?.pallets_declarados;
+  const col = r.nivel==='critica' ? 'var(--critical)' : 'var(--warning)';
+
+  $('#mcont').innerHTML = `
+    <div class="mhead">
+      <div class="ico">${r.gh}</div>
+      <div>
+        <div class="tt">${esc(r.tit)}</div>
+        <div class="st">${esc(v.carga_id)} · paso registrado a las ${hhmm(new Date(v.fecha_hora_carga))}</div>
+      </div>
+    </div>
+    <div class="mbody">
+      <div class="patgrande" style="color:${col}">${esc(v.patente || 'SIN PATENTE')}</div>
+      <div class="subpat">
+        ${v.guia ? `Guía ${esc(v.guia.numero)} · ${esc(v.guia.chofer)} · ${esc(v.guia.cliente)}`
+                 : 'Sin guía asociada en RDTOut'}
+      </div>
+
+      <div class="gran">
+        <div><div class="lab">Guía declara</div><div class="v">${dec!=null?n0(dec):'—'}</div></div>
+        <div><div class="lab">Cámara cuenta</div><div class="v">${n0(v.total_pallets)}</div></div>
+        <div><div class="lab">Diferencia</div>
+          <div class="v" style="color:${v.diferencia?col:'var(--text)'}">${v.diferencia==null?'—':(v.diferencia>0?'+':'')+n0(v.diferencia)}</div></div>
+      </div>
+
+      <div class="aviso-fila" style="border-left-color:${col}"><b>${esc(r.acc)}</b></div>
+
+      ${v.bultos?.length ? tiraFilas(v) : ''}
+
+      ${r.correo ? `<div class="cola"><span class="gh">✉</span> Alerta ${DEMO?'encolada (demo)':'enviada'} a operaciones de despacho</div>` : ''}
+    </div>
+    <div class="mfoot">
+      <button class="btn urg" id="m-retener">Camión retenido</button>
+      <button class="btn" id="m-atendida">Marcar atendida</button>
+      <button class="btn" id="m-cerrar">Cerrar</button>
+      <div class="sp"></div>
+      <button class="btn" id="m-silencio">Silenciar</button>
+    </div>`;
+
+  const modal = $('#modal');
+  modal.className = 'modal on ' + (r.nivel==='critica'?'critica':'aviso');
+  modal.setAttribute('aria-hidden','false');
+  $('#scrim').classList.add('on');
+  $('#m-cerrar').onclick = cerrarModal;
+  $('#m-atendida').onclick = ()=>{ v.atendida = true; cerrarModal(); render(); };
+  $('#m-retener').onclick = ()=>{ v.atendida = true; v.retenido = true; cerrarModal(); render(); };
+  $('#m-silencio').onclick = ()=>{ S.sonidoOn=false; $('#btn-sonido').classList.remove('on');
+                                   $('#btn-sonido').textContent='Activar sonido'; $('#aud-aviso').classList.remove('hide'); };
+  $('#m-retener').focus();
+}
+function cerrarModal(){
+  $('#modal').classList.remove('on'); $('#modal').setAttribute('aria-hidden','true');
+  $('#scrim').classList.remove('on');
+}
+$('#scrim').onclick = cerrarModal;
+addEventListener('keydown', e=>{ if(e.key==='Escape') cerrarModal(); });
+
+/* =====================================================================
+   RENDER
+   ===================================================================== */
+function render(){
+  const ahora = Date.now();
+
+  // --- KPIs de la jornada ---
+  const pasados = S.eventos.length;
+  const ok = S.eventos.filter(e=>e.estado==='ok').length;
+  const falt = S.eventos.filter(e=>e.estado==='faltante');
+  const sob = S.eventos.filter(e=>e.estado==='sobrante');
+  const pend = S.eventos.filter(e=>REGLAS[e.estado].nivel!=='ok' && !e.atendida).length;
+  const enRiesgo = falt.reduce((a,e)=>a-e.diferencia,0);
+
+  $('#kpis').innerHTML = [
+    ['Esperando paso', S.esperando.length, ''],
+    ['Pasos hoy', pasados, ''],
+    ['Conciliados', ok, 'ok'],
+    ['Con desviación', falt.length+sob.length, (falt.length+sob.length)?'mal':''],
+    ['Pallets en riesgo', enRiesgo, enRiesgo?'mal':''],
+    ['Alertas sin atender', pend, pend?'mal':''],
+  ].map(([l,v,c])=>`<div class="kpi ${c}"><div class="lab">${l}</div><div class="val">${n0(v)}</div></div>`).join('');
+
+  // --- camiones esperando ---
+  $('#cnt-esp').textContent = S.esperando.length;
+  $('#esperando').innerHTML = S.esperando.length ? S.esperando
+    .slice().sort((a,b)=>a.hora_emision-b.hora_emision)
+    .map(g=>{
+      const min = Math.round((ahora-g.hora_emision)/60000);
+      const viejo = min >= VENCE_MIN;
+      return `<div class="esp ${viejo?'viejo':''}">
+        <div class="izq">
+          <div class="pat">${esc(g.patente)}</div>
+          <div class="meta">${esc(g.numero)} · <b>${esc(g.chofer)}</b> · ${esc(g.cliente)}</div>
+          <div class="esperando">${viejo?'◷ ':''}emitida ${hhmm(new Date(g.hora_emision))} · esperando ${min} min</div>
+        </div>
+        <div class="der">
+          <div class="pal">${n0(g.pallets_declarados)}<small>PALLETS</small></div>
+        </div>
+      </div>`;
+    }).join('') : '<div class="vacio">Ningún camión pendiente de pasar</div>';
+
+  // --- feed de pasos ---
+  $('#cnt-ev').textContent = S.eventos.length;
+  $('#eventos').innerHTML = S.eventos.length ? S.eventos.map(v=>{
+    const r = REGLAS[v.estado];
+    const col = r.nivel==='critica'?'var(--critical)':r.nivel==='aviso'?'var(--warning)':'var(--good)';
+    return `<div class="ev ${v.estado}">
+      <span class="gh" style="color:${col}">${r.gh}</span>
+      <div style="min-width:0">
+        <div class="pat">${esc(v.patente||'sin patente')}${v.retenido?' · <span style="color:var(--critical);font-size:11px">RETENIDO</span>':v.historico?' · <span style="color:var(--muted);font-size:11px">previo a la sesión</span>':v.atendida?' · <span style="color:var(--muted);font-size:11px">atendida</span>':''}</div>
+        <div class="det">${v.guia?esc(v.guia.numero)+' · ':''}${n0(v.total_pallets)} pallets en ${v.total_bultos} filas</div>
+      </div>
+      ${v.diferencia ? `<div class="dif" style="color:${col}">${v.diferencia>0?'+':''}${n0(v.diferencia)}</div>` : ''}
+      <div class="hora">${hhmm(new Date(v.fecha_hora_carga))}</div>
+    </div>`;
+  }).join('') : '<div class="vacio">Sin pasos registrados todavía</div>';
+}
+
+/* =====================================================================
+   ORIGEN DE DATOS
+   ===================================================================== */
+/* ---------------------------------------------------------------------
+   Sesión de Entra expirada.
+   staticwebapp.config.json redirige el 401 a /login.html, así que un fetch
+   con la sesión vencida NO falla: responde 200 con el HTML del login. Sin
+   esta detección, el monitor mostraría "SIN CONEXIÓN" toda la noche y el
+   turno de la mañana lo encontraría mudo. Recargar dispara el flujo de
+   autenticación de la SWA y, si el usuario sigue conectado a Entra, la
+   pantalla vuelve sola.
+   --------------------------------------------------------------------- */
+let reautenticando = false;
+function sesionExpirada(){
+  if(reautenticando) return;
+  reautenticando = true;
+  const b = document.createElement('div');
+  b.style.cssText = 'position:fixed;inset:0;background:rgba(4,6,10,.92);z-index:200;display:grid;'+
+                    'place-items:center;text-align:center;font-family:var(--sans)';
+  b.innerHTML = `<div><div style="font-size:19px;font-weight:600;margin-bottom:8px">Sesión expirada</div>
+    <div style="color:var(--text-2);font-size:14px">Reconectando…</div></div>`;
+  document.body.appendChild(b);
+  setTimeout(()=>location.reload(), 3000);
+}
+
+async function pedirJSON(url){
+  const r = await fetch(url, {headers:{'Accept':'application/json'}});
+  const ct = r.headers.get('content-type') || '';
+  // 200 con HTML = nos devolvieron la página de login, no datos
+  if(r.status===401 || r.status===403 || (r.ok && !ct.includes('json'))){
+    sesionExpirada();
+    throw new Error('sesión expirada');
+  }
+  if(!r.ok) throw new Error(`${url} respondió ${r.status}`);
+  return r.json();
+}
+
+async function cargarGuiasReales(){
+  const gs = await pedirJSON(API_GUIAS);
+  S.esperando = gs.map(g=>({...g, hora_emision:new Date(g.hora_emision).getTime()}));
+}
+async function pollPasosReales(){
+  // Fecha local de Santiago, no UTC: pasadas las 20:00 toISOString ya es mañana.
+  const hoy = new Intl.DateTimeFormat('en-CA',{timeZone:'America/Santiago',
+    year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+  const d = await pedirJSON(`${API_PASOS}?desde=${hoy}&hasta=${hoy}`);
+  d.cargas.forEach(registrarPaso);   // registrarPaso es idempotente por carga_id
+}
+
+/* ---------------- simulación ---------------- */
+const CHOFERES = ['J. Muñoz','R. Cáceres','L. Pinto','M. Contreras','D. Fuentes','A. Reyes','S. Vidal','P. Órdenes'];
+const CLIENTES = ['Walmart Chile','Cencosud Retail','SMU S.A.','Falabella Retail','Tottus','CCU'];
+let nGuia = 918500, nCarga = 1200;
+const azar = a => a[Math.floor(Math.random()*a.length)];
+function patenteAzar(){
+  const L='BCDFGHJKLPRSTVWXYZ';
+  return Array.from({length:4},()=>azar(L.split(''))).join('') + (10+Math.floor(Math.random()*90));
+}
+function nuevaGuia(minAtras){
+  const filas = 12 + Math.floor(Math.random()*4);          // 12 a 15 filas
+  const porFila = 17 + Math.floor(Math.random()*2);        // 17 o 18 por fila
+  return {
+    numero:'G'+(++nGuia), patente:patenteAzar(), chofer:azar(CHOFERES), cliente:azar(CLIENTES),
+    pallets_declarados: filas*porFila, filas, pallets_por_fila: porFila,
+    hora_emision: Date.now() - minAtras*60000,
+  };
+}
+/* Construye un paso con la forma exacta del payload de SPOTVISION */
+function simularPaso(caso){
+  const g = caso==='sin_guia' ? nuevaGuia(0) : (S.esperando.length ? azar(S.esperando) : nuevaGuia(30));
+  const filas = g.filas, porFila = g.pallets_por_fila;
+  const reparto = Array.from({length:filas},()=>porFila);
+
+  if(caso==='faltante'){                                   // a una fila le faltan pallets
+    const i = Math.floor(Math.random()*filas);
+    reparto[i] -= 1 + Math.floor(Math.random()*Math.min(6,porFila-1));
+  }else if(caso==='sobrante'){
+    reparto[Math.floor(Math.random()*filas)] += 1 + Math.floor(Math.random()*3);
+  }
+
+  const t0 = Date.now();
+  const bultos = reparto.map((cant,i)=>({
+    bulto_id:`C${nCarga+1}-B${String(i+1).padStart(2,'0')}`,
+    fecha_hora_deteccion: new Date(t0 + Math.round(i*330 + Math.random()*120)).toISOString(),
+    foto_bulto_url: null,
+    // El campo que le pedimos a SPOTVISION: sólo se incluye si el interruptor está encendido
+    ...(S.detallePorBulto ? {pallets_bulto:cant} : {}),
+  }));
+
+  nCarga++;
+  return {
+    carga_id:'C'+nCarga,
+    fecha_hora_carga:new Date(t0).toISOString(),
+    patente: caso==='sin_patente' ? null : g.patente,
+    foto_patente_url: null,
+    total_pallets: reparto.reduce((a,b)=>a+b,0),
+    total_bultos: filas,
+    bultos,
+  };
+}
+function pasoAlAzar(){
+  const r = Math.random();
+  const caso = r<0.52 ? 'ok' : r<0.76 ? 'faltante' : r<0.88 ? 'sobrante' : r<0.95 ? 'sin_patente' : 'sin_guia';
+  registrarPaso(simularPaso(caso));
+  if(S.esperando.length < 6) S.esperando.push(nuevaGuia(Math.floor(Math.random()*90)));
+}
+
+/* =====================================================================
+   ARRANQUE
+   ===================================================================== */
+$('#btn-sonido').onclick = activarSonido;
+$('#btn-notif').onclick = activarNotif;
+$('#btn-paso').onclick = ()=>{ if(!ctx) activarSonido(); pasoAlAzar(); };
+$('#btn-limpiar').onclick = ()=>{ S.eventos=[]; render(); };
+$('#btn-demo').onclick = ()=>{
+  S.demoOn = !S.demoOn;
+  $('#btn-demo').classList.toggle('on', S.demoOn);
+  $('#btn-demo').textContent = S.demoOn ? 'Simulación activa' : 'Simulación detenida';
+};
+$('#btn-detalle').onclick = ()=>{
+  S.detallePorBulto = !S.detallePorBulto;
+  $('#btn-detalle').classList.toggle('on', S.detallePorBulto);
+  $('#btn-detalle').textContent = 'Detalle por bulto: ' + (S.detallePorBulto ? 'campo solicitado' : 'API actual');
+};
+
+setInterval(()=>{ $('#reloj').textContent = hhmmss(new Date()); }, 1000);
+$('#reloj').textContent = hhmmss(new Date());
+
+if(DEMO){
+  S.arranque = false;
+  for(let i=0;i<5;i++) S.esperando.push(nuevaGuia(Math.floor(Math.random()*260)));
+  render();
+  setInterval(()=>{ if(S.demoOn && !$('#modal').classList.contains('on')) pasoAlAzar(); }, 11000);
+}else{
+  // Producción: fuera todo lo que pueda generar una alerta falsa en el andén.
+  $$('.solo-demo').forEach(el=>el.remove());
+  $('#pill-vivo').classList.remove('hide');
+
+  const marcarCaida = (e)=>{
+    console.error(e);
+    const p = $('#pill-vivo');
+    p.style.borderColor = 'rgba(208,59,59,.5)'; p.style.color = 'var(--critical)';
+    p.querySelector('.viva').style.background = 'var(--critical)';
+    p.lastChild.textContent = 'SIN CONEXIÓN';
+  };
+  const marcarViva = ()=>{
+    const p = $('#pill-vivo');
+    p.style.borderColor = ''; p.style.color = '';
+    p.querySelector('.viva').style.background = ''; p.lastChild.textContent = 'EN LÍNEA';
+  };
+
+  const ciclo = ()=> cargarGuiasReales()
+    .then(()=>pollPasosReales())
+    .then(()=>{ marcarViva(); render(); })
+    .catch(marcarCaida);
+
+  ciclo().finally(()=>{ S.arranque = false; });   // a partir de acá, sí se alerta
+  setInterval(ciclo, POLL_MS);
+  setInterval(render, 30000);          // refresca los minutos de espera
+}
+</script>
+</body>
+</html>

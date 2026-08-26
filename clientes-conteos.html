@@ -501,7 +501,9 @@
             <div style="display:flex;gap:10px;flex-wrap:wrap;">
                 <button class="btn btn-secondary" onclick="testConnection()">🔄 Probar Conexión</button>
                 <button class="btn btn-primary" onclick="initializeData()">☁️ Subir Datos Iniciales al Almacén</button>
+                <a class="btn btn-secondary" href="/respaldos-conteos.html" style="text-decoration:none;display:inline-flex;align-items:center;">🗂️ Respaldos y restauración</a>
             </div>
+            <div class="alert a-info" style="margin-top:12px;">Cada guardado archiva automáticamente la versión anterior. Si algo se sobrescribe por error, se recupera desde <strong>Respaldos y restauración</strong>.</div>
         </div>
         <div class="config-card">
             <div class="config-title">📋 Información de Configuración</div>
@@ -929,6 +931,11 @@ const INIT_K = [
 // ================================================================
 let clientes = [], calendario = [], editCId = null, editKId = null;
 
+// Solo se pone en true tras una LECTURA exitosa del almacén. Mientras sea
+// false, GS.put se niega a escribir: así una lectura fallida nunca puede
+// terminar sobrescribiendo los datos reales con la copia del archivo.
+let almacenOK = false;
+
 // ================================================================
 //  ALMACÉN INTERNO (Azure Function + Blob JSON)
 //  Mismo contrato que Google Apps Script: .get(sheet) y .put(sheet, data)
@@ -942,6 +949,12 @@ const GS = {
         return (data || []).map(row => ({...row, id: Number(row.id)||row.id, num: Number(row.num)||row.num}));
     },
     async put(sheet, data) {
+        if (!almacenOK) {
+            throw new Error("Sin lectura confirmada del almacen: la escritura esta bloqueada para no sobrescribir los datos reales. Recarga la pagina.");
+        }
+        if (!Array.isArray(data)) {
+            throw new Error("Datos invalidos: se esperaba una lista.");
+        }
         const r = await fetch(STORE_URL, {
             method: "POST",
             headers: {"Content-Type": "application/json"},
@@ -1258,12 +1271,15 @@ async function loadData() {
                                      : (pendientes2024 !== 0 ? diferencia - pendientes2024 : diferencia);
             return { ...r, fisico, sap, diferencia, pendientes2024, difTotal };
         });
-        // Si las hojas están vacías, subir datos iniciales automáticamente
+        // Lectura correcta: recién ahora se habilita la escritura.
+        almacenOK = true;
+
+        // El almacén vacío NO se siembra automáticamente. Una lectura que
+        // devuelve vacío por un problema puntual sobrescribiría los datos
+        // reales con la copia del archivo. La carga inicial es manual, desde
+        // Configuración → "Subir datos iniciales".
         if (clientes.length === 0 && calendario.length === 0) {
-            await GS.put("Clientes", INIT_C);
-            await GS.put("Calendario", INIT_K);
-            clientes = [...INIT_C]; calendario = [...INIT_K];
-            toast("✅ Datos iniciales subidos al almacén", "success");
+            toast("El almacén está vacío. Si es la primera carga, usa \"Subir datos iniciales\" en Configuración.", "error");
         }
         renderClientes(); renderCalendario(); renderResultados();
         setSync("ok","Sincronizado ✓");
@@ -1273,10 +1289,14 @@ async function loadData() {
            Se hace fuera del tab Resultados porque la tab inicial es Clientes. */
         setTimeout(() => mostrarModalVencimientos(), 500);
     } catch(e) {
-        clientes = [...INIT_C]; calendario = [...INIT_K];
-        renderClientes(); renderCalendario();
+        // Antes se cargaban INIT_C/INIT_K en memoria: si el usuario editaba
+        // cualquier cosa, el primer guardado reemplazaba TODO el almacén por
+        // esa copia vieja del archivo. Ahora se queda vacío y bloqueado.
+        almacenOK = false;
+        clientes = []; calendario = []; resultados = [];
+        renderClientes(); renderCalendario(); renderResultados();
         setSync("error","Error de conexión");
-        toast("Error al conectar con el almacén. Mostrando datos locales.", "error");
+        toast("No se pudo leer el almacén. La edición queda bloqueada hasta que recargues.", "error");
         console.error(e);
     } finally { showLoad(false); }
     updateCfgStatus();

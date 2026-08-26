@@ -500,8 +500,7 @@
             <div id="configStatus" class="alert a-info">Verificando configuración...</div>
             <div style="display:flex;gap:10px;flex-wrap:wrap;">
                 <button class="btn btn-secondary" onclick="testConnection()">🔄 Probar Conexión</button>
-                <button class="btn btn-primary" onclick="initializeData()">☁️ Subir Datos Iniciales al Almacén</button>
-                <a class="btn btn-secondary" href="/respaldos-conteos.html" style="text-decoration:none;display:inline-flex;align-items:center;">🗂️ Respaldos y restauración</a>
+                <a class="btn btn-primary" href="/respaldos-conteos.html" style="text-decoration:none;display:inline-flex;align-items:center;">🗂️ Respaldos y restauración</a>
             </div>
             <div class="alert a-info" style="margin-top:12px;">Cada guardado archiva automáticamente la versión anterior. Si algo se sobrescribe por error, se recupera desde <strong>Respaldos y restauración</strong>.</div>
         </div>
@@ -1279,7 +1278,7 @@ async function loadData() {
         // reales con la copia del archivo. La carga inicial es manual, desde
         // Configuración → "Subir datos iniciales".
         if (clientes.length === 0 && calendario.length === 0) {
-            toast("El almacén está vacío. Si es la primera carga, usa \"Subir datos iniciales\" en Configuración.", "error");
+            toast("El almacén está vacío. Revisa Respaldos y restauración antes de cargar nada nuevo.", "error");
         }
         renderClientes(); renderCalendario(); renderResultados();
         setSync("ok","Sincronizado ✓");
@@ -1499,17 +1498,31 @@ async function testConnection() {
         updateCfgStatus(false);
     } finally{showLoad(false);}
 }
+// Carga inicial — histórica. Se usó una sola vez para subir la información
+// que venía del Excel. El botón se retiró de la interfaz porque sobrescribía
+// TODAS las hojas con la copia de datos congelada dentro de este archivo
+// (INIT_C / INIT_K, de abril de 2026).
+//
+// La función se conserva como último recurso, pero ahora verifica contra el
+// servidor y solo actúa si el almacén está REALMENTE vacío. Para volver a una
+// versión anterior está respaldos-conteos.html, que es lo correcto.
 async function initializeData() {
-    if(!confirm("¿Sobrescribir los datos en el almacén con los datos actuales del archivo?")) return;
     try {
         showLoad(true);
-        await GS.put("Clientes", clientes.length ? clientes : INIT_C);
-        await GS.put("Calendario", calendario.length ? calendario : INIT_K);
-        if (resultados.length > 0) await GS.put("Resultados", resultados);
-        toast("✅ Datos subidos al almacén correctamente","success");
+        const [c, k] = await Promise.all([GS.get("Clientes"), GS.get("Calendario")]);
+        if (c.length || k.length) {
+            toast("El almacén ya tiene datos. Para volver a una versión anterior usa Respaldos y restauración.", "error");
+            return;
+        }
+        if (!confirm("El almacén está vacío. ¿Subir los datos iniciales del archivo?")) return;
+        await GS.put("Clientes", INIT_C);
+        await GS.put("Calendario", INIT_K);
+        clientes = [...INIT_C]; calendario = [...INIT_K];
+        renderClientes(); renderCalendario();
+        toast("✅ Datos iniciales subidos al almacén","success");
         setSync("ok","Sincronizado ✓");
-    } catch(e){toast("Error: "+e.message,"error");}
-    finally{showLoad(false);}
+    } catch(e){ toast("Error: "+e.message,"error"); }
+    finally{ showLoad(false); }
 }
 function updateCfgStatus(ok) {
     g("showScriptUrl").textContent = STORE_URL;

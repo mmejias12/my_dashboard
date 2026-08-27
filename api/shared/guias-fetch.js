@@ -10,20 +10,20 @@
  * (procesarViaje), así que no son inventados: cantidadConfirmada, patente, chofer,
  * dteNro, clienteDestinoStr, bodegaDestinoStr, operacion, fechaConfirmacion.
  *
- * ── DOS COSAS QUE CONVIENE CONFIRMAR CON OPERACIONES ─────────────────────────
+ * ── LO QUE SE MIDIÓ EN PRODUCCIÓN (26 y 27 de agosto de 2026) ────────────────
  *
- *  1. OPERACIONES_DESPACHO. El túnel es de salida, así que sólo interesan los
- *     viajes que salen cargados. En consulta-transporte, 'Emision' y
- *     'Emision 24 horas' son emisión de pallets (salida) y 'Retiro' /
- *     'Devolucion' son entrada. Si en tu operación hay otro valor que también
- *     sale por el túnel, agrégalo a la lista o a la app setting.
- *
- *  2. LA MARCA DE TIEMPO. El monitor necesita tener el camión esperando ANTES
- *     de que pase. Si `fechaConfirmacion` se estampa recién cuando el viaje se
- *     cierra —es decir, después del paso— el camión nunca aparecería en la lista
- *     de espera y toda carga saldría como "sin guía". Vale la pena mirar en
- *     RDTOut un viaje del día y comprobar en qué momento se llena ese campo.
- *     Si llegara tarde, hay que usar el campo que sí marca la emisión.
+ *  · RDTOut IGNORA el rango pedido: consultando un solo día devolvió 18.679
+ *    filas repartidas entre el 25-06 y el 26-08. El recorte por fecha es
+ *    obligatorio y se hace más abajo.
+ *  · horaIngreso es el único campo con hora real. fechaDespacho y
+ *    fechaConfirmacion llegan siempre a medianoche.
+ *  · La PATENTE aparece recién en la etapa "Inspeccion Retiro": de 8 retiros
+ *    con patente, los 8 estaban en esa etapa, y ninguno de los 12 en etapa
+ *    "Solicitud" la traía. Es decir, la patente se llena cuando el camión ya
+ *    llegó — que es justo cuando pasa por el túnel.
+ *  · Solicitado y confirmado difieren seguido, y ahí está el valor del cruce:
+ *    RW5303 pidió 512 y se confirmaron 480; LS3119 pidió 320 y se confirmaron
+ *    319; VG1943 pidió 300 y se confirmaron 396.
  */
 
 const OPS_HOST = process.env.OS_OPS_HOST || 'https://apirdt1.azurewebsites.net';
@@ -52,6 +52,21 @@ const PALLETS_POR_FILA = Number(process.env.PALLETS_POR_FILA) || 18;
 const OPERACIONES_DESPACHO = (process.env.OPERACIONES_DESPACHO || '')
   .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
 
+/**
+ * Clasifica la operación. El tablero trata distinto cada tipo:
+ *  - emision:    el camión SALE con carga; se compara contra lo declarado.
+ *  - retiro:     el camión LLEGA con pallets del cliente; se compara contra la
+ *                solicitud de retiro y contra lo confirmado en la inspección.
+ *  - devolucion: tampoco es un despacho; se marca para que nadie la lea como tal.
+ */
+function clasificar(op) {
+  const o = (op || '').trim().toLowerCase();
+  if (o.startsWith('emision')) return 'emision';
+  if (o.startsWith('retiro')) return 'retiro';
+  if (o.startsWith('devolucion')) return 'devolucion';
+  return 'otro';
+}
+
 function normalizarPatente(p) {
   return (p || '').toUpperCase().replace(/[^A-Z0-9]/g, '') || null;
 }
@@ -75,7 +90,18 @@ async function obtenerGuias(desde, hasta) {
     .map((f) => {
       // cantidadConfirmada es la que usa la prefactura; si el viaje aún no se
       // confirma, la solicitada es lo que el camión debería llevar.
-      const pallets = Number(f.cantidadConfirmada) || Number(f.cantidadSolicitada) || 0;
+      const solicitada  = Number(f.cantidadSolicitada)  || 0;
+      const despachada  = Number(f.cantidadDespachada)  || 0;
+      const confirmada  = Number(f.cantidadConfirmada)  || 0;
+      const tipo = clasificar(f.operacion);
+      // Base de comparación contra el conteo de la cámara:
+      //  - emisión: lo que el documento declara que sale.
+      //  - retiro:  lo confirmado en la inspección; si aún no se confirma, lo
+      //             solicitado por el cliente. Ojo: sol y conf difieren seguido
+      //             (26-08: RW5303 pidió 512 y se confirmaron 480).
+      const pallets = tipo === 'retiro'
+        ? (confirmada || despachada || solicitada)
+        : (confirmada || solicitada);
       // horaIngreso es el ÚNICO campo con hora real: fechaDespacho y
       // fechaConfirmacion vienen a medianoche (2026-08-26T00:00:00), así que no
       // sirven para ordenar ni para cruzar contra el paso por el túnel.
@@ -94,7 +120,13 @@ async function obtenerGuias(desde, hasta) {
         cliente: f.clienteDestinoStr || f.clienteOrigenStr || null,
         bodega: f.bodegaDestinoStr || f.bodegaOrigenStr || null,
         operacion: (f.operacion || '').trim(),
+        tipo,
+        etapa: (f.etapaOperacion || '').trim() || null,
+        nro_pedido: String(f.nroPedido || '').trim() || null,
         pallets_declarados: pallets,
+        cantidad_solicitada: solicitada,
+        cantidad_despachada: despachada,
+        cantidad_confirmada: confirmada,
         // El conteo real de filas lo pone la cámara; acá va sólo el nominal.
         filas: null,
         pallets_por_fila: PALLETS_POR_FILA,
@@ -112,4 +144,4 @@ async function obtenerGuias(desde, hasta) {
         OPERACIONES_DESPACHO.includes(g.operacion.toLowerCase())));
 }
 
-module.exports = { obtenerGuias, normalizarPatente, PALLETS_POR_FILA, OPERACIONES_DESPACHO };
+module.exports = { obtenerGuias, normalizarPatente, clasificar, PALLETS_POR_FILA, OPERACIONES_DESPACHO };

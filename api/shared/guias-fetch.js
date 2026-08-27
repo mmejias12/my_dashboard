@@ -39,9 +39,18 @@ const OPS_PATH = process.env.OS_OPS_PATH || '/api/RDTOut/OpsXRangoFechas';
  */
 const PALLETS_POR_FILA = Number(process.env.PALLETS_POR_FILA) || 18;
 
-/** Operaciones que corresponden a un camión saliendo por el túnel de despacho. */
-const OPERACIONES_DESPACHO = (process.env.OPERACIONES_DESPACHO ||
-  'Emision,Emision 24 horas').split(',').map((s) => s.trim().toLowerCase());
+/**
+ * Operaciones que se consideran. Vacío = todas.
+ *
+ * OJO: no filtrar por operación es el default a propósito. Medido el 26-08-2026,
+ * de 597 viajes del día sólo 11 traían patente, y ninguno era Emisión: 8 Retiro
+ * y 3 Devolución. El túnel está viendo retiros e inspecciones, no despachos, así
+ * que filtrar por 'Emision' dejaba el cruce en cero. Traer patente ya es el filtro
+ * relevante. Para acotarlo, poner la app setting OPERACIONES_DESPACHO con la lista
+ * separada por comas una vez que operaciones confirme cuáles pasan por el túnel.
+ */
+const OPERACIONES_DESPACHO = (process.env.OPERACIONES_DESPACHO || '')
+  .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
 
 function normalizarPatente(p) {
   return (p || '').toUpperCase().replace(/[^A-Z0-9]/g, '') || null;
@@ -67,11 +76,16 @@ async function obtenerGuias(desde, hasta) {
       // cantidadConfirmada es la que usa la prefactura; si el viaje aún no se
       // confirma, la solicitada es lo que el camión debería llevar.
       const pallets = Number(f.cantidadConfirmada) || Number(f.cantidadSolicitada) || 0;
-      const cuando = f.fechaConfirmacion || f.fechaDespacho || f.horaIngreso || null;
+      // horaIngreso es el ÚNICO campo con hora real: fechaDespacho y
+      // fechaConfirmacion vienen a medianoche (2026-08-26T00:00:00), así que no
+      // sirven para ordenar ni para cruzar contra el paso por el túnel.
+      const cuando = f.horaIngreso || f.fechaConfirmacion || f.fechaDespacho || null;
       const fecha = cuando ? String(cuando).slice(0, 10) : null;
 
       return {
-        numero: String(f.dteNro || f.nroDocumento || f.nroPedido || '').trim(),
+        // en retiros y devoluciones dteNro llega en 0: cae al número de pedido
+        numero: String(f.dteNro || f.nroDocumento || f.nroPedido || '').replace(/^0$/, '').trim()
+                || String(f.nroPedido || '').trim(),
         fecha,
         hora_emision: cuando,
         patente: normalizarPatente(f.patente),
@@ -86,11 +100,16 @@ async function obtenerGuias(desde, hasta) {
         pallets_por_fila: PALLETS_POR_FILA,
       };
     })
+    // RECORTE POR FECHA — imprescindible. RDTOut ignora el rango pedido: al
+    // consultar un solo día devolvió 18.679 filas repartidas entre el 25-06 y el
+    // 26-08. Sin este recorte, el monitor mostraba guías de hace un mes y el
+    // cruce con la cámara daba cero. consulta-transporte.js ya hacía lo mismo.
     .filter((g) =>
       g.patente &&
       g.pallets_declarados > 0 &&
-      g.fecha &&
-      OPERACIONES_DESPACHO.includes(g.operacion.toLowerCase()));
+      g.fecha && g.fecha >= desde && g.fecha <= hasta &&
+      (!OPERACIONES_DESPACHO.length ||
+        OPERACIONES_DESPACHO.includes(g.operacion.toLowerCase())));
 }
 
 module.exports = { obtenerGuias, normalizarPatente, PALLETS_POR_FILA, OPERACIONES_DESPACHO };

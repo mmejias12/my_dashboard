@@ -321,32 +321,50 @@ async function enviarCorreo(v){
 /* =====================================================================
    EVALUACIÓN — el corazón: paso por el túnel contra guía esperada
    ===================================================================== */
+/* ¿En qué fila está la diferencia? Sólo se puede si el payload trae la
+   cantidad por bulto, que es justamente lo que le pedimos a SPOTVISION. */
+function calcularFila(carga, guia, dif){
+  if(!guia || !dif || !carga.bultos?.length) return null;
+  if(!carga.bultos.every(b => typeof b.pallets_bulto === 'number')) return null;
+  const nominal = guia.pallets_por_fila ?? Math.round(guia.pallets_declarados / carga.bultos.length);
+  let peor = null;
+  carga.bultos.forEach((b,idx)=>{
+    const d = b.pallets_bulto - nominal;
+    if(d !== 0 && (peor === null || Math.abs(d) > Math.abs(peor.d))) peor = {n:idx+1, d, b};
+  });
+  return peor;
+}
+
 function evaluar(carga){
-  // 1. sin patente no hay forma de asociar el paso a una guía
+  // 1. Si la API de conciliación YA cruzó la carga, esa guía manda.
+  //    El servidor compara contra todos los movimientos del día; la lista de
+  //    espera, en cambio, sólo tiene los que todavía no han pasado. Volver a
+  //    cruzar acá dejaba en "sin guía" a todo camión ya registrado en RDTOut,
+  //    que es precisamente el caso normal: la patente se llena al llegar.
+  if(carga.guia){
+    const i = S.esperando.findIndex(g => g.patente === carga.patente);
+    if(i >= 0) S.esperando.splice(i,1);          // ya pasó: sale de la espera
+    const dif = carga.diferencia ?? (carga.total_pallets - carga.guia.pallets_declarados);
+    const estado = (carga.estado && carga.estado !== 'sin_guia' && carga.estado !== 'sin_patente')
+      ? carga.estado
+      : (Math.abs(dif) <= TOLERANCIA ? 'ok' : dif < 0 ? 'faltante' : 'sobrante');
+    return {...carga, estado, diferencia:dif, filaAfectada:calcularFila(carga, carga.guia, dif)};
+  }
+
+  // 2. Sin patente no hay forma de asociar el paso a un documento.
   if(!carga.patente){
     return {...carga, guia:null, estado:'sin_patente', diferencia:null, filaAfectada:null};
   }
-  // 2. match contra la tabla de camiones esperados
+
+  // 3. Cruce local contra los camiones que estamos esperando.
   const i = S.esperando.findIndex(g => g.patente === carga.patente);
   if(i < 0){
     return {...carga, guia:null, estado:'sin_guia', diferencia:null, filaAfectada:null};
   }
-  const guia = S.esperando.splice(i,1)[0];       // deja de esperar: ya pasó
+  const guia = S.esperando.splice(i,1)[0];
   const dif = carga.total_pallets - guia.pallets_declarados;
   const estado = Math.abs(dif) <= TOLERANCIA ? 'ok' : (dif < 0 ? 'faltante' : 'sobrante');
-
-  // 3. ¿en qué fila está la diferencia? Sólo si el payload trae cantidad por bulto
-  let filaAfectada = null;
-  if(dif !== 0 && carga.bultos.every(b => typeof b.pallets_bulto === 'number')){
-    const nominal = guia.pallets_por_fila ?? Math.round(guia.pallets_declarados / carga.bultos.length);
-    let peor = null;
-    carga.bultos.forEach((b,idx)=>{
-      const d = b.pallets_bulto - nominal;
-      if(d !== 0 && (peor === null || Math.abs(d) > Math.abs(peor.d))) peor = {n:idx+1, d, b};
-    });
-    filaAfectada = peor;
-  }
-  return {...carga, guia, estado, diferencia:dif, filaAfectada};
+  return {...carga, guia, estado, diferencia:dif, filaAfectada:calcularFila(carga, guia, dif)};
 }
 
 function registrarPaso(carga){
@@ -703,6 +721,12 @@ if(DEMO){
     .then(()=>pollPasosReales())
     .then(()=>{ marcarViva(); render(); })
     .catch(marcarCaida);
+
+  // La primera consulta tarda unos segundos (RDTOut devuelve el mes completo).
+  // Sin este aviso la pantalla queda en blanco y parece que no funciona.
+  $('#esperando').innerHTML = '<div class="vacio">Consultando guías en RDTOut…</div>';
+  $('#eventos').innerHTML   = '<div class="vacio">Consultando pasos en SPOTVISION…</div>';
+  $('#pill-vivo').lastChild.textContent = 'CONECTANDO';
 
   ciclo().finally(()=>{ S.arranque = false; });   // a partir de acá, sí se alerta
   setInterval(ciclo, POLL_MS);

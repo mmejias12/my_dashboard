@@ -73,12 +73,13 @@ h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
 .ev{background:var(--surface-2);border:1px solid var(--line);border-left:2px solid var(--good);border-radius:10px;padding:10px 13px;display:flex;align-items:center;gap:12px;animation:entra .3s ease}
 @keyframes entra{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
 .ev.faltante{border-left-color:var(--critical)}
-.ev.sobrante{border-left-color:var(--warning)}
+.ev.sobrante{border-left-color:var(--critical)}
 .ev.sin_guia,.ev.sin_patente{border-left-color:var(--muted)}
 .ev .gh{font-size:15px;width:20px;text-align:center;flex:none}
 .ev .pat{font-weight:600;letter-spacing:.03em;font-variant-numeric:tabular-nums}
 .ev .det{font-size:12px;color:var(--text-2)}
 .ev .hora{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;margin-left:auto;text-align:right;flex:none}
+.tag{font-size:9px;letter-spacing:.09em;font-weight:600;border:1px solid;border-radius:4px;padding:1px 5px;margin-left:7px;vertical-align:2px}
 .ev .dif{font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;flex:none}
 
 /* ---------- tira de filas (bultos) ---------- */
@@ -188,9 +189,9 @@ const TOLERANCIA  = 0;                              // pallets de diferencia ace
 /* Reglas de alerta. `sonido` sólo aplica si el operador lo activó. */
 const REGLAS = {
   faltante:    {nivel:'critica', gh:'▼', tit:'Camión con menos pallets de los declarados',
-                acc:'Retener el camión y completar la carga', sonido:'critico', correo:true},
-  sobrante:    {nivel:'aviso',   gh:'▲', tit:'Camión con más pallets de los declarados',
-                acc:'Verificar la carga o corregir la guía', sonido:'aviso', correo:true},
+                acc:'Retener el camión y completar la carga de inmediato', sonido:'critico', correo:true},
+  sobrante:    {nivel:'critica', gh:'▲', tit:'Camión con más pallets de los declarados',
+                acc:'Diferencia por exceso: verificar la carga antes de que el camión salga', sonido:'critico', correo:true},
   sin_guia:    {nivel:'critica', gh:'?', tit:'Camión sin guía emitida',
                 acc:'Detener el camión: pasó sin documento asociado', sonido:'critico', correo:true},
   sin_patente: {nivel:'aviso',   gh:'⊘', tit:'Patente no legible',
@@ -199,6 +200,19 @@ const REGLAS = {
                 acc:'Confirmar si el camión sigue en planta', sonido:'aviso', correo:false},
   ok:          {nivel:'ok',      gh:'✓', tit:'Carga conciliada', acc:'', sonido:null, correo:false},
 };
+
+/* Tipo de operación. Sirve para que quien mire la pantalla distinga de un
+   vistazo un despacho de un retiro, y no lea un retiro como si fuera carga
+   que sale. Los colores son de identidad, no de estado: nunca compiten con
+   el verde/rojo del semáforo. */
+const TIPOS = {
+  emision:    {et:'EMISIÓN',    c:'#3987e5', nota:'Sale con carga. Se compara contra lo declarado en la guía.'},
+  retiro:     {et:'RETIRO',     c:'#9085e9', nota:'No es un despacho: el camión llega con pallets del cliente. Se compara contra la solicitud de retiro y lo confirmado en la inspección.'},
+  devolucion: {et:'DEVOLUCIÓN', c:'#199e70', nota:'Devolución de pallets. No corresponde tratarla como despacho.'},
+  otro:       {et:'—',          c:'#79818F', nota:''},
+};
+const tipoDe = t => TIPOS[t] || TIPOS.otro;
+const tag = t => t ? `<span class="tag" style="color:${tipoDe(t).c};border-color:${tipoDe(t).c}66">${tipoDe(t).et}</span>` : '';
 
 const $  = (s,r=document)=>r.querySelector(s);
 const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
@@ -385,24 +399,39 @@ function abrirModal(v){
       <div class="ico">${r.gh}</div>
       <div>
         <div class="tt">${esc(r.tit)}</div>
-        <div class="st">${esc(v.carga_id)} · paso registrado a las ${hhmm(new Date(v.fecha_hora_carga))}</div>
+        <div class="st">${esc(v.carga_id)} · paso registrado a las ${hhmm(new Date(v.fecha_hora_carga))}${v.guia?.tipo?' · '+tipoDe(v.guia.tipo).et:''}</div>
       </div>
     </div>
     <div class="mbody">
       <div class="patgrande" style="color:${col}">${esc(v.patente || 'SIN PATENTE')}</div>
       <div class="subpat">
-        ${v.guia ? `Guía ${esc(v.guia.numero)} · ${esc(v.guia.chofer)} · ${esc(v.guia.cliente)}`
+        ${v.guia ? `${v.guia.tipo==='emision'?'Guía':'Pedido'} ${esc(v.guia.nro_pedido || v.guia.numero)} · ${esc(v.guia.chofer||'sin chofer')} · ${esc(v.guia.cliente||'—')}`
                  : 'Sin guía asociada en RDTOut'}
       </div>
 
       <div class="gran">
-        <div><div class="lab">Guía declara</div><div class="v">${dec!=null?n0(dec):'—'}</div></div>
+        <div><div class="lab">${v.guia?.tipo==='retiro'?'RDTOut confirma':'Guía declara'}</div><div class="v">${dec!=null?n0(dec):'—'}</div></div>
         <div><div class="lab">Cámara cuenta</div><div class="v">${n0(v.total_pallets)}</div></div>
         <div><div class="lab">Diferencia</div>
           <div class="v" style="color:${v.diferencia?col:'var(--text)'}">${v.diferencia==null?'—':(v.diferencia>0?'+':'')+n0(v.diferencia)}</div></div>
       </div>
 
       <div class="aviso-fila" style="border-left-color:${col}"><b>${esc(r.acc)}</b></div>
+
+      ${v.guia?.tipo && v.guia.tipo !== 'emision' ? `<div class="aviso-fila" style="border-left-color:${tipoDe(v.guia.tipo).c}">
+        <b style="color:${tipoDe(v.guia.tipo).c}">${tipoDe(v.guia.tipo).et}</b> — ${esc(tipoDe(v.guia.tipo).nota)}</div>` : ''}
+
+      ${v.guia && v.guia.tipo === 'retiro' ? `
+        <div class="sec">Solicitud de retiro · pedido ${esc(v.guia.nro_pedido || v.guia.numero)}</div>
+        <div class="gran">
+          <div><div class="lab">Solicitado</div><div class="v">${n0(v.guia.cantidad_solicitada)}</div></div>
+          <div><div class="lab">Despachado</div><div class="v">${n0(v.guia.cantidad_despachada)}</div></div>
+          <div><div class="lab">Confirmado</div><div class="v">${n0(v.guia.cantidad_confirmada)}</div></div>
+        </div>
+        ${v.guia.cantidad_solicitada !== v.guia.cantidad_confirmada ? `<div class="aviso-fila">
+          El cliente solicitó ${n0(v.guia.cantidad_solicitada)} y en la inspección se confirmaron
+          ${n0(v.guia.cantidad_confirmada)}: <b>${v.guia.cantidad_confirmada > v.guia.cantidad_solicitada ? '+' : ''}${n0(v.guia.cantidad_confirmada - v.guia.cantidad_solicitada)}</b>
+          respecto de la solicitud. La cámara contó ${n0(v.total_pallets)}.</div>` : ''}` : ''}
 
       ${v.bultos?.length ? tiraFilas(v) : ''}
 
@@ -466,7 +495,7 @@ function render(){
       const viejo = min >= VENCE_MIN;
       return `<div class="esp ${viejo?'viejo':''}">
         <div class="izq">
-          <div class="pat">${esc(g.patente)}</div>
+          <div class="pat">${esc(g.patente)}${tag(g.tipo)}</div>
           <div class="meta">${esc(g.numero)} · <b>${esc(g.chofer)}</b> · ${esc(g.cliente)}</div>
           <div class="esperando">${viejo?'◷ ':''}emitida ${hhmm(new Date(g.hora_emision))} · esperando ${min} min</div>
         </div>
@@ -485,7 +514,7 @@ function render(){
       <span class="gh" style="color:${col}">${r.gh}</span>
       <div style="min-width:0">
         <div class="pat">${esc(v.patente||'sin patente')}${v.retenido?' · <span style="color:var(--critical);font-size:11px">RETENIDO</span>':v.historico?' · <span style="color:var(--muted);font-size:11px">previo a la sesión</span>':v.atendida?' · <span style="color:var(--muted);font-size:11px">atendida</span>':''}</div>
-        <div class="det">${v.guia?esc(v.guia.numero)+' · ':''}${n0(v.total_pallets)} pallets en ${v.total_bultos} filas</div>
+        <div class="det">${v.guia?tag(v.guia.tipo)+' ':''}${v.guia?esc(v.guia.numero)+' · ':''}${n0(v.total_pallets)} pallets en ${v.total_bultos} filas</div>
       </div>
       ${v.diferencia ? `<div class="dif" style="color:${col}">${v.diferencia>0?'+':''}${n0(v.diferencia)}</div>` : ''}
       <div class="hora">${hhmm(new Date(v.fecha_hora_carga))}</div>

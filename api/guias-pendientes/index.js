@@ -65,6 +65,12 @@ module.exports = async function (context, req) {
         // se devuelven para poder diagnosticar el cruce desde el navegador
         fecha: g.fecha,
         operacion: g.operacion,
+        tipo: g.tipo,
+        etapa: g.etapa,
+        nro_pedido: g.nro_pedido,
+        cantidad_solicitada: g.cantidad_solicitada,
+        cantidad_despachada: g.cantidad_despachada,
+        cantidad_confirmada: g.cantidad_confirmada,
       }))),
     };
   } catch (e) {

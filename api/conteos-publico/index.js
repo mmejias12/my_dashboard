@@ -80,13 +80,29 @@ const RECURSOS = {
 };
 
 // Lista blanca de campos por recurso. Todo lo que no esté aquí NO sale.
+//
+// Sobre las llaves de cruce — importante para quien consume los tres recursos:
+//   · clientes.id    identifica al cliente dentro de Clientes.json.
+//   · calendario.id  identifica la FILA del calendario, no al cliente: un
+//                    cliente con dos recintos tiene dos filas. Por eso corre
+//                    desfasado respecto de clientes.id y NO sirve para cruzar.
+//   · calendario.num es el número de orden del cliente. Coincide con
+//                    clientes.id solo por herencia del Excel original; no es
+//                    una llave foránea y ya se desalinea con los registros
+//                    nuevos. Tampoco sirve para cruzar.
+//   · resultados.conteoId -> calendario.id  es la ÚNICA relación real que
+//                    existe en los datos guardados.
+//
+// Para el resto, la API expone cliente_key: el nombre del cliente
+// normalizado, calculado igual en los tres recursos. Esa es la llave estable
+// para cruzar clientes <-> calendario <-> resultados.
 const CAMPOS_PUBLICOS = {
-  clientes:   ["id", "cliente", "ejecutivo", "mes"],
-  calendario: ["id", "num", "cliente", "estado", "recinto", "urgencia",
-               "fecha", "fecha_iso", "horario", "ejecutivo", "mes",
+  clientes:   ["id", "cliente", "cliente_key", "ejecutivo", "mes"],
+  calendario: ["id", "num", "cliente", "cliente_key", "estado", "recinto",
+               "urgencia", "fecha", "fecha_iso", "horario", "ejecutivo", "mes",
                "acceso", "implementos", "obs"],
-  resultados: ["id", "conteoId", "cliente", "fecha", "fecha_iso", "ejecutivo",
-               "recinto", "item", "fisico", "sap", "diferencia",
+  resultados: ["id", "conteoId", "cliente", "cliente_key", "fecha", "fecha_iso",
+               "ejecutivo", "recinto", "item", "fisico", "sap", "diferencia",
                "porcentaje", "pendientes2024", "difTotal", "obs"],
 };
 
@@ -124,6 +140,16 @@ function aISO(fecha) {
     }
   }
   return null;
+}
+
+// Llave de cruce estable entre los tres recursos: el nombre del cliente
+// normalizado. Sin tildes, sin mayúsculas, sin puntuación, espacios colapsados.
+//   "ALD LOGISTICA SpA."                    -> "ald-logistica-spa"
+//   "Comercial Rocky S.A."                  -> "comercial-rocky-s-a"
+//   "ELABORADORA ... LIMITADA (Castano)"    -> "elaboradora-...-limitada-castano"
+function claveCliente(nombre) {
+  const base = norm(nombre).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return base || null;
 }
 
 function esFechaValida(s) {
@@ -363,8 +389,18 @@ module.exports = async function (context, req) {
       const o = {};
       const iso = aISO(f.fecha);
       for (const c of campos) {
-        if (c === "fecha_iso") { o.fecha_iso = iso; continue; }
-        if (Object.prototype.hasOwnProperty.call(f, c)) o[c] = f[c];
+        if (c === "fecha_iso")   { o.fecha_iso = iso; continue; }
+        if (c === "cliente_key") { o.cliente_key = claveCliente(f.cliente); continue; }
+        if (!Object.prototype.hasOwnProperty.call(f, c)) continue;
+        if (c === "conteoId") {
+          // Se guarda como texto desde el <select> del formulario, mientras que
+          // calendario.id es número. Se normaliza acá para que el cruce
+          // resultados.conteoId -> calendario.id funcione sin convertir tipos.
+          const n = Number(f.conteoId);
+          o.conteoId = (String(f.conteoId).trim() !== "" && Number.isFinite(n)) ? n : f.conteoId;
+          continue;
+        }
+        o[c] = f[c];
       }
       return o;
     });

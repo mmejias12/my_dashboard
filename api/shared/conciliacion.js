@@ -64,11 +64,18 @@ function conciliar(cargas, guias, opts = {}) {
     let guia = null;
     if (c.patente) {
       const cand = idx.get(`${c.patente}|${c.fecha_hora_carga.slice(0, 10)}`) || [];
+      // Ventana SIMÉTRICA: el registro en RDTOut no siempre precede al paso.
+      // Medido el 26-08: NC8771 pasó por el túnel a las 08:06 y quedó registrado
+      // a las 08:35 (29 min despues), mientras CCRC36 se registró a las 08:58 y
+      // pasó a las 09:10. Exigir que la guia fuera anterior descartaba la mitad.
+      // Se toma la candidata mas cercana en el tiempo, no la primera.
+      let mejor = null;
       for (const g of cand) {
         if (usadas.has(g.numero)) continue;
-        const d = t0 - ts(g.hora_emision);
-        if (d >= 0 && d <= ventanaH * 3600 * 1000) { guia = g; usadas.add(g.numero); break; }
+        const d = Math.abs(t0 - ts(g.hora_emision));
+        if (d <= ventanaH * 3600 * 1000 && (mejor === null || d < mejor.d)) mejor = { g, d };
       }
+      if (mejor) { guia = mejor.g; usadas.add(mejor.g.numero); }
     }
 
     // --- estado ---

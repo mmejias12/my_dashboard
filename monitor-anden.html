@@ -70,7 +70,13 @@ h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
 .esp.viejo .esperando{color:var(--warning)}
 
 /* ---------- evento ---------- */
-.ev{background:var(--surface-2);border:1px solid var(--line);border-left:2px solid var(--good);border-radius:10px;padding:10px 13px;display:flex;align-items:center;gap:12px;animation:entra .3s ease}
+.ev{background:var(--surface-2);border:1px solid var(--line);border-left:2px solid var(--good);border-radius:10px;padding:10px 13px;display:flex;align-items:center;gap:12px;animation:entra .3s ease;cursor:pointer}
+.ev:hover{background:var(--surface-3);border-color:rgba(255,255,255,.2)}
+.ev:focus-visible{outline:2px solid var(--series-1);outline-offset:2px}
+.ev.pendiente{background:rgba(208,59,59,.07)}
+.pend{font-size:9px;letter-spacing:.08em;font-weight:600;color:var(--critical);border:1px solid rgba(208,59,59,.5);border-radius:4px;padding:1px 5px;margin-left:7px;vertical-align:2px}
+.kpi.click{cursor:pointer}
+.kpi.click:hover{background:var(--surface-2)}
 @keyframes entra{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
 .ev.faltante{border-left-color:var(--critical)}
 .ev.sobrante{border-left-color:var(--critical)}
@@ -484,7 +490,16 @@ function render(){
     ['Con desviación', falt.length+sob.length, (falt.length+sob.length)?'mal':''],
     ['Pallets en riesgo', enRiesgo, enRiesgo?'mal':''],
     ['Alertas sin atender', pend, pend?'mal':''],
-  ].map(([l,v,c])=>`<div class="kpi ${c}"><div class="lab">${l}</div><div class="val">${n0(v)}</div></div>`).join('');
+  ].map(([l,v,c],i)=>{
+    const clic = (i===5 && v>0) ? ' click" id="kpi-pendientes' : '';
+    return `<div class="kpi ${c}${clic}"><div class="lab">${l}</div><div class="val">${n0(v)}</div>
+      ${i===5&&v>0?'<div style="font-size:10px;color:var(--muted);margin-top:2px">clic para revisarlas</div>':''}</div>`;
+  }).join('');
+  const kp = $('#kpi-pendientes');
+  if(kp) kp.onclick = ()=>{
+    const p = S.eventos.filter(e=>REGLAS[e.estado].nivel!=='ok' && !e.atendida).pop();
+    if(p) abrirModal(p);
+  };
 
   // --- camiones esperando ---
   $('#cnt-esp').textContent = S.esperando.length;
@@ -510,16 +525,27 @@ function render(){
   $('#eventos').innerHTML = S.eventos.length ? S.eventos.map(v=>{
     const r = REGLAS[v.estado];
     const col = r.nivel==='critica'?'var(--critical)':r.nivel==='aviso'?'var(--warning)':'var(--good)';
-    return `<div class="ev ${v.estado}">
+    const pendiente = r.nivel!=='ok' && !v.atendida;
+    return `<div class="ev ${v.estado}${pendiente?' pendiente':''}" data-id="${esc(v.carga_id)}"
+                 tabindex="0" role="button" aria-label="Ver alerta de ${esc(v.patente||'sin patente')}">
       <span class="gh" style="color:${col}">${r.gh}</span>
       <div style="min-width:0">
-        <div class="pat">${esc(v.patente||'sin patente')}${v.retenido?' · <span style="color:var(--critical);font-size:11px">RETENIDO</span>':v.historico?' · <span style="color:var(--muted);font-size:11px">previo a la sesión</span>':v.atendida?' · <span style="color:var(--muted);font-size:11px">atendida</span>':''}</div>
+        <div class="pat">${esc(v.patente||'sin patente')}${v.retenido?' <span class="pend">RETENIDO</span>':pendiente?' <span class="pend">SIN ATENDER</span>':v.historico?' · <span style="color:var(--muted);font-size:11px">previo a la sesión</span>':v.atendida?' · <span style="color:var(--muted);font-size:11px">atendida</span>':''}</div>
         <div class="det">${v.guia?tag(v.guia.tipo)+' ':''}${v.guia?esc(v.guia.numero)+' · ':''}${n0(v.total_pallets)} pallets en ${v.total_bultos} filas</div>
       </div>
       ${v.diferencia ? `<div class="dif" style="color:${col}">${v.diferencia>0?'+':''}${n0(v.diferencia)}</div>` : ''}
       <div class="hora">${hhmm(new Date(v.fecha_hora_carga))}</div>
     </div>`;
   }).join('') : '<div class="vacio">Sin pasos registrados todavía</div>';
+
+  // Cada paso del feed reabre su alerta. Sin esto, una alerta cerrada con
+  // "Cerrar" quedaba contada como pendiente y sin ninguna forma de actuar
+  // sobre ella: el operador veía el número y no podía hacer nada.
+  $$('#eventos .ev').forEach(el=>{
+    const abrir = ()=>{ const v = S.eventos.find(e=>e.carga_id===el.dataset.id); if(v) abrirModal(v); };
+    el.onclick = abrir;
+    el.onkeydown = e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); abrir(); } };
+  });
 }
 
 /* =====================================================================

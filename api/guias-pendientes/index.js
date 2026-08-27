@@ -62,6 +62,9 @@ module.exports = async function (context, req) {
         filas: g.filas ?? null,
         pallets_por_fila: g.pallets_por_fila ?? null,
         hora_emision: g.hora_emision,
+        // se devuelven para poder diagnosticar el cruce desde el navegador
+        fecha: g.fecha,
+        operacion: g.operacion,
       }))),
     };
   } catch (e) {

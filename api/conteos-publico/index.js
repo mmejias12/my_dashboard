@@ -50,6 +50,22 @@
 //
 //  CONTEOS_RATE_LIMIT    (opcional) máximo de llamadas por minuto y por
 //                        key. Default 60.
+//
+//  ------------------------------------------------------------------------
+//  PARÁMETROS DE CONSULTA
+//  ------------------------------------------------------------------------
+//    recurso     clientes | calendario | resultados   (default calendario)
+//    cliente     texto, coincidencia parcial sin tildes
+//    estado      Programado | Realizado | Pendientes de respuesta
+//    mes         Enero … Diciembre
+//    ejecutivo   texto, coincidencia parcial
+//    desde/hasta AAAA-MM-DD, filtran por la fecha del conteo
+//    sin_fecha   excluir (default) | incluir — qué hacer con los registros
+//                que todavía no tienen fecha asignada cuando se usa un rango.
+//                Con cualquier rango, la respuesta informa siempre cuántos
+//                quedaron fuera en sin_fecha_excluidos.
+//    limit       1..500 (default 100)
+//    offset      desplazamiento para paginar
 // ============================================================================
 
 const crypto = require("crypto");
@@ -297,10 +313,24 @@ module.exports = async function (context, req) {
     if ((desde && !esFechaValida(desde)) || (hasta && !esFechaValida(hasta))) {
       return responder(400, { error: "desde/hasta deben tener formato AAAA-MM-DD" });
     }
-    if (desde || hasta) {
+
+    // Muchos conteos todavía no tienen fecha asignada (típicamente los que
+    // están "Pendientes de respuesta"). Un filtro por rango los dejaba fuera
+    // en silencio, y quien paginara por mes nunca los veía. Ahora:
+    //   · sin_fecha=incluir  los trae igual dentro del rango
+    //   · y la respuesta SIEMPRE informa cuántos se dejaron fuera
+    const rango = Boolean(desde || hasta);
+    const incluirSinFecha = norm(q.sin_fecha) === "incluir";
+    let sinFechaExcluidos = 0;
+
+    if (rango) {
       filas = filas.filter(f => {
         const iso = aISO(f.fecha);
-        if (!iso) return false;              // sin fecha queda fuera del rango
+        if (!iso) {
+          if (incluirSinFecha) return true;
+          sinFechaExcluidos++;
+          return false;
+        }
         if (desde && iso < desde) return false;
         if (hasta && iso > hasta) return false;
         return true;
@@ -343,15 +373,25 @@ module.exports = async function (context, req) {
       `conteos-publico: ${etiqueta} -> ${recurso} (${data.length}/${total})`
     );
 
-    return responder(200, {
+    const cuerpo = {
       recurso,
       generado: new Date().toISOString(),
       total,
       count: data.length,
       offset,
       limit,
-      data,
-    });
+    };
+    if (rango) {
+      // Nunca se descarta nada en silencio: si hay registros sin fecha que
+      // quedaron fuera del rango, la respuesta lo dice.
+      cuerpo.sin_fecha_excluidos = sinFechaExcluidos;
+      if (sinFechaExcluidos > 0) {
+        cuerpo.aviso = `${sinFechaExcluidos} registro(s) sin fecha asignada quedaron ` +
+          `fuera de este rango. Agrega sin_fecha=incluir para traerlos, o consulta sin desde/hasta.`;
+      }
+    }
+    cuerpo.data = data;
+    return responder(200, cuerpo);
 
   } catch (e) {
     context.log.error("conteos-publico error:", e && e.message);

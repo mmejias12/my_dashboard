@@ -61,21 +61,26 @@ function conciliar(cargas, guias, opts = {}) {
     }
 
     // --- cruce con la guia ---
-    let guia = null;
+    let guia = null, alternativas = [];
     if (c.patente) {
       const cand = idx.get(`${c.patente}|${c.fecha_hora_carga.slice(0, 10)}`) || [];
-      // Ventana SIMÉTRICA: el registro en RDTOut no siempre precede al paso.
-      // Medido el 26-08: NC8771 pasó por el túnel a las 08:06 y quedó registrado
-      // a las 08:35 (29 min despues), mientras CCRC36 se registró a las 08:58 y
-      // pasó a las 09:10. Exigir que la guia fuera anterior descartaba la mitad.
-      // Se toma la candidata mas cercana en el tiempo, no la primera.
-      let mejor = null;
-      for (const g of cand) {
-        if (usadas.has(g.numero)) continue;
-        const d = Math.abs(t0 - ts(g.hora_emision));
-        if (d <= ventanaH * 3600 * 1000 && (mejor === null || d < mejor.d)) mejor = { g, d };
-      }
-      if (mejor) { guia = mejor.g; usadas.add(mejor.g.numero); }
+      // UN CAMION TIENE VARIOS MOVIMIENTOS EN EL MISMO DIA. Medido el 28-08:
+      // siete de las siete patentes con movimiento tenian dos o tres. NC8771
+      // llego con un retiro (doc 80717024, 512) y salio con una emision
+      // (DTE 72137, 540); el cruce elegia el retiro y reportaba el documento
+      // equivocado. Como el tunel es de salida, la emision tiene prioridad;
+      // entre candidatas del mismo tipo gana la mas cercana en el tiempo.
+      const libres = cand.filter((g) => !usadas.has(g.numero));
+      const rango = (g) => (g.tipo === 'emision' ? 0 : g.tipo === 'retiro' ? 1 : 2);
+      libres.sort((x, y) => rango(x) - rango(y)
+        || Math.abs(t0 - ts(x.hora_emision)) - Math.abs(t0 - ts(y.hora_emision)));
+      if (libres.length) { guia = libres[0]; usadas.add(guia.numero); }
+      // El resto queda a mano: el operador puede ver contra qué otro documento
+      // se podria haber cruzado sin salir de la pantalla.
+      alternativas = libres.slice(1).map((g) => ({
+        numero: g.numero, nro_pedido: g.nro_pedido, tipo: g.tipo,
+        pallets_declarados: g.pallets_declarados, operacion: g.operacion,
+      }));
     }
 
     // --- estado ---
@@ -101,6 +106,7 @@ function conciliar(cargas, guias, opts = {}) {
       pausa_max_min: +pausaMax.toFixed(1),
       ritmo_bultos_min: duracionMin > 0 ? +((c.bultos || []).length / duracionMin).toFixed(2) : null,
       tipo: guia?.tipo ?? null,
+      guias_alternativas: typeof alternativas !== 'undefined' ? alternativas : [],
       nro_pedido: guia?.nro_pedido ?? null,
       etapa: guia?.etapa ?? null,
       transportista: guia?.transportista ?? null,

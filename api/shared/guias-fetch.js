@@ -59,7 +59,13 @@ const OPERACIONES_DESPACHO = (process.env.OPERACIONES_DESPACHO || '')
  *                solicitud de retiro y contra lo confirmado en la inspección.
  *  - devolucion: tampoco es un despacho; se marca para que nadie la lea como tal.
  */
-function clasificar(op) {
+function clasificar(op, dteNro) {
+  // El DTE es la señal dura: las emisiones generan documento (serie 72xxx,
+  // incremental) y llegan con dteNro > 0; los retiros y devoluciones traen
+  // dteNro en 0 y se identifican por nroDocumento. Se ve nítido en los datos:
+  // el pedido 4087445 (emisión) trae dte 72137 y documento vacío, mientras el
+  // 4106282 (retiro) trae dte 0 y documento 80717024.
+  if (Number(dteNro) > 0) return 'emision';
   const o = (op || '').trim().toLowerCase();
   if (o.startsWith('emision')) return 'emision';
   if (o.startsWith('retiro')) return 'retiro';
@@ -93,7 +99,7 @@ async function obtenerGuias(desde, hasta) {
       const solicitada  = Number(f.cantidadSolicitada)  || 0;
       const despachada  = Number(f.cantidadDespachada)  || 0;
       const confirmada  = Number(f.cantidadConfirmada)  || 0;
-      const tipo = clasificar(f.operacion);
+      const tipo = clasificar(f.operacion, f.dteNro);
       // Base de comparación contra el conteo de la cámara:
       //  - emisión: lo que el documento declara que sale.
       //  - retiro:  lo confirmado en la inspección; si aún no se confirma, lo
@@ -102,11 +108,15 @@ async function obtenerGuias(desde, hasta) {
       const pallets = tipo === 'retiro'
         ? (confirmada || despachada || solicitada)
         : (confirmada || solicitada);
-      // horaIngreso es el ÚNICO campo con hora real: fechaDespacho y
-      // fechaConfirmacion vienen a medianoche (2026-08-26T00:00:00), así que no
-      // sirven para ordenar ni para cruzar contra el paso por el túnel.
-      const cuando = f.horaIngreso || f.fechaConfirmacion || f.fechaDespacho || null;
-      const fecha = cuando ? String(cuando).slice(0, 10) : null;
+      // OJO CON LAS DOS FECHAS. horaIngreso es cuándo se CREÓ el pedido, no
+      // cuándo se movió el camión: la emisión 4087445 se creó el 28-07 y se
+      // despachó el 28-08. Filtrar por horaIngreso dejaba fuera justamente las
+      // emisiones, que se preparan con semanas de anticipación.
+      //   · fecha        → día operativo, para el recorte y el cruce.
+      //   · hora_emision → horaIngreso, único campo con hora, sólo de referencia.
+      const diaOperativo = f.fechaDespacho || f.fechaConfirmacion || f.fechaRequerida || f.horaIngreso;
+      const fecha = diaOperativo ? String(diaOperativo).slice(0, 10) : null;
+      const cuando = f.horaIngreso || diaOperativo || null;
 
       return {
         // en retiros y devoluciones dteNro llega en 0: cae al número de pedido
@@ -121,6 +131,7 @@ async function obtenerGuias(desde, hasta) {
         bodega: f.bodegaDestinoStr || f.bodegaOrigenStr || null,
         operacion: (f.operacion || '').trim(),
         tipo,
+        fecha_creacion: f.horaIngreso ? String(f.horaIngreso).slice(0, 10) : null,
         etapa: (f.etapaOperacion || '').trim() || null,
         nro_pedido: String(f.nroPedido || '').trim() || null,
         pallets_declarados: pallets,

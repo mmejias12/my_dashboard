@@ -23,7 +23,7 @@ body{background:var(--plane);color:var(--text);font-family:var(--sans);font-size
 a{color:inherit}
 h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
 
-/* ---------- topbar 2.0---------- */
+/* ---------- topbar ---------- */
 .top{display:flex;align-items:center;gap:14px;padding:14px 22px;border-bottom:1px solid var(--line);background:var(--surface);position:sticky;top:0;z-index:40}
 .logo{width:30px;height:30px;border-radius:8px;background:var(--brand);display:grid;place-items:center;font-weight:800;font-size:16px;color:#fff;flex:none}
 .top h1{font-size:15px}
@@ -83,6 +83,7 @@ tbody tr:hover{background:var(--surface-2)}
 .mini td,.mini th{padding:6px 9px}
 
 /* ---------- estado chips ---------- */
+.tag{font-size:9px;letter-spacing:.09em;font-weight:600;border:1px solid;border-radius:4px;padding:1px 5px;white-space:nowrap}
 .est{display:inline-flex;align-items:center;gap:6px;font-size:12px;white-space:nowrap}
 .est .gh{width:12px;text-align:center}
 
@@ -162,6 +163,14 @@ svg{display:block;width:100%;overflow:visible}
     </div>
     <div class="fgroup"><label for="f-cli">Cliente</label>
       <select id="f-cli"><option value="">Todos</option></select>
+    </div>
+    <div class="fgroup"><label for="f-tipo">Movimiento</label>
+      <select id="f-tipo">
+        <option value="">Todos</option>
+        <option value="emision">Sólo emisiones</option>
+        <option value="retiro">Sólo retiros</option>
+        <option value="devolucion">Sólo devoluciones</option>
+      </select>
     </div>
     <div class="fgroup"><label for="f-tol">Tolerancia</label>
       <select id="f-tol">
@@ -298,6 +307,17 @@ const EST = {
 };
 const ORDEN = ['ok','faltante','sobrante','sin_guia','sin_patente','en_curso'];
 
+/* Tipo de movimiento. Las emisiones generan DTE (serie 72xxx) y son las que
+   salen con carga; retiros y devoluciones son entradas. Sin esta distinción,
+   quien mira la tabla lee un retiro como si fuera un despacho. */
+const TIPOS = {
+  emision:    {et:'EMISIÓN',    c:'#3987e5'},
+  retiro:     {et:'RETIRO',     c:'#9085e9'},
+  devolucion: {et:'DEVOLUCIÓN', c:'#199e70'},
+  otro:       {et:'—',          c:'var(--muted)'},
+};
+const tipoDe = t => TIPOS[t] || TIPOS.otro;
+
 const $  = (s,r=document)=>r.querySelector(s);
 const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
 const esc = s => String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
@@ -311,7 +331,7 @@ const ts = s => new Date(s).getTime();
 /* ---------------------------------------------------------------------
    Estado de la UI
    --------------------------------------------------------------------- */
-const F = { rango:14, trans:'', cli:'', tol:0, q:'', estados:new Set(), orden:'fecha', dir:-1 };
+const F = { rango:14, trans:'', cli:'', tipo:'', tol:0, q:'', estados:new Set(), orden:'fecha', dir:-1 };
 
 /* ---------------------------------------------------------------------
    Reconciliación en cliente: la tolerancia es una regla de negocio que el
@@ -337,6 +357,7 @@ function universo(){
 function filtradas(u){
   const q = F.q.trim().toLowerCase();
   return u.filter(c =>
+    (!F.tipo || (c.guia?.tipo||c.tipo)===F.tipo) &&
     (!F.trans || c.transportista===F.trans) &&
     (!F.cli   || c.cliente===F.cli) &&
     (!F.estados.size || F.estados.has(c.est)) &&
@@ -630,6 +651,12 @@ const COLS = [
   ['pat','Patente',    c=>c.patente?esc(c.patente):'<span style="color:var(--muted)">sin OCR</span>', c=>c.patente||'zzz'],
   ['trans','Transportista', c=>esc(c.transportista||'—'), c=>c.transportista||'zzz'],
   ['cli','Cliente',    c=>esc(c.cliente||'—'), c=>c.cliente||'zzz'],
+  ['tipo','Tipo',      c=>{
+      const t = c.guia?.tipo || c.tipo;
+      if(!t) return '—';
+      const e = tipoDe(t);
+      return `<span class="tag" style="color:${e.c};border-color:${e.c}66">${e.et}</span>`;
+    }, c=>(c.guia?.tipo||c.tipo||'zzz')],
   ['guia','Guía',      c=>c.guia?esc(c.guia.numero):'—', c=>c.guia?.numero||'zzz'],
   ['dec','Declarado',  c=>c.guia?n0(c.guia.pallets_declarados):'—', c=>c.guia?.pallets_declarados??-1, 1],
   ['det','Detectado',  c=>n0(c.total_pallets), c=>c.total_pallets, 1],
@@ -853,13 +880,14 @@ function initFiltros(){
   $('#f-rango').onchange = e=>{F.rango=+e.target.value; render();};
   $('#f-trans').onchange = e=>{F.trans=e.target.value; render();};
   $('#f-cli').onchange   = e=>{F.cli=e.target.value; render();};
+  $('#f-tipo').onchange  = e=>{F.tipo=e.target.value; render();};
   $('#f-tol').onchange   = e=>{F.tol=+e.target.value; render();};
   let t; $('#f-q').oninput = e=>{clearTimeout(t); t=setTimeout(()=>{F.q=e.target.value; render();},180);};
 
   $('#btn-csv').onclick = ()=>{
     const f = filtradas(universo());
-    const cab=['carga_id','fecha_hora_carga','patente','transportista','cliente','guia','pallets_declarados','pallets_detectados','diferencia','estado','bultos','duracion_min'];
-    const filas=f.map(c=>[c.carga_id,c.fecha_hora_carga,c.patente||'',c.transportista||'',c.cliente||'',
+    const cab=['carga_id','fecha_hora_carga','patente','tipo','transportista','cliente','guia','pallets_declarados','pallets_detectados','diferencia','estado','bultos','duracion_min'];
+    const filas=f.map(c=>[c.carga_id,c.fecha_hora_carga,c.patente||'',(c.guia?.tipo||c.tipo||''),c.transportista||'',c.cliente||'',
       c.guia?.numero||'',c.guia?.pallets_declarados??'',c.total_pallets,c.diferencia??'',c.est,c.total_bultos,c.duracion_min]);
     const csv=[cab,...filas].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')).join('\n');
     const a=document.createElement('a');

@@ -2550,10 +2550,20 @@ function calEstadoDia(code, fecha){
   // 1) Licencia / vacaciones tienen prioridad
   var lic = calLicencia(code, fecha);
   if (lic){
+    var etiqueta = lic.permissionTypeName || lic.type || '';
+    var rango = lic.start ? (' · ' + (lic.start||'').substring(0,10) + ' → ' + (lic.end||'').substring(0,10)) : '';
+    // Talana registra las faltas injustificadas en el mismo endpoint que los
+    // permisos. Pintarlas como licencia sería tapar una falta: se muestran como
+    // ausencia, que es lo que son.
+    if (lic.justificada === false){
+      return { edo:'a', et:'', er:'—', st:'', sr:'—', atr:'',
+               turno: etiqueta || 'Falta injustificada',
+               com: (etiqueta || 'Falta injustificada') + rango };
+    }
     var esVac = esVacacion(lic);
     return { edo: esVac?'vac':'lic', et:'', er:'', st:'', sr:'', atr:'',
-             turno: (lic.permissionTypeName||lic.type||(esVac?'Vacaciones':'Licencia')),
-             com: (lic.permissionTypeName||lic.type||'') + (lic.start?(' · '+(lic.start||'').substring(0,10)+' → '+(lic.end||'').substring(0,10)):'') };
+             turno: (etiqueta || (esVac?'Vacaciones':'Licencia')),
+             com: etiqueta + rango };
   }
   // 2) Turno teórico del día
   var r = calcularResumenDia(code, fecha);

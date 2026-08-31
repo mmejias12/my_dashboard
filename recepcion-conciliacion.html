@@ -190,6 +190,9 @@ svg{display:block;width:100%;overflow:visible}
   <div class="sp"></div>
   <div class="pill demo" id="modo">DEMO · datos simulados</div>
   <div class="pill" id="gen">—</div>
+  <!-- Lo omitido se declara, no se esconde: si el total no calza con RDTOut,
+       acá está la razón. -->
+  <div class="pill hide" id="omitidas" title="Patentes fuera del alcance del túnel"></div>
 </div>
 
 <div class="wrap">
@@ -414,6 +417,31 @@ const FLOTA = {
   FV2792:{carro:false,camion:280, emision:280, retiro:280, conductor:'Emilio Caulle'},
 };
 const tope = (pat,tipo) => { const f=FLOTA[pat]; return f ? (tipo==='retiro'?f.retiro:f.emision) : null; };
+
+/* PATENTES FUERA DE ALCANCE. GXVL57 y CKWR19 operan en Talca y no pasan por el
+   túnel de Santiago: en el informe sólo aparecerían como guías sin cruce.
+   XX999 es la patente de pruebas de SPOTVISION; además no es un formato chileno
+   válido (4 letras + 2 dígitos, o 2 letras + 4 dígitos), así que el patrón dos
+   letras + 999 se puede descartar sin riesgo de perder un camión real.
+   El backend ya las filtra; esto cubre el caso de datos embebidos o de un
+   despliegue con la API sin actualizar. */
+const PATENTES_FUERA = new Set(['GXVL57','CKWR19']);
+const PATENTE_PRUEBA = /^[A-Z]{2}999$/;
+function enAlcance(p){
+  const k = (p||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(!k) return true;              // sin patente es un estado propio del tablero
+  return !PATENTES_FUERA.has(k) && !PATENTE_PRUEBA.test(k);
+}
+/* Deja el JSON del API listo para el tablero: saca las cargas y las guías
+   pendientes de patentes fuera de alcance, y lleva la cuenta para poder
+   declararlo en pantalla en vez de que los totales cambien sin explicación. */
+function filtrarAlcance(d){
+  const cargas0 = (d.cargas||[]).length, guias0 = (d.guias_sin_carga||[]).length;
+  const cargas = (d.cargas||[]).filter(c=>enAlcance(c.patente));
+  const guias  = (d.guias_sin_carga||[]).filter(g=>enAlcance(g.patente));
+  return {...d, cargas, guias_sin_carga:guias,
+          omitidas:{cargas:cargas0-cargas.length, guias:guias0-guias.length}};
+}
 
 const $  = (s,r=document)=>r.querySelector(s);
 const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
@@ -1246,7 +1274,7 @@ function initFiltros(){
     $('#gen').textContent = 'Cargando…';
   }
   try{
-    D = await cargarDatos();
+    D = filtrarAlcance(await cargarDatos());
   }catch(e){
     $('.wrap').innerHTML = `<div class="card"><div class="empty">
       No se pudieron cargar los datos.<br><br>
@@ -1258,6 +1286,11 @@ function initFiltros(){
   }
   $('#gen').textContent = 'Generado ' + D.generado.slice(0,16).replace('T',' ');
   $('#nota-cierre').textContent = D.parametros.cierre_min;
+  const om = (D.omitidas?.cargas||0) + (D.omitidas?.guias||0);
+  if(om){
+    $('#omitidas').classList.remove('hide');
+    $('#omitidas').textContent = `${om} registro${om>1?'s':''} omitido${om>1?'s':''} · Talca y patente de prueba`;
+  }
   initFiltros();
   render();
 })();

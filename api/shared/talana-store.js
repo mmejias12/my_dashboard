@@ -52,7 +52,16 @@ function getContainer() {
 }
 
 async function asegurarContenedor(container) {
-  try { await container.createIfNotExists(); } catch (_) { /* ya existe o sin permiso de crear */ }
+  // Devuelve null si quedó listo, o el motivo si no se pudo crear. Callar un
+  // fallo aquí deja al sync escribiendo contra un contenedor inexistente y el
+  // error aparece después, lejos de su causa.
+  try {
+    await container.createIfNotExists();
+    return null;
+  } catch (e) {
+    if (/already exists|ContainerAlreadyExists/i.test(e.message || '')) return null;
+    return `No se pudo crear el contenedor "${CONTAINER}": ${(e.message || '').slice(0, 200)}`;
+  }
 }
 
 async function streamAString(readable) {
@@ -61,12 +70,29 @@ async function streamAString(readable) {
   return Buffer.concat(chunks).toString('utf8');
 }
 
+/**
+ * "Todavía no existe" es un estado normal aquí: antes del primer sync no hay
+ * contenedor ni blobs, y eso debe leerse como "sin snapshot", no como avería.
+ *
+ * Se mira el código de error del SDK y no el texto del mensaje: Azure responde
+ * "The specified container does not exist." sin nombrar ContainerNotFound en la
+ * frase, así que una comparación por texto deja pasar el error y el reporte
+ * termina mostrando un 502 en vez de decir que falta sincronizar.
+ */
+function esNoEncontrado(e) {
+  if (!e) return false;
+  const codigo = e.code || (e.details && e.details.errorCode) || '';
+  if (codigo === 'BlobNotFound' || codigo === 'ContainerNotFound') return true;
+  if (e.statusCode === 404) return true;
+  return /BlobNotFound|ContainerNotFound|does not exist|no existe/i.test(e.message || '');
+}
+
 async function leer(container, clave) {
   try {
     const dl = await container.getBlobClient(clave).download();
     return JSON.parse(await streamAString(dl.readableStreamBody));
   } catch (e) {
-    if (/BlobNotFound|ContainerNotFound|404/.test(e.message)) return null;
+    if (esNoEncontrado(e)) return null;
     throw e;
   }
 }
@@ -196,7 +222,7 @@ const guardarEstado = (c, e) =>
   escribir(c, K_ESTADO, { ...e, _guardado: new Date().toISOString() });
 
 module.exports = {
-  getContainer, asegurarContenedor, leer, escribir,
+  getContainer, asegurarContenedor, leer, escribir, esNoEncontrado,
   leerMaestros, guardarMaestros, maestrosVencidos,
   leerMarcasDia, guardarMarcasDia, diasPendientes, leerMarcasRango, diaCerrado,
   leerAusenciasMes, guardarAusenciasMes, ausenciasVencidas, mesesDelRango, mesDe,

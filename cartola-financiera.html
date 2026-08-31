@@ -19,7 +19,7 @@
   --accent:#4ade80; --red-logo:#C0170C;
   --c-uf:#60a5fa; --c-clp:#fcd34d; --c-warn:#f87171; --c-ok:#4ade80;
   --c-arriendo:#4ade80; --c-emision:#60a5fa; --c-transf:#f59e0b;
-  --c-dev:#f87171; --c-traspaso:#8b5cf6; --c-twm:#06b6d4;
+  --c-dev:#f87171; --c-traspaso:#8b5cf6; --c-twm:#06b6d4; --c-comp:#e879f9;
   --radius-sm:6px; --radius-md:9px; --radius-lg:13px;
 }
 html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
@@ -143,8 +143,8 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
 .kfi-gold { color:var(--c-clp); }
 
 /* TIPO CARDS */
-.tipo-grid { display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin-bottom:.875rem; }
-@media(max-width:1100px){ .tipo-grid{grid-template-columns:repeat(3,1fr);} }
+.tipo-grid { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:.875rem; }
+@media(max-width:1100px){ .tipo-grid{grid-template-columns:repeat(2,1fr);} }
 .tipo-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);
   padding:.75rem;position:relative;overflow:hidden; }
 .tipo-card::before { content:'';position:absolute;top:0;left:0;right:0;height:2px; }
@@ -154,6 +154,27 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
 .tipo-dev::before      { background:var(--c-dev); }
 .tipo-traspaso::before { background:var(--c-traspaso); }
 .tipo-twm::before      { background:var(--c-twm); }
+.tipo-comp::before     { background:var(--c-comp); }
+.tipo-reloc::before    { background:var(--text-muted); }
+.tipo-card.is-info { opacity:.72; }
+.tipo-card.is-info .tipo-clp { color:var(--text-muted);font-size:13px; }
+
+/* SWITCH */
+.sw { display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font-size:11.5px;
+  color:var(--text-sec);padding:6px 10px;border:1px solid var(--border-md);border-radius:var(--radius-sm);
+  background:var(--bg-input);align-self:center; }
+.sw:hover { background:var(--bg-hover);color:var(--text-pri); }
+.sw input { position:absolute;opacity:0;width:0;height:0; }
+.sw-track { width:30px;height:17px;border-radius:9px;background:var(--bg-hover);
+  border:1px solid var(--border-md);position:relative;transition:background .15s;flex-shrink:0; }
+.sw-track::after { content:'';position:absolute;top:1.5px;left:2px;width:12px;height:12px;border-radius:50%;
+  background:var(--text-muted);transition:transform .15s,background .15s; }
+.sw input:checked + .sw-track { background:rgba(74,222,128,.25);border-color:rgba(74,222,128,.5); }
+.sw input:checked + .sw-track::after { transform:translateX(12px);background:var(--accent); }
+.sw input:focus-visible + .sw-track { outline:2px solid var(--c-uf);outline-offset:2px; }
+.sw-hint { font-size:9.5px;color:var(--text-muted);display:block;margin-top:1px; }
+.tag-ex { font-size:8.5px;background:rgba(252,211,77,.15);color:var(--c-clp);
+  padding:1px 5px;border-radius:7px;margin-left:6px;vertical-align:1px;letter-spacing:.3px; }
 .tipo-label { font-size:9.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px; }
 .tipo-clp { font-size:15px;font-weight:600; }
 .tipo-uf  { font-size:11px;color:var(--c-uf);margin-top:2px;font-family:'JetBrains Mono',monospace; }
@@ -425,6 +446,13 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
         <input type="date" id="d2" class="ctrl-date">
       </div>
       <button class="btn" onclick="loadData()">Cargar datos</button>
+      <label class="sw" title="Los ajustes retroactivos son registros de monto negativo que corrigen períodos anteriores pero se cargan con la fecha del día en que se hicieron. Al excluirlos, el período muestra su facturación propia.">
+        <input type="checkbox" id="sw-ajustes" checked onchange="toggleAjustes(this.checked)">
+        <span class="sw-track"></span>
+        <span>Excluir ajustes retroactivos
+          <span class="sw-hint">Registros de monto negativo · se muestran aparte</span>
+        </span>
+      </label>
       <div class="period-badge" id="period-badge" style="display:none">
         <span id="period-text">—</span>
       </div>
@@ -460,24 +488,24 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
       </div>
       <div class="kpi-flow" id="kpi-flow">
         <div class="kfi">
-          <div class="kfi-label">Total Cartola</div>
+          <div class="kfi-label">Cartola bruta</div>
           <div class="kfi-val kfi-blue" id="f-total-clp">—</div>
           <div class="kfi-sub kfi-blue" id="f-total-uf">— UF</div>
           <div class="kfi-desc" id="f-total-cli">— clientes · — registros</div>
           <span class="kfi-arrow">›</span>
         </div>
         <div class="kfi">
-          <div class="kfi-label">(-) Ex-clientes</div>
-          <div class="kfi-val kfi-neg" id="f-excli-clp">—</div>
-          <div class="kfi-sub" id="f-excli-uf">— UF</div>
-          <div class="kfi-desc">Contrato vencido · aún con inventario</div>
+          <div class="kfi-label">(-) Ajustes retroactivos</div>
+          <div class="kfi-val kfi-neg" id="f-ajus-clp">—</div>
+          <div class="kfi-sub" id="f-ajus-uf">— UF</div>
+          <div class="kfi-desc" id="f-ajus-desc">Registros de monto negativo</div>
           <span class="kfi-arrow">›</span>
         </div>
         <div class="kfi">
-          <div class="kfi-label">(-) Solo Arriendo</div>
-          <div class="kfi-val kfi-neg" id="f-arr-clp">—</div>
-          <div class="kfi-sub" id="f-arr-uf">— UF</div>
-          <div class="kfi-desc">Solo días pallet · sin emisión</div>
+          <div class="kfi-label">(-) Ex-clientes</div>
+          <div class="kfi-val kfi-neg" id="f-excli-clp">—</div>
+          <div class="kfi-sub" id="f-excli-uf">— UF</div>
+          <div class="kfi-desc" id="f-excli-desc">Contrato vencido · aún con inventario</div>
           <span class="kfi-arrow">›</span>
         </div>
         <div class="kfi">
@@ -499,6 +527,7 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
       <div class="section-hdr">
         <span class="section-title">Desglose por tipo de operación</span>
         <span class="section-badge badge-green">Monto en CLP y UF</span>
+        <span class="section-sub" id="tipo-nota">—</span>
       </div>
       <div class="tipo-grid" id="tipo-grid"></div>
 
@@ -530,6 +559,8 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
                 <th style="text-align:right">Arriendo CLP</th>
                 <th style="text-align:right">Emisión CLP</th>
                 <th style="text-align:right">Transf. CLP</th>
+                <th style="text-align:right">Comp. log. CLP</th>
+                <th style="text-align:right">Devol. CLP</th>
                 <th style="text-align:right">Otros CLP</th>
                 <th style="text-align:right">Total CLP</th>
                 <th style="text-align:right">Total UF</th>
@@ -569,7 +600,7 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
         <div class="alert-card">
           <div class="alert-head">
             <span class="alert-icon">✅</span>
-            <span class="alert-title">Solo arriendo (ex-clientes)</span>
+            <span class="alert-title">Ex-clientes (lista fija)</span>
             <span class="alert-count" id="cnt-solo-arr" style="color:#fcd34d">—</span>
           </div>
           <div class="alert-list" id="list-solo-arr">
@@ -683,6 +714,51 @@ var isDev   = ['localhost','127.0.0.1'].includes(location.hostname);
 
 var raw = [];
 var chartTop = null, chartTipo = null;
+
+// ── REGLAS DE NEGOCIO (alineadas con la cartola revisada) ─────────────────────
+// Ex-clientes: contrato terminado, mantienen inventario en el pool y por eso
+// siguen generando "arriendo días pallet" en la API, pero la cartola oficial
+// NO los considera en ningún concepto. Lista fija por cardCode (fallback por nombre).
+var EX_CLIENTES = {
+  'C76355360-4':'COMERCIAL CANADA',
+  'C84673600-K':'PRODUCTOS NUTRITIVOS AVELUP LIMITADA',
+  'C77666850-8':'CORREA Y CIA LTDA',
+  'C99529560-1':'PROCESADORA DE GRANOS AUSTRAL S.A.',
+  'C76072046-1':'COMERSUR S.A.',
+  'C85417200-K':'NALCO INDUSTRIAL SERVICES CHILE LTDA.',
+  'C96842520-K':'COMERCIAL ROCKY S.A.',
+  'C76549892-9':'PARKPET S.A',
+  'C76871186-0':'COMERCIAL LOMBARDI S.A.',
+  'C76130385-6':'PROCARNE COMERCIAL S.A.',
+  'C79862750-3':'TRANSPORTES CCU LTDA',
+  'C76493368-0':'BRUEGGEN AMERICA S.A.',
+  'C83610800-0':'MAR DEL SUR SPA'
+};
+var EX_CLIENTES_NOMBRES = {};
+Object.keys(EX_CLIENTES).forEach(function(k){ EX_CLIENTES_NOMBRES[EX_CLIENTES[k]] = true; });
+
+function esExCliente(r) {
+  if (EX_CLIENTES[r.cardCode]) return true;
+  return !!EX_CLIENTES_NOMBRES[(r.cardName||'').trim().toUpperCase()];
+}
+
+// Switch "Excluir ajustes retroactivos": los registros de monto negativo son
+// correcciones de períodos anteriores cargadas con la fecha del día en que se
+// hicieron. Distorsionan la semana en que caen, así que por defecto van aparte.
+var excluirAjustes = true;
+
+// Universo de registros sobre el que se calcula todo el tab "Resumen general".
+function baseRegs() {
+  if (!excluirAjustes) return raw;
+  return raw.filter(function(r){ return (r.netoCLP||0) >= 0; });
+}
+
+function toggleAjustes(v) {
+  excluirAjustes = !!v;
+  if (raw.length) {
+    renderAll(document.getElementById('d1').value, document.getElementById('d2').value);
+  }
+}
 
 // ── SIDEBAR ───────────────────────────────────────────────────────────────────
 function tog(id, hdr) {
@@ -798,16 +874,17 @@ function renderAll(d1, d2) {
 // ── AGRUPADOR ─────────────────────────────────────────────────────────────────
 function agruparPorCliente() {
   var map = {};
-  raw.forEach(function(r) {
+  baseRegs().forEach(function(r) {
     var code = r.cardCode;
     if (!map[code]) {
       map[code] = {
         code: code, name: r.cardName,
         arriendo:0, emision:0, transferencia:0, traspasoClp:0,
-        devolucion:0, twm:0, relocaliza:0, otrosClp:0,
+        devolucion:0, twm:0, relocaliza:0, compensacion:0, ajusteInv:0, otrosClp:0,
         totalCLP:0, totalUF:0,
-        pallets:0, palletsArr:0, palletsEm:0,
-        tieneEmision:false, tieneTransf:false
+        pallets:0, palletsArr:0, palletsEm:0, relocalizaQty:0,
+        tieneEmision:false, tieneTransf:false,
+        esEx: esExCliente(r)
       };
     }
     var c = map[code];
@@ -818,54 +895,73 @@ function agruparPorCliente() {
     c.totalCLP += clp;
     c.totalUF  += uf;
     c.pallets  += qty;
-    if      (op==='ARRIENDO DIAS PALLET') { c.arriendo+=clp; c.palletsArr+=qty; }
-    else if (op==='EMISION')              { c.emision+=clp;  c.palletsEm+=qty; c.tieneEmision=true; }
-    else if (op==='TRANSFERENCIA')        { c.transferencia+=clp; c.tieneTransf=true; }
-    else if (op==='TRANSFERENCIA WALMART'){ c.twm+=clp; c.tieneTransf=true; }
-    else if (op==='TRASPASO')             { c.traspasoClp+=clp; }
-    else if (op==='RELOCALIZA')           { c.relocaliza+=clp; }
-    else                                  { c.otrosClp+=clp; }
+    if      (op==='ARRIENDO DIAS PALLET')      { c.arriendo+=clp; c.palletsArr+=qty; }
+    else if (op==='EMISION')                   { c.emision+=clp;  c.palletsEm+=qty; c.tieneEmision=true; }
+    else if (op==='EMISION AJUSTE INVENTARIO') { c.ajusteInv+=clp; }
+    else if (op==='TRANSFERENCIA')             { c.transferencia+=clp; c.tieneTransf=true; }
+    else if (op==='TRANSFERENCIA WALMART')     { c.twm+=clp; c.tieneTransf=true; }
+    else if (op==='TRASPASO')                  { c.traspasoClp+=clp; }
+    else if (op==='RELOCALIZA')                { c.relocaliza+=clp; c.relocalizaQty+=qty; }
+    else if (op==='DEVOLUCION'||op==='DEVOLUCIONES') { c.devolucion+=clp; }
+    else if (op==='COMPENSACION LOGISTICA')    { c.compensacion+=clp; }
+    else                                       { c.otrosClp+=clp; }
   });
   return Object.values(map).sort(function(a,b){return b.totalCLP-a.totalCLP;});
 }
 
 // ── BLOQUE 1: FLUJO FINANCIERO ────────────────────────────────────────────────
 function renderFlujo(clientes) {
+  // 1) Cartola bruta: todo lo que trae la API, sin filtros
+  var brutoCLP=0, brutoUF=0;
+  raw.forEach(function(r){ brutoCLP+=(r.netoCLP||0); brutoUF+=(r.netoUF||0); });
+
+  // 2) Ajustes retroactivos: registros de monto negativo
+  var ajusCLP=0, ajusUF=0, ajusN=0;
+  raw.forEach(function(r){
+    if ((r.netoCLP||0) < 0) { ajusCLP+=r.netoCLP; ajusUF+=(r.netoUF||0); ajusN++; }
+  });
+
+  // Base de trabajo (ya sin ajustes si el switch está activo)
   var totalCLP=0, totalUF=0;
   clientes.forEach(function(c){totalCLP+=c.totalCLP;totalUF+=c.totalUF;});
 
-  // Ex-clientes: solo arriendo, sin emisión ni transferencia
+  // 3) Ex-clientes: lista fija, se descuentan completos (todos sus conceptos)
   var exCLP=0, exUF=0, exCount=0;
-  clientes.filter(function(c){return !c.tieneEmision&&!c.tieneTransf;}).forEach(function(c){
-    exCLP+=c.arriendo; exUF+=c.totalUF; exCount++;
+  clientes.filter(function(c){return c.esEx;}).forEach(function(c){
+    exCLP+=c.totalCLP; exUF+=c.totalUF; exCount++;
   });
 
-  // Solo arriendo: tienen algo más pero su emisión/transf es 0
-  var soloArrCLP=0, soloArrUF=0;
-  clientes.filter(function(c){return c.tieneEmision||c.tieneTransf;}).forEach(function(c){
-    soloArrCLP+=c.arriendo;
-  });
-
+  // 4) Subtotal neto
   var subCLP = totalCLP - exCLP;
   var subUF  = totalUF  - exUF;
   var subCount = clientes.length - exCount;
 
-  // Facturable: los que tienen emisión o transferencia
+  // 5) Facturable: clientes vigentes con emisión o transferencia
   var factCLP=0, factUF=0, factCount=0;
-  clientes.filter(function(c){return c.tieneEmision||c.tieneTransf;}).forEach(function(c){
-    factCLP+=c.totalCLP; factUF+=c.totalUF; factCount++;
+  var soloArrCLP=0;
+  clientes.filter(function(c){return !c.esEx;}).forEach(function(c){
+    if (c.tieneEmision||c.tieneTransf) { factCLP+=c.totalCLP; factUF+=c.totalUF; factCount++; }
+    else { soloArrCLP+=c.arriendo; }
   });
 
-  set('f-total-clp', fmtCLP(totalCLP));
-  set('f-total-uf',  fmtUF(totalUF)+' UF');
+  set('f-total-clp', fmtCLP(brutoCLP));
+  set('f-total-uf',  fmtUF(brutoUF)+' UF');
   set('f-total-cli', clientes.length+' clientes · '+raw.length.toLocaleString('es-CL')+' registros');
+
+  set('f-ajus-clp',  ajusN ? fmtCLP(ajusCLP) : '$0');
+  set('f-ajus-uf',   fmtUF(ajusUF)+' UF');
+  set('f-ajus-desc', ajusN
+      ? ajusN+' registros negativos · '+(excluirAjustes?'excluidos del subtotal':'INCLUIDOS en el subtotal')
+      : 'Sin ajustes en el período');
+
   set('f-excli-clp', '-'+fmtCLP(exCLP));
   set('f-excli-uf',  fmtUF(exUF)+' UF');
-  set('f-arr-clp',   fmtCLP(soloArrCLP));
-  set('f-arr-uf',    '— UF');
+  set('f-excli-desc', exCount+' de '+Object.keys(EX_CLIENTES).length+' ex-clientes con movimiento · lista fija');
+
   set('f-sub-clp',   fmtCLP(subCLP));
   set('f-sub-uf',    fmtUF(subUF)+' UF');
-  set('f-sub-cli',   subCount+' clientes activos');
+  set('f-sub-cli',   subCount+' clientes vigentes · '+fmtCLP(soloArrCLP)+' solo arriendo');
+
   set('f-fact-clp',  fmtCLP(factCLP));
   set('f-fact-uf',   fmtUF(factUF)+' UF');
   set('f-fact-cli',  factCount+' clientes con emisión/transf');
@@ -874,32 +970,60 @@ function renderFlujo(clientes) {
 // ── BLOQUE 2: TIPO CARDS ──────────────────────────────────────────────────────
 function renderTipoCards(clientes) {
   var tipos = {
-    'ARRIENDO DIAS PALLET': {label:'Días Pallet Arriendo', cls:'tipo-arriendo', clp:0, uf:0, qty:0},
-    'EMISION':              {label:'Emisiones',            cls:'tipo-emision',  clp:0, uf:0, qty:0},
-    'TRANSFERENCIA':        {label:'Transferencias',       cls:'tipo-transf',   clp:0, uf:0, qty:0},
-    'TRANSFERENCIA WALMART':{label:'Transf. Walmart',      cls:'tipo-twm',      clp:0, uf:0, qty:0},
-    'TRASPASO':             {label:'Traspasos',             cls:'tipo-traspaso', clp:0, uf:0, qty:0},
-    'RELOCALIZA':           {label:'Relocalizaciones',      cls:'tipo-dev',      clp:0, uf:0, qty:0},
+    'ARRIENDO DIAS PALLET':     {label:'Días Pallet Arriendo', cls:'tipo-arriendo', clp:0, uf:0, qty:0, u:'días pallet'},
+    'EMISION':                  {label:'Emisiones',            cls:'tipo-emision',  clp:0, uf:0, qty:0},
+    'TRANSFERENCIA':            {label:'Transferencias',       cls:'tipo-transf',   clp:0, uf:0, qty:0},
+    'TRANSFERENCIA WALMART':    {label:'Transf. Walmart',      cls:'tipo-twm',      clp:0, uf:0, qty:0},
+    'COMPENSACION LOGISTICA':   {label:'Compensación Logística',cls:'tipo-comp',    clp:0, uf:0, qty:0, u:'unidades'},
+    'DEVOLUCION':               {label:'Devoluciones',          cls:'tipo-dev',     clp:0, uf:0, qty:0},
+    'TRASPASO':                 {label:'Traspasos',             cls:'tipo-traspaso',clp:0, uf:0, qty:0},
+    'RELOCALIZA':               {label:'Relocalizaciones · sin cargo', cls:'tipo-reloc', clp:0, uf:0, qty:0, info:true},
   };
-  raw.forEach(function(r) {
+  var ajusteInv = {clp:0, uf:0, qty:0};
+  baseRegs().forEach(function(r) {
     var op = (r.operacion||'').toUpperCase();
+    if (op==='DEVOLUCIONES') op='DEVOLUCION';
+    if (op==='EMISION AJUSTE INVENTARIO') {
+      ajusteInv.clp += (r.netoCLP||0); ajusteInv.uf += (r.netoUF||0); ajusteInv.qty += (r.cantidad||0);
+      return;
+    }
     if (tipos[op]) {
       tipos[op].clp += (r.netoCLP||0);
       tipos[op].uf  += (r.netoUF||0);
       tipos[op].qty += (r.cantidad||0);
     }
   });
+  // La API entrega "EMISION AJUSTE INVENTARIO" de forma esporádica: se suma a Emisiones
+  // para que las tarjetas cuadren con el total, pero se deja anotado en el subtítulo.
+  if (ajusteInv.clp || ajusteInv.qty) {
+    tipos['EMISION'].clp += ajusteInv.clp;
+    tipos['EMISION'].uf  += ajusteInv.uf;
+    tipos['EMISION'].qty += ajusteInv.qty;
+    tipos['EMISION'].nota = 'incl. ajuste inventario '+fmtCLP(ajusteInv.clp);
+  }
   var html = '';
   Object.keys(tipos).forEach(function(k) {
     var t = tipos[k];
-    html += '<div class="tipo-card '+t.cls+'">'
+    html += '<div class="tipo-card '+t.cls+(t.info?' is-info':'')+'"'
+      + (t.info?' title="RELOCALIZA registra movimiento de pallets sin cargo asociado (netoCLP = 0)"':'')+'>'
       + '<div class="tipo-label">'+t.label+'</div>'
-      + '<div class="tipo-clp">'+fmtCLP(t.clp)+'</div>'
-      + '<div class="tipo-uf">'+fmtUF(t.uf)+' UF</div>'
-      + '<div class="tipo-qty">'+t.qty.toLocaleString('es-CL')+' pallets</div>'
+      + '<div class="tipo-clp">'+(t.info&&!t.clp ? 'Sin cargo' : fmtCLP(t.clp))+'</div>'
+      + '<div class="tipo-uf">'+(t.info&&!t.uf ? '—' : fmtUF(t.uf)+' UF')+'</div>'
+      + '<div class="tipo-qty">'+Math.round(t.qty).toLocaleString('es-CL')+' '+(t.u||'pallets')
+      + (t.nota ? ' · '+t.nota : '')+'</div>'
       + '</div>';
   });
   document.getElementById('tipo-grid').innerHTML = html;
+
+  var sumaTarjetas = 0;
+  Object.keys(tipos).forEach(function(k){ sumaTarjetas += tipos[k].clp; });
+  var totalBase = 0;
+  baseRegs().forEach(function(r){ totalBase += (r.netoCLP||0); });
+  var desc = Math.round(totalBase - sumaTarjetas);
+  document.getElementById('tipo-nota').textContent =
+    (excluirAjustes ? 'Sin ajustes retroactivos' : 'Ajustes retroactivos incluidos')
+    + ' · las tarjetas suman ' + fmtCLP(sumaTarjetas)
+    + (Math.abs(desc) > 1 ? ' · sin clasificar ' + fmtCLP(desc) : ' (cuadra con el total)');
 }
 
 // ── BLOQUE 3: GRÁFICOS ────────────────────────────────────────────────────────
@@ -931,18 +1055,20 @@ function renderCharts(clientes) {
   });
 
   // Donut tipos
-  var tipoMap = {'Arriendo':0,'Emisión':0,'Transf.':0,'T.Walmart':0,'Traspaso':0,'Otros':0};
-  raw.forEach(function(r) {
+  var tipoMap = {'Arriendo':0,'Emisión':0,'Transf.':0,'T.Walmart':0,'Comp. log.':0,'Devoluciones':0,'Traspaso':0,'Otros':0};
+  baseRegs().forEach(function(r) {
     var op = (r.operacion||'').toUpperCase();
     var clp = r.netoCLP||0;
     if      (op==='ARRIENDO DIAS PALLET')  tipoMap['Arriendo']+=clp;
-    else if (op==='EMISION')               tipoMap['Emisión']+=clp;
+    else if (op==='EMISION'||op==='EMISION AJUSTE INVENTARIO') tipoMap['Emisión']+=clp;
     else if (op==='TRANSFERENCIA')         tipoMap['Transf.']+=clp;
     else if (op==='TRANSFERENCIA WALMART') tipoMap['T.Walmart']+=clp;
+    else if (op==='COMPENSACION LOGISTICA')tipoMap['Comp. log.']+=clp;
+    else if (op==='DEVOLUCION'||op==='DEVOLUCIONES') tipoMap['Devoluciones']+=clp;
     else if (op==='TRASPASO')              tipoMap['Traspaso']+=clp;
     else                                   tipoMap['Otros']+=clp;
   });
-  var tipoColors = ['#4ade80','#60a5fa','#f59e0b','#06b6d4','#8b5cf6','#6b7280'];
+  var tipoColors = ['#4ade80','#60a5fa','#f59e0b','#06b6d4','#e879f9','#f87171','#8b5cf6','#6b7280'];
   if (chartTipo) chartTipo.destroy();
   chartTipo = new Chart(document.getElementById('chart-tipo').getContext('2d'), {
     type:'doughnut',
@@ -967,35 +1093,42 @@ function renderCharts(clientes) {
 
 // ── BLOQUE 4: TABLA CLIENTES ──────────────────────────────────────────────────
 function renderTablaClientes(clientes) {
-  document.getElementById('detalle-count').textContent = clientes.length+' clientes';
+  var nEx = clientes.filter(function(c){return c.esEx;}).length;
+  document.getElementById('detalle-count').textContent =
+    clientes.length+' clientes'+(nEx?' · '+nEx+' ex-clientes':'');
   var html = '';
   clientes.forEach(function(c) {
-    var otros = c.traspasoClp + c.devolucion + c.relocaliza + c.otrosClp;
-    html += '<tr>'
-      + '<td title="'+c.code+'">'+c.name+'</td>'
-      + '<td class="mono" style="text-align:right">'+c.pallets.toLocaleString('es-CL')+'</td>'
+    var otros = c.traspasoClp + c.relocaliza + c.ajusteInv + c.otrosClp;
+    html += '<tr'+(c.esEx?' style="opacity:.6"':'')+'>'
+      + '<td title="'+c.code+'">'+c.name+(c.esEx?'<span class="tag-ex">EX-CLIENTE</span>':'')+'</td>'
+      + '<td class="mono" style="text-align:right">'+Math.round(c.pallets).toLocaleString('es-CL')+'</td>'
       + '<td class="mono" style="text-align:right;color:var(--c-arriendo)">'+fmtCLP(c.arriendo)+'</td>'
       + '<td class="mono" style="text-align:right;color:var(--c-emision)">'+fmtCLP(c.emision)+'</td>'
       + '<td class="mono" style="text-align:right;color:var(--c-transf)">'+fmtCLP(c.transferencia+c.twm)+'</td>'
+      + '<td class="mono" style="text-align:right;color:var(--c-comp)">'+fmtCLP(c.compensacion)+'</td>'
+      + '<td class="mono" style="text-align:right;color:var(--c-dev)">'+fmtCLP(c.devolucion)+'</td>'
       + '<td class="mono" style="text-align:right;color:var(--text-muted)">'+fmtCLP(otros)+'</td>'
       + '<td class="mono" style="text-align:right;color:var(--c-clp);font-weight:600">'+fmtCLP(c.totalCLP)+'</td>'
       + '<td class="mono" style="text-align:right;color:var(--c-uf)">'+fmtUF(c.totalUF)+'</td>'
       + '</tr>';
   });
   // Fila totales
-  var totCLP=0,totUF=0,totArr=0,totEm=0,totTr=0,totOt=0,totPal=0;
+  var totCLP=0,totUF=0,totArr=0,totEm=0,totTr=0,totCo=0,totDv=0,totOt=0,totPal=0;
   clientes.forEach(function(c){
     totCLP+=c.totalCLP;totUF+=c.totalUF;totArr+=c.arriendo;
     totEm+=c.emision;totTr+=c.transferencia+c.twm;
-    totOt+=c.traspasoClp+c.devolucion+c.relocaliza+c.otrosClp;
+    totCo+=c.compensacion;totDv+=c.devolucion;
+    totOt+=c.traspasoClp+c.relocaliza+c.ajusteInv+c.otrosClp;
     totPal+=c.pallets;
   });
   html += '<tr style="border-top:2px solid var(--border-md);font-weight:600;background:var(--bg-surface)">'
     + '<td>TOTAL ('+clientes.length+' clientes)</td>'
-    + '<td class="mono" style="text-align:right">'+totPal.toLocaleString('es-CL')+'</td>'
+    + '<td class="mono" style="text-align:right">'+Math.round(totPal).toLocaleString('es-CL')+'</td>'
     + '<td class="mono" style="text-align:right;color:var(--c-arriendo)">'+fmtCLP(totArr)+'</td>'
     + '<td class="mono" style="text-align:right;color:var(--c-emision)">'+fmtCLP(totEm)+'</td>'
     + '<td class="mono" style="text-align:right;color:var(--c-transf)">'+fmtCLP(totTr)+'</td>'
+    + '<td class="mono" style="text-align:right;color:var(--c-comp)">'+fmtCLP(totCo)+'</td>'
+    + '<td class="mono" style="text-align:right;color:var(--c-dev)">'+fmtCLP(totDv)+'</td>'
     + '<td class="mono" style="text-align:right;color:var(--text-muted)">'+fmtCLP(totOt)+'</td>'
     + '<td class="mono" style="text-align:right;color:var(--c-clp);font-weight:700">'+fmtCLP(totCLP)+'</td>'
     + '<td class="mono" style="text-align:right;color:var(--c-uf)">'+fmtUF(totUF)+'</td>'
@@ -1005,17 +1138,19 @@ function renderTablaClientes(clientes) {
 
 // ── BLOQUE 5: ALERTAS ─────────────────────────────────────────────────────────
 function renderAlertas(clientes) {
-  // Sin emisión
-  var sinEm = clientes.filter(function(c){return !c.tieneEmision;});
+  var vigentes = clientes.filter(function(c){return !c.esEx;});
+
+  // Sin emisión (solo clientes vigentes)
+  var sinEm = vigentes.filter(function(c){return !c.tieneEmision;});
   renderAlertList('cnt-sin-em','list-sin-em', sinEm, '#f87171', 'arriendo');
 
-  // Sin emisión ni transferencia
-  var sinEmTr = clientes.filter(function(c){return !c.tieneEmision&&!c.tieneTransf;});
+  // Sin emisión ni transferencia (solo clientes vigentes)
+  var sinEmTr = vigentes.filter(function(c){return !c.tieneEmision&&!c.tieneTransf;});
   renderAlertList('cnt-sin-emtr','list-sin-emtr', sinEmTr, '#f87171', 'arriendo');
 
-  // Solo arriendo (ex-clientes: sin emisión ni transferencia)
-  var soloArr = clientes.filter(function(c){return !c.tieneEmision&&!c.tieneTransf&&c.arriendo>0;});
-  renderAlertList('cnt-solo-arr','list-solo-arr', soloArr, '#fcd34d', 'arriendo');
+  // Ex-clientes: lista fija, no depende de si facturaron esta semana
+  var ex = clientes.filter(function(c){return c.esEx;});
+  renderAlertList('cnt-solo-arr','list-solo-arr', ex, '#fcd34d', 'totalCLP');
 }
 
 function renderAlertList(cntId, listId, items, color, valField) {
@@ -1048,7 +1183,7 @@ function renderEmisiones(clientes) {
     var clsRel = c.palletsEm > c.palletsArr ? 'diff' : c.palletsEm > 0 ? 'ok' : 'neutral';
     // Calcular netoUF de emisión
     var emUF = 0;
-    raw.filter(function(r){return r.cardCode===c.code&&(r.operacion||'').toUpperCase()==='EMISION';})
+    baseRegs().filter(function(r){return r.cardCode===c.code&&(r.operacion||'').toUpperCase()==='EMISION';})
        .forEach(function(r){emUF+=r.netoUF||0;});
     html += '<tr>'
       + '<td title="'+c.code+'">'+c.name+'</td>'
@@ -1144,7 +1279,7 @@ function buildResumenMensual(d1, d2) {
   var sinFecha = 0;
   var mesFallback = (d1||'').substring(0,7);
 
-  raw.forEach(function(r){
+  baseRegs().forEach(function(r){
     var code = r.cardCode;
     var name = r.cardName;
     var op   = (r.operacion||'OTROS').toUpperCase();
@@ -1551,7 +1686,7 @@ function exportarResumenMensualExcel() {
 
   // Construir filas planas: 1 por registro crudo
   var filas = [];
-  raw.forEach(function(r){
+  baseRegs().forEach(function(r){
     var code = r.cardCode || '';
     var name = r.cardName || '';
     // Aplicar mismo filtro que usan las vistas (por nombre o código de cliente)

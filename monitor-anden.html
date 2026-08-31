@@ -192,6 +192,20 @@ const POLL_MS     = 15000;                          // sin webhook, cada cuánto
 const VENCE_MIN   = 240;                            // guía sin paso: se marca demorada
 const TOLERANCIA  = 0;                              // pallets de diferencia aceptados
 
+/* PATENTES FUERA DE ALCANCE. GXVL57 y CKWR19 operan en Talca: no pasan por el
+   túnel de Santiago, así que como guías en espera se quedarían colgadas para
+   siempre. XX999 es la patente de pruebas de SPOTVISION (y de paso no es un
+   formato chileno válido, por eso el patrón dos letras + 999 se descarta sin
+   riesgo). El backend ya las filtra; esto es el cinturón de seguridad para
+   cuando el monitor consume datos que no pasaron por nuestra API. */
+const PATENTES_FUERA = new Set(['GXVL57','CKWR19']);
+const PATENTE_PRUEBA = /^[A-Z]{2}999$/;
+function enAlcance(p){
+  const k = (p||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(!k) return true;                               // sin patente se resuelve aparte
+  return !PATENTES_FUERA.has(k) && !PATENTE_PRUEBA.test(k);
+}
+
 /* Reglas de alerta. `sonido` sólo aplica si el operador lo activó. */
 const REGLAS = {
   faltante:    {nivel:'critica', gh:'▼', tit:'Camión con menos pallets de los declarados',
@@ -382,6 +396,7 @@ function evaluar(carga){
 }
 
 function registrarPaso(carga){
+  if(!enAlcance(carga.patente)) return;         // Talca / patente de pruebas
   if(S.vistos.has(carga.carga_id)) return;      // idempotente: el poll repite cargas
   S.vistos.add(carga.carga_id);
   const v = evaluar(carga);
@@ -622,7 +637,8 @@ async function pedirJSON(url){
 
 async function cargarGuiasReales(){
   const gs = await pedirJSON(API_GUIAS);
-  S.esperando = gs.map(g=>({...g, hora_emision:new Date(g.hora_emision).getTime()}));
+  S.esperando = gs.filter(g=>enAlcance(g.patente))
+                  .map(g=>({...g, hora_emision:new Date(g.hora_emision).getTime()}));
 }
 async function pollPasosReales(){
   // Fecha local de Santiago, no UTC: pasadas las 20:00 toISOString ya es mañana.

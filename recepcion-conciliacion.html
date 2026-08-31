@@ -211,8 +211,8 @@ svg{display:block;width:100%;overflow:visible}
         <option value="1">Hoy</option>
       </select>
     </div>
-    <div class="fgroup"><label for="f-trans">Transportista</label>
-      <select id="f-trans"><option value="">Todos</option></select>
+    <div class="fgroup"><label for="f-pat">Camión</label>
+      <select id="f-pat"><option value="">Todos</option></select>
     </div>
     <div class="fgroup"><label for="f-cli">Cliente</label>
       <select id="f-cli"><option value="">Todos</option></select>
@@ -398,6 +398,23 @@ const TIPOS = {
 };
 const tipoDe = t => TIPOS[t] || TIPOS.otro;
 
+/* Capacidades reales de la flota (Capacidad de camiones.xlsx). Cuatro unidades
+   llevan carro de arrastre; las otras cinco son camión simple. Sirve para saber
+   si un conteo cabe físicamente arriba: por encima del tope no es una
+   diferencia con el documento, es un problema de conteo. */
+const FLOTA = {
+  NC8771:{carro:true, camion:240, emision:600, retiro:640, conductor:'Julio Bulnes'},
+  VG1943:{carro:true, camion:240, emision:600, retiro:640, conductor:'Victor Vega'},
+  CCRC36:{carro:true, camion:280, emision:600, retiro:680, conductor:'Juan Carlos Vega'},
+  RW5303:{carro:true, camion:280, emision:600, retiro:600, conductor:'Gonzalo Campos'},
+  BJCL13:{carro:false,camion:280, emision:280, retiro:280, conductor:'Ismael Campos'},
+  LS3119:{carro:false,camion:320, emision:320, retiro:320, conductor:'Antonio Vega'},
+  SP3393:{carro:false,camion:320, emision:320, retiro:320, conductor:'Cesar Anabalon'},
+  CPVW43:{carro:false,camion:320, emision:320, retiro:320, conductor:'Cristobal Echeverria'},
+  FV2792:{carro:false,camion:280, emision:280, retiro:280, conductor:'Emilio Caulle'},
+};
+const tope = (pat,tipo) => { const f=FLOTA[pat]; return f ? (tipo==='retiro'?f.retiro:f.emision) : null; };
+
 const $  = (s,r=document)=>r.querySelector(s);
 const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
 const esc = s => String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
@@ -411,7 +428,7 @@ const ts = s => new Date(s).getTime();
 /* ---------------------------------------------------------------------
    Estado de la UI
    --------------------------------------------------------------------- */
-const F = { rango:14, trans:'', cli:'', tipo:'', tol:0, q:'', flujo:'', estados:new Set(), orden:'fecha', dir:-1 };
+const F = { rango:14, pat:'', cli:'', tipo:'', tol:0, q:'', flujo:'', estados:new Set(), orden:'fecha', dir:-1 };
 
 /* ---------------------------------------------------------------------
    Reconciliación en cliente: la tolerancia es una regla de negocio que el
@@ -438,7 +455,7 @@ function filtradas(u){
   const q = F.q.trim().toLowerCase();
   return u.filter(c =>
     (!F.tipo || (c.guia?.tipo||c.tipo)===F.tipo) &&
-    (!F.trans || c.transportista===F.trans) &&
+    (!F.pat || c.patente===F.pat) &&
     (!F.cli   || c.cliente===F.cli) &&
     (!F.estados.size || F.estados.has(c.est)) &&
     (!q || (c.patente||'').toLowerCase().includes(q)
@@ -693,11 +710,15 @@ function pintarReinc(f, cont){
   r.forEach((o,i)=>{
     const y=i*(alto+gap), w=Math.max(3,(xFin-xLab)*(o.falt/max));
     txt(o.p, xLab-10, y+alto/2+4,'dl','end',s);
-    txt(o.t||'—', xLab-10, y+alto/2+15,'tk','end',s);
+    txt((FLOTA[o.p]?.conductor)||o.t||'—', xLab-10, y+alto/2+15,'tk','end',s);
     el('rect',{x:xLab,y:y+5,width:w,height:alto-12,rx:3,fill:'var(--critical)'},s);
     txt(n0(o.falt)+' pallets', xLab+w+8, y+alto/2+4,'dl','start',s);
     const hit=el('rect',{x:xLab-2,y:y,width:xFin-xLab+70,height:alto,class:'hit'},s);
-    conTip(hit,o.p,[['Transportista',o.t||'—'],['Cargas con desviación',n0(o.n)],['Pallets faltantes',n0(o.falt)],['Pallets sobrantes',n0(o.sob)]]);
+    conTip(hit,o.p,[['Conductor',(FLOTA[o.p]?.conductor)||o.t||'—'],['Cargas con desviación',n0(o.n)],
+                    ['Pallets faltantes',n0(o.falt)],['Pallets sobrantes',n0(o.sob)],['','clic para la ficha completa']]);
+    hit.style.cursor='pointer';
+    hit.addEventListener('click', ()=>{ ocultarTip(); abrirCamion(o.p); });
+    hit.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); ocultarTip(); abrirCamion(o.p); } });
   });
   cont.appendChild(s);
 }
@@ -1001,6 +1022,68 @@ function abrirLista(titulo, subtitulo, lista, nota){
   });
   abrirDlg();
 }
+/* Ficha del camión: lo que el gráfico de reincidentes insinúa, pero completo.
+   Junta el catálogo de flota, el resumen de sus cargas y el detalle uno a uno,
+   e incluye el contraste contra la capacidad física, que es lo que separa una
+   diferencia real de un problema de conteo. */
+function abrirCamion(pat){
+  const f = filtradas(universo()).filter(c=>c.patente===pat);
+  const cat = FLOTA[pat];
+  const falt = f.filter(c=>c.est==='faltante'), sob = f.filter(c=>c.est==='sobrante');
+  const ok = f.filter(c=>c.est==='ok').length;
+  const pFalt = falt.reduce((a,c)=>a-c.diferencia,0), pSob = sob.reduce((a,c)=>a+c.diferencia,0);
+  const excedidas = f.filter(c=>{ const t=tope(pat, c.guia?.tipo||c.tipo); return t && c.total_pallets>t; });
+  const maxCont = f.length?Math.max(...f.map(c=>c.total_pallets)):0;
+
+  const tarjeta=(l,v,col)=>`<div style="background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:11px 13px">
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em">${l}</div>
+      <div style="font-size:24px;font-weight:600;margin-top:3px;line-height:1${col?';color:'+col:''}">${v}</div></div>`;
+
+  $('#dlg-tt').textContent = pat;
+  $('#dlg-st').textContent = cat ? `${cat.conductor} · ${cat.carro?'camión con carro':'camión simple'} · tope ${n0(cat.emision)} pallets` : 'Fuera del catálogo de flota';
+  $('#dlg-cuerpo').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
+      ${tarjeta('Pasos', n0(f.length))}
+      ${tarjeta('Conciliados', n0(ok), 'var(--good)')}
+      ${tarjeta('Pallets faltantes', n0(pFalt), pFalt?'var(--critical)':null)}
+      ${tarjeta('Pallets sobrantes', n0(pSob), pSob?'var(--warning)':null)}
+    </div>
+
+    ${cat ? `<div class="formula">
+       Capacidad declarada: <span class="n">${n0(cat.camion)}</span> el camión${cat.carro?` más el carro, <span class="n">${n0(cat.emision)}</span> en total`:' (sin carro)'}.
+       El conteo más alto de este camión en el período fue <span class="n">${n0(maxCont)}</span>.
+     </div>` : `<div class="formula">Esta patente no está en el catálogo de capacidades, así que no se puede contrastar el conteo contra el tope físico.</div>`}
+
+    ${excedidas.length ? `<div class="formula" style="border-left-color:var(--critical)">
+       <b>${n0(excedidas.length)} ${excedidas.length===1?'carga supera':'cargas superan'} la capacidad del camión.</b>
+       No caben físicamente arriba, así que no son diferencias con el documento sino un problema del conteo.
+       ${excedidas.slice(0,4).map(c=>`${fecha(c.fecha_hora_carga)} ${hhmm(c.fecha_hora_carga)}: ${n0(c.total_pallets)} contra un tope de ${n0(tope(pat,c.guia?.tipo||c.tipo))}`).join(' · ')}
+     </div>` : ''}
+
+    <div class="sec" style="margin-top:18px">Sus cargas en el período</div>
+    ${f.length ? `<div class="tabla-wrap" style="max-height:40vh">${tablaSimple(
+        ['Fecha','Tipo','Guía','Declarado','Detectado','Δ','Filas','Estado'],
+        [...f].sort((x,y)=>y.fecha_hora_carga.localeCompare(x.fecha_hora_carga)).map(c=>{
+          const e=EST[c.est], tp=c.guia?.tipo||c.tipo;
+          return [`<span data-carga="${esc(c.carga_id)}" style="cursor:pointer;color:var(--series-1)">${fecha(c.fecha_hora_carga)} ${hhmm(c.fecha_hora_carga)}</span>`,
+            tp?`<span class="tag" style="color:${tipoDe(tp).c};border-color:${tipoDe(tp).c}66">${tipoDe(tp).et}</span>`:'—',
+            c.guia?esc(c.guia.numero):'—', c.guia?n0(c.guia.pallets_declarados):'—', n0(c.total_pallets),
+            c.diferencia==null?'—':(c.diferencia>0?'+':'')+n0(c.diferencia), n0(c.total_bultos),
+            `<span class="est" style="color:${e.c}"><span class="gh">${e.g}</span>${e.t}</span>`];
+        }))}</div>` : '<div class="empty">Sin cargas con los filtros actuales</div>'}
+
+    <div style="margin-top:14px"><button class="tbtn" id="btn-filtrar-cam">Filtrar el tablero por este camión</button></div>`;
+
+  $$('#dlg-cuerpo [data-carga]').forEach(el=>el.onclick=()=>{
+    const c = f.find(x=>x.carga_id===el.dataset.carga);
+    if(c){ cerrarDlg(); abrirDrawer(c); }
+  });
+  $('#btn-filtrar-cam').onclick = ()=>{
+    F.pat = pat; $('#f-pat').value = pat; cerrarDlg(); render();
+  };
+  abrirDlg();
+}
+
 function abrirDlg(){ $('#dlg').classList.add('on'); $('#dlg-scrim').classList.add('on'); $('#dlg-cerrar').focus(); }
 function cerrarDlg(){ $('#dlg').classList.remove('on'); $('#dlg-scrim').classList.remove('on'); }
 
@@ -1107,9 +1190,14 @@ function render(){
    ===================================================================== */
 function initFiltros(){
   const u = D.cargas;
-  const trans=[...new Set(u.map(c=>c.transportista).filter(Boolean))].sort();
+  // El transportista viene vacío desde RDTOut, así que el filtro útil es la
+  // patente: identifica al camión y, con el catálogo, también a su conductor.
+  const pats=[...new Set(u.map(c=>c.patente).filter(Boolean))].sort();
   const cli=[...new Set(u.map(c=>c.cliente).filter(Boolean))].sort();
-  $('#f-trans').innerHTML='<option value="">Todos</option>'+trans.map(t=>`<option>${esc(t)}</option>`).join('');
+  $('#f-pat').innerHTML='<option value="">Todos</option>'+pats.map(t=>{
+    const f=FLOTA[t];
+    return `<option value="${esc(t)}">${esc(t)}${f?' · '+esc(f.conductor):''}</option>`;
+  }).join('');
   $('#f-cli').innerHTML='<option value="">Todos</option>'+cli.map(t=>`<option>${esc(t)}</option>`).join('');
 
   $('#f-est').innerHTML = ORDEN.map(k=>{
@@ -1125,7 +1213,7 @@ function initFiltros(){
   });
 
   $('#f-rango').onchange = e=>{F.rango=+e.target.value; render();};
-  $('#f-trans').onchange = e=>{F.trans=e.target.value; render();};
+  $('#f-pat').onchange   = e=>{F.pat=e.target.value; render();};
   $('#f-cli').onchange   = e=>{F.cli=e.target.value; render();};
   $('#i-hora').innerHTML = ib('llegadas');
   $$('[data-flujo]').forEach(b=>b.onclick=()=>{
@@ -1140,7 +1228,7 @@ function initFiltros(){
   $('#btn-csv').onclick = ()=>{
     const f = filtradas(universo());
     const cab=['carga_id','fecha_hora_carga','patente','tipo','transportista','cliente','guia','pallets_declarados','pallets_detectados','diferencia','estado','bultos','duracion_min'];
-    const filas=f.map(c=>[c.carga_id,c.fecha_hora_carga,c.patente||'',(c.guia?.tipo||c.tipo||''),c.transportista||'',c.cliente||'',
+    const filas=f.map(c=>[c.carga_id,c.fecha_hora_carga,c.patente||'',(c.guia?.tipo||c.tipo||''),(FLOTA[c.patente]?.conductor||c.transportista||''),c.cliente||'',
       c.guia?.numero||'',c.guia?.pallets_declarados??'',c.total_pallets,c.diferencia??'',c.est,c.total_bultos,c.duracion_min]);
     const csv=[cab,...filas].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')).join('\n');
     const a=document.createElement('a');

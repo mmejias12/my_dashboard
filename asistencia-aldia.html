@@ -931,8 +931,10 @@ async function apiCall(endpoint, params) {
    (marcas sin sincronizar parecen inasistencias, permisos ausentes parecen
    faltas injustificadas). */
 var huecosDias = [], huecosMeses = [];
+var sinHorarioTeorico = false;
 function registrarHuecos(j) {
   if (!j) return;
+  if (j.sin_horario_teorico === true) sinHorarioTeorico = true;
   if (Array.isArray(j.dias_faltantes)) {
     j.dias_faltantes.forEach(function(d){ if (huecosDias.indexOf(d) < 0) huecosDias.push(d); });
   }
@@ -942,6 +944,7 @@ function registrarHuecos(j) {
 }
 function textoHuecos() {
   var p = [];
+  if (sinHorarioTeorico) p.push('sin turnos asignados en Talana: no se evalúan atrasos ni ausencias');
   if (huecosDias.length)  p.push(huecosDias.length + (huecosDias.length === 1 ? ' día' : ' días') + ' sin marcas sincronizadas');
   if (huecosMeses.length) p.push('permisos sin sincronizar de ' + huecosMeses.join(', '));
   return p.length ? ' · ⚠ ' + p.join(' y ') : '';
@@ -989,7 +992,7 @@ async function fetchTodasLasPaginas(endpoint, paramsBase, maxPages) {
    ═══════════════════════════════════════════════════════════════════════ */
 async function cargar() {
   $('btn-load').disabled = true;
-  huecosDias = []; huecosMeses = [];
+  huecosDias = []; huecosMeses = []; sinHorarioTeorico = false;
   try {
     setStatus('load', 'Cargando sucursales y departamentos...');
     await Promise.all([cargarSucursales(), cargarDepartamentos()]);
@@ -2554,7 +2557,22 @@ function calEstadoDia(code, fecha){
   }
   // 2) Turno teórico del día
   var r = calcularResumenDia(code, fecha);
-  if (!r.horario) return null;                     // sin turno ese día → celda vacía
+  if (!r.horario) {
+    // Sin turno asignado no se puede juzgar puntualidad ni ausencia: no sabemos
+    // si esa persona debía trabajar ese día. Pero si marcó, ESO sí es un hecho y
+    // hay que mostrarlo — dejar la celda vacía con marcas reales de por medio
+    // hace parecer que no vino nadie.
+    var mm = calMarcasDia(code, fecha);
+    if (!mm.length) return null;
+    var e1 = obtenerDateTimeMarca(mm[0]);
+    var s1 = mm.length > 1 ? obtenerDateTimeMarca(mm[mm.length - 1]) : null;
+    return { edo:'p', et:'—', st:'—',
+             er: e1 ? fmtHora(e1) : '—', sr: s1 ? fmtHora(s1) : '—',
+             srPost:null, atr:'', atrasado:false, enTurno:false,
+             turno:'Sin turno asignado',
+             com:'Sin horario teórico en Talana: se muestran las marcas reales, sin evaluar atraso',
+             sinHorario:true };
+  }
   var et = fmtHora(r.horario.start), st = fmtHora(r.horario.end);
   var turno = r.horario.workshiftName || 'Turno';
 

@@ -140,9 +140,11 @@ module.exports = async function (context, req) {
         break;
       }
 
-      case '/permission':
-        carga = sobre(await ausencias(container, desde, hasta), maestros._guardado);
+      case '/permission': {
+        const a = await ausencias(container, desde, hasta);
+        carga = sobre(a.data, maestros._guardado, { meses_sin_snapshot: a.mesesFaltantes });
         break;
+      }
 
       case '/todo': {
         const [m, a] = await Promise.all([
@@ -162,9 +164,10 @@ module.exports = async function (context, req) {
           }),
           horarios: h.data,
           marcas: m.data,
-          permisos: a,
+          permisos: a.data,
           avisos: {
             dias_sin_snapshot: m.faltantes,
+            meses_sin_snapshot: a.mesesFaltantes,
             empleados_sin_horario: h.sinHorario.length,
             rotativos_sin_ancla: h.rotativosSinAncla.length
           }
@@ -221,17 +224,26 @@ async function marcas(container, desde, hasta) {
 
 async function ausencias(container, desde, hasta) {
   const meses = store.mesesDelRango(desde, hasta);
-  const bloques = await Promise.all(meses.map(m => store.leerAusenciasMes(container, m).catch(() => null)));
+  const bloques = await Promise.all(meses.map(m =>
+    store.leerAusenciasMes(container, m).then(b => ({ m, b })).catch(() => ({ m, b: null }))
+  ));
+
   const todas = [];
-  for (const b of bloques) if (b && Array.isArray(b.ausencias)) todas.push(...b.ausencias);
+  const mesesFaltantes = [];
+  for (const { m, b } of bloques) {
+    if (b && Array.isArray(b.ausencias)) todas.push(...b.ausencias);
+    else mesesFaltantes.push(m);   // un mes sin sincronizar no puede pasar callado
+  }
+
   // Un permiso de varios meses aparece en más de un bloque: deduplicar.
   const vistos = new Set();
-  return todas.filter(p => {
+  const data = todas.filter(p => {
     const k = `${p.employeeCode}|${p.start}|${p.end}|${p.permissionTypeName}`;
     if (vistos.has(k)) return false;
     vistos.add(k);
     return p.start <= hasta && p.end >= desde;
   });
+  return { data, mesesFaltantes };
 }
 
 // ── diagnóstico: única ruta que toca Talana en vivo ─────────────────────────

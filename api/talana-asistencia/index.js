@@ -100,7 +100,9 @@ module.exports = async function (context, req) {
         status: 503, headers: JSONH,
         body: JSON.stringify({
           error: 'Snapshot de Talana todavía no generado',
-          detalle: 'Ejecuta el workflow "Asistencia Talana" o llama a POST /api/talana-sync con la llave de ingesta.'
+          detalle: 'Nadie ha ejecutado el sincronizador, así que el contenedor del snapshot está vacío o no existe. ' +
+                   'Lanza POST /api/talana-sync con el header X-Ingesta-Key, o el workflow "Asistencia Talana".',
+          contenedor: store.CONTAINER
         })
       };
       return;

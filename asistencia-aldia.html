@@ -377,8 +377,8 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 
 <div class="ctrls">
   <span class="ctrl-lbl">Empresa:</span>
-  <select id="empresa" class="ctrl-sel">
-    <option value="SURTEC">SURTEC</option>
+  <select id="empresa" class="ctrl-sel" onchange="poblarFiltrosArea();renderCalendario();renderPanelDia()">
+    <option value="">Todas</option>
   </select>
   <span class="ctrl-lbl">Mes:</span>
   <select id="mes-sel" class="ctrl-sel" onchange="seleccionarMes()"></select>
@@ -793,7 +793,12 @@ function empNombreCompleto(e) {
   return p.trim().replace(/\s+/g, ' ') || '—';
 }
 function empActivo(e) {
-  return (e.employeeStatus || '').toUpperCase() === 'ACTIVO';
+  // Sin employeeStatus se asume activo: preferimos mostrar de más a dejar el
+  // calendario en blanco sin que nada avise. El backend de Talana lo emite
+  // desde contrato.activo, pero un cambio de contrato no debe vaciar la vista.
+  if (!e) return false;
+  if (e.employeeStatus === undefined || e.employeeStatus === null || e.employeeStatus === '') return true;
+  return String(e.employeeStatus).toUpperCase() === 'ACTIVO';
 }
 function empSucursalAdmin(e) { return e.branchOfficeName || e.branchOffice || '—'; }
 function empDepartamento(e) { return e.departmentName || e.department || '—'; }
@@ -2644,14 +2649,35 @@ function calEmpleadosActivos(){
   var dep = ($('depto') && $('depto').value) || '';
   return cacheEmpleados.filter(function(e){
     if(!empActivo(e)) return false;
+    if(!empEnEmpresa(e)) return false;
     if(suc && empSucursalAdmin(e) !== suc) return false;
     if(dep && empDepartamento(e) !== dep) return false;
     return true;
   });
 }
 /* Puebla los selects de sucursal y departamento con los valores presentes en los datos */
+/* Razones sociales presentes en los datos (REDTEC SA y Logística y Transportes
+   RT SPA). Talana las entrega en el contrato; Workera no las distinguía. */
+function poblarFiltroEmpresa(){
+  var sel = $('empresa');
+  if(!sel) return;
+  var empresas = {};
+  cacheEmpleados.forEach(function(e){ if(e.empresa) empresas[e.empresa]=1; });
+  var nombres = Object.keys(empresas).sort();
+  var v = sel.value;
+  sel.innerHTML = '<option value="">Todas</option>' +
+    nombres.map(function(x){ return '<option>'+x+'</option>'; }).join('');
+  if (nombres.indexOf(v) >= 0) sel.value = v;
+}
+function empresaSeleccionada(){ return ($('empresa') && $('empresa').value) || ''; }
+function empEnEmpresa(e){
+  var f = empresaSeleccionada();
+  return !f || e.empresa === f;
+}
+
 function poblarFiltrosArea(){
-  var activos = cacheEmpleados.filter(empActivo);
+  poblarFiltroEmpresa();
+  var activos = cacheEmpleados.filter(function(e){ return empActivo(e) && empEnEmpresa(e); });
   var sucs = {}, deps = {};
   activos.forEach(function(e){ var s=empSucursalAdmin(e); if(s&&s!=='—')sucs[s]=1; var d=empDepartamento(e); if(d&&d!=='—')deps[d]=1; });
   var selS=$('sucursal'), selD=$('depto');

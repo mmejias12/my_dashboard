@@ -54,7 +54,10 @@ prueba('una marca de Talana se traduce al contrato del reporte', () => {
   });
   assert.strictEqual(m.attendanceDate, '2026-08-31T07:58:12'); // la T que espera el reporte
   assert.strictEqual(m.employee.code, '4471');
-  assert.strictEqual(m.employee.lastName, 'Soto Rivas');
+  // Los apellidos van separados porque empNombreCompleto() del reporte junta
+  // lastName + secondLastName y evita repetir si ya vienen unidos.
+  assert.strictEqual(m.employee.lastName, 'Soto');
+  assert.strictEqual(m.employee.secondLastName, 'Rivas');
   assert.strictEqual(m.employee.identification, '12345678-9');
   assert.strictEqual(m.tipo, 'ENTRADA');
 });
@@ -186,6 +189,86 @@ prueba('corrige el turno nocturno sumando un día a la salida', () => {
   const d = mapa.normalizarDia({ startWorkingHours: '22:00:00', exit_time: '06:00:00', workingDay: true });
   assert.strictEqual(d.inicio, 1320);
   assert.strictEqual(d.fin, 1800);
+});
+
+
+console.log('\nCasos reales del diagnóstico de REDTEC');
+
+prueba('numberWorkingDay = 0 con name "Lunes" se detecta como convención lunes', () => {
+  // Muestra literal de /rotativeDay/ en la cuenta de REDTEC.
+  const r = mapa.detectarDiaCero([
+    { name: 'Lunes',  numberWorkingDay: 0, workShift: 296456 },
+    { name: 'Martes', numberWorkingDay: 1, workShift: 296456 }
+  ]);
+  assert.strictEqual(r.diaCero, 'lunes');
+  assert.strictEqual(r.detectado, true);
+});
+
+prueba('la convención domingo también se detecta, sin depender de la variable', () => {
+  const r = mapa.detectarDiaCero([
+    { name: 'Domingo', numberWorkingDay: 0 },
+    { name: 'Lunes',   numberWorkingDay: 1 }
+  ]);
+  assert.strictEqual(r.diaCero, 'domingo');
+});
+
+prueba('con nombres irreconocibles cae en la configuración, sin inventar', () => {
+  const r = mapa.detectarDiaCero([{ name: 'Turno A', numberWorkingDay: 0 }]);
+  assert.strictEqual(r.detectado, false);
+  assert.strictEqual(r.diaCero, mapa.DIA_CERO);
+});
+
+prueba('indiceDiaSemana respeta la convención que se le pasa', () => {
+  assert.strictEqual(mapa.indiceDiaSemana('2026-08-31', 'lunes'), 0);   // lunes
+  assert.strictEqual(mapa.indiceDiaSemana('2026-08-31', 'domingo'), 1);
+});
+
+prueba('el horario real 12:30–18:00 del turno 296456 se expande bien', () => {
+  const def = mapa.normalizarDia({
+    id: 1416177, name: 'Lunes', startSnackHours: null, numberSnackMinutes: 0,
+    startWorkingHours: '12:30', numberWorkingMinutes: 330, workingDay: true,
+    numberWorkingDay: 0, workShift: 296456, exit_time: '18:00'
+  });
+  assert.strictEqual(def.inicio, 750);
+  assert.strictEqual(def.fin, 1080);
+  assert.strictEqual(mapa.fechaHora('2026-08-31', def.inicio), '2026-08-31T12:30:00');
+  assert.strictEqual(mapa.fechaHora('2026-08-31', def.fin),    '2026-08-31T18:00:00');
+});
+
+prueba('sin catálogo de turnos (403 en /workShift/) se infiere uno usable', () => {
+  const t = mapa.turnoInferido('296456', 'W', {
+    '0': { trabaja: true, inicio: 750, fin: 1080 },
+    '1': { trabaja: true, inicio: 750, fin: 1080 }
+  });
+  assert.strictEqual(t.type, 'W');
+  assert.strictEqual(t.inferido, true);
+  assert.ok(/12:30/.test(t.name), 'el nombre debe describir el horario: ' + t.name);
+});
+
+console.log('\nCampos que el reporte exige del empleado');
+
+prueba('empleado sin employeeStatus vaciaría el calendario: el mapeo lo emite', () => {
+  // El reporte filtra con employeeStatus === 'ACTIVO'. Es un campo de Workera
+  // que Talana no tiene; se deriva de contrato.activo y contrato.finiquitado.
+  const requeridos = ['code','name','lastName','secondLastName','identification',
+                      'employeeStatus','branchOfficeCode','branchOfficeName',
+                      'departmentCode','departmentName','genre','personalMail',
+                      'birthDate','empresa'];
+  const fuente = require('fs').readFileSync(
+    require('path').join(__dirname, '../api/shared/talana-asistencia.js'), 'utf8');
+  const bloque = fuente.slice(fuente.indexOf('const data = [...porPersona.values()]'),
+                              fuente.indexOf('data.sort('));
+  for (const campo of requeridos) {
+    assert.ok(new RegExp('\\b' + campo + '\\s*:').test(bloque),
+      'falta el campo ' + campo + ' en traerEmpleados');
+  }
+});
+
+prueba('los montos de bonos de userDefinedFields no salen al dashboard', () => {
+  const fuente = require('fs').readFileSync(
+    require('path').join(__dirname, '../api/shared/talana-asistencia.js'), 'utf8');
+  assert.ok(!/userDefinedFields/.test(fuente),
+    'contracts-resumed-paginated trae BonoGestion, BonoResponsabilidad y BonoEspecial: no deben viajar al navegador');
 });
 
 console.log(`\n${ok} pruebas pasaron${process.exitCode ? ' (con fallos)' : ''}.\n`);

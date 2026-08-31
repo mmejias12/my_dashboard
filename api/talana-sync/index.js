@@ -114,22 +114,11 @@ module.exports = async function (context, req) {
       }
     }
 
-    // ── 3) Ausencias por mes ────────────────────────────────────────────────
-    for (const mes of store.mesesDelRango(desde, hasta)) {
-      if (presupuesto.agotado(6000)) break;
-      const previo = await store.leerAusenciasMes(container, mes);
-      if (previo && !store.ausenciasVencidas(previo, mes)) { informe.ausencias.push(`${mes}: vigente`); continue; }
-      try {
-        const ini = mes + '-01';
-        const fin = ultimoDiaDelMes(mes);
-        const r = await mapa.traerAusencias(ini, fin, { presupuesto });
-        await store.guardarAusenciasMes(container, mes, r.data, { _fallos: r.fallos });
-        informe.ausencias.push(`${mes}: ${r.data.length}`);
-        if (r.fallos.length) informe.avisos.push(...r.fallos);
-      } catch (e) {
-        informe.avisos.push(`ausencias ${mes}: ${e.message.slice(0, 200)}`);
-      }
-    }
+    // ── 3) Ausencias ────────────────────────────────────────────────────────
+    // Los endpoints "resumed" ignoran los filtros de fecha y devuelven el
+    // histórico completo, así que pedirlos mes a mes traería lo mismo cada vez.
+    // Se traen UNA vez y se reparten por mes.
+    await sincronizarAusencias(container, desde, hasta, presupuesto, informe);
 
     await store.guardarEstado(container, {
       ultima_sync: new Date().toISOString(),
@@ -203,6 +192,65 @@ async function sincronizarMaestros(desde, hasta, presupuesto, informe) {
   };
 }
 
+// ── ausencias: una traída, repartida por mes ────────────────────────────────
+async function sincronizarAusencias(container, desde, hasta, presupuesto, informe) {
+  const meses = store.mesesDelRango(desde, hasta);
+
+  // ¿Hace falta ir a Talana? Sólo si a algún mes del rango le falta el bloque
+  // o ya venció.
+  let hayQueTraer = false;
+  for (const mes of meses) {
+    const previo = await store.leerAusenciasMes(container, mes).catch(() => null);
+    if (!previo || store.ausenciasVencidas(previo, mes)) { hayQueTraer = true; break; }
+  }
+  if (!hayQueTraer) { informe.ausencias.push('vigentes'); return; }
+
+  if (presupuesto.agotado(10000)) {
+    informe.ausencias.push('pendientes (sin presupuesto en esta pasada)');
+    informe.avisos.push('Ausencias no sincronizadas: vuelve a llamar para completarlas.');
+    return;
+  }
+
+  let r;
+  try {
+    r = await mapa.traerAusencias({ presupuesto });
+  } catch (e) {
+    informe.avisos.push(`ausencias: ${e.message.slice(0, 200)}`);
+    return;
+  }
+
+  // Escribir bloques a medias sería peor que no escribir: el reporte los vería
+  // como completos y mostraría permisos faltantes como ausencias injustificadas.
+  if (!r.completo) {
+    informe.ausencias.push('incompletas (se completarán en la siguiente pasada)');
+    informe.avisos.push('Ausencias incompletas: no se guardaron para no dejar meses a medias.');
+    return;
+  }
+
+  // Un permiso puede cruzar meses: entra en cada mes que toca. Los meses
+  // pedidos se escriben aunque queden vacíos, para que no figuren como
+  // "sin snapshot" cuando la verdad es que no hubo ausencias.
+  const porMes = new Map(meses.map(m => [m, []]));
+  for (const a of r.data) {
+    for (const mes of store.mesesDelRango(a.start, a.end)) {
+      if (!porMes.has(mes)) porMes.set(mes, []);
+      porMes.get(mes).push(a);
+    }
+  }
+
+  const entradas = [...porMes.entries()];
+  const LOTE = 12;
+  for (let i = 0; i < entradas.length; i += LOTE) {
+    await Promise.all(entradas.slice(i, i + LOTE).map(([mes, lista]) =>
+      store.guardarAusenciasMes(container, mes, lista, { _fallos: r.fallos })
+    ));
+  }
+
+  informe.ausencias.push(`${r.data.length} registros en ${entradas.length} meses`);
+  if (r.descartadas) informe.avisos.push(`${r.descartadas} ausencias sin fechas utilizables, descartadas.`);
+  if (r.fallos.length) informe.avisos.push(...r.fallos);
+}
+
 // ── utilidades ──────────────────────────────────────────────────────────────
 function leerCuerpo(req) {
   if (!req.body) return {};
@@ -211,10 +259,3 @@ function leerCuerpo(req) {
 }
 
 const primerDiaDelMes = fecha => fecha.slice(0, 7) + '-01';
-
-function ultimoDiaDelMes(mes) {
-  const d = new Date(mes + '-01T00:00:00');
-  d.setMonth(d.getMonth() + 1);
-  d.setDate(0);
-  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-}

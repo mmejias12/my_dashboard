@@ -82,8 +82,12 @@ module.exports = async function (context, req) {
             votos: maestros.turnos.diaCeroVotos
           } : { usado: mapa.DIA_CERO, detectado_del_dato: false },
           catalogo_turnos_degradado: maestros && maestros.turnos ? maestros.turnos.catalogoDegradado : null,
+          degradaciones: (maestros && maestros.degradaciones) || [],
           turnos: maestros && maestros.turnos ? Object.keys(maestros.turnos.catalogo).length : 0,
           asignaciones: maestros ? (maestros.asignaciones || []).length : 0,
+          // Sin asignaciones no hay turno para nadie: el reporte sólo puede
+          // mostrar marcas, no puntualidad ni ausencias.
+          sin_horario_teorico: Boolean(maestros && !(maestros.asignaciones || []).length),
           hoy
         })
       };
@@ -129,7 +133,9 @@ module.exports = async function (context, req) {
         const h = horarios(maestros, desde, hasta);
         carga = sobre(h.data, maestros._guardado, {
           sin_horario: h.sinHorario.length,
-          rotativos_sin_ancla: h.rotativosSinAncla
+          rotativos_sin_ancla: h.rotativosSinAncla,
+          sin_horario_teorico: !(maestros.asignaciones || []).length,
+          degradaciones: maestros.degradaciones || []
         });
         break;
       }

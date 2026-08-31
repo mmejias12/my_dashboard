@@ -471,56 +471,103 @@ function mapearMarca(m) {
 //  AUSENCIAS  (variantes "resumed": sin número de licencia ni datos médicos)
 // ════════════════════════════════════════════════════════════════════════════
 
-async function traerAusencias(desde, hasta, opts = {}) {
-  const fuentes = [
-    { recurso: '/absentism-resumed/',            etiqueta: 'Licencia/Permiso' },
-    { recurso: '/vacations-resumed/',            etiqueta: 'Vacaciones' },
-    { recurso: '/administrative-leaves-resumed/', etiqueta: 'Día administrativo' }
-  ];
+// Las tres fuentes "resumed" NO comparten nombres de campo. Verificado contra
+// la cuenta de REDTEC:
+//
+//   /absentism-resumed/             fechaDesde / fechaHasta / tipoAusencia
+//   /vacations-resumed/             vacacionesDesde / vacacionesHasta / tipoVacaciones
+//   /administrative-leaves-resumed/ desde / hasta / administrative_type
+//
+// Las tres anidan al trabajador en `empleado` como OBJETO (no como id).
+const FUENTES_AUSENCIA = [
+  {
+    recurso: '/absentism-resumed/',
+    etiqueta: 'Licencia/Permiso',
+    desde: a => a.fechaDesde,
+    hasta: a => a.fechaHasta,
+    // Aquí el tipo ya es descriptivo: "falta injustificada", "permiso sin goce".
+    tipo: a => a.tipoAusencia
+  },
+  {
+    recurso: '/vacations-resumed/',
+    etiqueta: 'Vacaciones',
+    desde: a => a.vacacionesDesde,
+    hasta: a => a.vacacionesHasta,
+    // tipoVacaciones vale "normales" y solo no dice nada: se compone.
+    tipo: a => (a.tipoVacaciones && a.tipoVacaciones !== 'normales')
+      ? `Vacaciones (${a.tipoVacaciones})` : 'Vacaciones'
+  },
+  {
+    recurso: '/administrative-leaves-resumed/',
+    etiqueta: 'Día administrativo',
+    desde: a => a.desde,
+    hasta: a => a.hasta,
+    tipo: a => (a.administrative_type && a.administrative_type !== 'anual')
+      ? `Día administrativo (${a.administrative_type})` : 'Día administrativo'
+  }
+];
 
+/**
+ * Trae TODAS las ausencias resumidas. No acepta rango porque los endpoints
+ * devuelven el histórico completo (1.425 ausencias, 2.615 vacaciones en REDTEC)
+ * ignorando los filtros de fecha: pedirlas mes a mes traería lo mismo cada vez.
+ * Se traen una vez y el sincronizador las reparte por mes.
+ */
+async function traerAusencias(opts = {}) {
   const data = [];
   const fallos = [];
   let completo = true;
 
-  for (const f of fuentes) {
+  for (const f of FUENTES_AUSENCIA) {
     try {
-      const r = await talana.listar(f.recurso, { desde, hasta, since: desde, to: hasta }, opts);
+      const r = await talana.listar(f.recurso, {}, opts);
       if (!r.completo) completo = false;
-      for (const a of r.items) data.push(mapearAusencia(a, f.etiqueta));
+      for (const a of r.items) data.push(mapearAusencia(a, f));
     } catch (e) {
       // Un token sin permiso sobre un módulo no debe tumbar el resto.
       fallos.push(`${f.recurso}: ${e.message.slice(0, 160)}`);
     }
   }
 
-  // Recortar al rango pedido.
-  const dentro = data.filter(p => p.start && p.end && p.start <= hasta && p.end >= desde);
-  dentro.sort((a, b) => a.start.localeCompare(b.start));
-  return { data: dentro, completo, fallos };
+  const conFechas = data.filter(p => p.start && p.end);
+  conFechas.sort((a, b) => a.start.localeCompare(b.start));
+  return { data: conFechas, completo, fallos, descartadas: data.length - conFechas.length };
 }
 
-function mapearAusencia(a, etiquetaPorDefecto) {
-  // Los recursos "resumed" no comparten nombres de campo al 100 %; se aceptan
-  // las variantes conocidas y se cae con elegancia si aparece una nueva.
-  const persona = a.persona || a.employee || a.empleado || a.detallesTrabajador || {};
-  const personaId = a.persona_id || a.personaId || a.empleado ||
-                    (typeof persona === 'object' ? persona.id : persona) || null;
-  const tipo = a.tipo || a.type || a.tipoAusencia ||
-               (a.absenceType && (a.absenceType.nombre || a.absenceType.name)) ||
-               etiquetaPorDefecto;
+// Una ausencia que Talana marca como injustificada NO es un permiso: si el
+// reporte la pintara como licencia, una falta quedaría tapada como si fuera
+// justificada. Se etiqueta para que el calendario la muestre como ausencia.
+const esInjustificada = tipo => /injustificad/i.test(tipo || '');
+
+function mapearAusencia(a, fuente) {
+  const f = fuente || {};
+  const bruto = a.empleado ?? a.persona ?? a.employee ?? a.detallesTrabajador;
+  const persona = (bruto && typeof bruto === 'object') ? bruto : {};
+
+  // `empleado` viene como objeto en los tres recursos, pero otros endpoints de
+  // Talana lo mandan como id suelto. Sólo se toma como id si es un número.
+  let personaId = null;
+  if (typeof bruto === 'number') personaId = bruto;
+  else if (persona.id !== undefined && persona.id !== null) personaId = persona.id;
+  else if (a.persona_id ?? a.personaId) personaId = a.persona_id ?? a.personaId;
+
+  const tipo = String(
+    (f.tipo && f.tipo(a)) || a.tipo || a.type || a.tipoAusencia || f.etiqueta || 'Ausencia'
+  );
 
   return {
     employeeCode: personaId !== null ? String(personaId) : '',
-    employeeName: typeof persona === 'object'
-      ? [persona.nombre, persona.apellidoPaterno, persona.apellidoMaterno].filter(Boolean).join(' ')
-      : '',
-    identification: (typeof persona === 'object' && (persona.rut || '')) || a.rut || '',
-    start: soloFecha(a.fechaDesde || a.desde || a.start || a.startDate || a.fecha_desde),
-    end:   soloFecha(a.fechaHasta || a.hasta || a.end   || a.endDate   || a.fecha_hasta),
-    permissionTypeName: String(tipo),
+    employeeName: [persona.nombre, persona.apellidoPaterno, persona.apellidoMaterno]
+      .filter(Boolean).join(' '),
+    identification: persona.rut || a.rut || '',
+    start: soloFecha((f.desde && f.desde(a)) || a.fechaDesde || a.desde || a.start || a.startDate),
+    end:   soloFecha((f.hasta && f.hasta(a)) || a.fechaHasta || a.hasta || a.end   || a.endDate),
+    permissionTypeName: tipo,
+    justificada: !esInjustificada(tipo),
     dias: a.numeroDias || a.dias || null,
     medioDia: Boolean(a.mediosDias || a.medioDia),
-    jornada: a.jornada || null
+    jornada: a.jornada || null,
+    estado: a.estado || null
   };
 }
 
@@ -663,6 +710,6 @@ module.exports = {
   rangoDias, sumarDias, isoDia, indiceDiaSemana, aMinutos, fechaHora,
   detectarDiaCero,
   // Exportados para poder probar el mapeo sin salir a la red:
-  mapearMarca, mapearAusencia, normalizarDia, turnoInferido,
-  DIA_CERO
+  mapearMarca, mapearAusencia, normalizarDia, turnoInferido, aHoraLocal,
+  FUENTES_AUSENCIA, DIA_CERO
 };

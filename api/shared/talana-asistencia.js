@@ -39,6 +39,13 @@ const talana = require('./talana-client.js');
 // documentado y el diagnóstico permite verificarlo contra la realidad.
 const DIA_CERO = (process.env.TALANA_DIA_CERO || 'lunes').toLowerCase();
 
+// Nombres de día como los escribe Talana en rotativeDay.name, sin tildes.
+const NOMBRE_A_DIA_JS = {
+  domingo: 0, lunes: 1, martes: 2, miercoles: 3, jueves: 4, viernes: 5, sabado: 6
+};
+const sinTildes = s => String(s || '').toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
 // ── helpers de fecha / hora ─────────────────────────────────────────────────
 const pad = n => (n < 10 ? '0' + n : '' + n);
 
@@ -78,11 +85,34 @@ function fechaHora(fecha, minutos) {
   return `${base}T${pad(Math.floor(resto / 60))}:${pad(resto % 60)}:00`;
 }
 
-// Índice de día de semana según la convención configurada.
+// Índice de día de semana según la convención de Talana.
 // JS getDay(): 0=domingo … 6=sábado.
-function indiceDiaSemana(fecha) {
+function indiceDiaSemana(fecha, diaCero) {
   const js = new Date(fecha + 'T00:00:00').getDay();
-  return DIA_CERO === 'domingo' ? js : (js + 6) % 7;   // lunes = 0
+  return (diaCero || DIA_CERO) === 'domingo' ? js : (js + 6) % 7;   // lunes = 0
+}
+
+/**
+ * Deduce si numberWorkingDay = 0 es lunes o domingo, leyendo el `name` que
+ * Talana pone en cada día del turno ("Lunes", "Martes", …).
+ *
+ * La documentación no lo especifica, y equivocarse corre TODOS los horarios un
+ * día sin que nada falle de forma visible. Como el propio dato lo dice, se
+ * prefiere deducirlo antes que confiar en una variable de entorno.
+ * Si los nombres no son reconocibles, cae en TALANA_DIA_CERO.
+ */
+function detectarDiaCero(diasCrudos) {
+  const votos = { lunes: 0, domingo: 0 };
+  for (const d of diasCrudos || []) {
+    const dow = NOMBRE_A_DIA_JS[sinTildes(d.name)];
+    if (dow === undefined || d.numberWorkingDay === null || d.numberWorkingDay === undefined) continue;
+    const n = Number(d.numberWorkingDay);
+    if ((n + 1) % 7 === dow % 7) votos.lunes++;      // 0=lunes → dow 1
+    if (n % 7 === dow % 7) votos.domingo++;          // 0=domingo → dow 0
+  }
+  if (votos.lunes === 0 && votos.domingo === 0) return { diaCero: DIA_CERO, detectado: false, votos };
+  const diaCero = votos.lunes >= votos.domingo ? 'lunes' : 'domingo';
+  return { diaCero, detectado: true, votos };
 }
 
 const soloFecha = s => (s ? String(s).slice(0, 10) : '');
@@ -146,18 +176,31 @@ async function traerEmpleados(opts = {}) {
       personaId:         c.empleado || p.id,
       contratoId:        c.id,
       name:              p.nombre || '',
-      lastName:          [p.apellidoPaterno, p.apellidoMaterno].filter(Boolean).join(' '),
+      lastName:          p.apellidoPaterno || '',
+      secondLastName:    p.apellidoMaterno || '',
       identification:    c.persona_rut || p.rut || '',
+      // El reporte filtra por employeeStatus === 'ACTIVO'. Es un campo que venía
+      // de Workera: si no se emite, el calendario sale vacío sin dar ningún error.
+      employeeStatus:    (c.activo && !c.finiquitado) ? 'ACTIVO' : 'INACTIVO',
+      birthDate:         soloFecha(p.fechaNacimiento),
+      genre:             p.sexo === 'M' ? 'Masculino' : p.sexo === 'F' ? 'Femenino' : (p.sexo || ''),
+      personalMail:      p.email || '',
+      personalPhone:     '',            // no viene en contracts-resumed-paginated
       email:             p.email || null,
       branchOffice:      suc.id ? String(suc.id) : '',
+      branchOfficeCode:  suc.id ? String(suc.id) : '',
       branchOfficeName:  suc.nombre || '',
       department:        cc.codigo || (cc.id ? String(cc.id) : ''),
+      departmentCode:    cc.codigo || (cc.id ? String(cc.id) : ''),
       departmentName:    cc.nombre || uo.nombre || '',
       gerencia:          uo.nombre || '',
       position:          c.cargo || '',
       jornada:           (c.jornada && c.jornada.nombre) || '',
       horasJornada:      c.horasDeLaJornada || null,
       tipoContrato:      (c.tipoContrato && c.tipoContrato.nombre) || '',
+      // REDTEC opera con dos razones sociales; el reporte filtra por esto.
+      empresa:           (c.empleadorRazonSocial && c.empleadorRazonSocial.razonSocial) || '',
+      empresaRut:        (c.empleadorRazonSocial && c.empleadorRazonSocial.rut) || '',
       fechaContratacion: soloFecha(c.fechaContratacion),
       desde:             soloFecha(c.desde),
       hasta:             soloFecha(c.hasta),
@@ -178,22 +221,36 @@ async function traerEmpleados(opts = {}) {
  *   /specificDay-paginado/→ días de los turnos manuales   (date concreta)
  */
 async function traerTurnos(opts = {}) {
-  const turnos = await talana.listar('/workShift/', {}, opts);
+  // /workShift/ es el catálogo (nombre, tipo, tolerancia). El token de REDTEC
+  // recibe 403 en este recurso, así que NO puede ser obligatorio: si falla, el
+  // catálogo se reconstruye a partir de los días, que sí responden. Se pierde
+  // el nombre real del turno y la tolerancia, no el horario.
+  let catalogo = {};
+  let catalogoDegradado = null;
+  let turnosCompleto = true;
+  try {
+    const turnos = await talana.listar('/workShift/', {}, opts);
+    turnosCompleto = turnos.completo;
+    for (const t of turnos.items) {
+      catalogo[String(t.id)] = {
+        id: t.id,
+        name: t.name || ('Turno ' + t.id),
+        type: t.workShiftType || 'W',
+        tolerance: Number(t.tolerance || 0),
+        snackDuration: t.snackDuration || null,
+        schedule: t.schedule || '',
+        publicId: t.publicId || null
+      };
+    }
+  } catch (e) {
+    catalogoDegradado = `/workShift/ → ${e.status || 'error'}: ${e.message.slice(0, 160)}`;
+  }
+
   const semanales = await talana.listar('/rotativeDay/', {}, opts);
   const rotativos = await talana.listar('/specialRotativeDay/', {}, opts);
 
-  const catalogo = {};
-  for (const t of turnos.items) {
-    catalogo[String(t.id)] = {
-      id: t.id,
-      name: t.name || ('Turno ' + t.id),
-      type: t.workShiftType || 'W',
-      tolerance: Number(t.tolerance || 0),
-      snackDuration: t.snackDuration || null,
-      schedule: t.schedule || '',
-      publicId: t.publicId || null
-    };
-  }
+  // Convención de días deducida del propio dato, no adivinada.
+  const dc = detectarDiaCero(semanales.items);
 
   const diasSemanales = {};   // workShiftId → { indiceDia: definicion }
   for (const d of semanales.items) {
@@ -210,9 +267,41 @@ async function traerTurnos(opts = {}) {
     diasRotativos[k].sort((a, b) => (a.orden || 0) - (b.orden || 0));
   }
 
+  // Turnos que aparecen en los días pero no en el catálogo (por el 403, o
+  // porque el catálogo llegó incompleto): se infiere el tipo de dónde salieron.
+  for (const k of Object.keys(diasSemanales)) {
+    if (!catalogo[k]) catalogo[k] = turnoInferido(k, 'W', diasSemanales[k]);
+  }
+  for (const k of Object.keys(diasRotativos)) {
+    if (!catalogo[k]) catalogo[k] = turnoInferido(k, 'R');
+  }
+
   return {
     catalogo, diasSemanales, diasRotativos,
-    completo: turnos.completo && semanales.completo && rotativos.completo
+    diaCero: dc.diaCero,
+    diaCeroDetectado: dc.detectado,
+    diaCeroVotos: dc.votos,
+    catalogoDegradado,
+    completo: turnosCompleto && semanales.completo && rotativos.completo
+  };
+}
+
+// Turno reconstruido cuando /workShift/ no está disponible. El nombre sale del
+// horario que realmente cumple, que es más útil que "Turno 296456".
+function turnoInferido(id, tipo, dias) {
+  let etiqueta = 'Turno ' + id;
+  if (dias) {
+    const laborables = Object.values(dias).filter(d => d.trabaja && d.inicio !== null);
+    if (laborables.length) {
+      const d = laborables[0];
+      const hhmm = m => `${pad(Math.floor((m % 1440) / 60))}:${pad(m % 60)}`;
+      etiqueta = `${hhmm(d.inicio)}–${hhmm(d.fin)} (${laborables.length}d)`;
+    }
+  }
+  return {
+    id: Number(id), name: etiqueta, type: tipo,
+    tolerance: 0, snackDuration: null, schedule: '', publicId: null,
+    inferido: true
   };
 }
 
@@ -311,7 +400,8 @@ function mapearMarca(m) {
       code: String(p.id || ''),
       personaId: p.id || null,
       name: p.nombre || '',
-      lastName: [p.apellidoPaterno, p.apellidoMaterno].filter(Boolean).join(' '),
+      lastName: p.apellidoPaterno || '',
+      secondLastName: p.apellidoMaterno || '',
       identification: p.rut || ''
     },
     checksum: m.checksum || null,
@@ -442,7 +532,7 @@ function construirHorarios({ desde, hasta, empleados, asignaciones, turnos, dias
         continue;                       // sin ancla de ciclo no es determinable
       } else {
         const semana = turnos.diasSemanales[String(asig.workShift)] || {};
-        def = semana[String(indiceDiaSemana(fecha))] || null;
+        def = semana[String(indiceDiaSemana(fecha, turnos.diaCero))] || null;
       }
 
       if (!def || !def.trabaja || def.inicio === null) continue;
@@ -468,6 +558,7 @@ function construirHorarios({ desde, hasta, empleados, asignaciones, turnos, dias
         code: emp.code,
         name: emp.name,
         lastName: emp.lastName,
+        secondLastName: emp.secondLastName,
         identification: emp.identification,
         branchOffice: emp.branchOffice,
         branchOfficeName: emp.branchOfficeName,
@@ -519,7 +610,8 @@ module.exports = {
   traerAsignaciones, traerDiasManuales, traerMarcasDia, traerAusencias,
   construirHorarios, formatearAsignaciones,
   rangoDias, sumarDias, isoDia, indiceDiaSemana, aMinutos, fechaHora,
+  detectarDiaCero,
   // Exportados para poder probar el mapeo sin salir a la red:
-  mapearMarca, mapearAusencia, normalizarDia,
+  mapearMarca, mapearAusencia, normalizarDia, turnoInferido,
   DIA_CERO
 };

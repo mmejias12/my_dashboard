@@ -24,6 +24,8 @@ const CIERRE_MIN = 3;       // minutos sin bultos nuevos para dar la carga por c
 const VENTANA_H = 12;       // horas maximas entre emision de guia y llegada
 const TOLERANCIA = 0;       // pallets de diferencia que aun se consideran OK
 
+const { revisarCapacidad } = require('./flota');
+
 const ts = (s) => new Date(s).getTime();
 
 function conciliar(cargas, guias, opts = {}) {
@@ -106,6 +108,10 @@ function conciliar(cargas, guias, opts = {}) {
       pausa_max_min: +pausaMax.toFixed(1),
       ritmo_bultos_min: duracionMin > 0 ? +((c.bultos || []).length / duracionMin).toFixed(2) : null,
       tipo: guia?.tipo ?? null,
+      // Contraste contra la capacidad física del camión. Un conteo por sobre el
+      // tope no cabe arriba, así que no es una diferencia con el documento sino
+      // un problema del conteo mismo.
+      capacidad: revisarCapacidad(c.patente, c[campoConteo], guia?.tipo),
       guias_alternativas: typeof alternativas !== 'undefined' ? alternativas : [],
       nro_pedido: guia?.nro_pedido ?? null,
       etapa: guia?.etapa ?? null,

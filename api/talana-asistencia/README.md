@@ -78,8 +78,10 @@ El diagnóstico del 31-08-2026 dejó esto:
 | `/contracts-resumed-paginated/` | 200 · 93 contratos |
 | `/rotativeDay/` | 200 · 252 días de turno |
 | `/specialRotativeDay/` | 200 · 0 (no hay rotativos) |
+| `/mark/` | 200 · 77 marcas en el día de la prueba |
 | **`/workShift/`** | **403 · "No tienes permisos para realizar la solicitud"** |
-| `/mark/`, `/workShiftPersonRange/`, los `-resumed` | sin probar todavía |
+| **`/workShiftPersonRange/`** | **403 · misma falta de permiso** |
+| los `-resumed` | sin probar todavía |
 
 **`/workShift/` en 403 no rompe el reporte**, pero lo degrada: ese recurso es el
 catálogo de turnos (nombre, tipo, tolerancia). Sin él, `traerTurnos()` reconstruye
@@ -89,9 +91,43 @@ tolerancia de atraso, que queda en 0. Conviene pedirle a Talana el permiso de
 lectura sobre `/workShift/`; `/_estado` informa la degradación en
 `catalogo_turnos_degradado`.
 
-**`/workShiftPersonRange/` sí es imprescindible**: es la asignación persona ↔
-turno. Si también responde 403, no hay horario teórico para nadie. Pruébalo con
-`?endpoint=/_diagnostico&recursos=workShiftPersonRange,mark`.
+**`/workShiftPersonRange/` también da 403, y eso sí duele.** Es la asignación
+persona ↔ turno: sin ella ningún trabajador tiene horario teórico, y sin horario
+teórico el reporte no puede calcular atrasos, salidas anticipadas ni detectar a
+quien faltó (no hay forma de saber quién *debía* trabajar ese día).
+
+Lo que sí funciona mientras tanto: las marcas llegan completas y con su sentido
+real (`direction`), así que el calendario muestra presencia con las horas
+efectivas de entrada y salida, marcadas como "Sin turno asignado". El reporte
+avisa la limitación en la línea de estado en vez de mostrar celdas vacías.
+
+**Lo que hay que pedirle a Talana:** lectura sobre el módulo de **Asistencia y
+Turnos**, concretamente `/workShift/`, `/workShiftPersonRange/` y
+`/specificDay-paginado/`. Con eso el reporte queda completo.
+
+### El sistema aguanta la falta de permiso, no la ignora
+
+Ninguno de esos 403 detiene la sincronización: las marcas, personas, sucursales
+y centros de costo se traen igual. Pero la degradación se declara en tres
+lugares, para que nadie lea el reporte creyendo que está completo:
+
+- `POST /api/talana-sync` lo devuelve en `avisos`, con el texto
+  "SIN HORARIO TEÓRICO…".
+- `GET ...?endpoint=/_estado` expone `sin_horario_teorico` y `degradaciones`.
+- El reporte lo escribe en su línea de estado.
+
+## La hora de las marcas
+
+Talana entrega el `TS` con desfase horario y a veces con microsegundos:
+`2026-08-31T09:06:32.979284-04:00`. El horario teórico, en cambio, es hora de
+pared sin desfase (`2026-08-31T12:30:00`), porque un turno "entra a las 12:30" y
+punto.
+
+El reporte resta ambos para calcular atrasos. Restar un instante absoluto contra
+una hora flotante da resultados distintos según la zona horaria del navegador que
+abra la página, así que las marcas se normalizan a hora de pared de Chile
+(`TALANA_TZ`, por defecto `America/Santiago`) antes de guardarse. El `TS`
+original queda en `tsOriginal` por trazabilidad.
 
 ## El día cero de los turnos ya no se adivina
 
@@ -116,6 +152,7 @@ se cayó a la configuración.
 | `TALANA_DIA_CERO` | no | `lunes` | **respaldo**: normalmente se deduce de `rotativeDay.name` |
 | `TALANA_GRACIA_DIAS` | no | `5` | días hacia atrás que se reconsultan por marcas atrasadas |
 | `TALANA_TTL_MAESTROS_MIN` | no | `720` | vida útil de personas, turnos y asignaciones |
+| `TALANA_TZ` | no | `America/Santiago` | zona con que se normaliza la hora de las marcas |
 | `TALANA_EMPRESA_ID` | no | — | id de empresa que inyecta `talana-proxy` (REDTEC = `2921`) |
 | `TALANA_PRESUPUESTO_MS` | no | `32000` | tiempo por invocación de sync, bajo el corte de la plataforma |
 
@@ -183,7 +220,8 @@ para que el JS del reporte no cambie.
 | Horarios corridos un día | la detección falló; revisa `dia_cero` en `/_estado` y forza `TALANA_DIA_CERO` |
 | Calendario vacío con datos cargados | `employeeStatus` no llegó; el reporte filtra por él |
 | Turnos con nombre tipo `12:30–18:00 (5d)` | 403 en `/workShift/`: catálogo reconstruido desde los días |
-| Trabajadores sin horario teórico | turno rotativo sin ancla, o sin asignación en `workShiftPersonRange` |
+| Todos "Sin turno asignado" | 403 en `/workShiftPersonRange/`: falta el permiso del módulo de Turnos |
+| Trabajadores sueltos sin horario | sin asignación vigente en `workShiftPersonRange` para ese día |
 | Faltan marcas del día en curso | el sync corre cada 4 h; usa "Run workflow" para forzarlo |
 | ⚠ en la línea de estado del reporte | hay días o meses del rango fuera del snapshot: sincroniza ese rango |
 | Marcas que aparecen días después | normal: el sync reconsulta los últimos `TALANA_GRACIA_DIAS` días |
@@ -192,8 +230,8 @@ para que el JS del reporte no cambie.
 ## Pruebas
 
 ```
-node scripts/test-talana-mapeo.js        # 24 · unitarias del mapeo
-node scripts/test-talana-integracion.js  # 28 · circuito completo
+node scripts/test-talana-mapeo.js        # 30 · unitarias del mapeo
+node scripts/test-talana-integracion.js  # 36 · circuito completo
 ```
 
 Ninguna toca la red ni Azure, así que corren en cualquier parte.
@@ -206,6 +244,7 @@ ausencias, horario teórico, detección del día cero.
 sólo las dos fronteras: Talana (con las formas exactas que devolvió
 `/_diagnostico`, incluido el 403 de `/workShift/`) y Blob Storage (en memoria).
 Cubre la llave del sincronizador, el 503 cuando no hay snapshot, la
-deduplicación de marcas, la idempotencia del segundo sync y los avisos de
-cobertura incompleta. Los datos de personas son inventados: la forma es la
+deduplicación de marcas, la idempotencia del segundo sync, los avisos de
+cobertura incompleta, la normalización horaria y el escenario real de REDTEC con
+403 en el módulo de Turnos. Los datos de personas son inventados: la forma es la
 real, los RUT y nombres no.

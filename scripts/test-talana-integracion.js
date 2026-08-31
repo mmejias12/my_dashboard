@@ -78,13 +78,13 @@ const FIXTURES = {
   ],
   '/specificDay-paginado/': [],
   '/mark/': [
-    marca(9001, 1475433, 'ANA MARIA', 'SOTO', 'RIVAS', '11111111-1', `${HOY} 12:26:04`, 'E', 'ck-1'),
-    marca(9002, 1475433, 'ANA MARIA', 'SOTO', 'RIVAS', '11111111-1', `${HOY} 18:11:47`, 'X', 'ck-2'),
-    marca(9003, 3301888, 'JUAN CARLOS', 'PEREZ', 'ORTEGA', '22222222-2', `${HOY} 08:14:02`, 'E', 'ck-3'),
+    marca(9001, 1475433, 'ANA MARIA', 'SOTO', 'RIVAS', '11111111-1', `${HOY}T12:26:04-04:00`, 'E', 'ck-1'),
+    marca(9002, 1475433, 'ANA MARIA', 'SOTO', 'RIVAS', '11111111-1', `${HOY}T18:11:47-04:00`, 'X', 'ck-2'),
+    marca(9003, 3301888, 'JUAN CARLOS', 'PEREZ', 'ORTEGA', '22222222-2', `${HOY}T08:14:02.979284-04:00`, 'E', 'ck-3'),
     // Marca repetida (mismo checksum): el sync debe deduplicarla.
-    marca(9003, 3301888, 'JUAN CARLOS', 'PEREZ', 'ORTEGA', '22222222-2', `${HOY} 08:14:02`, 'E', 'ck-3'),
+    marca(9003, 3301888, 'JUAN CARLOS', 'PEREZ', 'ORTEGA', '22222222-2', `${HOY}T08:14:02.979284-04:00`, 'E', 'ck-3'),
     // Marca de otro día: entra en la ventana pedida pero debe descartarse.
-    marca(9004, 3301888, 'JUAN CARLOS', 'PEREZ', 'ORTEGA', '22222222-2', '2026-08-30 09:00:00', 'E', 'ck-4')
+    marca(9004, 3301888, 'JUAN CARLOS', 'PEREZ', 'ORTEGA', '22222222-2', '2026-08-30T09:00:00-04:00', 'E', 'ck-4')
   ],
   '/absentism-resumed/': [
     { persona_id: 3301888, fechaDesde: '2026-08-31', fechaHasta: '2026-08-31', tipo: 'Permiso sin goce' }
@@ -401,6 +401,68 @@ console.log('\nSegunda pasada (idempotencia y ventana de gracia)');
   prueba('reconsulta el día de hoy porque sigue dentro de la ventana de gracia', () => {
     assert.ok(llamadas.slice(llamadasAntes).includes('/mark/'),
       'un día abierto debe reconsultarse: pueden subir marcas atrasadas');
+  });
+}
+
+
+console.log('\nEscenario real: sin permiso sobre el módulo de Turnos');
+
+{
+  // Es lo que devuelve hoy la cuenta de REDTEC: 403 en las asignaciones.
+  FIXTURES['/workShiftPersonRange/'] = { error: { status: 403, mensaje: '{"detail":"No tienes permisos para realizar la solicitud"}' } };
+  FIXTURES['/specificDay-paginado/']  = { error: { status: 403, mensaje: '{"detail":"No tienes permisos para realizar la solicitud"}' } };
+  BLOBS.clear();
+
+  const r = await llamarSync({ desde: HOY, hasta: HOY, maestros: true });
+
+  prueba('el 403 en asignaciones NO tumba la sincronización', () => {
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual(r.json.ok, true, JSON.stringify(r.json));
+    assert.deepStrictEqual(r.json.dias_sincronizados, [HOY], 'las marcas deben sincronizarse igual');
+  });
+
+  prueba('el aviso dice en palabras qué se perdió y qué hay que pedir', () => {
+    const t = r.json.avisos.join(' | ');
+    assert.ok(/SIN HORARIO TEÓRICO/.test(t), t);
+    assert.ok(/Turnos/.test(t), 'debe nombrar el módulo que falta: ' + t);
+  });
+
+  const est = await llamarApi('/_estado');
+  prueba('/_estado marca sin_horario_teorico', () => {
+    assert.strictEqual(est.json.sin_horario_teorico, true);
+    assert.strictEqual(est.json.asignaciones, 0);
+  });
+
+  const marcas = await llamarApi('/attendanceData', { start: HOY, end: HOY });
+  prueba('las marcas siguen llegando completas pese al 403', () => {
+    assert.strictEqual(marcas.json.data.length, 3);
+    assert.ok(marcas.json.data.every(m => m.tipo));
+  });
+
+  const hor = await llamarApi('/workshift/schedules', { start: HOY, end: HOY });
+  prueba('/workshift/schedules avisa que nadie tiene turno, en vez de callarlo', () => {
+    assert.strictEqual(hor.json.sin_horario_teorico, true);
+    assert.ok(hor.json.degradaciones.length > 0);
+  });
+}
+
+console.log('\nHora de pared en las marcas guardadas');
+
+{
+  const r = await llamarApi('/attendanceData', { start: HOY, end: HOY });
+  prueba('el desfase -04:00 no llega al reporte: se guarda hora de pared', () => {
+    for (const m of r.json.data) {
+      assert.ok(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(m.attendanceDate),
+        'attendanceDate debe ser hora de pared limpia: ' + m.attendanceDate);
+    }
+  });
+  prueba('la hora se conserva tal cual la marcó la persona', () => {
+    const ana = r.json.data.filter(m => m.employee.code === '1475433');
+    assert.deepStrictEqual(ana.map(m => m.attendanceDate.substring(11, 19)), ['12:26:04', '18:11:47']);
+  });
+  prueba('los microsegundos de Talana no sobreviven', () => {
+    const juan = r.json.data.find(m => m.employee.code === '3301888');
+    assert.strictEqual(juan.attendanceDate, `${HOY}T08:14:02`);
   });
 }
 

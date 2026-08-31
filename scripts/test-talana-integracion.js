@@ -86,13 +86,22 @@ const FIXTURES = {
     // Marca de otro día: entra en la ventana pedida pero debe descartarse.
     marca(9004, 3301888, 'JUAN CARLOS', 'PEREZ', 'ORTEGA', '22222222-2', '2026-08-30T09:00:00-04:00', 'E', 'ck-4')
   ],
+  // Nombres de campo verificados contra la cuenta real: cada fuente usa los suyos
+  // y las tres anidan al trabajador como objeto en `empleado`.
   '/absentism-resumed/': [
-    { persona_id: 3301888, fechaDesde: '2026-08-31', fechaHasta: '2026-08-31', tipo: 'Permiso sin goce' }
+    { empleado: { id: 3301888, rut: '22222222-2', nombre: 'JUAN CARLOS', apellidoPaterno: 'PEREZ' },
+      fechaDesde: HOY, fechaHasta: HOY, numeroDias: 1, tipoAusencia: 'permiso sin goce', estado: 'Aprobada' },
+    { empleado: { id: 3301888, rut: '22222222-2', nombre: 'JUAN CARLOS', apellidoPaterno: 'PEREZ' },
+      fechaDesde: '2026-08-20', fechaHasta: '2026-08-20', numeroDias: 1, tipoAusencia: 'falta injustificada' }
   ],
   '/vacations-resumed/': [
-    { persona_id: 1475433, desde: '2026-09-10', hasta: '2026-09-20', tipo: 'Vacaciones' }
+    { empleado: { id: 1475433, rut: '11111111-1', nombre: 'ANA MARIA', apellidoPaterno: 'SOTO' },
+      vacacionesDesde: '2026-09-10', vacacionesHasta: '2026-09-20', numeroDias: 9, tipoVacaciones: 'normales' }
   ],
-  '/administrative-leaves-resumed/': []
+  '/administrative-leaves-resumed/': [
+    { id: 686022, empleado: { id: 1475433, rut: '11111111-1', nombre: 'ANA MARIA', apellidoPaterno: 'SOTO' },
+      desde: '2026-08-25', hasta: '2026-08-25', numeroDias: 1, administrative_type: 'anual' }
+  ]
 };
 
 function contrato(o) {
@@ -334,34 +343,41 @@ console.log('\nContrato que consume el reporte');
 }
 
 {
-  const r = await llamarApi('/permission', { start: HOY, end: HOY });
-  prueba('/permission entrega las ausencias del mes sincronizado', () => {
-    assert.strictEqual(r.json.data.length, 1);
-    const p = r.json.data[0];
-    assert.strictEqual(p.employeeCode, '3301888');
-    assert.strictEqual(p.start, HOY);
-    assert.strictEqual(p.permissionTypeName, 'Permiso sin goce');
-    assert.deepStrictEqual(r.json.meses_sin_snapshot, []);
+  const r = await llamarApi('/permission', { start: '2026-08-01', end: '2026-08-31' });
+  prueba('/permission asocia cada ausencia a su trabajador, no a "[object Object]"', () => {
+    assert.ok(r.json.data.length >= 3, JSON.stringify(r.json.data));
+    assert.ok(r.json.data.every(p => /^\d+$/.test(p.employeeCode)),
+      'employeeCode debe ser el id de persona: ' + JSON.stringify(r.json.data.map(p => p.employeeCode)));
+  });
+  prueba('las tres fuentes llegan con sus fechas resueltas', () => {
+    const tipos = r.json.data.map(p => p.permissionTypeName).sort();
+    assert.ok(tipos.includes('permiso sin goce'), tipos.join(' | '));
+    assert.ok(tipos.includes('falta injustificada'), tipos.join(' | '));
+    assert.ok(tipos.includes('Día administrativo'), tipos.join(' | '));
+    assert.ok(r.json.data.every(p => p.start && p.end));
+  });
+  prueba('la falta injustificada viaja marcada como no justificada', () => {
+    const f = r.json.data.find(p => p.permissionTypeName === 'falta injustificada');
+    assert.strictEqual(f.justificada, false);
+    const p = r.json.data.find(p => p.permissionTypeName === 'permiso sin goce');
+    assert.strictEqual(p.justificada, true);
   });
   prueba('no viaja información médica ni número de licencia', () => {
     const txt = JSON.stringify(r.json);
-    for (const campo of ['numeroLicencia', 'medicoLicencia', 'enfermedades_cronicas', 'alergias', 'medicamentos']) {
+    for (const campo of ['numeroLicencia', 'medicoLicencia', 'enfermedades_cronicas', 'alergias', 'medicamentos', 'motivo']) {
       assert.ok(!txt.includes(campo), 'se filtró ' + campo);
     }
   });
 
-  // Sólo se sincronizó agosto. Al pedir septiembre las vacaciones del fixture
-  // no están, y eso NO puede quedar callado: sin aviso, un permiso ausente se
-  // ve en el calendario como una falta injustificada.
-  const sep = await llamarApi('/permission', { start: HOY, end: '2026-09-30' });
-  prueba('un mes sin sincronizar se declara en meses_sin_snapshot', () => {
-    assert.deepStrictEqual(sep.json.meses_sin_snapshot, ['2026-09']);
-  });
-
-  const todo = await llamarApi('/todo', { start: HOY, end: '2026-09-30' });
-  prueba('/todo también arrastra el aviso de cobertura incompleta', () => {
-    assert.deepStrictEqual(todo.json.avisos.meses_sin_snapshot, ['2026-09']);
-    assert.ok(todo.json.avisos.dias_sin_snapshot.length > 0, 'septiembre tampoco tiene marcas');
+  // Una sola traída reparte TODOS los meses: las vacaciones de septiembre
+  // quedaron guardadas aunque el sync se pidió sobre agosto.
+  const sep = await llamarApi('/permission', { start: '2026-09-01', end: '2026-09-30' });
+  prueba('las vacaciones de otro mes quedaron repartidas en su propio bloque', () => {
+    const v = sep.json.data.find(p => p.permissionTypeName === 'Vacaciones');
+    assert.ok(v, 'las vacaciones de septiembre deben estar: ' + JSON.stringify(sep.json));
+    assert.strictEqual(v.start, '2026-09-10');
+    assert.strictEqual(v.end, '2026-09-20');
+    assert.strictEqual(v.employeeCode, '1475433');
   });
 }
 

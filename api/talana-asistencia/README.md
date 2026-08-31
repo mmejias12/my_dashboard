@@ -58,13 +58,51 @@ ahora lo usa cuando viene. La heurística antigua queda como respaldo.
 Los turnos **rotativos** (`workShiftType = 'R'`) definen el ciclo en
 `/specialRotativeDay/` (día 1, día 2, …), pero la API pública **no expone la fecha
 ancla del ciclo de cada persona**, así que no hay forma de saber en qué día del
-ciclo cae una fecha dada. Esos empleados quedan sin horario teórico y el reporte
-los resuelve con su respaldo de *primera marca = entrada / última = salida*.
+ciclo cae una fecha dada. Esos empleados quedarían sin horario teórico y el
+reporte los resolvería con su respaldo de *primera marca = entrada / última =
+salida*.
 
+En la cuenta de REDTEC esto **no aplica**: `/specialRotativeDay/` devuelve 0
+registros, o sea que no hay turnos rotativos configurados. Si algún día se crean,
 `GET /api/talana-asistencia?endpoint=/workshift/schedules` los lista en
-`rotativos_sin_ancla`. Si en REDTEC hay turnos rotativos relevantes, hay dos
-salidas: pedir a Talana el dato de ancla, o cargar esos turnos como manuales
-(`specificDay`), que sí traen fecha concreta.
+`rotativos_sin_ancla`.
+
+## Estado del token de REDTEC
+
+El diagnóstico del 31-08-2026 dejó esto:
+
+| Recurso | Estado |
+|---|---|
+| `/sucursal/` | 200 · 2 sucursales (Bodega Santiago, Bodega Talca) |
+| `/centroCosto/` | 200 · 42 centros |
+| `/contracts-resumed-paginated/` | 200 · 93 contratos |
+| `/rotativeDay/` | 200 · 252 días de turno |
+| `/specialRotativeDay/` | 200 · 0 (no hay rotativos) |
+| **`/workShift/`** | **403 · "No tienes permisos para realizar la solicitud"** |
+| `/mark/`, `/workShiftPersonRange/`, los `-resumed` | sin probar todavía |
+
+**`/workShift/` en 403 no rompe el reporte**, pero lo degrada: ese recurso es el
+catálogo de turnos (nombre, tipo, tolerancia). Sin él, `traerTurnos()` reconstruye
+el catálogo desde los días que sí responden y le pone al turno un nombre derivado
+de su horario (`12:30–18:00 (5d)`) en vez del nombre real. Se pierde también la
+tolerancia de atraso, que queda en 0. Conviene pedirle a Talana el permiso de
+lectura sobre `/workShift/`; `/_estado` informa la degradación en
+`catalogo_turnos_degradado`.
+
+**`/workShiftPersonRange/` sí es imprescindible**: es la asignación persona ↔
+turno. Si también responde 403, no hay horario teórico para nadie. Pruébalo con
+`?endpoint=/_diagnostico&recursos=workShiftPersonRange,mark`.
+
+## El día cero de los turnos ya no se adivina
+
+Talana pone el nombre del día en `rotativeDay.name` ("Lunes", "Martes", …) junto
+al `numberWorkingDay`. `detectarDiaCero()` cruza ambos y deduce la convención del
+propio dato en cada sincronización. En REDTEC salió **lunes = 0**, que coincide
+con el valor por defecto.
+
+`TALANA_DIA_CERO` queda sólo como respaldo por si algún día los nombres dejan de
+ser reconocibles. `/_estado` muestra en `dia_cero` qué se usó y si se detectó o
+se cayó a la configuración.
 
 ## Variables de aplicación (Azure → Static Web App → Configuración)
 
@@ -75,7 +113,7 @@ salidas: pedir a Talana el dato de ancla, o cargar esos turnos como manuales
 | `OS_INGESTA_KEY` | sí | — | llave compartida que protege `POST /api/talana-sync` |
 | `OS_TALANA_CONTAINER` | no | `redtec-talana` | contenedor del snapshot |
 | `TALANA_RPM` | no | `18` | peticiones por minuto. No subir cerca de 50 |
-| `TALANA_DIA_CERO` | no | `lunes` | qué día representa `numberWorkingDay = 0`. Ver "puesta en marcha" |
+| `TALANA_DIA_CERO` | no | `lunes` | **respaldo**: normalmente se deduce de `rotativeDay.name` |
 | `TALANA_GRACIA_DIAS` | no | `5` | días hacia atrás que se reconsultan por marcas atrasadas |
 | `TALANA_TTL_MAESTROS_MIN` | no | `720` | vida útil de personas, turnos y asignaciones |
 | `TALANA_EMPRESA_ID` | no | — | id de empresa que inyecta `talana-proxy` (REDTEC = `2921`) |
@@ -103,10 +141,9 @@ Secrets del repositorio (Settings → Secrets and variables → Actions):
    Devuelve el código HTTP y una muestra de cada recurso. Si `mark`, `workShift` o
    `workShiftPersonRange` responden 401/403, el token no cubre ese módulo.
 
-3. **Calibrar el día cero de los turnos semanales.** La documentación de Talana no
-   dice si `rotativeDay.numberWorkingDay = 0` es lunes o domingo. Toma un trabajador
-   con turno conocido y compara el horario que muestra el reporte con la realidad:
-   si aparece **corrido exactamente un día**, cambia `TALANA_DIA_CERO` a `domingo`.
+3. **Confirmar que `/workShiftPersonRange/` y `/mark/` responden**, que son los dos
+   recursos sin los cuales no hay reporte:
+   `?endpoint=/_diagnostico&recursos=workShiftPersonRange,mark`
 
 4. **Primera carga.** Ejecuta el workflow *Asistencia Talana* a mano
    (Actions → Run workflow) indicando `desde` y `hasta`. Reintenta solo hasta que
@@ -133,6 +170,7 @@ Secrets del repositorio (Settings → Secrets and variables → Actions):
 | `/todo&start&end` | todo lo anterior en una sola respuesta |
 | `/_estado` | antigüedad del snapshot y última sincronización |
 | `/_diagnostico` | muestra en vivo de cada recurso de Talana |
+| `/_diagnostico&recursos=mark,workShift` | sólo esos recursos (el diagnóstico completo no cabe en una invocación) |
 
 Las respuestas mantienen el sobre de Workera (`{ data, totalPages, totalResult }`)
 para que el JS del reporte no cambie.
@@ -142,7 +180,9 @@ para que el JS del reporte no cambie.
 | Síntoma | Causa probable |
 |---|---|
 | 503 "snapshot todavía no generado" | nunca corrió `talana-sync`; ejecuta el workflow a mano |
-| Horarios corridos un día | `TALANA_DIA_CERO` mal calibrado (paso 3) |
+| Horarios corridos un día | la detección falló; revisa `dia_cero` en `/_estado` y forza `TALANA_DIA_CERO` |
+| Calendario vacío con datos cargados | `employeeStatus` no llegó; el reporte filtra por él |
+| Turnos con nombre tipo `12:30–18:00 (5d)` | 403 en `/workShift/`: catálogo reconstruido desde los días |
 | Trabajadores sin horario teórico | turno rotativo sin ancla, o sin asignación en `workShiftPersonRange` |
 | Faltan marcas del día en curso | el sync corre cada 4 h; usa "Run workflow" para forzarlo |
 | Marcas que aparecen días después | normal: el sync reconsulta los últimos `TALANA_GRACIA_DIAS` días |
@@ -154,5 +194,5 @@ para que el JS del reporte no cambie.
 node scripts/test-talana-mapeo.js
 ```
 
-16 pruebas del mapeo y de la construcción del horario teórico, con datos simulados.
+24 pruebas del mapeo y de la construcción del horario teórico, con datos simulados.
 No tocan la red ni Azure.

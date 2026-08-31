@@ -121,6 +121,43 @@ h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
 .patgrande{font-size:38px;font-weight:700;letter-spacing:.06em;text-align:center;margin:2px 0 4px;font-variant-numeric:tabular-nums}
 .subpat{text-align:center;color:var(--text-2);font-size:13px;margin-bottom:16px}
 .mfoot{padding:14px 22px;border-top:1px solid var(--line);display:flex;gap:9px;flex-wrap:wrap}
+/* Tira de evidencia: una miniatura por bulto. Reemplaza al "?" que dejaba la
+   ausencia de pallets_bulto en la API. */
+.fila.foto{padding:0;overflow:hidden;position:relative;min-width:74px;max-width:110px;aspect-ratio:4/3;
+           display:flex;flex-direction:column;justify-content:flex-end;cursor:zoom-in}
+.fila.foto img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.fila.foto .n{position:relative;background:linear-gradient(transparent,rgba(4,6,10,.88));
+              color:#dfe3ea;padding:9px 3px 3px;font-size:10px;font-weight:600;letter-spacing:.03em}
+.fila.foto:hover{border-color:rgba(255,255,255,.4)}
+.fila.foto:focus-visible{outline:2px solid var(--series-1);outline-offset:2px}
+.fila.sinfoto{border-style:dashed;color:var(--warning)}
+/* Primer bulto después de un corte en el tiempo: marca dónde la cámara dejó de
+   ver y volvió a empezar, que es justo donde hay que mirar. */
+.fila.corte{border-left:3px solid var(--critical)}
+.fila.corte::after{content:'corte';position:absolute;top:3px;left:3px;font-size:8px;letter-spacing:.06em;
+  background:rgba(208,59,59,.85);color:#fff;border-radius:3px;padding:1px 4px}
+
+/* ---------- visor de evidencia ---------- */
+.lb{position:fixed;inset:0;background:rgba(4,6,10,.94);z-index:300;display:none;
+    flex-direction:column;align-items:center;justify-content:center;padding:20px}
+.lb.on{display:flex}
+.lb img{max-width:min(1100px,92vw);max-height:78vh;border-radius:10px;
+        background:var(--surface-2);box-shadow:0 24px 70px rgba(0,0,0,.65)}
+.lb-cab{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;gap:14px;
+        padding:16px 20px;background:linear-gradient(rgba(4,6,10,.9),transparent)}
+.lb-cab .tt{font-size:15px;font-weight:600}
+.lb-cab .st{font-size:12px;color:var(--text-2)}
+.lb-cab .x{background:none;border:0;color:var(--text-2);font-size:26px;cursor:pointer;line-height:1}
+.lb-nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(23,27,36,.9);
+        border:1px solid var(--line);color:var(--text);width:44px;height:56px;border-radius:10px;
+        cursor:pointer;font-size:20px;line-height:1}
+.lb-nav:hover{border-color:rgba(255,255,255,.3)}
+.lb-nav.izq{left:18px} .lb-nav.der{right:18px}
+.lb-nav:disabled{opacity:.25;cursor:default}
+.lb-pie{margin-top:14px;font-size:12px;color:var(--muted);text-align:center}
+.lb-pie kbd{background:var(--surface-2);border:1px solid var(--line);border-radius:4px;
+            padding:1px 5px;font-family:inherit;font-size:11px}
+
 .aviso-fila{background:var(--surface-2);border:1px solid var(--line);border-left:2px solid var(--warning);border-radius:9px;padding:10px 13px;font-size:12px;color:var(--text-2);margin-top:4px}
 .aviso-fila b{color:var(--text)}
 .sec{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:16px 0 2px}
@@ -177,6 +214,21 @@ h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
 
 <div class="scrim" id="scrim"></div>
 <div class="modal" id="modal" role="alertdialog" aria-modal="true" aria-hidden="true"><div id="mcont"></div></div>
+
+<!-- Visor de evidencia. La API no entrega los pallets de cada bulto, pero sí
+     una foto por bulto: mientras esa cifra no llegue, la foto es la única
+     forma de que el operador ubique la fila corta sin bajar al andén. -->
+<div class="lb" id="lb" role="dialog" aria-modal="true" aria-label="Evidencia ampliada">
+  <div class="lb-cab">
+    <div><div class="tt" id="lb-tt"></div><div class="st" id="lb-st"></div></div>
+    <div style="flex:1"></div>
+    <button class="x" id="lb-cerrar" aria-label="Cerrar visor">×</button>
+  </div>
+  <button class="lb-nav izq" id="lb-izq" aria-label="Anterior">‹</button>
+  <img id="lb-img" alt="">
+  <button class="lb-nav der" id="lb-der" aria-label="Siguiente">›</button>
+  <div class="lb-pie"><kbd>←</kbd> <kbd>→</kbd> para navegar · <kbd>Esc</kbd> para cerrar</div>
+</div>
 
 <script>
 "use strict";
@@ -238,6 +290,7 @@ const $  = (s,r=document)=>r.querySelector(s);
 const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
 const esc = s => String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
 const n0 = v => (v==null||isNaN(v))?'—':Math.round(v).toLocaleString('es-CL');
+const n1 = v => (v==null||isNaN(v))?'—':v.toLocaleString('es-CL',{maximumFractionDigits:1});
 const hhmmss = d => d.toLocaleTimeString('es-CL',{hour12:false});
 const hhmm = d => d.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',hour12:false});
 const ddmm = d => d.toLocaleDateString('es-CL',{day:'2-digit',month:'2-digit'});
@@ -421,26 +474,111 @@ function registrarPaso(carga){
 /* =====================================================================
    MODAL DE ALERTA
    ===================================================================== */
+/* Evidencia. La API Key no puede viajar dentro de un <img src>, así que la
+   imagen se pide a nuestra Function, que la inyecta y devuelve los bytes. */
+const API_EVIDENCIA = '/api/spotvision-evidencia';
+function urlEv(u){
+  if(!u || DEMO) return null;
+  try { return API_EVIDENCIA + new URL(u).search; } catch { return null; }
+}
+
+/* GRUPOS DE DETECCIÓN. Medido el 31-08: las cargas que calzan exactas llegan
+   en una sola ráfaga continua (14 bultos en 2,2 s), mientras que las dos que
+   no calzaron traían un corte en el medio — LS3119 registró 13 bultos, 11,8 s
+   de nada, y otros 14. Un corte así no es un camión pasando: o es el carro de
+   arrastre entrando por separado, o son dos pasadas distintas que la API juntó
+   en una sola carga. Es la información que le falta al operador para saber si
+   la diferencia es de la carga o del conteo. */
+const CORTE_S = 2;
+function gruposDeteccion(bultos){
+  const t = bultos.map(b=>new Date(b.fecha_hora_deteccion).getTime()).sort((a,b)=>a-b);
+  const grupos = []; let ini = 0;
+  for(let i=1;i<t.length;i++){
+    if(t[i]-t[i-1] >= CORTE_S*1000){ grupos.push({n:i-ini, hueco:(t[i]-t[i-1])/1000}); ini = i; }
+  }
+  grupos.push({n:t.length-ini, hueco:null});
+  return grupos;
+}
+
 function tiraFilas(v){
   const b = v.bultos;
   const conDetalle = b.every(x => typeof x.pallets_bulto === 'number');
   const nominal = v.guia ? (v.guia.pallets_por_fila ?? Math.round(v.guia.pallets_declarados/b.length)) : null;
+
+  // Con pallets_bulto se marca la fila exacta; sin ese campo, la foto de cada
+  // bulto es lo que permite ubicarla a ojo. Las fotos SÍ vienen: el 31-08 los
+  // 29 bultos de RW5303 traían foto_bulto_url.
+  GALERIA = [];
+  // índices donde arranca un grupo nuevo, para marcar el corte en la tira
+  const cortes = new Set();
+  { let acum = 0;
+    for(const gr of gruposDeteccion(b)){ if(acum) cortes.add(acum); acum += gr.n; } }
   const celdas = b.map((x,i)=>{
-    if(!conDetalle) return `<div class="fila incog"><div class="n">F${String(i+1).padStart(2,'0')}</div><div class="v">?</div></div>`;
-    const d = nominal!=null ? x.pallets_bulto - nominal : 0;
-    const cls = d<0?'corta':d>0?'larga':'';
-    return `<div class="fila ${cls}"><div class="n">F${String(i+1).padStart(2,'0')}</div><div class="v">${x.pallets_bulto}</div></div>`;
+    const et = `F${String(i+1).padStart(2,'0')}`;
+    if(conDetalle){
+      const d = nominal!=null ? x.pallets_bulto - nominal : 0;
+      const cls = d<0?'corta':d>0?'larga':'';
+      return `<div class="fila ${cls}"><div class="n">${et}</div><div class="v">${x.pallets_bulto}</div></div>`;
+    }
+    const src = urlEv(x.foto_bulto_url);
+    if(!src) return `<div class="fila sinfoto"><div class="n">${et}</div><div class="v">${x.foto_bulto_url?'demo':'—'}</div></div>`;
+    const lab = `${et} · ${hhmm(new Date(x.fecha_hora_deteccion))}`;
+    const k = GALERIA.push({src, lab}) - 1;
+    return `<div class="fila foto${cortes.has(i)?' corte':''}" data-i="${k}" tabindex="0" role="button" aria-label="Ampliar ${lab}">
+              <img loading="lazy" src="${src}" alt="${lab}"><div class="n">${et}</div></div>`;
   }).join('');
+
+  const g = gruposDeteccion(b);
+  const avisoGrupos = g.length > 1
+    ? `<div class="aviso-fila" style="border-left-color:var(--critical)">
+         La cámara registró estos ${b.length} bultos en <b>${g.length} grupos separados</b>
+         (${g.map(x=>x.n).join(' y ')} bultos, con ${n1(g.find(x=>x.hueco)?.hueco)} s sin detecciones en medio).
+         Un paso continuo llega en una sola ráfaga: revisar si fue el carro de arrastre entrando aparte
+         o <b>dos pasadas distintas sumadas en una misma carga</b>.</div>`
+    : '';
+
   const pie = conDetalle
     ? (v.filaAfectada
         ? `<div class="aviso-fila" style="border-left-color:var(--critical)">La diferencia está en la <b>fila ${v.filaAfectada.n}</b>:
              ${v.filaAfectada.d>0?'+':''}${v.filaAfectada.d} pallets respecto de las ${nominal} de una fila completa.</div>`
         : '')
-    : `<div class="aviso-fila">La API no entrega la cantidad de pallets por bulto, así que <b>no es posible señalar la fila</b>.
-         Con el campo solicitado a SPOTVISION, acá se marcaría la fila exacta y el operador no tendría que revisar
-         ${b.length} fotografías. Usa el botón <b>Detalle por bulto</b> para ver cómo se vería.</div>`;
-  return `<div class="sec">Distribución por fila · ${b.length} bultos</div><div class="tira">${celdas}</div>${pie}`;
+    : `<div class="aviso-fila">La API entrega el total de la carga pero <b>no cuántos pallets trae cada bulto</b>,
+         así que el sistema no puede señalar la fila. Sí entrega una foto por bulto: ampliarlas es, por ahora,
+         la forma de ubicar la fila corta${nominal?` — una fila completa lleva ${nominal} pallets`:''}.</div>`;
+
+  return `<div class="sec">Evidencia por fila · ${b.length} bultos</div>
+          <div class="tira">${celdas}</div>${avisoGrupos}${pie}`;
 }
+
+/* ---------- visor ---------- */
+let GALERIA = [], lbIdx = 0;
+function abrirVisor(i){
+  if(!GALERIA.length) return;
+  lbIdx = Math.max(0, Math.min(i, GALERIA.length-1));
+  const g = GALERIA[lbIdx];
+  $('#lb-img').src = g.src; $('#lb-img').alt = g.lab;
+  $('#lb-tt').textContent = g.lab;
+  $('#lb-st').textContent = `${lbIdx+1} de ${GALERIA.length}`;
+  $('#lb-izq').disabled = lbIdx === 0;
+  $('#lb-der').disabled = lbIdx === GALERIA.length-1;
+  $('#lb').classList.add('on');
+  $('#lb-cerrar').focus();
+}
+function cerrarVisor(){ $('#lb').classList.remove('on'); $('#lb-img').src=''; }
+function moverVisor(d){ abrirVisor(lbIdx + d); }
+$('#lb-cerrar').onclick = cerrarVisor;
+$('#lb-izq').onclick = ()=>moverVisor(-1);
+$('#lb-der').onclick = ()=>moverVisor(1);
+$('#lb').onclick = e=>{ if(e.target.id==='lb') cerrarVisor(); };
+// Delegación: la tira se rearma en cada apertura del modal.
+document.addEventListener('click', e=>{
+  const c = e.target.closest('.fila.foto');
+  if(c) abrirVisor(+c.dataset.i);
+});
+document.addEventListener('keydown', e=>{
+  const c = e.target.closest?.('.fila.foto');
+  if(c && (e.key==='Enter'||e.key===' ')){ e.preventDefault(); abrirVisor(+c.dataset.i); }
+});
 
 function abrirModal(v){
   const r = REGLAS[v.estado];
@@ -514,7 +652,17 @@ function cerrarModal(){
   $('#scrim').classList.remove('on');
 }
 $('#scrim').onclick = cerrarModal;
-addEventListener('keydown', e=>{ if(e.key==='Escape') cerrarModal(); });
+addEventListener('keydown', e=>{
+  // Con el visor abierto, Escape y las flechas son suyas: cerrar el modal
+  // detrás dejaría al operador sin el contexto de la alerta.
+  if($('#lb').classList.contains('on')){
+    if(e.key==='Escape'){ e.stopPropagation(); cerrarVisor(); }
+    else if(e.key==='ArrowLeft')  moverVisor(-1);
+    else if(e.key==='ArrowRight') moverVisor(1);
+    return;
+  }
+  if(e.key==='Escape') cerrarModal();
+});
 
 /* =====================================================================
    RENDER

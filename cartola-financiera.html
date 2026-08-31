@@ -954,7 +954,7 @@ function renderFlujo(clientes) {
       ? ajusN+' registros negativos · '+(excluirAjustes?'excluidos del subtotal':'INCLUIDOS en el subtotal')
       : 'Sin ajustes en el período');
 
-  set('f-excli-clp', '-'+fmtCLP(exCLP));
+  set('f-excli-clp', fmtCLP(-Math.abs(exCLP)));
   set('f-excli-uf',  fmtUF(exUF)+' UF');
   set('f-excli-desc', exCount+' de '+Object.keys(EX_CLIENTES).length+' ex-clientes con movimiento · lista fija');
 
@@ -1758,7 +1758,9 @@ function set(id, val) {
 }
 function fmtCLP(v) {
   if (!v) return '$0';
-  return '$'+Math.round(v).toLocaleString('es-CL');
+  var n = Math.round(v);
+  // El signo va antes del símbolo: -$1.234.567, no $-1.234.567
+  return (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('es-CL');
 }
 function fmtUF(v) {
   if (!v) return '0,000';

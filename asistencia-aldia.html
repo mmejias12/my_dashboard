@@ -921,7 +921,30 @@ async function apiCall(endpoint, params) {
   }
   var snap = r.headers.get('X-Talana-Snapshot');
   if (snap) snapshotGenerado = snap;
-  return r.json();
+  var j = await r.json();
+  registrarHuecos(j);
+  return j;
+}
+
+/* El backend avisa qué días o meses del rango no están en el snapshot. Un hueco
+   no puede pasar callado: el reporte se vería completo mostrando datos a medias
+   (marcas sin sincronizar parecen inasistencias, permisos ausentes parecen
+   faltas injustificadas). */
+var huecosDias = [], huecosMeses = [];
+function registrarHuecos(j) {
+  if (!j) return;
+  if (Array.isArray(j.dias_faltantes)) {
+    j.dias_faltantes.forEach(function(d){ if (huecosDias.indexOf(d) < 0) huecosDias.push(d); });
+  }
+  if (Array.isArray(j.meses_sin_snapshot)) {
+    j.meses_sin_snapshot.forEach(function(m){ if (huecosMeses.indexOf(m) < 0) huecosMeses.push(m); });
+  }
+}
+function textoHuecos() {
+  var p = [];
+  if (huecosDias.length)  p.push(huecosDias.length + (huecosDias.length === 1 ? ' día' : ' días') + ' sin marcas sincronizadas');
+  if (huecosMeses.length) p.push('permisos sin sincronizar de ' + huecosMeses.join(', '));
+  return p.length ? ' · ⚠ ' + p.join(' y ') : '';
 }
 /* Antigüedad del snapshot: si el sync se cayó, el reporte debe decirlo en vez
    de mostrar datos viejos como si fueran de ahora. */
@@ -966,6 +989,7 @@ async function fetchTodasLasPaginas(endpoint, paramsBase, maxPages) {
    ═══════════════════════════════════════════════════════════════════════ */
 async function cargar() {
   $('btn-load').disabled = true;
+  huecosDias = []; huecosMeses = [];
   try {
     setStatus('load', 'Cargando sucursales y departamentos...');
     await Promise.all([cargarSucursales(), cargarDepartamentos()]);
@@ -990,7 +1014,7 @@ async function cargar() {
     setStatus('ok', '✓ Datos cargados · ' + cacheEmpleados.length + ' empleados · ' +
               cacheHorarios.length + ' horarios · ' +
               cacheMarcacionesEnriquecimiento.length + ' marcas · ' +
-              cachePermisos.length + ' permisos' + textoSnapshot());
+              cachePermisos.length + ' permisos' + textoSnapshot() + textoHuecos());
 
     // Vista única: calendario del mes + panel del día
     poblarFiltrosArea();

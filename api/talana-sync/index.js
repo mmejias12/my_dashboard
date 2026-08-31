@@ -177,6 +177,19 @@ async function sincronizarMaestros(desde, hasta, presupuesto, informe) {
 
   if (!completo) informe.avisos.push('Maestros incompletos: se agotó el presupuesto, se completarán en la siguiente pasada.');
 
+  // Recursos del módulo de Turnos que el token puede no cubrir. No detienen la
+  // sincronización, pero sí hay que decirlo fuerte: sin ellos no hay horario
+  // teórico, y sin horario teórico no hay atrasos ni ausencias, sólo marcas.
+  const degradaciones = [turnos.catalogoDegradado, asignaciones.degradado, manuales.degradado].filter(Boolean);
+  if (degradaciones.length) informe.avisos.push(...degradaciones);
+  if (asignaciones.degradado) {
+    informe.avisos.push(
+      'SIN HORARIO TEÓRICO: /workShiftPersonRange/ no está disponible, así que ningún ' +
+      'trabajador tiene turno asignado. El reporte mostrará marcas reales pero no ' +
+      'podrá calcular atrasos ni detectar ausencias. Pide a Talana lectura sobre el módulo de Turnos.'
+    );
+  }
+
   return {
     sucursales: sucursales.data,
     departamentos: centros.data,
@@ -185,6 +198,7 @@ async function sincronizarMaestros(desde, hasta, presupuesto, informe) {
     asignaciones: asignaciones.data,
     diasManuales: manuales.data,
     rangoDiasManuales: { desde: mapa.sumarDias(desde, -31), hasta: mapa.sumarDias(hasta, 31) },
+    degradaciones,
     _completo: completo
   };
 }

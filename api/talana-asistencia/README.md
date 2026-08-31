@@ -168,7 +168,7 @@ Secrets del repositorio (Settings → Secrets and variables → Actions):
 | `/attendanceData&start&end` | marcas del rango |
 | `/permission&start&end` | ausencias, vacaciones y días administrativos |
 | `/todo&start&end` | todo lo anterior en una sola respuesta |
-| `/_estado` | antigüedad del snapshot y última sincronización |
+| `/_estado` | antigüedad del snapshot, día cero usado y degradación del catálogo |
 | `/_diagnostico` | muestra en vivo de cada recurso de Talana |
 | `/_diagnostico&recursos=mark,workShift` | sólo esos recursos (el diagnóstico completo no cabe en una invocación) |
 
@@ -185,14 +185,27 @@ para que el JS del reporte no cambie.
 | Turnos con nombre tipo `12:30–18:00 (5d)` | 403 en `/workShift/`: catálogo reconstruido desde los días |
 | Trabajadores sin horario teórico | turno rotativo sin ancla, o sin asignación en `workShiftPersonRange` |
 | Faltan marcas del día en curso | el sync corre cada 4 h; usa "Run workflow" para forzarlo |
+| ⚠ en la línea de estado del reporte | hay días o meses del rango fuera del snapshot: sincroniza ese rango |
 | Marcas que aparecen días después | normal: el sync reconsulta los últimos `TALANA_GRACIA_DIAS` días |
 | 429 en el diagnóstico | hay un bloqueo activo de 10 minutos; espera y baja `TALANA_RPM` |
 
 ## Pruebas
 
 ```
-node scripts/test-talana-mapeo.js
+node scripts/test-talana-mapeo.js        # 24 · unitarias del mapeo
+node scripts/test-talana-integracion.js  # 28 · circuito completo
 ```
 
-24 pruebas del mapeo y de la construcción del horario teórico, con datos simulados.
-No tocan la red ni Azure.
+Ninguna toca la red ni Azure, así que corren en cualquier parte.
+
+`test-talana-mapeo.js` verifica cada traducción por separado: horas, marcas,
+ausencias, horario teórico, detección del día cero.
+
+`test-talana-integracion.js` ejecuta las Functions reales de punta a punta
+—`talana-sync` → Blob → `talana-asistencia` → contrato del reporte— simulando
+sólo las dos fronteras: Talana (con las formas exactas que devolvió
+`/_diagnostico`, incluido el 403 de `/workShift/`) y Blob Storage (en memoria).
+Cubre la llave del sincronizador, el 503 cuando no hay snapshot, la
+deduplicación de marcas, la idempotencia del segundo sync y los avisos de
+cobertura incompleta. Los datos de personas son inventados: la forma es la
+real, los RUT y nombres no.

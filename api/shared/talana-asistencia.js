@@ -117,6 +117,34 @@ function detectarDiaCero(diasCrudos) {
 
 const soloFecha = s => (s ? String(s).slice(0, 10) : '');
 
+// ── hora de pared local ─────────────────────────────────────────────────────
+// Talana entrega el TS de las marcas con desfase horario y a veces con
+// microsegundos: "2026-08-31T09:06:32.979284-04:00". El horario teórico, en
+// cambio, es hora de pared sin desfase ("2026-08-31T12:30:00"), porque un turno
+// "entra a las 12:30" y punto.
+//
+// El reporte resta ambos para calcular atrasos, y restar un instante absoluto
+// contra una hora flotante da resultados distintos según la zona del navegador
+// que abra la página. Para que la comparación sea siempre la misma, las marcas
+// se normalizan a hora de pared de Chile antes de guardarlas.
+const TZ = process.env.TALANA_TZ || 'America/Santiago';
+const FMT_LOCAL = new Intl.DateTimeFormat('en-CA', {
+  timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+});
+
+function aHoraLocal(ts) {
+  if (!ts) return '';
+  const s = String(ts).trim().replace(' ', 'T');
+  // Sin desfase: ya viene como hora de pared, sólo se recorta el sobrante.
+  if (!/(Z|[+-]\d{2}:?\d{2})$/.test(s)) return s.slice(0, 19);
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return s.slice(0, 19);
+  const p = {};
+  for (const { type, value } of FMT_LOCAL.formatToParts(d)) p[type] = value;
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}`;
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 //  MAESTROS
 // ════════════════════════════════════════════════════════════════════════════
@@ -324,29 +352,50 @@ function normalizarDia(d, orden) {
   };
 }
 
-/** Asignaciones persona ↔ turno ↔ rango de fechas. */
+/**
+ * Asignaciones persona ↔ turno ↔ rango de fechas.
+ *
+ * Un 403 aquí NO puede tumbar la sincronización: las marcas, las personas y las
+ * sucursales sí se pueden traer, y el reporte todavía sirve para ver quién marcó
+ * y a qué hora. Lo que se pierde es el horario teórico, o sea la puntualidad y
+ * la detección de ausencias. Se devuelve vacío y se declara la degradación.
+ */
 async function traerAsignaciones(opts) {
-  const { items, completo } = await talana.listar('/workShiftPersonRange/', {}, opts);
-  const data = items.map(a => ({
-    id: a.id,
-    person: a.person,
-    workShift: a.workShift,
-    fromDate: soloFecha(a.fromDate),
-    toDate: soloFecha(a.toDate)
-  }));
-  return { data, completo };
+  try {
+    const { items, completo } = await talana.listar('/workShiftPersonRange/', {}, opts);
+    const data = items.map(a => ({
+      id: a.id,
+      person: a.person,
+      workShift: a.workShift,
+      fromDate: soloFecha(a.fromDate),
+      toDate: soloFecha(a.toDate)
+    }));
+    return { data, completo, degradado: null };
+  } catch (e) {
+    return {
+      data: [], completo: true,
+      degradado: `/workShiftPersonRange/ → ${e.status || 'error'}: ${e.message.slice(0, 160)}`
+    };
+  }
 }
 
-/** Días de turnos manuales dentro de un rango. */
+/** Días de turnos manuales dentro de un rango. Mismo criterio ante un 403. */
 async function traerDiasManuales(desde, hasta, opts) {
-  const { items, completo } = await talana.listar(
-    '/specificDay-paginado/', { min_date: desde, max_date: hasta }, opts
-  );
-  const porTurnoFecha = {};   // "workShiftId|fecha" → definicion
-  for (const d of items) {
-    porTurnoFecha[`${d.workShift}|${soloFecha(d.date)}`] = normalizarDia(d);
+  try {
+    const { items, completo } = await talana.listar(
+      '/specificDay-paginado/', { min_date: desde, max_date: hasta }, opts
+    );
+    const porTurnoFecha = {};   // "workShiftId|fecha" → definicion
+    for (const d of items) {
+      porTurnoFecha[`${d.workShift}|${soloFecha(d.date)}`] = normalizarDia(d);
+    }
+    return { data: porTurnoFecha, completo, degradado: null };
+  } catch (e) {
+    return {
+      data: {}, completo: true,
+      degradado: `/specificDay-paginado/ → ${e.status || 'error'}: ${e.message.slice(0, 160)}`
+    };
   }
-  return { data: porTurnoFecha, completo };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -391,11 +440,13 @@ async function traerMarcasDia(fecha, opts = {}) {
 
 function mapearMarca(m) {
   const p = m.person || {};
-  // TS puede venir como "2026-08-31T07:58:12" o "2026-08-31 07:58:12".
-  const ts = String(m.TS || m.ts || '').replace(' ', 'T');
+  // TS real de Talana: "2026-08-31T10:28:43-04:00" o con microsegundos,
+  // "2026-08-31T09:06:32.979284-04:00". Se normaliza a hora de pared de Chile.
+  const ts = aHoraLocal(m.TS || m.ts);
   return {
     id: m.id,
     attendanceDate: ts,                      // el reporte lee este campo
+    tsOriginal: m.TS || null,                // se conserva por trazabilidad
     employee: {
       code: String(p.id || ''),
       personaId: p.id || null,

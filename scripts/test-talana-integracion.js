@@ -165,11 +165,27 @@ cliente.listar = async function (recurso) {
 
 // Contenedor Blob en memoria, con la misma superficie que usa talana-store.
 const BLOBS = new Map();
+
+// El contenedor NO existe hasta que el sync lo crea, igual que en Azure. El
+// error se imita tal cual lo manda el SDK: mensaje sin la palabra
+// "ContainerNotFound" y el código aparte.
+let contenedorCreado = false;
+function errorAzure(codigo, mensaje) {
+  const e = new Error(mensaje);
+  e.code = codigo;
+  e.statusCode = 404;
+  e.details = { errorCode: codigo };
+  return e;
+}
 const contenedorFalso = {
-  createIfNotExists: async () => ({}),
+  createIfNotExists: async () => { contenedorCreado = true; return {}; },
   getBlobClient: clave => ({
     download: async () => {
-      if (!BLOBS.has(clave)) { const e = new Error('BlobNotFound'); throw e; }
+      if (!contenedorCreado) {
+        throw errorAzure('ContainerNotFound',
+          'The specified container does not exist.\nRequestId:1c87e77a-201e-0082-7291-39b4e0000000\nTime:2026-08-31T21:40:17.9286905Z');
+      }
+      if (!BLOBS.has(clave)) throw errorAzure('BlobNotFound', 'The specified blob does not exist.');
       return { readableStreamBody: (async function* () { yield Buffer.from(BLOBS.get(clave)); })() };
     }
   }),
@@ -227,10 +243,30 @@ console.log('\nSeguridad del sincronizador');
 console.log('\nAntes del primer sync');
 
 {
+  // Antes del primer sync el contenedor no existe. Azure responde "The specified
+  // container does not exist." SIN nombrar ContainerNotFound en el texto, así que
+  // detectar el caso por el mensaje dejaba escapar el error como 502.
   const r = await llamarApi('/employee');
-  prueba('sin snapshot la API responde 503 con instrucciones, no 500', () => {
-    assert.strictEqual(r.status, 503);
+  prueba('contenedor inexistente = "falta sincronizar", no un 502', () => {
+    assert.strictEqual(r.status, 503, 'devolvió ' + r.status + ': ' + JSON.stringify(r.json));
     assert.ok(/talana-sync/.test(r.json.detalle), 'el mensaje debe decir qué ejecutar: ' + r.json.detalle);
+    assert.ok(r.json.contenedor, 'y qué contenedor falta');
+  });
+
+  const est = await llamarApi('/_estado');
+  prueba('/_estado sigue respondiendo sin snapshot, para poder diagnosticar', () => {
+    assert.strictEqual(est.status, 200);
+    assert.strictEqual(est.json.empleados, 0);
+  });
+
+  prueba('el código de error del SDK se reconoce aunque el texto no lo nombre', () => {
+    const e = new Error('The specified container does not exist.\nRequestId:abc');
+    e.code = 'ContainerNotFound'; e.statusCode = 404;
+    assert.strictEqual(store.esNoEncontrado(e), true);
+    // Un error real de credenciales NO debe confundirse con "todavía no existe".
+    const auth = new Error('Server failed to authenticate the request.');
+    auth.code = 'AuthenticationFailed'; auth.statusCode = 403;
+    assert.strictEqual(store.esNoEncontrado(auth), false);
   });
 }
 

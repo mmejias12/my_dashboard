@@ -1,130 +1,135 @@
-// ─── TALANA PROXY ───────────────────────────────────────────────────────────
+// ─── TALANA PROXY (genérico) ────────────────────────────────────────────────
 // Azure Function: /api/talana-proxy
-// URL de producción confirmada: talana.com (del correo Postman de Talana)
-// Empresa REDTEC id: 2921
 //
-// El dashboard llama a:
+// Pasarela directa a la API REST de Talana para consultas puntuales
+// (rrhh-dashboard.html y pruebas manuales). El reporte de asistencia NO usa
+// esta ruta: va por /api/talana-asistencia, que lee el snapshot en Blob y por
+// eso no puede gatillar el bloqueo por exceso de peticiones.
+//
 //   GET /api/talana-proxy?endpoint=/es/api/persona/&page=1
-//   GET /api/talana-proxy?endpoint=/es/api/persona/&empresa=2921&page=1
+//   GET /api/talana-proxy?endpoint=/es/api/sucursal/
+//
+// El token va en la variable de aplicación TALANA_TOKEN. Antes estaba escrito
+// en este archivo, es decir publicado en el repositorio: ese token debe
+// considerarse comprometido y rotarse en Talana.
+//
+// Como el proxy queda expuesto a cualquier usuario autenticado del portal, sólo
+// deja pasar recursos de LECTURA de una lista blanca; todo lo demás se rechaza.
+//
+// Las llamadas salen por shared/talana-client.js, que las serializa con una
+// separación mínima entre peticiones. Esto importa: rrhh-dashboard.html pide
+// el saldo de vacaciones de hasta 50 personas una tras otra, y sin freno eso
+// supera las 50 req/min y hace que Talana bloquee la URL 10 minutos — lo que
+// dejaría caído también el reporte de asistencia.
 // ────────────────────────────────────────────────────────────────────────────
 
-const https = require('https');
-const http  = require('http');
+const cliente = require('../shared/talana-client.js');
 
-const TALANA_TOKEN   = '44655ede473bde96d38dd1f25926cc3603db5c70';
-const EMPRESA_ID     = '2921'; // REDTEC en Talana
-const TALANA_HOST    = process.env.TALANA_HOST || 'talana.com';
-const TALANA_PROTO   = process.env.TALANA_PROTO || 'https'; // usa https por defecto
+const HOST       = cliente.HOST;
+const BASE       = cliente.BASE;
+const EMPRESA_ID = process.env.TALANA_EMPRESA_ID || '';
+
+// Recursos de sólo lectura que este proxy permite reenviar.
+const PERMITIDOS = [
+  '/persona/', '/personas-paginadas/',
+  '/contrato-paginado/', '/contracts-resumed-paginated/',
+  '/sucursal/', '/centroCosto/', '/centroCosto-paginado/',
+  '/unidadOrganizacional/', '/job-title/',
+  '/mark/', '/workShift/', '/workShift-paginado/', '/workShiftPersonRange/',
+  '/rotativeDay/', '/rotativeDay-paginado/', '/specialRotativeDay/',
+  '/specificDay/', '/specificDay-paginado/', '/workedDays', '/jornadaLaboral/',
+  '/absentism-resumed/', '/vacations-resumed/', '/administrative-leaves-resumed/',
+  '/personaAusencia-paginado/', '/vacacionesSolicitud/',
+  '/diaAdministrativoSolicitud/', '/saldo-vacaciones-empresa/'
+];
+
+const CORS = {
+  'Access-Control-Allow-Origin':  '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Content-Type': 'application/json; charset=utf-8'
+};
 
 module.exports = async function (context, req) {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin':  '*',
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Content-Type': 'application/json'
-  };
+  if (req.method === 'OPTIONS') { context.res = { status: 204, headers: CORS }; return; }
 
-  if (req.method === 'OPTIONS') {
-    context.res = { status: 200, headers: corsHeaders, body: '' };
-    return;
-  }
-
-  const endpoint = req.query.endpoint;
-  if (!endpoint) {
+  if (!cliente.tieneToken()) {
     context.res = {
-      status: 400, headers: corsHeaders,
+      status: 500, headers: CORS,
       body: JSON.stringify({
-        error: 'Parámetro "endpoint" requerido.',
-        ejemplo: '/api/talana-proxy?endpoint=/es/api/persona/',
-        empresa_id: EMPRESA_ID
+        error: 'TALANA_TOKEN no configurado',
+        detalle: 'Azure → Static Web App → Configuración → Variables de aplicación → TALANA_TOKEN'
       })
     };
     return;
   }
 
-  // Construir query string: reenviar params + agregar empresa si no viene
-  const params = Object.entries(req.query).filter(([k]) => k !== 'endpoint');
-  // Algunos endpoints de Talana requieren filtro por empresa
-  // Lo inyectamos si el endpoint lo acepta y no viene ya en params
-  const needsEmpresa = ['/es/api/persona/', '/es/api/contrato', '/es/api/vacaciones']
-    .some(p => endpoint.startsWith(p));
-  if (needsEmpresa && !params.find(([k]) => k === 'empresa')) {
-    params.push(['empresa', EMPRESA_ID]);
+  const bruto = req.query.endpoint;
+  if (!bruto) {
+    context.res = {
+      status: 400, headers: CORS,
+      body: JSON.stringify({
+        error: 'Parámetro "endpoint" requerido.',
+        ejemplo: '/api/talana-proxy?endpoint=/es/api/persona/',
+        permitidos: PERMITIDOS
+      })
+    };
+    return;
   }
 
-  const qs   = params.map(([k,v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
-  const path = qs ? `${endpoint}?${qs}` : endpoint;
+  // Acepta '/es/api/persona/' o 'persona/'; normaliza a un recurso bajo BASE.
+  let recurso = String(bruto);
+  if (recurso.startsWith(BASE)) recurso = recurso.slice(BASE.length);
+  if (!recurso.startsWith('/')) recurso = '/' + recurso;
+  if (recurso.includes('..')) {
+    context.res = { status: 400, headers: CORS, body: JSON.stringify({ error: 'endpoint inválido' }) };
+    return;
+  }
+
+  const permitido = PERMITIDOS.some(p => recurso === p || recurso.startsWith(p));
+  if (!permitido) {
+    context.res = {
+      status: 403, headers: CORS,
+      body: JSON.stringify({ error: `Recurso no permitido por el proxy: ${recurso}`, permitidos: PERMITIDOS })
+    };
+    return;
+  }
+
+  const params = {};
+  for (const [k, v] of Object.entries(req.query)) if (k !== 'endpoint') params[k] = v;
+
+  // Algunos recursos filtran por empresa; se inyecta sólo si está configurada
+  // y el llamador no la mandó.
+  const necesitaEmpresa = ['/persona/', '/personas-paginadas/', '/contrato', '/vacaciones']
+    .some(p => recurso.startsWith(p));
+  if (EMPRESA_ID && necesitaEmpresa && params.empresa === undefined) params.empresa = EMPRESA_ID;
 
   try {
-    const result = await callTalana(TALANA_HOST, path, TALANA_PROTO);
+    const presupuesto = cliente.crearPresupuesto(35000);
+    const r = await cliente.get(recurso, params, { presupuesto });
 
-    // Si https falla con conexión, intentar http (el correo usaba http)
-    if (result.status === 0 && TALANA_PROTO === 'https') {
-      const fallback = await callTalana(TALANA_HOST, path, 'http');
-      if (fallback.status !== 0) {
-        context.res = {
-          status:  fallback.status,
-          headers: { ...corsHeaders, 'X-Talana-Host': TALANA_HOST, 'X-Talana-Proto': 'http' },
-          body:    fallback.body
-        };
-        return;
-      }
-    }
-
-    if (result.status !== 0) {
+    if (r.agotado) {
       context.res = {
-        status:  result.status,
-        headers: { ...corsHeaders, 'X-Talana-Host': TALANA_HOST },
-        body:    result.body
+        status: 503,
+        headers: { ...CORS, 'Retry-After': '30' },
+        body: JSON.stringify({
+          error: 'Talana está limitando el uso (429) o la cola no alcanzó a despachar',
+          detalle: 'Reintenta en unos segundos. El proxy espacía las peticiones a propósito.',
+          recurso
+        })
       };
       return;
     }
 
-    // No se pudo conectar
     context.res = {
-      status: 502, headers: corsHeaders,
-      body: JSON.stringify({
-        error: `No se pudo conectar con ${TALANA_PROTO}://${TALANA_HOST}`,
-        detalle: result.error,
-        host_usado: TALANA_HOST,
-        empresa_id: EMPRESA_ID,
-        endpoint_solicitado: path
-      })
+      status: r.status || 502,
+      headers: { ...CORS, 'X-Talana-Host': HOST },
+      body: r.cuerpo || JSON.stringify({ error: 'Respuesta vacía de Talana', _path: r.path })
     };
-
   } catch (err) {
     context.res = {
-      status: 500, headers: corsHeaders,
-      body: JSON.stringify({ error: 'Error interno proxy: ' + err.message })
+      status: 502, headers: CORS,
+      body: JSON.stringify({ error: 'Error conectando con Talana', detalle: err.message, host: HOST })
     };
   }
 };
-
-function callTalana(hostname, path, proto) {
-  const lib = proto === 'https' ? https : http;
-  return new Promise((resolve) => {
-    const options = {
-      hostname,
-      path,
-      method:  'GET',
-      headers: {
-        'Authorization': `Token ${TALANA_TOKEN}`,
-        'Accept':        'application/json',
-        'Content-Type':  'application/json'
-      }
-    };
-
-    const req = lib.request(options, (res) => {
-      let body = '';
-      res.on('data', chunk => body += chunk);
-      res.on('end', () => resolve({ status: res.statusCode, body, error: null }));
-    });
-
-    req.on('error', (e) => resolve({ status: 0, body: '', error: e.message }));
-    req.setTimeout(12000, () => {
-      req.destroy();
-      resolve({ status: 0, body: '', error: 'Timeout 12s en ' + hostname });
-    });
-    req.end();
-  });
-}

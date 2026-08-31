@@ -8,6 +8,7 @@
 const { obtenerCargas } = require('../shared/spotvision-fetch');
 const { obtenerGuias } = require('../shared/guias-fetch');
 const { conciliar } = require('../shared/conciliacion');
+const { patenteEnAlcance } = require('../shared/flota');
 
 // Seccion 9 de la guia: el filtro de fechas usa la fecha de REGISTRO en
 // SPOTVISION, no fecha_hora_carga. Se consulta con holgura y luego se recorta.
@@ -26,10 +27,11 @@ module.exports = async function (context, req) {
       obtenerGuias(desde, hasta),
     ]);
 
-    // recorte al rango pedido usando fecha_hora_carga (la de terreno)
+    // recorte al rango pedido usando fecha_hora_carga (la de terreno) y
+    // descarte de las patentes fuera de alcance (Talca, patente de pruebas).
     const cargas = cargasCrudas.filter((c) => {
       const f = (c.fecha_hora_carga || '').slice(0, 10);
-      return f >= desde && f <= hasta;
+      return f >= desde && f <= hasta && patenteEnAlcance(c.patente);
     });
 
     const r = conciliar(cargas, guias, {

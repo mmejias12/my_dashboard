@@ -73,6 +73,11 @@ function clasificar(op, dteNro) {
   return 'otro';
 }
 
+// Patentes fuera del alcance del túnel de Santiago (Talca y la de pruebas).
+// El catálogo vive en flota.js para que el lado cámara y el lado guía apliquen
+// exactamente el mismo criterio.
+const { patenteEnAlcance } = require('./flota');
+
 function normalizarPatente(p) {
   return (p || '').toUpperCase().replace(/[^A-Z0-9]/g, '') || null;
 }
@@ -149,6 +154,9 @@ async function obtenerGuias(desde, hasta) {
     // cruce con la cámara daba cero. consulta-transporte.js ya hacía lo mismo.
     .filter((g) =>
       g.patente &&
+      // Talca y la patente de pruebas: nunca cruzan el túnel, así que como
+      // "guía sin carga" sólo ensucian el monitor y el informe.
+      patenteEnAlcance(g.patente) &&
       g.pallets_declarados > 0 &&
       g.fecha && g.fecha >= desde && g.fecha <= hasta &&
       (!OPERACIONES_DESPACHO.length ||

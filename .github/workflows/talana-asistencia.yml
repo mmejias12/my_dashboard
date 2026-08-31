@@ -1,0 +1,91 @@
+name: Asistencia Talana
+
+# Mantiene fresco el snapshot que alimenta asistencia-aldia.html.
+#
+# Static Web Apps sólo admite triggers HTTP en sus Functions gestionadas, así
+# que el reloj vive aquí y sólo golpea POST /api/talana-sync.
+#
+# El sync es INCREMENTAL a propósito: Talana bloquea 10 minutos una URL que
+# supere las ~50 peticiones por minuto, así que cada llamada avanza lo que
+# alcanza dentro de su presupuesto de tiempo y devuelve cuántos días quedan.
+# Este job reintenta hasta que `pendientes` llega a 0.
+#
+# Secrets necesarios (Settings → Secrets and variables → Actions):
+#   TALANA_SYNC_URL   https://<tu-swa>.azurestaticapps.net/api/talana-sync
+#   OS_INGESTA_KEY    misma llave compartida que ya usa os-ingesta-http
+
+on:
+  schedule:
+    # UTC. Chile es UTC-4/-3 → aprox. 05:10, 09:10, 13:10, 17:10 y 21:10 local.
+    - cron: '10 1,9,13,17,21 * * *'
+  workflow_dispatch:
+    inputs:
+      desde:
+        description: 'Fecha inicial YYYY-MM-DD (vacío = día 1 del mes en curso)'
+        required: false
+      hasta:
+        description: 'Fecha final YYYY-MM-DD (vacío = hoy)'
+        required: false
+      maestros:
+        description: 'Forzar refresco de personas, turnos y asignaciones'
+        type: boolean
+        default: false
+
+concurrency:
+  group: talana-asistencia
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sincronizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Sincronizar Talana → snapshot
+        env:
+          URL:      ${{ secrets.TALANA_SYNC_URL }}
+          KEY:      ${{ secrets.OS_INGESTA_KEY }}
+          DESDE:    ${{ inputs.desde }}
+          HASTA:    ${{ inputs.hasta }}
+          MAESTROS: ${{ inputs.maestros }}
+        run: |
+          set -euo pipefail
+          if [ -z "${URL:-}" ] || [ -z "${KEY:-}" ]; then
+            echo "::error::Faltan los secrets TALANA_SYNC_URL / OS_INGESTA_KEY"
+            exit 1
+          fi
+
+          cuerpo='{}'
+          if [ -n "${DESDE:-}" ] || [ -n "${HASTA:-}" ] || [ "${MAESTROS:-false}" = "true" ]; then
+            cuerpo=$(jq -nc \
+              --arg d "${DESDE:-}" --arg h "${HASTA:-}" --argjson m "${MAESTROS:-false}" \
+              '{} + (if $d != "" then {desde:$d} else {} end)
+                  + (if $h != "" then {hasta:$h} else {} end)
+                  + (if $m       then {maestros:true} else {} end)')
+          fi
+          echo "Cuerpo: $cuerpo"
+
+          # Hasta 12 pasadas: cubre un backfill de un mes completo desde cero.
+          for i in $(seq 1 12); do
+            echo "── Pasada $i ──────────────────────────────────────────────"
+            respuesta=$(curl -fsS --max-time 120 -X POST "$URL" \
+              -H "X-Ingesta-Key: $KEY" \
+              -H "Content-Type: application/json" \
+              -d "$cuerpo")
+            echo "$respuesta" | jq '{ok, maestros, sincronizados:(.dias_sincronizados|length), pendientes, ausencias, avisos}'
+
+            pendientes=$(echo "$respuesta" | jq -r '.pendientes // 0')
+            if [ "$pendientes" = "0" ]; then
+              echo "✓ Snapshot al día."
+              exit 0
+            fi
+
+            # Los maestros ya quedaron frescos en la primera pasada.
+            cuerpo=$(echo "$cuerpo" | jq -c 'del(.maestros)')
+            echo "Quedan $pendientes días; esperando antes de continuar…"
+            sleep 45
+          done
+
+          echo "::warning::Quedaron días pendientes tras 12 pasadas. La próxima ejecución programada los completará."

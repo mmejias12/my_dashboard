@@ -54,7 +54,10 @@ module.exports = async function (context, req) {
 
   try {
     if (endpoint === '/_diagnostico') {
-      context.res = { status: 200, headers: JSONH, body: JSON.stringify(await diagnostico()) };
+      context.res = {
+        status: 200, headers: JSONH,
+        body: JSON.stringify(await diagnostico(req.query.recursos))
+      };
       return;
     }
 
@@ -73,7 +76,14 @@ module.exports = async function (context, req) {
           empleados: maestros ? maestros.empleados.length : 0,
           contenedor: store.CONTAINER,
           ventana_gracia_dias: store.VENTANA_GRACIA_DIAS,
-          dia_cero_turnos: mapa.DIA_CERO,
+          dia_cero: maestros && maestros.turnos ? {
+            usado: maestros.turnos.diaCero,
+            detectado_del_dato: Boolean(maestros.turnos.diaCeroDetectado),
+            votos: maestros.turnos.diaCeroVotos
+          } : { usado: mapa.DIA_CERO, detectado_del_dato: false },
+          catalogo_turnos_degradado: maestros && maestros.turnos ? maestros.turnos.catalogoDegradado : null,
+          turnos: maestros && maestros.turnos ? Object.keys(maestros.turnos.catalogo).length : 0,
+          asignaciones: maestros ? (maestros.asignaciones || []).length : 0,
           hoy
         })
       };
@@ -228,37 +238,48 @@ async function ausencias(container, desde, hasta) {
 // Trae una muestra pequeña de cada recurso para verificar credenciales, forma
 // de los datos y, sobre todo, la convención de numberWorkingDay de los turnos
 // semanales (que la documentación no especifica).
-async function diagnostico() {
+// Cada llamada gasta ~3,3 s de espaciado, así que en una invocación no caben
+// los once recursos. Van ordenados por criticidad y se puede acotar con
+// ?recursos=mark,workShiftPersonRange para probar sólo lo que falta.
+const PRUEBAS = [
+  ['mark',                         '/mark/',                          () => ({ desde: store.hoyIso(), hasta: store.hoyIso() })],
+  ['workShiftPersonRange',         '/workShiftPersonRange/',          () => ({})],
+  ['rotativeDay',                  '/rotativeDay/',                   () => ({})],
+  ['contracts-resumed-paginated',  '/contracts-resumed-paginated/',   () => ({ 'solo-activos': 'true' })],
+  ['absentism-resumed',            '/absentism-resumed/',             () => ({})],
+  ['vacations-resumed',            '/vacations-resumed/',             () => ({})],
+  ['administrative-leaves-resumed','/administrative-leaves-resumed/', () => ({})],
+  ['workShift',                    '/workShift/',                     () => ({})],
+  ['specialRotativeDay',           '/specialRotativeDay/',            () => ({})],
+  ['sucursal',                     '/sucursal/',                      () => ({})],
+  ['centroCosto',                  '/centroCosto/',                   () => ({})]
+];
+
+async function diagnostico(filtro) {
   if (!cliente.tieneToken()) {
     return { ok: false, error: 'TALANA_TOKEN no configurado' };
   }
-  const presupuesto = cliente.crearPresupuesto(30000);
-  const opts = { presupuesto, pageSize: 3, maxPaginas: 1 };
+  const pedidos = (filtro || '').split(',').map(s => s.trim()).filter(Boolean);
+  const pruebas = pedidos.length
+    ? PRUEBAS.filter(([n]) => pedidos.includes(n))
+    : PRUEBAS;
+
+  const presupuesto = cliente.crearPresupuesto(38000);
   const salida = {
     ok: true,
     host: cliente.HOST, base: cliente.BASE, rpm: cliente.RPM,
-    dia_cero_turnos: mapa.DIA_CERO,
+    dia_cero_configurado: mapa.DIA_CERO,
+    probados: pruebas.map(([n]) => n),
     recursos: {}
   };
 
-  const pruebas = [
-    ['sucursal',                     '/sucursal/',                     {}],
-    ['centroCosto',                  '/centroCosto/',                  {}],
-    ['contracts-resumed-paginated',  '/contracts-resumed-paginated/',  { 'solo-activos': 'true' }],
-    ['workShift',                    '/workShift/',                    {}],
-    ['rotativeDay',                  '/rotativeDay/',                  {}],
-    ['specialRotativeDay',           '/specialRotativeDay/',           {}],
-    ['workShiftPersonRange',         '/workShiftPersonRange/',         {}],
-    ['mark',                         '/mark/',                         { desde: store.hoyIso(), hasta: store.hoyIso() }],
-    ['absentism-resumed',            '/absentism-resumed/',            {}],
-    ['vacations-resumed',            '/vacations-resumed/',            {}],
-    ['administrative-leaves-resumed','/administrative-leaves-resumed/', {}]
-  ];
-
   for (const [nombre, recurso, params] of pruebas) {
-    if (presupuesto.agotado(4000)) { salida.recursos[nombre] = { estado: 'omitido (presupuesto)' }; continue; }
+    if (presupuesto.agotado(4500)) {
+      salida.recursos[nombre] = { estado: 'omitido (presupuesto) — repite con ?recursos=' + nombre };
+      continue;
+    }
     try {
-      const r = await cliente.get(recurso, { ...params, page_size: 3 }, { presupuesto });
+      const r = await cliente.get(recurso, { ...params(), page_size: 3 }, { presupuesto });
       const items = cliente.extraerItems(r.json);
       salida.recursos[nombre] = {
         http: r.status,
@@ -266,13 +287,17 @@ async function diagnostico() {
         muestra: items.slice(0, 2),
         error: r.status === 200 ? undefined : String(r.cuerpo).slice(0, 200)
       };
+      // El propio dato dice qué día es numberWorkingDay = 0.
+      if (nombre === 'rotativeDay' && items.length) {
+        salida.dia_cero_detectado = mapa.detectarDiaCero(items);
+      }
     } catch (e) {
       salida.recursos[nombre] = { estado: 'error', error: e.message.slice(0, 240) };
     }
   }
 
-  salida.nota = 'Revisa rotativeDay.numberWorkingDay contra la realidad de un turno conocido: ' +
-                'si el reporte muestra los horarios corridos un día, cambia TALANA_DIA_CERO a "domingo".';
+  salida.nota = 'Los que dicen "omitido (presupuesto)" no fallaron: no alcanzó el tiempo. ' +
+                'Vuelve a llamar con ?endpoint=/_diagnostico&recursos=<nombre> para probarlos.';
   return salida;
 }
 

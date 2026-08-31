@@ -226,6 +226,20 @@ const esc = s => String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>'
 const n0 = v => (v==null||isNaN(v))?'—':Math.round(v).toLocaleString('es-CL');
 const hhmmss = d => d.toLocaleTimeString('es-CL',{hour12:false});
 const hhmm = d => d.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',hour12:false});
+const ddmm = d => d.toLocaleDateString('es-CL',{day:'2-digit',month:'2-digit'});
+const hoyISO = () => new Intl.DateTimeFormat('en-CA',{timeZone:'America/Santiago',
+  year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+/* Los minutos crudos confunden: 4.384 min son tres días. Y la guía puede
+   haberse creado hace una semana aunque su despacho sea hoy, así que la fecha
+   tiene que verse. */
+function hace(ms){
+  const m = Math.round(ms/60000);
+  if(m < 60) return `hace ${m} min`;
+  const hs = Math.floor(m/60), min = m%60;
+  if(hs < 24) return `hace ${hs} h${min?' '+min+' min':''}`;
+  const d = Math.floor(hs/24);
+  return `hace ${d} d${hs%24?' '+(hs%24)+' h':''}`;
+}
 
 /* =====================================================================
    ESTADO
@@ -526,11 +540,14 @@ function render(){
     .map(g=>{
       const min = Math.round((ahora-g.hora_emision)/60000);
       const viejo = min >= VENCE_MIN;
+      const fe = new Date(g.hora_emision);
+      const esHoy = (g.fecha_creacion || '') === hoyISO()
+                 || fe.toISOString().slice(0,10) === hoyISO();
       return `<div class="esp ${viejo?'viejo':''}">
         <div class="izq">
           <div class="pat">${esc(g.patente)}${tag(g.tipo)}</div>
           <div class="meta">${esc(g.numero)} · <b>${esc(g.chofer)}</b> · ${esc(g.cliente)}</div>
-          <div class="esperando">${viejo?'◷ ':''}emitida ${hhmm(new Date(g.hora_emision))} · esperando ${min} min</div>
+          <div class="esperando">${viejo?'◷ ':''}emitida ${ddmm(fe)} ${hhmm(fe)} · ${hace(ahora-g.hora_emision)}${esHoy?'':' <b style="color:var(--warning)">· no es de hoy</b>'}${g.fecha?` · despacho ${ddmm(new Date(g.fecha+'T12:00:00'))}`:''}</div>
         </div>
         <div class="der">
           <div class="pal">${n0(g.pallets_declarados)}<small>PALLETS</small></div>

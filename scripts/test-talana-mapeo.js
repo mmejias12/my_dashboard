@@ -271,4 +271,57 @@ prueba('los montos de bonos de userDefinedFields no salen al dashboard', () => {
     'contracts-resumed-paginated trae BonoGestion, BonoResponsabilidad y BonoEspecial: no deben viajar al navegador');
 });
 
+
+console.log('\nTS real de Talana (con desfase horario)');
+
+prueba('el desfase -04:00 se normaliza a hora de pared, sin cambiar la hora', () => {
+  // Muestra literal de /mark/ en la cuenta de REDTEC.
+  const m = mapa.mapearMarca({
+    id: 289216699, TS: '2026-08-31T10:28:43-04:00', direction: 'X',
+    checksum: 'd353575c:yg4j8', person: { id: 2691016, nombre: 'JESUS', apellidoPaterno: 'IBARRA' }
+  });
+  assert.strictEqual(m.attendanceDate, '2026-08-31T10:28:43');
+  assert.strictEqual(m.tipo, 'SALIDA');
+});
+
+prueba('los microsegundos se recortan', () => {
+  const m = mapa.mapearMarca({
+    TS: '2026-08-31T09:06:32.979284-04:00', direction: 'E', person: { id: 1475433 }
+  });
+  assert.strictEqual(m.attendanceDate, '2026-08-31T09:06:32');
+});
+
+prueba('un TS en UTC se convierte a hora de Chile, no se recorta a lo bruto', () => {
+  // 13:28 UTC = 09:28 en Chile (UTC-4). Recortar sin convertir daría 13:28 y
+  // todos los atrasos saldrían con cuatro horas de más.
+  const m = mapa.mapearMarca({ TS: '2026-08-31T13:28:43Z', direction: 'E', person: { id: 1 } });
+  assert.strictEqual(m.attendanceDate, '2026-08-31T09:28:43');
+});
+
+prueba('un TS sin desfase se deja tal cual', () => {
+  const m = mapa.mapearMarca({ TS: '2026-08-31 07:58:12', direction: 'E', person: { id: 1 } });
+  assert.strictEqual(m.attendanceDate, '2026-08-31T07:58:12');
+});
+
+prueba('el formato normalizado es el que el reporte sabe parsear', () => {
+  const m = mapa.mapearMarca({ TS: '2026-08-31T10:28:43-04:00', direction: 'X', person: { id: 1 } });
+  // obtenerFechaMarca() usa substring(0,10) y obtenerHoraMarca() substring(11,19).
+  assert.strictEqual(m.attendanceDate.substring(0, 10), '2026-08-31');
+  assert.strictEqual(m.attendanceDate.substring(11, 19), '10:28:43');
+});
+
+console.log('\nSin permiso sobre el módulo de Turnos');
+
+prueba('sin asignaciones nadie tiene horario, y se declara', () => {
+  const r = mapa.construirHorarios({
+    desde: '2026-08-31', hasta: '2026-08-31',
+    empleados: [{ code: '1', name: 'Ana', lastName: 'Soto', identification: '1-9' }],
+    asignaciones: [],          // esto es lo que deja un 403 en /workShiftPersonRange/
+    turnos: { catalogo: {}, diasSemanales: {}, diasRotativos: {}, diaCero: 'lunes' },
+    diasManuales: {}
+  });
+  assert.strictEqual(r.data.length, 0, 'sin asignación el empleado no aporta filas de horario');
+  assert.deepStrictEqual(r.sinHorario, ['1']);
+});
+
 console.log(`\n${ok} pruebas pasaron${process.exitCode ? ' (con fallos)' : ''}.\n`);

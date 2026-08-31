@@ -70,7 +70,17 @@ module.exports = async function (context, req) {
 
   try {
     const container = store.getContainer();
-    await store.asegurarContenedor(container);
+    const fallaContenedor = await store.asegurarContenedor(container);
+    if (fallaContenedor) {
+      context.res = {
+        status: 502, headers: JSONH,
+        body: JSON.stringify({
+          ok: false, error: fallaContenedor,
+          detalle: 'Revisa que OS_STORAGE_CONN tenga permiso para crear contenedores, o crea el contenedor a mano en el storage.'
+        })
+      };
+      return;
+    }
 
     // ── 1) Maestros ─────────────────────────────────────────────────────────
     let maestros = await store.leerMaestros(container);

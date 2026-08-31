@@ -113,6 +113,35 @@ tbody tr:hover{background:var(--surface-2)}
 .ev.abrible:hover{border-color:rgba(255,255,255,.35)}
 .ev.abrible:focus-visible{outline:2px solid var(--series-1);outline-offset:2px}
 
+/* ---------- botón de información y modal de detalle ---------- */
+.ibtn{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:50%;
+  border:1px solid var(--line);background:transparent;color:var(--muted);font:inherit;
+  font-size:10px;font-style:italic;font-weight:700;cursor:help;padding:0;margin-left:6px;
+  vertical-align:1px;line-height:1}
+.ibtn:hover{color:var(--text);border-color:rgba(255,255,255,.4)}
+.ibtn:focus-visible{outline:2px solid var(--series-1);outline-offset:2px}
+.tile.click,.salud-fila.click{cursor:pointer}
+.tile.click:hover{border-color:rgba(255,255,255,.24)}
+.salud-fila.click:hover .salud-lab{color:var(--text)}
+.verdet{font-size:11px;color:var(--series-1);margin-left:6px}
+
+.dlg-scrim{position:fixed;inset:0;background:rgba(4,6,10,.8);z-index:70;display:none}
+.dlg-scrim.on{display:block}
+.dlg{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:75;display:none;
+  width:min(860px,calc(100% - 32px));max-height:86vh;overflow:hidden;flex-direction:column;
+  background:var(--surface);border:1px solid rgba(255,255,255,.14);border-radius:14px;
+  box-shadow:0 30px 80px rgba(0,0,0,.7)}
+.dlg.on{display:flex}
+.dlg-cab{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;gap:12px}
+.dlg-cab h3{font-size:15px}
+.dlg-cab .st{font-size:12px;color:var(--muted);margin-top:2px}
+.dlg-cuerpo{padding:16px 20px;overflow-y:auto}
+.dlg-cuerpo p{margin:0 0 10px;font-size:13px;color:var(--text-2);line-height:1.55}
+.dlg-cuerpo b{color:var(--text)}
+.formula{background:var(--surface-2);border:1px solid var(--line);border-left:2px solid var(--series-1);
+  border-radius:9px;padding:11px 14px;font-size:13px;margin:10px 0}
+.formula .n{font-variant-numeric:tabular-nums;font-weight:600;color:var(--text)}
+
 /* ---------- visor de evidencia ---------- */
 .lb{position:fixed;inset:0;background:rgba(4,6,10,.94);z-index:100;display:none;
     flex-direction:column;align-items:center;justify-content:center;padding:20px}
@@ -236,8 +265,13 @@ svg{display:block;width:100%;overflow:visible}
 
     <div class="card" id="c-hora">
       <div class="chead">
-        <div><h3>Llegadas por hora</h3><div class="desc">Cargas detectadas en el túnel</div></div>
+        <div><h3>Pasos por hora <span id="i-hora"></span></h3><div class="desc">Cargas detectadas en el túnel</div></div>
         <div class="sp"></div><button class="tbtn" data-tabla="hora">tabla</button>
+      </div>
+      <div class="chips" style="margin-bottom:10px">
+        <button class="chip" data-flujo="" aria-pressed="true">Todos</button>
+        <button class="chip" data-flujo="salida" aria-pressed="false"><span class="dot" style="background:#3987e5"></span>Salidas</button>
+        <button class="chip" data-flujo="llegada" aria-pressed="false"><span class="dot" style="background:#9085e9"></span>Llegadas</button>
       </div>
       <div data-vista="hora"></div>
     </div>
@@ -285,6 +319,16 @@ svg{display:block;width:100%;overflow:visible}
 <div class="scrim" id="scrim"></div>
 <aside class="drawer" id="drawer" aria-hidden="true"><div id="dcont"></div></aside>
 <div class="tip" id="tip"></div>
+
+<div class="dlg-scrim" id="dlg-scrim"></div>
+<div class="dlg" id="dlg" role="dialog" aria-modal="true" aria-labelledby="dlg-tt">
+  <div class="dlg-cab">
+    <div><h3 id="dlg-tt"></h3><div class="st" id="dlg-st"></div></div>
+    <div style="flex:1"></div>
+    <button class="x" id="dlg-cerrar" aria-label="Cerrar">×</button>
+  </div>
+  <div class="dlg-cuerpo" id="dlg-cuerpo"></div>
+</div>
 
 <div class="lb" id="lb" role="dialog" aria-modal="true" aria-label="Evidencia ampliada">
   <div class="lb-cab">
@@ -367,7 +411,7 @@ const ts = s => new Date(s).getTime();
 /* ---------------------------------------------------------------------
    Estado de la UI
    --------------------------------------------------------------------- */
-const F = { rango:14, trans:'', cli:'', tipo:'', tol:0, q:'', estados:new Set(), orden:'fecha', dir:-1 };
+const F = { rango:14, trans:'', cli:'', tipo:'', tol:0, q:'', flujo:'', estados:new Set(), orden:'fecha', dir:-1 };
 
 /* ---------------------------------------------------------------------
    Reconciliación en cliente: la tolerancia es una regla de negocio que el
@@ -466,30 +510,38 @@ function pintarKPIs(f){
 
   $('#kpis').innerHTML = `
     <div class="tile">
-      <div class="lab">Cargas del período</div>
+      <div class="lab">Cargas del período ${ib('cargas')}</div>
       <div class="val">${n0(f.length)}</div>
       <div class="foot">${n0(cerradas.length)} cerradas · ${n0(f.length-cerradas.length)} descargando</div>
     </div>
     <div class="tile">
-      <div class="lab">Conciliadas OK</div>
+      <div class="lab">Conciliadas OK ${ib('ok')}</div>
       <div class="val">${pct(ok,conciliables.length)}%</div>
       <div class="foot"><span class="dot" style="background:var(--good)"></span><span class="gh">✓</span> ${n0(ok)} de ${n0(conciliables.length)} cruzables</div>
     </div>
-    <div class="tile ${accion?'alert':''}">
-      <div class="lab">Requieren acción</div>
+    <div class="tile click ${accion?'alert':''}" id="tile-accion">
+      <div class="lab">Requieren acción ${ib('accion')}</div>
       <div class="val">${n0(accion)}</div>
-      <div class="foot">${n0(falt.length)} faltante · ${n0(sob.length)} sobrante · ${n0(f.filter(c=>c.est==='sin_guia').length)} sin guía</div>
+      <div class="foot">${n0(falt.length)} faltante · ${n0(sob.length)} sobrante · ${n0(f.filter(c=>c.est==='sin_guia').length)} sin guía<span class="verdet">ver cuáles →</span></div>
     </div>
     <div class="tile">
-      <div class="lab">Pallets no cargados</div>
+      <div class="lab">Pallets no cargados ${ib('pallets')}</div>
       <div class="val" style="color:var(--critical)">${n0(palletsFalt)}</div>
       <div class="foot"><span class="dot" style="background:var(--warning)"></span><span class="gh">▲</span> ${n0(palletsSob)} pallets de más en otras cargas</div>
     </div>
     <div class="tile">
-      <div class="lab">Lectura de patente</div>
+      <div class="lab">Lectura de patente ${ib('ocr')}</div>
       <div class="val">${pct(conPat,f.length)}%</div>
       <div class="foot">${n0(f.length-conPat)} cargas sin OCR · no se pueden cruzar solas</div>
     </div>`;
+
+  $('#tile-accion').onclick = e=>{
+    if(e.target.closest('.ibtn')) return;
+    const l = f.filter(c=>['faltante','sobrante','sin_guia'].includes(c.est))
+               .sort((a,b)=>Math.abs(b.diferencia??0)-Math.abs(a.diferencia??0));
+    abrirLista('Cargas que requieren acción', `${l.length} casos · ordenados por tamaño de la diferencia`, l,
+      'Faltante: completar la carga antes de que el camión salga. Sobrante: verificar la carga. Sin guía: revisar en RDTOut si el movimiento quedó registrado. Clic en la fecha para abrir el detalle con la evidencia.');
+  };
 }
 
 /* =====================================================================
@@ -585,8 +637,13 @@ function tablaDia(f){
    Llegadas por hora — una sola serie, un solo color
    ===================================================================== */
 function serieHoras(f){
+  // El comportamiento de un camión que sale con carga no es el mismo que el de
+  // uno que llega a dejar pallets: mirarlos juntos esconde los dos patrones.
+  const sel = F.flujo==='salida' ? c=>(c.guia?.tipo||c.tipo)==='emision'
+            : F.flujo==='llegada' ? c=>['retiro','devolucion'].includes(c.guia?.tipo||c.tipo)
+            : ()=>true;
   const h = Array.from({length:24},(_,i)=>({h:i,n:0}));
-  f.forEach(c=>h[+c.fecha_hora_carga.slice(11,13)].n++);
+  f.filter(sel).forEach(c=>h[+c.fecha_hora_carga.slice(11,13)].n++);
   const act = h.filter(x=>x.n>0);
   const min = act.length?Math.min(...act.map(x=>x.h)):6;
   const max = act.length?Math.max(...act.map(x=>x.h)):20;
@@ -656,26 +713,34 @@ function pintarSalud(f){
   const totB = f.reduce((a,c)=>a+c.bultos.length,0);
   const sinFoto = f.reduce((a,c)=>a+c.bultos_sin_foto,0);
   const filas = [
-    ['Patente leída por OCR', f.filter(c=>c.patente).length, f.length, 'Sin patente no hay cruce automático'],
-    ['Bultos con evidencia fotográfica', totB-sinFoto, totB, 'La foto es la prueba ante el transportista'],
-    ['Cargas cruzadas con su guía', f.filter(c=>c.guia).length, f.length, 'El resto queda en revisión manual'],
+    ['Patente leída por OCR', f.filter(c=>c.patente).length, f.length, 'Sin patente no hay cruce automático', 'salud-ocr', false],
+    ['Bultos con evidencia fotográfica', totB-sinFoto, totB, 'La foto es la prueba ante el transportista', 'salud-foto', false],
+    ['Cargas cruzadas con su guía', f.filter(c=>c.guia).length, f.length, 'El resto queda en revisión manual', 'salud-cruce', true],
   ];
-  $('#salud').innerHTML = filas.map(([lab,a,b,nota])=>{
+  $('#salud').innerHTML = filas.map(([lab,a,b,nota,clave,clicable])=>{
     const p = pct(a,b);
     const col = p>=95?'var(--good)':p>=85?'var(--warning)':'var(--critical)';
     const gh  = p>=95?'✓':p>=85?'▲':'▼';
-    return `<div style="margin-bottom:16px">
+    return `<div class="salud-fila ${clicable?'click':''}" ${clicable?'id="salud-cruce"':''} style="margin-bottom:16px">
       <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
-        <span>${esc(lab)}</span>
+        <span class="salud-lab">${esc(lab)} ${ib(clave)}</span>
         <span style="font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:6px">
           <span class="gh" style="color:${col}">${gh}</span><b>${p}%</b>
           <span style="color:var(--muted);font-weight:400">${n0(a)}/${n0(b)}</span></span>
       </div>
       <div style="height:6px;background:var(--surface-3);border-radius:3px;overflow:hidden">
         <div style="height:100%;width:${p}%;background:${col};border-radius:3px"></div></div>
-      <div style="font-size:11px;color:var(--muted);margin-top:5px">${esc(nota)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:5px">${esc(nota)}${clicable?'<span class="verdet">ver las pendientes →</span>':''}</div>
     </div>`;
   }).join('');
+
+  const sc = $('#salud-cruce');
+  if(sc) sc.onclick = e=>{
+    if(e.target.closest('.ibtn')) return;
+    const l = f.filter(c=>!c.guia);
+    abrirLista('Cargas para revisión manual', `${l.length} cargas sin documento asociado`, l,
+      'El sistema no encontró su movimiento en RDTOut. Las causas habituales son que la patente no se leyó, que el movimiento aún no se registra, o que quedó con otra fecha operativa.');
+  };
 }
 
 /* =====================================================================
@@ -845,6 +910,100 @@ function abrirDrawer(c){
   $('#drawer').classList.add('on'); $('#drawer').setAttribute('aria-hidden','false');
   $('#scrim').classList.add('on');
 }
+/* =====================================================================
+   Información y detalle de cada indicador.
+   Nace de una pregunta concreta de operaciones: "52 de 79" y "79 de 94" no
+   se entienden solos. Cada número explica de dónde sale y, cuando tiene
+   sentido, deja ver la lista exacta que hay detrás.
+   ===================================================================== */
+const ib = k => `<button class="ibtn" data-info="${k}" aria-label="Qué significa este indicador">i</button>`;
+
+function textoInfo(k, f){
+  const cerradas = f.filter(c=>c.est!=='en_curso');
+  const cruzables = f.filter(c=>['ok','faltante','sobrante'].includes(c.est));
+  const ok = f.filter(c=>c.est==='ok').length;
+  const conGuia = f.filter(c=>c.guia).length;
+  const conPat = f.filter(c=>c.patente).length;
+  const falt = f.filter(c=>c.est==='faltante');
+  const sob = f.filter(c=>c.est==='sobrante');
+  const sinG = f.filter(c=>c.est==='sin_guia').length;
+  const F = (a,b,txt) => `<div class="formula"><span class="n">${n0(a)}</span> de <span class="n">${n0(b)}</span> — ${txt}</div>`;
+  switch(k){
+    case 'cargas': return {t:'Cargas del período', c:
+      `<p>Cada fila es <b>un camión cruzando el túnel</b>, no un documento. Si un camión pasa dos veces en el día, son dos cargas.</p>
+       ${F(f.length, f.length, 'pasos registrados en el rango y filtros actuales')}
+       <p>De ese total, <b>${n0(cerradas.length)}</b> ya cerraron el conteo y <b>${n0(f.length-cerradas.length)}</b> siguen en curso.</p>`};
+    case 'ok': return {t:'Conciliadas OK', c:
+      `<p>Es el porcentaje sobre las <b>cruzables</b>, no sobre el total. Una carga es cruzable cuando tiene patente legible <i>y</i> se le encontró su documento: sólo esas se pueden comparar.</p>
+       ${F(ok, cruzables.length, 'conciliadas sobre cruzables')}
+       <p>El resto hasta las <b>${n0(f.length)}</b> del período son cargas que no se pudieron comparar: <b>${n0(f.length-conPat)}</b> sin patente y <b>${n0(sinG)}</b> sin documento asociado.</p>
+       <p>Por eso ves tres números distintos y todos son correctos: <b>${n0(f.length)}</b> pasos, <b>${n0(conGuia)}</b> con documento, <b>${n0(cruzables.length)}</b> comparables, <b>${n0(ok)}</b> sin diferencia.</p>`};
+    case 'accion': return {t:'Requieren acción', c:
+      `<p>Suma de los tres estados que necesitan que alguien haga algo:</p>
+       <div class="formula"><span class="n">${n0(falt.length)}</span> faltante · <span class="n">${n0(sob.length)}</span> sobrante · <span class="n">${n0(sinG)}</span> sin guía</div>
+       <p><b>Faltante:</b> el camión lleva menos de lo declarado. Hay que completar la carga antes de que salga.<br>
+          <b>Sobrante:</b> lleva más de lo declarado. Verificar la carga antes de la salida.<br>
+          <b>Sin guía:</b> pasó por el túnel y no se le encontró documento. Revisar en RDTOut si el movimiento se registró.</p>
+       <p>Las cargas sin patente no entran acá: no se pueden comparar, así que no hay diferencia que atender.</p>`};
+    case 'pallets': return {t:'Pallets no cargados', c:
+      `<p>Suma de todo lo que falta en las cargas marcadas como faltante. Es la cifra que representa pérdida potencial.</p>
+       ${F(falt.reduce((a,c)=>a-c.diferencia,0), falt.length, 'pallets faltantes repartidos en esas cargas')}
+       <p>Aparte, hay <b>${n0(sob.reduce((a,c)=>a+c.diferencia,0))}</b> pallets de más en <b>${n0(sob.length)}</b> cargas. No se restan entre sí: son casos distintos y cada uno se revisa por separado.</p>`};
+    case 'ocr': return {t:'Lectura de patente', c:
+      `<p>Porcentaje de cargas en las que la cámara logró leer la patente. Sin patente no hay forma de asociar el paso con su documento.</p>
+       ${F(conPat, f.length, 'cargas con patente legible')}
+       <p>Cada lectura fallida cuesta doble: la carga queda sin conciliar y su documento queda huérfano en el reporte.</p>`};
+    case 'salud-ocr': return {t:'Patente leída por OCR', c:
+      `<p>Mismo indicador que la tarjeta de arriba, sobre el total de cargas del período.</p>${F(conPat, f.length, 'con patente')}`};
+    case 'salud-foto': return {t:'Bultos con evidencia fotográfica', c:
+      `<p>Se cuenta por <b>bulto</b>, no por carga: una carga de 30 filas aporta 30 bultos. La foto es la prueba ante el transportista cuando se discute una diferencia.</p>`};
+    case 'salud-cruce': return {t:'Cargas cruzadas con su guía', c:
+      `<p>Cargas a las que el sistema encontró su documento en RDTOut, cruzando por patente y día.</p>
+       ${F(conGuia, f.length, 'cargas con documento asociado')}
+       <p>Las <b>${n0(f.length-conGuia)}</b> restantes quedan en revisión manual: o la patente no se leyó, o el movimiento no está registrado en RDTOut, o quedó con otra fecha.</p>`};
+    case 'llegadas': return {t:'Llegadas por hora', c:
+      `<p>Distribución horaria de los pasos por el túnel. Sirve para dimensionar turnos y ver a qué hora se concentra el trabajo del andén.</p>
+       <p>Con los botones se separan las <b>salidas</b> (emisiones, el camión sale con carga) de las <b>llegadas</b> (retiros y devoluciones, el camión llega con pallets). Son comportamientos distintos y conviene mirarlos por separado.</p>`};
+    default: return {t:'Indicador', c:'<p>Sin descripción.</p>'};
+  }
+}
+
+function abrirInfo(k){
+  const f = filtradas(universo());
+  const {t,c} = textoInfo(k,f);
+  $('#dlg-tt').textContent = t;
+  $('#dlg-st').textContent = 'Cómo se calcula';
+  $('#dlg-cuerpo').innerHTML = c;
+  abrirDlg();
+}
+
+/* Lista de cargas detrás de un indicador; cada fila abre su detalle. */
+function abrirLista(titulo, subtitulo, lista, nota){
+  $('#dlg-tt').textContent = titulo;
+  $('#dlg-st').textContent = subtitulo;
+  $('#dlg-cuerpo').innerHTML = (nota?`<p>${nota}</p>`:'') + (lista.length
+    ? `<div class="tabla-wrap" style="max-height:52vh">${tablaSimple(
+        ['Fecha','Patente','Tipo','Guía','Declarado','Detectado','Δ','Estado'],
+        lista.map(c=>{
+          const e=EST[c.est], tp=c.guia?.tipo||c.tipo;
+          return [`<span data-carga="${esc(c.carga_id)}" style="cursor:pointer;color:var(--series-1)">${fecha(c.fecha_hora_carga)} ${hhmm(c.fecha_hora_carga)}</span>`,
+            esc(c.patente||'sin OCR'),
+            tp?`<span class="tag" style="color:${tipoDe(tp).c};border-color:${tipoDe(tp).c}66">${tipoDe(tp).et}</span>`:'—',
+            c.guia?esc(c.guia.numero):'—',
+            c.guia?n0(c.guia.pallets_declarados):'—', n0(c.total_pallets),
+            c.diferencia==null?'—':(c.diferencia>0?'+':'')+n0(c.diferencia),
+            `<span class="est" style="color:${e.c}"><span class="gh">${e.g}</span>${e.t}</span>`];
+        }))}</div>`
+    : '<div class="empty">No hay cargas en esta categoría con los filtros actuales</div>');
+  $$('#dlg-cuerpo [data-carga]').forEach(el=>el.onclick=()=>{
+    const c = filtradas(universo()).find(x=>x.carga_id===el.dataset.carga);
+    if(c){ cerrarDlg(); abrirDrawer(c); }
+  });
+  abrirDlg();
+}
+function abrirDlg(){ $('#dlg').classList.add('on'); $('#dlg-scrim').classList.add('on'); $('#dlg-cerrar').focus(); }
+function cerrarDlg(){ $('#dlg').classList.remove('on'); $('#dlg-scrim').classList.remove('on'); }
+
 let GALERIA = [];   // {src, lab} de la carga abierta, para navegar en el visor
 
 function tileEv(lab, url){
@@ -879,6 +1038,13 @@ function cerrarDrawer(){
   $('#scrim').classList.remove('on'); ocultarTip();
 }
 $('#scrim').onclick = cerrarDrawer;
+$('#dlg-cerrar').onclick = cerrarDlg;
+$('#dlg-scrim').onclick = cerrarDlg;
+// la "i" se pinta dentro de bloques que se rearman en cada render: delegación
+document.addEventListener('click', e=>{
+  const b = e.target.closest('.ibtn');
+  if(b){ e.stopPropagation(); abrirInfo(b.dataset.info); }
+});
 $('#lb-cerrar').onclick = cerrarVisor;
 $('#lb-izq').onclick = ()=>moverVisor(-1);
 $('#lb-der').onclick = ()=>moverVisor(1);
@@ -890,7 +1056,10 @@ addEventListener('keydown', e=>{
     else if(e.key==='ArrowRight') moverVisor(1);
     return;                       // con el visor abierto, el drawer no se cierra
   }
-  if(e.key==='Escape') cerrarDrawer();
+  if(e.key==='Escape'){
+    if($('#dlg').classList.contains('on')) cerrarDlg();
+    else cerrarDrawer();
+  }
 });
 
 /* =====================================================================
@@ -958,6 +1127,12 @@ function initFiltros(){
   $('#f-rango').onchange = e=>{F.rango=+e.target.value; render();};
   $('#f-trans').onchange = e=>{F.trans=e.target.value; render();};
   $('#f-cli').onchange   = e=>{F.cli=e.target.value; render();};
+  $('#i-hora').innerHTML = ib('llegadas');
+  $$('[data-flujo]').forEach(b=>b.onclick=()=>{
+    F.flujo = b.dataset.flujo;
+    $$('[data-flujo]').forEach(x=>x.setAttribute('aria-pressed', x.dataset.flujo===F.flujo));
+    render();
+  });
   $('#f-tipo').onchange  = e=>{F.tipo=e.target.value; render();};
   $('#f-tol').onchange   = e=>{F.tol=+e.target.value; render();};
   let t; $('#f-q').oninput = e=>{clearTimeout(t); t=setTimeout(()=>{F.q=e.target.value; render();},180);};

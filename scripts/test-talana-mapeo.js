@@ -68,23 +68,84 @@ prueba('direction X y O se traducen a salida e intermedia', () => {
   assert.strictEqual(mapa.mapearMarca({ TS: '2026-08-31T13:00:00', person: {} }).tipo, null);
 });
 
-console.log('\nAusencias');
+console.log('\nAusencias · las tres fuentes usan nombres de campo distintos');
 
-prueba('una ausencia resumida se traduce al contrato de permisos', () => {
+const fuente = rec => mapa.FUENTES_AUSENCIA.find(f => f.recurso === rec);
+
+prueba('/absentism-resumed/ · fechaDesde / fechaHasta / tipoAusencia', () => {
   const a = mapa.mapearAusencia({
-    persona: { id: 4471, nombre: 'Ana', apellidoPaterno: 'Soto', rut: '12345678-9' },
-    fechaDesde: '2026-09-01', fechaHasta: '2026-09-05', numeroDias: 5, tipo: 'Vacaciones'
-  }, 'Vacaciones');
-  assert.strictEqual(a.employeeCode, '4471');
-  assert.strictEqual(a.start, '2026-09-01');
-  assert.strictEqual(a.end, '2026-09-05');
+    empleado: { id: 4014326, rut: '18756239-2', nombre: 'DANIEL', apellidoPaterno: 'CARRASCO', apellidoMaterno: 'RIELOFF' },
+    fechaDesde: '2026-05-14', fechaHasta: '2026-05-15', numeroDias: 2,
+    tipoAusencia: 'permiso sin goce', estado: 'Aprobada'
+  }, fuente('/absentism-resumed/'));
+  assert.strictEqual(a.employeeCode, '4014326');
+  assert.strictEqual(a.start, '2026-05-14');
+  assert.strictEqual(a.end, '2026-05-15');
+  assert.strictEqual(a.permissionTypeName, 'permiso sin goce');
+  assert.strictEqual(a.justificada, true);
+});
+
+prueba('/vacations-resumed/ · vacacionesDesde / vacacionesHasta', () => {
+  // Con los nombres genéricos anteriores estas fechas salían vacías y las 2.615
+  // vacaciones de REDTEC se descartaban enteras.
+  const a = mapa.mapearAusencia({
+    empleado: { id: 3757882, rut: '15332012-8', nombre: 'ADOLFO', apellidoPaterno: 'GARCIA' },
+    vacacionesDesde: '2026-09-04', vacacionesHasta: '2026-09-04',
+    numeroDias: 1, tipoVacaciones: 'normales'
+  }, fuente('/vacations-resumed/'));
+  assert.strictEqual(a.employeeCode, '3757882');
+  assert.strictEqual(a.start, '2026-09-04');
+  assert.strictEqual(a.end, '2026-09-04');
   assert.strictEqual(a.permissionTypeName, 'Vacaciones');
 });
 
-prueba('acepta los nombres alternativos de campo de los recursos resumed', () => {
-  const a = mapa.mapearAusencia({ persona_id: 99, desde: '2026-09-10', hasta: '2026-09-10' }, 'Día administrativo');
-  assert.strictEqual(a.employeeCode, '99');
+prueba('un tipo de vacaciones distinto de "normales" se conserva', () => {
+  const a = mapa.mapearAusencia({
+    empleado: { id: 1 }, vacacionesDesde: '2026-09-04', vacacionesHasta: '2026-09-05',
+    tipoVacaciones: 'progresivas'
+  }, fuente('/vacations-resumed/'));
+  assert.strictEqual(a.permissionTypeName, 'Vacaciones (progresivas)');
+});
+
+prueba('/administrative-leaves-resumed/ · desde / hasta / administrative_type', () => {
+  const a = mapa.mapearAusencia({
+    id: 686022, empleado: { id: 1475541, rut: '7103442-9', nombre: 'CLAUDIO', apellidoPaterno: 'REYES' },
+    desde: '2025-11-07', hasta: '2025-11-07', administrative_type: 'anual'
+  }, fuente('/administrative-leaves-resumed/'));
+  assert.strictEqual(a.employeeCode, '1475541');
+  assert.strictEqual(a.start, '2025-11-07');
   assert.strictEqual(a.permissionTypeName, 'Día administrativo');
+});
+
+prueba('`empleado` anidado como objeto NO se convierte en el código', () => {
+  // Las tres fuentes anidan al trabajador como objeto. Tomarlo como id daba
+  // employeeCode = "[object Object]" y ningún permiso calzaba con su persona.
+  for (const f of mapa.FUENTES_AUSENCIA) {
+    const a = mapa.mapearAusencia({
+      empleado: { id: 777, nombre: 'X' },
+      fechaDesde: '2026-01-01', fechaHasta: '2026-01-01',
+      vacacionesDesde: '2026-01-01', vacacionesHasta: '2026-01-01',
+      desde: '2026-01-01', hasta: '2026-01-01'
+    }, f);
+    assert.strictEqual(a.employeeCode, '777', 'falló en ' + f.recurso);
+  }
+});
+
+prueba('un `empleado` que sí viene como id suelto se sigue aceptando', () => {
+  const a = mapa.mapearAusencia({ empleado: 555, desde: '2026-01-01', hasta: '2026-01-01' },
+                                fuente('/administrative-leaves-resumed/'));
+  assert.strictEqual(a.employeeCode, '555');
+});
+
+prueba('una falta injustificada no se marca como permiso justificado', () => {
+  // Talana las devuelve por el mismo endpoint que los permisos. Si el calendario
+  // las pintara como licencia, una falta quedaría tapada como justificada.
+  const a = mapa.mapearAusencia({
+    empleado: { id: 4014326 }, fechaDesde: '2026-06-03', fechaHasta: '2026-06-03',
+    tipoAusencia: 'falta injustificada'
+  }, fuente('/absentism-resumed/'));
+  assert.strictEqual(a.justificada, false);
+  assert.strictEqual(a.permissionTypeName, 'falta injustificada');
 });
 
 console.log('\nHorario teórico');

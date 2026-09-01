@@ -594,6 +594,27 @@ function categoriaAusencia(tipo) {
   return String(tipo).charAt(0).toUpperCase() + String(tipo).slice(1);
 }
 
+/**
+ * Vuelve a aplicar la política de tipos sobre una ausencia YA guardada.
+ *
+ * El snapshot puede haberse escrito con una versión anterior del mapeo, y los
+ * bloques mensuales sólo se reescriben cuando vencen. Si la generalización
+ * viviera únicamente en la escritura, un cambio de política tardaría horas en
+ * llegar al navegador. Aplicarla también al servir hace que lo que sale sea
+ * siempre lo vigente, sin depender de la antigüedad del snapshot.
+ *
+ * Es idempotente: una categoría ya normalizada vuelve a dar la misma.
+ */
+function normalizarAusenciaServida(p) {
+  if (!p) return p;
+  const crudo = p.permissionTypeName;
+  return {
+    ...p,
+    permissionTypeName: categoriaAusencia(crudo),
+    justificada: typeof p.justificada === 'boolean' ? p.justificada : !esInjustificada(crudo)
+  };
+}
+
 function mapearAusencia(a, fuente) {
   const f = fuente || {};
   const bruto = a.empleado ?? a.persona ?? a.employee ?? a.detallesTrabajador;
@@ -769,5 +790,6 @@ module.exports = {
   detectarDiaCero,
   // Exportados para poder probar el mapeo sin salir a la red:
   mapearMarca, mapearAusencia, normalizarDia, turnoInferido, aHoraLocal,
+  normalizarAusenciaServida, categoriaAusencia,
   FUENTES_AUSENCIA, DIA_CERO
 };

@@ -62,9 +62,12 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 
 /* ── Barras horizontales ── */
 .bars{display:flex;flex-direction:column;gap:7px}
-.bar-row{display:grid;grid-template-columns:1fr 3fr auto;gap:10px;align-items:center;font-size:11.5px;cursor:default;padding:1px 0}
+.bar-row{display:grid;grid-template-columns:minmax(0,1.5fr) 2.5fr auto;gap:10px;align-items:center;font-size:11.5px;cursor:pointer;padding:2px 4px;margin:0 -4px;border-radius:6px;transition:background .1s}
+.bar-row:hover{background:var(--s2)}
 .bar-row:hover .bar-fill{filter:brightness(1.25)}
 .bar-lbl{color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar-row:hover .bar-lbl{color:var(--t1)}
+.pista{font-size:10.5px;color:var(--t3);margin-top:10px;font-style:italic}
 .bar-track{background:var(--s3);border-radius:3px;height:9px;overflow:hidden}
 .bar-fill{height:100%;border-radius:0 3px 3px 0;background:var(--blue);transition:filter .12s}
 .bar-val{font-family:'DM Mono',monospace;color:var(--t1);font-size:11.5px;min-width:26px;text-align:right}
@@ -181,11 +184,20 @@ tbody tr:hover{background:var(--s2)}
   <!-- ══ RESUMEN ══ -->
   <div id="t-resumen" class="main">
     <div class="kpis" id="kpis"></div>
-    <div class="grid" style="grid-template-columns:1.15fr 1fr">
-      <div class="card">
-        <div class="ct">Dotación por área</div>
-        <div class="cs">Trabajadores con contrato vigente, por unidad organizacional</div>
-        <div class="bars" id="ch-areas"></div>
+    <div class="grid" style="grid-template-columns:1.15fr 1fr;align-items:start">
+      <div>
+        <div class="card" style="margin-bottom:11px">
+          <div class="ct">Dotación por área</div>
+          <div class="cs">Trabajadores con contrato vigente, por unidad organizacional</div>
+          <div class="bars" id="ch-areas"></div>
+          <div class="pista">Clic en un área para ver quiénes la componen</div>
+        </div>
+        <div class="card">
+          <div class="ct">Antigüedad en la empresa</div>
+          <div class="cs">Años desde la fecha de contratación</div>
+          <div class="bars" id="ch-ant"></div>
+          <div class="pista">Clic en un tramo para ver el detalle</div>
+        </div>
       </div>
       <div>
         <div class="card" style="margin-bottom:11px">
@@ -202,6 +214,7 @@ tbody tr:hover{background:var(--s2)}
           <div class="ct">Vacaciones acumuladas</div>
           <div class="cs">Cuántos trabajadores hay en cada tramo de saldo</div>
           <div class="bars" id="ch-vac"></div>
+          <div class="pista">Clic en un tramo para ver quiénes son</div>
         </div>
       </div>
     </div>
@@ -451,12 +464,15 @@ function renderResumen(){
 
   // Dotación por área — comparar magnitud: barras de un solo tono.
   var areas = contar(V, area);
-  var otras = areas.slice(11).reduce(function(s,x){ return s+x[1]; }, 0);
-  var top = areas.slice(0,11);
-  if(otras) top.push(['Otras áreas', otras]);
+  var otras = areas.slice(11);
+  var top = areas.slice(0,11).map(function(x){ return [x[0], x[1], 'area', x[0]]; });
+  if(otras.length){
+    top.push(['Otras áreas', otras.reduce(function(s,x){ return s+x[1]; },0), 'areas-resto', '']);
+  }
   var maxA = Math.max.apply(null, top.map(function(x){ return x[1]; }));
   $('ch-areas').innerHTML = top.map(function(x){
-    return barra(x[0], x[1], maxA, 'var(--blue)', x[1]+(x[1]===1?' persona':' personas')+' en '+x[0]);
+    return barra(x[0], x[1], maxA, 'var(--blue)',
+      x[1]+(x[1]===1?' persona':' personas')+' · clic para ver quiénes', x[2], x[3]);
   }).join('');
 
   // Dos categorías no son una torta: es una proporción, y se lee mejor así.
@@ -464,16 +480,43 @@ function renderResumen(){
   medidor('mt-emp','lg-emp', contar(V, sociedad), ['var(--purple)','var(--cyan)','var(--blue)','var(--pink)'], V.length);
 
   // Tramos de saldo: cada tramo lleva su nombre, no depende del color.
-  var tramos = [
-    ['Hasta 5 días',   function(n){ return n<=5; },        'var(--green)'],
-    ['6 a 12 días',    function(n){ return n>5 && n<=12; },'var(--green)'],
-    ['13 a 20 días',   function(n){ return n>12 && n<=20;},'var(--amber)'],
-    ['Más de 20 días', function(n){ return n>20; },        'var(--red)']
-  ].map(function(t){ return [t[0], saldos.filter(t[1]).length, t[2]]; });
-  var maxT = Math.max.apply(null, tramos.map(function(t){ return t[1]; })) || 1;
-  $('ch-vac').innerHTML = tramos.map(function(t){
-    return barra(t[0], t[1], maxT, t[2], t[1]+' trabajadores con '+t[0].toLowerCase()+' acumulados');
+  var maxT = Math.max.apply(null, TRAMOS_VAC.map(function(t){
+    return V.filter(function(c){ return enTramoVac(c, t); }).length; })) || 1;
+  $('ch-vac').innerHTML = TRAMOS_VAC.map(function(t){
+    var n = V.filter(function(c){ return enTramoVac(c, t); }).length;
+    return barra(t.nom, n, maxT, t.color, n+' con '+t.nom.toLowerCase()+' acumulados · clic para ver', 'vac', t.nom);
   }).join('');
+
+  // Antigüedad — llena el espacio con algo accionable y es otro punto de entrada.
+  var maxAnt = Math.max.apply(null, TRAMOS_ANT.map(function(t){
+    return V.filter(function(c){ return enTramoAnt(c, t); }).length; })) || 1;
+  $('ch-ant').innerHTML = TRAMOS_ANT.map(function(t){
+    var n = V.filter(function(c){ return enTramoAnt(c, t); }).length;
+    return barra(t.nom, n, maxAnt, 'var(--cyan)', n+' con '+t.nom.toLowerCase()+' en la empresa · clic para ver', 'ant', t.nom);
+  }).join('');
+}
+
+/* Tramos: el nombre viaja con el dato, así el color nunca es la única pista. */
+var TRAMOS_VAC = [
+  { nom:'Hasta 5 días',   min:-999, max:5,   color:'var(--green)' },
+  { nom:'6 a 12 días',    min:5,    max:12,  color:'var(--green)' },
+  { nom:'13 a 20 días',   min:12,   max:20,  color:'var(--amber)' },
+  { nom:'Más de 20 días', min:20,   max:999, color:'var(--red)'   }
+];
+var TRAMOS_ANT = [
+  { nom:'Menos de 1 año', min:0,  max:1 },
+  { nom:'1 a 3 años',     min:1,  max:3 },
+  { nom:'3 a 5 años',     min:3,  max:5 },
+  { nom:'5 a 10 años',    min:5,  max:10 },
+  { nom:'Más de 10 años', min:10, max:999 }
+];
+function enTramoVac(c, t){
+  var n = saldoDe(c);
+  return typeof n === 'number' && n > t.min && n <= t.max;
+}
+function enTramoAnt(c, t){
+  var a = antiguedad(c.fechaContratacion);
+  return a !== null && a >= t.min && a < t.max;
 }
 
 function tile(lbl, val, sub, color){
@@ -481,13 +524,20 @@ function tile(lbl, val, sub, color){
        + '<div class="kpi-val" style="color:'+color+'">'+val+'</div>'
        + '<div class="kpi-sub">'+esc(sub)+'</div></div>';
 }
-function barra(lbl, val, max, color, tip){
+function barra(lbl, val, max, color, tip, grupo, clave){
   var pct = max ? Math.max(2, val/max*100) : 0;
-  return '<div class="bar-row" title="'+esc(tip||'')+'">'
+  // La clave viaja en atributos de datos, no incrustada en un onclick: un
+  // nombre de área con comilla rompería el JS de la cadena.
+  var datos = grupo ? ' data-grupo="'+esc(grupo)+'" data-clave="'+esc(String(clave))+'"' : '';
+  return '<div class="bar-row" title="'+esc(tip||lbl)+'"'+datos+'>'
        + '<div class="bar-lbl">'+esc(lbl)+'</div>'
        + '<div class="bar-track"><div class="bar-fill" style="width:'+pct+'%;background:'+color+'"></div></div>'
        + '<div class="bar-val">'+val+'</div></div>';
 }
+document.addEventListener('click', function(e){
+  var fila = e.target.closest ? e.target.closest('.bar-row[data-grupo]') : null;
+  if(fila) abrirGrupo(fila.getAttribute('data-grupo'), fila.getAttribute('data-clave'));
+});
 function medidor(trackId, legId, pares, colores, total){
   $(trackId).innerHTML = pares.map(function(p,i){
     return '<div class="meter-seg" title="'+esc(p[0]+': '+p[1])+'" style="width:'+(p[1]/total*100)+'%;background:'+colores[i%colores.length]+'"></div>';
@@ -655,20 +705,127 @@ function renderContratos(){
 /* ═══════════════════════════════════════════════════════════════════════════
    FICHA DEL TRABAJADOR
    ═══════════════════════════════════════════════════════════════════════════ */
+/* ── Última vez que cada persona tomó vacaciones ──
+   Sale del histórico de /vacations-resumed/ y es el dato que le da sentido al
+   saldo: 25 días acumulados pesan distinto si la última salida fue hace dos
+   meses o hace tres años. */
+var _ultimaVac = null;
+function ultimaVacacion(personaId){
+  if(!_ultimaVac){
+    _ultimaVac = {};
+    var hoy = hoyIso();
+    DATA.vacaciones.forEach(function(v){
+      var id = v.empleado && v.empleado.id;
+      var h = String(v.vacacionesHasta||'').slice(0,10);
+      if(!id || !h || h > hoy) return;               // sólo las ya tomadas
+      if(!_ultimaVac[id] || h > _ultimaVac[id]) _ultimaVac[id] = h;
+    });
+  }
+  return _ultimaVac[personaId] || null;
+}
+function mesesDesde(iso){
+  if(!iso) return null;
+  var d = new Date(iso+'T00:00:00');
+  if(isNaN(d)) return null;
+  return Math.max(0, (new Date() - d) / (1000*60*60*24*30.44));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DETALLE DE UN GRUPO
+
+   Un número en una barra no sirve para actuar: "Administración 10" no dice a
+   quién hay que ir a hablarle. El clic abre la nómina detrás del número.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function abrirGrupo(tipo, clave){
+  var V = DATA.vigentes, gente, titulo, sub;
+
+  if(tipo === 'area'){
+    gente = V.filter(function(c){ return area(c) === clave; });
+    titulo = clave; sub = 'Unidad organizacional';
+  } else if(tipo === 'areas-resto'){
+    var top11 = contar(V, area).slice(0,11).map(function(x){ return x[0]; });
+    gente = V.filter(function(c){ return top11.indexOf(area(c)) < 0; });
+    titulo = 'Otras áreas'; sub = 'Unidades fuera de las once mayores';
+  } else if(tipo === 'vac'){
+    var tv = TRAMOS_VAC.find(function(t){ return t.nom === clave; });
+    gente = V.filter(function(c){ return enTramoVac(c, tv); });
+    titulo = 'Vacaciones acumuladas · ' + clave; sub = 'Saldo disponible al corte de hoy';
+  } else if(tipo === 'ant'){
+    var ta = TRAMOS_ANT.find(function(t){ return t.nom === clave; });
+    gente = V.filter(function(c){ return enTramoAnt(c, ta); });
+    titulo = 'Antigüedad · ' + clave; sub = 'Años desde la fecha de contratación';
+  } else return;
+
+  var esVac = tipo === 'vac';
+  gente = gente.sort(function(a,b){
+    return esVac ? (saldoDe(b)||0) - (saldoDe(a)||0)
+                 : nombre(a).localeCompare(nombre(b),'es');
+  });
+
+  var ants = gente.map(function(c){ return antiguedad(c.fechaContratacion); }).filter(function(n){ return n!==null; });
+  var sals = gente.map(saldoDe).filter(function(n){ return typeof n === 'number'; });
+  var prom = function(a){ return a.length ? a.reduce(function(s,x){return s+x;},0)/a.length : null; };
+
+  setT('m-nm', titulo);
+  $('m-meta').innerHTML = '<span>'+esc(sub)+'</span>'
+    + '<span class="badge b-purple">'+gente.length+(gente.length===1?' persona':' personas')+'</span>';
+
+  var html = '<div class="kpis" style="margin-bottom:14px">'
+    + tile('Dotación', gente.length, 'con contrato vigente', 'var(--purple)')
+    + tile('Antigüedad media', prom(ants)===null?'—':prom(ants).toFixed(1), 'años en la empresa', 'var(--cyan)')
+    + tile('Saldo medio', prom(sals)===null?'—':dias(prom(sals)), 'días de vacaciones', 'var(--blue)')
+    + tile('Sobre 20 días', sals.filter(function(n){return n>20;}).length, 'conviene programarles', sals.filter(function(n){return n>20;}).length?'var(--red)':'var(--green)')
+    + '</div>';
+
+  html += '<div class="tbl-wrap"><table><thead><tr>'
+    + '<th>Trabajador</th><th>Cargo</th>'
+    + (esVac ? '<th>Área</th>' : '<th>Sucursal</th>')
+    + '<th class="num">Antigüedad</th><th>Últimas vacaciones</th><th class="num">Saldo</th>'
+    + '</tr></thead><tbody>'
+    + gente.map(function(c){
+        var a = antiguedad(c.fechaContratacion);
+        var uv = ultimaVacacion(c.empleado);
+        var m = mesesDesde(uv);
+        // Más de un año sin salir es lo que hay que mirar junto al saldo alto.
+        var uvTxt = uv ? fecha(uv) + (m!==null && m>=12 ? ' <span class="badge b-amber">'+Math.round(m/12*10)/10+'a</span>' : '')
+                       : '<span class="badge b-gray">sin registro</span>';
+        return '<tr onclick="abrir('+c.id+',true)">'
+          + '<td style="font-weight:500">'+esc(nombre(c))+'</td>'
+          + '<td style="color:var(--t2)">'+esc(nz(c.cargo))+'</td>'
+          + '<td style="color:var(--t2)">'+esc(esVac ? area(c) : sucursal(c))+'</td>'
+          + '<td class="num">'+(a===null?'—':a.toFixed(1)+'a')+'</td>'
+          + '<td class="mono" style="color:var(--t3)">'+uvTxt+'</td>'
+          + '<td class="num">'+badgeSaldo(saldoDe(c))+'</td>'
+          + '</tr>';
+      }).join('')
+    + '</tbody></table></div>'
+    + '<div class="pista">Clic en una fila para abrir la ficha completa</div>';
+
+  _grupoPrevio = { tipo: tipo, clave: clave };
+  $('m-bd').innerHTML = html;
+  $('modal').classList.add('on');
+  document.body.style.overflow='hidden';
+}
+var _grupoPrevio = null;
+
 function buscarContrato(id){
   var f = function(c){ return c.id === id; };
   return DATA.vigentes.find(f) || (DATA.historico||[]).find(f) || null;
 }
 
-function abrir(id){
+function abrir(id, desdeGrupo){
   var c = buscarContrato(id);
   if(!c) return;
+  if(!desdeGrupo) _grupoPrevio = null;
   var p = per(c), d = det(c), s = DATA.saldos[c.empleado];
 
   setT('m-nm', nombre(c));
   $('m-meta').innerHTML = '<span class="mono">'+esc(rut(c))+'</span>'
     + '<span class="badge '+(vigente(c)?'b-green':'b-gray')+'">'+(vigente(c)?'Vigente':'Finiquitado')+'</span>'
-    + '<span>'+esc(nz(c.cargo))+'</span>';
+    + '<span>'+esc(nz(c.cargo))+'</span>'
+    + (desdeGrupo && _grupoPrevio
+        ? '<button class="back" style="background:none;cursor:pointer;font-family:inherit" onclick="volverGrupo()">← Volver a la lista</button>'
+        : '');
 
   var ant = antiguedad(c.fechaContratacion);
   var html = '';
@@ -701,9 +858,12 @@ function abrir(id){
   ]);
 
   if(s){
+    var uv = ultimaVacacion(c.empleado), mv = mesesDesde(uv);
     html += seccion('Vacaciones', [
       f('Días normales', dias(s.diasNormales)), f('Días progresivos', dias(s.diasProgresivos)),
       f('Saldo disponible', dias(s.diasRestantes)+' días'),
+      f('Últimas vacaciones tomadas', uv ? fecha(uv) : 'Sin registro'),
+      f('Tiempo desde entonces', mv===null ? null : (mv<12 ? Math.round(mv)+' meses' : (Math.round(mv/12*10)/10)+' años')),
       f('Días administrativos', c.diasAdministrativos),
       f('Días adicionales pactados', c.diasAdicionalesVacaciones)
     ]);
@@ -802,7 +962,8 @@ function seccion(titulo, campos){
   if(!c.length) return '';
   return '<div class="sec"><div class="sec-t">'+esc(titulo)+'</div><div class="fields">'+c.join('')+'</div></div>';
 }
-function cerrar(){ $('modal').classList.remove('on'); document.body.style.overflow=''; }
+function volverGrupo(){ if(_grupoPrevio) abrirGrupo(_grupoPrevio.tipo, _grupoPrevio.clave); }
+function cerrar(){ $('modal').classList.remove('on'); document.body.style.overflow=''; _grupoPrevio=null; }
 document.addEventListener('keydown', function(e){ if(e.key==='Escape') cerrar(); });
 
 /* ── Pestañas ── */

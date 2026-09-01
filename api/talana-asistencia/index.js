@@ -243,9 +243,14 @@ async function ausencias(container, desde, hasta) {
     else mesesFaltantes.push(m);   // un mes sin sincronizar no puede pasar callado
   }
 
+  // La política de tipos se reaplica al servir, no sólo al guardar: un bloque
+  // escrito por una versión anterior del mapeo no debe filtrar al navegador
+  // detalle que hoy no corresponde mostrar.
+  const normalizadas = todas.map(mapa.normalizarAusenciaServida);
+
   // Un permiso de varios meses aparece en más de un bloque: deduplicar.
   const vistos = new Set();
-  const data = todas.filter(p => {
+  const data = normalizadas.filter(p => {
     const k = `${p.employeeCode}|${p.start}|${p.end}|${p.permissionTypeName}`;
     if (vistos.has(k)) return false;
     vistos.add(k);

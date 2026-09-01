@@ -146,7 +146,7 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 <div class="status-bar">
   <div class="sdot" id="sdot"></div>
   <span id="stxt">Presiona "Cargar datos" para consultar la API de Talana</span>
-  <span style="margin-left:auto;color:var(--t3)">Proxy: <code style="color:var(--blue)">/api/talana-proxy</code> → <code style="color:var(--green)">talana.com</code> · Empresa ID: <strong>2921</strong> · Token: integración-centralizacion@redtec.cl</span>
+  <span style="margin-left:auto;color:var(--t3)">Datos en vivo desde <code style="color:var(--green)">Talana</code></span>
 </div>
 
 <!-- TABS -->
@@ -155,7 +155,8 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
   <button class="tab"     onclick="goTab('personas',this)">👥 Personas</button>
   <button class="tab"     onclick="goTab('vacaciones',this)">🏖️ Vacaciones</button>
   <button class="tab"     onclick="goTab('contratos',this)">📄 Contratos</button>
-  <button class="tab"     onclick="goTab('asistencia',this)">⏱️ Asistencia</button>
+  <a class="tab" href="asistencia-aldia.html" title="El control de marcas vive en su propio reporte"
+     style="text-decoration:none;display:flex;align-items:center;margin-left:auto;color:var(--blue)">⏱️ Asistencia al día ↗</a>
 </div>
 
 <!-- ─── TAB RESUMEN ──────────────────────────────────────────── -->
@@ -310,23 +311,6 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 </div>
 </div>
 
-<!-- ─── TAB ASISTENCIA ───────────────────────────────────────── -->
-<div id="t-asistencia" style="display:none">
-<div class="main">
-  <div class="card" style="margin-bottom:11px">
-    <div class="ct">Módulo de Asistencia</div>
-    <div class="cs">Marcas, turnos y ausencias</div>
-    <div id="asist-content">
-      <div class="empty">
-        <div style="font-size:32px;opacity:.3">⏱️</div>
-        <div style="font-size:13px;color:var(--t2);font-weight:500">Asistencia cargando...</div>
-        <div style="font-size:11.5px">Los datos de asistencia requieren permisos específicos en la cuenta Talana</div>
-      </div>
-    </div>
-  </div>
-</div>
-</div>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script>
 // ═══ CONFIG ═══════════════════════════════════════════════════
@@ -347,6 +331,8 @@ var PERS_BASE = [];
 function $(i){return document.getElementById(i);}
 function setT(i,v){var e=$(i);if(e)e.textContent=v;}
 function kc(k){if(CH[k]){CH[k].destroy();delete CH[k];}}
+// Talana devuelve saldos como 8.333333333333329: se muestran con un decimal.
+function dias(n){ return (n===null||n===undefined||isNaN(n)) ? '—' : (Math.round(n*10)/10).toString(); }
 function fmtFecha(s){if(!s)return'—';var p=s.split('-');return p[2]+'/'+p[1]+'/'+p[0].substring(2);}
 function edad(fn){if(!fn)return'—';var d=new Date(fn);return Math.floor((new Date()-d)/(1000*60*60*24*365));}
 function setStatus(t,m){
@@ -403,15 +389,23 @@ async function cargarTodo() {
     setStatus('load','Cargando contratos...');
     DATA.contratos = await fetchAll('/es/api/contrato-paginado/', {type_status_search:'actives'});
 
-    // 4. Saldos de vacaciones (una por persona, en paralelo limitado)
+    // 4. Saldos de vacaciones — TODOS en una sola consulta.
+    //    Antes se pedía /persona/{id}/saldo_vacaciones/ una vez por persona: 50
+    //    llamadas seguidas que por sí solas superan el límite de uso de Talana
+    //    (~50 req/min) y provocan un bloqueo de 10 minutos de esa URL, que se
+    //    llevaría por delante también al sincronizador de asistencia.
+    //    /saldo-vacaciones-empresa/ devuelve lo mismo para toda la empresa.
     setStatus('load','Cargando saldos de vacaciones...');
-    var ids = DATA.personas.map(p => p.id).slice(0, 50); // máx 50 para no saturar
     var saldos = {};
-    for (var i = 0; i < ids.length; i++) {
-      try {
-        var s = await apiFetch('/es/api/persona/'+ids[i]+'/saldo_vacaciones/');
-        saldos[ids[i]] = s;
-      } catch(e) { saldos[ids[i]] = null; }
+    try {
+      var lista = await fetchAll('/es/api/saldo-vacaciones-empresa/');
+      lista.forEach(function(r) {
+        // { empleado_id, rut, nombre, fecha_corte, saldo:{diasNormales,
+        //   diasProgresivos, diasRestantes}, error }
+        if (r && r.empleado_id && r.saldo) saldos[r.empleado_id] = r.saldo;
+      });
+    } catch(e) {
+      console.warn('[saldos]', e.message);   // sin saldos el resto sigue sirviendo
     }
     DATA.saldos = saldos;
 
@@ -459,7 +453,7 @@ async function cargarTodo() {
 
 // ═══ TABS ═════════════════════════════════════════════════════
 function goTab(name, btn) {
-  ['resumen','personas','vacaciones','contratos','asistencia'].forEach(t => $('t-'+t).style.display='none');
+  ['resumen','personas','vacaciones','contratos'].forEach(t => $('t-'+t).style.display='none');
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
   $('t-'+name).style.display = 'block';
   if(btn) btn.classList.add('on');
@@ -594,7 +588,7 @@ function filtPers() {
   var S = DATA.saldos;
   $('tb-pers').innerHTML = rows.slice(0,200).map(p => {
     var s = S[p.id];
-    var saldoStr = s ? s.diasRestantes+'d' : '—';
+    var saldoStr = s ? dias(s.diasRestantes)+'d' : '—';
     var saldoCls = s ? (s.diasRestantes<=5?'b-red':s.diasRestantes<=10?'b-amber':'b-green') : 'b-gray';
     var edad_val = p.fechaNacimiento ? edad(p.fechaNacimiento) : '—';
     var email = p.detalles?.[0]?.email || p.email || '—';
@@ -647,9 +641,9 @@ function renderVacaciones() {
     var cls = x.s.diasRestantes<=5?'b-red':x.s.diasRestantes<=10?'b-amber':'b-green';
     return '<tr>'
       +'<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+x.nombre+'</td>'
-      +'<td class="mono" style="text-align:right">'+x.s.diasNormales+'</td>'
-      +'<td class="mono" style="text-align:right">'+x.s.diasProgresivos+'</td>'
-      +'<td><span class="badge '+cls+'">'+x.s.diasRestantes+'d</span></td>'
+      +'<td class="mono" style="text-align:right">'+dias(x.s.diasNormales)+'</td>'
+      +'<td class="mono" style="text-align:right">'+dias(x.s.diasProgresivos)+'</td>'
+      +'<td><span class="badge '+cls+'">'+dias(x.s.diasRestantes)+'d</span></td>'
       +'</tr>';
   }).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--t3);padding:1rem">Sin saldos disponibles</td></tr>';
 

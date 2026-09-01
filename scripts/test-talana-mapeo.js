@@ -81,7 +81,7 @@ prueba('/absentism-resumed/ · fechaDesde / fechaHasta / tipoAusencia', () => {
   assert.strictEqual(a.employeeCode, '4014326');
   assert.strictEqual(a.start, '2026-05-14');
   assert.strictEqual(a.end, '2026-05-15');
-  assert.strictEqual(a.permissionTypeName, 'permiso sin goce');
+  assert.strictEqual(a.permissionTypeName, 'Permiso sin goce');   // categoría, no el crudo
   assert.strictEqual(a.justificada, true);
 });
 
@@ -145,7 +145,45 @@ prueba('una falta injustificada no se marca como permiso justificado', () => {
     tipoAusencia: 'falta injustificada'
   }, fuente('/absentism-resumed/'));
   assert.strictEqual(a.justificada, false);
-  assert.strictEqual(a.permissionTypeName, 'falta injustificada');
+  assert.strictEqual(a.permissionTypeName, 'Falta injustificada');
+});
+
+
+console.log('\nEl motivo médico no sale al navegador');
+
+prueba('"licencia maternal" y "licencia medica" se colapsan a "Licencia"', () => {
+  // Talana distingue el motivo; el reporte sólo necesita saber que la ausencia
+  // está justificada. El detalle de salud quedaría a la vista de cualquiera que
+  // abra el calendario, junto al nombre y el RUT.
+  for (const crudo of ['licencia medica', 'licencia maternal', 'LICENCIA MÉDICA']) {
+    const a = mapa.mapearAusencia({
+      empleado: { id: 1 }, fechaDesde: '2026-09-01', fechaHasta: '2026-09-05', tipoAusencia: crudo
+    }, fuente('/absentism-resumed/'));
+    assert.strictEqual(a.permissionTypeName, 'Licencia', 'falló con: ' + crudo);
+    assert.strictEqual(a.justificada, true);
+  }
+});
+
+prueba('las categorías que el calendario distingue se conservan', () => {
+  const de = (crudo, f) => mapa.mapearAusencia({
+    empleado: { id: 1 }, fechaDesde: '2026-09-01', fechaHasta: '2026-09-01',
+    vacacionesDesde: '2026-09-01', vacacionesHasta: '2026-09-01',
+    desde: '2026-09-01', hasta: '2026-09-01', tipoAusencia: crudo
+  }, f).permissionTypeName;
+  assert.strictEqual(de('falta injustificada', fuente('/absentism-resumed/')), 'Falta injustificada');
+  assert.strictEqual(de('permiso sin goce',    fuente('/absentism-resumed/')), 'Permiso sin goce');
+  assert.strictEqual(de(null, fuente('/vacations-resumed/')), 'Vacaciones');
+  assert.strictEqual(de(null, fuente('/administrative-leaves-resumed/')), 'Día administrativo');
+});
+
+prueba('la falta injustificada se sigue detectando sobre el tipo crudo', () => {
+  // La categoría se calcula antes; si `justificada` mirara la categoría en vez
+  // del crudo, el orden de las reglas podría invertir el resultado.
+  const a = mapa.mapearAusencia({
+    empleado: { id: 1 }, fechaDesde: '2026-09-01', fechaHasta: '2026-09-01',
+    tipoAusencia: 'inasistencia injustificada'
+  }, fuente('/absentism-resumed/'));
+  assert.strictEqual(a.justificada, false);
 });
 
 console.log('\nHorario teórico');

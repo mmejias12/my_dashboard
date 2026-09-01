@@ -594,6 +594,46 @@ console.log('\nAusencias que no caben en una sola pasada');
   cliente.listar = listarReal;
 }
 
+
+console.log('\nSnapshot escrito por una versión anterior del mapeo');
+
+{
+  // Los bloques mensuales sólo se reescriben cuando vencen. Si la política de
+  // tipos viviera únicamente en la escritura, un cambio tardaría horas en
+  // llegar al navegador y el detalle antiguo seguiría saliendo mientras tanto.
+  const clave = 'talana/ausencias/2026-07.json';
+  BLOBS.set(clave, JSON.stringify({
+    mes: '2026-07',
+    ausencias: [
+      { employeeCode: '1475377', employeeName: 'X', identification: '1-9',
+        start: '2026-07-05', end: '2026-07-20',
+        permissionTypeName: 'licencia maternal', justificada: true },
+      { employeeCode: '1475397', employeeName: 'Y', identification: '2-7',
+        start: '2026-07-10', end: '2026-07-12',
+        permissionTypeName: 'licencia medica', justificada: true },
+      { employeeCode: '3966497', employeeName: 'Z', identification: '3-5',
+        start: '2026-07-15', end: '2026-07-15',
+        permissionTypeName: 'falta injustificada', justificada: false }
+    ],
+    total: 3, _guardado: new Date().toISOString()
+  }));
+
+  const r = await llamarApi('/permission', { start: '2026-07-01', end: '2026-07-31' });
+
+  prueba('un bloque viejo se normaliza AL SERVIR, sin esperar a que venza', () => {
+    const tipos = r.json.data.map(p => p.permissionTypeName).sort();
+    assert.deepStrictEqual(tipos, ['Falta injustificada', 'Licencia', 'Licencia'], tipos.join(' | '));
+    assert.ok(!JSON.stringify(r.json).match(/maternal|medica/i),
+      'el motivo no debe sobrevivir en la respuesta');
+  });
+
+  prueba('la marca de justificada del bloque viejo se respeta', () => {
+    const f = r.json.data.find(p => p.permissionTypeName === 'Falta injustificada');
+    assert.strictEqual(f.justificada, false);
+    assert.ok(r.json.data.filter(p => p.permissionTypeName === 'Licencia').every(p => p.justificada === true));
+  });
+}
+
 console.log(`\n${ok} pruebas de integración pasaron${process.exitCode ? ' (con fallos)' : ''}.\n`);
 
 })().catch(e => { console.error('\nFALLO NO CAPTURADO:\n', e); process.exitCode = 1; });

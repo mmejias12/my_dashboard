@@ -174,13 +174,15 @@ function extraerItems(json) {
  *    y el llamador debe reanudar más tarde (los items traídos son válidos).
  */
 async function listar(recurso, params, opts = {}) {
-  const presupuesto = opts.presupuesto;
   const maxPaginas  = opts.maxPaginas || 60;
   const pageSize    = opts.pageSize || PAGE_SIZE;
 
   const items = [];
   let paginas = 0;
-  let siguiente = null;
+  // opts.desdePath permite REANUDAR donde quedó una invocación anterior. Sin
+  // esto, un recurso que no cabe en un presupuesto vuelve a empezar de la
+  // página 1 en cada pasada y no termina nunca.
+  let siguiente = opts.desdePath || null;
   let ultimoStatus = 0;
 
   while (paginas < maxPaginas) {
@@ -190,7 +192,9 @@ async function listar(recurso, params, opts = {}) {
 
     ultimoStatus = r.status;
 
-    if (r.agotado) return { items, completo: false, paginas, status: r.status, motivo: 'presupuesto' };
+    if (r.agotado) {
+      return { items, completo: false, paginas, status: r.status, motivo: 'presupuesto', siguiente };
+    }
 
     if (r.status !== 200) {
       const e = new Error(`Talana ${recurso} → HTTP ${r.status}${r.error ? ' (' + r.error + ')' : ''}: ${String(r.cuerpo).slice(0, 300)}`);
@@ -204,7 +208,7 @@ async function listar(recurso, params, opts = {}) {
     paginas++;
 
     const next = r.json && !Array.isArray(r.json) ? r.json.next : null;
-    if (!next) return { items, completo: true, paginas, status: ultimoStatus };
+    if (!next) return { items, completo: true, paginas, status: ultimoStatus, siguiente: null };
 
     // El "next" de DRF viene absoluto: quedarse con path + query.
     try {
@@ -212,11 +216,11 @@ async function listar(recurso, params, opts = {}) {
       siguiente = u.pathname + u.search;
     } catch (_) {
       siguiente = next.startsWith('/') ? next : null;
-      if (!siguiente) return { items, completo: true, paginas, status: ultimoStatus };
+      if (!siguiente) return { items, completo: true, paginas, status: ultimoStatus, siguiente: null };
     }
   }
 
-  return { items, completo: false, paginas, status: ultimoStatus, motivo: 'max_paginas' };
+  return { items, completo: false, paginas, status: ultimoStatus, motivo: 'max_paginas', siguiente };
 }
 
 module.exports = {

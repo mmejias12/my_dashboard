@@ -45,15 +45,29 @@ jobs:
     steps:
       - name: Sincronizar Talana → snapshot
         env:
-          URL:      ${{ secrets.TALANA_SYNC_URL }}
-          KEY:      ${{ secrets.OS_INGESTA_KEY }}
-          DESDE:    ${{ inputs.desde }}
-          HASTA:    ${{ inputs.hasta }}
-          MAESTROS: ${{ inputs.maestros }}
+          URL:         ${{ secrets.TALANA_SYNC_URL }}
+          INGESTA_URL: ${{ secrets.INGESTA_URL }}
+          KEY:         ${{ secrets.OS_INGESTA_KEY }}
+          DESDE:       ${{ inputs.desde }}
+          HASTA:       ${{ inputs.hasta }}
+          MAESTROS:    ${{ inputs.maestros }}
         run: |
           set -euo pipefail
-          if [ -z "${URL:-}" ] || [ -z "${KEY:-}" ]; then
-            echo "::error::Faltan los secrets TALANA_SYNC_URL / OS_INGESTA_KEY"
+
+          # La URL del sincronizador se puede fijar en TALANA_SYNC_URL, pero si no
+          # existe se deriva de INGESTA_URL: es el mismo Static Web App, otra ruta.
+          # Así no hay que crear un secret nuevo sólo para repetir el host.
+          if [ -z "${URL:-}" ] && [ -n "${INGESTA_URL:-}" ]; then
+            URL="$(printf '%s' "$INGESTA_URL" | sed -E 's#(https?://[^/]+).*#\1#')/api/talana-sync"
+            echo "TALANA_SYNC_URL no está definido; se deriva de INGESTA_URL."
+          fi
+
+          if [ -z "${URL:-}" ]; then
+            echo "::error::Falta el secret TALANA_SYNC_URL (o INGESTA_URL, del que se deriva)."
+            exit 1
+          fi
+          if [ -z "${KEY:-}" ]; then
+            echo "::error::Falta el secret OS_INGESTA_KEY. Es la llave compartida con tu propia Function, no una credencial de Talana."
             exit 1
           fi
 
@@ -70,13 +84,41 @@ jobs:
           # Hasta 12 pasadas: cubre un backfill de un mes completo desde cero.
           for i in $(seq 1 12); do
             echo "── Pasada $i ──────────────────────────────────────────────"
-            respuesta=$(curl -fsS --max-time 120 -X POST "$URL" \
+
+            # Sin -f, para poder leer el cuerpo de un 4xx/5xx en vez de sólo
+            # "curl falló": el sincronizador explica en el JSON qué pasó.
+            respuesta=$(curl -sS --max-time 150 -w '\n%{http_code}' -X POST "$URL" \
               -H "X-Ingesta-Key: $KEY" \
               -H "Content-Type: application/json" \
-              -d "$cuerpo")
-            echo "$respuesta" | jq '{ok, maestros, sincronizados:(.dias_sincronizados|length), pendientes, ausencias, avisos}'
+              -d "$cuerpo") || { echo "::error::No se pudo conectar con el sincronizador."; exit 1; }
 
-            pendientes=$(echo "$respuesta" | jq -r '.pendientes // 0')
+            codigo="$(printf '%s' "$respuesta" | tail -n1)"
+            cuerpo_resp="$(printf '%s' "$respuesta" | sed '$d')"
+
+            if [ "$codigo" != "200" ]; then
+              echo "::error::El sincronizador respondió HTTP $codigo"
+              echo "$cuerpo_resp" | head -c 2000
+              exit 1
+            fi
+            if ! printf '%s' "$cuerpo_resp" | jq -e . >/dev/null 2>&1; then
+              echo "::error::Respuesta no es JSON. ¿La URL apunta al Static Web App correcto?"
+              echo "$cuerpo_resp" | head -c 500
+              exit 1
+            fi
+
+            echo "$cuerpo_resp" | jq '{ok, maestros, sincronizados:(.dias_sincronizados|length), pendientes, ausencias, avisos}'
+
+            # Los avisos no son decorativos: ahí sale si faltan permisos de Talana.
+            printf '%s' "$cuerpo_resp" | jq -r '.avisos[]? | select(test("SIN HORARIO"))' \
+              | while read -r a; do echo "::warning::$a"; done
+
+            if [ "$(printf '%s' "$cuerpo_resp" | jq -r '.ok')" != "true" ]; then
+              echo "::error::El sincronizador terminó con ok:false"
+              printf '%s' "$cuerpo_resp" | jq -r '.avisos[]?'
+              exit 1
+            fi
+
+            pendientes=$(printf '%s' "$cuerpo_resp" | jq -r '.pendientes // 0')
             if [ "$pendientes" = "0" ]; then
               echo "✓ Snapshot al día."
               exit 0

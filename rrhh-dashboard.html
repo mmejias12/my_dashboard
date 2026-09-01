@@ -117,6 +117,8 @@ body{zoom:var(--escala,1)}
 table{width:100%;border-collapse:collapse;font-size:13px}
 thead th{background:var(--s2);color:var(--t3);font-size:11px;text-transform:uppercase;letter-spacing:.4px;font-weight:600;text-align:left;padding:9px 11px;white-space:nowrap;position:sticky;top:0;z-index:2}
 tbody td{padding:8px 11px;border-top:1px solid var(--br);white-space:nowrap}
+.trunc{max-width:0;overflow:hidden;text-overflow:ellipsis}
+.w-nom{width:22%}.w-cargo{width:20%}.w-area{width:18%}.w-suc{width:12%}
 tbody tr{cursor:pointer;transition:background .1s}
 tbody tr:hover{background:var(--s2)}
 .mono{font-family:'DM Mono',monospace}
@@ -267,7 +269,7 @@ tbody tr:hover{background:var(--s2)}
       <span class="cnt" id="p-cnt"></span>
     </div>
     <div class="tbl-wrap"><table>
-      <thead><tr><th>Trabajador</th><th>RUT</th><th>Cargo</th><th>Área</th><th>Sucursal</th><th>Ingreso</th><th class="num">Antigüedad</th><th class="num">Vac.</th></tr></thead>
+      <thead><tr><th class="w-nom">Trabajador</th><th>RUT</th><th class="w-cargo">Cargo</th><th class="w-area">Área</th><th class="w-suc">Sucursal</th><th>Ingreso</th><th class="num">Antigüedad</th><th class="num">Vac.</th></tr></thead>
       <tbody id="tb-pers"></tbody>
     </table></div>
   </div>
@@ -317,7 +319,7 @@ tbody tr:hover{background:var(--s2)}
     </div>
     <div id="c-aviso"></div>
     <div class="tbl-wrap"><table>
-      <thead><tr><th>Trabajador</th><th>RUT</th><th>Estado</th><th>Cargo</th><th>Tipo</th><th>Sociedad</th><th>Desde</th><th>Hasta</th></tr></thead>
+      <thead><tr><th class="w-nom">Trabajador</th><th>RUT</th><th>Estado</th><th class="w-cargo">Cargo</th><th>Tipo</th><th class="w-area">Sociedad</th><th>Desde</th><th>Hasta</th></tr></thead>
       <tbody id="tb-cont"></tbody>
     </table></div>
   </div>
@@ -403,6 +405,14 @@ var TAB = 'resumen', ESTADO = 'vigentes';
 /* ── Utilidades ── */
 function $(i){ return document.getElementById(i); }
 function setT(i,v){ var e=$(i); if(e) e.textContent=v; }
+/* Celda que se recorta con puntos suspensivos pero conserva el texto entero
+   en el tooltip: la tabla cabe en la página sin barra horizontal y no se
+   pierde información. */
+function celda(txt, clase, estilo){
+  var t = String(txt==null?'':txt);
+  return '<td'+(clase?' class="'+clase+'"':'')+(estilo?' style="'+estilo+'"':'')
+       + ' title="'+esc(t)+'">'+esc(t)+'</td>';
+}
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function nz(v){ return (v===null||v===undefined||v==='') ? '—' : v; }
@@ -666,11 +676,11 @@ function renderPersonas(){
     var ant = antiguedad(c.fechaContratacion);
     var s = saldoDe(c);
     return '<tr onclick="abrir('+c.id+')">'
-      + '<td style="font-weight:500">'+esc(nombre(c))+'</td>'
+      + celda(nombre(c), 'trunc', 'font-weight:500')
       + '<td class="mono" style="color:var(--t3)">'+esc(rut(c))+'</td>'
-      + '<td>'+esc(nz(c.cargo))+'</td>'
-      + '<td style="color:var(--t2)">'+esc(area(c))+'</td>'
-      + '<td style="color:var(--t2)">'+esc(sucursal(c))+'</td>'
+      + celda(nz(c.cargo), 'trunc')
+      + celda(area(c), 'trunc', 'color:var(--t2)')
+      + celda(sucursal(c), 'trunc', 'color:var(--t2)')
       + '<td class="mono" style="color:var(--t3)">'+fecha(c.fechaContratacion)+'</td>'
       + '<td class="num">'+(ant===null?'—':ant.toFixed(1)+'a')+'</td>'
       + '<td class="num">'+badgeSaldo(s)+'</td>'
@@ -770,12 +780,12 @@ function renderContratos(){
   $('tb-cont').innerHTML = rows.length ? rows.slice(0,600).map(function(c){
     var v = vigente(c);
     return '<tr onclick="abrir('+c.id+')">'
-      + '<td style="font-weight:500">'+esc(nombre(c))+'</td>'
+      + celda(nombre(c), 'trunc', 'font-weight:500')
       + '<td class="mono" style="color:var(--t3)">'+esc(rut(c))+'</td>'
       + '<td><span class="badge '+(v?'b-green':'b-gray')+'">'+(v?'Vigente':'Finiquitado')+'</span></td>'
-      + '<td>'+esc(nz(c.cargo))+'</td>'
-      + '<td style="color:var(--t2)">'+esc(tipoContrato(c))+'</td>'
-      + '<td style="color:var(--t2)">'+esc(sociedad(c))+'</td>'
+      + celda(nz(c.cargo), 'trunc')
+      + celda(tipoContrato(c), '', 'color:var(--t2)')
+      + celda(sociedad(c), 'trunc', 'color:var(--t2)')
       + '<td class="mono" style="color:var(--t3)">'+fecha(c.desde)+'</td>'
       + '<td class="mono" style="color:var(--t3)">'+fecha(c.hasta)+'</td>'
       + '</tr>';

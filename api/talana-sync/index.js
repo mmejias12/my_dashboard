@@ -128,20 +128,25 @@ module.exports = async function (context, req) {
     // Los endpoints "resumed" ignoran los filtros de fecha y devuelven el
     // histórico completo, así que pedirlos mes a mes traería lo mismo cada vez.
     // Se traen UNA vez y se reparten por mes.
-    await sincronizarAusencias(container, desde, hasta, presupuesto, informe);
+    const ausenciasPendientes = await sincronizarAusencias(container, desde, hasta, presupuesto, informe);
+    informe.ausencias_pendientes = Boolean(ausenciasPendientes);
 
     await store.guardarEstado(container, {
       ultima_sync: new Date().toISOString(),
       desde, hasta,
       dias_sincronizados: informe.dias_sincronizados.length,
-      dias_pendientes: informe.dias_pendientes.length
+      dias_pendientes: informe.dias_pendientes.length,
+      ausencias_pendientes: informe.ausencias_pendientes
     });
 
+    // `pendientes` es lo que mira el workflow para decidir si vuelve a llamar.
+    // Las ausencias tienen que contar: si sólo se miraran los días, una traída
+    // de ausencias a medias se daría por buena y nunca se completaría.
     context.res = {
       status: 200, headers: JSONH,
       body: JSON.stringify({
         ...informe,
-        pendientes: informe.dias_pendientes.length,
+        pendientes: informe.dias_pendientes.length + (informe.ausencias_pendientes ? 1 : 0),
         ms: Date.now() - t0
       })
     };
@@ -213,28 +218,34 @@ async function sincronizarAusencias(container, desde, hasta, presupuesto, inform
     const previo = await store.leerAusenciasMes(container, mes).catch(() => null);
     if (!previo || store.ausenciasVencidas(previo, mes)) { hayQueTraer = true; break; }
   }
-  if (!hayQueTraer) { informe.ausencias.push('vigentes'); return; }
+  if (!hayQueTraer) { informe.ausencias.push('vigentes'); return false; }
 
-  if (presupuesto.agotado(10000)) {
+  const avancePrevio = await store.leerAvanceAusencias(container).catch(() => null);
+  const avance = (avancePrevio && !avancePrevio._cerrado && Array.isArray(avancePrevio.data))
+    ? avancePrevio : null;
+
+  if (presupuesto.agotado(8000)) {
     informe.ausencias.push('pendientes (sin presupuesto en esta pasada)');
-    informe.avisos.push('Ausencias no sincronizadas: vuelve a llamar para completarlas.');
-    return;
+    return true;
   }
 
   let r;
   try {
-    r = await mapa.traerAusencias({ presupuesto });
+    r = await mapa.traerAusencias({ presupuesto }, avance);
   } catch (e) {
     informe.avisos.push(`ausencias: ${e.message.slice(0, 200)}`);
-    return;
+    return true;
   }
 
   // Escribir bloques a medias sería peor que no escribir: el reporte los vería
   // como completos y mostraría permisos faltantes como ausencias injustificadas.
+  // Se guarda el avance para reanudar, y se declara que quedó trabajo pendiente
+  // — si no, el workflow se daría por terminado y nunca volvería a intentarlo.
   if (!r.completo) {
-    informe.ausencias.push('incompletas (se completarán en la siguiente pasada)');
-    informe.avisos.push('Ausencias incompletas: no se guardaron para no dejar meses a medias.');
-    return;
+    await store.guardarAvanceAusencias(container, r.avance);
+    const leidas = (r.avance && r.avance.data.length) || 0;
+    informe.ausencias.push(`parcial: ${leidas} registros leídos, continúa en la próxima pasada`);
+    return true;
   }
 
   // Un permiso puede cruzar meses: entra en cada mes que toca. Los meses
@@ -256,9 +267,12 @@ async function sincronizarAusencias(container, desde, hasta, presupuesto, inform
     ));
   }
 
+  await store.limpiarAvanceAusencias(container);
+
   informe.ausencias.push(`${r.data.length} registros en ${entradas.length} meses`);
   if (r.descartadas) informe.avisos.push(`${r.descartadas} ausencias sin fechas utilizables, descartadas.`);
   if (r.fallos.length) informe.avisos.push(...r.fallos);
+  return false;
 }
 
 // ── utilidades ──────────────────────────────────────────────────────────────

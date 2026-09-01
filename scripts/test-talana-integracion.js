@@ -387,15 +387,15 @@ console.log('\nContrato que consume el reporte');
   });
   prueba('las tres fuentes llegan con sus fechas resueltas', () => {
     const tipos = r.json.data.map(p => p.permissionTypeName).sort();
-    assert.ok(tipos.includes('permiso sin goce'), tipos.join(' | '));
-    assert.ok(tipos.includes('falta injustificada'), tipos.join(' | '));
+    assert.ok(tipos.includes('Permiso sin goce'), tipos.join(' | '));
+    assert.ok(tipos.includes('Falta injustificada'), tipos.join(' | '));
     assert.ok(tipos.includes('Día administrativo'), tipos.join(' | '));
     assert.ok(r.json.data.every(p => p.start && p.end));
   });
   prueba('la falta injustificada viaja marcada como no justificada', () => {
-    const f = r.json.data.find(p => p.permissionTypeName === 'falta injustificada');
+    const f = r.json.data.find(p => p.permissionTypeName === 'Falta injustificada');
     assert.strictEqual(f.justificada, false);
-    const p = r.json.data.find(p => p.permissionTypeName === 'permiso sin goce');
+    const p = r.json.data.find(p => p.permissionTypeName === 'Permiso sin goce');
     assert.strictEqual(p.justificada, true);
   });
   prueba('no viaja información médica ni número de licencia', () => {

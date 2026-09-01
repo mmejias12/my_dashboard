@@ -513,25 +513,55 @@ const FUENTES_AUSENCIA = [
  * ignorando los filtros de fecha: pedirlas mes a mes traería lo mismo cada vez.
  * Se traen una vez y el sincronizador las reparte por mes.
  */
-async function traerAusencias(opts = {}) {
-  const data = [];
-  const fallos = [];
+async function traerAusencias(opts = {}, avance = null) {
+  // Son ~4.000 registros repartidos en decenas de páginas: no caben en el
+  // presupuesto de una sola invocación de la Function. Por eso la traída es
+  // REANUDABLE: cada pasada continúa donde quedó la anterior, guardando lo ya
+  // leído y el cursor de cada fuente. Sin esto, cada pasada volvería a empezar
+  // de la página 1 y la sincronización nunca terminaría.
+  const previo = avance || { data: [], cursores: {}, fallos: [] };
+  const data = previo.data.slice();
+  const cursores = { ...previo.cursores };
+  const fallos = previo.fallos.slice();
   let completo = true;
 
   for (const f of FUENTES_AUSENCIA) {
+    const cursor = cursores[f.recurso];
+    if (cursor === 'listo') continue;              // esta fuente ya terminó
+
+    if (opts.presupuesto && opts.presupuesto.agotado(6000)) { completo = false; continue; }
+
     try {
-      const r = await talana.listar(f.recurso, {}, opts);
-      if (!r.completo) completo = false;
+      const r = await talana.listar(f.recurso, {}, {
+        ...opts,
+        // Estos recursos son grandes: páginas más gruesas = menos peticiones.
+        pageSize: Number(process.env.TALANA_PAGE_SIZE_AUSENCIAS || 500),
+        desdePath: typeof cursor === 'string' ? cursor : undefined
+      });
       for (const a of r.items) data.push(mapearAusencia(a, f));
+      if (r.completo) {
+        cursores[f.recurso] = 'listo';
+      } else {
+        cursores[f.recurso] = r.siguiente || cursor || null;
+        completo = false;
+      }
     } catch (e) {
       // Un token sin permiso sobre un módulo no debe tumbar el resto.
       fallos.push(`${f.recurso}: ${e.message.slice(0, 160)}`);
+      cursores[f.recurso] = 'listo';
     }
   }
 
+  const avanceNuevo = { data, cursores, fallos };
+
+  if (!completo) return { data: [], completo: false, fallos, avance: avanceNuevo, descartadas: 0 };
+
   const conFechas = data.filter(p => p.start && p.end);
   conFechas.sort((a, b) => a.start.localeCompare(b.start));
-  return { data: conFechas, completo, fallos, descartadas: data.length - conFechas.length };
+  return {
+    data: conFechas, completo: true, fallos,
+    descartadas: data.length - conFechas.length, avance: null
+  };
 }
 
 // Una ausencia que Talana marca como injustificada NO es un permiso: si el

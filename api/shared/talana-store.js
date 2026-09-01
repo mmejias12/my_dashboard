@@ -34,6 +34,9 @@ const TTL_MAESTROS_MIN = Number(process.env.TALANA_TTL_MAESTROS_MIN || 720); // 
 
 const K_MAESTROS = 'talana/maestros.json';
 const K_ESTADO   = 'talana/estado.json';
+// Traída de ausencias a medio camino: se guarda para poder reanudarla en la
+// siguiente invocación en vez de empezar de cero.
+const K_AUS_PARCIAL = 'talana/ausencias-parcial.json';
 const kMarcas    = fecha => `talana/marcas/${fecha}.json`;
 const kAusencias = mes   => `talana/ausencias/${mes}.json`;
 
@@ -215,6 +218,13 @@ function mesesAtras(mes, n) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
 }
 
+const leerAvanceAusencias    = c => leer(c, K_AUS_PARCIAL);
+const guardarAvanceAusencias = (c, a) =>
+  escribir(c, K_AUS_PARCIAL, { ...a, _guardado: new Date().toISOString() });
+// Terminada la traída, el parcial deja de tener sentido. No se borra el blob
+// (haría falta permiso de borrado): se vacía, que para el caso es lo mismo.
+const limpiarAvanceAusencias = c => escribir(c, K_AUS_PARCIAL, { data: [], cursores: {}, fallos: [], _cerrado: true });
+
 // ── estado del sincronizador ────────────────────────────────────────────────
 const leerEstado = c => leer(c, K_ESTADO);
 
@@ -226,6 +236,7 @@ module.exports = {
   leerMaestros, guardarMaestros, maestrosVencidos,
   leerMarcasDia, guardarMarcasDia, diasPendientes, leerMarcasRango, diaCerrado,
   leerAusenciasMes, guardarAusenciasMes, ausenciasVencidas, mesesDelRango, mesDe,
+  leerAvanceAusencias, guardarAvanceAusencias, limpiarAvanceAusencias,
   leerEstado, guardarEstado,
   hoyIso, CONTAINER, VENTANA_GRACIA_DIAS, TTL_MAESTROS_MIN
 };

@@ -569,6 +569,31 @@ async function traerAusencias(opts = {}, avance = null) {
 // justificada. Se etiqueta para que el calendario la muestre como ausencia.
 const esInjustificada = tipo => /injustificad/i.test(tipo || '');
 
+/**
+ * Generaliza el tipo de ausencia antes de que salga al navegador.
+ *
+ * Talana distingue "licencia medica" de "licencia maternal". El reporte sólo
+ * necesita saber que la persona está justificadamente ausente; el motivo de
+ * salud no aporta nada a la asistencia y quedaría a la vista de cualquiera que
+ * abra el calendario, junto al nombre y el RUT. Se colapsan a "Licencia".
+ *
+ * Si RR.HH. necesita el detalle, TALANA_DETALLE_AUSENCIA=1 lo devuelve tal cual.
+ */
+const DETALLE_AUSENCIA = process.env.TALANA_DETALLE_AUSENCIA === '1';
+
+function categoriaAusencia(tipo) {
+  const t = sinTildes(tipo);
+  if (!t) return 'Ausencia';
+  if (DETALLE_AUSENCIA) return String(tipo);
+  if (/injustificad/.test(t)) return 'Falta injustificada';
+  // Vacaciones y días administrativos conservan su subtipo: "progresivas" o
+  // "anual" son categorías legales, no información de salud.
+  if (/vacacion/.test(t) || /administrativ/.test(t)) return String(tipo);
+  if (/licencia/.test(t))     return 'Licencia';      // sin el motivo médico
+  if (/permiso/.test(t))      return /sin goce/.test(t) ? 'Permiso sin goce' : 'Permiso';
+  return String(tipo).charAt(0).toUpperCase() + String(tipo).slice(1);
+}
+
 function mapearAusencia(a, fuente) {
   const f = fuente || {};
   const bruto = a.empleado ?? a.persona ?? a.employee ?? a.detallesTrabajador;
@@ -581,9 +606,12 @@ function mapearAusencia(a, fuente) {
   else if (persona.id !== undefined && persona.id !== null) personaId = persona.id;
   else if (a.persona_id ?? a.personaId) personaId = a.persona_id ?? a.personaId;
 
-  const tipo = String(
+  const tipoCrudo = String(
     (f.tipo && f.tipo(a)) || a.tipo || a.type || a.tipoAusencia || f.etiqueta || 'Ausencia'
   );
+  // La categoría es lo que viaja al navegador; el crudo sólo sirve para decidir
+  // si la ausencia es justificada, y no sale de aquí.
+  const tipo = categoriaAusencia(tipoCrudo);
 
   return {
     employeeCode: personaId !== null ? String(personaId) : '',
@@ -593,7 +621,7 @@ function mapearAusencia(a, fuente) {
     start: soloFecha((f.desde && f.desde(a)) || a.fechaDesde || a.desde || a.start || a.startDate),
     end:   soloFecha((f.hasta && f.hasta(a)) || a.fechaHasta || a.hasta || a.end   || a.endDate),
     permissionTypeName: tipo,
-    justificada: !esInjustificada(tipo),
+    justificada: !esInjustificada(tipoCrudo),
     dias: a.numeroDias || a.dias || null,
     medioDia: Boolean(a.mediosDias || a.medioDia),
     jornada: a.jornada || null,

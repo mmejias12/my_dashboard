@@ -518,6 +518,82 @@ console.log('\nHora de pared en las marcas guardadas');
   });
 }
 
+
+console.log('\nAusencias que no caben en una sola pasada');
+
+{
+  // Reproduce lo que pasó en producción: ~4.000 ausencias repartidas en muchas
+  // páginas, y un presupuesto que se agota antes de terminarlas.
+  BLOBS.clear();
+  contenedorCreado = false;
+
+  const PAGINAS = { '/absentism-resumed/': 3, '/vacations-resumed/': 6, '/administrative-leaves-resumed/': 1 };
+  const pedidas = [];
+  let cortarTras = 2;          // sólo dos páginas por invocación
+
+  const listarReal = cliente.listar;
+  cliente.listar = async function (recurso, params, opts = {}) {
+    if (!PAGINAS[recurso]) return listarReal.call(this, recurso, params, opts);
+
+    let pagina = 1;
+    if (opts.desdePath) pagina = Number((opts.desdePath.match(/page=(\d+)/) || [])[1] || 1);
+
+    const items = [];
+    let servidas = 0;
+    while (pagina <= PAGINAS[recurso]) {
+      if (servidas >= cortarTras) {
+        pedidas.push(recurso + '#' + pagina + ' (corte)');
+        return { items, completo: false, paginas: servidas, status: 0,
+                 motivo: 'presupuesto', siguiente: `/es/api${recurso}?page=${pagina}` };
+      }
+      pedidas.push(recurso + '#' + pagina);
+      items.push({
+        empleado: { id: 1475433, rut: '11111111-1', nombre: 'ANA MARIA', apellidoPaterno: 'SOTO' },
+        fechaDesde: '2026-09-0' + ((pagina % 9) + 1), fechaHasta: '2026-09-0' + ((pagina % 9) + 1),
+        vacacionesDesde: '2026-09-0' + ((pagina % 9) + 1), vacacionesHasta: '2026-09-0' + ((pagina % 9) + 1),
+        desde: '2026-09-0' + ((pagina % 9) + 1), hasta: '2026-09-0' + ((pagina % 9) + 1),
+        tipoAusencia: 'permiso sin goce', tipoVacaciones: 'normales', administrative_type: 'anual'
+      });
+      servidas++; pagina++;
+    }
+    return { items, completo: true, paginas: servidas, status: 200, siguiente: null };
+  };
+
+  const pasadas = [];
+  for (let i = 0; i < 8; i++) {
+    const r = await llamarSync({ desde: '2026-09-01', hasta: '2026-09-01', maestros: i === 0 });
+    pasadas.push(r.json);
+    if (r.json.pendientes === 0) break;
+  }
+
+  prueba('una traída parcial NO se declara terminada', () => {
+    assert.ok(pasadas.length > 1, 'debió necesitar más de una pasada');
+    assert.strictEqual(pasadas[0].pendientes > 0, true,
+      'con ausencias a medias, pendientes debe ser > 0 o el workflow se da por listo: ' + JSON.stringify(pasadas[0]));
+    assert.strictEqual(pasadas[0].ausencias_pendientes, true);
+  });
+
+  prueba('cada pasada REANUDA en vez de empezar de la página 1', () => {
+    // Si no hubiera cursor, la página 1 se pediría una vez por pasada.
+    const veces1 = pedidas.filter(x => x === '/vacations-resumed/#1').length;
+    assert.strictEqual(veces1, 1, 'la página 1 se pidió ' + veces1 + ' veces: ' + pedidas.join(', '));
+  });
+
+  prueba('termina y deja las ausencias guardadas', () => {
+    const ultima = pasadas[pasadas.length - 1];
+    assert.strictEqual(ultima.pendientes, 0, JSON.stringify(ultima));
+    assert.strictEqual(ultima.ausencias_pendientes, false);
+    assert.ok(BLOBS.has('talana/ausencias/2026-09.json'), 'debe existir el bloque del mes');
+  });
+
+  prueba('nada se guarda mientras la traída está a medias', () => {
+    // La primera pasada quedó incompleta: no debió escribir bloques mensuales.
+    assert.ok(/parcial/.test(String(pasadas[0].ausencias)), JSON.stringify(pasadas[0].ausencias));
+  });
+
+  cliente.listar = listarReal;
+}
+
 console.log(`\n${ok} pruebas de integración pasaron${process.exitCode ? ' (con fallos)' : ''}.\n`);
 
 })().catch(e => { console.error('\nFALLO NO CAPTURADO:\n', e); process.exitCode = 1; });

@@ -80,7 +80,7 @@ h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
 @keyframes entra{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
 .ev.faltante{border-left-color:var(--critical)}
 .ev.sobrante{border-left-color:var(--critical)}
-.ev.sin_guia,.ev.sin_patente{border-left-color:var(--muted)}
+.ev.sin_guia,.ev.sin_patente,.ev.fuera_alcance{border-left-color:var(--muted)}
 .ev .gh{font-size:15px;width:20px;text-align:center;flex:none}
 .ev .pat{font-weight:600;letter-spacing:.03em;font-variant-numeric:tabular-nums}
 .ev .det{font-size:12px;color:var(--text-2)}
@@ -173,7 +173,7 @@ h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
     <div class="logo">R</div>
     <div>
       <h1>Monitor de andén · Despacho</h1>
-      <div class="sub">Guía emitida (RDTOut) → paso por túnel (SPOTVISION)</div>
+      <div class="sub">Emisiones · guía emitida (RDTOut) → paso por túnel (SPOTVISION)</div>
     </div>
     <div class="sp"></div>
     <div id="aud-aviso" class="aud-aviso">Sonido desactivado — el navegador exige un clic</div>
@@ -183,6 +183,7 @@ h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
     <button class="btn on solo-demo" id="btn-demo">Simulación activa</button>
     <button class="btn solo-demo" id="btn-paso">Simular paso</button>
     <div class="pill demo solo-demo"><span class="viva"></span>DEMO</div>
+    <div class="pill" id="pill-alcance" title="El túnel es de salida: el monitor vigila despachos. Los retiros llegan con pallets del cliente y se revisan contra la inspección, en el informe de conciliación.">SÓLO EMISIONES</div>
     <div class="pill hide" id="pill-vivo"><span class="viva"></span>EN LÍNEA</div>
     <div class="reloj" id="reloj">--:--:--</div>
   </div>
@@ -271,6 +272,11 @@ const REGLAS = {
   demorada:    {nivel:'aviso',   gh:'◷', tit:'Guía emitida sin paso registrado',
                 acc:'Confirmar si el camión sigue en planta', sonido:'aviso', correo:false},
   ok:          {nivel:'ok',      gh:'✓', tit:'Carga conciliada', acc:'', sonido:null, correo:false},
+  // El camión pasó, pero el documento del día para esa patente es un retiro o
+  // una devolución. No es un despacho: no se compara y no se alerta. Se deja
+  // visible igual, porque el operador necesita saber que el camión pasó.
+  fuera_alcance:{nivel:'ok',     gh:'↩', tit:'Paso registrado · no es un despacho',
+                acc:'', sonido:null, correo:false},
 };
 
 /* Tipo de operación. Sirve para que quien mire la pantalla distinga de un
@@ -423,13 +429,28 @@ function evaluar(carga){
   //    cruzar acá dejaba en "sin guía" a todo camión ya registrado en RDTOut,
   //    que es precisamente el caso normal: la patente se llena al llegar.
   if(carga.guia){
-    const i = S.esperando.findIndex(g => g.patente === carga.patente);
+    // Sale de la espera la guía QUE SE CRUZÓ, no la primera de esa patente: un
+    // camión puede tener dos emisiones el mismo día y sacar la equivocada dejaba
+    // en pantalla una que ya salió y ocultaba una que no.
+    // Si la guía cruzada no está en la lista, no se saca nada: caer de vuelta a
+    // "la primera de esta patente" borraba la emisión equivocada.
+    const i = S.esperando.findIndex(g => g.numero === carga.guia.numero);
     if(i >= 0) S.esperando.splice(i,1);          // ya pasó: sale de la espera
     const dif = carga.diferencia ?? (carga.total_pallets - carga.guia.pallets_declarados);
     const estado = (carga.estado && carga.estado !== 'sin_guia' && carga.estado !== 'sin_patente')
       ? carga.estado
       : (Math.abs(dif) <= TOLERANCIA ? 'ok' : dif < 0 ? 'faltante' : 'sobrante');
     return {...carga, estado, diferencia:dif, filaAfectada:calcularFila(carga, carga.guia, dif)};
+  }
+
+  // 1b. Sin emisión, pero con un retiro o devolución de esa patente ese día.
+  //     No es un camión sin documento: es un movimiento que este monitor no
+  //     compara. Marcarlo "sin guía" disparaba una alerta crítica por cada
+  //     retiro — el 01-09 habrían sido 3 de 9 pasos.
+  const noDespacho = (carga.guias_alternativas||[]).find(g => g.tipo==='retiro' || g.tipo==='devolucion');
+  if(carga.patente && noDespacho){
+    return {...carga, guia:null, estado:'fuera_alcance', diferencia:null,
+            filaAfectada:null, otroDoc:noDespacho};
   }
 
   // 2. Sin patente no hay forma de asociar el paso a un documento.
@@ -601,13 +622,20 @@ function abrirModal(v){
       </div>
 
       <div class="gran">
-        <div><div class="lab">${v.guia?.tipo==='retiro'?'RDTOut confirma':'Guía declara'}</div><div class="v">${dec!=null?n0(dec):'—'}</div></div>
+        <div><div class="lab">${v.estado==='fuera_alcance'?'No se compara':v.guia?.tipo==='retiro'?'RDTOut confirma':'Guía declara'}</div><div class="v">${dec!=null?n0(dec):'—'}</div></div>
         <div><div class="lab">Cámara cuenta</div><div class="v">${n0(v.total_pallets)}</div></div>
         <div><div class="lab">Diferencia</div>
           <div class="v" style="color:${v.diferencia?col:'var(--text)'}">${v.diferencia==null?'—':(v.diferencia>0?'+':'')+n0(v.diferencia)}</div></div>
       </div>
 
-      <div class="aviso-fila" style="border-left-color:${col}"><b>${esc(r.acc)}</b></div>
+      ${r.acc?`<div class="aviso-fila" style="border-left-color:${col}"><b>${esc(r.acc)}</b></div>`:''}
+
+      ${v.otroDoc ? `<div class="aviso-fila" style="border-left-color:${tipoDe(v.otroDoc.tipo).c}">
+        <b style="color:${tipoDe(v.otroDoc.tipo).c}">${tipoDe(v.otroDoc.tipo).et}</b> —
+        el documento del día para esta patente es el ${v.otroDoc.tipo==='retiro'?'retiro':'documento'}
+        <b>${esc(v.otroDoc.nro_pedido || v.otroDoc.numero)}</b> por ${n0(v.otroDoc.pallets_declarados)} pallets.
+        Este monitor vigila despachos, así que <b>no lo compara</b>: la revisión del retiro va contra la
+        inspección, en el informe de conciliación.</div>` : ''}
 
       ${v.guia?.tipo && v.guia.tipo !== 'emision' ? `<div class="aviso-fila" style="border-left-color:${tipoDe(v.guia.tipo).c}">
         <b style="color:${tipoDe(v.guia.tipo).c}">${tipoDe(v.guia.tipo).et}</b> — ${esc(tipoDe(v.guia.tipo).nota)}</div>` : ''}
@@ -671,7 +699,10 @@ function render(){
   const ahora = Date.now();
 
   // --- KPIs de la jornada ---
-  const pasados = S.eventos.length;
+  // Los pasos que no son despacho no entran en el conteo de la jornada: si
+  // entraran, "9 pasos / 5 conciliados / 1 desviación" no cerraría nunca.
+  const fuera = S.eventos.filter(e=>e.estado==='fuera_alcance').length;
+  const pasados = S.eventos.length - fuera;
   const ok = S.eventos.filter(e=>e.estado==='ok').length;
   const falt = S.eventos.filter(e=>e.estado==='faltante');
   const sob = S.eventos.filter(e=>e.estado==='sobrante');
@@ -680,7 +711,7 @@ function render(){
 
   $('#kpis').innerHTML = [
     ['Esperando paso', S.esperando.length, ''],
-    ['Pasos hoy', pasados, ''],
+    ['Despachos hoy', pasados, ''],
     ['Conciliados', ok, 'ok'],
     ['Con desviación', falt.length+sob.length, (falt.length+sob.length)?'mal':''],
     ['Pallets en riesgo', enRiesgo, enRiesgo?'mal':''],
@@ -688,7 +719,8 @@ function render(){
   ].map(([l,v,c],i)=>{
     const clic = (i===5 && v>0) ? ' click" id="kpi-pendientes' : '';
     return `<div class="kpi ${c}${clic}"><div class="lab">${l}</div><div class="val">${n0(v)}</div>
-      ${i===5&&v>0?'<div style="font-size:10px;color:var(--muted);margin-top:2px">clic para revisarlas</div>':''}</div>`;
+      ${i===5&&v>0?'<div style="font-size:10px;color:var(--muted);margin-top:2px">clic para revisarlas</div>':''}
+      ${i===1&&fuera?`<div style="font-size:10px;color:var(--muted);margin-top:2px">+${fuera} paso${fuera>1?'s':''} que no son despacho</div>`:''}</div>`;
   }).join('');
   const kp = $('#kpi-pendientes');
   if(kp) kp.onclick = ()=>{
@@ -722,14 +754,15 @@ function render(){
   $('#cnt-ev').textContent = S.eventos.length;
   $('#eventos').innerHTML = S.eventos.length ? S.eventos.map(v=>{
     const r = REGLAS[v.estado];
-    const col = r.nivel==='critica'?'var(--critical)':r.nivel==='aviso'?'var(--warning)':'var(--good)';
+    const col = v.estado==='fuera_alcance' ? 'var(--muted)'
+              : r.nivel==='critica'?'var(--critical)':r.nivel==='aviso'?'var(--warning)':'var(--good)';
     const pendiente = r.nivel!=='ok' && !v.atendida;
     return `<div class="ev ${v.estado}${pendiente?' pendiente':''}" data-id="${esc(v.carga_id)}"
                  tabindex="0" role="button" aria-label="Ver alerta de ${esc(v.patente||'sin patente')}">
       <span class="gh" style="color:${col}">${r.gh}</span>
       <div style="min-width:0">
         <div class="pat">${esc(v.patente||'sin patente')}${v.retenido?' <span class="pend">RETENIDO</span>':pendiente?' <span class="pend">SIN ATENDER</span>':v.historico?' · <span style="color:var(--muted);font-size:11px">previo a la sesión</span>':v.atendida?' · <span style="color:var(--muted);font-size:11px">atendida</span>':''}</div>
-        <div class="det">${v.guia?tag(v.guia.tipo)+' ':''}${v.guia?esc(v.guia.numero)+' · ':''}${n0(v.total_pallets)} pallets en ${v.total_bultos} filas</div>
+        <div class="det">${v.guia?tag(v.guia.tipo)+' ':''}${v.otroDoc?tag(v.otroDoc.tipo)+' ':''}${v.guia?esc(v.guia.numero)+' · ':''}${n0(v.total_pallets)} pallets en ${v.total_bultos} filas</div>
       </div>
       ${v.diferencia ? `<div class="dif" style="color:${col}">${v.diferencia>0?'+':''}${n0(v.diferencia)}</div>` : ''}
       <div class="hora">${hhmm(new Date(v.fecha_hora_carga))}</div>
@@ -784,7 +817,7 @@ async function pedirJSON(url){
 }
 
 async function cargarGuiasReales(){
-  const gs = await pedirJSON(API_GUIAS);
+  const gs = await pedirJSON(API_GUIAS + '?tipo=emision');
   S.esperando = gs.filter(g=>enAlcance(g.patente))
                   .map(g=>({...g, hora_emision:new Date(g.hora_emision).getTime()}));
 }
@@ -792,7 +825,7 @@ async function pollPasosReales(){
   // Fecha local de Santiago, no UTC: pasadas las 20:00 toISOString ya es mañana.
   const hoy = new Intl.DateTimeFormat('en-CA',{timeZone:'America/Santiago',
     year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-  const d = await pedirJSON(`${API_PASOS}?desde=${hoy}&hasta=${hoy}`);
+  const d = await pedirJSON(`${API_PASOS}?desde=${hoy}&hasta=${hoy}&tipo=emision`);
   d.cargas.forEach(registrarPaso);   // registrarPaso es idempotente por carga_id
 }
 

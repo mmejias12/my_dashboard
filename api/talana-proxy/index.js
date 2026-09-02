@@ -40,7 +40,13 @@ const PERMITIDOS = [
   '/specificDay/', '/specificDay-paginado/', '/workedDays', '/jornadaLaboral/',
   '/absentism-resumed/', '/vacations-resumed/', '/administrative-leaves-resumed/',
   '/personaAusencia-paginado/', '/vacacionesSolicitud/',
-  '/diaAdministrativoSolicitud/', '/saldo-vacaciones-empresa/'
+  '/diaAdministrativoSolicitud/', '/saldo-vacaciones-empresa/',
+  // "Jornada Calculada": único candidato que queda para obtener el horario
+  // teórico por persona/día sin el permiso de /workShiftPersonRange/.
+  '/assignationSummaryApi/',
+  // Complementos del módulo Asistencia, para descartarlos con dato y no con
+  // suposiciones.
+  '/regimenDeTrabajo/', '/horas-extras/', '/periodos/', '/zkcard/'
 ];
 
 const CORS = {

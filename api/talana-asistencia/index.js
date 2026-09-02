@@ -277,7 +277,14 @@ const PRUEBAS = [
   ['workShift',                    '/workShift/',                     () => ({})],
   ['specialRotativeDay',           '/specialRotativeDay/',            () => ({})],
   ['sucursal',                     '/sucursal/',                      () => ({})],
-  ['centroCosto',                  '/centroCosto/',                   () => ({})]
+  ['centroCosto',                  '/centroCosto/',                   () => ({})],
+  // "Jornada Calculada". Es el último candidato documentado que podría dar el
+  // horario teórico por persona/día sin el permiso de /workShiftPersonRange/.
+  ['assignationSummaryApi',        '/assignationSummaryApi/',
+    () => ({ from_date: store.hoyIso(), to_date: store.hoyIso() })],
+  ['regimenDeTrabajo',             '/regimenDeTrabajo/',              () => ({})],
+  ['horas-extras',                 '/horas-extras/',                  () => ({})],
+  ['zkcard',                       '/zkcard/',                        () => ({})]
 ];
 
 async function diagnostico(filtro) {

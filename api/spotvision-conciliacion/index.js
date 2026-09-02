@@ -38,6 +38,11 @@ module.exports = async function (context, req) {
       cierreMin: Number(req.query.cierre_min) || undefined,
       tolerancia: Number(req.query.tolerancia) || undefined,
       campoConteo: req.query.campo === 'bultos' ? 'total_bultos' : 'total_pallets',
+      // ?tipo=emision — lo usa el monitor de andén. El túnel es de salida: la
+      // pregunta operativa es si el camión se va con lo que declara la guía.
+      // Los retiros llegan con pallets del cliente y se revisan contra la
+      // inspección, en otro momento y con otro documento.
+      soloEmisiones: req.query.tipo === 'emision',
     });
 
     context.res = {

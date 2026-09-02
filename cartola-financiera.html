@@ -446,11 +446,18 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
         <input type="date" id="d2" class="ctrl-date">
       </div>
       <button class="btn" onclick="loadData()">Cargar datos</button>
-      <label class="sw" title="Los ajustes retroactivos son registros de monto negativo que corrigen períodos anteriores pero se cargan con la fecha del día en que se hicieron. Al excluirlos, el período muestra su facturación propia.">
+      <label class="sw" title="La API entrega correcciones de períodos anteriores como registros negativos, cargados con la fecha del día en que se hicieron. Con esta opción se netean contra el cargo del mismo cliente y concepto, y si el ajuste lo supera el par queda en cero — igual que la cartola oficial.">
         <input type="checkbox" id="sw-ajustes" checked onchange="toggleAjustes(this.checked)">
         <span class="sw-track"></span>
-        <span>Excluir ajustes retroactivos
-          <span class="sw-hint">Registros de monto negativo · se muestran aparte</span>
+        <span>Netear ajustes retroactivos
+          <span class="sw-hint">Sin dejar saldo negativo por cliente</span>
+        </span>
+      </label>
+      <label class="sw" title="Clientes cuyo arriendo de días pallet no se factura: contrato terminado pero mantienen inventario en el pool, así que la API les sigue generando cargo.">
+        <input type="checkbox" id="sw-exclientes" checked onchange="toggleExClientes(this.checked)">
+        <span class="sw-track"></span>
+        <span>Excluir clientes no facturables
+          <span class="sw-hint">Lista fija · se muestran aparte</span>
         </span>
       </label>
       <div class="period-badge" id="period-badge" style="display:none">
@@ -495,21 +502,21 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
           <span class="kfi-arrow">›</span>
         </div>
         <div class="kfi">
-          <div class="kfi-label">(-) Ajustes retroactivos</div>
+          <div class="kfi-label">Ajustes retroactivos</div>
           <div class="kfi-val kfi-neg" id="f-ajus-clp">—</div>
           <div class="kfi-sub" id="f-ajus-uf">— UF</div>
           <div class="kfi-desc" id="f-ajus-desc">Registros de monto negativo</div>
           <span class="kfi-arrow">›</span>
         </div>
         <div class="kfi">
-          <div class="kfi-label">(-) Ex-clientes</div>
+          <div class="kfi-label">(-) No facturables</div>
           <div class="kfi-val kfi-neg" id="f-excli-clp">—</div>
           <div class="kfi-sub" id="f-excli-uf">— UF</div>
           <div class="kfi-desc" id="f-excli-desc">Contrato vencido · aún con inventario</div>
           <span class="kfi-arrow">›</span>
         </div>
         <div class="kfi">
-          <div class="kfi-label">Subtotal neto</div>
+          <div class="kfi-label">Subtotal facturable</div>
           <div class="kfi-val kfi-gold" id="f-sub-clp">—</div>
           <div class="kfi-sub kfi-gold" id="f-sub-uf">— UF</div>
           <div class="kfi-desc" id="f-sub-cli">— clientes activos</div>
@@ -600,7 +607,7 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
         <div class="alert-card">
           <div class="alert-head">
             <span class="alert-icon">✅</span>
-            <span class="alert-title">Ex-clientes (lista fija)</span>
+            <span class="alert-title">Clientes no facturables</span>
             <span class="alert-count" id="cnt-solo-arr" style="color:#fcd34d">—</span>
           </div>
           <div class="alert-list" id="list-solo-arr">
@@ -719,45 +726,86 @@ var chartTop = null, chartTipo = null;
 // Ex-clientes: contrato terminado, mantienen inventario en el pool y por eso
 // siguen generando "arriendo días pallet" en la API, pero la cartola oficial
 // NO los considera en ningún concepto. Lista fija por cardCode (fallback por nombre).
+// ── REGLAS DE NEGOCIO (alineadas con la cartola revisada) ─────────────────────
+// Clientes cuyo arriendo de días pallet no se factura. Dos alcances:
+//   'total'    → el cliente no se factura en ningún concepto (contrato terminado,
+//                mantiene inventario en el pool y por eso la API le sigue generando arriendo).
+//   'arriendo' → solo se excluye el arriendo; sus otros movimientos sí se facturan.
 var EX_CLIENTES = {
-  'C76355360-4':'COMERCIAL CANADA',
-  'C84673600-K':'PRODUCTOS NUTRITIVOS AVELUP LIMITADA',
-  'C77666850-8':'CORREA Y CIA LTDA',
-  'C99529560-1':'PROCESADORA DE GRANOS AUSTRAL S.A.',
-  'C76072046-1':'COMERSUR S.A.',
-  'C85417200-K':'NALCO INDUSTRIAL SERVICES CHILE LTDA.',
-  'C96842520-K':'COMERCIAL ROCKY S.A.',
-  'C76549892-9':'PARKPET S.A',
-  'C76871186-0':'COMERCIAL LOMBARDI S.A.',
-  'C76130385-6':'PROCARNE COMERCIAL S.A.',
-  'C79862750-3':'TRANSPORTES CCU LTDA',
-  'C76493368-0':'BRUEGGEN AMERICA S.A.',
-  'C83610800-0':'MAR DEL SUR SPA'
+  'C76355360-4':{n:'COMERCIAL CANADA',                        alcance:'total'},
+  'C84673600-K':{n:'PRODUCTOS NUTRITIVOS AVELUP LIMITADA',    alcance:'total'},
+  'C77666850-8':{n:'CORREA Y CIA LTDA',                       alcance:'total'},
+  'C99529560-1':{n:'PROCESADORA DE GRANOS AUSTRAL S.A.',      alcance:'total'},
+  'C76072046-1':{n:'COMERSUR S.A.',                           alcance:'total'},
+  'C85417200-K':{n:'NALCO INDUSTRIAL SERVICES CHILE LTDA.',   alcance:'total'},
+  'C96842520-K':{n:'COMERCIAL ROCKY S.A.',                    alcance:'total'},
+  'C76549892-9':{n:'PARKPET S.A',                             alcance:'total'},
+  'C76871186-0':{n:'COMERCIAL LOMBARDI S.A.',                 alcance:'total'},
+  'C76130385-6':{n:'PROCARNE COMERCIAL S.A.',                 alcance:'total'},
+  'C79862750-3':{n:'TRANSPORTES CCU LTDA',                    alcance:'total'},
+  'C76493368-0':{n:'BRUEGGEN AMERICA S.A.',                   alcance:'total'},
+  'C83610800-0':{n:'MAR DEL SUR SPA',                         alcance:'total'},
+  'C90703000-8':{n:'NESTLE CHILE S.A',                        alcance:'arriendo'}
 };
-var EX_CLIENTES_NOMBRES = {};
-Object.keys(EX_CLIENTES).forEach(function(k){ EX_CLIENTES_NOMBRES[EX_CLIENTES[k]] = true; });
+var EX_POR_NOMBRE = {};
+Object.keys(EX_CLIENTES).forEach(function(k){ EX_POR_NOMBRE[EX_CLIENTES[k].n] = EX_CLIENTES[k]; });
 
-function esExCliente(r) {
-  if (EX_CLIENTES[r.cardCode]) return true;
-  return !!EX_CLIENTES_NOMBRES[(r.cardName||'').trim().toUpperCase()];
+function reglaEx(r) {
+  return EX_CLIENTES[r.cardCode] || EX_POR_NOMBRE[(r.cardName||'').trim().toUpperCase()] || null;
 }
+// ¿este registro queda fuera del universo facturable?
+function esRegistroExcluido(r) {
+  var g = reglaEx(r);
+  if (!g) return false;
+  if (g.alcance === 'total') return true;
+  return (r.operacion||'').toUpperCase() === 'ARRIENDO DIAS PALLET';
+}
+// ¿el cliente está total o parcialmente excluido? (para marcarlo en la tabla)
+function esExCliente(r) { return !!reglaEx(r); }
 
-// Switch "Excluir ajustes retroactivos": los registros de monto negativo son
-// correcciones de períodos anteriores cargadas con la fecha del día en que se
-// hicieron. Distorsionan la semana en que caen, así que por defecto van aparte.
-var excluirAjustes = true;
+// ── AJUSTES RETROACTIVOS ──────────────────────────────────────────────────────
+// La API entrega correcciones de períodos anteriores como registros de monto
+// negativo, cargados con la fecha del día en que se hicieron. La cartola oficial
+// los NETEA contra el cargo del mismo cliente y concepto, y nunca deja saldo
+// negativo: si el ajuste supera al cargo, el par cliente/concepto queda en cero.
+// Esa es la regla que replica este switch (validada contra las semanas 2 a 34).
+var netearAjustes = true;
+var excluirEx     = true;
 
-// Universo de registros sobre el que se calcula todo el tab "Resumen general".
+var _cacheBase = null, _cacheKey = '';
 function baseRegs() {
-  if (!excluirAjustes) return raw;
-  return raw.filter(function(r){ return (r.netoCLP||0) >= 0; });
+  var key = (netearAjustes?'1':'0') + (excluirEx?'1':'0') + raw.length;
+  if (_cacheKey === key && _cacheBase) return _cacheBase;
+  var regs = excluirEx ? raw.filter(function(r){ return !esRegistroExcluido(r); }) : raw.slice();
+  if (netearAjustes) {
+    var neto = {};
+    regs.forEach(function(r){
+      var k = r.cardCode + '|' + (r.operacion||'').toUpperCase();
+      neto[k] = (neto[k]||0) + (r.netoCLP||0);
+    });
+    // Si el par cliente/concepto neteó negativo, se descarta completo (queda en cero).
+    // Si neteó positivo, pasan todos sus registros —cargo y ajuste— y el neto es correcto.
+    regs = regs.filter(function(r){
+      return neto[r.cardCode + '|' + (r.operacion||'').toUpperCase()] >= 0;
+    });
+  }
+  _cacheKey = key; _cacheBase = regs;
+  return regs;
+}
+function invalidarBase(){ _cacheBase = null; _cacheKey = ''; }
+
+// Registros que quedaron fuera por ser de un cliente no facturable
+function regsExcluidos() {
+  return raw.filter(esRegistroExcluido);
 }
 
 function toggleAjustes(v) {
-  excluirAjustes = !!v;
-  if (raw.length) {
-    renderAll(document.getElementById('d1').value, document.getElementById('d2').value);
-  }
+  netearAjustes = !!v; invalidarBase();
+  if (raw.length) renderAll(document.getElementById('d1').value, document.getElementById('d2').value);
+}
+function toggleExClientes(v) {
+  excluirEx = !!v; invalidarBase();
+  if (raw.length) renderAll(document.getElementById('d1').value, document.getElementById('d2').value);
 }
 
 // ── SIDEBAR ───────────────────────────────────────────────────────────────────
@@ -832,6 +880,7 @@ function loadData() {
     .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
     .then(function(data) {
       raw = Array.isArray(data) ? data : [];
+      invalidarBase();
       if (!raw.length) {
         document.getElementById('empty-state').innerHTML =
           '<div class="chart-card"><div class="state-msg">Sin datos para el rango seleccionado</div></div>';
@@ -884,7 +933,8 @@ function agruparPorCliente() {
         totalCLP:0, totalUF:0,
         pallets:0, palletsArr:0, palletsEm:0, relocalizaQty:0,
         tieneEmision:false, tieneTransf:false,
-        esEx: esExCliente(r)
+        esEx: !!reglaEx(r),
+        exAlcance: (reglaEx(r)||{}).alcance || null
       };
     }
     var c = map[code];
@@ -911,56 +961,63 @@ function agruparPorCliente() {
 
 // ── BLOQUE 1: FLUJO FINANCIERO ────────────────────────────────────────────────
 function renderFlujo(clientes) {
-  // 1) Cartola bruta: todo lo que trae la API, sin filtros
+  // 1) Cartola bruta: todo lo que trae la API, sin ningún filtro
   var brutoCLP=0, brutoUF=0;
   raw.forEach(function(r){ brutoCLP+=(r.netoCLP||0); brutoUF+=(r.netoUF||0); });
 
-  // 2) Ajustes retroactivos: registros de monto negativo
+  // 2) Ajustes retroactivos presentes en el período
   var ajusCLP=0, ajusUF=0, ajusN=0;
   raw.forEach(function(r){
     if ((r.netoCLP||0) < 0) { ajusCLP+=r.netoCLP; ajusUF+=(r.netoUF||0); ajusN++; }
   });
+  // Pares cliente/concepto que el neteo dejó en cero (el ajuste superaba al cargo)
+  var enCero = 0, montoEnCero = 0;
+  if (netearAjustes) {
+    var neto = {};
+    (excluirEx ? raw.filter(function(r){return !esRegistroExcluido(r);}) : raw).forEach(function(r){
+      var k = r.cardCode + '|' + (r.operacion||'').toUpperCase();
+      neto[k] = (neto[k]||0) + (r.netoCLP||0);
+    });
+    Object.keys(neto).forEach(function(k){ if (neto[k] < 0) { enCero++; montoEnCero += neto[k]; } });
+  }
 
-  // Base de trabajo (ya sin ajustes si el switch está activo)
-  var totalCLP=0, totalUF=0;
-  clientes.forEach(function(c){totalCLP+=c.totalCLP;totalUF+=c.totalUF;});
-
-  // 3) Ex-clientes: lista fija, se descuentan completos (todos sus conceptos)
-  var exCLP=0, exUF=0, exCount=0;
-  clientes.filter(function(c){return c.esEx;}).forEach(function(c){
-    exCLP+=c.totalCLP; exUF+=c.totalUF; exCount++;
+  // 3) Clientes no facturables: lista fija
+  var exCLP=0, exUF=0, exCodes={};
+  regsExcluidos().forEach(function(r){
+    exCLP+=(r.netoCLP||0); exUF+=(r.netoUF||0); exCodes[r.cardCode]=1;
   });
+  var exCount = Object.keys(exCodes).length;
 
-  // 4) Subtotal neto
-  var subCLP = totalCLP - exCLP;
-  var subUF  = totalUF  - exUF;
-  var subCount = clientes.length - exCount;
+  // 4) Subtotal facturable = la base sobre la que se calcula todo el resto
+  var subCLP=0, subUF=0;
+  clientes.forEach(function(c){ subCLP+=c.totalCLP; subUF+=c.totalUF; });
 
-  // 5) Facturable: clientes vigentes con emisión o transferencia
-  var factCLP=0, factUF=0, factCount=0;
-  var soloArrCLP=0;
-  clientes.filter(function(c){return !c.esEx;}).forEach(function(c){
+  // 5) Clientes con emisión o transferencia en el período
+  var factCLP=0, factUF=0, factCount=0, soloArrCLP=0;
+  clientes.forEach(function(c){
     if (c.tieneEmision||c.tieneTransf) { factCLP+=c.totalCLP; factUF+=c.totalUF; factCount++; }
     else { soloArrCLP+=c.arriendo; }
   });
 
   set('f-total-clp', fmtCLP(brutoCLP));
   set('f-total-uf',  fmtUF(brutoUF)+' UF');
-  set('f-total-cli', clientes.length+' clientes · '+raw.length.toLocaleString('es-CL')+' registros');
+  set('f-total-cli', clientes.length+' clientes facturables · '+raw.length.toLocaleString('es-CL')+' registros');
 
   set('f-ajus-clp',  ajusN ? fmtCLP(ajusCLP) : '$0');
   set('f-ajus-uf',   fmtUF(ajusUF)+' UF');
-  set('f-ajus-desc', ajusN
-      ? ajusN+' registros negativos · '+(excluirAjustes?'excluidos del subtotal':'INCLUIDOS en el subtotal')
-      : 'Sin ajustes en el período');
+  set('f-ajus-desc', !ajusN ? 'Sin ajustes en el período'
+      : !netearAjustes ? ajusN+' registros · SIN netear, se arrastran al subtotal'
+      : ajusN+' registros · neteados'+(enCero ? ' · '+enCero+' par(es) cliente/concepto quedaron en cero' : ''));
 
-  set('f-excli-clp', fmtCLP(-Math.abs(exCLP)));
+  set('f-excli-clp', fmtCLP(excluirEx ? -Math.abs(exCLP) : 0));
   set('f-excli-uf',  fmtUF(exUF)+' UF');
-  set('f-excli-desc', exCount+' de '+Object.keys(EX_CLIENTES).length+' ex-clientes con movimiento · lista fija');
+  set('f-excli-desc', !excluirEx
+      ? 'SIN excluir · '+exCount+' clientes incluidos en el subtotal'
+      : exCount+' de '+Object.keys(EX_CLIENTES).length+' con movimiento · lista fija');
 
   set('f-sub-clp',   fmtCLP(subCLP));
   set('f-sub-uf',    fmtUF(subUF)+' UF');
-  set('f-sub-cli',   subCount+' clientes vigentes · '+fmtCLP(soloArrCLP)+' solo arriendo');
+  set('f-sub-cli',   clientes.length+' clientes · '+fmtCLP(soloArrCLP)+' solo arriendo');
 
   set('f-fact-clp',  fmtCLP(factCLP));
   set('f-fact-uf',   fmtUF(factUF)+' UF');
@@ -1021,9 +1078,10 @@ function renderTipoCards(clientes) {
   baseRegs().forEach(function(r){ totalBase += (r.netoCLP||0); });
   var desc = Math.round(totalBase - sumaTarjetas);
   document.getElementById('tipo-nota').textContent =
-    (excluirAjustes ? 'Sin ajustes retroactivos' : 'Ajustes retroactivos incluidos')
+    (netearAjustes ? 'Ajustes neteados' : 'Ajustes sin netear')
+    + ' · ' + (excluirEx ? 'sin clientes no facturables' : 'con clientes no facturables')
     + ' · las tarjetas suman ' + fmtCLP(sumaTarjetas)
-    + (Math.abs(desc) > 1 ? ' · sin clasificar ' + fmtCLP(desc) : ' (cuadra con el total)');
+    + (Math.abs(desc) > 1 ? ' · sin clasificar ' + fmtCLP(desc) : ' (cuadra)');
 }
 
 // ── BLOQUE 3: GRÁFICOS ────────────────────────────────────────────────────────
@@ -1095,12 +1153,12 @@ function renderCharts(clientes) {
 function renderTablaClientes(clientes) {
   var nEx = clientes.filter(function(c){return c.esEx;}).length;
   document.getElementById('detalle-count').textContent =
-    clientes.length+' clientes'+(nEx?' · '+nEx+' ex-clientes':'');
+    clientes.length+' clientes'+(nEx?' · '+nEx+' no facturables incluidos':'');
   var html = '';
   clientes.forEach(function(c) {
     var otros = c.traspasoClp + c.relocaliza + c.ajusteInv + c.otrosClp;
     html += '<tr'+(c.esEx?' style="opacity:.6"':'')+'>'
-      + '<td title="'+c.code+'">'+c.name+(c.esEx?'<span class="tag-ex">EX-CLIENTE</span>':'')+'</td>'
+      + '<td title="'+c.code+'">'+c.name+(c.esEx?'<span class="tag-ex">'+(c.exAlcance==='arriendo'?'ARRIENDO NO FACT.':'NO FACTURABLE')+'</span>':'')+'</td>'
       + '<td class="mono" style="text-align:right">'+Math.round(c.pallets).toLocaleString('es-CL')+'</td>'
       + '<td class="mono" style="text-align:right;color:var(--c-arriendo)">'+fmtCLP(c.arriendo)+'</td>'
       + '<td class="mono" style="text-align:right;color:var(--c-emision)">'+fmtCLP(c.emision)+'</td>'
@@ -1138,7 +1196,7 @@ function renderTablaClientes(clientes) {
 
 // ── BLOQUE 5: ALERTAS ─────────────────────────────────────────────────────────
 function renderAlertas(clientes) {
-  var vigentes = clientes.filter(function(c){return !c.esEx;});
+  var vigentes = clientes.filter(function(c){return c.exAlcance !== 'total';});
 
   // Sin emisión (solo clientes vigentes)
   var sinEm = vigentes.filter(function(c){return !c.tieneEmision;});
@@ -1148,8 +1206,14 @@ function renderAlertas(clientes) {
   var sinEmTr = vigentes.filter(function(c){return !c.tieneEmision&&!c.tieneTransf;});
   renderAlertList('cnt-sin-emtr','list-sin-emtr', sinEmTr, '#f87171', 'arriendo');
 
-  // Ex-clientes: lista fija, no depende de si facturaron esta semana
-  var ex = clientes.filter(function(c){return c.esEx;});
+  // No facturables: lista fija, se arma con los registros que quedaron fuera
+  var m = {};
+  regsExcluidos().forEach(function(r){
+    if (!m[r.cardCode]) m[r.cardCode] = {name:r.cardName, totalCLP:0, arriendo:0};
+    m[r.cardCode].totalCLP += (r.netoCLP||0);
+    if ((r.operacion||'').toUpperCase()==='ARRIENDO DIAS PALLET') m[r.cardCode].arriendo += (r.netoCLP||0);
+  });
+  var ex = Object.values(m).sort(function(a,b){return b.totalCLP-a.totalCLP;});
   renderAlertList('cnt-solo-arr','list-solo-arr', ex, '#fcd34d', 'totalCLP');
 }
 

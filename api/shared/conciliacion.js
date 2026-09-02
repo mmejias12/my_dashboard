@@ -8,9 +8,10 @@
  *     de que la carga cierre produce faltantes falsos. Una carga se considera
  *     cerrada cuando no recibe bultos nuevos hace CIERRE_MIN minutos.
  *  2. CRUCE. La API no trae numero de guia: la unica llave disponible es
- *     patente + ventana horaria. La guia debe estar emitida ANTES de la llegada
- *     y dentro de VENTANA_H horas. Cada guia se consume una sola vez.
- *  3. ESTADO. ok | faltante | sobrante | sin_guia | sin_patente | en_curso.
+ *     patente + dia. Como un camion tiene VARIOS movimientos en el mismo dia,
+ *     el cruce se resuelve como una asignacion, no paso por paso (ver abajo).
+ *  3. ESTADO. ok | faltante | sobrante | sin_guia | sin_patente | en_curso
+ *     | fuera_alcance (documento que el tablero no compara, ver soloEmisiones).
  *
  * ATENCION: `campoConteo` decide si se compara total_pallets o total_bultos.
  * La guia de integracion no explica la diferencia entre ambos (en su ejemplo
@@ -28,25 +29,84 @@ const { revisarCapacidad } = require('./flota');
 
 const ts = (s) => new Date(s).getTime();
 
+/**
+ * ASIGNACION PATENTE + DIA.
+ *
+ * Por que no alcanza con recorrer las cargas en orden y que cada una tome la
+ * primera guia libre: medido el 01-09-2026, RW5303 paso dos veces. A las 05:42
+ * la camara conto 402 y a las 14:42 conto 540; la unica emision del dia
+ * (DTE 72183, pedido 4087420, ALIMENTOS ANDINOS) declaraba 540. El recorrido
+ * cronologico le entregaba la emision al paso de las 05:42 -- que llegaba
+ * primero -- y dejaba al de las 14:42 cruzado contra un retiro de 114, con un
+ * "sobrante" de +426 que nunca existio. El paso de las 14:42 calzaba EXACTO
+ * con la emision: 30 bultos, 540 pallets, 540 declarados.
+ *
+ * La cantidad es informacion del cruce, no solo del resultado. Se arman todos
+ * los pares posibles dentro de la misma patente y el mismo dia, se ordenan por
+ * que tan bien calzan y se asigna de arriba hacia abajo. Un calce exacto le
+ * gana siempre a uno que solo llego antes.
+ *
+ * Criterio de orden, en este orden:
+ *   1. tipo de documento (emision primero: el tunel es de salida)
+ *   2. diferencia absoluta contra el conteo de la camara
+ *   3. cercania en el tiempo, para desempatar
+ */
+function asignar(cargas, guias, campoConteo, soloEmisiones) {
+  const llave = (pat, fechaHora) => `${pat}|${String(fechaHora).slice(0, 10)}`;
+
+  const guiasPorLlave = new Map();
+  guias.forEach((g, gi) => {
+    const k = llave(g.patente, g.fecha);
+    if (!guiasPorLlave.has(k)) guiasPorLlave.set(k, []);
+    guiasPorLlave.get(k).push(gi);
+  });
+
+  const pares = [];
+  cargas.forEach((c, ci) => {
+    if (!c.patente) return;
+    const candidatas = guiasPorLlave.get(llave(c.patente, c.fecha_hora_carga)) || [];
+    for (const gi of candidatas) {
+      const g = guias[gi];
+      if (soloEmisiones && g.tipo !== 'emision') continue;
+      pares.push({
+        ci, gi,
+        rango: g.tipo === 'emision' ? 0 : g.tipo === 'retiro' ? 1 : 2,
+        dif: Math.abs((c[campoConteo] ?? 0) - g.pallets_declarados),
+        dt: Math.abs(ts(c.fecha_hora_carga) - ts(g.hora_emision)),
+      });
+    }
+  });
+
+  pares.sort((a, b) => a.rango - b.rango || a.dif - b.dif || a.dt - b.dt);
+
+  const guiaDe = new Map();   // indice de carga -> indice de guia
+  const cargaDe = new Map();  // indice de guia  -> indice de carga
+  for (const p of pares) {
+    if (guiaDe.has(p.ci) || cargaDe.has(p.gi)) continue;
+    guiaDe.set(p.ci, p.gi);
+    cargaDe.set(p.gi, p.ci);
+  }
+  return { guiaDe, cargaDe, guiasPorLlave, llave };
+}
+
 function conciliar(cargas, guias, opts = {}) {
   const {
     cierreMin = CIERRE_MIN,
     ventanaH = VENTANA_H,
     tolerancia = TOLERANCIA,
     campoConteo = 'total_pallets',
+    // El monitor de anden mira solo emisiones: el tunel es de salida y la
+    // pregunta operativa es si el camion se va con lo que dice la guia. Los
+    // retiros llegan con pallets del cliente y se revisan contra la inspeccion,
+    // que es otro flujo y otro momento.
+    soloEmisiones = false,
     ahora = Date.now(),
   } = opts;
 
-  // indice de guias por patente + fecha
-  const idx = new Map();
-  for (const g of guias) {
-    const k = `${g.patente}|${g.fecha}`;
-    if (!idx.has(k)) idx.set(k, []);
-    idx.get(k).push(g);
-  }
-  const usadas = new Set();
+  const { guiaDe, cargaDe, guiasPorLlave, llave } =
+    asignar(cargas, guias, campoConteo, soloEmisiones);
 
-  const salida = cargas.map((c) => {
+  const salida = cargas.map((c, ci) => {
     const t0 = ts(c.fecha_hora_carga);
     const tiempos = (c.bultos || []).map((b) => ts(b.fecha_hora_deteccion));
     const ultimo = tiempos.length ? Math.max(...tiempos) : t0;
@@ -62,28 +122,23 @@ function conciliar(cargas, guias, opts = {}) {
       pausaMax = Math.max(pausaMax, (serie[i] - serie[i - 1]) / 60000);
     }
 
-    // --- cruce con la guia ---
-    let guia = null, alternativas = [];
-    if (c.patente) {
-      const cand = idx.get(`${c.patente}|${c.fecha_hora_carga.slice(0, 10)}`) || [];
-      // UN CAMION TIENE VARIOS MOVIMIENTOS EN EL MISMO DIA. Medido el 28-08:
-      // siete de las siete patentes con movimiento tenian dos o tres. NC8771
-      // llego con un retiro (doc 80717024, 512) y salio con una emision
-      // (DTE 72137, 540); el cruce elegia el retiro y reportaba el documento
-      // equivocado. Como el tunel es de salida, la emision tiene prioridad;
-      // entre candidatas del mismo tipo gana la mas cercana en el tiempo.
-      const libres = cand.filter((g) => !usadas.has(g.numero));
-      const rango = (g) => (g.tipo === 'emision' ? 0 : g.tipo === 'retiro' ? 1 : 2);
-      libres.sort((x, y) => rango(x) - rango(y)
-        || Math.abs(t0 - ts(x.hora_emision)) - Math.abs(t0 - ts(y.hora_emision)));
-      if (libres.length) { guia = libres[0]; usadas.add(guia.numero); }
-      // El resto queda a mano: el operador puede ver contra qué otro documento
-      // se podria haber cruzado sin salir de la pantalla.
-      alternativas = libres.slice(1).map((g) => ({
-        numero: g.numero, nro_pedido: g.nro_pedido, tipo: g.tipo,
-        pallets_declarados: g.pallets_declarados, operacion: g.operacion,
-      }));
-    }
+    const gi = guiaDe.get(ci);
+    const guia = gi === undefined ? null : guias[gi];
+
+    // Los demas documentos de esa patente ese dia. Se devuelven SIEMPRE, incluso
+    // los ya asignados, con la hora del paso que se los llevo: es lo que permite
+    // entender un cruce raro sin salir de la pantalla.
+    const alternativas = (guiasPorLlave.get(llave(c.patente, c.fecha_hora_carga)) || [])
+      .filter((x) => x !== gi)
+      .map((x) => {
+        const g = guias[x];
+        const otra = cargaDe.get(x);
+        return {
+          numero: g.numero, nro_pedido: g.nro_pedido, tipo: g.tipo,
+          pallets_declarados: g.pallets_declarados, operacion: g.operacion,
+          asignada_a: otra === undefined ? null : cargas[otra].fecha_hora_carga,
+        };
+      });
 
     // --- estado ---
     const detectados = c[campoConteo];
@@ -112,7 +167,7 @@ function conciliar(cargas, guias, opts = {}) {
       // tope no cabe arriba, así que no es una diferencia con el documento sino
       // un problema del conteo mismo.
       capacidad: revisarCapacidad(c.patente, c[campoConteo], guia?.tipo),
-      guias_alternativas: typeof alternativas !== 'undefined' ? alternativas : [],
+      guias_alternativas: alternativas,
       nro_pedido: guia?.nro_pedido ?? null,
       etapa: guia?.etapa ?? null,
       transportista: guia?.transportista ?? null,
@@ -127,9 +182,13 @@ function conciliar(cargas, guias, opts = {}) {
   return {
     cargas: salida,
     // guias emitidas cuyo camion nunca aparecio en el tunel (o cuya patente no se leyo)
-    guias_sin_carga: guias.filter((g) => !usadas.has(g.numero)),
-    parametros: { cierre_min: cierreMin, ventana_h: ventanaH, tolerancia_pallets: tolerancia, campo_conteo: campoConteo },
+    guias_sin_carga: guias.filter((g, gi) =>
+      !cargaDe.has(gi) && (!soloEmisiones || g.tipo === 'emision')),
+    parametros: {
+      cierre_min: cierreMin, ventana_h: ventanaH, tolerancia_pallets: tolerancia,
+      campo_conteo: campoConteo, solo_emisiones: soloEmisiones,
+    },
   };
 }
 
-module.exports = { conciliar, CIERRE_MIN, VENTANA_H, TOLERANCIA };
+module.exports = { conciliar, asignar, CIERRE_MIN, VENTANA_H, TOLERANCIA };

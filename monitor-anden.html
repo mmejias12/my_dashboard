@@ -731,18 +731,30 @@ function render(){
   // --- camiones esperando ---
   $('#cnt-esp').textContent = S.esperando.length;
   $('#esperando').innerHTML = S.esperando.length ? S.esperando
-    .slice().sort((a,b)=>a.hora_emision-b.hora_emision)
+    .slice().sort((a,b)=>String(a.fecha??'').localeCompare(String(b.fecha??''))
+                      || a.hora_emision-b.hora_emision)
     .map(g=>{
-      const min = Math.round((ahora-g.hora_emision)/60000);
-      const viejo = min >= VENCE_MIN;
+      // QUÉ HACE VIEJA A UNA GUÍA. Antes se medía contra hora_emision, que es
+      // cuándo se CREÓ el documento en RDTOut, no cuándo debe salir el camión:
+      // la 72187 se creó el 28/8 para despachar el 2/9 y la tarjeta la mostraba
+      // en naranja, "hace 4 d 22 h · no es de hoy", como si estuviera colgada
+      // desde el viernes. Lo que atrasa a una guía es que su DÍA DE DESPACHO ya
+      // pasó y el camión no cruzó.
+      const atraso = g.dias_atraso ?? (g.fecha
+        ? Math.round((Date.parse(hoyISO()+'T12:00:00Z') - Date.parse(g.fecha+'T12:00:00Z'))/86400000)
+        : 0);
+      const viejo = atraso > 0;
       const fe = new Date(g.hora_emision);
-      const esHoy = (g.fecha_creacion || '') === hoyISO()
-                 || fe.toISOString().slice(0,10) === hoyISO();
+      const dia = g.fecha ? ddmm(new Date(g.fecha+'T12:00:00')) : null;
+      const cuando = !g.fecha ? 'sin día de despacho'
+        : atraso > 0 ? `<b style="color:var(--warning)">debió salir el ${dia} · ${atraso} día${atraso>1?'s':''} de atraso</b>`
+        : atraso < 0 ? `despacho programado para el ${dia}`
+        : 'despacho hoy';
       return `<div class="esp ${viejo?'viejo':''}">
         <div class="izq">
           <div class="pat">${esc(g.patente)}${tag(g.tipo)}</div>
           <div class="meta">${esc(g.numero)} · <b>${esc(g.chofer)}</b> · ${esc(g.cliente)}</div>
-          <div class="esperando">${viejo?'◷ ':''}emitida ${ddmm(fe)} ${hhmm(fe)} · ${hace(ahora-g.hora_emision)}${esHoy?'':' <b style="color:var(--warning)">· no es de hoy</b>'}${g.fecha?` · despacho ${ddmm(new Date(g.fecha+'T12:00:00'))}`:''}</div>
+          <div class="esperando">${viejo?'◷ ':''}${cuando} · <span style="color:var(--muted)">documento creado ${ddmm(fe)} ${hhmm(fe)}</span></div>
         </div>
         <div class="der">
           <div class="pal">${n0(g.pallets_declarados)}<small>PALLETS</small></div>
@@ -817,7 +829,9 @@ async function pedirJSON(url){
 }
 
 async function cargarGuiasReales(){
-  const gs = await pedirJSON(API_GUIAS + '?tipo=emision');
+  // arrastre=3: las emisiones de días anteriores que nunca cruzaron siguen a la
+  // vista en vez de desaparecer a la medianoche.
+  const gs = await pedirJSON(API_GUIAS + '?tipo=emision&arrastre=3');
   S.esperando = gs.filter(g=>enAlcance(g.patente))
                   .map(g=>({...g, hora_emision:new Date(g.hora_emision).getTime()}));
 }

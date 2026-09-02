@@ -12,7 +12,8 @@
  *   fecha=YYYY-MM-DD   por defecto, hoy en America/Santiago
  */
 const { obtenerCargas } = require('../shared/spotvision-fetch');
-const { obtenerGuias, normalizarPatente } = require('../shared/guias-fetch');
+const { obtenerGuias } = require('../shared/guias-fetch');
+const { conciliar } = require('../shared/conciliacion');
 
 /** Fecha de hoy en Santiago, sin depender de la zona horaria del host. */
 function hoySantiago() {
@@ -38,15 +39,24 @@ module.exports = async function (context, req) {
       obtenerCargas(mover(fecha, -1), mover(fecha, 1)),
     ]);
 
-    // patentes que ya cruzaron el túnel en la fecha consultada
-    const yaPasaron = new Set(
-      cargas
-        .filter(c => c.patente && (c.fecha_hora_carga || '').slice(0, 10) === fecha)
-        .map(c => normalizarPatente(c.patente))
-    );
+    // ?tipo=emision — el monitor de andén espera despachos, no retiros. Sin
+    // este recorte la columna de espera se llena de solicitudes de retiro en
+    // etapa de inspección (el 01-09 eran 15 de 17) que nunca son un despacho.
+    const soloEmisiones = req.query.tipo === 'emision';
 
-    const pendientes = guias
-      .filter(g => !yaPasaron.has(g.patente))
+    // QUÉ CUENTA COMO "YA PASÓ". Antes se descartaba por PATENTE: bastaba que
+    // el camión cruzara una vez para que todas sus guías del día salieran de la
+    // espera. Con dos emisiones en un día eso escondía la segunda — el 01-09,
+    // SP3393 tenía la 72179 y la 72172, cruzó una y la otra desapareció de la
+    // pantalla sin haber salido nunca. Ahora se corre el mismo motor de cruce
+    // que usa el monitor y quedan pendientes exactamente las guías que ninguna
+    // carga se llevó.
+    const delDia = cargas.filter(
+      (c) => c.patente && (c.fecha_hora_carga || '').slice(0, 10) === fecha);
+
+    const { guias_sin_carga } = conciliar(delDia, guias, { soloEmisiones });
+
+    const pendientes = guias_sin_carga
       .sort((a, b) => String(a.hora_emision).localeCompare(String(b.hora_emision)));
 
     context.res = {

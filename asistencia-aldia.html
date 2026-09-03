@@ -334,6 +334,12 @@ body{zoom:var(--escala,1)}
 .cm-marca-val.rojo{color:var(--red)}
 .cm-marca-val.pend{color:var(--t3);font-style:italic;font-size:13px}
 .cm-marca-sub{font-size:9.5px;color:var(--t3);margin-top:2px}
+.gps-bloque{margin-bottom:16px}
+.gps-h{font-size:11.5px;margin:0 0 8px;color:var(--cyan);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.gps-row{background:var(--s1);border:1px solid var(--br);border-radius:8px;padding:9px 11px;margin-bottom:8px}
+.gps-row-top{font-size:12px;color:var(--t1)}
+.gps-row-sub{font-size:10px;color:var(--t3);margin-top:2px}
+.gps-map{width:100%;height:200px;border:0;border-radius:7px;margin-top:9px;background:var(--s3)}
 .cm-coment-wrap{border-top:1px solid var(--br);padding-top:14px}
 .cm-coment-lbl{font-size:10.5px;color:var(--t2);font-weight:600;display:block;margin-bottom:6px}
 .cm-coment{width:100%;background:var(--s1);border:1px solid var(--brm);border-radius:7px;color:var(--t1);padding:8px 10px;font-size:12px;font-family:inherit;resize:vertical;min-height:56px;outline:none}
@@ -527,6 +533,7 @@ body{zoom:var(--escala,1)}
     <div class="cal-modal-body">
       <div id="cm-alert" class="cm-alert" style="display:none"></div>
       <div class="cm-marcas" id="cm-marcas"></div>
+      <div id="cm-gps" style="display:none"></div>
       <div class="cm-coment-wrap">
         <label class="cm-coment-lbl">Comentario / observación</label>
         <textarea id="cm-coment" class="cm-coment" placeholder="Escribe una observación para este día..."></textarea>
@@ -875,6 +882,92 @@ function empActivo(e) {
 }
 function empSucursalAdmin(e) { return e.branchOfficeName || e.branchOffice || '—'; }
 function empDepartamento(e) { return e.departmentName || e.department || '—'; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   GEOLOCALIZACIÓN DEL MARCAJE
+
+   Cada marca de terreno trae lat/lng (marcaje móvil). Cada sucursal trae la
+   ubicación del recinto y `rango`, el radio de tolerancia en metros con que
+   Talana valida el marcaje. Si la marca cae fuera de ese radio, no se descarta:
+   se muestra "marcado" pero con advertencia y el mapa del punto, para que RR.HH.
+   lo revise. Radio configurable con un mínimo, por si RR.HH. usa un criterio
+   más amplio que el de Talana.
+   ════════════════════════════════════════════════════════════════════════════ */
+var GPS_RANGO_MINIMO = 120;   // m — piso de tolerancia; RR.HH. valida sobre esto
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+function sucursalDeMarcaOEmpleado(m, emp){
+  // Preferimos la sucursal donde se registró la marca (office); si no, la del
+  // contrato del empleado. Ambas se cruzan contra cacheSucursales por id.
+  var idMarca = m && m.office != null ? String(m.office) : null;
+  var idEmp   = emp && emp.branchOffice != null ? String(emp.branchOffice) : null;
+  return cacheSucursales.find(function(s){ return String(s.code)===idMarca || String(s.id)===idMarca; })
+      || cacheSucursales.find(function(s){ return String(s.code)===idEmp   || String(s.id)===idEmp;   })
+      || null;
+}
+function distanciaMetrosGps(lat1,lng1,lat2,lng2){
+  if([lat1,lng1,lat2,lng2].some(function(v){return v==null||isNaN(v);})) return null;
+  var R=6371000, rad=Math.PI/180;
+  var dLat=(lat2-lat1)*rad, dLng=(lng2-lng1)*rad;
+  var a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*rad)*Math.cos(lat2*rad)*Math.sin(dLng/2)*Math.sin(dLng/2);
+  return Math.round(2*R*Math.asin(Math.sqrt(a)));
+}
+/* Evalúa una marca contra su recinto. Devuelve null si no hay coordenadas. */
+function evaluarGps(m, emp){
+  if(m==null || m.lat==null || m.lng==null) return null;
+  var suc = sucursalDeMarcaOEmpleado(m, emp);
+  var dist = (suc && suc.lat!=null) ? distanciaMetrosGps(m.lat, m.lng, suc.lat, suc.lng) : null;
+  // El umbral efectivo es el mayor entre el rango de la sucursal y el piso.
+  var rango = Math.max(GPS_RANGO_MINIMO, (suc && suc.rango!=null) ? suc.rango : 0);
+  return {
+    lat:m.lat, lng:m.lng, sucursal:suc, dist:dist, rango:rango,
+    fuera:(dist!=null && dist>rango),
+    hora:(m.attendanceDate? String(m.attendanceDate).substring(11,19):''),
+    tipo:m.tipo||m.direction||''
+  };
+}
+/* Marcas crudas (con coordenadas) de un empleado en un día, ordenadas por hora. */
+function marcasCrudasDia(code, fecha){
+  var arr = (cacheMarcasPorDia[fecha]||[]).filter(function(m){ return obtenerCodeMarca(m)===String(code); });
+  return arr.slice().sort(function(a,b){ return String(a.attendanceDate||'').localeCompare(String(b.attendanceDate||'')); });
+}
+/* URL de OpenStreetMap embebido, centrado en el punto con un marcador. */
+function mapaEmbedUrl(lat,lng){
+  var d=0.004, bbox=[lng-d, lat-d, lng+d, lat+d].join('%2C');
+  return 'https://www.openstreetmap.org/export/embed.html?bbox='+bbox+'&layer=mapnik&marker='+lat+'%2C'+lng;
+}
+function mapaLinkUrl(lat,lng){
+  return 'https://www.openstreetmap.org/?mlat='+lat+'&mlon='+lng+'#map=18/'+lat+'/'+lng;
+}
+/* Bloque HTML de geolocalización para el modal del día. */
+function bloqueGpsHtml(code, fecha){
+  var emp = cacheEmpleados.find(function(e){ return String(e.code)===String(code); });
+  var evals = marcasCrudasDia(code, fecha).map(function(m){ return evaluarGps(m, emp); }).filter(Boolean);
+  if(!evals.length) return '';
+  var fuera = evals.filter(function(g){ return g.fuera; });
+  var cab = fuera.length
+      ? '<div class="cm-alert rojo" style="margin-bottom:10px">📍 '+fuera.length+' marcaje'+(fuera.length>1?'s':'')+' fuera del radio del recinto — revisar</div>'
+      : '<div class="cm-alert info" style="margin-bottom:10px">📍 Marcaje dentro del radio del recinto</div>';
+  var filas = evals.map(function(g){
+    var estado = g.dist==null
+        ? '<span style="color:var(--t3)">sin recinto de referencia</span>'
+        : (g.fuera
+            ? '<span style="color:var(--red);font-weight:600">'+g.dist+' m · fuera de rango ('+g.rango+' m)</span>'
+            : '<span style="color:var(--green)">'+g.dist+' m · dentro de rango</span>');
+    var link = ' · <a href="'+mapaLinkUrl(g.lat,g.lng)+'" target="_blank" rel="noopener" style="color:var(--cyan)">ver mapa</a>';
+    var mapa = g.fuera
+        ? '<iframe class="gps-map" src="'+mapaEmbedUrl(g.lat,g.lng)+'" loading="lazy" referrerpolicy="no-referrer"></iframe>'
+        : '';
+    return '<div class="gps-row">'
+      + '<div class="gps-row-top"><b>'+(g.hora||'—')+'</b> '+(g.tipo?('· '+esc(String(g.tipo)))+' ':'')+estado+link+'</div>'
+      + (g.sucursal? '<div class="gps-row-sub">Recinto: '+esc(g.sucursal.name||'')+'</div>':'')
+      + mapa
+      + '</div>';
+  }).join('');
+  return '<div class="gps-bloque"><h4 class="gps-h">Geolocalización del marcaje</h4>'+cab+filas+'</div>';
+}
 
 function cacheCargarDeDisco() {
   try {
@@ -3054,6 +3147,14 @@ function abrirCalModal(code, fecha){
     }
   }
   $('cm-marcas').innerHTML = m;
+
+  // Geolocalización: distancia de cada marca al recinto y mapa si está fuera.
+  var gpsEl = $('cm-gps');
+  if(gpsEl){
+    var g = bloqueGpsHtml(code, fecha);
+    gpsEl.innerHTML = g;
+    gpsEl.style.display = g ? 'block' : 'none';
+  }
 
   var ckey = code+'|'+fecha;
   $('cm-coment').value = calComentarios[ckey] || '';

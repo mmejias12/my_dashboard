@@ -556,6 +556,7 @@ body{zoom:var(--escala,1)}
         <span class="filter-chip" data-edo="lic" onclick="calToggleChip(this)">Lic</span>
         <span class="filter-chip" data-edo="vac" onclick="calToggleChip(this)">Vac</span>
         <input id="cal-busca" placeholder="Buscar por nombre o RUT..." oninput="renderCalendario()" style="flex:1;min-width:200px">
+        <span class="filter-chip" id="chip-exentos" onclick="toggleExentos(this)" title="Gerentes y jefaturas en Artículo 22, exentos de marcar asistencia">👔 Jefaturas exentas</span>
       </div>
 
       <div class="cal-monthbar">
@@ -975,6 +976,28 @@ function empActivo(e) {
 }
 function empSucursalAdmin(e) { return e.branchOfficeName || e.branchOffice || '—'; }
 function empDepartamento(e) { return e.departmentName || e.department || '—'; }
+
+/* ── Jefaturas exentas de marcación ──
+   Gerentes y jefaturas de confianza no marcan asistencia: en Chile van con
+   jornada "Artículo 22", que es exactamente esa exención legal. En REDTEC los
+   diez de Artículo 22 son toda la plana gerencial y ninguno marca, así que se
+   ocultan del reporte por defecto (tenerlos como filas vacías sólo estorba).
+   EXENTOS_RUT_EXTRA cubre casos que RR.HH. detecte pero que en Talana quedaron
+   con jornada normal — se agregan por RUT acá. El chip "jefaturas exentas" del
+   filtro los vuelve a mostrar cuando se necesite. */
+var EXENTOS_RUT_EXTRA = ['16680663-1'];   // Juan Carlos Pérez (Jefe; jornada normal en Talana, no marca)
+function empExento(e){
+  if(!e) return false;
+  if(/art[ií]culo\s*22/i.test(e.jornada||'')) return true;
+  var rut = String(e.identification||'').replace(/\s/g,'');
+  return EXENTOS_RUT_EXTRA.indexOf(rut) >= 0;
+}
+var mostrarExentos = false;
+function toggleExentos(el){
+  mostrarExentos = !mostrarExentos;
+  if(el) el.classList.toggle('on', mostrarExentos);
+  renderCalendario(); renderPanelDia();
+}
 
 /* ════════════════════════════════════════════════════════════════════════════
    GEOLOCALIZACIÓN DEL MARCAJE
@@ -3211,10 +3234,21 @@ function calEmpleadosActivos(){
   return cacheEmpleados.filter(function(e){
     if(!empActivo(e)) return false;
     if(!empEnEmpresa(e)) return false;
+    // Jefaturas exentas (Artículo 22) fuera por defecto: no marcan.
+    if(!mostrarExentos && empExento(e)) return false;
     if(suc && empSucursalAdmin(e) !== suc) return false;
     if(dep && empDepartamento(e) !== dep) return false;
     return true;
   });
+}
+/* Cuántas jefaturas exentas hay en el filtro actual (para la etiqueta del chip). */
+function contarExentos(){
+  var suc = ($('sucursal') && $('sucursal').value) || '';
+  var dep = ($('depto') && $('depto').value) || '';
+  return cacheEmpleados.filter(function(e){
+    return empActivo(e) && empEnEmpresa(e) && empExento(e)
+        && (!suc || empSucursalAdmin(e)===suc) && (!dep || empDepartamento(e)===dep);
+  }).length;
 }
 /* Puebla los selects de sucursal y departamento con los valores presentes en los datos */
 /* Razones sociales presentes en los datos (REDTEC SA y Logística y Transportes
@@ -3329,6 +3363,10 @@ function renderCalendario(preservarScroll){
   var q = ($('cal-busca').value||'').toLowerCase().trim();
 
   $('cal-mestitulo').textContent = CAL_NMES[calMes] + ' ' + calAnio;
+
+  // Etiqueta del chip de jefaturas exentas con el conteo actual.
+  var chE = $('chip-exentos');
+  if(chE){ var nE = contarExentos(); chE.textContent = '👔 Jefaturas exentas ('+nE+')'; chE.style.display = nE? '' : 'none'; }
 
   var personas = calEmpleadosActivos().filter(function(e){
     if(!q) return true;

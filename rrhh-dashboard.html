@@ -118,7 +118,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
 thead th{background:var(--s2);color:var(--t3);font-size:11px;text-transform:uppercase;letter-spacing:.4px;font-weight:600;text-align:left;padding:9px 11px;white-space:nowrap;position:sticky;top:0;z-index:2}
 tbody td{padding:8px 11px;border-top:1px solid var(--br);white-space:nowrap}
 .trunc{max-width:0;overflow:hidden;text-overflow:ellipsis}
-.w-nom{width:22%}.w-cargo{width:20%}.w-area{width:18%}.w-suc{width:12%}
+.w-nom{width:20%}.w-cargo{width:17%}.w-area{width:16%}.w-suc{width:12%}
 tbody tr{cursor:pointer;transition:background .1s}
 tbody tr:hover{background:var(--s2)}
 .mono{font-family:'DM Mono',monospace}
@@ -226,10 +226,10 @@ tbody tr:hover{background:var(--s2)}
     <div class="grid" style="grid-template-columns:1.15fr 1fr;align-items:start">
       <div>
         <div class="card" style="margin-bottom:11px">
-          <div class="ct">Dotación por área</div>
-          <div class="cs">Trabajadores con contrato vigente, por unidad organizacional</div>
+          <div class="ct">Dotación por gerencia</div>
+          <div class="cs">Trabajadores con contrato vigente, por gerencia (primer nivel del árbol)</div>
           <div class="bars" id="ch-areas"></div>
-          <div class="pista">Clic en un área para ver quiénes la componen</div>
+          <div class="pista">Clic en una gerencia para ver el desglose por área y cargo</div>
         </div>
         <div class="card">
           <div class="ct">Antigüedad en la empresa</div>
@@ -264,12 +264,13 @@ tbody tr:hover{background:var(--s2)}
     <div class="ctrls">
       <input class="inp" id="p-q" placeholder="Buscar por nombre, RUT o cargo…" oninput="renderPersonas()">
       <select class="sel" id="p-emp" onchange="renderPersonas()"><option value="">Todas las sociedades</option></select>
-      <select class="sel" id="p-suc" onchange="renderPersonas()"><option value="">Todas las sucursales</option></select>
+      <select class="sel" id="p-ger" onchange="renderPersonas()"><option value="">Todas las gerencias</option></select>
       <select class="sel" id="p-area" onchange="renderPersonas()"><option value="">Todas las áreas</option></select>
+      <select class="sel" id="p-suc" onchange="renderPersonas()"><option value="">Todas las sucursales</option></select>
       <span class="cnt" id="p-cnt"></span>
     </div>
     <div class="tbl-wrap"><table>
-      <thead><tr><th class="w-nom">Trabajador</th><th>RUT</th><th class="w-cargo">Cargo</th><th class="w-area">Área</th><th class="w-suc">Sucursal</th><th>Ingreso</th><th class="num">Antigüedad</th><th class="num">Vac.</th></tr></thead>
+      <thead><tr><th class="w-nom">Trabajador</th><th>RUT</th><th class="w-cargo">Cargo</th><th class="w-area">Gerencia</th><th class="w-area">Área</th><th>Ingreso</th><th class="num">Antigüedad</th><th class="num">Vac.</th></tr></thead>
       <tbody id="tb-pers"></tbody>
     </table></div>
   </div>
@@ -399,7 +400,7 @@ var PROXY = '/api/talana-proxy';
    otros devuelve todo de una vez. fetchAll cubre ambos casos siguiendo `next`. */
 var PAGE_SIZE = 100;
 
-var DATA = { vigentes: [], historico: null, saldos: {}, vacaciones: [], ausencias: [] };
+var DATA = { vigentes: [], historico: null, saldos: {}, vacaciones: [], ausencias: [], uo: {} };
 var TAB = 'resumen', ESTADO = 'vigentes';
 
 /* ── Utilidades ── */
@@ -425,6 +426,22 @@ function antiguedad(desde){
   var d=new Date(String(desde).slice(0,10)+'T00:00:00'), h=new Date();
   if(isNaN(d)) return null;
   return Math.max(0,(h-d)/(1000*60*60*24*365.25));
+}
+/* Fecha de ingreso real para calcular antigüedad y años de servicio.
+   `desde` es la versión vigente del contrato: se mueve con cada anexo, así que
+   NO sirve para antigüedad. `fechaContratacion` es el inicio del contrato
+   actual. `fechaDeContratacionReconocidaParaAnosDeServicio` es la fecha real de
+   ingreso reconocida para indemnización: en recontrataciones (finiquito y nuevo
+   contrato respetando la antigüedad) es anterior a fechaContratacion, y es la
+   que cuenta. Se prioriza esa; si no existe, la fecha de contratación. */
+function fechaIngreso(c){
+  return (c && (c.fechaDeContratacionReconocidaParaAnosDeServicio || c.fechaContratacion)) || null;
+}
+/* True cuando la antigüedad reconocida difiere del contrato actual: es el caso
+   de la persona recontratada a la que se le respetaron los años. */
+function tieneAntiguedadReconocida(c){
+  var r = c && c.fechaDeContratacionReconocidaParaAnosDeServicio;
+  return !!r && String(r).slice(0,10) !== String(c.fechaContratacion||'').slice(0,10);
 }
 function setStatus(t,m){ $('sdot').className='sdot '+(t==='ok'?'ok':t==='load'?'load':t==='err'?'err':''); setT('stxt',m); }
 
@@ -471,6 +488,18 @@ async function cargar(){
   try{
     setStatus('load','Cargando dotación vigente…');
     DATA.vigentes = await fetchAll('/es/api/contrato-paginado/');
+
+    // Árbol de unidades organizacionales: el contrato trae la unidad de la
+    // persona (gerencia2) con el id de su padre, pero no el NOMBRE del padre.
+    // Este mapa id→{nombre,parent} permite subir hasta la raíz y resolver la
+    // gerencia (gerencia1) a la que pertenece cada quien.
+    setStatus('load','Cargando estructura de gerencias…');
+    try{
+      DATA.uo = {};
+      (await fetchAll('/es/api/unidadOrganizacional/')).forEach(function(u){
+        if(u && u.id!=null) DATA.uo[u.id] = { nombre:u.nombre, parent:u.parent };
+      });
+    }catch(e){ console.warn('[unidadOrganizacional]', e.message); DATA.uo={}; }
 
     setStatus('load','Cargando saldos de vacaciones…');
     DATA.saldos = {};
@@ -529,6 +558,23 @@ function det(c){ var p=per(c); return (p.detalles && p.detalles[0]) || {}; }
 function nombre(c){ var p=per(c); return [p.nombre,p.apellidoPaterno,p.apellidoMaterno].filter(Boolean).join(' ') || '—'; }
 function rut(c){ return per(c).rut || '—'; }
 function area(c){ return (c.unidadOrganizacionalDetails && c.unidadOrganizacionalDetails.nombre) || '—'; }
+/* Gerencia (gerencia1): la raíz del árbol de unidades. Se sube por `parent`
+   desde la unidad de la persona hasta el nodo sin padre. Varias gerencias
+   tienen un hijo llamado "Gerencia", así que hay que resolver por id, no por
+   nombre. Si la unidad no está en el árbol, cae en la unidad misma. */
+function gerencia(c){
+  var uo = c.unidadOrganizacionalDetails;
+  if(!uo || uo.id==null) return '—';
+  var actual = uo.id, nombre = uo.nombre, guarda = 0;
+  while(actual!=null && guarda++ < 12){
+    var nodo = DATA.uo[actual];
+    if(!nodo){ break; }
+    nombre = nodo.nombre;
+    if(nodo.parent==null) break;
+    actual = nodo.parent;
+  }
+  return nombre || '—';
+}
 function sucursal(c){ return (c.sucursal && c.sucursal.nombre) || '—'; }
 function sociedad(c){ return (c.empleadorRazonSocial && c.empleadorRazonSocial.razonSocial) || '—'; }
 function tipoContrato(c){ return (c.tipoContratoDetails && c.tipoContratoDetails.nombre) || '—'; }
@@ -551,22 +597,19 @@ function renderResumen(){
 
   $('kpis').innerHTML = [
     tile('Dotación vigente', V.length, 'contratos activos hoy', 'var(--purple)'),
-    tile('Áreas', new Set(V.map(area)).size, 'unidades organizacionales', 'var(--blue)'),
+    tile('Gerencias', new Set(V.map(gerencia)).size, 'áreas de primer nivel', 'var(--blue)'),
     tile('Sociedades', sociedades, 'razones sociales del grupo', 'var(--cyan)'),
     tile('Con más de 20 días', acumulados, 'conviene programarles vacaciones', acumulados ? 'var(--red)' : 'var(--green)')
   ].join('');
 
-  // Dotación por área — comparar magnitud: barras de un solo tono.
-  var areas = contar(V, area);
-  var otras = areas.slice(11);
-  var top = areas.slice(0,11).map(function(x){ return [x[0], x[1], 'area', x[0]]; });
-  if(otras.length){
-    top.push(['Otras áreas', otras.reduce(function(s,x){ return s+x[1]; },0), 'areas-resto', '']);
-  }
-  var maxA = Math.max.apply(null, top.map(function(x){ return x[1]; }));
-  $('ch-areas').innerHTML = top.map(function(x){
+  // Dotación por gerencia — el primer nivel del árbol (RRHH, Producción,
+  // Administración…). El clic abre el desglose por área y cargo dentro de la
+  // gerencia. Muchas menos barras que las 42 unidades planas y se lee de un vistazo.
+  var gers = contar(V, gerencia);
+  var maxA = Math.max.apply(null, gers.map(function(x){ return x[1]; }));
+  $('ch-areas').innerHTML = gers.map(function(x){
     return barra(x[0], x[1], maxA, 'var(--m3)',
-      x[1]+(x[1]===1?' persona':' personas')+' · clic para ver quiénes', x[2], x[3]);
+      x[1]+(x[1]===1?' persona':' personas')+' · clic para ver el desglose', 'gerencia', x[0]);
   }).join('');
 
   // Dos categorías no son una torta: es una proporción, y se lee mejor así.
@@ -609,7 +652,7 @@ function enTramoVac(c, t){
   return typeof n === 'number' && n > t.min && n <= t.max;
 }
 function enTramoAnt(c, t){
-  var a = antiguedad(c.fechaContratacion);
+  var a = antiguedad(fechaIngreso(c));
   return a !== null && a >= t.min && a < t.max;
 }
 
@@ -648,6 +691,7 @@ function medidor(trackId, legId, pares, colores, total){
 function poblarFiltros(){
   var V = DATA.vigentes;
   llenar('p-emp', contar(V, sociedad).map(function(x){return x[0];}), 'Todas las sociedades');
+  llenar('p-ger', contar(V, gerencia).map(function(x){return x[0];}).sort(), 'Todas las gerencias');
   llenar('p-suc', contar(V, sucursal).map(function(x){return x[0];}), 'Todas las sucursales');
   llenar('p-area', contar(V, area).map(function(x){return x[0];}).sort(), 'Todas las áreas');
   llenar('c-tipo', contar(V, tipoContrato).map(function(x){return x[0];}), 'Todos los tipos');
@@ -662,9 +706,10 @@ function llenar(id, valores, etiquetaTodos){
 
 function renderPersonas(){
   var q=($('p-q').value||'').toLowerCase().trim();
-  var fe=$('p-emp').value, fs=$('p-suc').value, fa=$('p-area').value;
+  var fe=$('p-emp').value, fs=$('p-suc').value, fa=$('p-area').value, fg=($('p-ger')||{}).value||'';
   var rows = DATA.vigentes.filter(function(c){
     if(fe && sociedad(c)!==fe) return false;
+    if(fg && gerencia(c)!==fg) return false;
     if(fs && sucursal(c)!==fs) return false;
     if(fa && area(c)!==fa) return false;
     if(q && (nombre(c)+' '+rut(c)+' '+(c.cargo||'')).toLowerCase().indexOf(q)<0) return false;
@@ -673,15 +718,15 @@ function renderPersonas(){
 
   setT('p-cnt', rows.length+' de '+DATA.vigentes.length);
   $('tb-pers').innerHTML = rows.length ? rows.map(function(c){
-    var ant = antiguedad(c.fechaContratacion);
+    var ant = antiguedad(fechaIngreso(c));
     var s = saldoDe(c);
     return '<tr onclick="abrir('+c.id+')">'
       + celda(nombre(c), 'trunc', 'font-weight:500')
       + '<td class="mono" style="color:var(--t3)">'+esc(rut(c))+'</td>'
       + celda(nz(c.cargo), 'trunc')
+      + celda(gerencia(c), 'trunc', 'color:var(--t2)')
       + celda(area(c), 'trunc', 'color:var(--t2)')
-      + celda(sucursal(c), 'trunc', 'color:var(--t2)')
-      + '<td class="mono" style="color:var(--t3)">'+fecha(c.fechaContratacion)+'</td>'
+      + '<td class="mono" style="color:var(--t3)">'+fecha(fechaIngreso(c))+'</td>'
       + '<td class="num">'+(ant===null?'—':ant.toFixed(1)+'a')+'</td>'
       + '<td class="num">'+badgeSaldo(s)+'</td>'
       + '</tr>';
@@ -833,13 +878,13 @@ function mesesDesde(iso){
 function abrirGrupo(tipo, clave){
   var V = DATA.vigentes, gente, titulo, sub;
 
-  if(tipo === 'area'){
+  var esGer = false;
+  if(tipo === 'gerencia'){
+    gente = V.filter(function(c){ return gerencia(c) === clave; });
+    titulo = clave; sub = 'Gerencia · desglose por área y cargo'; esGer = true;
+  } else if(tipo === 'area'){
     gente = V.filter(function(c){ return area(c) === clave; });
     titulo = clave; sub = 'Unidad organizacional';
-  } else if(tipo === 'areas-resto'){
-    var top11 = contar(V, area).slice(0,11).map(function(x){ return x[0]; });
-    gente = V.filter(function(c){ return top11.indexOf(area(c)) < 0; });
-    titulo = 'Otras áreas'; sub = 'Unidades fuera de las once mayores';
   } else if(tipo === 'vac'){
     var tv = TRAMOS_VAC.find(function(t){ return t.nom === clave; });
     gente = V.filter(function(c){ return enTramoVac(c, tv); });
@@ -856,7 +901,7 @@ function abrirGrupo(tipo, clave){
                  : nombre(a).localeCompare(nombre(b),'es');
   });
 
-  var ants = gente.map(function(c){ return antiguedad(c.fechaContratacion); }).filter(function(n){ return n!==null; });
+  var ants = gente.map(function(c){ return antiguedad(fechaIngreso(c)); }).filter(function(n){ return n!==null; });
   var sals = gente.map(saldoDe).filter(function(n){ return typeof n === 'number'; });
   var prom = function(a){ return a.length ? a.reduce(function(s,x){return s+x;},0)/a.length : null; };
 
@@ -871,13 +916,35 @@ function abrirGrupo(tipo, clave){
     + tile('Sobre 20 días', sals.filter(function(n){return n>20;}).length, 'conviene programarles', sals.filter(function(n){return n>20;}).length?'var(--red)':'var(--green)')
     + '</div>';
 
+  // Dentro de una gerencia, el desglose que pidió RR.HH.: por área y por cargo.
+  if(esGer){
+    var maxMini = function(pares){ return Math.max.apply(null, pares.map(function(p){return p[1];})) || 1; };
+    var mini = function(pares){
+      var mx = maxMini(pares);
+      return pares.map(function(p){
+        var pct = Math.max(3, p[1]/mx*100);
+        return '<div class="bar-row" style="cursor:default" title="'+esc(p[0]+': '+p[1])+'">'
+          + '<div class="bar-lbl">'+esc(p[0])+'</div>'
+          + '<div class="bar-track"><div class="bar-fill" style="width:'+pct+'%;background:var(--m2)"></div></div>'
+          + '<div class="bar-val">'+p[1]+'</div></div>';
+      }).join('');
+    };
+    html += '<div class="grid" style="grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">'
+      + '<div><div class="sec-t" style="margin-bottom:8px">Por área</div><div class="bars">'
+        + mini(contar(gente, area)) + '</div></div>'
+      + '<div><div class="sec-t" style="margin-bottom:8px">Por cargo</div><div class="bars">'
+        + mini(contar(gente, function(c){ return c.cargo || '—'; })) + '</div></div>'
+      + '</div>';
+  }
+
+  var colOrg = (esVac || esGer) ? 'Área' : 'Sucursal';
   html += '<div class="tbl-wrap"><table><thead><tr>'
     + '<th>Trabajador</th><th>Cargo</th>'
-    + (esVac ? '<th>Área</th>' : '<th>Sucursal</th>')
+    + '<th>'+colOrg+'</th>'
     + '<th class="num">Antigüedad</th><th>Últimas vacaciones</th><th class="num">Saldo</th>'
     + '</tr></thead><tbody>'
     + gente.map(function(c){
-        var a = antiguedad(c.fechaContratacion);
+        var a = antiguedad(fechaIngreso(c));
         var uv = ultimaVacacion(c.empleado);
         var m = mesesDesde(uv);
         // Más de un año sin salir es lo que hay que mirar junto al saldo alto.
@@ -886,7 +953,7 @@ function abrirGrupo(tipo, clave){
         return '<tr onclick="abrir('+c.id+',true)">'
           + '<td style="font-weight:500">'+esc(nombre(c))+'</td>'
           + '<td style="color:var(--t2)">'+esc(nz(c.cargo))+'</td>'
-          + '<td style="color:var(--t2)">'+esc(esVac ? area(c) : sucursal(c))+'</td>'
+          + '<td style="color:var(--t2)">'+esc((esVac || esGer) ? area(c) : sucursal(c))+'</td>'
           + '<td class="num">'+(a===null?'—':a.toFixed(1)+'a')+'</td>'
           + '<td class="mono" style="color:var(--t3)">'+uvTxt+'</td>'
           + '<td class="num">'+badgeSaldo(saldoDe(c))+'</td>'
@@ -921,20 +988,25 @@ function abrir(id, desdeGrupo){
         ? '<button class="back" style="background:none;cursor:pointer;font-family:inherit" onclick="volverGrupo()">← Volver a la lista</button>'
         : '');
 
-  var ant = antiguedad(c.fechaContratacion);
+  var ant = antiguedad(fechaIngreso(c));
   var html = '';
 
+  var recon = tieneAntiguedadReconocida(c);
   html += seccion('Contrato', [
     f('Cargo', c.cargo), f('Tipo de contrato', tipoContrato(c)),
     f('Fecha de contratación', fecha(c.fechaContratacion)),
-    f('Antigüedad', ant===null?null:ant.toFixed(1)+' años'),
-    f('Vigente desde', fecha(c.desde)), f('Vigente hasta', c.hasta?fecha(c.hasta):'Indefinido'),
+    // Sólo cuando difiere: es la fecha real de ingreso que se respeta para años
+    // de servicio en una recontratación. Se marca para que RR.HH. la note.
+    recon ? f('Antigüedad reconocida', fecha(c.fechaDeContratacionReconocidaParaAnosDeServicio)+' · cuenta para indemnización') : '',
+    f('Antigüedad', ant===null?null:ant.toFixed(1)+' años'+(recon?' (desde la fecha reconocida)':'')),
+    f('Vigente desde (versión actual)', fecha(c.desde)), f('Vigente hasta', c.hasta?fecha(c.hasta):'Indefinido'),
     f('Jornada', c.jornada && c.jornada.nombre), f('Días de jornada', c.dias_jornada),
     f('Horas semanales', c.horasDeLaJornada), f('Código interno', c.codigo)
   ]);
 
   html += seccion('Organización', [
     f('Sociedad', sociedad(c)), f('RUT sociedad', c.empleadorRazonSocial && c.empleadorRazonSocial.rut, true),
+    f('Gerencia', gerencia(c)),
     f('Área', area(c)), f('Centro de costo', c.centroCosto && (c.centroCosto.codigo+' · '+c.centroCosto.nombre)),
     f('Sucursal', sucursal(c)),
     f('Jefatura', c.jefe ? [c.jefe.nombre,c.jefe.apellidoPaterno,c.jefe.apellidoMaterno].filter(Boolean).join(' ') : null)

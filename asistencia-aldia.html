@@ -373,6 +373,34 @@ body{zoom:var(--escala,1)}
 .leaflet-popup-content{font-family:inherit;font-size:12.5px}
 .mp-tip-nom{font-weight:700}
 .mp-tip-sub{color:#555;font-size:11px}
+/* Ficha del trabajador: KPIs del mes + mini-calendario */
+.emp-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:9px}
+.empk{background:var(--s1);border:1px solid var(--br);border-radius:9px;padding:11px 13px}
+.empk-n{font-size:23px;font-weight:700;font-family:'DM Mono',monospace;line-height:1}
+.empk-l{font-size:10.5px;color:var(--t3);margin-top:4px}
+.emc-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;max-width:340px}
+.emc-dow{text-align:center;font-size:9.5px;color:var(--t3);font-weight:700;padding-bottom:2px}
+.emc-cell{position:relative;aspect-ratio:1;border-radius:6px;display:flex;align-items:center;justify-content:center;background:var(--s1);border:1px solid var(--br)}
+.emc-empty{background:transparent;border:none}
+.emc-num{font-size:11px;font-weight:600;color:var(--t2)}
+.emc-p{background:var(--green-bg);border-color:color-mix(in srgb,var(--green) 25%,transparent)} .emc-p .emc-num{color:var(--green)}
+.emc-p.emc-atras{background:var(--red-bg);border-color:color-mix(in srgb,var(--red) 25%,transparent)} .emc-p.emc-atras .emc-num{color:var(--red)}
+.emc-a{background:var(--red-bg);border-color:color-mix(in srgb,var(--red) 25%,transparent)} .emc-a .emc-num{color:var(--red)}
+.emc-pe{background:var(--amber-bg);border-color:color-mix(in srgb,var(--amber) 25%,transparent)} .emc-pe .emc-num{color:var(--amber)}
+.emc-ps{background:var(--purple-bg);border-color:color-mix(in srgb,var(--purple) 25%,transparent)} .emc-ps .emc-num{color:var(--purple)}
+.emc-lic{background:var(--blue-bg);border-color:color-mix(in srgb,var(--blue) 25%,transparent)} .emc-lic .emc-num{color:var(--blue)}
+.emc-vac{background:var(--cyan-bg);border-color:color-mix(in srgb,var(--cyan) 25%,transparent)} .emc-vac .emc-num{color:var(--cyan)}
+.emc-fut,.emc-nada{opacity:.35}
+.emc-pin{position:absolute;bottom:-1px;right:1px;font-size:8px;line-height:1}
+.emc-leyenda{display:flex;flex-wrap:wrap;gap:10px;margin-top:11px;font-size:10.5px;color:var(--t2)}
+.emc-leyenda span{display:inline-flex;align-items:center;gap:4px}
+.emc-lg{width:11px;height:11px;border-radius:3px;display:inline-block}
+.emc-lg.emc-p{background:var(--green-bg);border:1px solid var(--green)}
+.emc-lg.emc-a{background:var(--red-bg);border:1px solid var(--red)}
+.emc-lg.emc-pe{background:var(--amber-bg);border:1px solid var(--amber)}
+.emc-lg.emc-ps{background:var(--purple-bg);border:1px solid var(--purple)}
+.emc-lg.emc-lic{background:var(--blue-bg);border:1px solid var(--blue)}
+.emc-hint{font-size:10px;color:var(--t3);margin-top:6px;font-style:italic}
 .cm-coment-wrap{border-top:1px solid var(--br);padding-top:14px}
 .cm-coment-lbl{font-size:10.5px;color:var(--t2);font-weight:600;display:block;margin-bottom:6px}
 .cm-coment{width:100%;background:var(--s1);border:1px solid var(--brm);border-radius:7px;color:var(--t1);padding:8px 10px;font-size:12px;font-family:inherit;resize:vertical;min-height:56px;outline:none}
@@ -2752,16 +2780,47 @@ function abrirModalEmpleado(code) {
   // Construir HTML
   var html = '';
   html += '<h2>' + empNombreCompleto(emp) + '</h2>';
-  html += '<div class="modal-sub">RUT: ' + (emp.identification || '—') + ' · Código: ' + (emp.code || '—') + '</div>';
+  html += '<div class="modal-sub">RUT: ' + (emp.identification || '—') + ' · Código: ' + (emp.code || '—')
+        + (emp.position ? ' · ' + esc(emp.position) : '') + '</div>';
 
-  // Datos personales
+  // ── Resumen del mes visible (a partir de la asistencia real) ──
+  var rm = resumenMesEmpleado(code);
+  var mesLbl = (typeof CAL_NMES!=='undefined' && calMes!=null) ? (CAL_NMES[calMes]+' '+calAnio) : '';
+  html += '<div class="modal-section"><h3>Resumen de ' + mesLbl + '</h3><div class="emp-kpis">';
+  html += '<div class="empk"><div class="empk-n" style="color:var(--green)">'+rm.presentes+'</div><div class="empk-l">Días presente</div></div>';
+  html += '<div class="empk"><div class="empk-n" style="color:'+(rm.atrasos?'var(--red)':'var(--t2)')+'">'+rm.atrasos+'</div><div class="empk-l">Atrasos'+(rm.minAtraso?' · '+rm.minAtraso+' min':'')+'</div></div>';
+  html += '<div class="empk"><div class="empk-n" style="color:'+(rm.ausencias?'var(--red)':'var(--t2)')+'">'+rm.ausencias+'</div><div class="empk-l">Ausencias</div></div>';
+  html += '<div class="empk"><div class="empk-n" style="color:'+(rm.fueraZona?'var(--red)':'var(--t2)')+'">'+rm.fueraZona+'</div><div class="empk-l">Marcó fuera de zona</div></div>';
+  if(rm.licvac) html += '<div class="empk"><div class="empk-n" style="color:var(--blue)">'+rm.licvac+'</div><div class="empk-l">Licencia / vacaciones</div></div>';
+  if(rm.sinSalida) html += '<div class="empk"><div class="empk-n" style="color:var(--purple)">'+rm.sinSalida+'</div><div class="empk-l">Sin marca de salida</div></div>';
+  html += '</div></div>';
+
+  // ── Calendario del mes de esta persona ──
+  html += '<div class="modal-section"><h3>Calendario de ' + mesLbl + '</h3>';
+  html += calendarioMesEmpleado(code);
+  html += '<div class="emc-leyenda"><span><i class="emc-lg emc-p"></i>Presente</span><span><i class="emc-lg emc-a"></i>Ausente</span><span><i class="emc-lg emc-pe"></i>Sin entrada</span><span><i class="emc-lg emc-ps"></i>Sin salida</span><span><i class="emc-lg emc-lic"></i>Lic/Vac</span><span>📍 Fuera de zona</span></div>';
+  html += '<div class="emc-hint">Clic en un día para ver sus marcas y el mapa</div></div>';
+
+  // ── Contrato y organización ──
+  html += '<div class="modal-section"><h3>Contrato y organización</h3><div class="modal-grid">';
+  html += '<div><div class="lbl">Cargo</div><div class="val">' + esc(emp.position || '—') + '</div></div>';
+  html += '<div><div class="lbl">Gerencia</div><div class="val">' + esc(emp.gerencia || '—') + '</div></div>';
+  html += '<div><div class="lbl">Área / Depto.</div><div class="val">' + esc(empDepartamento(emp)) + '</div></div>';
+  html += '<div><div class="lbl">Sucursal</div><div class="val">' + esc(empSucursalAdmin(emp)) + '</div></div>';
+  html += '<div><div class="lbl">Jornada</div><div class="val">' + esc(emp.jornada || '—') + (emp.horasJornada ? ' · '+emp.horasJornada+' h' : '') + '</div></div>';
+  html += '<div><div class="lbl">Tipo de contrato</div><div class="val">' + esc(emp.tipoContrato || '—') + '</div></div>';
+  html += '<div><div class="lbl">Ingreso</div><div class="val">' + (emp.fechaContratacion ? fmtFecha(emp.fechaContratacion) : '—') + '</div></div>';
+  html += '<div><div class="lbl">Antigüedad</div><div class="val">' + antiguedadTxt(emp.fechaContratacion) + '</div></div>';
+  if(emp.jefe) html += '<div><div class="lbl">Jefatura</div><div class="val">' + esc(emp.jefe) + '</div></div>';
+  if(emp.empresa) html += '<div><div class="lbl">Sociedad</div><div class="val">' + esc(emp.empresa) + '</div></div>';
+  html += '</div></div>';
+
+  // ── Datos personales ──
   html += '<div class="modal-section"><h3>Datos personales</h3><div class="modal-grid">';
-  html += '<div><div class="lbl">Sucursal</div><div class="val">' + empSucursalAdmin(emp) + '</div></div>';
-  html += '<div><div class="lbl">Departamento</div><div class="val">' + empDepartamento(emp) + '</div></div>';
   html += '<div><div class="lbl">Estado</div><div class="val">' + (emp.employeeStatus || '—') + '</div></div>';
   html += '<div><div class="lbl">Género</div><div class="val">' + (emp.genre || '—') + '</div></div>';
-  html += '<div><div class="lbl">Email</div><div class="val">' + (emp.personalMail || '—') + '</div></div>';
-  html += '<div><div class="lbl">Teléfono</div><div class="val">' + (emp.personalPhone || '—') + '</div></div>';
+  if(emp.birthDate) html += '<div><div class="lbl">Fecha de nacimiento</div><div class="val">' + fmtFecha(emp.birthDate) + '</div></div>';
+  html += '<div><div class="lbl">Email</div><div class="val">' + (emp.personalMail || emp.email || '—') + '</div></div>';
   html += '</div></div>';
 
   // Turnos asignados
@@ -3188,6 +3247,61 @@ function poblarFiltrosArea(){
 }
 
 function pillTxt(edo){ return {p:'P',a:'A',pe:'P/E',ps:'P/S',lic:'Lic',vac:'Vac'}[edo]||'·'; }
+
+/* ── Apoyo para la ficha del trabajador ── */
+function antiguedadTxt(fc){
+  if(!fc) return '—';
+  var d = new Date(String(fc).slice(0,10)+'T00:00:00'); if(isNaN(d)) return '—';
+  var y = (new Date() - d)/(1000*60*60*24*365.25);
+  if(y < 1) return Math.round(y*12)+' meses';
+  return (Math.round(y*10)/10)+' años';
+}
+/* Resumen del mes visible para una persona, a partir de su asistencia real. */
+function resumenMesEmpleado(code){
+  var r = {presentes:0, atrasos:0, minAtraso:0, ausencias:0, licvac:0, fueraZona:0, sinSalida:0, dias:0};
+  var ultimo = new Date(calAnio, calMes+1, 0).getDate();
+  var hoyStr = hoy();
+  for(var d=1; d<=ultimo; d++){
+    var fecha = calIso(calAnio, calMes, d);
+    if(fecha > hoyStr) break;
+    var st = calEstadoDia(code, fecha);
+    if(!st) continue;
+    r.dias++;
+    if(st.edo==='p' || st.edo==='ps' || st.edo==='pe'){
+      r.presentes++;
+      if(st.atrasado){ r.atrasos++; r.minAtraso += (parseInt(st.atr)||0); }
+      if(st.edo==='ps') r.sinSalida++;
+      if(diaFueraDeZona(code, fecha)) r.fueraZona++;
+    } else if(st.edo==='a'){ r.ausencias++; }
+    else if(st.edo==='lic' || st.edo==='vac'){ r.licvac++; }
+  }
+  return r;
+}
+/* Mini-calendario del mes visible para una persona (grilla L→D). */
+function calendarioMesEmpleado(code){
+  var ultimo = new Date(calAnio, calMes+1, 0).getDate();
+  var primerDow = new Date(calAnio, calMes, 1).getDay();   // 0=Dom
+  var offset = (primerDow+6)%7;                             // la semana parte el lunes
+  var hoyStr = hoy();
+  var dows = ['Lu','Ma','Mi','Ju','Vi','Sá','Do'].map(function(x){ return '<div class="emc-dow">'+x+'</div>'; }).join('');
+  var celdas = '';
+  for(var i=0;i<offset;i++) celdas += '<div class="emc-cell emc-empty"></div>';
+  for(var d=1; d<=ultimo; d++){
+    var fecha = calIso(calAnio, calMes, d);
+    var futuro = fecha > hoyStr;
+    var st = futuro ? null : calEstadoDia(code, fecha);
+    var cls = 'emc-cell', pin = '', click = '';
+    if(st){
+      cls += ' emc-'+st.edo + (st.atrasado?' emc-atras':'');
+      if((st.edo==='p'||st.edo==='ps'||st.edo==='pe') && diaFueraDeZona(code, fecha)) pin = '<span class="emc-pin">📍</span>';
+      click = ' onclick="cerrarModal();abrirCalModal(\''+code+'\',\''+fecha+'\')" style="cursor:pointer" title="Ver el día"';
+    } else {
+      cls += futuro ? ' emc-fut' : ' emc-nada';
+    }
+    celdas += '<div class="'+cls+'"'+click+'><span class="emc-num">'+d+'</span>'+pin+'</div>';
+  }
+  return '<div class="emc-grid">'+dows+celdas+'</div>';
+}
 
 /* Repinta panel + calendario conservando el scroll (usado tras carga en background) */
 var calScrollLeft=0, calScrollTop=0, calChipSemana=null;

@@ -312,6 +312,7 @@ body{zoom:var(--escala,1)}
 .cal-mini.empty{background:transparent;color:var(--t4)}
 .cal-cell.alerta .cal-mini{box-shadow:0 0 0 1.5px var(--red)}
 .cal-cell.alerta::after{content:'';position:absolute;top:3px;right:3px;width:5px;height:5px;border-radius:50%;background:var(--red);box-shadow:0 0 5px var(--red)}
+.cal-pin{position:absolute;bottom:0;left:1px;font-size:9px;line-height:1;pointer-events:none;filter:drop-shadow(0 0 1px var(--bg))}
 .cal-modal{position:fixed;inset:0;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(4px);z-index:1100;display:none;align-items:center;justify-content:center;padding:20px}
 .cal-modal.show{display:flex}
 .cal-modal-card{background:var(--s2);border:1px solid var(--brm);border-radius:13px;width:100%;max-width:440px;box-shadow:0 20px 60px color-mix(in srgb,var(--sombra-c) 55%,transparent);overflow:hidden}
@@ -353,6 +354,25 @@ body{zoom:var(--escala,1)}
 .mapa-grande-pie{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;font-size:12px;color:var(--t2)}
 .mapa-grande-pie a{color:var(--cyan);text-decoration:none;font-weight:600}
 .mapa-grande-pie a:hover{text-decoration:underline}
+.mapa-personas{position:fixed;inset:0;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(5px);z-index:1250;display:none;align-items:center;justify-content:center;padding:24px}
+.mapa-personas.show{display:flex}
+.mp-card{background:var(--s2);border:1px solid var(--brm);border-radius:14px;width:100%;max-width:960px;overflow:hidden;box-shadow:0 24px 70px color-mix(in srgb,var(--sombra-c) 60%,transparent);display:flex;flex-direction:column;max-height:calc(100vh - 48px)}
+.mp-head{padding:14px 18px;border-bottom:1px solid var(--br);display:flex;align-items:center;gap:14px}
+.mp-head h3{font-size:16px;font-weight:700;color:var(--t1);margin:0}
+.mp-sub{font-size:11.5px;color:var(--t2);margin-top:2px}
+.mp-fecha{margin-left:auto;background:var(--s1);border:1px solid var(--br);color:var(--t1);border-radius:7px;padding:6px 10px;font-family:inherit;font-size:12.5px}
+.mp-resumen{display:flex;gap:8px;padding:11px 18px;border-bottom:1px solid var(--br);flex-wrap:wrap}
+.mp-pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 11px;border-radius:20px;border:1px solid var(--br)}
+.mp-pill .dot{width:9px;height:9px;border-radius:50%}
+.mp-pill.dentro{background:var(--green-bg);color:var(--green)}
+.mp-pill.fuera{background:var(--red-bg);color:var(--red)}
+.mp-pill.sinrec{background:var(--s1);color:var(--t2)}
+.mp-body{position:relative;flex:1;min-height:0}
+#mp-map{width:100%;height:min(64vh,560px);background:var(--s3)}
+.mp-vacio{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--t2);font-size:13px;padding:30px;background:var(--s2)}
+.leaflet-popup-content{font-family:inherit;font-size:12.5px}
+.mp-tip-nom{font-weight:700}
+.mp-tip-sub{color:#555;font-size:11px}
 .cm-coment-wrap{border-top:1px solid var(--br);padding-top:14px}
 .cm-coment-lbl{font-size:10.5px;color:var(--t2);font-weight:600;display:block;margin-bottom:6px}
 .cm-coment{width:100%;background:var(--s1);border:1px solid var(--brm);border-radius:7px;color:var(--t1);padding:8px 10px;font-size:12px;font-family:inherit;resize:vertical;min-height:56px;outline:none}
@@ -491,6 +511,7 @@ body{zoom:var(--escala,1)}
       <div class="ct">
         <span>📅 Asistencia al día</span>
         <span class="card-actions">
+          <button class="btn-mini" onclick="abrirMapaPersonas()">🗺️ Mapa</button>
           <button class="btn-mini" onclick="calHoyMes()">Mes actual</button>
           <button class="btn-mini" onclick="cargar()">↻ Refrescar</button>
         </span>
@@ -524,6 +545,7 @@ body{zoom:var(--escala,1)}
         <span class="cal-lg"><span class="cal-mini ps">P/S</span> Sin salida</span>
         <span class="cal-lg"><span class="cal-mini lic">Lic</span> Licencia</span>
         <span class="cal-lg"><span class="cal-mini vac">Vac</span> Vacaciones</span>
+        <span class="cal-lg"><span style="font-size:11px">📍</span> Marcó fuera de zona</span>
       </div>
 
       <div class="cal-wrap" id="cal-wrap">
@@ -553,6 +575,25 @@ body{zoom:var(--escala,1)}
         <button class="cm-guardar" onclick="guardarComentarioCal()">Guardar comentario</button>
         <span class="cm-saved" id="cm-saved" style="display:none">✓ Guardado</span>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- MAPA DE PERSONAS (Leaflet) -->
+<div class="mapa-personas" id="mapa-personas" onclick="if(event.target===this)cerrarMapaPersonas()">
+  <div class="mp-card">
+    <div class="mp-head">
+      <div>
+        <h3>🗺️ Marcajes en el mapa</h3>
+        <div class="mp-sub" id="mp-sub">—</div>
+      </div>
+      <input type="date" id="mp-fecha" class="mp-fecha" onchange="renderMapaPersonas()">
+      <button class="cal-modal-close" onclick="cerrarMapaPersonas()">&times;</button>
+    </div>
+    <div class="mp-resumen" id="mp-resumen"></div>
+    <div class="mp-body">
+      <div id="mp-map"></div>
+      <div class="mp-vacio" id="mp-vacio" style="display:none"></div>
     </div>
   </div>
 </div>
@@ -952,6 +993,18 @@ function evaluarGps(m, emp){
     tipo:m.tipo||m.direction||''
   };
 }
+/* ¿Alguna marca de ese día del empleado cayó fuera del radio del recinto?
+   Sólo puede saberse si el recinto tiene coordenadas (snapshot regenerado o
+   respaldo cargado). Sin eso devuelve false (no se afirma nada). */
+function diaFueraDeZona(code, fecha){
+  var emp = cacheEmpleados.find(function(e){ return String(e.code)===String(code); });
+  var ms = marcasCrudasDia(code, fecha);
+  for (var i=0;i<ms.length;i++){
+    var g = evaluarGps(ms[i], emp);
+    if (g && g.fuera) return true;
+  }
+  return false;
+}
 /* Marcas crudas (con coordenadas) de un empleado en un día, ordenadas por hora. */
 function marcasCrudasDia(code, fecha){
   var arr = (cacheMarcasPorDia[fecha]||[]).filter(function(m){ return obtenerCodeMarca(m)===String(code); });
@@ -1018,6 +1071,142 @@ function cerrarMapaGrande(){
   var m = $('mapa-grande'); if(!m) return;
   m.classList.remove('show');
   var b = $('mapa-grande-body'); if(b) b.innerHTML='';   // libera el iframe
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   MAPA DE PERSONAS (Leaflet)
+
+   Pinta, para un día, a cada persona que marcó con GPS como un punto sobre el
+   mapa real: verde si marcó dentro del radio del recinto, rojo si marcó fuera,
+   gris si el recinto aún no tiene coordenadas para comparar. El recinto va con
+   su círculo de zona. Nombre al pasar el mouse. Leaflet se carga desde cdnjs
+   sólo la primera vez que se abre el mapa.
+   ════════════════════════════════════════════════════════════════════════════ */
+var _leafletMap = null, _leafletCapas = null;
+function cargarLeaflet(){
+  if (window.L) return Promise.resolve();
+  return new Promise(function(resolve, reject){
+    var css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
+    document.head.appendChild(css);
+    var js = document.createElement('script');
+    js.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+    js.onload = resolve;
+    js.onerror = function(){ reject(new Error('No se pudo cargar Leaflet')); };
+    document.head.appendChild(js);
+  });
+}
+function abrirMapaPersonas(){
+  var inp = $('mp-fecha');
+  // Arranca en el día que se esté mirando en el calendario, o en hoy.
+  if(inp && !inp.value) inp.value = (calModalCtx && calModalCtx.fecha) || hoy();
+  $('mapa-personas').classList.add('show');
+  cargarLeaflet().then(function(){
+    if(!_leafletMap){
+      _leafletMap = L.map('mp-map', { zoomControl:true, attributionControl:true });
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19, attribution: '© OpenStreetMap'
+      }).addTo(_leafletMap);
+      _leafletCapas = L.layerGroup().addTo(_leafletMap);
+    }
+    setTimeout(function(){ _leafletMap.invalidateSize(); renderMapaPersonas(); }, 60);
+  }).catch(function(e){
+    $('mp-vacio').style.display='flex';
+    $('mp-vacio').textContent = 'No se pudo cargar el mapa: '+e.message;
+  });
+}
+function cerrarMapaPersonas(){ $('mapa-personas').classList.remove('show'); }
+
+/* Datos del día para el mapa: un punto por persona (su primera marca con GPS),
+   coloreado según si ese día tuvo alguna marca fuera de la zona. */
+function datosMapaDia(fecha){
+  var marcas = (cacheMarcasPorDia[fecha]||[]).filter(function(m){ return m.lat!=null && m.lng!=null; });
+  var porPersona = {};
+  marcas.forEach(function(m){
+    var code = obtenerCodeMarca(m);
+    if(!porPersona[code]) porPersona[code] = [];
+    porPersona[code].push(m);
+  });
+  var puntos = [];
+  Object.keys(porPersona).forEach(function(code){
+    var ms = porPersona[code].slice().sort(function(a,b){ return String(a.attendanceDate||'').localeCompare(String(b.attendanceDate||'')); });
+    var emp = cacheEmpleados.find(function(e){ return String(e.code)===String(code); });
+    if(emp && !empEnEmpresa(emp)) return;                 // respeta el filtro de empresa
+    var sucFiltro = ($('sucursal')&&$('sucursal').value)||'';
+    if(sucFiltro && emp && empSucursalAdmin(emp)!==sucFiltro) return;
+    var rep = ms[0];
+    var gRep = evaluarGps(rep, emp);
+    // estado del día: rojo si CUALQUIER marca cayó fuera; si no hay recinto, gris
+    var algunaFuera=false, algunaConDist=false;
+    ms.forEach(function(m){ var g=evaluarGps(m,emp); if(g){ if(g.dist!=null) algunaConDist=true; if(g.fuera) algunaFuera=true; } });
+    puntos.push({
+      code:code,
+      nombre: emp ? empNombreCompleto(emp) : code,
+      lat: Number(rep.lat), lng: Number(rep.lng),
+      hora: gRep? gRep.hora : '',
+      dist: gRep? gRep.dist : null,
+      sucursal: gRep? gRep.sucursal : null,
+      estado: !algunaConDist ? 'sinrec' : (algunaFuera ? 'fuera' : 'dentro')
+    });
+  });
+  return puntos;
+}
+function renderMapaPersonas(){
+  if(!_leafletMap || !window.L) return;
+  var fecha = ($('mp-fecha')&&$('mp-fecha').value) || hoy();
+  _leafletCapas.clearLayers();
+  var puntos = datosMapaDia(fecha);
+
+  // Recintos con coordenadas (para el círculo de zona y para centrar el mapa).
+  var recintos = cacheSucursales.filter(function(s){ return s.lat!=null && s.lng!=null; });
+  var sucFiltro = ($('sucursal')&&$('sucursal').value)||'';
+  if(sucFiltro) recintos = recintos.filter(function(s){ return (s.name===sucFiltro)||(String(s.code)===sucFiltro); });
+
+  var COL = { dentro:'#12a05f', fuera:'#e5484d', sinrec:'#8a8f9a' };
+  var bounds = [];
+
+  recintos.forEach(function(s){
+    var radio = Math.max(GPS_RANGO_MINIMO, s.rango!=null?s.rango:0);
+    L.circle([s.lat, s.lng], { radius:radio, color:'#3b82f6', weight:1.5, fillColor:'#3b82f6', fillOpacity:.08 }).addTo(_leafletCapas);
+    L.marker([s.lat, s.lng]).addTo(_leafletCapas).bindPopup('<div class="mp-tip-nom">'+esc(s.name||'Recinto')+'</div><div class="mp-tip-sub">Zona de '+radio+' m</div>');
+    bounds.push([s.lat, s.lng]);
+  });
+
+  puntos.forEach(function(p){
+    var col = COL[p.estado];
+    var m = L.circleMarker([p.lat, p.lng], {
+      radius:7, color:'#fff', weight:1.5, fillColor:col, fillOpacity:.95
+    }).addTo(_leafletCapas);
+    var sub = p.estado==='sinrec' ? 'ubicación registrada'
+            : (p.estado==='fuera' ? ('fuera de zona'+(p.dist!=null?(' · '+p.dist+' m'):''))
+                                   : ('dentro de zona'+(p.dist!=null?(' · '+p.dist+' m'):'')));
+    m.bindTooltip('<span class="mp-tip-nom">'+esc(p.nombre)+'</span>', {direction:'top', offset:[0,-4]});
+    m.bindPopup('<div class="mp-tip-nom">'+esc(p.nombre)+'</div><div class="mp-tip-sub">'+(p.hora?esc(p.hora)+' · ':'')+sub+'</div>');
+    bounds.push([p.lat, p.lng]);
+  });
+
+  // Resumen
+  var nD=puntos.filter(function(p){return p.estado==='dentro';}).length;
+  var nF=puntos.filter(function(p){return p.estado==='fuera';}).length;
+  var nS=puntos.filter(function(p){return p.estado==='sinrec';}).length;
+  var res = '<span class="mp-pill dentro"><span class="dot" style="background:'+COL.dentro+'"></span>'+nD+' dentro</span>'
+          + '<span class="mp-pill fuera"><span class="dot" style="background:'+COL.fuera+'"></span>'+nF+' fuera</span>';
+  if(nS) res += '<span class="mp-pill sinrec"><span class="dot" style="background:'+COL.sinrec+'"></span>'+nS+' sin recinto de referencia</span>';
+  $('mp-resumen').innerHTML = res;
+  var partes = fecha.split('-');
+  $('mp-sub').textContent = (puntos.length? puntos.length+' persona'+(puntos.length>1?'s':'')+' con GPS' : 'Sin marcajes con GPS')
+      + ' · ' + (partes.length===3? partes[2]+'/'+partes[1]+'/'+partes[0] : fecha);
+
+  // Encajar la vista
+  if(bounds.length){
+    $('mp-vacio').style.display='none';
+    if(bounds.length===1) _leafletMap.setView(bounds[0], 16);
+    else _leafletMap.fitBounds(bounds, { padding:[40,40], maxZoom:17 });
+  } else {
+    $('mp-vacio').style.display='flex';
+    $('mp-vacio').textContent = 'No hay marcajes con ubicación GPS para este día.';
+  }
 }
 
 function cacheCargarDeDisco() {
@@ -1261,7 +1450,38 @@ async function cargarSucursales() {
     opt.textContent = s.name || s.code;
     sel.appendChild(opt);
   });
-  return lista;
+  // Si el snapshot todavía no trae la ubicación del recinto (snapshot viejo),
+  // se piden las coordenadas directo a Talana como respaldo. Es una sola
+  // llamada (dos sucursales) y sólo la primera vez. Requiere rol admin/rrhh;
+  // si no hay acceso, la geo-zona se desactiva sin romper el resto.
+  if (!cacheSucursales.some(function(s){ return s.lat!=null; })) {
+    try { await completarCoordsSucursal(); } catch(e){ console.warn('[coords sucursal]', e.message); }
+  }
+  return cacheSucursales;
+}
+
+/* Respaldo: trae lat/lng/rango de /sucursal/ vía el proxy y las fusiona en
+   cacheSucursales por id. Fuente correcta cuando el snapshot se regenere; esto
+   es sólo el puente mientras tanto. */
+async function completarCoordsSucursal() {
+  var r = await fetch('/api/talana-proxy?endpoint=' + encodeURIComponent('/sucursal/'), { headers:{Accept:'application/json'} });
+  if (!r.ok) return;
+  var j = await r.json();
+  var arr = (j && (j.results || j)) || [];
+  var porId = {};
+  arr.forEach(function(s){
+    var loc = s.location_parseado || parsearPuntoWkt(s.location);
+    porId[String(s.id)] = { lat: loc?loc.lat:null, lng: loc?loc.lng:null, rango: (s.rango!=null?Number(s.rango):null) };
+  });
+  cacheSucursales.forEach(function(s){
+    var c = porId[String(s.id)] || porId[String(s.code)];
+    if (c){ if(s.lat==null) s.lat=c.lat; if(s.lng==null) s.lng=c.lng; if(s.rango==null) s.rango=c.rango; }
+  });
+}
+function parsearPuntoWkt(wkt){
+  if(!wkt) return null;
+  var m = String(wkt).match(/POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)/i);
+  return m ? { lng:Number(m[1]), lat:Number(m[2]) } : null;
 }
 
 async function cargarDepartamentos() {
@@ -3027,9 +3247,13 @@ function renderCalendario(preservarScroll){
       var op = visible?'':'opacity:.16;';
       // P atrasado: pill en rojo aunque esté presente
       var miniCls = st.edo + (st.atrasado ? ' p-atras' : '');
-      body += '<div class="cal-cell'+(finde?' finde':'')+(alerta?' alerta':'')+(st.atrasado?' con-atraso':'')+'" style="'+op+'" '+
+      // Pin cuando la persona estuvo presente pero alguna marca cayó fuera de
+      // la zona del recinto. La P sigue siendo P; el pin avisa que hay que mirar.
+      var geoOut = (st.edo==='p'||st.edo==='ps'||st.edo==='pe') && diaFueraDeZona(code, fecha);
+      var pin = geoOut ? '<span class="cal-pin" title="Marcó fuera de la zona del recinto">📍</span>' : '';
+      body += '<div class="cal-cell'+(finde?' finde':'')+(alerta?' alerta':'')+(st.atrasado?' con-atraso':'')+(geoOut?' geo-out':'')+'" style="'+op+'" '+
               'onclick="abrirCalModal(\''+code+'\',\''+fecha+'\')">'+
-              '<span class="cal-mini '+miniCls+'">'+pillTxt(st.edo)+'</span></div>';
+              '<span class="cal-mini '+miniCls+'">'+pillTxt(st.edo)+'</span>'+pin+'</div>';
     }
     body += '</div>';
   });
@@ -3236,9 +3460,11 @@ function guardarComentarioCal(){
 }
 document.addEventListener('keydown', function(e){
   if(e.key!=='Escape') return;
-  // El mapa grande se cierra primero: está por encima del modal del día.
+  // Se cierra el que esté más arriba: lightbox > mapa de personas > modal del día.
   var mg = $('mapa-grande');
   if(mg && mg.classList.contains('show')){ cerrarMapaGrande(); return; }
+  var mp = $('mapa-personas');
+  if(mp && mp.classList.contains('show')){ cerrarMapaPersonas(); return; }
   cerrarCalModal();
 });
 

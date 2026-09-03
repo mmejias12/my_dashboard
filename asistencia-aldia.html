@@ -339,7 +339,20 @@ body{zoom:var(--escala,1)}
 .gps-row{background:var(--s1);border:1px solid var(--br);border-radius:8px;padding:9px 11px;margin-bottom:8px}
 .gps-row-top{font-size:12px;color:var(--t1)}
 .gps-row-sub{font-size:10px;color:var(--t3);margin-top:2px}
-.gps-map{width:100%;height:200px;border:0;border-radius:7px;margin-top:9px;background:var(--s3)}
+.gps-map-wrap{position:relative;margin-top:10px;border-radius:8px;overflow:hidden;cursor:pointer;border:1px solid var(--br)}
+.gps-map-wrap:hover{border-color:var(--cyan)}
+.gps-map{width:100%;height:190px;border:0;display:block;background:var(--s3);pointer-events:none}
+.gps-map-hint{position:absolute;right:8px;bottom:8px;background:color-mix(in srgb,var(--bg) 78%,transparent);color:var(--t1);font-size:10.5px;font-weight:600;padding:4px 8px;border-radius:6px;border:1px solid var(--br)}
+.mapa-grande{position:fixed;inset:0;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(5px);z-index:1300;display:none;align-items:center;justify-content:center;padding:24px}
+.mapa-grande.show{display:flex}
+.mapa-grande-card{background:var(--s2);border:1px solid var(--brm);border-radius:13px;width:100%;max-width:820px;overflow:hidden;box-shadow:0 24px 70px color-mix(in srgb,var(--sombra-c) 60%,transparent)}
+.mapa-grande-head{padding:14px 18px;border-bottom:1px solid var(--br);display:flex;align-items:center;gap:12px}
+.mapa-grande-head h3{font-size:15px;font-weight:700;color:var(--t1);margin:0}
+.mapa-grande-head .cal-modal-close{margin-left:auto}
+.mapa-grande-frame{width:100%;height:min(60vh,520px);border:0;display:block;background:var(--s3)}
+.mapa-grande-pie{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;font-size:12px;color:var(--t2)}
+.mapa-grande-pie a{color:var(--cyan);text-decoration:none;font-weight:600}
+.mapa-grande-pie a:hover{text-decoration:underline}
 .cm-coment-wrap{border-top:1px solid var(--br);padding-top:14px}
 .cm-coment-lbl{font-size:10.5px;color:var(--t2);font-weight:600;display:block;margin-bottom:6px}
 .cm-coment{width:100%;background:var(--s1);border:1px solid var(--brm);border-radius:7px;color:var(--t1);padding:8px 10px;font-size:12px;font-family:inherit;resize:vertical;min-height:56px;outline:none}
@@ -541,6 +554,17 @@ body{zoom:var(--escala,1)}
         <span class="cm-saved" id="cm-saved" style="display:none">✓ Guardado</span>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- LIGHTBOX MAPA GRANDE -->
+<div class="mapa-grande" id="mapa-grande" onclick="if(event.target===this)cerrarMapaGrande()">
+  <div class="mapa-grande-card">
+    <div class="mapa-grande-head">
+      <h3 id="mapa-grande-titulo">Ubicación del marcaje</h3>
+      <button class="cal-modal-close" onclick="cerrarMapaGrande()">&times;</button>
+    </div>
+    <div class="mapa-grande-body" id="mapa-grande-body"></div>
   </div>
 </div>
 
@@ -947,26 +971,53 @@ function bloqueGpsHtml(code, fecha){
   var evals = marcasCrudasDia(code, fecha).map(function(m){ return evaluarGps(m, emp); }).filter(Boolean);
   if(!evals.length) return '';
   var fuera = evals.filter(function(g){ return g.fuera; });
-  var cab = fuera.length
-      ? '<div class="cm-alert rojo" style="margin-bottom:10px">📍 '+fuera.length+' marcaje'+(fuera.length>1?'s':'')+' fuera del radio del recinto — revisar</div>'
-      : '<div class="cm-alert info" style="margin-bottom:10px">📍 Marcaje dentro del radio del recinto</div>';
+  var conDist = evals.filter(function(g){ return g.dist != null; });
+  // La cabecera sólo habla de rango cuando hay recinto con coordenadas para
+  // comparar; si el recinto aún no tiene ubicación, no se afirma nada del radio.
+  var cab;
+  if(fuera.length)      cab = '<div class="cm-alert rojo" style="margin-bottom:10px">📍 '+fuera.length+' marcaje'+(fuera.length>1?'s':'')+' fuera del radio del recinto — revisar</div>';
+  else if(conDist.length) cab = '<div class="cm-alert info" style="margin-bottom:10px">📍 Marcaje dentro del radio del recinto</div>';
+  else                  cab = '<div class="cm-alert ambar" style="margin-bottom:10px">📍 Ubicación del marcaje registrada · recinto sin coordenadas para medir distancia</div>';
+
   var filas = evals.map(function(g){
     var estado = g.dist==null
-        ? '<span style="color:var(--t3)">sin recinto de referencia</span>'
+        ? '<span style="color:var(--t3)">ubicación registrada</span>'
         : (g.fuera
             ? '<span style="color:var(--red);font-weight:600">'+g.dist+' m · fuera de rango ('+g.rango+' m)</span>'
             : '<span style="color:var(--green)">'+g.dist+' m · dentro de rango</span>');
-    var link = ' · <a href="'+mapaLinkUrl(g.lat,g.lng)+'" target="_blank" rel="noopener" style="color:var(--cyan)">ver mapa</a>';
-    var mapa = g.fuera
-        ? '<iframe class="gps-map" src="'+mapaEmbedUrl(g.lat,g.lng)+'" loading="lazy" referrerpolicy="no-referrer"></iframe>'
-        : '';
-    return '<div class="gps-row">'
-      + '<div class="gps-row-top"><b>'+(g.hora||'—')+'</b> '+(g.tipo?('· '+esc(String(g.tipo)))+' ':'')+estado+link+'</div>'
+    var verMapa = ' · <a href="javascript:void(0)" onclick="abrirMapaGrande('+g.lat+','+g.lng+',\''+esc(g.hora||'')+' '+esc(String(g.tipo||''))+'\')" style="color:var(--cyan)">ver mapa</a>';
+    return '<div class="gps-row" style="padding-bottom:6px">'
+      + '<div class="gps-row-top"><b>'+(g.hora||'—')+'</b> '+(g.tipo?('· '+esc(String(g.tipo)))+' ':'')+estado+verMapa+'</div>'
       + (g.sucursal? '<div class="gps-row-sub">Recinto: '+esc(g.sucursal.name||'')+'</div>':'')
-      + mapa
       + '</div>';
   }).join('');
-  return '<div class="gps-bloque"><h4 class="gps-h">Geolocalización del marcaje</h4>'+cab+filas+'</div>';
+
+  // Un mini-mapa representativo (la primera marca con coordenadas), siempre
+  // visible y ampliable al hacer clic — como pidió RR.HH.
+  var rep = evals[0];
+  var mini = '<div class="gps-map-wrap" onclick="abrirMapaGrande('+rep.lat+','+rep.lng+',\''+esc(rep.hora||'')+' '+esc(String(rep.tipo||''))+'\')" title="Clic para ampliar el mapa">'
+    + '<iframe class="gps-map" src="'+mapaEmbedUrl(rep.lat,rep.lng)+'" loading="lazy" referrerpolicy="no-referrer" tabindex="-1"></iframe>'
+    + '<div class="gps-map-hint">🔍 Clic para ampliar</div></div>';
+
+  return '<div class="gps-bloque"><h4 class="gps-h">Geolocalización del marcaje</h4>'+cab+filas+mini+'</div>';
+}
+
+/* Lightbox con el mapa grande e interactivo del punto donde se marcó. */
+function abrirMapaGrande(lat, lng, titulo){
+  var cont = $('mapa-grande-body');
+  if(!cont) return;
+  $('mapa-grande-titulo').textContent = titulo ? ('Marcaje · '+titulo) : 'Ubicación del marcaje';
+  cont.innerHTML = '<iframe class="mapa-grande-frame" src="'+mapaEmbedUrl(lat,lng)+'" referrerpolicy="no-referrer"></iframe>'
+    + '<div class="mapa-grande-pie">'
+    + '<span class="mono">'+lat.toFixed(6)+', '+lng.toFixed(6)+'</span>'
+    + '<a href="'+mapaLinkUrl(lat,lng)+'" target="_blank" rel="noopener">Abrir en OpenStreetMap ↗</a>'
+    + '</div>';
+  $('mapa-grande').classList.add('show');
+}
+function cerrarMapaGrande(){
+  var m = $('mapa-grande'); if(!m) return;
+  m.classList.remove('show');
+  var b = $('mapa-grande-body'); if(b) b.innerHTML='';   // libera el iframe
 }
 
 function cacheCargarDeDisco() {
@@ -2740,8 +2791,21 @@ function calEstadoDia(code, fecha){
     // hace parecer que no vino nadie.
     var mm = calMarcasDia(code, fecha);
     if (!mm.length) return null;
-    var e1 = obtenerDateTimeMarca(mm[0]);
-    var s1 = mm.length > 1 ? obtenerDateTimeMarca(mm[mm.length - 1]) : null;
+    // La entrada real es la primera marca de ENTRADA y la salida real la última
+    // de SALIDA, según la dirección que informa Talana (E/X). Tomar sin más la
+    // última marca como "salida" pintaba una segunda o tercera ENTRADA como
+    // salida (p. ej. tres marcas de entrada seguidas).
+    var entradas = mm.filter(function(m){ return obtenerTipoMarca(m) === 'ENTRADA'; });
+    var salidas  = mm.filter(function(m){ return obtenerTipoMarca(m) === 'SALIDA'; });
+    var e1, s1;
+    if (entradas.length || salidas.length){
+      e1 = entradas.length ? obtenerDateTimeMarca(entradas[0]) : null;
+      s1 = salidas.length  ? obtenerDateTimeMarca(salidas[salidas.length - 1]) : null;
+    } else {
+      // Talana no informó dirección en ninguna marca: se cae a primera/última.
+      e1 = obtenerDateTimeMarca(mm[0]);
+      s1 = mm.length > 1 ? obtenerDateTimeMarca(mm[mm.length - 1]) : null;
+    }
     return { edo:'p', et:'—', st:'—',
              er: e1 ? fmtHora(e1) : '—', sr: s1 ? fmtHora(s1) : '—',
              srPost:null, atr:'', atrasado:false, enTurno:false,
@@ -3170,7 +3234,13 @@ function guardarComentarioCal(){
   $('cm-saved').style.display='inline';
   setTimeout(function(){ $('cm-saved').style.display='none'; }, 1800);
 }
-document.addEventListener('keydown', function(e){ if(e.key==='Escape') cerrarCalModal(); });
+document.addEventListener('keydown', function(e){
+  if(e.key!=='Escape') return;
+  // El mapa grande se cierra primero: está por encima del modal del día.
+  var mg = $('mapa-grande');
+  if(mg && mg.classList.contains('show')){ cerrarMapaGrande(); return; }
+  cerrarCalModal();
+});
 
 
 </script>

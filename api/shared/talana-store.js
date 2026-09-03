@@ -115,6 +115,12 @@ const guardarMaestros = (c, m) => escribir(c, K_MAESTROS, { ...m, _guardado: new
 
 function maestrosVencidos(maestros) {
   if (!maestros || !maestros._guardado) return true;
+  // Migración de esquema: si el snapshot fue generado antes de que las
+  // sucursales trajeran la ubicación del recinto (lat/lng/rango, para la
+  // validación GPS del marcaje), se fuerza una regeneración aunque no haya
+  // vencido por tiempo. `rango` ausente = esquema viejo; null = valor real.
+  const sucs = (maestros.sucursales || []);
+  if (sucs.length && sucs.every(s => s.rango === undefined)) return true;
   const edadMin = (Date.now() - Date.parse(maestros._guardado)) / 60000;
   return edadMin > TTL_MAESTROS_MIN;
 }

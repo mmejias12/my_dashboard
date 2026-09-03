@@ -153,14 +153,41 @@ async function traerSucursales(opts) {
   const { items, completo } = await talana.listar('/sucursal/', {}, opts);
   const data = items
     .filter(s => s.vigente !== false)
-    .map(s => ({
-      id: s.id,
-      code: String(s.id),
-      name: s.nombre || ('Sucursal ' + s.id),
-      comuna: s.direccionComuna || null,
-      direccion: [s.direccionCalle, s.direccionNumero].filter(Boolean).join(' ')
-    }));
+    .map(s => {
+      // Talana guarda la ubicación del recinto y el radio de tolerancia (metros)
+      // con que valida el marcaje. location_parseado ya trae lat/lng; si no,
+      // se parsea el WKT "POINT (lng lat)".
+      const loc = s.location_parseado || parsearPunto(s.location);
+      return {
+        id: s.id,
+        code: String(s.id),
+        name: s.nombre || ('Sucursal ' + s.id),
+        comuna: s.direccionComuna || null,
+        direccion: [s.direccionCalle, s.direccionNumero].filter(Boolean).join(' '),
+        lat: loc ? loc.lat : null,
+        lng: loc ? loc.lng : null,
+        rango: (s.rango != null ? Number(s.rango) : null)   // radio permitido (m)
+      };
+    });
   return { data, completo };
+}
+
+/** WKT de Talana: "POINT (-70.7668 -33.4581)" → { lat, lng } (orden lng lat). */
+function parsearPunto(wkt) {
+  if (!wkt) return null;
+  const m = String(wkt).match(/POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)/i);
+  if (!m) return null;
+  return { lng: Number(m[1]), lat: Number(m[2]) };
+}
+
+/** Distancia en metros entre dos coordenadas (haversine). */
+function distanciaMetros(lat1, lng1, lat2, lng2) {
+  if ([lat1, lng1, lat2, lng2].some(v => v == null || isNaN(v))) return null;
+  const R = 6371000, rad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * rad, dLng = (lng2 - lng1) * rad;
+  const a = Math.sin(dLat/2)**2 +
+            Math.cos(lat1*rad) * Math.cos(lat2*rad) * Math.sin(dLng/2)**2;
+  return Math.round(2 * R * Math.asin(Math.sqrt(a)));
 }
 
 async function traerCentrosCosto(opts) {
@@ -460,11 +487,18 @@ function mapearMarca(m) {
     tipo: DIRECCION[m.direction] || null,    // ENTRADA | SALIDA | INTERMEDIA
     attendanceType: m.direction === 'E' ? 1 : m.direction === 'X' ? 2 : 0,
     markingMethod: m.markingMethod || null,
-    office: m.office || null,
-    lat: m.lat || null,
-    lng: m.lng || null,
+    sourceMark: m.sourceMark || null,        // mobile | web | reloj…
+    office: m.office || null,                // sucursal donde se registró la marca
+    lat: aNumero(m.lat),                      // Talana los manda como string
+    lng: aNumero(m.lng),
     message: m.message || ''
   };
+}
+
+function aNumero(v) {
+  if (v == null || v === '') return null;
+  const n = Number(v);
+  return isNaN(n) ? null : n;
 }
 
 // ════════════════════════════════════════════════════════════════════════════

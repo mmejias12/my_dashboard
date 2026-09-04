@@ -90,6 +90,7 @@ h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
 .ev.faltante{border-left-color:var(--critical)}
 .ev.sobrante{border-left-color:var(--critical)}
 .ev.sin_guia,.ev.sin_patente,.ev.fuera_alcance{border-left-color:var(--muted)}
+.ev.fusion{border-left-color:var(--warning)}
 .ev .gh{font-size:15px;width:20px;text-align:center;flex:none}
 .ev .pat{font-weight:600;letter-spacing:.03em;font-variant-numeric:tabular-nums}
 .ev .det{font-size:12px;color:var(--text-2)}
@@ -289,6 +290,12 @@ const REGLAS = {
   // actualizarse hasta recargar. Comparar una carga abierta daría un faltante
   // falso, así que se muestra y se espera a que cierre.
   en_curso:    {nivel:'ok',      gh:'◷', tit:'Paso en curso', acc:'', sonido:null, correo:false},
+  // DOS CAMIONES CONTADOS COMO UNO. No es un problema de carga sino de conteo:
+  // el segundo camión quedó dentro de la carga del primero y con su patente,
+  // así que su despacho aparece como "sin registro de cámara".
+  fusion:      {nivel:'aviso',   gh:'⧉', tit:'Dos pasadas contadas como una',
+                acc:'El conteo suma más de un camión: identificar el segundo y contarlo aparte',
+                sonido:'aviso', correo:false},
   // El camión pasó, pero el documento del día para esa patente es un retiro o
   // una devolución. No es un despacho: no se compara y no se alerta. Se deja
   // visible igual, porque el operador necesita saber que el camión pasó.
@@ -508,6 +515,23 @@ function calcularFila(carga, guia, dif){
   return peor;
 }
 
+/* Parte la carga en el corte largo: lo de antes es el camión de la patente
+   leída, lo de después es el que se sumó. Los pallets de cada tramo se estiman
+   con las 18 por fila, porque la API no dice cuántos trae cada bulto. */
+const CORTE_LARGO_S = 6;
+function partirFusion(carga){
+  const g = carga.deteccion?.grupos || [];
+  const i = g.findIndex(x => (x.hueco_s || 0) >= CORTE_LARGO_S);
+  if(i < 0) return null;
+  const suma = (a) => a.reduce((s,x)=>s+x.bultos, 0);
+  const uno = g.slice(0, i+1), dos = g.slice(i+1);
+  return {
+    corte_s: g[i].hueco_s,
+    uno: {bultos: suma(uno), pallets: suma(uno)*18, hasta: g[i].hasta},
+    dos: {bultos: suma(dos), pallets: suma(dos)*18, desde: dos[0]?.desde},
+  };
+}
+
 function evaluar(carga){
   // 0. LA CARGA TODAVÍA ESTÁ ABIERTA. Mientras siga entrando bultos no hay
   //    nada que comparar: cualquier lectura ahora daría un faltante falso. Se
@@ -537,6 +561,13 @@ function evaluar(carga){
       ? carga.estado
       : (Math.abs(dif) <= TOLERANCIA ? 'ok' : dif < 0 ? 'faltante' : 'sobrante');
     return {...carga, estado, diferencia:dif, filaAfectada:calcularFila(carga, carga.guia, dif)};
+  }
+
+  // 1a. DOS CAMIONES EN UNA CARGA. Comparar esto contra cualquier guía no tiene
+  //     sentido: el total no es de un camión. Se marca como problema de conteo.
+  if(carga.deteccion?.posible_fusion){
+    return {...carga, guia:carga.guia ?? null, estado:'fusion',
+            diferencia:null, filaAfectada:null, fusion:partirFusion(carga)};
   }
 
   // 1b. Sin emisión, pero con un retiro o devolución de esa patente ese día.
@@ -692,11 +723,12 @@ function tiraFilas(v){
               <img loading="lazy" src="${src}" alt="${lab}"><div class="n">${et}</div></div>`;
   }).join('');
 
-  const g = gruposDeteccion(b);
+  // Si ya se explicó la fusión arriba, este aviso sobra: diría lo mismo peor.
+  const g = v.fusion ? [] : gruposDeteccion(b);
   const avisoGrupos = g.length > 1
     ? `<div class="aviso-fila" style="border-left-color:var(--critical)">
          La cámara registró estos ${b.length} bultos en <b>${g.length} grupos separados</b>
-         (${g.map(x=>x.n).join(' y ')} bultos, con ${n1(g.find(x=>x.hueco)?.hueco)} s sin detecciones en medio).
+         (${g.map(x=>x.n).join(' y ')} bultos, con hasta ${n1(Math.max(...g.map(x=>x.hueco||0)))} s sin detecciones en medio).
          Un paso continuo llega en una sola ráfaga: revisar si fue el carro de arrastre entrando aparte
          o <b>dos pasadas distintas sumadas en una misma carga</b>.</div>`
     : '';
@@ -772,6 +804,17 @@ function abrirModal(v){
       </div>
 
       ${r.acc?`<div class="aviso-fila" style="border-left-color:${col}"><b>${esc(r.acc)}</b></div>`:''}
+
+      ${v.fusion ? `<div class="aviso-fila" style="border-left-color:var(--warning)">
+        La cámara registró <b>${v.total_bultos} bultos</b> en una sola carga, más de lo que cabe en un
+        ${esc(v.patente)} (tope ${n0(v.capacidad?.capacidad_total)} pallets), y con un corte de
+        <b>${n1(v.fusion.corte_s)} s</b> en el medio. Lo más probable es que sean <b>dos camiones</b>:
+        <br>· hasta las ${hhmm(new Date(v.fusion.uno.hasta))} — ${v.fusion.uno.bultos} filas ≈ ${n0(v.fusion.uno.pallets)} pallets
+           (${esc(v.patente)})
+        <br>· desde las ${hhmm(new Date(v.fusion.dos.desde))} — <b>${v.fusion.dos.bultos} filas ≈ ${n0(v.fusion.dos.pallets)} pallets</b>
+           (otro camión, con su despacho sin registro de cámara)
+        <br><br>Buscar en <b>Emisiones sin cruce</b> un despacho de ${n0(v.fusion.dos.pallets)} pallets a esa hora:
+        ese camión sí salió.</div>` : ''}
 
       ${v.otroDoc ? `<div class="aviso-fila" style="border-left-color:${tipoDe(v.otroDoc.tipo).c}">
         <b style="color:${tipoDe(v.otroDoc.tipo).c}">${tipoDe(v.otroDoc.tipo).et}</b> —

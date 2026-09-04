@@ -119,6 +119,17 @@ async function obtenerGuias(desde, hasta) {
       // emisiones, que se preparan con semanas de anticipación.
       //   · fecha        → día operativo, para el recorte y el cruce.
       //   · hora_emision → horaIngreso, único campo con hora, sólo de referencia.
+      // ¿EL DESPACHO YA SE CERRÓ EN RDTOut? Medido entre el 31-08 y el 04-09:
+      // de 55 emisiones con patente, 54 estaban en etapa "Cerrado" y una en
+      // "Confirmar". El historial del pedido 4087420 muestra por qué: el camión
+      // cruzó el túnel a las 14:42, la patente y el DTE se cargaron a las 14:54
+      // y el pedido quedó Cerrado a las 16:10. Es decir, el cierre ocurre
+      // DESPUÉS de que el camión salió. Una emisión cerrada y confirmada que la
+      // cámara nunca registró no es un camión por salir: es un despacho que ya
+      // ocurrió y que la cámara no vio.
+      const etapaTxt = (f.etapaOperacion || '').trim();
+      const despachoCerrado = /cerrado/i.test(etapaTxt) && confirmada > 0;
+
       const diaOperativo = f.fechaDespacho || f.fechaConfirmacion || f.fechaRequerida || f.horaIngreso;
       const fecha = diaOperativo ? String(diaOperativo).slice(0, 10) : null;
       const cuando = f.horaIngreso || diaOperativo || null;
@@ -137,7 +148,8 @@ async function obtenerGuias(desde, hasta) {
         operacion: (f.operacion || '').trim(),
         tipo,
         fecha_creacion: f.horaIngreso ? String(f.horaIngreso).slice(0, 10) : null,
-        etapa: (f.etapaOperacion || '').trim() || null,
+        etapa: etapaTxt || null,
+        despacho_cerrado: despachoCerrado,
         nro_pedido: String(f.nroPedido || '').trim() || null,
         pallets_declarados: pallets,
         cantidad_solicitada: solicitada,

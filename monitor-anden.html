@@ -68,6 +68,14 @@ h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
 .esp .pal small{font-size:11px;color:var(--muted);font-weight:400;display:block;margin-top:3px;letter-spacing:.04em}
 .esp .esperando{font-size:11px;color:var(--muted);margin-top:5px}
 .esp.viejo .esperando{color:var(--warning)}
+/* Despacho que RDTOut ya cerró: el camión salió, lo que falta es el registro
+   de la cámara. No es una espera, así que no se pinta como urgencia. */
+.esp.cerrado{border-left-color:var(--muted)}
+.esp.cerrado .esperando{color:var(--muted)}
+.grupo{font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);
+       padding:6px 3px 0;display:flex;align-items:baseline;gap:8px}
+.grupo b{color:var(--text-2);font-weight:600}
+.grupo .exp{font-size:11px;letter-spacing:0;text-transform:none;color:var(--muted)}
 
 /* ---------- evento ---------- */
 .ev{background:var(--surface-2);border:1px solid var(--line);border-left:2px solid var(--good);border-radius:10px;padding:10px 13px;display:flex;align-items:center;gap:12px;animation:entra .3s ease;cursor:pointer}
@@ -194,10 +202,10 @@ h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
   <div class="cols">
     <div class="panel">
       <div class="phead">
-        <h2>Camiones esperando el paso</h2>
+        <h2>Emisiones sin cruce</h2>
         <span class="cnt" id="cnt-esp">0</span>
         <div class="sp"></div>
-        <span style="font-size:11px;color:var(--muted)">guías emitidas, aún sin cruzar el túnel</span>
+        <span style="font-size:11px;color:var(--muted)">guías emitidas que la cámara no registró</span>
       </div>
       <div class="plist" id="esperando"></div>
     </div>
@@ -855,6 +863,14 @@ addEventListener('keydown', e=>{
 function render(){
   const ahora = Date.now();
 
+  // DOS COSAS DISTINTAS QUE ANTES SE VEÍAN IGUAL. Si RDTOut ya cerró y confirmó
+  // el despacho, el camión SALIÓ: el historial del pedido 4087420 muestra que
+  // el cierre se registra después del paso. Esas guías no están esperando nada
+  // y en la columna de espera se quedaban para siempre. Lo que falta ahí es el
+  // registro de la cámara, que es un problema de cobertura, no de andén.
+  const porSalir  = S.esperando.filter(g=>!g.despacho_cerrado);
+  const sinCamara = S.esperando.filter(g=>g.despacho_cerrado);
+
   // --- KPIs de la jornada ---
   // Los pasos que no son despacho no entran en el conteo de la jornada: si
   // entraran, "9 pasos / 5 conciliados / 1 desviación" no cerraría nunca.
@@ -867,7 +883,7 @@ function render(){
   const enRiesgo = falt.reduce((a,e)=>a-e.diferencia,0);
 
   $('#kpis').innerHTML = [
-    ['Esperando paso', S.esperando.length, ''],
+    ['Por salir', porSalir.length, ''],
     ['Despachos hoy', pasados, ''],
     ['Conciliados', ok, 'ok'],
     ['Con desviación', falt.length+sob.length, (falt.length+sob.length)?'mal':''],
@@ -877,7 +893,8 @@ function render(){
     const clic = (i===5 && v>0) ? ' click" id="kpi-pendientes' : '';
     return `<div class="kpi ${c}${clic}"><div class="lab">${l}</div><div class="val">${n0(v)}</div>
       ${i===5&&v>0?'<div style="font-size:10px;color:var(--muted);margin-top:2px">clic para revisarlas</div>':''}
-      ${i===1&&fuera?`<div style="font-size:10px;color:var(--muted);margin-top:2px">+${fuera} paso${fuera>1?'s':''} que no son despacho</div>`:''}</div>`;
+      ${i===1&&fuera?`<div style="font-size:10px;color:var(--muted);margin-top:2px">+${fuera} paso${fuera>1?'s':''} que no son despacho</div>`:''}
+      ${i===0&&sinCamara.length?`<div style="font-size:10px;color:var(--muted);margin-top:2px">+${sinCamara.length} sin registro de cámara</div>`:''}</div>`;
   }).join('');
   const kp = $('#kpi-pendientes');
   if(kp) kp.onclick = ()=>{
@@ -885,9 +902,9 @@ function render(){
     if(p) abrirModal(p);
   };
 
-  // --- camiones esperando ---
+  // --- emisiones sin cruce ---
   $('#cnt-esp').textContent = S.esperando.length;
-  $('#esperando').innerHTML = S.esperando.length ? S.esperando
+  const tarjetas = (lista) => lista
     .slice().sort((a,b)=>String(a.fecha??'').localeCompare(String(b.fecha??''))
                       || a.hora_emision-b.hora_emision)
     .map(g=>{
@@ -900,14 +917,17 @@ function render(){
       const atraso = g.dias_atraso ?? (g.fecha
         ? Math.round((Date.parse(hoyISO()+'T12:00:00Z') - Date.parse(g.fecha+'T12:00:00Z'))/86400000)
         : 0);
-      const viejo = atraso > 0;
+      // Un despacho ya cerrado no está atrasado: ya ocurrió.
+      const viejo = atraso > 0 && !g.despacho_cerrado;
       const fe = new Date(g.hora_emision);
       const dia = g.fecha ? ddmm(new Date(g.fecha+'T12:00:00')) : null;
-      const cuando = !g.fecha ? 'sin día de despacho'
+      const cuando = g.despacho_cerrado
+        ? `salió el ${dia||'—'} · RDTOut confirmó ${n0(g.cantidad_confirmada || g.pallets_declarados)} pallets · <b>la cámara no lo registró</b>`
+        : !g.fecha ? 'sin día de despacho'
         : atraso > 0 ? `<b style="color:var(--warning)">debió salir el ${dia} · ${atraso} día${atraso>1?'s':''} de atraso</b>`
         : atraso < 0 ? `despacho programado para el ${dia}`
         : 'despacho hoy';
-      return `<div class="esp ${viejo?'viejo':''}">
+      return `<div class="esp ${viejo?'viejo':''}${g.despacho_cerrado?' cerrado':''}">
         <div class="izq">
           <div class="pat">${esc(g.patente)}${tag(g.tipo)}</div>
           <div class="meta">${esc(g.numero)} · <b>${esc(g.chofer)}</b> · ${esc(g.cliente)}</div>
@@ -917,7 +937,14 @@ function render(){
           <div class="pal">${n0(g.pallets_declarados)}<small>PALLETS</small></div>
         </div>
       </div>`;
-    }).join('') : '<div class="vacio">Ningún camión pendiente de pasar</div>';
+    }).join('');
+
+  $('#esperando').innerHTML = S.esperando.length ? [
+    porSalir.length ? `<div class="grupo"><b>Por salir</b> · ${porSalir.length}
+      <span class="exp">el despacho aún no se cierra en RDTOut</span></div>` + tarjetas(porSalir) : '',
+    sinCamara.length ? `<div class="grupo"><b>Sin registro de cámara</b> · ${sinCamara.length}
+      <span class="exp">despachados y confirmados en RDTOut; el camión ya salió</span></div>` + tarjetas(sinCamara) : '',
+  ].join('') : '<div class="vacio">Todas las emisiones del período tienen su paso registrado</div>';
 
   // --- feed de pasos ---
   $('#cnt-ev').textContent = S.eventos.length;

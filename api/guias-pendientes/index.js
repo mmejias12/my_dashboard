@@ -98,6 +98,9 @@ module.exports = async function (context, req) {
         operacion: g.operacion,
         tipo: g.tipo,
         etapa: g.etapa,
+        // true = RDTOut ya cerró y confirmó el despacho, así que el camión
+        // salió: lo que falta no es el camión, es el registro de la cámara.
+        despacho_cerrado: !!g.despacho_cerrado,
         nro_pedido: g.nro_pedido,
         cantidad_solicitada: g.cantidad_solicitada,
         cantidad_despachada: g.cantidad_despachada,

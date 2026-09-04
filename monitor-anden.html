@@ -74,6 +74,7 @@ h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
 .ev:hover{background:var(--surface-3);border-color:rgba(255,255,255,.2)}
 .ev:focus-visible{outline:2px solid var(--series-1);outline-offset:2px}
 .ev.pendiente{background:rgba(208,59,59,.07)}
+.ev.recien{outline:2px solid var(--warning);outline-offset:1px;transition:outline-color .4s}
 .pend{font-size:9px;letter-spacing:.08em;font-weight:600;color:var(--critical);border:1px solid rgba(208,59,59,.5);border-radius:4px;padding:1px 5px;margin-left:7px;vertical-align:2px}
 .kpi.click{cursor:pointer}
 .kpi.click:hover{background:var(--surface-2)}
@@ -272,6 +273,14 @@ const REGLAS = {
   demorada:    {nivel:'aviso',   gh:'◷', tit:'Guía emitida sin paso registrado',
                 acc:'Confirmar si el camión sigue en planta', sonido:'aviso', correo:false},
   ok:          {nivel:'ok',      gh:'✓', tit:'Carga conciliada', acc:'', sonido:null, correo:false},
+  // EL CAMIÓN TODAVÍA ESTÁ PASANDO. El motor devuelve 'en_curso' mientras la
+  // carga siga recibiendo bultos (menos de CIERRE_MIN sin novedad). Faltaba
+  // acá, y era la causa de que la pantalla se congelara: buscar ese estado en
+  // esta tabla daba undefined, leer .nivel lanzaba TypeError dentro de
+  // registrarPaso y de render(), el ciclo entero moría y el feed dejaba de
+  // actualizarse hasta recargar. Comparar una carga abierta daría un faltante
+  // falso, así que se muestra y se espera a que cierre.
+  en_curso:    {nivel:'ok',      gh:'◷', tit:'Paso en curso', acc:'', sonido:null, correo:false},
   // El camión pasó, pero el documento del día para esa patente es un retiro o
   // una devolución. No es un despacho: no se compara y no se alerta. Se deja
   // visible igual, porque el operador necesita saber que el camión pasó.
@@ -290,6 +299,13 @@ const TIPOS = {
   otro:       {et:'—',          c:'#79818F', nota:''},
 };
 const tipoDe = t => TIPOS[t] || TIPOS.otro;
+
+/* Nunca buscar el estado en la tabla directo: un estado nuevo en el backend no
+   puede volver a dejar la pantalla congelada. Si aparece uno desconocido, se
+   muestra como aviso y el monitor sigue andando. */
+const REGLA_DESCONOCIDA = {nivel:'aviso', gh:'•', tit:'Paso registrado',
+  acc:'Estado no reconocido: revisar manualmente', sonido:null, correo:false};
+const regla = (e) => REGLAS[e] || REGLA_DESCONOCIDA;
 const tag = t => t ? `<span class="tag" style="color:${tipoDe(t).c};border-color:${tipoDe(t).c}66">${tipoDe(t).et}</span>` : '';
 
 const $  = (s,r=document)=>r.querySelector(s);
@@ -325,15 +341,44 @@ const S = {
   notifOn: false,
   demoOn: true,
   detallePorBulto: false,   // el campo que le pedimos a SPOTVISION
-  vistos: new Set(),
+  cerradas: new Set(),      // cargas ya evaluadas en firme
+  atendidas: new Set(),     // marcadas por el operador (sobreviven a la recarga)
+  retenidos: new Set(),
+  cola: [],                 // alertas esperando pantalla
+  enPantalla: null,         // carga_id de la alerta abierta
   arranque: true,           // primera sincronización: entra el histórico sin alertar
 };
+
+/* =====================================================================
+   MEMORIA ENTRE RECARGAS
+   La sesión de Entra ID vence sola y la página se recarga: sin esto, cada
+   recarga borraba qué alertas ya habían sido atendidas y qué botones estaban
+   activos. Se guarda por fecha, así que al día siguiente parte limpio.
+   ===================================================================== */
+const CLAVE = () => 'spotvision.monitor.' + hoyISO();
+function cargarEstado(){
+  try{
+    const g = JSON.parse(localStorage.getItem(CLAVE()) || '{}');
+    S.atendidas = new Set(g.atendidas || []);
+    S.retenidos = new Set(g.retenidos || []);
+    return g.prefs || {};
+  }catch(e){ return {}; }        // modo incógnito o storage bloqueado
+}
+function guardarEstado(){
+  try{
+    localStorage.setItem(CLAVE(), JSON.stringify({
+      atendidas: [...new Set(S.eventos.filter(e=>e.atendida).map(e=>e.carga_id))],
+      retenidos: [...new Set(S.eventos.filter(e=>e.retenido).map(e=>e.carga_id))],
+      prefs: {sonido:S.sonidoOn, notif:S.notifOn, detalle:S.detallePorBulto},
+    }));
+  }catch(e){ /* sin storage el monitor igual funciona, sólo no recuerda */ }
+}
 
 /* =====================================================================
    SONIDO — generado con WebAudio, sin archivos externos
    ===================================================================== */
 let ctx = null;
-function activarSonido(){
+function activarSonido(confirmar = true){
   try{
     ctx = ctx || new (window.AudioContext||window.webkitAudioContext)();
     ctx.resume();
@@ -341,8 +386,32 @@ function activarSonido(){
     $('#btn-sonido').classList.add('on');
     $('#btn-sonido').textContent = 'Sonido activo';
     $('#aud-aviso').classList.add('hide');
-    pitido(660,.08,.10);                     // confirmación breve
+    if(confirmar) pitido(660,.08,.10);       // confirmación breve
+    guardarEstado();
   }catch(e){ console.warn('Audio no disponible', e); }
+}
+
+/* AUTO-ACTIVACIÓN AL ABRIR LA PÁGINA.
+   El navegador no deja que una página emita sonido sin que alguien la haya
+   tocado: es una regla del navegador, no algo que podamos desactivar. Lo que
+   sí se puede es recordar que el operador ya lo había activado y reanudarlo
+   solo, en cuanto haga el primer clic o toque una tecla en cualquier parte de
+   la pantalla. En la práctica queda activo sin que tenga que buscar el botón. */
+function prepararSonidoAutomatico(){
+  const intentar = ()=>{
+    activarSonido(false);
+    if(ctx && ctx.state === 'running'){
+      document.removeEventListener('click', intentar, true);
+      document.removeEventListener('keydown', intentar, true);
+    }
+  };
+  intentar();                                  // por si el navegador ya lo permite
+  if(!ctx || ctx.state !== 'running'){
+    $('#aud-aviso').classList.remove('hide');
+    $('#aud-aviso').textContent = 'Sonido listo — se activa solo con el primer clic en la pantalla';
+    document.addEventListener('click', intentar, true);
+    document.addEventListener('keydown', intentar, true);
+  }
 }
 function pitido(freq, dur, vol, cuando=0){
   if(!ctx) return;
@@ -370,13 +439,22 @@ function sonar(tipo){
 async function activarNotif(){
   if(!('Notification' in window)) return alert('Este navegador no soporta notificaciones de escritorio.');
   const r = await Notification.requestPermission();
-  S.notifOn = r === 'granted';
+  aplicarNotif(r === 'granted');
+}
+function aplicarNotif(on){
+  S.notifOn = on;
   $('#btn-notif').classList.toggle('on', S.notifOn);
   $('#btn-notif').textContent = S.notifOn ? 'Notificaciones activas' : 'Notificaciones bloqueadas';
+  guardarEstado();
+}
+/* Si el permiso ya se concedió antes, se activa sola: pedirlo de nuevo no
+   aporta nada y obligaba al operador a hacer clic en cada recarga. */
+function prepararNotifAutomatica(){
+  if('Notification' in window && Notification.permission === 'granted') aplicarNotif(true);
 }
 function notificar(v){
   if(!S.notifOn) return;
-  const r = REGLAS[v.estado];
+  const r = regla(v.estado);
   try{
     new Notification(`${r.gh} ${v.patente||'Sin patente'} · ${r.tit}`, {
       body: v.diferencia!=null ? `${v.diferencia>0?'+':''}${v.diferencia} pallets · ${r.acc}` : r.acc,
@@ -389,7 +467,7 @@ function notificar(v){
    CORREO — la Function hace el envío real; acá sólo se encola
    ===================================================================== */
 async function enviarCorreo(v){
-  const r = REGLAS[v.estado];
+  const r = regla(v.estado);
   const payload = {
     tipo: v.estado, nivel: r.nivel, patente: v.patente, carga_id: v.carga_id,
     guia: v.guia?.numero ?? null, chofer: v.guia?.chofer ?? null,
@@ -423,6 +501,16 @@ function calcularFila(carga, guia, dif){
 }
 
 function evaluar(carga){
+  // 0. LA CARGA TODAVÍA ESTÁ ABIERTA. Mientras siga entrando bultos no hay
+  //    nada que comparar: cualquier lectura ahora daría un faltante falso. Se
+  //    muestra el paso en curso y se espera a que cierre; el poll la vuelve a
+  //    evaluar. Sin esta guarda un camión que aún no terminaba de pasar caía
+  //    en "sin guía" y se quedaba así.
+  if(carga.cerrada === false){
+    return {...carga, guia:carga.guia ?? null, estado:'en_curso',
+            diferencia:null, filaAfectada:null};
+  }
+
   // 1. Si la API de conciliación YA cruzó la carga, esa guía manda.
   //    El servidor compara contra todos los movimientos del día; la lista de
   //    espera, en cambio, sólo tiene los que todavía no han pasado. Volver a
@@ -470,26 +558,73 @@ function evaluar(carga){
 }
 
 function registrarPaso(carga){
-  if(!enAlcance(carga.patente)) return;         // Talca / patente de pruebas
-  if(S.vistos.has(carga.carga_id)) return;      // idempotente: el poll repite cargas
-  S.vistos.add(carga.carga_id);
+  if(!enAlcance(carga.patente)) return;           // Talca / patente de pruebas
+  if(S.cerradas.has(carga.carga_id)) return;      // ya evaluada en firme
+
+  // UNA CARGA ABIERTA SE VUELVE A EVALUAR. Antes bastaba con haberla visto una
+  // vez para no mirarla nunca más, así que el camión que pasaba con el monitor
+  // abierto quedaba congelado "en curso": cuando cerraba y aparecía la
+  // diferencia real, nadie se enteraba hasta recargar la página.
+  const idx = S.eventos.findIndex(e => e.carga_id === carga.carga_id);
+  const previo = idx >= 0 ? S.eventos[idx] : null;
+
   const v = evaluar(carga);
-  S.eventos.unshift(v);
-  if(S.eventos.length > 60) S.eventos.pop();
-  const r = REGLAS[v.estado];
-  // En la primera sincronización del día entra el histórico completo: se
-  // muestra en el feed pero NO se alerta, o el operador recibiría una
-  // avalancha de pop-ups por camiones que ya se fueron hace horas.
-  if(r.nivel !== 'ok' && !S.arranque){
+  if(previo){
+    v.atendida = previo.atendida; v.retenido = previo.retenido; v.historico = previo.historico;
+    S.eventos[idx] = v;
+  }else{
+    S.eventos.unshift(v);
+    if(S.eventos.length > 60) S.eventos.pop();
+  }
+  if(v.cerrada) S.cerradas.add(carga.carga_id);
+
+  // Estado atendido guardado de una sesión anterior: sobrevive a la recarga.
+  if(!previo && S.atendidas.has(carga.carga_id)) v.atendida = true;
+  if(!previo && S.retenidos.has(carga.carga_id)) v.retenido = true;
+
+  const r = regla(v.estado);
+  // Sólo se alerta por una carga CERRADA: comparar una que sigue sumando
+  // bultos da faltantes falsos. Y en la primera sincronización entra el
+  // histórico del día, que se muestra pero no dispara pop-up ni sonido: el
+  // operador recibiría una avalancha por camiones que se fueron hace horas.
+  const nuevaAlerta = r.nivel !== 'ok' && v.cerrada && !v.atendida
+                      && (!previo || previo.estado !== v.estado);
+  if(nuevaAlerta && !S.arranque){
     sonar(r.sonido);
     notificar(v);
     if(r.correo) enviarCorreo(v);
-    abrirModal(v);
-  }else if(r.nivel !== 'ok'){
-    v.atendida = true;
-    v.historico = true;
+    encolarAlerta(v);
+  }else if(nuevaAlerta){
+    v.historico = true;      // queda pendiente y visible, pero sin ruido
   }
+  guardarEstado();
   render();
+}
+
+/* =====================================================================
+   COLA DE ALERTAS
+   Si en un mismo poll cierran dos camiones, antes cada uno llamaba a
+   abrirModal y el segundo pisaba al primero: el operador veía una sola
+   alerta y las demás quedaban contadas pero nunca mostradas. Ahora se
+   encolan y se muestran una por una.
+   ===================================================================== */
+let tAlerta = null;
+function encolarAlerta(v){
+  if(!S.cola.includes(v.carga_id)) S.cola.push(v.carga_id);
+  // Se espera a que termine de procesarse el lote: si en el mismo poll cerraron
+  // tres camiones, la primera pantalla ya sabe que hay dos más detrás.
+  clearTimeout(tAlerta);
+  tAlerta = setTimeout(()=>{
+    if(!$('#modal').classList.contains('on')) mostrarSiguiente();
+  }, 0);
+}
+function mostrarSiguiente(){
+  while(S.cola.length){
+    const id = S.cola.shift();
+    const v = S.eventos.find(e => e.carga_id === id);
+    if(v && !v.atendida){ abrirModal(v); return true; }
+  }
+  return false;
 }
 
 /* =====================================================================
@@ -602,7 +737,7 @@ document.addEventListener('keydown', e=>{
 });
 
 function abrirModal(v){
-  const r = REGLAS[v.estado];
+  const r = regla(v.estado);
   const dec = v.guia?.pallets_declarados;
   const col = r.nivel==='critica' ? 'var(--critical)' : 'var(--warning)';
 
@@ -611,7 +746,7 @@ function abrirModal(v){
       <div class="ico">${r.gh}</div>
       <div>
         <div class="tt">${esc(r.tit)}</div>
-        <div class="st">${esc(v.carga_id)} · paso registrado a las ${hhmm(new Date(v.fecha_hora_carga))}${v.guia?.tipo?' · '+tipoDe(v.guia.tipo).et:''}</div>
+        <div class="st">${esc(v.carga_id)} · paso registrado a las ${hhmm(new Date(v.fecha_hora_carga))}${v.guia?.tipo?' · '+tipoDe(v.guia.tipo).et:''}${S.cola.length?` · <b style="color:var(--warning)">${S.cola.length} alerta${S.cola.length>1?'s':''} más en espera</b>`:''}</div>
       </div>
     </div>
     <div class="mbody">
@@ -664,22 +799,44 @@ function abrirModal(v){
       <button class="btn" id="m-silencio">Silenciar</button>
     </div>`;
 
+  S.enPantalla = v.carga_id;
   const modal = $('#modal');
   modal.className = 'modal on ' + (r.nivel==='critica'?'critica':'aviso');
   modal.setAttribute('aria-hidden','false');
   $('#scrim').classList.add('on');
-  $('#m-cerrar').onclick = cerrarModal;
-  $('#m-atendida').onclick = ()=>{ v.atendida = true; cerrarModal(); render(); };
-  $('#m-retener').onclick = ()=>{ v.atendida = true; v.retenido = true; cerrarModal(); render(); };
+  $('#m-cerrar').onclick = ()=>cerrarModal(v.carga_id);
+  $('#m-atendida').onclick = ()=>{ v.atendida = true; S.atendidas.add(v.carga_id); cerrarModal(v.carga_id); };
+  $('#m-retener').onclick = ()=>{ v.atendida = true; v.retenido = true;
+                                  S.atendidas.add(v.carga_id); S.retenidos.add(v.carga_id);
+                                  cerrarModal(v.carga_id); };
   $('#m-silencio').onclick = ()=>{ S.sonidoOn=false; $('#btn-sonido').classList.remove('on');
-                                   $('#btn-sonido').textContent='Activar sonido'; $('#aud-aviso').classList.remove('hide'); };
+                                   $('#btn-sonido').textContent='Activar sonido';
+                                   $('#aud-aviso').classList.remove('hide'); guardarEstado(); };
   $('#m-retener').focus();
 }
-function cerrarModal(){
+function cerrarModal(id){
   $('#modal').classList.remove('on'); $('#modal').setAttribute('aria-hidden','true');
   $('#scrim').classList.remove('on');
+  // AL CERRAR, LA ALERTA QUEDA A LA VISTA. Antes cerrar no repintaba nada: el
+  // paso recién alertado no aparecía en el listado hasta el render de los 30 s,
+  // y el operador se quedaba sin dónde ir a buscarlo.
+  guardarEstado();
+  render();
+  if(id) destacarEnLista(id);
+  // Si venían varias juntas, la siguiente entra ahora en vez de perderse.
+  if(S.cola.length) setTimeout(mostrarSiguiente, 400);
 }
-$('#scrim').onclick = cerrarModal;
+
+/* Lleva el listado hasta el paso recién cerrado y lo marca un momento, para
+   que el ojo lo encuentre sin buscar. */
+function destacarEnLista(id){
+  const el = document.querySelector(`#eventos .ev[data-id="${CSS.escape(id)}"]`);
+  if(!el) return;
+  el.scrollIntoView({block:'nearest', behavior:'smooth'});
+  el.classList.add('recien');
+  setTimeout(()=>el.classList.remove('recien'), 2600);
+}
+$('#scrim').onclick = ()=>cerrarModal(S.enPantalla);
 addEventListener('keydown', e=>{
   // Con el visor abierto, Escape y las flechas son suyas: cerrar el modal
   // detrás dejaría al operador sin el contexto de la alerta.
@@ -689,7 +846,7 @@ addEventListener('keydown', e=>{
     else if(e.key==='ArrowRight') moverVisor(1);
     return;
   }
-  if(e.key==='Escape') cerrarModal();
+  if(e.key==='Escape') cerrarModal(S.enPantalla);
 });
 
 /* =====================================================================
@@ -706,7 +863,7 @@ function render(){
   const ok = S.eventos.filter(e=>e.estado==='ok').length;
   const falt = S.eventos.filter(e=>e.estado==='faltante');
   const sob = S.eventos.filter(e=>e.estado==='sobrante');
-  const pend = S.eventos.filter(e=>REGLAS[e.estado].nivel!=='ok' && !e.atendida).length;
+  const pend = S.eventos.filter(e=>regla(e.estado).nivel!=='ok' && !e.atendida).length;
   const enRiesgo = falt.reduce((a,e)=>a-e.diferencia,0);
 
   $('#kpis').innerHTML = [
@@ -724,7 +881,7 @@ function render(){
   }).join('');
   const kp = $('#kpi-pendientes');
   if(kp) kp.onclick = ()=>{
-    const p = S.eventos.filter(e=>REGLAS[e.estado].nivel!=='ok' && !e.atendida).pop();
+    const p = S.eventos.filter(e=>regla(e.estado).nivel!=='ok' && !e.atendida).pop();
     if(p) abrirModal(p);
   };
 
@@ -765,7 +922,7 @@ function render(){
   // --- feed de pasos ---
   $('#cnt-ev').textContent = S.eventos.length;
   $('#eventos').innerHTML = S.eventos.length ? S.eventos.map(v=>{
-    const r = REGLAS[v.estado];
+    const r = regla(v.estado);
     const col = v.estado==='fuera_alcance' ? 'var(--muted)'
               : r.nivel==='critica'?'var(--critical)':r.nivel==='aviso'?'var(--warning)':'var(--good)';
     const pendiente = r.nivel!=='ok' && !v.atendida;
@@ -840,7 +997,15 @@ async function pollPasosReales(){
   const hoy = new Intl.DateTimeFormat('en-CA',{timeZone:'America/Santiago',
     year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
   const d = await pedirJSON(`${API_PASOS}?desde=${hoy}&hasta=${hoy}&tipo=emision`);
-  d.cargas.forEach(registrarPaso);   // registrarPaso es idempotente por carga_id
+  // Cada paso se registra aislado: si uno viene con algo que la pantalla no
+  // sabe leer, se anota en consola y los demás siguen entrando. Antes una sola
+  // carga con problemas cortaba el forEach, dejaba el ciclo en "SIN CONEXIÓN"
+  // y el feed sin actualizar hasta que alguien recargara.
+  for(const c of d.cargas){
+    try{ registrarPaso(c); }
+    catch(e){ console.error('paso', c.carga_id, e); }
+  }
+  return d.cargas.length;
 }
 
 /* ---------------- simulación ---------------- */
@@ -904,7 +1069,7 @@ function pasoAlAzar(){
 /* =====================================================================
    ARRANQUE
    ===================================================================== */
-$('#btn-sonido').onclick = activarSonido;
+$('#btn-sonido').onclick = ()=>activarSonido(true);
 $('#btn-notif').onclick = activarNotif;
 $('#btn-paso').onclick = ()=>{ if(!ctx) activarSonido(); pasoAlAzar(); };
 $('#btn-limpiar').onclick = ()=>{ S.eventos=[]; render(); };
@@ -913,11 +1078,20 @@ $('#btn-demo').onclick = ()=>{
   $('#btn-demo').classList.toggle('on', S.demoOn);
   $('#btn-demo').textContent = S.demoOn ? 'Simulación activa' : 'Simulación detenida';
 };
-$('#btn-detalle').onclick = ()=>{
-  S.detallePorBulto = !S.detallePorBulto;
+function aplicarDetalle(on){
+  S.detallePorBulto = on;
   $('#btn-detalle').classList.toggle('on', S.detallePorBulto);
   $('#btn-detalle').textContent = 'Detalle por bulto: ' + (S.detallePorBulto ? 'campo solicitado' : 'API actual');
-};
+  guardarEstado();
+}
+$('#btn-detalle').onclick = ()=>aplicarDetalle(!S.detallePorBulto);
+
+/* Preferencias guardadas: los botones vuelven como estaban, sin que el
+   operador tenga que reactivarlos después de cada recarga. */
+const PREFS = cargarEstado();
+if(PREFS.detalle) aplicarDetalle(true);
+prepararNotifAutomatica();
+if(PREFS.sonido !== false) prepararSonidoAutomatico();
 
 setInterval(()=>{ $('#reloj').textContent = hhmmss(new Date()); }, 1000);
 $('#reloj').textContent = hhmmss(new Date());
@@ -945,9 +1119,14 @@ if(DEMO){
     p.querySelector('.viva').style.background = ''; p.lastChild.textContent = 'EN LÍNEA';
   };
 
+  // S.arranque se apaga sólo cuando un ciclo COMPLETÓ bien. Si se apagara con
+  // el primer intento aunque hubiera fallado (RDTOut responde lento y a veces
+  // corta), el ciclo siguiente entraría con el histórico del día ya en modo
+  // "alertar" y dispararía de golpe un pop-up, un sonido y un correo por cada
+  // camión que pasó en la mañana.
   const ciclo = ()=> cargarGuiasReales()
     .then(()=>pollPasosReales())
-    .then(()=>{ marcarViva(); render(); })
+    .then(()=>{ marcarViva(); S.arranque = false; render(); })
     .catch(marcarCaida);
 
   // La primera consulta tarda unos segundos (RDTOut devuelve el mes completo).
@@ -956,7 +1135,7 @@ if(DEMO){
   $('#eventos').innerHTML   = '<div class="vacio">Consultando pasos en SPOTVISION…</div>';
   $('#pill-vivo').lastChild.textContent = 'CONECTANDO';
 
-  ciclo().finally(()=>{ S.arranque = false; });   // a partir de acá, sí se alerta
+  ciclo();                             // desde el primer ciclo bueno, sí se alerta
   setInterval(ciclo, POLL_MS);
   setInterval(render, 30000);          // refresca los minutos de espera
 }

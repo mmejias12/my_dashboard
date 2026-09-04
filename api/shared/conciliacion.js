@@ -30,6 +30,60 @@ const { revisarCapacidad } = require('./flota');
 const ts = (s) => new Date(s).getTime();
 
 /**
+ * FUSION DE PASADAS.
+ *
+ * Un camion cruza el tunel en una rafaga continua: 14 bultos en 2,2 s, 30 en
+ * 7,5 s. Cuando en medio de una carga aparece un corte de varios segundos, lo
+ * que sigue despues del corte suele ser OTRO camion que la API sumo a la misma
+ * carga y le puso la patente del primero.
+ *
+ * Caso medido el 04-09-2026, carga C1108, patente CCRC36:
+ *   12:56:59 - 12:57:02   12 bultos
+ *   (corte de 2,2 s)      -> camion y carro de la misma unidad
+ *   12:57:04 - 12:57:08   18 bultos
+ *   (CORTE DE 9,2 s)
+ *   12:57:17 - 12:57:20   14 bultos
+ * Total 44 bultos y 791 pallets, cuando CCRC36 no puede llevar mas de 600.
+ * Los primeros 30 bultos son 540 (la carga de CCRC36) y los ultimos 14 son
+ * 252: exactamente el despacho del LS3119, que operaciones reporto como
+ * "salio y la camara no lo detecto". Si salio; quedo dentro de otra carga.
+ *
+ * La firma es doble y por eso se puede afirmar: un corte largo Y un total que
+ * no cabe fisicamente arriba del camion. Un corte solo puede ser el carro de
+ * arrastre entrando aparte, que es legitimo.
+ */
+const CORTE_S = 2;        // separacion minima para considerar que hubo un corte
+const CORTE_LARGO_S = 6;  // por sobre esto ya no parece el carro de la misma unidad
+
+function analizarDeteccion(bultos, capacidad, contados) {
+  const t = (bultos || []).map((b) => ts(b.fecha_hora_deteccion)).sort((a, b) => a - b);
+  if (t.length < 2) return { grupos: [], corte_max_s: 0, posible_fusion: false };
+
+  const grupos = [];
+  let ini = 0;
+  for (let i = 1; i < t.length; i++) {
+    if (t[i] - t[i - 1] >= CORTE_S * 1000) {
+      grupos.push({ bultos: i - ini, desde: new Date(t[ini]).toISOString(),
+                    hasta: new Date(t[i - 1]).toISOString(),
+                    hueco_s: +((t[i] - t[i - 1]) / 1000).toFixed(1) });
+      ini = i;
+    }
+  }
+  grupos.push({ bultos: t.length - ini, desde: new Date(t[ini]).toISOString(),
+                hasta: new Date(t[t.length - 1]).toISOString(), hueco_s: null });
+
+  const corteMax = Math.max(0, ...grupos.map((g) => g.hueco_s || 0));
+  const excede = !!(capacidad && contados > capacidad);
+
+  return {
+    grupos,
+    corte_max_s: corteMax,
+    // Se afirma solo con las dos senales juntas.
+    posible_fusion: excede && corteMax >= CORTE_LARGO_S && grupos.length > 1,
+  };
+}
+
+/**
  * ASIGNACION PATENTE + DIA.
  *
  * Por que no alcanza con recorrer las cargas en orden y que cada una tome la
@@ -122,6 +176,9 @@ function conciliar(cargas, guias, opts = {}) {
       pausaMax = Math.max(pausaMax, (serie[i] - serie[i - 1]) / 60000);
     }
 
+    const cap = revisarCapacidad(c.patente, c[campoConteo], null);
+    const deteccion = analizarDeteccion(c.bultos, cap?.capacidad_total, c[campoConteo]);
+
     const gi = guiaDe.get(ci);
     const guia = gi === undefined ? null : guias[gi];
 
@@ -167,6 +224,9 @@ function conciliar(cargas, guias, opts = {}) {
       // tope no cabe arriba, así que no es una diferencia con el documento sino
       // un problema del conteo mismo.
       capacidad: revisarCapacidad(c.patente, c[campoConteo], guia?.tipo),
+      // Como llegaron los bultos en el tiempo, y si el corte + el exceso de
+      // capacidad apuntan a que aca hay mas de un camion sumado.
+      deteccion,
       guias_alternativas: alternativas,
       nro_pedido: guia?.nro_pedido ?? null,
       etapa: guia?.etapa ?? null,
@@ -191,4 +251,7 @@ function conciliar(cargas, guias, opts = {}) {
   };
 }
 
-module.exports = { conciliar, asignar, CIERRE_MIN, VENTANA_H, TOLERANCIA };
+module.exports = {
+  conciliar, asignar, analizarDeteccion,
+  CIERRE_MIN, VENTANA_H, TOLERANCIA, CORTE_S, CORTE_LARGO_S,
+};

@@ -59,8 +59,48 @@ async function pedir(url, { intentos = 4, timeoutMs = 20000 } = {}) {
 }
 
 /**
+ * DETALLE POR BULTO. Desde el 05-09-2026 la API entrega, en cada bulto, un
+ * arreglo `detalles` con la composicion real de la fila:
+ *
+ *   "detalles": [ {tipo:"pallet", color:"blanco", cantidad:4},
+ *                 {tipo:"pallet", color:"rojo",   cantidad:14} ]
+ *
+ * Es el campo que veniamos pidiendo (consulta 1 del anexo). Se normaliza a
+ * `pallets_bulto` para que el resto del sistema lo use sin cambios: el monitor
+ * ya sabe marcar la fila corta cuando ese numero existe.
+ *
+ * Verificado sobre 33 cargas del 02 al 04-09: la suma de `cantidad` coincide
+ * EXACTO con `total_pallets` en las 33. Ademas responde la consulta 4 del
+ * anexo: de 687 filas, 602 traen 18 pallets pero las demas van entre 1 y 20,
+ * asi que la camara cuenta pallets reales y no posiciones de la fila.
+ */
+function normalizarBulto(b) {
+  const det = Array.isArray(b.detalles) ? b.detalles : null;
+  if (!det) return b;
+  const pallets = det.reduce((s, d) => s + (Number(d.cantidad) || 0), 0);
+  const colores = {};
+  for (const d of det) {
+    const c = (d.color || 'sin color').toLowerCase();
+    colores[c] = (colores[c] || 0) + (Number(d.cantidad) || 0);
+  }
+  return { ...b, pallets_bulto: pallets, colores };
+}
+
+function normalizarCarga(c) {
+  if (!Array.isArray(c.bultos)) return c;
+  const bultos = c.bultos.map(normalizarBulto);
+  // Colores de toda la carga. Las capacidades de la flota cambian segun el
+  // color del pallet, asi que este dato deja de ser una incognita.
+  const colores = {};
+  for (const b of bultos) {
+    for (const k in (b.colores || {})) colores[k] = (colores[k] || 0) + b.colores[k];
+  }
+  return { ...c, bultos, colores: Object.keys(colores).length ? colores : undefined };
+}
+
+/**
  * Recorre TODAS las paginas de /redtec/cargas para un rango.
- * Devuelve el array plano de cargas tal cual lo entrega la API.
+ * Devuelve el array plano de cargas, con el detalle por bulto normalizado.
  */
 async function obtenerCargas(fechaInicio, fechaFin, { tamanoPagina = 200 } = {}) {
   const todas = [];
@@ -77,7 +117,7 @@ async function obtenerCargas(fechaInicio, fechaFin, { tamanoPagina = 200 } = {})
     const r = await pedir(`${BASE}/redtec/cargas?${qs}`);
     totalPaginas = Number(r.headers.get('X-Total-Paginas') || 0);
     const lote = await r.json();
-    todas.push(...lote);
+    todas.push(...lote.map(normalizarCarga));
     if (totalPaginas === 0) break;
     pagina++;
   }
@@ -111,4 +151,7 @@ function partirUrlEvidencia(url) {
   } catch { return null; }
 }
 
-module.exports = { obtenerCargas, obtenerEvidencia, partirUrlEvidencia, BASE };
+module.exports = {
+  obtenerCargas, obtenerEvidencia, partirUrlEvidencia, BASE,
+  normalizarCarga, normalizarBulto,
+};

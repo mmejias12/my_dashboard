@@ -141,6 +141,13 @@ h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
 .fila.foto:hover{border-color:rgba(255,255,255,.4)}
 .fila.foto:focus-visible{outline:2px solid var(--series-1);outline-offset:2px}
 .fila.sinfoto{border-style:dashed;color:var(--warning)}
+/* Cantidad de pallets de la fila, sobre la foto. */
+.fila.foto .cant{position:absolute;top:3px;right:4px;font-size:13px;font-weight:700;
+  font-variant-numeric:tabular-nums;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.9)}
+.fila.foto.corta{border-color:rgba(208,59,59,.9);border-width:2px}
+.fila.foto.corta .cant{color:#ff9d9d}
+.fila.foto.larga{border-color:rgba(250,178,25,.9);border-width:2px}
+.fila.foto.larga .cant{color:#ffd77a}
 /* Primer bulto después de un corte en el tiempo: marca dónde la cámara dejó de
    ver y volvió a empezar, que es justo donde hay que mirar. */
 .fila.corte{border-left:3px solid var(--critical)}
@@ -708,19 +715,25 @@ function tiraFilas(v){
   const cortes = new Set();
   { let acum = 0;
     for(const gr of gruposDeteccion(b)){ if(acum) cortes.add(acum); acum += gr.n; } }
+  // Desde que SPOTVISION entrega el detalle por bulto, la celda muestra las dos
+  // cosas: la cantidad de la fila —que es lo que permite señalar cuál viene
+  // corta— y la foto para confirmarla con el ojo.
   const celdas = b.map((x,i)=>{
     const et = `F${String(i+1).padStart(2,'0')}`;
-    if(conDetalle){
-      const d = nominal!=null ? x.pallets_bulto - nominal : 0;
-      const cls = d<0?'corta':d>0?'larga':'';
-      return `<div class="fila ${cls}"><div class="n">${et}</div><div class="v">${x.pallets_bulto}</div></div>`;
-    }
+    const n = typeof x.pallets_bulto === 'number' ? x.pallets_bulto : null;
+    const d = (n!=null && nominal!=null) ? n - nominal : 0;
+    const cls = (d<0?'corta':d>0?'larga':'') + (cortes.has(i)?' corte':'');
     const src = urlEv(x.foto_bulto_url);
-    if(!src) return `<div class="fila sinfoto"><div class="n">${et}</div><div class="v">${x.foto_bulto_url?'demo':'—'}</div></div>`;
-    const lab = `${et} · ${hhmm(new Date(x.fecha_hora_deteccion))}`;
+    if(!src){
+      return `<div class="fila ${cls}${n==null?' sinfoto':''}"><div class="n">${et}</div>
+                <div class="v">${n ?? (x.foto_bulto_url?'demo':'—')}</div></div>`;
+    }
+    const lab = `${et}${n!=null?` · ${n} pallets`:''} · ${hhmm(new Date(x.fecha_hora_deteccion))}`;
     const k = GALERIA.push({src, lab}) - 1;
-    return `<div class="fila foto${cortes.has(i)?' corte':''}" data-i="${k}" tabindex="0" role="button" aria-label="Ampliar ${lab}">
-              <img loading="lazy" src="${src}" alt="${lab}"><div class="n">${et}</div></div>`;
+    return `<div class="fila foto ${cls}" data-i="${k}" tabindex="0" role="button" aria-label="Ampliar ${lab}">
+              <img loading="lazy" src="${src}" alt="${lab}">
+              ${n!=null?`<div class="cant">${n}</div>`:''}
+              <div class="n">${et}</div></div>`;
   }).join('');
 
   // Si ya se explicó la fusión arriba, este aviso sobra: diría lo mismo peor.
@@ -738,12 +751,19 @@ function tiraFilas(v){
         ? `<div class="aviso-fila" style="border-left-color:var(--critical)">La diferencia está en la <b>fila ${v.filaAfectada.n}</b>:
              ${v.filaAfectada.d>0?'+':''}${v.filaAfectada.d} pallets respecto de las ${nominal} de una fila completa.</div>`
         : '')
-    : `<div class="aviso-fila">La API entrega el total de la carga pero <b>no cuántos pallets trae cada bulto</b>,
-         así que el sistema no puede señalar la fila. Sí entrega una foto por bulto: ampliarlas es, por ahora,
-         la forma de ubicar la fila corta${nominal?` — una fila completa lleva ${nominal} pallets`:''}.</div>`;
+    : `<div class="aviso-fila">Esta carga no trae el detalle por bulto, así que el sistema no puede señalar
+         la fila. Ampliar las fotos es la forma de ubicarla${nominal?` — una fila completa lleva ${nominal} pallets`:''}.</div>`;
 
-  return `<div class="sec">Evidencia por fila · ${b.length} bultos</div>
-          <div class="tira">${celdas}</div>${avisoGrupos}${pie}`;
+  // El color importa: las capacidades de la flota cambian según el pallet que
+  // se lleve, así que saber la mezcla ayuda a leer un conteo alto o bajo.
+  const col = v.colores || null;
+  const compo = col
+    ? `<div class="aviso-fila" style="border-left-color:var(--series-1)">Composición de la carga:
+         ${Object.entries(col).sort((a,b)=>b[1]-a[1]).map(([k,n])=>`<b>${n0(n)}</b> ${esc(k)}`).join(' · ')}.</div>`
+    : '';
+
+  return `<div class="sec">Evidencia por fila · ${b.length} bultos${conDetalle?' · con detalle de pallets':''}</div>
+          <div class="tira">${celdas}</div>${avisoGrupos}${pie}${compo}`;
 }
 
 /* ---------- visor ---------- */

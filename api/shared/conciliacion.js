@@ -143,6 +143,110 @@ function asignar(cargas, guias, campoConteo, soloEmisiones) {
   return { guiaDe, cargaDe, guiasPorLlave, llave };
 }
 
+/**
+ * CONSOLIDACION: UN CAMION PUEDE SALIR CON VARIAS GUIAS.
+ *
+ * Caso medido el 08-09-2026. CCRC36 cruzo a las 10:46 con 504 pallets en 28
+ * filas. El cruce le asigno la emision 72274 (252 pallets) y reporto un
+ * sobrante de +252, mientras la 72275 -- otros 252, para otro cliente --
+ * quedaba como "despacho sin registro de camara". Las dos iban en el mismo
+ * camion: 252 + 252 = 504, y 28 filas = 14 + 14. No sobraba nada.
+ *
+ * Antes de acusar una diferencia se busca si alguna COMBINACION de los
+ * documentos libres de esa patente y ese dia explica el conteo exacto. Vale
+ * para los dos lados: tambien cambia una guia grande mal asignada por dos
+ * chicas que suman justo, que es el caso del faltante inventado.
+ *
+ * Reglas para no inventar explicaciones:
+ *  - solo se acepta una combinacion que calce DENTRO DE LA TOLERANCIA. No se
+ *    acepta la "mas cercana": si nada calza, la diferencia se informa igual.
+ *  - gana la combinacion con MENOS documentos; un solo documento exacto le
+ *    gana siempre a dos que sumen lo mismo.
+ *  - a igualdad de documentos, gana la que conserva la guia ya asignada.
+ *  - maximo MAX_DOCS documentos por carga: mas que eso ya no es un despacho
+ *    consolidado, es una coincidencia numerica.
+ *  - solo documentos libres: una guia ya cruzada con otro paso no se reutiliza.
+ */
+const MAX_DOCS = 4;        // documentos que puede llevar un camion en una salida
+const MAX_CANDIDATAS = 12; // tope para no disparar la combinatoria
+
+function combinaciones(indices, maxDocs) {
+  const salida = [];
+  const rec = (desde, actual) => {
+    if (actual.length) salida.push(actual.slice());
+    if (actual.length === maxDocs) return;
+    for (let i = desde; i < indices.length; i++) {
+      actual.push(indices[i]);
+      rec(i + 1, actual);
+      actual.pop();
+    }
+  };
+  rec(0, []);
+  return salida;
+}
+
+function consolidar(cargas, guias, opts) {
+  const { guiaDe, cargaDe, guiasPorLlave, llave, campoConteo, tolerancia, soloEmisiones } = opts;
+
+  // indice de carga -> lista de indices de guia (uno o varios)
+  const guiasDe = new Map();
+  cargas.forEach((c, ci) => {
+    const gi = guiaDe.get(ci);
+    if (gi !== undefined) guiasDe.set(ci, [gi]);
+  });
+
+  cargas.forEach((c, ci) => {
+    if (!c.patente) return;
+    const contados = c[campoConteo] ?? 0;
+    if (!contados) return;
+
+    const asignada = guiaDe.get(ci);
+    const declarado = asignada !== undefined ? guias[asignada].pallets_declarados : 0;
+    if (asignada !== undefined && Math.abs(contados - declarado) <= tolerancia) return; // ya calza
+
+    // Candidatas: la ya asignada (se puede cambiar) mas las que nadie tomo.
+    const todas = guiasPorLlave.get(llave(c.patente, c.fecha_hora_carga)) || [];
+    const pool = todas.filter((gi) => {
+      const g = guias[gi];
+      if (soloEmisiones && g.tipo !== 'emision') return false;
+      if (g.pallets_declarados <= 0) return false;
+      return gi === asignada || !cargaDe.has(gi);
+    }).slice(0, MAX_CANDIDATAS);
+    if (pool.length < 2) return;   // sin nada que combinar
+
+    let mejor = null;
+    for (const combo of combinaciones(pool, MAX_DOCS)) {
+      if (combo.length < 2 && combo[0] === asignada) continue;   // es lo que ya teniamos
+      const suma = combo.reduce((s, gi) => s + guias[gi].pallets_declarados, 0);
+      if (Math.abs(contados - suma) > tolerancia) continue;
+      const conservaAsignada = asignada !== undefined && combo.includes(asignada) ? 0 : 1;
+      const puntaje = [combo.length, conservaAsignada];
+      if (!mejor || puntaje[0] < mejor.puntaje[0]
+          || (puntaje[0] === mejor.puntaje[0] && puntaje[1] < mejor.puntaje[1])) {
+        mejor = { combo, puntaje };
+      }
+    }
+    if (!mejor) return;
+
+    // Se adopta: se libera lo que ya no se usa y se reservan los nuevos.
+    for (const gi of (guiasDe.get(ci) || [])) {
+      if (!mejor.combo.includes(gi)) cargaDe.delete(gi);
+    }
+    mejor.combo.forEach((gi) => cargaDe.set(gi, ci));
+    guiasDe.set(ci, mejor.combo);
+    guiaDe.set(ci, mejor.combo[0]);
+  });
+
+  return guiasDe;
+}
+
+/** true si los numeros de documento son correlativos (72274, 72275, ...). */
+function sonCorrelativas(nums) {
+  const n = nums.map(Number).filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
+  if (n.length !== nums.length || n.length < 2) return false;
+  return n.every((x, i) => i === 0 || x === n[i - 1] + 1);
+}
+
 function conciliar(cargas, guias, opts = {}) {
   const {
     cierreMin = CIERRE_MIN,
@@ -159,6 +263,12 @@ function conciliar(cargas, guias, opts = {}) {
 
   const { guiaDe, cargaDe, guiasPorLlave, llave } =
     asignar(cargas, guias, campoConteo, soloEmisiones);
+
+  // Segunda pasada: antes de acusar una diferencia, ver si el camion salio con
+  // mas de un documento y entre todos explican el conteo.
+  const guiasDe = consolidar(cargas, guias, {
+    guiaDe, cargaDe, guiasPorLlave, llave, campoConteo, tolerancia, soloEmisiones,
+  });
 
   const salida = cargas.map((c, ci) => {
     const t0 = ts(c.fecha_hora_carga);
@@ -181,12 +291,16 @@ function conciliar(cargas, guias, opts = {}) {
 
     const gi = guiaDe.get(ci);
     const guia = gi === undefined ? null : guias[gi];
+    // Documentos que viajaron en esta carga. Normalmente uno; a veces varios.
+    const docs = (guiasDe.get(ci) || []).map((x) => guias[x]);
+    const declaradoTotal = docs.reduce((s, g) => s + g.pallets_declarados, 0);
 
     // Los demas documentos de esa patente ese dia. Se devuelven SIEMPRE, incluso
     // los ya asignados, con la hora del paso que se los llevo: es lo que permite
     // entender un cruce raro sin salir de la pantalla.
+    const usados = new Set(guiasDe.get(ci) || []);
     const alternativas = (guiasPorLlave.get(llave(c.patente, c.fecha_hora_carga)) || [])
-      .filter((x) => x !== gi)
+      .filter((x) => !usados.has(x))
       .map((x) => {
         const g = guias[x];
         const otra = cargaDe.get(x);
@@ -204,7 +318,8 @@ function conciliar(cargas, guias, opts = {}) {
     else if (!c.patente) estado = 'sin_patente';
     else if (!guia) estado = 'sin_guia';
     else {
-      diferencia = detectados - guia.pallets_declarados;
+      // Se compara contra la SUMA de los documentos que lleva el camion.
+      diferencia = detectados - declaradoTotal;
       estado = Math.abs(diferencia) <= tolerancia ? 'ok'
              : diferencia < 0 ? 'faltante' : 'sobrante';
     }
@@ -228,6 +343,13 @@ function conciliar(cargas, guias, opts = {}) {
       // capacidad apuntan a que aca hay mas de un camion sumado.
       deteccion,
       guias_alternativas: alternativas,
+      // Cuando el camion sale con varios documentos, aca van todos y el total
+      // contra el que se comparo. `correlativas` corrobora el caso tipico: dos
+      // guias emitidas una tras otra para el mismo viaje.
+      guias: docs,
+      pallets_declarados_total: docs.length ? declaradoTotal : null,
+      consolidada: docs.length > 1,
+      correlativas: docs.length > 1 && sonCorrelativas(docs.map((g) => g.numero)),
       nro_pedido: guia?.nro_pedido ?? null,
       etapa: guia?.etapa ?? null,
       transportista: guia?.transportista ?? null,
@@ -244,6 +366,7 @@ function conciliar(cargas, guias, opts = {}) {
     // guias emitidas cuyo camion nunca aparecio en el tunel (o cuya patente no se leyo)
     guias_sin_carga: guias.filter((g, gi) =>
       !cargaDe.has(gi) && (!soloEmisiones || g.tipo === 'emision')),
+    parametros_consolidacion: { max_documentos: MAX_DOCS },
     parametros: {
       cierre_min: cierreMin, ventana_h: ventanaH, tolerancia_pallets: tolerancia,
       campo_conteo: campoConteo, solo_emisiones: soloEmisiones,
@@ -252,6 +375,6 @@ function conciliar(cargas, guias, opts = {}) {
 }
 
 module.exports = {
-  conciliar, asignar, analizarDeteccion,
+  conciliar, asignar, analizarDeteccion, consolidar, sonCorrelativas,
   CIERRE_MIN, VENTANA_H, TOLERANCIA, CORTE_S, CORTE_LARGO_S,
 };

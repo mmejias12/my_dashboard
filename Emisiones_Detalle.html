@@ -266,6 +266,11 @@ var tip=document.getElementById('tip');
 function showTip(h,x,y){tip.innerHTML=h;tip.style.opacity=1;var w=tip.offsetWidth,ht=tip.offsetHeight;var nx=x+14,ny=y+14;if(nx+w>innerWidth-8)nx=x-w-14;if(ny+ht>innerHeight-8)ny=y-ht-14;tip.style.left=nx+'px';tip.style.top=ny+'px';}
 function hideTip(){tip.style.opacity=0;}
 function bindTip(el,h){el.addEventListener('mousemove',function(e){showTip(h,e.clientX,e.clientY);});el.addEventListener('mouseleave',hideTip);}
+/* tooltip de observación por delegación en el cuerpo del modal:
+   muestra sobre un Nº de pedido con obs y se oculta apenas el mouse pasa a cualquier otro punto (evita que quede pegado). */
+(function(){var mb=document.getElementById('m-body');if(!mb)return;
+  mb.addEventListener('mousemove',function(e){var l=e.target.closest?e.target.closest('.ped-obs'):null;if(l){pedTip(e,l.getAttribute('data-ped'));}else{hideTip();}});
+  mb.addEventListener('mouseleave',hideTip);})();
 
 /* filtros */
 function opts(){return {d1:document.getElementById('f-desde').value,d2:document.getElementById('f-hasta').value,pl:document.getElementById('f-planta').value,tp:document.getElementById('f-tipo').value,cl:document.getElementById('f-cli').value};}
@@ -418,8 +423,8 @@ function renderTabla(ag){
 }
 
 /* ===== modal cliente ===== */
-function openModal(e,t,h){document.getElementById('m-eyebrow').textContent=e;document.getElementById('m-title').textContent=t;document.getElementById('m-body').innerHTML=h;document.getElementById('modal-ov').classList.add('on');}
-function closeModal(){document.getElementById('modal-ov').classList.remove('on');}
+function openModal(e,t,h){hideTip();document.getElementById('m-eyebrow').textContent=e;document.getElementById('m-title').textContent=t;document.getElementById('m-body').innerHTML=h;document.getElementById('modal-ov').classList.add('on');}
+function closeModal(){hideTip();document.getElementById('modal-ov').classList.remove('on');}
 document.addEventListener('keydown',function(e){if(e.key==='Escape')closeModal();});
 function barRow(l,v,mx,col,r){var p=mx?Math.max(1.5,100*v/mx):0;return '<div class="mrow"><span class="mrow-l">'+esc(l)+'</span><span class="mrow-bar"><i style="width:'+p+'%;background:'+col+'"></i></span><span class="mrow-v">'+r+'</span></div>';}
 function miniLine(data,color){var W=800,H=90,pad=6;if(!data||!data.length)return '<div class="m-hint">sin datos</div>';var mx=Math.max.apply(null,data.concat([1])),mn=0;var xf=function(i){return pad+(W-2*pad)*i/Math.max(1,data.length-1);},yf=function(v){return H-pad-(H-2*pad)*(v-mn)/((mx-mn)||1);};var d='';data.forEach(function(v,i){d+=(i?'L':'M')+xf(i).toFixed(1)+' '+yf(v).toFixed(1);});return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:90px"><path d="'+d+'L'+xf(data.length-1)+' '+(H-pad)+'L'+xf(0)+' '+(H-pad)+'Z" fill="'+color+'" opacity="0.10"/><path d="'+d+'" fill="none" stroke="'+color+'" stroke-width="2"/></svg>';}
@@ -438,9 +443,9 @@ function modalCliente(cli){
     var np=(''+(r.nroPedido||'')).replace(/'/g,"\\'");var tp=tipoEmision(r.operacion);
     var esRec=(tp==='Express'||tp==='24 horas');
     var tieneObs=r.observacion&&(''+r.observacion).trim();
-    var hov=esRec?' onmousemove="pedTip(event,\''+np+'\')" onmouseleave="hideTip()"':'';
+    var attrs=esRec?(' data-ped="'+esc(''+(r.nroPedido||''))+'"'):' title="Ver historial del pedido"';
     var marca=esRec&&tieneObs?' <span title="Tiene observación" style="color:var(--amber,#fcd34d)">⚑</span>':'';
-    return '<tr><td>'+dOf(r)+'</td><td><span class="ped-link"'+(esRec?'':' title="Ver historial del pedido"')+hov+' onclick="modalPedido(\''+np+'\',\''+cli.replace(/'/g,"\\'")+'\')">'+(r.nroPedido||'–')+'</span>'+marca+'</td><td>'+tp+'</td><td>'+planta(r)+'</td><td>'+fmt(num(r.cantidadDespachada))+'</td><td>'+esc(r.chofer||'–')+'</td><td>'+esc(r.patente||'–')+'</td><td>'+(r.dteNro||'–')+'</td></tr>';}).join('');
+    return '<tr><td>'+dOf(r)+'</td><td><span class="ped-link'+(esRec?' ped-obs':'')+'"'+attrs+' onclick="modalPedido(\''+np+'\',\''+cli.replace(/'/g,"\\'")+'\')">'+(r.nroPedido||'–')+'</span>'+marca+'</td><td>'+tp+'</td><td>'+planta(r)+'</td><td>'+fmt(num(r.cantidadDespachada))+'</td><td>'+esc(r.chofer||'–')+'</td><td>'+esc(r.patente||'–')+'</td><td>'+(r.dteNro||'–')+'</td></tr>';}).join('');
   var html='<div class="m-kpis">'+mkpi('Emitido (u)',fmt(tot))+mkpi('Valorizado',money(valCLP))+mkpi('UF',fmt1(valUF))+mkpi('Tarifa base',(tarBase?tarBase.toFixed(5):'–')+' UF')+mkpi('Pedidos',fmt(ops.length))+'</div>'
     +'<div class="m-sec"><div class="m-sec-t">Por tipo de emisión</div>'+(tpBars||'<div class="m-hint">—</div>')+'</div>'
     +'<div class="m-sec"><div class="m-sec-t">Cálculo del valorizado · tarifa base '+(tarBase?tarBase.toFixed(5):'–')+' UF/pallet · valor UF '+money(ag.ufv)+'</div>'

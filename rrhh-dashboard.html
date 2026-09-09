@@ -62,6 +62,8 @@ body{zoom:var(--escala,1)}
 .load-btn{font-size:13px;padding:7px 17px;background:var(--purple);color:var(--s1);border:none;border-radius:6px;cursor:pointer;font-weight:600;font-family:inherit;transition:opacity .15s}
 .load-btn:hover{opacity:.88}
 .load-btn:disabled{opacity:.4;cursor:not-allowed}
+.spinner-rrhh{width:34px;height:34px;border:3px solid var(--br);border-top-color:var(--purple);border-radius:50%;animation:girar-rrhh .8s linear infinite}
+@keyframes girar-rrhh{to{transform:rotate(360deg)}}
 
 /* ── Barra de estado ── */
 .status-bar{background:var(--s1);border-bottom:1px solid var(--br);padding:8px 20px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--t3)}
@@ -191,14 +193,14 @@ tbody tr:hover{background:var(--s2)}
       <button onclick="setEscala(1.3,this)" title="Texto mucho más grande" style="font-size:16px">A</button>
     </div>
     <button class="icon-btn" id="btn-tema" onclick="alternarTema()" title="Cambiar entre tono claro y oscuro" aria-label="Cambiar tono"></button>
-    <button class="load-btn" id="load-btn" onclick="cargar()">Cargar datos</button>
+    <button class="load-btn" id="load-btn" onclick="cargar()" title="Volver a consultar Talana">↻ Actualizar</button>
     <a href="m3link_dashboard_dark.html" class="back">← Panel</a>
   </div>
 </div>
 
 <div class="status-bar">
   <div class="sdot" id="sdot"></div>
-  <span id="stxt">Presiona "Cargar datos" para consultar Talana</span>
+  <span id="stxt">Cargando…</span>
   <span style="margin-left:auto;color:var(--t3)">Datos en vivo desde <code style="color:var(--green)">Talana</code></span>
 </div>
 
@@ -212,9 +214,9 @@ tbody tr:hover{background:var(--s2)}
 
 <div id="vacio" class="main">
   <div class="empty">
-    <div style="font-size:30px;opacity:.25;margin-bottom:10px">👥</div>
-    <div style="font-size:13px;color:var(--t2);font-weight:500">Sin datos cargados</div>
-    <div style="margin-top:5px">Presiona "Cargar datos" para consultar personas, contratos y vacaciones desde Talana</div>
+    <div class="spinner-rrhh" style="margin:0 auto 14px"></div>
+    <div style="font-size:13px;color:var(--t2);font-weight:500">Cargando dotación desde Talana…</div>
+    <div style="margin-top:5px">La dotación aparece en unos segundos; los saldos de vacaciones se completan enseguida.</div>
   </div>
 </div>
 
@@ -483,17 +485,18 @@ async function fetchAll(endpoint, extra, onProgreso){
    una decena. El histórico se pide sólo si alguien lo pide.
    ═══════════════════════════════════════════════════════════════════════════ */
 async function cargar(){
-  var btn=$('load-btn'); btn.disabled=true; btn.textContent='Cargando…';
-  setStatus('load','Conectando con Talana…');
+  var btn=$('load-btn'); btn.disabled=true; var textoPrevio=btn.textContent; btn.textContent='Cargando…';
+  setStatus('load','Cargando dotación vigente…');
   try{
-    setStatus('load','Cargando dotación vigente…');
+    // ── FASE 1: lo esencial y rápido — contratos + estructura de gerencias.
+    //    Con esto ya se puebla dotación, personas y contratos, así que el
+    //    dashboard aparece útil en pocos segundos.
     DATA.vigentes = await fetchAll('/es/api/contrato-paginado/');
 
     // Árbol de unidades organizacionales: el contrato trae la unidad de la
     // persona (gerencia2) con el id de su padre, pero no el NOMBRE del padre.
     // Este mapa id→{nombre,parent} permite subir hasta la raíz y resolver la
     // gerencia (gerencia1) a la que pertenece cada quien.
-    setStatus('load','Cargando estructura de gerencias…');
     try{
       DATA.uo = {};
       (await fetchAll('/es/api/unidadOrganizacional/')).forEach(function(u){
@@ -501,35 +504,52 @@ async function cargar(){
       });
     }catch(e){ console.warn('[unidadOrganizacional]', e.message); DATA.uo={}; }
 
-    setStatus('load','Cargando saldos de vacaciones…');
-    DATA.saldos = {};
-    try{
-      (await fetchAll('/es/api/saldo-vacaciones-empresa/')).forEach(function(r){
-        if(r && r.empleado_id && r.saldo) DATA.saldos[r.empleado_id]=r.saldo;
-      });
-    }catch(e){ console.warn('[saldos]', e.message); }
-
-    setStatus('load','Cargando vacaciones…');
-    try{ DATA.vacaciones = await fetchAll('/es/api/vacations-resumed/'); }
-    catch(e){ console.warn('[vacaciones]', e.message); DATA.vacaciones=[]; }
-
-    setStatus('load','Cargando ausencias…');
-    try{ DATA.ausencias = await fetchAll('/es/api/absentism-resumed/'); }
-    catch(e){ console.warn('[ausencias]', e.message); DATA.ausencias=[]; }
-
     $('vacio').style.display='none';
     $('contenido').style.display='block';
     poblarFiltros();
     renderResumen(); renderPersonas(); renderVacaciones(); renderContratos();
-
-    btn.disabled=false; btn.textContent='Actualizar';
-    setStatus('ok', DATA.vigentes.length+' contratos vigentes · '+Object.keys(DATA.saldos).length+' saldos · '+DATA.vacaciones.length+' vacaciones');
     setT('live-lbl','En vivo · '+new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'}));
+    setStatus('load', DATA.vigentes.length+' contratos · cargando saldos de vacaciones…');
+
+    // ── FASE 2: en segundo plano — saldos, vacaciones y ausencias. No bloquea
+    //    la vista; cada bloque re-renderiza lo suyo al llegar. El saldo es lo
+    //    más lento de Talana (~15 s), por eso va después de mostrar la dotación.
+    cargarComplementos(btn, textoPrevio);
   }catch(e){
     btn.disabled=false; btn.textContent='Reintentar';
     setStatus('err', e.message);
     console.error(e);
   }
+}
+
+/* FASE 2 — complementos que llegan después de mostrar la dotación.
+   Cada uno re-renderiza sólo lo que depende de él, para que la vista se vaya
+   completando sola sin que el usuario tenga que esperar el total. */
+async function cargarComplementos(btn, textoPrevio){
+  // Saldos de vacaciones (lo más lento de Talana): al llegar, actualiza el
+  // resumen, la tabla de personas (columna Vac.) y la pestaña de vacaciones.
+  try{
+    DATA.saldos = {};
+    (await fetchAll('/es/api/saldo-vacaciones-empresa/')).forEach(function(r){
+      if(r && r.empleado_id && r.saldo) DATA.saldos[r.empleado_id]=r.saldo;
+    });
+    renderResumen(); renderPersonas(); renderVacaciones();
+    setStatus('load', DATA.vigentes.length+' contratos · '+Object.keys(DATA.saldos).length+' saldos · cargando vacaciones…');
+  }catch(e){ console.warn('[saldos]', e.message); }
+
+  // Vacaciones aprobadas (para "próximas vacaciones" y "última salida").
+  try{
+    DATA.vacaciones = await fetchAll('/es/api/vacations-resumed/');
+    _ultimaVac = null;            // se recalcula con los datos nuevos
+    renderVacaciones(); renderResumen();
+  }catch(e){ console.warn('[vacaciones]', e.message); DATA.vacaciones=[]; }
+
+  // Ausencias (alimentan la ficha de cada persona en el popup).
+  try{ DATA.ausencias = await fetchAll('/es/api/absentism-resumed/'); }
+  catch(e){ console.warn('[ausencias]', e.message); DATA.ausencias=[]; }
+
+  if(btn){ btn.disabled=false; btn.textContent=(textoPrevio==='Cargando…'?'↻ Actualizar':textoPrevio); }
+  setStatus('ok', DATA.vigentes.length+' contratos vigentes · '+Object.keys(DATA.saldos||{}).length+' saldos · '+(DATA.vacaciones||[]).length+' vacaciones');
 }
 
 /* El histórico son 2.209 versiones de contrato: 23 páginas a través de la cola
@@ -1139,6 +1159,13 @@ function goTab(name, btn){
   $('t-'+name).style.display='block';
   if(btn) btn.classList.add('on');
   TAB = name;
+}
+
+/* Carga automática al abrir: ya no hay que presionar ningún botón. */
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', cargar);
+} else {
+  cargar();
 }
 </script>
 </body>

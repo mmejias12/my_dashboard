@@ -474,6 +474,12 @@ const TIPOS = {
 };
 const tipoDe = t => TIPOS[t] || TIPOS.otro;
 
+/* Un camión puede salir con más de una guía (el 08-09 el CCRC36 llevó la 72274
+   y la 72275, 252 + 252 = 504). Lo declarado del viaje es la suma. */
+const docsDe = c => c.guias || (c.guia ? [c.guia] : []);
+const decDe  = c => c.pallets_declarados_total ?? c.guia?.pallets_declarados ?? null;
+const marcaDocs = c => c.consolidada ? ` <span class="tag t-emision">+${docsDe(c).length-1}</span>` : '';
+
 /* Capacidades reales de la flota (Capacidad de camiones.xlsx). Cuatro unidades
    llevan carro de arrastre; las otras cinco son camión simple. Sirve para saber
    si un conteo cabe físicamente arriba: por encima del tope no es una
@@ -884,8 +890,8 @@ const COLS = [
       const e = tipoDe(t);
       return `<span class="tag t-${e.k}">${e.et}</span>`;
     }, c=>(c.guia?.tipo||c.tipo||'zzz')],
-  ['guia','Guía',      c=>c.guia?esc(c.guia.numero):'—', c=>c.guia?.numero||'zzz'],
-  ['dec','Declarado',  c=>c.guia?n0(c.guia.pallets_declarados):'—', c=>c.guia?.pallets_declarados??-1, 1],
+  ['guia','Guía',      c=>c.guia?esc(c.guia.numero)+marcaDocs(c):'—', c=>c.guia?.numero||'zzz'],
+  ['dec','Declarado',  c=>decDe(c)!=null?n0(decDe(c)):'—', c=>decDe(c)??-1, 1],
   ['det','Detectado',  c=>n0(c.total_pallets), c=>c.total_pallets, 1],
   ['dif','Δ',          c=>{
       if(c.diferencia==null) return '—';
@@ -973,7 +979,7 @@ function urlEv(u){
 function abrirDrawer(c){
   GALERIA = [];            // se rearma con las miniaturas de esta carga
   const e = EST[c.est];
-  const dec = c.guia?.pallets_declarados;
+  const dec = decDe(c);
   const dif = c.diferencia;
   const colDif = c.est==='faltante'?'var(--critical)':c.est==='sobrante'?'var(--warning)':'var(--text)';
 
@@ -995,6 +1001,12 @@ function abrirDrawer(c){
       <div><div class="lab">Diferencia</div><div class="v" style="color:${colDif}">${dif==null?'—':(dif>0?'+':'')+n0(dif)}</div></div>
     </div>
 
+    ${c.consolidada ? `<div class="note" style="border-left-color:var(--good);color:var(--text-2)">
+      <b style="color:var(--good)">Salió con ${docsDe(c).length} guías.</b> El conteo no cuadraba con un solo
+      documento pero sí con la suma de estos${c.correlativas?', <b>correlativos entre sí</b>':''}:
+      <br>${docsDe(c).map(g=>`· ${esc(g.numero)} — ${n0(g.pallets_declarados)} pallets — ${esc(g.cliente||'sin cliente')}`).join('<br>')}
+      <br><b>${docsDe(c).map(g=>n0(g.pallets_declarados)).join(' + ')} = ${n0(dec)}</b> contra ${n0(c.total_pallets)} contados.</div>` : ''}
+
     ${c.est==='faltante' ? `<div class="note" style="border-left-color:var(--critical);color:var(--text-2)">
       <b style="color:var(--critical)">▼ Faltan ${n0(-dif)} pallets.</b> El camión salió del túnel con menos de lo que declara la guía
       ${esc(c.guia?.numero||'')}. Corresponde completar la carga o corregir el documento antes de cerrar la recepción.</div>` : ''}
@@ -1010,7 +1022,9 @@ function abrirDrawer(c){
       ${D.parametros.cierre_min} min sin bultos nuevos: comparar ahora daría un faltante falso.</div>` : ''}
 
     <dl class="meta">
-      <dt>Guía</dt><dd>${c.guia?esc(c.guia.numero)+' · emitida '+hhmm(c.guia.hora_emision):'—'}</dd>
+      <dt>${docsDe(c).length>1?'Guías':'Guía'}</dt><dd>${docsDe(c).length
+        ? docsDe(c).map(g=>esc(g.numero)+' ('+n0(g.pallets_declarados)+')').join(' + ')
+        : '—'}</dd>
       <dt>Transportista</dt><dd>${esc(c.transportista||'—')}</dd>
       <dt>Cliente</dt><dd>${esc(c.cliente||'—')}</dd>
       <dt>Bodega</dt><dd>${esc(c.bodega||'—')}</dd>
@@ -1116,7 +1130,7 @@ function abrirLista(titulo, subtitulo, lista, nota){
             esc(c.patente||'sin OCR'),
             tp?`<span class="tag t-${tipoDe(tp).k}">${tipoDe(tp).et}</span>`:'—',
             c.guia?esc(c.guia.numero):'—',
-            c.guia?n0(c.guia.pallets_declarados):'—', n0(c.total_pallets),
+            decDe(c)!=null?n0(decDe(c)):'—', n0(c.total_pallets),
             c.diferencia==null?'—':(c.diferencia>0?'+':'')+n0(c.diferencia),
             `<span class="est" style="color:${e.c}"><span class="gh">${e.g}</span>${e.t}</span>`];
         }))}</div>`
@@ -1172,7 +1186,7 @@ function abrirCamion(pat){
           const e=EST[c.est], tp=c.guia?.tipo||c.tipo;
           return [`<span data-carga="${esc(c.carga_id)}" style="cursor:pointer;color:var(--series-1)">${fecha(c.fecha_hora_carga)} ${hhmm(c.fecha_hora_carga)}</span>`,
             tp?`<span class="tag t-${tipoDe(tp).k}">${tipoDe(tp).et}</span>`:'—',
-            c.guia?esc(c.guia.numero):'—', c.guia?n0(c.guia.pallets_declarados):'—', n0(c.total_pallets),
+            c.guia?esc(c.guia.numero)+marcaDocs(c):'—', decDe(c)!=null?n0(decDe(c)):'—', n0(c.total_pallets),
             c.diferencia==null?'—':(c.diferencia>0?'+':'')+n0(c.diferencia), n0(c.total_bultos),
             `<span class="est" style="color:${e.c}"><span class="gh">${e.g}</span>${e.t}</span>`];
         }))}</div>` : '<div class="empty">Sin cargas con los filtros actuales</div>'}
@@ -1334,7 +1348,7 @@ function initFiltros(){
     const f = filtradas(universo());
     const cab=['carga_id','fecha_hora_carga','patente','tipo','transportista','cliente','guia','pallets_declarados','pallets_detectados','diferencia','estado','bultos','duracion_min'];
     const filas=f.map(c=>[c.carga_id,c.fecha_hora_carga,c.patente||'',(c.guia?.tipo||c.tipo||''),(FLOTA[c.patente]?.conductor||c.transportista||''),c.cliente||'',
-      c.guia?.numero||'',c.guia?.pallets_declarados??'',c.total_pallets,c.diferencia??'',c.est,c.total_bultos,c.duracion_min]);
+      docsDe(c).map(g=>g.numero).join(' + ')||'',decDe(c)??'',c.total_pallets,c.diferencia??'',c.est,c.total_bultos,c.duracion_min]);
     const csv=[cab,...filas].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')).join('\n');
     const a=document.createElement('a');
     a.href=URL.createObjectURL(new Blob(["﻿"+csv],{type:'text/csv;charset=utf-8'}));

@@ -267,7 +267,7 @@ function renderKPIs(ag){
   ];
   document.getElementById('kpis-main').innerHTML=main.map(function(k,i){return kcard(k,'m'+i);}).join('');
   main.forEach(function(k,i){if(k.spk)sparkline('spk-m'+i,k.spkD,css(k.spkC));});
-  document.getElementById('kpis-tipo').innerHTML=TIPOS.map(function(t){var pct=tot?100*tipos[t]/tot:0;var rec=t==='24 horas'?' (+20%)':(t==='Express'?' (+40%)':'');return '<div class="stat-card"><div class="stat-label">'+t+rec+'<small>'+fmt(tipos[t])+' u · '+pct.toFixed(1)+'%</small></div><div class="stat-value" style="color:'+TCOL[t]+'">'+money(vtipos[t])+'</div></div>';}).join('');
+  document.getElementById('kpis-tipo').innerHTML=TIPOS.map(function(t){var pct=tot?100*tipos[t]/tot:0;var rec=t==='24 horas'?' (+20%)':(t==='Express'?' (+40%)':'');return '<div class="stat-card" style="cursor:pointer" title="Ver clientes de este tipo" onclick="modalTipo(\''+t+'\')"><div class="stat-label">'+t+rec+'<small>'+fmt(tipos[t])+' u · '+pct.toFixed(1)+'%</small></div><div class="stat-value" style="color:'+TCOL[t]+'">'+money(vtipos[t])+'</div></div>';}).join('');
   var ref=document.getElementById('cart-ref'); if(ref)ref.textContent=money(ag.cartClp);
 }
 
@@ -284,8 +284,8 @@ function renderTipo(ag){
   arr.forEach(function(x,i){var y=6+i*rowH;var bw=Math.max(2,(x1-xLab)*x.v/mx);
     var t=E('text',{x:xLab-8,y:y+rowH/2,'class':'axis-txt','text-anchor':'end'});t.textContent=x.t;s.appendChild(t);
     var rc=E('rect',{x:xLab,y:y+6,width:bw,height:rowH-16,rx:4,fill:TCOL[x.t],'class':'mark',style:'cursor:pointer'});
-    bindTip(rc,'<div class="tt-title">Emisión '+x.t+'</div><div class="tt-row"><i style="background:'+TCOL[x.t]+'"></i>Cantidad<b>'+fmt(x.v)+' u</b></div><div class="tt-row">Participación<b>'+(100*x.v/total).toFixed(1)+'%</b></div>');
-    rc.addEventListener('click',function(){document.getElementById('f-tipo').value=x.t;renderAll();}); s.appendChild(rc);
+    bindTip(rc,'<div class="tt-title">Emisión '+x.t+'</div><div class="tt-row"><i style="background:'+TCOL[x.t]+'"></i>Cantidad<b>'+fmt(x.v)+' u</b></div><div class="tt-row">Participación<b>'+(100*x.v/total).toFixed(1)+'%</b></div><div class="tt-row" style="color:var(--accent)">clic para ver clientes →</div>');
+    rc.addEventListener('click',function(){modalTipo(x.t);}); s.appendChild(rc);
     var vt=E('text',{x:xLab+bw+8,y:y+rowH/2,'class':'val-txt'});vt.textContent=fmt(x.v)+' · '+(100*x.v/total).toFixed(0)+'%';s.appendChild(vt);
   });
 }
@@ -335,11 +335,11 @@ function renderVal(ag){
 /* ===== top clientes ===== */
 function renderTop(ag){
   var arr=ag.clientes.slice().filter(function(c){return c.total>0;}).sort(function(a,b){return b.total-a.total;}).slice(0,12);
-  var W=470,rowH=27,H=Math.max(arr.length*rowH+6,50),xLab=150,x1=W-120;
+  var W=520,rowH=27,H=Math.max(arr.length*rowH+6,50),xLab=210,x1=W-70;
   var mx=niceMax(Math.max.apply(null,arr.map(function(x){return x.total;}).concat([1])));
   var s=mount('c-top',W,H);
   arr.forEach(function(x,i){var y=6+i*rowH;var bw=Math.max(2,(x1-xLab)*x.total/mx);
-    var t=E('text',{x:xLab-8,y:y+rowH/2,'class':'axis-txt','text-anchor':'end',style:'cursor:pointer'});t.textContent=x.cli.length>22?x.cli.slice(0,21)+'…':x.cli;t.addEventListener('click',function(){modalCliente(x.cli);});s.appendChild(t);
+    var t=E('text',{x:xLab-8,y:y+rowH/2,'class':'axis-txt','text-anchor':'end',style:'cursor:pointer;font-size:10px'});t.textContent=x.cli.length>28?x.cli.slice(0,27)+'…':x.cli;t.addEventListener('click',function(){modalCliente(x.cli);});s.appendChild(t);
     var rc=E('rect',{x:xLab,y:y+4,width:bw,height:rowH-10,rx:4,fill:css('--s1'),'class':'mark',style:'cursor:pointer'});
     bindTip(rc,'<div class="tt-title">'+esc(x.cli)+'</div><div class="tt-row"><i style="background:'+css('--s1')+'"></i>Emitido<b>'+fmt(x.total)+' u</b></div><div class="tt-row">Valorizado<b>'+money(x.valCLP)+'</b></div><div class="tt-row" style="color:var(--accent)">clic para ver →</div>');
     rc.addEventListener('click',function(){modalCliente(x.cli);});s.appendChild(rc);
@@ -383,13 +383,36 @@ function modalCliente(cli){
   var tp={}; TIPOS.forEach(function(t){tp[t]=0;}); ops.forEach(function(r){tp[tipoEmision(r.operacion)]+=num(r.cantidadDespachada);});
   var tpMax=Math.max.apply(null,TIPOS.map(function(t){return tp[t];}).concat([1]));
   var tpBars=TIPOS.filter(function(t){return tp[t]>0;}).map(function(t){return barRow(t,tp[t],tpMax,TCOL[t],fmt(tp[t])+' u');}).join('');
+  var calcRows=TIPOS.filter(function(t){return tp[t]>0;}).map(function(t){var fa=FACTORES[t]||1;var tarAp=tarBase*fa;var u=tp[t]*tarAp;return '<tr><td>'+t+'</td><td>'+fmt(tp[t])+'</td><td>'+(tarBase?tarBase.toFixed(5):'–')+'</td><td>'+(fa>1?'+'+Math.round((fa-1)*100)+'%':'—')+'</td><td>'+(tarBase?tarAp.toFixed(5):'–')+'</td><td>'+fmt1(u)+'</td><td>'+money(u*ag.ufv)+'</td></tr>';}).join('');
   var days=[...new Set(ops.map(dOf))].sort(); var byd={}; ops.forEach(function(r){byd[dOf(r)]=(byd[dOf(r)]||0)+num(r.cantidadDespachada);});
   var pedRows=ops.slice().sort(function(a,b){return (b.fechaDespacho||'').localeCompare(a.fechaDespacho||'');}).map(function(r){return '<tr><td>'+dOf(r)+'</td><td>'+r.nroPedido+'</td><td>'+tipoEmision(r.operacion)+'</td><td>'+planta(r)+'</td><td>'+fmt(num(r.cantidadDespachada))+'</td><td>'+esc(r.chofer||'–')+'</td><td>'+esc(r.patente||'–')+'</td><td>'+(r.dteNro||'–')+'</td></tr>';}).join('');
   var html='<div class="m-kpis">'+mkpi('Emitido (u)',fmt(tot))+mkpi('Valorizado',money(valCLP))+mkpi('UF',fmt1(valUF))+mkpi('Tarifa base',(tarBase?tarBase.toFixed(5):'–')+' UF')+mkpi('Pedidos',fmt(ops.length))+'</div>'
     +'<div class="m-sec"><div class="m-sec-t">Por tipo de emisión</div>'+(tpBars||'<div class="m-hint">—</div>')+'</div>'
+    +'<div class="m-sec"><div class="m-sec-t">Cálculo del valorizado · tarifa base '+(tarBase?tarBase.toFixed(5):'–')+' UF/pallet · valor UF '+money(ag.ufv)+'</div>'
+      +'<table class="m-table"><thead><tr><th>Tipo</th><th>Cantidad</th><th>Tarifa base (UF)</th><th>Recargo</th><th>Tarifa aplicada</th><th>UF</th><th>Valorizado $</th></tr></thead><tbody>'+calcRows+'</tbody>'
+      +'<tfoot><tr><td>Total</td><td>'+fmt(tot)+'</td><td>–</td><td>–</td><td>–</td><td>'+fmt1(valUF)+'</td><td>'+money(valCLP)+'</td></tr></tfoot></table>'
+      +'<div class="m-hint">Valorizado = cantidad × tarifa base del cliente × recargo (24 horas +20%, Express +40%). UF→CLP con el valor de la cartola.</div></div>'
     +'<div class="m-sec"><div class="m-sec-t">Comportamiento diario · emitido (u)</div>'+miniLine(days.map(function(d){return byd[d];}),css('--s1'))+'</div>'
     +'<div class="m-sec"><div class="m-sec-t">Pedidos ('+ops.length+')</div><table class="m-table"><thead><tr><th>Fecha</th><th>Nº pedido</th><th>Tipo</th><th>Base</th><th>Cant.</th><th style="text-align:left">Chofer</th><th>Patente</th><th>DTE</th></tr></thead><tbody>'+pedRows+'</tbody></table></div>';
   openModal('Cliente · Emisiones',cli,html);
+}
+/* pop-up informativo por tipo de emisión */
+function modalTipo(t){
+  var ag=window._ag, f=window._f; var factor=FACTORES[t]||1;
+  var rows=f.ops.filter(function(r){return tipoEmision(r.operacion)===t;});
+  var byCli={}; rows.forEach(function(r){var c=r.clienteDestinoStr||'(s/cliente)';if(!byCli[c])byCli[c]={q:0,uf:0,ped:{}};byCli[c].q+=num(r.cantidadDespachada);byCli[c].uf+=valUFrow(r,ag.tmap);byCli[c].ped[r.nroPedido]=1;});
+  var arr=Object.keys(byCli).map(function(c){return {cli:c,q:byCli[c].q,clp:byCli[c].uf*ag.ufv,ped:Object.keys(byCli[c].ped).length};}).sort(function(a,b){return b.clp-a.clp;});
+  var totQ=arr.reduce(function(a,x){return a+x.q;},0), totClp=arr.reduce(function(a,x){return a+x.clp;},0);
+  var grandQ=0; ag.ops.forEach(function(r){grandQ+=num(r.cantidadDespachada);});
+  var mx=Math.max.apply(null,arr.map(function(x){return x.clp;}).concat([1]));
+  var bars=arr.slice(0,15).map(function(x){return '<div class="mrow"><span class="mrow-l clickable" onclick="modalCliente(\''+x.cli.replace(/'/g,"\\'")+'\')">'+esc(x.cli.length>24?x.cli.slice(0,23)+'…':x.cli)+'</span><span class="mrow-bar"><i style="width:'+Math.max(1.5,100*x.clp/mx)+'%;background:'+TCOL[t]+'"></i></span><span class="mrow-v">'+money(x.clp)+'</span></div>';}).join('');
+  var tbl=arr.map(function(x){return '<tr class="clickable" onclick="modalCliente(\''+x.cli.replace(/'/g,"\\'")+'\')"><td>'+esc(x.cli)+'</td><td>'+fmt(x.q)+'</td><td>'+money(x.clp)+'</td><td>'+fmt(x.ped)+'</td></tr>';}).join('');
+  var recTxt=factor>1?('recargo +'+Math.round((factor-1)*100)+'% sobre la tarifa base'):'a tarifa base (sin recargo)';
+  var html='<div class="m-kpis">'+mkpi('Cantidad',fmt(totQ)+' u')+mkpi('Valorizado',money(totClp))+mkpi('% del total',(grandQ?100*totQ/grandQ:0).toFixed(1)+'%')+mkpi('Recargo',factor>1?('+'+Math.round((factor-1)*100)+'%'):'—')+mkpi('Clientes',fmt(arr.length))+'</div>'
+    +'<div class="m-hint">'+recTxt+'. Valorizado = tarifa base del cliente × cantidad'+(factor>1?(' × '+factor):'')+'.</div>'
+    +'<div class="m-sec"><div class="m-sec-t">Valorizado por cliente · clic para ver el cliente</div>'+(bars||'<div class="m-hint">—</div>')+'</div>'
+    +'<div class="m-sec"><div class="m-sec-t">Clientes ('+arr.length+')</div><table class="m-table"><thead><tr><th>Cliente</th><th>Cantidad</th><th>Valorizado</th><th>Pedidos</th></tr></thead><tbody>'+tbl+'</tbody></table></div>';
+  openModal('Emisión por tipo',t+(factor>1?' (+'+Math.round((factor-1)*100)+'%)':''),html);
 }
 
 /* ===== orquesta ===== */

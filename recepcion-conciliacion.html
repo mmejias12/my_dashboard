@@ -1022,9 +1022,11 @@ function abrirDrawer(c){
       ${D.parametros.cierre_min} min sin bultos nuevos: comparar ahora daría un faltante falso.</div>` : ''}
 
     <dl class="meta">
-      <dt>${docsDe(c).length>1?'Guías':'Guía'}</dt><dd>${docsDe(c).length
+      <dt>${docsDe(c).length>1?'Guías (DTE)':'Guía (DTE)'}</dt><dd>${docsDe(c).length
         ? docsDe(c).map(g=>esc(g.numero)+' ('+n0(g.pallets_declarados)+')').join(' + ')
         : '—'}</dd>
+      <dt>${docsDe(c).length>1?'Pedidos':'Pedido'}</dt><dd>${
+        docsDe(c).map(g=>g.nro_pedido).filter(Boolean).map(esc).join(' + ') || '—'}</dd>
       <dt>Transportista</dt><dd>${esc(c.transportista||'—')}</dd>
       <dt>Cliente</dt><dd>${esc(c.cliente||'—')}</dd>
       <dt>Bodega</dt><dd>${esc(c.bodega||'—')}</dd>

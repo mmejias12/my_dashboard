@@ -296,6 +296,15 @@ body{zoom:var(--escala,1)}
 .cal-prow:hover .cal-pname{background:var(--s3)}
 .cal-pn{font-size:11.5px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:166px}
 .cal-pr{font-size:9.5px;color:var(--t3);font-family:'DM Mono',monospace}
+.cal-arearow{display:flex;border-top:2px solid var(--brm);background:var(--s3);cursor:pointer}
+.cal-arearow:hover .cal-arealabel{background:var(--s4)}
+.cal-arealabel{width:190px;min-width:190px;padding:8px 12px;position:sticky;left:0;z-index:2;background:var(--s3);border-right:1px solid var(--brm);font-size:11.5px;font-weight:700;color:var(--t1);display:flex;align-items:center;gap:7px}
+.cal-areacaret{font-size:10px;color:var(--t3);transition:transform .15s;flex-shrink:0}
+.cal-arearow.colapsada .cal-areacaret{transform:rotate(-90deg)}
+.cal-areaname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-areacount{margin-left:auto;background:var(--s1);border:1px solid var(--br);border-radius:10px;padding:1px 8px;font-size:10px;color:var(--t2);font-weight:600;flex-shrink:0}
+.cal-areabar{flex:1;padding:8px 12px;font-size:10.5px;color:var(--t3);display:flex;align-items:center;gap:5px;white-space:nowrap;position:sticky;left:190px}
+.cal-prow.oculta{display:none}
 .cal-cell{width:38px;min-width:38px;height:34px;border-right:1px solid var(--br);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .12s;position:relative}
 .cal-cell:hover{transform:scale(1.12);z-index:5;box-shadow:0 0 0 2px var(--cyan)}
 .cal-cell.finde{background:color-mix(in srgb,var(--ovc) 1.5%,transparent)}
@@ -486,7 +495,7 @@ body{zoom:var(--escala,1)}
   <select id="sucursal" class="ctrl-sel" onchange="renderCalendario();renderPanelDia()"><option value="">Todas</option></select>
   <span class="ctrl-lbl">Depto:</span>
   <select id="depto" class="ctrl-sel" onchange="renderCalendario();renderPanelDia()"><option value="">Todos</option></select>
-  <button id="btn-load" class="load-btn" onclick="cargar()">🔄 Cargar mes</button>
+  <!-- La carga es automática: al abrir y al cambiar mes/sucursal/depto. -->
   <!-- controles ocultos que la maquinaria de datos sigue usando internamente -->
   <input type="date" id="d1" style="display:none">
   <input type="date" id="d2" style="display:none">
@@ -495,7 +504,7 @@ body{zoom:var(--escala,1)}
 
 <div class="status-bar">
   <div id="sdot" class="sdot"></div>
-  <span id="status-txt">Selecciona un mes y presiona «Cargar mes».</span>
+  <span id="status-txt">Cargando asistencia del mes…</span>
 </div>
 
 <div class="main">
@@ -578,7 +587,7 @@ body{zoom:var(--escala,1)}
       </div>
 
       <div class="cal-wrap" id="cal-wrap">
-        <div class="cal-matrix" id="cal-matrix"><div class="empty" style="padding:30px">Carga los datos con el botón "Cargar" de arriba para ver el calendario.</div></div>
+        <div class="cal-matrix" id="cal-matrix"><div class="empty" style="padding:30px">Cargando asistencia…</div></div>
       </div>
     </div>
   </div>
@@ -1448,7 +1457,7 @@ async function fetchTodasLasPaginas(endpoint, paramsBase, maxPages) {
    CARGA PRINCIPAL — orquesta todos los endpoints
    ═══════════════════════════════════════════════════════════════════════ */
 async function cargar() {
-  $('btn-load').disabled = true;
+  var _btn = $('btn-load'); if(_btn) _btn.disabled = true;
   huecosDias = []; huecosMeses = []; sinHorarioTeorico = false;
   try {
     setStatus('load', 'Cargando sucursales y departamentos...');
@@ -1484,7 +1493,7 @@ async function cargar() {
     console.error(e);
     setStatus('err', '⚠ Error: ' + e.message);
   } finally {
-    $('btn-load').disabled = false;
+    var _b = $('btn-load'); if(_b) _b.disabled = false;
   }
 }
 
@@ -3282,6 +3291,37 @@ function poblarFiltrosArea(){
 
 function pillTxt(edo){ return {p:'P',a:'A',pe:'P/E',ps:'P/S',lic:'Lic',vac:'Vac'}[edo]||'·'; }
 
+/* ── Agrupación por área en el calendario ── */
+var AREAS_COLAPSADAS_KEY = 'talana_areas_colapsadas_v1';
+var areasColapsadas = (function(){ try{ return JSON.parse(localStorage.getItem(AREAS_COLAPSADAS_KEY))||{}; }catch(e){ return {}; } })();
+function areaColapsada(area){ return !!areasColapsadas[area]; }
+function toggleArea(area){
+  areasColapsadas[area] = !areasColapsadas[area];
+  try{ localStorage.setItem(AREAS_COLAPSADAS_KEY, JSON.stringify(areasColapsadas)); }catch(e){}
+  // Mostrar/ocultar sin repintar todo el calendario.
+  var filas = document.querySelectorAll('.cal-prow[data-area="'+(window.CSS&&CSS.escape?CSS.escape(area):area)+'"]');
+  filas.forEach(function(f){ f.classList.toggle('oculta', areasColapsadas[area]); });
+  var caret = null;
+  document.querySelectorAll('.cal-arearow').forEach(function(row){
+    var nm = row.querySelector('.cal-areaname');
+    if(nm && nm.textContent===area) row.classList.toggle('colapsada', areasColapsadas[area]);
+  });
+}
+/* Nombre de pila en Title Case (Talana entrega los nombres en MAYÚSCULAS). */
+function tituloNombre(s){
+  return String(s||'').toLowerCase().replace(/(^|\s)([a-záéíóúñ])/g, function(m,a,b){ return a+b.toUpperCase(); });
+}
+/* Jefe del área: la jefatura más frecuente entre los integrantes. Si hay más de
+   una, se indica cuántas otras hay. */
+function jefeDeArea(miembros){
+  var cuenta = {};
+  miembros.forEach(function(e){ var j=(e.jefe||'').trim(); if(j) cuenta[j]=(cuenta[j]||0)+1; });
+  var jefes = Object.keys(cuenta).sort(function(a,b){ return cuenta[b]-cuenta[a]; });
+  if(!jefes.length) return '';
+  var principal = tituloNombre(jefes[0]);
+  return jefes.length>1 ? (principal+' (+'+(jefes.length-1)+' más)') : principal;
+}
+
 /* ── Apoyo para la ficha del trabajador ── */
 function antiguedadTxt(fc){
   if(!fc) return '—';
@@ -3383,31 +3423,47 @@ function renderCalendario(preservarScroll){
   }
   head += '</div>';
 
-  // filas por persona
-  var body = '';
-  personas.forEach(function(e){
+  // Una fila de celdas de días para una persona (se reutiliza en cada grupo).
+  function filaPersona(e){
     var code = e.code, nombre = empNombreCompleto(e), rut = e.identification||'—';
-    body += '<div class="cal-prow"><div class="cal-pname cal-pname-click" title="Ver ficha completa de '+nombre+'" onclick="abrirModalEmpleado(\''+code+'\')"><span class="cal-pn">'+nombre+'</span><span class="cal-pr">'+rut+'</span></div>';
+    var oculta = areaColapsada(e.departmentName||'(Sin área)') ? ' oculta' : '';
+    var fila = '<div class="cal-prow'+oculta+'" data-area="'+esc(e.departmentName||'(Sin área)')+'"><div class="cal-pname cal-pname-click" title="Ver ficha completa de '+esc(nombre)+'" onclick="abrirModalEmpleado(\''+code+'\')"><span class="cal-pn">'+esc(nombre)+'</span><span class="cal-pr">'+esc(rut)+'</span></div>';
     for (var dia=1; dia<=ultimo; dia++){
       var fecha = calIso(calAnio, calMes, dia);
       var f = new Date(calAnio, calMes, dia); var dow=f.getDay(); var finde=(dow===0||dow===6);
-      if (f > hoyD){ body += '<div class="cal-cell vacio'+(finde?' finde':'')+'"><span class="cal-mini empty">·</span></div>'; continue; }
+      if (f > hoyD){ fila += '<div class="cal-cell vacio'+(finde?' finde':'')+'"><span class="cal-mini empty">·</span></div>'; continue; }
       var st = calEstadoDia(code, fecha);
-      if (!st){ body += '<div class="cal-cell vacio'+(finde?' finde':'')+'"><span class="cal-mini empty">·</span></div>'; continue; }
+      if (!st){ fila += '<div class="cal-cell vacio'+(finde?' finde':'')+'"><span class="cal-mini empty">·</span></div>'; continue; }
       var visible = (calChipEstado==='todos' || st.edo===calChipEstado);
-      var alerta = (st.edo==='ps');
       var op = visible?'':'opacity:.16;';
-      // P atrasado: pill en rojo aunque esté presente
       var miniCls = st.edo + (st.atrasado ? ' p-atras' : '');
-      // Pin cuando la persona estuvo presente pero alguna marca cayó fuera de
-      // la zona del recinto. La P sigue siendo P; el pin avisa que hay que mirar.
       var geoOut = (st.edo==='p'||st.edo==='ps'||st.edo==='pe') && diaFueraDeZona(code, fecha);
       var pin = geoOut ? '<span class="cal-pin" title="Marcó fuera de la zona del recinto">📍</span>' : '';
-      body += '<div class="cal-cell'+(finde?' finde':'')+(alerta?' alerta':'')+(st.atrasado?' con-atraso':'')+(geoOut?' geo-out':'')+'" style="'+op+'" '+
+      fila += '<div class="cal-cell'+(finde?' finde':'')+((st.edo==='ps')?' alerta':'')+(st.atrasado?' con-atraso':'')+(geoOut?' geo-out':'')+'" style="'+op+'" '+
               'onclick="abrirCalModal(\''+code+'\',\''+fecha+'\')">'+
               '<span class="cal-mini '+miniCls+'">'+pillTxt(st.edo)+'</span>'+pin+'</div>';
     }
-    body += '</div>';
+    return fila + '</div>';
+  }
+
+  // Agrupar por área (departmentName). Cada grupo lleva su encabezado colapsable
+  // con el conteo y el jefe del área (la jefatura más frecuente entre sus
+  // integrantes) visible en la banda y en el tooltip.
+  var grupos = {};
+  personas.forEach(function(e){ var a=e.departmentName||'(Sin área)'; (grupos[a]=grupos[a]||[]).push(e); });
+  var areas = Object.keys(grupos).sort(function(a,b){ return a.localeCompare(b,'es'); });
+
+  var body = '';
+  areas.forEach(function(area){
+    var miembros = grupos[area];
+    var jefe = jefeDeArea(miembros);
+    var colap = areaColapsada(area);
+    var tip = jefe ? ('Jefatura del área: '+jefe) : 'Sin jefatura registrada';
+    body += '<div class="cal-arearow'+(colap?' colapsada':'')+'" title="'+esc(tip)+'" onclick="toggleArea(\''+esc(area).replace(/'/g,"\\'")+'\')">'
+          + '<div class="cal-arealabel"><span class="cal-areacaret">▾</span><span class="cal-areaname">'+esc(area)+'</span><span class="cal-areacount">'+miembros.length+'</span></div>'
+          + '<div class="cal-areabar">'+(jefe ? '👤 '+esc(jefe) : '<span style="opacity:.6">sin jefatura registrada</span>')+'</div>'
+          + '</div>';
+    miembros.forEach(function(e){ body += filaPersona(e); });
   });
 
   cont.innerHTML = head + body;

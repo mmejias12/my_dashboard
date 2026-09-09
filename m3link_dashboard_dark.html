@@ -2135,6 +2135,12 @@ var TABS=(function(){
             e.preventDefault(); e.stopPropagation(); home();
           }
         }, true);
+        // Ocultar el menú lateral interno de la vista (el workspace ya provee navegación)
+        if(d.head && !d.getElementById('__m3embed')){
+          var st=d.createElement('style'); st.id='__m3embed';
+          st.textContent='.sidebar{display:none!important}.layout{padding-left:0!important}.main{margin-left:0!important}';
+          d.head.appendChild(st);
+        }
       }catch(e){}
     });
   }

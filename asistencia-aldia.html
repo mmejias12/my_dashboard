@@ -1070,8 +1070,8 @@ function diaFueraDeZona(code, fecha){
 }
 /* Marcas crudas (con coordenadas) de un empleado en un día, ordenadas por hora. */
 function marcasCrudasDia(code, fecha){
-  var arr = (cacheMarcasPorDia[fecha]||[]).filter(function(m){ return obtenerCodeMarca(m)===String(code); });
-  return arr.slice().sort(function(a,b){ return String(a.attendanceDate||'').localeCompare(String(b.attendanceDate||'')); });
+  var arr = dedupMarcas((cacheMarcasPorDia[fecha]||[]).filter(function(m){ return obtenerCodeMarca(m)===String(code); }));
+  return arr.sort(function(a,b){ return String(a.attendanceDate||'').localeCompare(String(b.attendanceDate||'')); });
 }
 /* URL de OpenStreetMap embebido, centrado en el punto con un marcador. */
 function mapaEmbedUrl(lat,lng){
@@ -1272,11 +1272,34 @@ function renderMapaPersonas(){
   }
 }
 
+/* Quita marcas repetidas de una lista. La misma marca de Talana es única por
+   `checksum`; si faltara, se cae a code+hora. Necesario porque una marca podía
+   quedar apilada varias veces en el caché entre recargas. */
+function dedupMarcas(arr){
+  var visto = {}, out = [];
+  (arr||[]).forEach(function(m){
+    if(!m) return;
+    var k = m.checksum || (obtenerCodeMarca(m) + '|' + (m.attendanceDate || m.TS || ''));
+    if(visto[k]) return;
+    visto[k] = true; out.push(m);
+  });
+  return out;
+}
+
 function cacheCargarDeDisco() {
   try {
     var raw = localStorage.getItem(CACHE_KEY);
     if (raw) {
       cacheMarcasPorDia = JSON.parse(raw);
+      // Limpiar duplicados ya persistidos en este navegador (de versiones
+      // anteriores que apilaban la misma marca en cada recarga).
+      var huboDup = false;
+      Object.keys(cacheMarcasPorDia).forEach(function(f){
+        var antes = (cacheMarcasPorDia[f]||[]).length;
+        cacheMarcasPorDia[f] = dedupMarcas(cacheMarcasPorDia[f]);
+        if(cacheMarcasPorDia[f].length !== antes) huboDup = true;
+      });
+      if(huboDup){ try{ localStorage.setItem(CACHE_KEY, JSON.stringify(cacheMarcasPorDia)); }catch(e){} }
       var dias = Object.keys(cacheMarcasPorDia).length;
       var total = Object.values(cacheMarcasPorDia).reduce(function(a, b) { return a + b.length; }, 0);
       console.log('[Asistencia] Cache: ' + dias + ' días, ' + total + ' marcas');
@@ -1752,12 +1775,17 @@ function mergearMarcasNuevas(nuevas) {
   // Persistir agrupadas por día
   // Estructura real Workera: m.attendanceDate = "2026-05-04T06:09:29" (ISO con T)
   //                          m.employee.code  = "9828794"
+  var diasTocados = {};
   nuevasUnicas.forEach(function(m) {
     var fecha = obtenerFechaMarca(m);
     if (!fecha) return;
     if (!cacheMarcasPorDia[fecha]) cacheMarcasPorDia[fecha] = [];
     cacheMarcasPorDia[fecha].push(m);
+    diasTocados[fecha] = 1;
   });
+  // Deduplicar los días recién tocados: aunque una marca repetida no debería
+  // llegar, así el caché nunca acumula copias de la misma marca (mismo checksum).
+  Object.keys(diasTocados).forEach(function(f){ cacheMarcasPorDia[f] = dedupMarcas(cacheMarcasPorDia[f]); });
   cacheGuardarEnDisco();
 }
 
@@ -3186,9 +3214,9 @@ function calEstadoDia(code, fecha){
 
 /* Todas las marcas reales de un empleado en una fecha, ordenadas cronológicamente */
 function calMarcasDia(code, fecha){
-  var arr = cacheMarcacionesEnriquecimiento.filter(function(m){
+  var arr = dedupMarcas(cacheMarcacionesEnriquecimiento.filter(function(m){
     return obtenerCodeMarca(m) == code && obtenerFechaMarca(m) === fecha;
-  });
+  }));
   arr.sort(function(a,b){
     var da=obtenerDateTimeMarca(a), db=obtenerDateTimeMarca(b);
     return (da?da.getTime():0) - (db?db.getTime():0);

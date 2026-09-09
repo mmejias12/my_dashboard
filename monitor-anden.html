@@ -802,7 +802,9 @@ document.addEventListener('keydown', e=>{
 
 function abrirModal(v){
   const r = regla(v.estado);
-  const dec = v.guia?.pallets_declarados;
+  // Un camión puede salir con más de una guía: se compara contra la suma.
+  const dec = v.pallets_declarados_total ?? v.guia?.pallets_declarados;
+  const docs = v.guias || (v.guia ? [v.guia] : []);
   const col = r.nivel==='critica' ? 'var(--critical)' : 'var(--warning)';
 
   $('#mcont').innerHTML = `
@@ -816,8 +818,10 @@ function abrirModal(v){
     <div class="mbody">
       <div class="patgrande" style="color:${col}">${esc(v.patente || 'SIN PATENTE')}</div>
       <div class="subpat">
-        ${v.guia ? `${v.guia.tipo==='emision'?'Guía':'Pedido'} ${esc(v.guia.nro_pedido || v.guia.numero)} · ${esc(v.guia.chofer||'sin chofer')} · ${esc(v.guia.cliente||'—')}`
-                 : 'Sin guía asociada en RDTOut'}
+        ${v.consolidada
+          ? `${docs.length} guías · ${esc(v.guia.chofer||'sin chofer')}`
+          : v.guia ? `${v.guia.tipo==='emision'?'Guía':'Pedido'} ${esc(v.guia.nro_pedido || v.guia.numero)} · ${esc(v.guia.chofer||'sin chofer')} · ${esc(v.guia.cliente||'—')}`
+                   : 'Sin guía asociada en RDTOut'}
       </div>
 
       <div class="gran">
@@ -828,6 +832,12 @@ function abrirModal(v){
       </div>
 
       ${r.acc?`<div class="aviso-fila" style="border-left-color:${col}"><b>${esc(r.acc)}</b></div>`:''}
+
+      ${v.consolidada ? `<div class="aviso-fila" style="border-left-color:var(--good)">
+        <b>Salió con ${docs.length} guías.</b> El conteo de la cámara no cuadraba con un solo documento,
+        pero sí con la suma de estos${v.correlativas?' <b>documentos correlativos</b>':''}:
+        <br>${docs.map(g=>`· ${esc(g.numero)} — ${n0(g.pallets_declarados)} pallets — ${esc(g.cliente||'sin cliente')}`).join('<br>')}
+        <br><b>${docs.map(g=>n0(g.pallets_declarados)).join(' + ')} = ${n0(dec)}</b>, y la cámara contó ${n0(v.total_pallets)}.</div>` : ''}
 
       ${v.fusion ? `<div class="aviso-fila" style="border-left-color:var(--warning)">
         La cámara registró <b>${v.total_bultos} bultos</b> en una sola carga, más de lo que cabe en un
@@ -1025,7 +1035,7 @@ function render(){
       <span class="gh" style="color:${col}">${r.gh}</span>
       <div style="min-width:0">
         <div class="pat">${esc(v.patente||'sin patente')}${v.retenido?' <span class="pend">RETENIDO</span>':pendiente?' <span class="pend">SIN ATENDER</span>':v.historico?' · <span style="color:var(--muted);font-size:11px">previo a la sesión</span>':v.atendida?' · <span style="color:var(--muted);font-size:11px">atendida</span>':''}</div>
-        <div class="det">${v.guia?tag(v.guia.tipo)+' ':''}${v.otroDoc?tag(v.otroDoc.tipo)+' ':''}${v.guia?esc(v.guia.numero)+' · ':''}${n0(v.total_pallets)} pallets en ${v.total_bultos} filas</div>
+        <div class="det">${v.guia?tag(v.guia.tipo)+' ':''}${v.otroDoc?tag(v.otroDoc.tipo)+' ':''}${v.guia?esc(v.guia.numero)+(v.consolidada?` <span class="pend" style="color:var(--good);border-color:rgba(12,163,12,.5)">+${(v.guias||[]).length-1} GUÍA${(v.guias||[]).length>2?'S':''}</span>`:'')+' · ':''}${n0(v.total_pallets)} pallets en ${v.total_bultos} filas</div>
       </div>
       ${v.diferencia ? `<div class="dif" style="color:${col}">${v.diferencia>0?'+':''}${n0(v.diferencia)}</div>` : ''}
       <div class="hora">${hhmm(new Date(v.fecha_hora_carga))}</div>

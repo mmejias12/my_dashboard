@@ -16,24 +16,26 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type'
 };
 
-const ADMIN_ROLES = (process.env.ADMIN_ROLES || 'admin')
+// Dueños autorizados a ver el uso (por correo). Configurable con USO_OWNERS
+// (lista separada por comas). Este es el candado real, no depende de roles.
+const OWNERS = (process.env.USO_OWNERS || 'mmejias@redtecsa.com')
   .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
 
-function rolesDe(req){
+function emailDe(req){
   try {
     const h = req.headers && (req.headers['x-ms-client-principal'] || req.headers['X-MS-CLIENT-PRINCIPAL']);
-    if (!h) return [];
+    if (!h) return '';
     const p = JSON.parse(Buffer.from(h, 'base64').toString('utf8'));
-    return (p.userRoles || []).map(r => String(r).toLowerCase());
-  } catch (e) { return []; }
+    return String(p.userDetails || '').toLowerCase();
+  } catch (e) { return ''; }
 }
 
 module.exports = async function (context, req) {
   if (req.method === 'OPTIONS') { context.res = { status: 204, headers: CORS }; return; }
 
-  const roles = rolesDe(req);
-  if (!roles.some(r => ADMIN_ROLES.includes(r))) {
-    context.res = { status: 403, headers: { ...CORS, 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'solo administradores' }) };
+  const email = emailDe(req);
+  if (OWNERS.indexOf(email) < 0) {
+    context.res = { status: 403, headers: { ...CORS, 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'no autorizado' }) };
     return;
   }
 

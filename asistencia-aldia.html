@@ -287,14 +287,15 @@ body{zoom:var(--escala,1)}
 .cal-daycol.hoy .cal-dnum{color:var(--cyan)}
 .cal-prow{display:flex;border-top:1px solid var(--br)}
 .cal-prow:hover{background:color-mix(in srgb,var(--ovc) 1.5%,transparent)}
-.cal-pname{width:190px;min-width:190px;padding:6px 12px;position:sticky;left:0;z-index:2;background:var(--s2);border-right:1px solid var(--brm);display:flex;flex-direction:column;justify-content:center}
+.cal-pname{width:190px;min-width:190px;padding:6px 12px;position:sticky;left:0;z-index:2;background:var(--s2);border-right:1px solid var(--brm);display:flex;flex-direction:row;align-items:center;gap:7px}
+.cal-pname-txt{display:flex;flex-direction:column;justify-content:center;min-width:0}
 .cal-pname-click{cursor:pointer;transition:background .13s}
 .cal-pname-click:hover{background:var(--s4)!important}
 .cal-pname-click:hover .cal-pn{color:var(--cyan)}
 .cal-pname-click::after{content:"\203A";position:absolute;right:8px;top:50%;transform:translateY(-50%);color:var(--t4);font-size:15px;opacity:0;transition:opacity .13s}
 .cal-pname-click:hover::after{opacity:1;color:var(--cyan)}
 .cal-prow:hover .cal-pname{background:var(--s3)}
-.cal-pn{font-size:11.5px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:166px}
+.cal-pn{font-size:11.5px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:145px}
 .cal-pr{font-size:9.5px;color:var(--t3);font-family:'DM Mono',monospace}
 .cal-arearow{display:flex;border-top:2px solid var(--brm);background:var(--s3);cursor:pointer}
 .cal-arearow:hover .cal-arealabel{background:var(--s4)}
@@ -450,7 +451,10 @@ body{zoom:var(--escala,1)}
 .kperson-click{cursor:pointer;transition:border-color .13s,background .13s}
 .kperson-click:hover{border-color:var(--cyan);background:var(--s3)}
 .kperson-click:hover .kp-name{color:var(--cyan)}
-.kav{width:26px;height:26px;border-radius:50%;background:var(--s4);color:currentColor;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:'DM Mono',monospace}
+.kav{width:26px;height:26px;border-radius:50%;background:var(--s4);color:currentColor;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:'DM Mono',monospace;overflow:hidden}
+.kav img{width:100%;height:100%;object-fit:cover;display:block}
+.kav.grande{width:58px;height:58px;font-size:17px}
+.kav.chico{width:20px;height:20px;font-size:8px}
 .kp-info{flex:1;min-width:0}
 .kp-name{font-size:11.5px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .kp-sub{font-size:9.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -2840,11 +2844,13 @@ function abrirModalEmpleado(code) {
     return pc == code;
   });
 
-  // Construir HTML
+  // Construir HTML — cabecera con la foto (o iniciales) a la izquierda.
   var html = '';
-  html += '<h2>' + empNombreCompleto(emp) + '</h2>';
-  html += '<div class="modal-sub">RUT: ' + (emp.identification || '—') + ' · Código: ' + (emp.code || '—')
-        + (emp.position ? ' · ' + esc(emp.position) : '') + '</div>';
+  html += '<div style="display:flex;gap:14px;align-items:center;margin-bottom:6px">'
+        + avatarEmp(emp, 'grande')
+        + '<div style="min-width:0"><h2 style="margin:0">' + esc(empNombreCompleto(emp)) + '</h2>'
+        + '<div class="modal-sub" style="margin:2px 0 0">RUT: ' + esc(emp.identification || '—') + ' · Código: ' + esc(emp.code || '—')
+        + (emp.position ? ' · ' + esc(emp.position) : '') + '</div></div></div>';
 
   // ── Resumen del mes visible (a partir de la asistencia real) ──
   var rm = resumenMesEmpleado(code);
@@ -3458,7 +3464,7 @@ function renderCalendario(preservarScroll){
   function filaPersona(e){
     var code = e.code, nombre = empNombreCompleto(e), rut = e.identification||'—';
     var oculta = areaColapsada(e.departmentName||'(Sin área)') ? ' oculta' : '';
-    var fila = '<div class="cal-prow'+oculta+'" data-area="'+esc(e.departmentName||'(Sin área)')+'"><div class="cal-pname cal-pname-click" title="Ver ficha completa de '+esc(nombre)+'" onclick="abrirModalEmpleado(\''+code+'\')"><span class="cal-pn">'+esc(nombre)+'</span><span class="cal-pr">'+esc(rut)+'</span></div>';
+    var fila = '<div class="cal-prow'+oculta+'" data-area="'+esc(e.departmentName||'(Sin área)')+'"><div class="cal-pname cal-pname-click" title="Ver ficha completa de '+esc(nombre)+'" onclick="abrirModalEmpleado(\''+code+'\')">'+avatarEmp(e,'chico')+'<div class="cal-pname-txt"><span class="cal-pn">'+esc(nombre)+'</span><span class="cal-pr">'+esc(rut)+'</span></div></div>';
     for (var dia=1; dia<=ultimo; dia++){
       var fecha = calIso(calAnio, calMes, dia);
       var f = new Date(calAnio, calMes, dia); var dow=f.getDay(); var finde=(dow===0||dow===6);
@@ -3558,6 +3564,16 @@ function calIniciales(nombre){
   var p=(nombre||'').trim().split(/\s+/);
   return ((p[0]||'')[0]||'?').toUpperCase() + ((p[1]||'')[0]||'').toUpperCase();
 }
+/* Avatar del trabajador: foto de Talana (emp.photo) o iniciales de respaldo.
+   Si la foto no carga, cae a las iniciales sin dejar el círculo vacío. */
+function avatarEmp(emp, clase){
+  var ini = calIniciales(empNombreCompleto(emp));
+  var f = emp && emp.photo;
+  var cls = 'kav'+(clase?(' '+clase):'');
+  if(f) return '<div class="'+cls+'"><img src="'+esc(f)+'" alt="" loading="lazy" '
+    + 'onerror="var a=this.closest(\'.kav\');a.classList.add(\'sinfoto\');a.textContent=\''+esc(ini)+'\'"></div>';
+  return '<div class="'+cls+' sinfoto">'+esc(ini)+'</div>';
+}
 function calPersonRow(emp, detalle, fecha){
   var nombre=empNombreCompleto(emp);
   var suc=(emp.branchOfficeName||emp.branchOffice||'—');
@@ -3568,7 +3584,7 @@ function calPersonRow(emp, detalle, fecha){
   // día vencido en "No marcó salida".
   var click = fecha ? ' onclick="abrirCalModal(\''+emp.code+'\',\''+fecha+'\')" title="Ver el detalle del día"' : '';
   return '<div class="kperson'+(fecha?' kperson-click':'')+'"'+click+'>'+
-    '<div class="kav">'+calIniciales(nombre)+'</div>'+
+    avatarEmp(emp)+
     '<div class="kp-info"><div class="kp-name">'+nombre+'</div><div class="kp-sub">'+sub+'</div></div>'+
     '<div class="kp-detail">'+(detalle||'')+'</div></div>';
 }

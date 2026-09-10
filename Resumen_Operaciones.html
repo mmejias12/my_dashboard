@@ -17,6 +17,21 @@
     --s1:#3987e5;--s2:#8b5cf6;--s3:#38c172;--s4:#f0a83a;--s5:#e05c8a;
     --rojos:#e0524f;--blancos-rep:#5f9bd8;--blancos-vta:#38b2ac;
   }
+
+  :root[data-theme="light"]{
+    --bg-page:#f3f5f9;--bg-surface:#ffffff;--bg-hover:#eaeef5;--bg-active:#e3ecfa;--bg-input:#ffffff;
+    --border:#dde3ec;--border-md:#c6cedb;
+    --text-primary:#131722;--text-secondary:#4a5268;--text-muted:#6b7488;
+    --accent:#2f74d0;--green:#1f9d57;--red:#d6455a;--amber:#c07d12;
+    --s1:#2f74d0;--s2:#7c53d6;--s3:#1f9d57;--s4:#c07d12;--s5:#c94f7c;
+    --rojos:#c9403d;--blancos-rep:#3f7fbf;--blancos-vta:#1f9c94;
+  }
+
+  /* ===== Accesibilidad: tamaño de texto + tema claro/oscuro ===== */
+  .acc{display:inline-flex;align-items:center;gap:4px}
+  .acc .ab{min-width:30px;height:30px;padding:0 7px;border:1px solid var(--border-md);background:var(--bg-input,var(--bg-surface));color:var(--text-secondary);border-radius:7px;cursor:pointer;font-family:inherit;font-size:12px;display:inline-flex;align-items:center;justify-content:center}
+  .acc .ab:hover{background:var(--bg-hover);color:var(--text-primary)}
+  .acc .ab.big{font-size:16px;font-weight:700}
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg-page);color:var(--text-primary);font-family:'Inter',-apple-system,sans-serif;font-size:13px;-webkit-font-smoothing:antialiased}
   .topbar{position:fixed;top:0;left:0;right:0;height:50px;background:var(--bg-surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:0 18px;z-index:100}
@@ -144,6 +159,9 @@
     <button class="btn primary" id="btn-upd">↻ Actualizar</button>
     <button class="btn" id="btn-plan" title="Cargar Excel del plan/presupuesto">▦ Cargar plan</button>
     <button class="btn" id="btn-exp">↓ Exportar</button>
+    <div class="acc" title="Tamaño de texto"><button class="ab" id="fs-down" title="Reducir texto">A−</button><button class="ab big" id="fs-up" title="Aumentar texto">A+</button></div>
+    <div class="acc"><button class="ab" id="theme-tg" title="Cambiar tema claro/oscuro">☀︎</button></div>
+
   </div>
 
   <div class="note"><b>ROJOS en vivo</b> desde <b>opsxrangofechas</b> (la misma API de M3LINK). <b>REAL = cantidad confirmada</b> (lo efectivamente confirmado, igual al REAL de M2LINK). <b>PLAN = cantidad solicitada</b> (lo planificado a emitir/mover, <b>excluye anulados</b>), calculado en vivo hasta cargar el Excel de PLAN. <b>INDX</b> = REAL/PLAN − 1 y <b>DIF</b> = REAL − PLAN. Plaza: emisiones por bodega origen, retiros/devoluciones por bodega destino. <b>PPTO</b>, <b>BLANCOS</b> y la regla de <b>TRANSFERENCIAS</b> quedan por confirmar.</div>
@@ -416,6 +434,23 @@ function cargar(){
   document.getElementById('foot-upd').textContent='Cargado '+new Date().toLocaleString('es-CL');
   cargar();
 })();
+/* ===== Accesibilidad: tamaño de texto + tema claro/oscuro ===== */
+var FSLEVELS=[1,1.15,1.3,1.5], fsIdx=1;
+function applyFS(){ document.documentElement.style.zoom=FSLEVELS[fsIdx]; try{localStorage.setItem('resop_fs',fsIdx);}catch(e){} }
+function applyTheme(t){
+  document.documentElement.setAttribute('data-theme',t);
+  var b=document.getElementById('theme-tg'); if(b)b.textContent=(t==='light'?'☾':'☀︎');
+  try{localStorage.setItem('resop_theme',t);}catch(e){}
+  if(typeof renderAll==='function'){ try{ renderAll(); }catch(e){} }   /* repinta los SVG con los colores del tema */
+}
+document.getElementById('fs-down').addEventListener('click',function(){ fsIdx=Math.max(0,fsIdx-1); applyFS(); });
+document.getElementById('fs-up').addEventListener('click',function(){ fsIdx=Math.min(FSLEVELS.length-1,fsIdx+1); applyFS(); });
+document.getElementById('theme-tg').addEventListener('click',function(){ applyTheme(document.documentElement.getAttribute('data-theme')==='light'?'dark':'light'); });
+(function(){ try{
+  var t=localStorage.getItem('resop_theme'); if(t)applyTheme(t);
+  var f=parseInt(localStorage.getItem('resop_fs'),10); if(!isNaN(f)&&f>=0&&f<FSLEVELS.length){fsIdx=f;applyFS();}
+}catch(e){} })();
+
 </script>
 </body>
 </html>

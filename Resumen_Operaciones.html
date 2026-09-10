@@ -146,7 +146,7 @@
     <button class="btn" id="btn-exp">↓ Exportar</button>
   </div>
 
-  <div class="note"><b>ROJOS en vivo</b> desde <b>opsxrangofechas</b> (la misma API de M3LINK). <b>REAL = cantidad confirmada</b> (lo efectivamente confirmado, igual al REAL de M2LINK). <b>PLAN = cantidad solicitada</b> (lo planificado a emitir/mover), calculado en vivo hasta cargar el Excel de PLAN. <b>INDX</b> = REAL/PLAN − 1 y <b>DIF</b> = REAL − PLAN. Plaza: emisiones por bodega origen, retiros/devoluciones por bodega destino. <b>PPTO</b>, <b>BLANCOS</b> y la regla de <b>TRANSFERENCIAS</b> quedan por confirmar.</div>
+  <div class="note"><b>ROJOS en vivo</b> desde <b>opsxrangofechas</b> (la misma API de M3LINK). <b>REAL = cantidad confirmada</b> (lo efectivamente confirmado, igual al REAL de M2LINK). <b>PLAN = cantidad solicitada</b> (lo planificado a emitir/mover, <b>excluye anulados</b>), calculado en vivo hasta cargar el Excel de PLAN. <b>INDX</b> = REAL/PLAN − 1 y <b>DIF</b> = REAL − PLAN. Plaza: emisiones por bodega origen, retiros/devoluciones por bodega destino. <b>PPTO</b>, <b>BLANCOS</b> y la regla de <b>TRANSFERENCIAS</b> quedan por confirmar.</div>
 
   <div class="period-band" id="period-band">—</div>
 
@@ -229,7 +229,8 @@ function computeReal(rng){
   var det={EMISIONES:[],RETIROS:[],DEVOLUCIONES:[],TRANSFERENCIAS:[]};
   rows.forEach(function(r){ var m=metricOf(r.operacion); if(!m||!base[m])return; var p=rowPlaza(m,r);
     var q=rowQty(m,r); if(q){ base[m][p]+=q; base[m].Total+=q; det[m].push(r); }
-    var qp=rowQtyPlan(m,r); if(qp){ basePlan[m][p]+=qp; basePlan[m].Total+=qp; }
+    var an=(''+(r.etapaOperacion||'')).toLowerCase().indexOf('anulad')>=0; // PLAN excluye anulados (como el m3link)
+    var qp=rowQtyPlan(m,r); if(qp&&!an){ basePlan[m][p]+=qp; basePlan[m].Total+=qp; }
   });
   // derivados REAL
   var RD=blankGrid(), DL=blankGrid();

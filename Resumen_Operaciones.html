@@ -146,7 +146,7 @@
     <button class="btn" id="btn-exp">↓ Exportar</button>
   </div>
 
-  <div class="note">Los <b>REALES de ROJOS</b> se calculan en vivo desde <b>opsxrangofechas</b> (la misma API de M3LINK): EMISIONES por despacho, RETIROS/DEVOLUCIONES por confirmación, plaza según bodega. <b>PLAN/PPTO</b> se cargan desde Excel (pendiente). <b>BLANCOS</b> y la regla de <b>TRANSFERENCIAS</b> quedan por confirmar.</div>
+  <div class="note"><b>ROJOS en vivo</b> desde <b>opsxrangofechas</b> (la misma API de M3LINK). <b>REAL = cantidad confirmada</b> (lo efectivamente confirmado, igual al REAL de M2LINK). <b>PLAN = cantidad solicitada</b> (lo planificado a emitir/mover), calculado en vivo hasta cargar el Excel de PLAN. <b>INDX</b> = REAL/PLAN − 1 y <b>DIF</b> = REAL − PLAN. Plaza: emisiones por bodega origen, retiros/devoluciones por bodega destino. <b>PPTO</b>, <b>BLANCOS</b> y la regla de <b>TRANSFERENCIAS</b> quedan por confirmar.</div>
 
   <div class="period-band" id="period-band">—</div>
 
@@ -181,10 +181,12 @@ function metricOf(op){ op=(''+(op||'')).trim().toLowerCase();
   if(op.indexOf('devolucion')===0)return 'DEVOLUCIONES';
   if(op.indexOf('transferencia')===0)return 'TRANSFERENCIAS';
   return null; }
-// EMISIONES: plaza = origen (planta que emite), cantidad = despachada
-// RETIROS/DEVOLUCIONES: plaza = destino (planta que recibe), cantidad = confirmada
+// EMISIONES: plaza = origen (planta que emite). RETIROS/DEVOLUCIONES: plaza = destino (planta que recibe).
+// REAL = cantidad CONFIRMADA (lo efectivamente confirmado; = REAL de M2LINK).
+// PLAN en vivo = cantidad SOLICITADA (lo planificado a emitir/mover); el Excel de PLAN puede sobrescribirlo.
 function rowPlaza(m,r){ return (m==='EMISIONES')?plaza(r.bodegaOrigenStr):plaza(r.bodegaDestinoStr); }
-function rowQty(m,r){ var d=num(r.cantidadDespachada),c=num(r.cantidadConfirmada); return (m==='EMISIONES')?d:c; }
+function rowQty(m,r){ return num(r.cantidadConfirmada); }
+function rowQtyPlan(m,r){ return num(r.cantidadSolicitada); }
 
 /* ===== PLAN (Excel, pendiente) ===== */
 var PLAN=null; // estructura futura: {EMISIONES:{ROJOS:{Santiago:..,Talca:..}}, ...}
@@ -223,15 +225,23 @@ function computeReal(rng){
   // filtra por fechaRequerida en rango
   var rows=OPS.filter(function(r){ var d=dOf(r); return d>=rng.desde && d<=rng.hasta; });
   var base={EMISIONES:blankGrid(),RETIROS:blankGrid(),DEVOLUCIONES:blankGrid(),TRANSFERENCIAS:blankGrid()};
+  var basePlan={EMISIONES:blankGrid(),RETIROS:blankGrid(),DEVOLUCIONES:blankGrid(),TRANSFERENCIAS:blankGrid()};
   var det={EMISIONES:[],RETIROS:[],DEVOLUCIONES:[],TRANSFERENCIAS:[]};
-  rows.forEach(function(r){ var m=metricOf(r.operacion); if(!m||!base[m])return; var q=rowQty(m,r); if(!q)return; var p=rowPlaza(m,r); base[m][p]+=q; base[m].Total+=q; det[m].push(r); });
-  // derivados
+  rows.forEach(function(r){ var m=metricOf(r.operacion); if(!m||!base[m])return; var p=rowPlaza(m,r);
+    var q=rowQty(m,r); if(q){ base[m][p]+=q; base[m].Total+=q; det[m].push(r); }
+    var qp=rowQtyPlan(m,r); if(qp){ basePlan[m][p]+=qp; basePlan[m].Total+=qp; }
+  });
+  // derivados REAL
   var RD=blankGrid(), DL=blankGrid();
   ['Total'].concat(PLAZAS).forEach(function(p){ RD[p]=base.RETIROS[p]+base.DEVOLUCIONES[p]; DL[p]=RD[p]-base.EMISIONES[p]; });
   var real={EMISIONES:base.EMISIONES,RETIROS:base.RETIROS,DEVOLUCIONES:base.DEVOLUCIONES,TRANSFERENCIAS:base.TRANSFERENCIAS,RET_DEV:RD,DELTA:DL};
+  // derivados PLAN (en vivo = solicitado)
+  var RDp=blankGrid(), DLp=blankGrid();
+  ['Total'].concat(PLAZAS).forEach(function(p){ RDp[p]=basePlan.RETIROS[p]+basePlan.DEVOLUCIONES[p]; DLp[p]=RDp[p]-basePlan.EMISIONES[p]; });
+  var planLive={EMISIONES:basePlan.EMISIONES,RETIROS:basePlan.RETIROS,DEVOLUCIONES:basePlan.DEVOLUCIONES,TRANSFERENCIAS:basePlan.TRANSFERENCIAS,RET_DEV:RDp,DELTA:DLp};
   // REAL FC emisiones desde operacionespalletsrojos (Total)
   var fcTotal=0; (ROJOSFC||[]).forEach(function(x){ var f=(''+(x.fecha||'')).slice(0,10); if(f>=rng.desde && f<=rng.hasta) fcTotal+=num(x.emision); });
-  return {real:real, det:det, rows:rows, fcEmisTotal:fcTotal};
+  return {real:real, planLive:planLive, det:det, rows:rows, fcEmisTotal:fcTotal};
 }
 
 /* ===== render ===== */
@@ -297,7 +307,7 @@ function cell(A,m,sr,cat,plz,div){
   }
   var real=A.real[m]?A.real[m][plz]:null;
   var realFC=(m==='EMISIONES'&&plz==='Total')?A.fcEmisTotal:null;
-  var plan=planVal('PLAN',m,cat.k,plz), ppto=planVal('PPTO',m,cat.k,plz);
+  var plan=planVal('PLAN',m,cat.k,plz); if(plan==null&&cat.live&&A.planLive&&A.planLive[m]){ plan=A.planLive[m][plz]; } var ppto=planVal('PPTO',m,cat.k,plz);
   var v;
   if(sr==='REAL'){ v=real==null?'–':fmt(real/div); return '<td class="val">'+v+'</td>'; }
   if(sr==='REAL FC'){ if(realFC==null)return '<td class="val mut">–</td>'; return '<td class="val">'+fmt(realFC/div)+'</td>'; }
@@ -329,7 +339,7 @@ function drill(m){
     PLAZAS.filter(function(p){return grid[p];}).map(function(p){return mkpi(p,fmt(grid[p]));}).join('')+
     mkpi('Pedidos',fmt(det.length))+'</div>';
   // tabla de pedidos
-  var qh=(m==='EMISIONES')?'Despachado':'Confirmado';
+  var qh='Confirmado';
   var rows=det.slice().sort(function(a,b){return rowQty(m,b)-rowQty(m,a);}).map(function(r){
     return '<tr><td>'+esc(r.nroPedido)+'</td><td>'+esc(r.operacion)+'</td><td style="text-align:left">'+rowPlaza(m,r)+'</td><td style="text-align:left">'+esc((m==='EMISIONES'?r.clienteDestinoStr:r.bodegaOrigenStr)||'–')+'</td><td>'+fmt(rowQty(m,r))+'</td><td style="text-align:left">'+esc(r.etapaOperacion||'')+'</td></tr>';
   }).join('');

@@ -168,7 +168,12 @@ async function sincronizarMaestros(desde, hasta, presupuesto, informe) {
 
   const sucursales = marca(await mapa.traerSucursales(opts));
   const centros    = marca(await mapa.traerCentrosCosto(opts));
-  const empleados  = marca(await mapa.traerEmpleados(opts));
+  // Fotos de perfil (dato no sensible, URL pública). Si falla, el reporte cae a
+  // las iniciales; no debe detener la sincronización.
+  let fotos = {};
+  try { fotos = await mapa.traerFotos(opts); }
+  catch (e) { informe.avisos.push('No se pudieron traer las fotos de perfil: ' + e.message); }
+  const empleados  = marca(await mapa.traerEmpleados({ presupuesto, fotos }));
   const turnos     = await mapa.traerTurnos(opts);
   if (!turnos.completo) completo = false;
   const asignaciones = marca(await mapa.traerAsignaciones(opts));

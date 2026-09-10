@@ -241,6 +241,9 @@ async function traerEmpleados(opts = {}) {
       genre:             p.sexo === 'M' ? 'Masculino' : p.sexo === 'F' ? 'Femenino' : (p.sexo || ''),
       personalMail:      p.email || '',
       personalPhone:     '',            // no viene en contracts-resumed-paginated
+      // Foto de perfil (URL pública de Talana). No viene en contracts-resumed;
+      // se inyecta desde /personas-paginadas/ a través de opts.fotos.
+      photo:             (opts.fotos && opts.fotos[String(c.empleado || p.id)]) || '',
       email:             p.email || null,
       branchOffice:      suc.id ? String(suc.id) : '',
       branchOfficeCode:  suc.id ? String(suc.id) : '',
@@ -266,6 +269,23 @@ async function traerEmpleados(opts = {}) {
 
   data.sort((a, b) => (a.lastName + a.name).localeCompare(b.lastName + b.name, 'es'));
   return { data, completo };
+}
+
+/**
+ * Mapa personaId → URL de foto de perfil, desde /personas-paginadas/.
+ * Las URLs de Talana (media/profilePhotos) son públicas, así que el reporte las
+ * usa directo en <img>. No es dato sensible. Si el recurso falla, se devuelve
+ * un mapa vacío y el reporte cae a las iniciales.
+ */
+async function traerFotos(opts = {}) {
+  const { items } = await talana.listar('/personas-paginadas/', {}, opts);
+  const fotos = {};
+  for (const p of items || []) {
+    const d = (p.detalles && (Array.isArray(p.detalles) ? p.detalles[0] : p.detalles)) || {};
+    const url = p.foto || d.foto;
+    if (url) fotos[String(p.id)] = url;
+  }
+  return fotos;
 }
 
 /**
@@ -817,7 +837,7 @@ function formatearAsignaciones({ empleados, asignaciones, turnos, desde, hasta }
 }
 
 module.exports = {
-  traerSucursales, traerCentrosCosto, traerEmpleados, traerTurnos,
+  traerSucursales, traerCentrosCosto, traerEmpleados, traerFotos, traerTurnos,
   traerAsignaciones, traerDiasManuales, traerMarcasDia, traerAusencias,
   construirHorarios, formatearAsignaciones,
   rangoDias, sumarDias, isoDia, indiceDiaSemana, aMinutos, fechaHora,

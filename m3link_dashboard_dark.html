@@ -514,18 +514,13 @@
     .sel,.search-input{ width:100% !important; }
     .stats{ grid-template-columns:1fr !important; }
     .resumen-grid{ grid-template-columns:1fr 1fr; }
-    .table-wrap{ overflow-x:hidden;max-height:none;overflow-y:visible; }
-    .table-wrap table,.table-wrap tbody,.table-wrap tr,.table-wrap td{ display:block;width:100%; }
-    .table-wrap thead{ display:none; }
-    .table-wrap tr{ border:1px solid var(--border);border-radius:10px;margin-bottom:10px;padding:2px 10px 4px;background:var(--bg-card); }
-    .table-wrap td{ display:flex;justify-content:space-between;align-items:center;gap:12px;
-      max-width:none !important;white-space:normal !important;overflow:visible;text-overflow:clip;
-      border-bottom:1px solid var(--border);padding:7px 2px;text-align:right !important;font-size:12.5px; }
-    .table-wrap td:last-child{ border-bottom:0; }
-    .table-wrap td::before{ content:attr(data-label);color:var(--text-muted);font-weight:600;font-size:11px;text-align:left;flex:0 0 40%; }
-    .table-wrap td[data-label="Nº pedido"]{ padding:9px 2px;font-size:14px; }
-    .table-wrap td[colspan]{ display:block;text-align:center !important;padding:14px 2px; }
-    .table-wrap td[colspan]::before{ content:"" !important;display:none; }
+    /* Tabla: se conserva con todas sus columnas y se desliza de lado con el dedo */
+    .table-wrap{ overflow-x:auto; -webkit-overflow-scrolling:touch; max-height:72vh; }
+    .table-wrap table{ min-width:820px; }
+    .table-wrap th, .table-wrap td{ font-size:12px; padding:6px 9px; }
+    /* 1ª columna (Nº pedido) fija al deslizar, como referencia */
+    .table-wrap th:first-child, .table-wrap td:first-child{ position:sticky; left:0; z-index:2; background:var(--bg-card); box-shadow:1px 0 0 var(--border); }
+    .table-wrap thead th:first-child{ background:var(--bg-surface); }
     .table-toolbar{ flex-wrap:wrap;gap:6px; }
     .totals-bar{ flex-wrap:wrap;gap:6px 14px; }
     .pager,.pagination,.pag{ flex-wrap:wrap;justify-content:center; }

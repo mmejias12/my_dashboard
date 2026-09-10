@@ -64,6 +64,11 @@ body{zoom:var(--escala,1)}
 .load-btn:disabled{opacity:.4;cursor:not-allowed}
 .spinner-rrhh{width:34px;height:34px;border:3px solid var(--br);border-top-color:var(--purple);border-radius:50%;animation:girar-rrhh .8s linear infinite}
 @keyframes girar-rrhh{to{transform:rotate(360deg)}}
+.avatar{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;overflow:hidden;flex-shrink:0;background:var(--m3);color:#fff;font-weight:700;font-size:11px;vertical-align:middle}
+.avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.avatar.sinfoto{background:var(--m3)}
+.avatar.mini{width:26px;height:26px;font-size:10px}
+.avatar.grande{width:60px;height:60px;font-size:20px}
 
 /* ── Barra de estado ── */
 .status-bar{background:var(--s1);border-bottom:1px solid var(--br);padding:8px 20px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--t3)}
@@ -333,7 +338,7 @@ tbody tr:hover{background:var(--s2)}
 <div class="modal-bg" id="modal" onclick="if(event.target===this)cerrar()">
   <div class="modal">
     <button class="modal-x" onclick="cerrar()">×</button>
-    <div class="modal-hd"><div class="modal-nm" id="m-nm">—</div><div class="modal-meta" id="m-meta"></div></div>
+    <div class="modal-hd" style="display:flex;gap:14px;align-items:center"><span id="m-foto"></span><div style="flex:1;min-width:0"><div class="modal-nm" id="m-nm">—</div><div class="modal-meta" id="m-meta"></div></div></div>
     <div class="modal-bd" id="m-bd"></div>
   </div>
 </div>
@@ -596,6 +601,17 @@ function gerencia(c){
   return nombre || '—';
 }
 function sucursal(c){ return (c.sucursal && c.sucursal.nombre) || '—'; }
+/* Foto del trabajador (URL pública de Talana) e iniciales de respaldo. */
+function fotoDe(c){ return (det(c) && det(c).foto) || ''; }
+function inicialesDe(nom){ var p=String(nom||'').trim().split(/\s+/); return (((p[0]||'')[0]||'')+((p[1]||'')[0]||'')).toUpperCase() || '—'; }
+/* Avatar con la foto; si no hay o falla la carga, muestra las iniciales. */
+function avatarHtml(c, clase){
+  var f = fotoDe(c), ini = inicialesDe(nombre(c));
+  var cls = 'avatar '+(clase||'');
+  if(f) return '<span class="'+cls+'"><img src="'+esc(f)+'" alt="" loading="lazy" '
+    + 'onerror="var a=this.closest(\'.avatar\');a.classList.add(\'sinfoto\');a.textContent=\''+esc(ini)+'\'"></span>';
+  return '<span class="'+cls+' sinfoto">'+esc(ini)+'</span>';
+}
 function sociedad(c){ return (c.empleadorRazonSocial && c.empleadorRazonSocial.razonSocial) || '—'; }
 function tipoContrato(c){ return (c.tipoContratoDetails && c.tipoContratoDetails.nombre) || '—'; }
 function vigente(c){ return c.activo === true && !c.finiquitado; }
@@ -741,7 +757,8 @@ function renderPersonas(){
     var ant = antiguedad(fechaIngreso(c));
     var s = saldoDe(c);
     return '<tr onclick="abrir('+c.id+')">'
-      + celda(nombre(c), 'trunc', 'font-weight:500')
+      + '<td><span style="display:inline-flex;align-items:center;gap:8px;max-width:100%">'+avatarHtml(c,'mini')
+        + '<span style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(nombre(c))+'">'+esc(nombre(c))+'</span></span></td>'
       + '<td class="mono" style="color:var(--t3)">'+esc(rut(c))+'</td>'
       + celda(nz(c.cargo), 'trunc')
       + celda(gerencia(c), 'trunc', 'color:var(--t2)')
@@ -926,6 +943,7 @@ function abrirGrupo(tipo, clave){
   var prom = function(a){ return a.length ? a.reduce(function(s,x){return s+x;},0)/a.length : null; };
 
   setT('m-nm', titulo);
+  var mf=$('m-foto'); if(mf) mf.innerHTML='';   // el modal de grupo no lleva foto
   $('m-meta').innerHTML = '<span>'+esc(sub)+'</span>'
     + '<span class="badge b-purple">'+gente.length+(gente.length===1?' persona':' personas')+'</span>';
 
@@ -1001,6 +1019,7 @@ function abrir(id, desdeGrupo){
   var p = per(c), d = det(c), s = DATA.saldos[c.empleado];
 
   setT('m-nm', nombre(c));
+  $('m-foto').innerHTML = avatarHtml(c, 'grande');
   $('m-meta').innerHTML = '<span class="mono">'+esc(rut(c))+'</span>'
     + '<span class="badge '+(vigente(c)?'b-green':'b-gray')+'">'+(vigente(c)?'Vigente':'Finiquitado')+'</span>'
     + '<span>'+esc(nz(c.cargo))+'</span>'

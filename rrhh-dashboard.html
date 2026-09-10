@@ -69,6 +69,11 @@ body{zoom:var(--escala,1)}
 .avatar.sinfoto{background:var(--m3)}
 .avatar.mini{width:26px;height:26px;font-size:10px}
 .avatar.grande{width:60px;height:60px;font-size:20px}
+.foto-grande{position:fixed;inset:0;background:color-mix(in srgb,var(--s1) 88%,transparent);backdrop-filter:blur(6px);z-index:1400;display:none;align-items:center;justify-content:center;padding:24px}
+.foto-grande.on,.foto-grande.show{display:flex}
+.foto-grande-inner{position:relative;background:var(--s2);border:1px solid var(--brm);border-radius:14px;padding:14px;max-width:min(90vw,420px);box-shadow:0 24px 70px rgba(0,0,0,.5)}
+.foto-grande-inner img{display:block;width:100%;height:auto;max-height:70vh;object-fit:contain;border-radius:9px;background:var(--s3)}
+.foto-grande-cap{text-align:center;margin-top:10px;font-size:13px;font-weight:600;color:var(--t1)}
 
 /* ── Barra de estado ── */
 .status-bar{background:var(--s1);border-bottom:1px solid var(--br);padding:8px 20px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--t3)}
@@ -335,6 +340,14 @@ tbody tr:hover{background:var(--s2)}
 </div>
 
 <!-- ══ FICHA ══ -->
+<div class="foto-grande" id="foto-grande" onclick="cerrarFotoGrande()">
+  <div class="foto-grande-inner" onclick="event.stopPropagation()">
+    <button class="modal-x" onclick="cerrarFotoGrande()" style="top:8px;right:8px">×</button>
+    <img id="foto-grande-img" src="" alt="">
+    <div class="foto-grande-cap" id="foto-grande-cap"></div>
+  </div>
+</div>
+
 <div class="modal-bg" id="modal" onclick="if(event.target===this)cerrar()">
   <div class="modal">
     <button class="modal-x" onclick="cerrar()">×</button>
@@ -604,14 +617,26 @@ function sucursal(c){ return (c.sucursal && c.sucursal.nombre) || '—'; }
 /* Foto del trabajador (URL pública de Talana) e iniciales de respaldo. */
 function fotoDe(c){ return (det(c) && det(c).foto) || ''; }
 function inicialesDe(nom){ var p=String(nom||'').trim().split(/\s+/); return (((p[0]||'')[0]||'')+((p[1]||'')[0]||'')).toUpperCase() || '—'; }
-/* Avatar con la foto; si no hay o falla la carga, muestra las iniciales. */
-function avatarHtml(c, clase){
+/* Avatar con la foto; si no hay o falla la carga, muestra las iniciales.
+   ampliable: al hacer clic abre la foto grande (sólo si hay foto). */
+function avatarHtml(c, clase, ampliable){
   var f = fotoDe(c), ini = inicialesDe(nombre(c));
   var cls = 'avatar '+(clase||'');
-  if(f) return '<span class="'+cls+'"><img src="'+esc(f)+'" alt="" loading="lazy" '
+  var clk = (ampliable && f)
+    ? ' onclick="event.stopPropagation();abrirFotoGrande(\''+esc(f)+'\',\''+esc(nombre(c)).replace(/'/g,"\\'")+'\')" style="cursor:zoom-in" title="Ampliar foto"'
+    : '';
+  if(f) return '<span class="'+cls+'"'+clk+'><img src="'+esc(f)+'" alt="" loading="lazy" '
     + 'onerror="var a=this.closest(\'.avatar\');a.classList.add(\'sinfoto\');a.textContent=\''+esc(ini)+'\'"></span>';
   return '<span class="'+cls+' sinfoto">'+esc(ini)+'</span>';
 }
+/* Lightbox de la foto de perfil a tamaño grande. */
+function abrirFotoGrande(url, nom){
+  var m = $('foto-grande'); if(!m) return;
+  $('foto-grande-img').src = url;
+  $('foto-grande-cap').textContent = nom || '';
+  m.classList.add('show');
+}
+function cerrarFotoGrande(){ var m=$('foto-grande'); if(m){ m.classList.remove('show'); $('foto-grande-img').src=''; } }
 function sociedad(c){ return (c.empleadorRazonSocial && c.empleadorRazonSocial.razonSocial) || '—'; }
 function tipoContrato(c){ return (c.tipoContratoDetails && c.tipoContratoDetails.nombre) || '—'; }
 function vigente(c){ return c.activo === true && !c.finiquitado; }
@@ -1019,7 +1044,7 @@ function abrir(id, desdeGrupo){
   var p = per(c), d = det(c), s = DATA.saldos[c.empleado];
 
   setT('m-nm', nombre(c));
-  $('m-foto').innerHTML = avatarHtml(c, 'grande');
+  $('m-foto').innerHTML = avatarHtml(c, 'grande', true);
   $('m-meta').innerHTML = '<span class="mono">'+esc(rut(c))+'</span>'
     + '<span class="badge '+(vigente(c)?'b-green':'b-gray')+'">'+(vigente(c)?'Vigente':'Finiquitado')+'</span>'
     + '<span>'+esc(nz(c.cargo))+'</span>'
@@ -1169,7 +1194,12 @@ function seccion(titulo, campos){
 }
 function volverGrupo(){ if(_grupoPrevio) abrirGrupo(_grupoPrevio.tipo, _grupoPrevio.clave); }
 function cerrar(){ $('modal').classList.remove('on'); document.body.style.overflow=''; _grupoPrevio=null; }
-document.addEventListener('keydown', function(e){ if(e.key==='Escape') cerrar(); });
+document.addEventListener('keydown', function(e){
+  if(e.key!=='Escape') return;
+  var fg=$('foto-grande');
+  if(fg && fg.classList.contains('show')){ cerrarFotoGrande(); return; }
+  cerrar();
+});
 
 /* ── Pestañas ── */
 function goTab(name, btn){

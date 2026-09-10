@@ -121,6 +121,10 @@ function maestrosVencidos(maestros) {
   // vencido por tiempo. `rango` ausente = esquema viejo; null = valor real.
   const sucs = (maestros.sucursales || []);
   if (sucs.length && sucs.every(s => s.rango === undefined)) return true;
+  // Igual para las fotos de perfil: si los empleados aún no traen el campo
+  // `photo`, el snapshot es previo a esa mejora y se regenera.
+  const emps = (maestros.empleados || []);
+  if (emps.length && emps.every(e => e.photo === undefined)) return true;
   const edadMin = (Date.now() - Date.parse(maestros._guardado)) / 60000;
   return edadMin > TTL_MAESTROS_MIN;
 }

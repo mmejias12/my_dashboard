@@ -383,6 +383,8 @@ body{zoom:var(--escala,1)}
 .leaflet-popup-content{font-family:inherit;font-size:12.5px}
 .mp-tip-nom{font-weight:700}
 .mp-tip-sub{color:#555;font-size:11px}
+.mp-pop{display:flex;align-items:center;gap:9px}
+.mp-pop-foto{width:44px;height:44px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.25)}
 /* Ficha del trabajador: KPIs del mes + mini-calendario */
 .emp-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:9px}
 .empk{background:var(--s1);border:1px solid var(--br);border-radius:9px;padding:11px 13px}
@@ -455,6 +457,11 @@ body{zoom:var(--escala,1)}
 .kav img{width:100%;height:100%;object-fit:cover;display:block}
 .kav.grande{width:58px;height:58px;font-size:17px}
 .kav.chico{width:20px;height:20px;font-size:8px}
+.foto-grande{position:fixed;inset:0;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(6px);z-index:1400;display:none;align-items:center;justify-content:center;padding:24px}
+.foto-grande.show{display:flex}
+.foto-grande-inner{position:relative;background:var(--s2);border:1px solid var(--brm);border-radius:14px;padding:14px;box-shadow:0 24px 70px color-mix(in srgb,var(--sombra-c) 60%,transparent);max-width:min(90vw,420px)}
+.foto-grande-inner img{display:block;width:100%;height:auto;max-height:70vh;object-fit:contain;border-radius:9px;background:var(--s3)}
+.foto-grande-cap{text-align:center;margin-top:10px;font-size:13px;font-weight:600;color:var(--t1)}
 .kp-info{flex:1;min-width:0}
 .kp-name{font-size:11.5px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .kp-sub{font-size:9.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -603,6 +610,7 @@ body{zoom:var(--escala,1)}
 <div class="cal-modal" id="cal-modal" onclick="if(event.target===this)cerrarCalModal()">
   <div class="cal-modal-card">
     <div class="cal-modal-head">
+      <span id="cm-foto"></span>
       <div>
         <h3 id="cm-nombre">—</h3>
         <div class="cm-sub"><span id="cm-fecha">—</span> · <span id="cm-turno">—</span></div>
@@ -640,6 +648,15 @@ body{zoom:var(--escala,1)}
       <div id="mp-map"></div>
       <div class="mp-vacio" id="mp-vacio" style="display:none"></div>
     </div>
+  </div>
+</div>
+
+<!-- LIGHTBOX FOTO -->
+<div class="foto-grande" id="foto-grande" onclick="cerrarFotoGrande()">
+  <div class="foto-grande-inner" onclick="event.stopPropagation()">
+    <button class="cal-modal-close" onclick="cerrarFotoGrande()" style="position:absolute;top:8px;right:8px;z-index:2">&times;</button>
+    <img id="foto-grande-img" src="" alt="">
+    <div class="foto-grande-cap" id="foto-grande-cap"></div>
   </div>
 </div>
 
@@ -1210,6 +1227,7 @@ function datosMapaDia(fecha){
     puntos.push({
       code:code,
       nombre: emp ? empNombreCompleto(emp) : code,
+      foto: (emp && emp.photo) || '',
       lat: Number(rep.lat), lng: Number(rep.lng),
       hora: gRep? gRep.hora : '',
       dist: gRep? gRep.dist : null,
@@ -1249,7 +1267,12 @@ function renderMapaPersonas(){
             : (p.estado==='fuera' ? ('fuera de zona'+(p.dist!=null?(' · '+p.dist+' m'):''))
                                    : ('dentro de zona'+(p.dist!=null?(' · '+p.dist+' m'):'')));
     m.bindTooltip('<span class="mp-tip-nom">'+esc(p.nombre)+'</span>', {direction:'top', offset:[0,-4]});
-    m.bindPopup('<div class="mp-tip-nom">'+esc(p.nombre)+'</div><div class="mp-tip-sub">'+(p.hora?esc(p.hora)+' · ':'')+sub+'</div>');
+    var fotoHtml = p.foto
+      ? '<img class="mp-pop-foto" src="'+esc(p.foto)+'" alt="" onerror="this.style.display=\'none\'">'
+      : '';
+    m.bindPopup('<div class="mp-pop">'+fotoHtml
+      + '<div><div class="mp-tip-nom">'+esc(p.nombre)+'</div>'
+      + '<div class="mp-tip-sub">'+(p.hora?esc(p.hora)+' · ':'')+sub+'</div></div></div>');
     bounds.push([p.lat, p.lng]);
   });
 
@@ -1603,7 +1626,43 @@ async function cargarTrabajadores() {
     if (n.indexOf('PRUEBA') >= 0 && n.indexOf('WORKERA') >= 0) return false;
     return true;
   });
+  // Si el snapshot todavía no trae las fotos (snapshot previo a esa mejora), se
+  // piden al vuelo a Talana como respaldo. Va en SEGUNDO PLANO para no demorar
+  // la carga: el reporte abre con iniciales y las fotos aparecen al llegar.
+  // Cuando el snapshot ya traiga `photo`, este respaldo no se ejecuta.
+  if (!cacheEmpleados.some(function(e){ return e.photo; })) {
+    completarFotos()
+      .then(function(){ try{ renderPanelDia(); renderCalendario(true); }catch(e){} })
+      .catch(function(e){ console.warn('[fotos]', e.message); });
+  }
   return cacheEmpleados;
+}
+/* Respaldo: trae las fotos de /personas-paginadas/ (URL pública) y las fusiona
+   en cacheEmpleados por id de persona. Puente mientras el snapshot no las trae;
+   requiere rol admin/rrhh en el proxy. */
+async function completarFotos() {
+  // /personas-paginadas/ tiene el histórico completo (cientos de registros) en
+  // páginas de 100, y los activos están dispersos, así que se pagina hasta
+  // cubrirlos a todos o agotar las páginas.
+  var porId = {}, page = 1, guard = 0;
+  while (guard++ < 8) {
+    var r = await fetch('/api/talana-proxy?endpoint=' + encodeURIComponent('/personas-paginadas/') + '&page=' + page + '&page_size=100', { headers:{Accept:'application/json'} });
+    if (!r.ok) break;
+    var j = await r.json();
+    var arr = (j && (j.results || j)) || [];
+    arr.forEach(function(p){
+      var d = (p.detalles && (Array.isArray(p.detalles)?p.detalles[0]:p.detalles)) || {};
+      var url = p.foto || d.foto;
+      if (url) porId[String(p.id)] = url;
+    });
+    // Corta apenas todos los empleados del reporte ya tengan su foto resuelta.
+    if (cacheEmpleados.every(function(e){ return porId[String(e.personaId || e.code)]; })) break;
+    if (!j || !j.next) break;
+    page++;
+  }
+  cacheEmpleados.forEach(function(e){
+    if (!e.photo) e.photo = porId[String(e.personaId || e.code)] || '';
+  });
 }
 async function recargarEmpleados() {
   cacheEmpleados = [];
@@ -2847,7 +2906,7 @@ function abrirModalEmpleado(code) {
   // Construir HTML — cabecera con la foto (o iniciales) a la izquierda.
   var html = '';
   html += '<div style="display:flex;gap:14px;align-items:center;margin-bottom:6px">'
-        + avatarEmp(emp, 'grande')
+        + avatarEmp(emp, 'grande', true)
         + '<div style="min-width:0"><h2 style="margin:0">' + esc(empNombreCompleto(emp)) + '</h2>'
         + '<div class="modal-sub" style="margin:2px 0 0">RUT: ' + esc(emp.identification || '—') + ' · Código: ' + esc(emp.code || '—')
         + (emp.position ? ' · ' + esc(emp.position) : '') + '</div></div></div>';
@@ -3566,14 +3625,26 @@ function calIniciales(nombre){
 }
 /* Avatar del trabajador: foto de Talana (emp.photo) o iniciales de respaldo.
    Si la foto no carga, cae a las iniciales sin dejar el círculo vacío. */
-function avatarEmp(emp, clase){
+function avatarEmp(emp, clase, ampliable){
   var ini = calIniciales(empNombreCompleto(emp));
   var f = emp && emp.photo;
   var cls = 'kav'+(clase?(' '+clase):'');
-  if(f) return '<div class="'+cls+'"><img src="'+esc(f)+'" alt="" loading="lazy" '
+  // ampliable: al hacer clic abre la foto grande (sólo tiene sentido si hay foto).
+  var clk = (ampliable && f)
+    ? ' onclick="event.stopPropagation();abrirFotoGrande(\''+esc(f)+'\',\''+esc(empNombreCompleto(emp)).replace(/'/g,"\\'")+'\')" style="cursor:zoom-in" title="Ampliar foto"'
+    : '';
+  if(f) return '<div class="'+cls+'"'+clk+'><img src="'+esc(f)+'" alt="" loading="lazy" '
     + 'onerror="var a=this.closest(\'.kav\');a.classList.add(\'sinfoto\');a.textContent=\''+esc(ini)+'\'"></div>';
   return '<div class="'+cls+' sinfoto">'+esc(ini)+'</div>';
 }
+/* Lightbox de la foto de perfil a tamaño grande. */
+function abrirFotoGrande(url, nombre){
+  var m = $('foto-grande'); if(!m) return;
+  $('foto-grande-img').src = url;
+  $('foto-grande-cap').textContent = nombre || '';
+  m.classList.add('show');
+}
+function cerrarFotoGrande(){ var m=$('foto-grande'); if(m){ m.classList.remove('show'); $('foto-grande-img').src=''; } }
 function calPersonRow(emp, detalle, fecha){
   var nombre=empNombreCompleto(emp);
   var suc=(emp.branchOfficeName||emp.branchOffice||'—');
@@ -3658,6 +3729,7 @@ function abrirCalModal(code, fecha){
   calModalCtx = { code:code, fecha:fecha };
   var partes = fecha.split('-');
   $('cm-nombre').textContent = nombre;
+  var cmf = $('cm-foto'); if(cmf) cmf.innerHTML = emp ? avatarEmp(emp, '', true) : '';
   $('cm-fecha').textContent = partes[2]+' '+CAL_NMES[parseInt(partes[1])-1]+' '+partes[0];
   $('cm-turno').textContent = st.turno||'—';
   $('cm-pill').innerHTML = '<span class="cal-mini '+st.edo+(st.atrasado?' p-atras':'')+'" style="width:auto;padding:2px 8px">'+pillTxt(st.edo)+'</span>';
@@ -3719,7 +3791,9 @@ function guardarComentarioCal(){
 }
 document.addEventListener('keydown', function(e){
   if(e.key!=='Escape') return;
-  // Se cierra el que esté más arriba: lightbox > mapa de personas > modal del día.
+  // Se cierra el que esté más arriba: foto > lightbox mapa > mapa de personas > modal del día.
+  var fg = $('foto-grande');
+  if(fg && fg.classList.contains('show')){ cerrarFotoGrande(); return; }
   var mg = $('mapa-grande');
   if(mg && mg.classList.contains('show')){ cerrarMapaGrande(); return; }
   var mp = $('mapa-personas');

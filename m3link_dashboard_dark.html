@@ -2074,6 +2074,41 @@ function exportXLSX() {
         avatarEl.title = email;
       }
       if (emailEl) emailEl.textContent = email;
+
+      /* ===== Visibilidad del menú por ROL de área =====
+         Regla: un usuario con rol de área (p.ej. "comercial") ve SOLO los grupos de su(s) área(s).
+         admin / interno ven todo. Usuarios sin rol de área (legado) ven todo, como hasta ahora.
+         Nota: esto es visual; la protección real por servidor se hace con allowedRoles en staticwebapp.config.json. */
+      try {
+        var roles = user.userRoles || [];
+        function hasRole(r){ return roles.indexOf(r) >= 0; }
+        var GROUP_ROLES = {
+          'g-comercial':   ['comercial'],
+          'g-logistica':   ['logistica'],
+          'g-operaciones': ['operaciones'],
+          'g-gerencia':    ['gerencia'],
+          'g-finanzas':    ['finanzas'],
+          'g-stocks':      ['stock'],
+          'g-trans':       ['transportes'],
+          'g-rrhh':        ['rrhh']
+        };
+        var SCOPED = ['comercial','logistica','operaciones','gerencia','finanzas','stock','transportes','rrhh'];
+        var isScoped = SCOPED.some(hasRole) && !hasRole('admin') && !hasRole('interno');
+        if (isScoped) {
+          Object.keys(GROUP_ROLES).forEach(function(gid){
+            var canSee = GROUP_ROLES[gid].some(hasRole);
+            if (!canSee) {
+              var sub = document.getElementById(gid);
+              if (sub) {
+                sub.style.display = 'none';
+                var hdr = sub.previousElementSibling;
+                if (hdr && hdr.classList.contains('s-hdr')) hdr.style.display = 'none';
+              }
+            }
+          });
+          document.body.setAttribute('data-role-scoped','1');
+        }
+      } catch(err) { console.warn('rol menú:', err); }
     }
   } catch(e) {
     console.warn('No se pudo cargar usuario:', e);

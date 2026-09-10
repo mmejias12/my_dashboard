@@ -17,6 +17,32 @@
   --accent:#4ade80;--red-logo:#C0170C;
   --bg-active:#1a2a1f;--border-accent:rgba(74,222,128,.35);
 }
+/* ===== Clickeables, chips de filtro y modal de historial ===== */
+.clickable{cursor:pointer}
+.rank-item.clickable:hover{background:var(--bg-hover);border-radius:6px}
+.ped-link{color:var(--accent);cursor:pointer;text-decoration:underline;text-decoration-color:rgba(74,222,128,.4);font-weight:500}
+.ped-link:hover{text-decoration-color:var(--accent)}
+.fchip{display:inline-flex;align-items:center;gap:6px;background:var(--bg-active);border:1px solid var(--border-accent);color:var(--accent);border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer}
+.fchip b{font-weight:600}
+.fchip .x{opacity:.7;font-weight:700}
+.fchip:hover .x{opacity:1}
+.anul-row{opacity:.55}
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);z-index:900;display:none;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto}
+.modal-ov.on{display:flex}
+.modal-bx{background:var(--bg-card);border:1px solid var(--border-md);border-radius:13px;width:100%;max-width:680px;box-shadow:0 24px 60px rgba(0,0,0,.6)}
+.modal-hd{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border)}
+.modal-ey{font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px}
+.modal-ti{font-size:16px;font-weight:600;margin-top:2px}
+.modal-cl{background:none;border:1px solid var(--border-md);color:var(--text-sec);width:28px;height:28px;border-radius:7px;cursor:pointer;font-size:14px;flex-shrink:0}
+.modal-cl:hover{background:var(--bg-hover);color:var(--text-pri)}
+.modal-bd{padding:14px 16px;max-height:70vh;overflow-y:auto}
+.tl{position:relative;padding-left:20px}
+.tl::before{content:'';position:absolute;left:5px;top:4px;bottom:4px;width:2px;background:var(--border-md)}
+.tl-it{position:relative;padding:0 0 14px 0}
+.tl-dot{position:absolute;left:-19px;top:3px;width:10px;height:10px;border-radius:50%;background:var(--accent);border:2px solid var(--bg-card)}
+.tl-tt{font-size:12.5px;font-weight:600}
+.tl-dt{font-size:10.5px;color:var(--text-muted);margin-top:1px}
+.tl-de{font-size:11.5px;color:var(--text-sec);margin-top:4px;line-height:1.6}
 html,body{min-height:100%;font-family:'Inter',sans-serif;font-size:13px;background:var(--bg-page);color:var(--text-pri);-webkit-font-smoothing:antialiased}
 .topbar{position:sticky;top:0;z-index:200;height:50px;background:var(--bg-surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1.25rem;gap:12px}
 .logo{display:flex;align-items:center;gap:9px;text-decoration:none;color:inherit;cursor:pointer}
@@ -229,10 +255,22 @@ html,body{min-height:100%;font-family:'Inter',sans-serif;font-size:13px;backgrou
       <div class="ctrl-group"><span class="ctrl-label">Hasta</span><input type="date" id="d2" class="ctrl-date"></div>
       <div class="ctrl-group">
         <span class="ctrl-label">Cliente</span>
-        <select id="cliente-sel" class="ctrl-select"><option value="">— Primero carga datos —</option></select>
+        <select id="cliente-sel" class="ctrl-select"><option value="">— Cargando —</option></select>
       </div>
-      <button class="btn-load" id="btn-load" onclick="loadData()">Cargar datos</button>
+      <div class="ctrl-group">
+        <span class="ctrl-label">Operación</span>
+        <select id="op-sel" class="ctrl-select"><option value="__ALL__">Todas</option></select>
+      </div>
+      <label class="ctrl-group" style="cursor:pointer;justify-content:flex-end">
+        <span class="ctrl-label">Anuladas</span>
+        <span style="display:flex;align-items:center;gap:6px;height:31px;font-size:12px;color:var(--text-sec)">
+          <input type="checkbox" id="chk-anul" style="accent-color:var(--accent)"> incluir
+        </span>
+      </label>
+      <button class="btn-load" id="btn-load" onclick="loadData()">↻ Actualizar</button>
     </div>
+
+    <div id="filtro-chips" style="display:none;margin:-.35rem 0 .75rem;gap:6px;flex-wrap:wrap"></div>
 
     <div id="empty-state"><div class="chart-card"><div class="state-msg">Carga datos y selecciona un cliente para ver su análisis completo</div></div></div>
     <div id="content" style="display:none">
@@ -282,14 +320,14 @@ html,body{min-height:100%;font-family:'Inter',sans-serif;font-size:13px;backgrou
 
       <!-- Tabla pedidos -->
       <div class="chart-card" style="padding:.75rem;margin-bottom:1.5rem">
-        <div class="chart-title" style="margin-bottom:.75rem">📋 Todos los pedidos del cliente en el período</div>
+        <div class="chart-title" style="margin-bottom:.75rem">📋 Pedidos del cliente en el período <span style="font-weight:400;color:var(--text-muted)">— clic en el <b>Nº de pedido</b> para ver su historial</span></div>
         <div class="tbl-wrap">
           <table class="tbl">
             <thead><tr>
               <th>Nro Pedido</th><th>Operación</th><th>Etapa</th>
               <th style="text-align:right">Sol.</th><th style="text-align:right">Desp.</th>
               <th style="text-align:right">Conf.</th><th style="text-align:right">Pend.</th>
-              <th>Bodega origen</th><th>Fecha req.</th><th>Chofer</th>
+              <th>Bodega</th><th>Fecha req.</th><th>Chofer</th>
             </tr></thead>
             <tbody id="tbody-pedidos"></tbody>
           </table>
@@ -304,30 +342,61 @@ html,body{min-height:100%;font-family:'Inter',sans-serif;font-size:13px;backgrou
 <script>
 var API_PROXY='/api/ops';
 var API_DIRECT='https://apirdt1.azurewebsites.net/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRangoFechas';
+var HIST_PROXY='/api/historial-proxy';
+var HIST_DIRECT='https://apirdt1.azurewebsites.net/api/RDTOut/historialxnropedido';
 var isLocal=location.protocol==='file:';
 var isDev=['localhost','127.0.0.1'].includes(location.hostname);
 var raw=[], clienteActual='';
 var chartDiario=null, chartTipos=null;
+
+/* Cliente que se precarga solo al abrir la vista (si no está en el período, toma el de más movimiento) */
+var CLIENTE_DEFECTO='cambiaso';
+/* Estado de filtros */
+var fOp='__ALL__', fIncAnul=false, fDrill=null;   /* fDrill = {campo:'bodega'|'chofer', valor:'…'} */
 
 var OP_COLORS={'Emision':'#60a5fa','Retiro':'#4ade80','Devolucion ':'#f87171',
   'Transferencias':'#f59e0b','Relocalizacion':'#8b5cf6','Traspasos':'#06b6d4',
   'Trans Diferenciada':'#e879f9','Emision 24 horas':'#38bdf8','Emision LD':'#0ea5e9',
   'Emision Retiro Cliente':'#93c5fd'};
 
-/* sidebar JS al final del archivo */
+/* ===== Reglas de negocio ===== */
+function esAnulada(r){ return (''+(r.etapaOperacion||'')).toLowerCase().indexOf('anulad')>=0; }
+function esRedtec(n){ return (''+(n||'')).toUpperCase().indexOf('REDTEC')>=0; }
+/* La contraparte es el cliente que no es REDTEC (en emisiones va de destino, en retiros de origen) */
+function contraparteDe(r){
+  var o=r.clienteOrigenStr||'', d=r.clienteDestinoStr||'';
+  if(o&&!esRedtec(o)) return o;
+  if(d&&!esRedtec(d)) return d;
+  return o||d||'';
+}
+/* La bodega relevante depende del tipo: la emisión sale de la de origen, el retiro y la devolución llegan a la de destino */
+function bodegaDe(r){
+  var op=(''+(r.operacion||'')).toLowerCase();
+  if(op.indexOf('retiro')===0||op.indexOf('devolucion')===0) return r.bodegaDestinoStr||r.bodegaOrigenStr||'Sin bodega';
+  return r.bodegaOrigenStr||r.bodegaDestinoStr||'Sin bodega';
+}
+function choferDe(r){
+  if(!r.chofer||!(''+r.chofer).trim()) return '';
+  return (''+r.chofer).trim()+(r.patente?' ('+r.patente+')':'');
+}
 
-window.addEventListener('DOMContentLoaded',function(){
-  var h=new Date(),y=h.getFullYear(),m=String(h.getMonth()+1).padStart(2,'0'),d=String(h.getDate()).padStart(2,'0');
-  document.getElementById('d2').value=y+'-'+m+'-'+d;
-  document.getElementById('d1').value=y+'-'+m+'-01';
-  var g2=document.getElementById('g2');
-  if(g2) g2.style.maxHeight=(g2.scrollHeight+100)+'px';
-  document.getElementById('cliente-sel').onchange=function(){
-    clienteActual=this.value;
-    if(clienteActual&&raw.length) renderCliente();
-  };
-});
+/* ===== Filtros ===== */
+function delCliente(){
+  return raw.filter(function(r){ return r.clienteOrigenStr===clienteActual||r.clienteDestinoStr===clienteActual; });
+}
+function filtrados(){
+  return delCliente().filter(function(r){
+    if(!fIncAnul&&esAnulada(r)) return false;
+    if(fOp!=='__ALL__'&&(r.operacion||'')!==fOp) return false;
+    if(fDrill){
+      if(fDrill.campo==='bodega'&&bodegaDe(r)!==fDrill.valor) return false;
+      if(fDrill.campo==='chofer'&&choferDe(r)!==fDrill.valor) return false;
+    }
+    return true;
+  });
+}
 
+/* ===== Carga ===== */
 function loadData(){
   var btn=document.getElementById('btn-load');
   btn.disabled=true;btn.textContent='Cargando...';
@@ -339,37 +408,64 @@ function loadData(){
     .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
     .then(function(data){
       raw=Array.isArray(data)?data:[];
-      btn.disabled=false;btn.textContent='Cargar datos';
-      // Poblar selector de clientes
-      var clientes=[...new Set(raw.map(function(r){return r.clienteOrigenStr||r.clienteDestinoStr||'';}))].filter(Boolean).sort();
+      btn.disabled=false;btn.textContent='↻ Actualizar';
+
+      /* Clientes: la contraparte de cada operación (antes sólo se miraba el origen y se perdían
+         los clientes que only aparecen como destino, que es el caso de todas las emisiones) */
+      var clientes=[...new Set(raw.map(contraparteDe))].filter(Boolean).sort();
       var sel=document.getElementById('cliente-sel');
       sel.innerHTML='<option value="">— Selecciona un cliente —</option>';
       clientes.forEach(function(c){sel.innerHTML+='<option value="'+escHtml(c)+'">'+escHtml(c)+'</option>';});
-      document.getElementById('empty-state').innerHTML='<div class="chart-card"><div class="state-msg">Datos cargados — selecciona un cliente del selector</div></div>';
+
+      /* Tipos de operación presentes en el período */
+      var ops=[...new Set(raw.map(function(r){return r.operacion||'';}))].filter(Boolean).sort();
+      var osel=document.getElementById('op-sel');
+      osel.innerHTML='<option value="__ALL__">Todas</option>';
+      ops.forEach(function(o){osel.innerHTML+='<option value="'+escHtml(o)+'">'+escHtml(o)+'</option>';});
+      if(ops.indexOf(fOp)<0) fOp='__ALL__';
+      osel.value=fOp;
+
+      /* Precarga: deja la vista lista sin que el usuario tenga que elegir nada */
+      var elegido=clienteActual&&clientes.indexOf(clienteActual)>=0?clienteActual:clientePorDefecto(clientes);
+      if(elegido){ sel.value=elegido; clienteActual=elegido; renderCliente(); }
+      else document.getElementById('empty-state').innerHTML='<div class="chart-card"><div class="state-msg">Sin operaciones en el período seleccionado</div></div>';
     })
     .catch(function(e){
-      document.getElementById('empty-state').innerHTML='<div class="chart-card"><div class="state-msg" style="color:#f87171">Error: '+e.message+'</div></div>';
-      btn.disabled=false;btn.textContent='Cargar datos';
+      document.getElementById('empty-state').innerHTML='<div class="chart-card"><div class="state-msg" style="color:#f87171">Error: '+escHtml(e.message)+'</div></div>';
+      btn.disabled=false;btn.textContent='↻ Actualizar';
     });
 }
+function clientePorDefecto(clientes){
+  var pref=clientes.filter(function(c){return c.toLowerCase().indexOf(CLIENTE_DEFECTO)>=0;});
+  if(pref.length) return pref[0];
+  var cnt={};
+  raw.forEach(function(r){ var c=contraparteDe(r); if(c) cnt[c]=(cnt[c]||0)+1; });
+  var best='',bn=-1;
+  Object.keys(cnt).forEach(function(c){ if(cnt[c]>bn){bn=cnt[c];best=c;} });
+  return best;
+}
 
+/* ===== Render ===== */
 function renderCliente(){
-  var filtrado=raw.filter(function(r){
-    return (r.clienteOrigenStr===clienteActual||r.clienteDestinoStr===clienteActual);
-  });
+  var todas=delCliente();
+  var filtrado=filtrados();
+  var nAnul=todas.filter(esAnulada).length;
+
   if(!filtrado.length){
-    document.getElementById('empty-state').innerHTML='<div class="chart-card"><div class="state-msg">Sin registros para este cliente</div></div>';
+    document.getElementById('empty-state').innerHTML='<div class="chart-card"><div class="state-msg">Sin registros para este cliente con los filtros actuales</div></div>';
     document.getElementById('content').style.display='none';
+    pintarChips(nAnul);
     return;
   }
   document.getElementById('empty-state').innerHTML='';
   document.getElementById('content').style.display='block';
+  pintarChips(nAnul);
 
   // KPIs
   var totSol=0,totConf=0,totPend=0;
   filtrado.forEach(function(r){totSol+=(r.cantidadSolicitada||0);totConf+=(r.cantidadConfirmada||0);totPend+=(r.cantidadPendiente||0);});
   var pct=totSol>0?Math.round((totConf/totSol)*100):0;
-  var tipos=[...new Set(filtrado.map(function(r){return r.operacion||'';}))].join(' · ');
+  var tipos=[...new Set(filtrado.map(function(r){return r.operacion||'';}))].filter(Boolean).join(' · ');
   document.getElementById('k-ops').textContent=filtrado.length.toLocaleString('es-CL');
   document.getElementById('k-tipos').textContent=tipos;
   document.getElementById('k-sol').textContent=totSol.toLocaleString('es-CL');
@@ -391,6 +487,8 @@ function renderCliente(){
     if(f) diasMap[f]=(diasMap[f]||0)+(r.cantidadConfirmada||0);
   });
   var dias=Object.keys(diasMap).sort();
+  /* Si el CDN de Chart.js no cargó, igual mostramos KPIs, rankings y tabla */
+  if(typeof Chart==='undefined'){ marcarSinGraficos(); } else {
   if(chartDiario) chartDiario.destroy();
   chartDiario=new Chart(document.getElementById('chart-diario').getContext('2d'),{
     type:'line',
@@ -406,7 +504,7 @@ function renderCliente(){
     }
   });
 
-  // Donut tipos
+  // Donut tipos — clic en un gajo filtra por ese tipo
   var tipoMap={};
   filtrado.forEach(function(r){var k=r.operacion||'Otros';tipoMap[k]=(tipoMap[k]||0)+(r.cantidadConfirmada||0);});
   var tipoKeys=Object.keys(tipoMap);
@@ -418,28 +516,26 @@ function renderCliente(){
       borderColor:tipoKeys.map(function(k){return OP_COLORS[k]||'#6b7280';}),
       borderWidth:2,hoverOffset:6}]},
     options:{responsive:true,maintainAspectRatio:false,cutout:'55%',
+      onHover:function(e,el){e.native.target.style.cursor=el.length?'pointer':'default';},
+      onClick:function(e,el){ if(!el.length)return; var k=tipoKeys[el[0].index]; setOp(fOp===k?'__ALL__':k); },
       plugins:{legend:{position:'right',labels:{color:'#9da3b4',font:{size:10},padding:8,boxWidth:10,boxHeight:10}},
         tooltip:{backgroundColor:'#1e222d',borderColor:'rgba(255,255,255,.1)',borderWidth:1,
           titleColor:'#e8eaf0',bodyColor:'#9da3b4',
-          callbacks:{label:function(ctx){return ' '+ctx.label+': '+ctx.raw.toLocaleString('es-CL')+' pallets';}}}
+          callbacks:{label:function(ctx){return ' '+ctx.label+': '+ctx.raw.toLocaleString('es-CL')+' pallets (clic para filtrar)';}}}
       }
     }
   });
+  } /* fin del bloque de gráficos */
 
-  // Bodegas
+  // Bodegas (según el tipo de operación) — clic filtra
   var bodMap={};
-  filtrado.forEach(function(r){var k=r.bodegaOrigenStr||'Sin bodega';bodMap[k]=(bodMap[k]||0)+(r.cantidadConfirmada||0);});
-  renderRankList('list-bodegas',topN(bodMap,8),'#60a5fa');
+  filtrado.forEach(function(r){var k=bodegaDe(r);bodMap[k]=(bodMap[k]||0)+(r.cantidadConfirmada||0);});
+  renderRankList('list-bodegas',topN(bodMap,8),'#60a5fa','bodega');
 
-  // Choferes
+  // Choferes — clic filtra
   var choMap={};
-  filtrado.forEach(function(r){
-    if(r.chofer&&r.chofer.trim()){
-      var k=r.chofer.trim()+(r.patente?' ('+r.patente+')':'');
-      choMap[k]=(choMap[k]||0)+(r.cantidadConfirmada||0);
-    }
-  });
-  renderRankList('list-choferes',topN(choMap,8),'#f59e0b');
+  filtrado.forEach(function(r){ var k=choferDe(r); if(k) choMap[k]=(choMap[k]||0)+(r.cantidadConfirmada||0); });
+  renderRankList('list-choferes',topN(choMap,8),'#f59e0b','chofer');
 
   // Días con más pendiente
   var pendMap={};
@@ -447,7 +543,7 @@ function renderCliente(){
     var pend=r.cantidadPendiente||0;
     if(pend>0){var f=(r.fechaRequerida||'').substring(0,10);if(f) pendMap[f]=(pendMap[f]||0)+pend;}
   });
-  renderRankList('list-pendiente',topN(pendMap,8),'#f87171');
+  renderRankList('list-pendiente',topN(pendMap,8),'#f87171',null);
 
   // Tabla pedidos
   var sorted=filtrado.slice().sort(function(a,b){return new Date(b.horaIngreso)-new Date(a.horaIngreso);});
@@ -456,39 +552,139 @@ function renderCliente(){
     var opColor=OP_COLORS[r.operacion]||'#6b7280';
     var pend=r.cantidadPendiente||0;
     var fReq=r.fechaRequerida?(r.fechaRequerida.substring(0,10).split('-').reverse().join('/')):'-';
-    html+='<tr>'
-      +'<td class="mono" style="color:var(--accent)">'+(r.nroPedido||'-')+'</td>'
-      +'<td><span class="badge" style="background:'+opColor+'22;color:'+opColor+';border:1px solid '+opColor+'44">'+(r.operacion||'-')+'</span></td>'
-      +'<td style="font-size:11px;color:var(--text-sec)">'+(r.etapaOperacion||'-')+'</td>'
+    var nro=''+(r.nroPedido||'');
+    var celdaNro=nro
+      ? '<span class="ped-link" title="Ver historial del pedido" data-ped="'+escHtml(nro)+'" data-op="'+escHtml(r.operacion||'')+'" data-etapa="'+escHtml(r.etapaOperacion||'')+'">'+escHtml(nro)+'</span>'
+      : '-';
+    html+='<tr'+(esAnulada(r)?' class="anul-row"':'')+'>'
+      +'<td class="mono">'+celdaNro+'</td>'
+      +'<td><span class="badge" style="background:'+opColor+'22;color:'+opColor+';border:1px solid '+opColor+'44">'+escHtml(r.operacion||'-')+'</span></td>'
+      +'<td style="font-size:11px;color:var(--text-sec)">'+escHtml(r.etapaOperacion||'-')+'</td>'
       +'<td class="mono" style="text-align:right">'+(r.cantidadSolicitada||0).toLocaleString('es-CL')+'</td>'
       +'<td class="mono" style="text-align:right">'+(r.cantidadDespachada||0).toLocaleString('es-CL')+'</td>'
       +'<td class="mono" style="text-align:right;color:#4ade80">'+(r.cantidadConfirmada||0).toLocaleString('es-CL')+'</td>'
       +'<td class="mono" style="text-align:right;color:'+(pend>0?'#f87171':'#5a6070')+'">'+pend.toLocaleString('es-CL')+'</td>'
-      +'<td style="font-size:11px;color:var(--text-sec)">'+(r.bodegaOrigenStr||'-')+'</td>'
+      +'<td style="font-size:11px;color:var(--text-sec)">'+escHtml(bodegaDe(r))+'</td>'
       +'<td class="mono" style="font-size:10.5px">'+fReq+'</td>'
-      +'<td style="font-size:11px;color:var(--text-muted)">'+(r.chofer||'-')+'</td>'
+      +'<td style="font-size:11px;color:var(--text-muted)">'+escHtml(r.chofer||'-')+'</td>'
       +'</tr>';
   });
   document.getElementById('tbody-pedidos').innerHTML=html;
 }
 
+/* ===== Filtros: chips y cambios ===== */
+function pintarChips(nAnul){
+  var cont=document.getElementById('filtro-chips'), chips=[];
+  if(fOp!=='__ALL__') chips.push('<span class="fchip" onclick="setOp(\'__ALL__\')">Operación: <b>'+escHtml(fOp)+'</b><span class="x">✕</span></span>');
+  if(fDrill) chips.push('<span class="fchip" onclick="setDrill(null)">'+(fDrill.campo==='bodega'?'Bodega':'Chofer')+': <b>'+escHtml(fDrill.valor)+'</b><span class="x">✕</span></span>');
+  if(!fIncAnul&&nAnul>0) chips.push('<span class="fchip" style="border-color:var(--border-md);color:var(--text-muted);background:transparent;cursor:default">'+nAnul+' anulada'+(nAnul!==1?'s':'')+' excluida'+(nAnul!==1?'s':'')+'</span>');
+  cont.innerHTML=chips.join(' ');
+  cont.style.display=chips.length?'flex':'none';
+}
+function marcarSinGraficos(){
+  ['chart-diario','chart-tipos'].forEach(function(id){
+    var c=document.getElementById(id); if(!c||!c.parentNode)return;
+    c.parentNode.innerHTML='<div class="state-msg" style="font-size:11.5px">No se pudo cargar la librería de gráficos.<br>Los datos de abajo sí están disponibles.</div>';
+  });
+}
+function setOp(v){ fOp=v; var s=document.getElementById('op-sel'); if(s)s.value=v; if(clienteActual&&raw.length) renderCliente(); }
+function setDrill(d){ fDrill=d; if(clienteActual&&raw.length) renderCliente(); }
+
 function topN(map,n){return Object.entries(map).sort(function(a,b){return b[1]-a[1];}).slice(0,n);}
-function renderRankList(id,data,color){
+function renderRankList(id,data,color,campo){
   var max=data.length?data[0][1]:1;
   var html='';
   data.forEach(function(d,i){
     var pct=Math.round((d[1]/max)*100);
-    html+='<div class="rank-item">'
+    var act=campo&&fDrill&&fDrill.campo===campo&&fDrill.valor===d[0];
+    var clk=campo
+      ? ' class="rank-item clickable'+(act?' on':'')+'" title="Clic para filtrar por '+escHtml(d[0])+'" data-campo="'+escHtml(campo)+'" data-valor="'+escHtml(d[0])+'" data-activo="'+(act?'1':'0')+'"'
+      : ' class="rank-item"';
+    html+='<div'+clk+'>'
       +'<span class="rank-num">'+(i+1)+'</span>'
-      +'<span class="rank-name" title="'+d[0]+'">'+d[0]+'</span>'
+      +'<span class="rank-name" title="'+escHtml(d[0])+'">'+escHtml(d[0])+'</span>'
       +'<div class="rank-bar-wrap"><div class="rank-bar" style="width:'+pct+'%;background:'+color+'"></div></div>'
       +'<span class="rank-val" style="color:'+color+'">'+d[1].toLocaleString('es-CL')+'</span>'
       +'</div>';
   });
   document.getElementById(id).innerHTML=html||'<div style="color:var(--text-muted);font-size:11px;padding:.5rem">Sin datos</div>';
 }
+
+/* ===== Historial del pedido (HistorialXNroPedido) ===== */
+function abrirHist(nro,op,etapa){
+  document.getElementById('hist-ey').textContent=(op||'Pedido')+(etapa?' · '+etapa:'');
+  document.getElementById('hist-ti').textContent='Pedido '+nro;
+  document.getElementById('hist-bd').innerHTML='<div class="state-msg"><div class="spinner"></div>Consultando historial…</div>';
+  document.getElementById('hist-ov').classList.add('on');
+  var url=(isLocal?HIST_DIRECT:HIST_PROXY)+'?nroPedido='+encodeURIComponent(nro);
+  fetch(url,{headers:{'Accept':'application/json'}})
+    .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
+    .then(function(d){ pintarHist(Array.isArray(d)?d:[]); })
+    .catch(function(e){ document.getElementById('hist-bd').innerHTML='<div class="state-msg" style="color:#f87171">No se pudo cargar el historial: '+escHtml(e.message)+'</div>'; });
+}
+function cerrarHist(){ document.getElementById('hist-ov').classList.remove('on'); }
+function pintarHist(evs){
+  var bd=document.getElementById('hist-bd');
+  if(!evs.length){ bd.innerHTML='<div class="state-msg">Sin eventos registrados para este pedido.</div>'; return; }
+  evs.sort(function(a,b){return new Date(a.fechaCreacionHistorial)-new Date(b.fechaCreacionHistorial);});
+  var h='<div class="tl">';
+  evs.forEach(function(ev){
+    var tit=ev.glosaHistorial||'Evento';
+    if(ev.etapaOperacion) tit+=' — '+ev.etapaOperacion;
+    var det=[];
+    if(ev.usuario) det.push('Usuario: '+escHtml(''+ev.usuario));
+    if(ev.cantidadSolicitada!=null) det.push('Sol. '+ev.cantidadSolicitada);
+    if(ev.cantidadDespachada!=null) det.push('Desp. '+ev.cantidadDespachada);
+    if(ev.cantidadConfirmada!=null) det.push('Conf. '+ev.cantidadConfirmada);
+    if(ev.chofer) det.push('Chofer: '+escHtml(''+ev.chofer));
+    if(ev.observacion) det.push('Obs.: '+escHtml(''+ev.observacion));
+    h+='<div class="tl-it"><div class="tl-dot"></div>'
+      +'<div class="tl-tt">'+escHtml(tit)+'</div>'
+      +'<div class="tl-dt">'+fmtFechaH(ev.fechaCreacionHistorial)+'</div>'
+      +(det.length?'<div class="tl-de">'+det.join(' · ')+'</div>':'')
+      +'</div>';
+  });
+  bd.innerHTML=h+'</div><div style="font-size:10.5px;color:var(--text-muted);text-align:center;margin-top:8px">'+evs.length+' evento'+(evs.length!==1?'s':'')+' · HistorialXNroPedido</div>';
+}
+function fmtFechaH(s){ if(!s)return '—'; var d=new Date(s); return isNaN(d)?(''+s):d.toLocaleString('es-CL'); }
+
 function fmtDateShort(s){var p=s.split('-');return p[2]+'/'+p[1];}
-function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function escHtml(s){return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+/* ===== Arranque: la vista se dispara sola con un cliente de ejemplo ===== */
+window.addEventListener('DOMContentLoaded',function(){
+  var h=new Date(),y=h.getFullYear(),m=String(h.getMonth()+1).padStart(2,'0'),d=String(h.getDate()).padStart(2,'0');
+  document.getElementById('d2').value=y+'-'+m+'-'+d;      /* hasta hoy */
+  document.getElementById('d1').value=y+'-'+m+'-01';      /* desde el 1º del mes en curso */
+  var g2=document.getElementById('g2');
+  if(g2) g2.style.maxHeight=(g2.scrollHeight+100)+'px';
+
+  document.getElementById('cliente-sel').onchange=function(){
+    clienteActual=this.value;
+    fDrill=null;                                          /* al cambiar de cliente se limpia el drill */
+    if(clienteActual&&raw.length) renderCliente();
+  };
+  document.getElementById('op-sel').onchange=function(){ setOp(this.value); };
+  document.getElementById('chk-anul').onchange=function(){ fIncAnul=this.checked; if(clienteActual&&raw.length) renderCliente(); };
+  document.getElementById('d1').onchange=loadData;
+  document.getElementById('d2').onchange=loadData;
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape') cerrarHist(); });
+
+  /* Clics delegados: Nº de pedido abre su historial; bodega/chofer filtran la vista */
+  document.getElementById('tbody-pedidos').addEventListener('click',function(e){
+    var a=e.target.closest&&e.target.closest('.ped-link'); if(!a)return;
+    abrirHist(a.getAttribute('data-ped'),a.getAttribute('data-op'),a.getAttribute('data-etapa'));
+  });
+  ['list-bodegas','list-choferes'].forEach(function(id){
+    document.getElementById(id).addEventListener('click',function(e){
+      var it=e.target.closest&&e.target.closest('.rank-item.clickable'); if(!it)return;
+      if(it.getAttribute('data-activo')==='1') setDrill(null);
+      else setDrill({campo:it.getAttribute('data-campo'),valor:it.getAttribute('data-valor')});
+    });
+  });
+
+  loadData();                                             /* precarga automática al abrir */
+});
 </script>
 
 <!-- ══ SIDEBAR: acordeón, colapso, buscador (idéntico a m3link_dashboard_dark.html) ══ -->
@@ -613,6 +809,17 @@ document.addEventListener('keydown', function(e) {
   }
 })();
 </script>
+
+<!-- Modal: historial del pedido -->
+<div class="modal-ov" id="hist-ov" onclick="if(event.target===this)cerrarHist()">
+  <div class="modal-bx">
+    <div class="modal-hd">
+      <div><div class="modal-ey" id="hist-ey">Pedido</div><div class="modal-ti" id="hist-ti">—</div></div>
+      <button class="modal-cl" onclick="cerrarHist()">✕</button>
+    </div>
+    <div class="modal-bd" id="hist-bd"></div>
+  </div>
+</div>
 
 </body>
 </html>

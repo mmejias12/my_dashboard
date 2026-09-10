@@ -220,7 +220,21 @@ document.getElementById('btn-load').addEventListener('click',load);
 document.getElementById('btn-exp').addEventListener('click',exportCSV);
 document.getElementById('quick').addEventListener('change',function(){ setRango(this.value); load(); });
 setRango('mtd');
-load();
+// Candado por usuario (el candado real está en la Function; esto es la capa visual)
+(async function guard(){
+  var OWNERS=['mmejias@redtecsa.com'];
+  try{
+    var r=await fetch('/.auth/me'); var d=await r.json();
+    var email=((d&&d.clientPrincipal&&d.clientPrincipal.userDetails)||'').toLowerCase();
+    if(OWNERS.indexOf(email)<0){
+      var c=document.querySelector('.controls'); if(c)c.style.display='none';
+      var m=document.getElementById('msg'); m.style.display=''; m.textContent='Esta página es privada.';
+      setTimeout(function(){ location.href='m3link_dashboard_dark.html'; }, 1400);
+      return;
+    }
+  }catch(e){ /* si /.auth/me falla, la Function igual valida por servidor */ }
+  load();
+})();
 </script>
 </body>
 </html>

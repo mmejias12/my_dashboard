@@ -36,7 +36,29 @@ function prueba(nombre, fn) {
 }
 
 // ── Talana simulado, con las formas del diagnóstico real ────────────────────
-const HOY = '2026-08-31';   // lunes
+// HOY debe ser el día real: la prueba de la ventana de gracia comprueba que un
+// día abierto (dentro de los últimos días) se reconsulte, así que una fecha
+// fija quedaría "cerrada" con el paso del tiempo y rompería el test sin que el
+// código cambie.
+const HOY = new Date().toISOString().slice(0, 10);
+const MES_HOY = HOY.slice(0, 7);
+// Un mes distinto al de HOY, para probar que las ausencias se reparten por mes.
+const _md = new Date(HOY + 'T00:00:00'); _md.setDate(1); _md.setMonth(_md.getMonth() - 1);
+const OTRO_MES = _md.toISOString().slice(0, 7);
+const VAC_DESDE = OTRO_MES + '-10', VAC_HASTA = OTRO_MES + '-20';   // vacaciones en el otro mes
+const FALTA_DIA = MES_HOY + '-01', ADMIN_DIA = MES_HOY + '-02';     // en el mes de HOY
+const AYER = (function(){ const d=new Date(HOY+'T00:00:00'); d.setDate(d.getDate()-1); return d.toISOString().slice(0,10); })();
+// Offset real de Chile continental para HOY (-03:00 en verano, -04:00 en
+// invierno). Se usa en los TS de las marcas para que, tras normalizar a hora de
+// pared de Santiago, la hora escrita se conserve sin importar el mes en que se
+// corra la prueba.
+const OFF = (function(){
+  const p = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Santiago', timeZoneName: 'longOffset' })
+    .formatToParts(new Date(HOY + 'T12:00:00Z'));
+  const tz = (p.find(x => x.type === 'timeZoneName') || {}).value || 'GMT-04:00';
+  const m = tz.match(/GMT([+-]\d{2}):?(\d{2})/);
+  return m ? (m[1] + ':' + m[2]) : '-04:00';
+})();
 
 const FIXTURES = {
   '/sucursal/': [
@@ -78,13 +100,13 @@ const FIXTURES = {
   ],
   '/specificDay-paginado/': [],
   '/mark/': [
-    marca(9001, 1475433, 'ANA MARIA', 'SOTO', 'RIVAS', '11111111-1', `${HOY}T12:26:04-04:00`, 'E', 'ck-1'),
-    marca(9002, 1475433, 'ANA MARIA', 'SOTO', 'RIVAS', '11111111-1', `${HOY}T18:11:47-04:00`, 'X', 'ck-2'),
-    marca(9003, 3301888, 'JUAN CARLOS', 'PEREZ', 'ORTEGA', '22222222-2', `${HOY}T08:14:02.979284-04:00`, 'E', 'ck-3'),
+    marca(9001, 1475433, 'ANA MARIA', 'SOTO', 'RIVAS', '11111111-1', `${HOY}T12:26:04${OFF}`, 'E', 'ck-1'),
+    marca(9002, 1475433, 'ANA MARIA', 'SOTO', 'RIVAS', '11111111-1', `${HOY}T18:11:47${OFF}`, 'X', 'ck-2'),
+    marca(9003, 3301888, 'JUAN CARLOS', 'PEREZ', 'ORTEGA', '22222222-2', `${HOY}T08:14:02.979284${OFF}`, 'E', 'ck-3'),
     // Marca repetida (mismo checksum): el sync debe deduplicarla.
-    marca(9003, 3301888, 'JUAN CARLOS', 'PEREZ', 'ORTEGA', '22222222-2', `${HOY}T08:14:02.979284-04:00`, 'E', 'ck-3'),
+    marca(9003, 3301888, 'JUAN CARLOS', 'PEREZ', 'ORTEGA', '22222222-2', `${HOY}T08:14:02.979284${OFF}`, 'E', 'ck-3'),
     // Marca de otro día: entra en la ventana pedida pero debe descartarse.
-    marca(9004, 3301888, 'JUAN CARLOS', 'PEREZ', 'ORTEGA', '22222222-2', '2026-08-30T09:00:00-04:00', 'E', 'ck-4')
+    marca(9004, 3301888, 'JUAN CARLOS', 'PEREZ', 'ORTEGA', '22222222-2', `${AYER}T09:00:00${OFF}`, 'E', 'ck-4')
   ],
   // Nombres de campo verificados contra la cuenta real: cada fuente usa los suyos
   // y las tres anidan al trabajador como objeto en `empleado`.
@@ -92,15 +114,15 @@ const FIXTURES = {
     { empleado: { id: 3301888, rut: '22222222-2', nombre: 'JUAN CARLOS', apellidoPaterno: 'PEREZ' },
       fechaDesde: HOY, fechaHasta: HOY, numeroDias: 1, tipoAusencia: 'permiso sin goce', estado: 'Aprobada' },
     { empleado: { id: 3301888, rut: '22222222-2', nombre: 'JUAN CARLOS', apellidoPaterno: 'PEREZ' },
-      fechaDesde: '2026-08-20', fechaHasta: '2026-08-20', numeroDias: 1, tipoAusencia: 'falta injustificada' }
+      fechaDesde: FALTA_DIA, fechaHasta: FALTA_DIA, numeroDias: 1, tipoAusencia: 'falta injustificada' }
   ],
   '/vacations-resumed/': [
     { empleado: { id: 1475433, rut: '11111111-1', nombre: 'ANA MARIA', apellidoPaterno: 'SOTO' },
-      vacacionesDesde: '2026-09-10', vacacionesHasta: '2026-09-20', numeroDias: 9, tipoVacaciones: 'normales' }
+      vacacionesDesde: VAC_DESDE, vacacionesHasta: VAC_HASTA, numeroDias: 9, tipoVacaciones: 'normales' }
   ],
   '/administrative-leaves-resumed/': [
     { id: 686022, empleado: { id: 1475433, rut: '11111111-1', nombre: 'ANA MARIA', apellidoPaterno: 'SOTO' },
-      desde: '2026-08-25', hasta: '2026-08-25', numeroDias: 1, administrative_type: 'anual' }
+      desde: ADMIN_DIA, hasta: ADMIN_DIA, numeroDias: 1, administrative_type: 'anual' }
   ]
 };
 
@@ -289,7 +311,7 @@ prueba('el 403 de /workShift/ no detiene la sincronización', () => {
 prueba('quedaron escritos los blobs esperados', () => {
   assert.ok(BLOBS.has('talana/maestros.json'));
   assert.ok(BLOBS.has(`talana/marcas/${HOY}.json`));
-  assert.ok(BLOBS.has('talana/ausencias/2026-08.json'));
+  assert.ok(BLOBS.has(`talana/ausencias/${MES_HOY}.json`));
   assert.ok(BLOBS.has('talana/estado.json'));
 });
 
@@ -379,7 +401,7 @@ console.log('\nContrato que consume el reporte');
 }
 
 {
-  const r = await llamarApi('/permission', { start: '2026-08-01', end: '2026-08-31' });
+  const r = await llamarApi('/permission', { start: MES_HOY + '-01', end: MES_HOY + '-31' });
   prueba('/permission asocia cada ausencia a su trabajador, no a "[object Object]"', () => {
     assert.ok(r.json.data.length >= 3, JSON.stringify(r.json.data));
     assert.ok(r.json.data.every(p => /^\d+$/.test(p.employeeCode)),
@@ -407,12 +429,12 @@ console.log('\nContrato que consume el reporte');
 
   // Una sola traída reparte TODOS los meses: las vacaciones de septiembre
   // quedaron guardadas aunque el sync se pidió sobre agosto.
-  const sep = await llamarApi('/permission', { start: '2026-09-01', end: '2026-09-30' });
+  const sep = await llamarApi('/permission', { start: OTRO_MES + '-01', end: OTRO_MES + '-31' });
   prueba('las vacaciones de otro mes quedaron repartidas en su propio bloque', () => {
     const v = sep.json.data.find(p => p.permissionTypeName === 'Vacaciones');
-    assert.ok(v, 'las vacaciones de septiembre deben estar: ' + JSON.stringify(sep.json));
-    assert.strictEqual(v.start, '2026-09-10');
-    assert.strictEqual(v.end, '2026-09-20');
+    assert.ok(v, 'las vacaciones del otro mes deben estar: ' + JSON.stringify(sep.json));
+    assert.strictEqual(v.start, VAC_DESDE);
+    assert.strictEqual(v.end, VAC_HASTA);
     assert.strictEqual(v.employeeCode, '1475433');
   });
 }

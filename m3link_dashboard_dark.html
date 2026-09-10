@@ -499,6 +499,38 @@
   #tabpanes iframe.on{ display:block; }
   body.has-tabs .main{ padding-top:calc(1.25rem + 40px); }
 
+  /* ===== CELULAR: Ops x rango fechas (tarjetas apiladas) ===== */
+  @media(max-width:640px){
+    .main{ padding:.7rem .7rem; }
+    .page-header{ gap:6px;margin-bottom:.7rem; }
+    .page-title{ font-size:16px; }
+    .breadcrumb{ font-size:10.5px; }
+    .last-upd{ font-size:10.5px; }
+    .cbar{ padding:.7rem .75rem;gap:.6rem;align-items:stretch; }
+    .cbar .ctrl-group{ flex:1 1 46%; }
+    .ctrl-date{ width:100%; }
+    .cbar .btn{ flex:1 1 46%;justify-content:center; }
+    .cbar > div[style*="margin-left:auto"]{ margin-left:0 !important;width:100%;flex-wrap:wrap;gap:8px; }
+    .sel,.search-input{ width:100% !important; }
+    .stats{ grid-template-columns:1fr !important; }
+    .resumen-grid{ grid-template-columns:1fr 1fr; }
+    .table-wrap{ overflow-x:hidden;max-height:none;overflow-y:visible; }
+    .table-wrap table,.table-wrap tbody,.table-wrap tr,.table-wrap td{ display:block;width:100%; }
+    .table-wrap thead{ display:none; }
+    .table-wrap tr{ border:1px solid var(--border);border-radius:10px;margin-bottom:10px;padding:2px 10px 4px;background:var(--bg-card); }
+    .table-wrap td{ display:flex;justify-content:space-between;align-items:center;gap:12px;
+      max-width:none !important;white-space:normal !important;overflow:visible;text-overflow:clip;
+      border-bottom:1px solid var(--border);padding:7px 2px;text-align:right !important;font-size:12.5px; }
+    .table-wrap td:last-child{ border-bottom:0; }
+    .table-wrap td::before{ content:attr(data-label);color:var(--text-muted);font-weight:600;font-size:11px;text-align:left;flex:0 0 40%; }
+    .table-wrap td[data-label="Nº pedido"]{ padding:9px 2px;font-size:14px; }
+    .table-wrap td[colspan]{ display:block;text-align:center !important;padding:14px 2px; }
+    .table-wrap td[colspan]::before{ content:"" !important;display:none; }
+    .table-toolbar{ flex-wrap:wrap;gap:6px; }
+    .totals-bar{ flex-wrap:wrap;gap:6px 14px; }
+    .pager,.pagination,.pag{ flex-wrap:wrap;justify-content:center; }
+  }
+
 </style>
 </head>
 <body>
@@ -741,6 +773,7 @@
       <a href="cartola-financiera.html" class="s-item"><i class="ti ti-file-invoice"></i> Cartola financiera</a>
       <a href="semaforo-gerencial.html" class="s-item"><i class="ti ti-traffic-lights"></i> Semáforo gerencial</a>
       <a href="gerencia-grilla2026.html" class="s-item"><i class="ti ti-dashboard"></i> Dashboard ejecutivo</a>
+      <a href="uso-plataforma.html" class="s-item"><i class="ti ti-chart-arcs"></i> Uso de la plataforma</a>
     </div>
 
     <div class="s-hdr" onclick="tog('g-finanzas',this)" data-cat="cat" data-tip="Finanzas"><i class="ti ti-cash-banknote s-leading"></i> Finanzas <i class="ti ti-chevron-right s-chevron"></i></div>
@@ -1048,10 +1081,13 @@ function toggleSidebar() {
 }
 /* Restaurar estado al cargar */
 (function() {
-  if (localStorage.getItem('m3link_sidebar_collapsed') === '1') {
-    var sb = document.getElementById('mainSidebar');
-    if (sb) sb.classList.add('collapsed');
-  }
+  var sb = document.getElementById('mainSidebar');
+  if (!sb) return;
+  if (localStorage.getItem('m3link_sidebar_collapsed') === '1') sb.classList.add('collapsed');
+  // En celular: colapsar a riel de iconos para dejar espacio al contenido
+  function mobRail(){ if (window.innerWidth <= 640) sb.classList.add('collapsed'); }
+  mobRail();
+  window.addEventListener('resize', mobRail);
 })();
 function act(el) {
   var items = document.querySelectorAll('.s-item');
@@ -1126,10 +1162,21 @@ document.addEventListener('keydown', function(e) {
   }
 });
 
+// Registro de uso (best-effort): quién usa la plataforma. Ver api/uso-registro.
+function logUso(vista, area){
+  try{
+    var body = JSON.stringify({ vista: vista || '(sin vista)', area: area || '' });
+    if (navigator.sendBeacon){ navigator.sendBeacon('/api/uso-registro', new Blob([body], {type:'application/json'})); }
+    else { fetch('/api/uso-registro', {method:'POST', headers:{'Content-Type':'application/json'}, body:body, keepalive:true}).catch(function(){}); }
+  }catch(e){}
+}
+var VISTA_LBL = { ops:'Ops x rango fechas', trans:'Transacciones x cliente', transf:'Transferencias x cliente' };
+
 // Cambia la vista del listado según el item del menú clickeado.
 // Ajusta filtro de tipo de operación, breadcrumb y orden visual de la tabla.
 function setVista(el, modo) {
   act(el);  // marcar item activo
+  logUso(VISTA_LBL[modo] || modo, 'Comercial');
 
   var bc = document.querySelector('.breadcrumb');
   var sel = document.getElementById('op-filter');
@@ -1163,6 +1210,7 @@ window.addEventListener('DOMContentLoaded', function() {
   var primerDia = yyyy + '-' + mm + '-01';
   document.getElementById('d1').value = primerDia;
   document.getElementById('d2').value = hoyStr;
+  logUso('(ingreso a la app)', '');  // marca sesión/usuario activo
 });
 
 /* CARGAR DATOS */
@@ -1579,16 +1627,16 @@ function render() {
     var pedidoId = r.nroPedido || '';
     var rowIdx = start + i;
     rows += '<tr>'
-      + '<td class="mono" style="font-weight:500;color:var(--accent);cursor:pointer;text-decoration:underline;text-decoration-color:rgba(74,222,128,.4)" onclick="openModal(' + rowIdx + ')">'  + (pedidoId || '&mdash;') + '</td>'
-      + '<td title="' + (r.clienteOrigenStr||'') + '">'                  + (r.clienteOrigenStr||'&mdash;') + '</td>'
-      + '<td title="' + (r.clienteDestinoStr||'') + '">'                 + (r.clienteDestinoStr||'&mdash;') + '</td>'
-      + '<td>' + opBadge(r.operacion) + '</td>'
-      + '<td class="' + etapaCls(r.etapaOperacion) + '">'                + (r.etapaOperacion||'&mdash;') + '</td>'
-      + '<td style="text-align:right">' + (r.cantidadSolicitada  != null ? r.cantidadSolicitada  : '&mdash;') + '</td>'
-      + '<td style="text-align:right">' + (r.cantidadDespachada  != null ? r.cantidadDespachada  : '&mdash;') + '</td>'
-      + '<td style="text-align:right">' + (r.cantidadConfirmada  != null ? r.cantidadConfirmada  : '&mdash;') + '</td>'
-      + '<td class="mono" style="color:var(--text-secondary);font-size:10.5px">' + fmtDate(r.horaIngreso) + '</td>'
-      + '<td style="color:var(--text-muted);font-size:11px">' + (r.usuario||'&mdash;') + '</td>'
+      + '<td data-label="Nº pedido" class="mono" style="font-weight:500;color:var(--accent);cursor:pointer;text-decoration:underline;text-decoration-color:rgba(74,222,128,.4)" onclick="openModal(' + rowIdx + ')">'  + (pedidoId || '&mdash;') + '</td>'
+      + '<td data-label="Cliente origen" title="' + (r.clienteOrigenStr||'') + '">'                  + (r.clienteOrigenStr||'&mdash;') + '</td>'
+      + '<td data-label="Cliente destino" title="' + (r.clienteDestinoStr||'') + '">'                 + (r.clienteDestinoStr||'&mdash;') + '</td>'
+      + '<td data-label="Operación">' + opBadge(r.operacion) + '</td>'
+      + '<td data-label="Etapa" class="' + etapaCls(r.etapaOperacion) + '">'                + (r.etapaOperacion||'&mdash;') + '</td>'
+      + '<td data-label="Solicitada" style="text-align:right">' + (r.cantidadSolicitada  != null ? r.cantidadSolicitada  : '&mdash;') + '</td>'
+      + '<td data-label="Despachada" style="text-align:right">' + (r.cantidadDespachada  != null ? r.cantidadDespachada  : '&mdash;') + '</td>'
+      + '<td data-label="Confirmada" style="text-align:right">' + (r.cantidadConfirmada  != null ? r.cantidadConfirmada  : '&mdash;') + '</td>'
+      + '<td data-label="Hora ingreso" class="mono" style="color:var(--text-secondary);font-size:10.5px">' + fmtDate(r.horaIngreso) + '</td>'
+      + '<td data-label="Usuario" style="color:var(--text-muted);font-size:11px">' + (r.usuario||'&mdash;') + '</td>'
       + '</tr>';
   }
   tbody.innerHTML = rows;
@@ -2239,6 +2287,7 @@ document.addEventListener('click', function(e){
   if(!/\.html?$/i.test(resolved.pathname)) return;
   e.preventDefault(); e.stopPropagation();
   var label=(a.textContent||'').replace(/\s+/g,' ').replace(/[↔]|próx\.?/gi,'').trim();
+  try{ if(typeof logUso==='function') logUso(label, ''); }catch(e){}
   TABS.open(href, label);
 }, true);
 

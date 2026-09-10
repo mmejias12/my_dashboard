@@ -67,7 +67,28 @@
   .live-dot { width:7px;height:7px;background:var(--accent);border-radius:50%;animation:pulse 2.5s ease-in-out infinite;box-shadow:0 0 6px var(--accent); }
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
   .topbar-right { margin-left:auto;display:flex;align-items:center;gap:10px; }
-  .avatar { width:27px;height:27px;border-radius:50%;background:#1a2a1f;color:var(--accent);font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;border:1px solid var(--border-accent); }
+  .avatar { width:27px;height:27px;border-radius:50%;background:#1a2a1f;color:var(--accent);font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;border:1px solid var(--border-accent);overflow:hidden; }
+  .avatar img{ width:100%;height:100%;object-fit:cover;border-radius:50%; }
+  /* Menú de cuenta (estilo Azure) */
+  .user-menu{ position:relative; }
+  .avatar-btn{ background:none;border:none;padding:0;cursor:pointer;display:flex;align-items:center;border-radius:50%; }
+  .avatar-btn:focus-visible{ outline:2px solid var(--accent);outline-offset:2px; }
+  .avatar-btn .avatar{ width:30px;height:30px;transition:box-shadow .15s; }
+  .avatar-btn:hover .avatar{ box-shadow:0 0 0 3px rgba(57,135,229,.18); }
+  .user-pop{ position:absolute;top:40px;right:0;width:290px;background:var(--bg-surface,#141a2e);border:1px solid var(--border);border-radius:12px;box-shadow:0 20px 50px rgba(0,0,0,.5);padding:8px;z-index:300; }
+  .user-pop .up-head{ display:flex;align-items:center;gap:11px;padding:8px 8px 10px; }
+  .user-pop .avatar-lg{ width:44px;height:44px;font-size:15px;flex:0 0 auto; }
+  .user-pop .up-id{ min-width:0; }
+  .user-pop .up-name{ font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  .user-pop .up-email{ font-size:11.5px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  .user-pop .up-org{ display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text-muted);padding:0 8px 8px; }
+  .user-pop .up-sep{ height:1px;background:var(--border);margin:2px 0 6px; }
+  .user-pop .up-item{ display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px;text-decoration:none;color:var(--text-primary);font-size:13px;font-weight:500; }
+  .user-pop .up-item i{ font-size:16px; }
+  .user-pop .up-item:hover{ background:var(--bg-hover,#1d2540); }
+  .user-pop .up-item.secret{ color:#8fc0ff; }
+  .user-pop .up-item.danger{ color:#f87171; }
+  .user-pop .up-item.danger:hover{ background:rgba(248,113,113,.1); }
   .user-email { font-size:11.5px;color:var(--text-secondary); }
 
   /* LAYOUT */
@@ -544,9 +565,21 @@
   <div class="topbar-title"><div class="live-dot"></div>Panel de control M3LINK</div>
   <div class="topbar-right">
     <button class="btn-help" onclick="document.getElementById('helpModal').classList.add('visible')" title="Guía de módulos"><i class="ti ti-help-circle"></i> Ayuda</button>
-    <div class="avatar" id="m3l-avatar" title="Cargando...">?</div>
-    <span class="user-email" id="m3l-user-email">Cargando...</span>
-    <a href="/logout" title="Cerrar sesión" style="margin-left:10px;color:#f87171;text-decoration:none;font-size:12px;font-weight:600;padding:4px 10px;border-radius:6px;background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.2);">Cerrar sesión</a>
+    <div class="user-menu" id="user-menu">
+      <button class="avatar-btn" id="m3l-avatar-btn" title="Mi cuenta" aria-haspopup="true" aria-expanded="false">
+        <span class="avatar" id="m3l-avatar">?</span>
+      </button>
+      <div class="user-pop" id="user-pop" hidden>
+        <div class="up-head">
+          <span class="avatar avatar-lg" id="up-avatar">?</span>
+          <div class="up-id"><div class="up-name" id="up-name">—</div><div class="up-email" id="up-email">—</div></div>
+        </div>
+        <div class="up-org"><i class="ti ti-building-community"></i> <span>REDTEC S.A. · M3LINK</span></div>
+        <div class="up-sep"></div>
+        <a class="up-item secret" id="up-secret" href="uso-plataforma.html" hidden><i class="ti ti-chart-arcs"></i> Uso de la plataforma</a>
+        <a class="up-item danger" href="/logout"><i class="ti ti-logout"></i> Cerrar sesión</a>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -768,7 +801,6 @@
       <a href="cartola-financiera.html" class="s-item"><i class="ti ti-file-invoice"></i> Cartola financiera</a>
       <a href="semaforo-gerencial.html" class="s-item"><i class="ti ti-traffic-lights"></i> Semáforo gerencial</a>
       <a href="gerencia-grilla2026.html" class="s-item"><i class="ti ti-dashboard"></i> Dashboard ejecutivo</a>
-      <a href="uso-plataforma.html" class="s-item"><i class="ti ti-chart-arcs"></i> Uso de la plataforma</a>
     </div>
 
     <div class="s-hdr" onclick="tog('g-finanzas',this)" data-cat="cat" data-tip="Finanzas"><i class="ti ti-cash-banknote s-leading"></i> Finanzas <i class="ti ti-chevron-right s-chevron"></i></div>
@@ -2111,13 +2143,20 @@ function exportXLSX() {
       var initials = (parts[0] || '?').charAt(0).toUpperCase();
       if (parts[1]) initials += parts[1].charAt(0).toUpperCase();
 
+      // Nombre legible desde el correo (parte local, capitalizada)
+      var nombre = parts.map(function(w){ return w ? w.charAt(0).toUpperCase()+w.slice(1) : w; }).join(' ') || email;
+
       var avatarEl = document.getElementById('m3l-avatar');
-      var emailEl = document.getElementById('m3l-user-email');
-      if (avatarEl) {
-        avatarEl.textContent = initials;
-        avatarEl.title = email;
+      if (avatarEl) { avatarEl.textContent = initials; avatarEl.title = email; }
+      var upAv = document.getElementById('up-avatar'); if (upAv) upAv.textContent = initials;
+      var upNm = document.getElementById('up-name');  if (upNm) upNm.textContent = nombre;
+      var upEm = document.getElementById('up-email'); if (upEm) { upEm.textContent = email; upEm.title = email; }
+
+      // Acceso secreto: solo para el dueño (por correo). El candado real está en el servidor.
+      var USO_OWNERS = ['mmejias@redtecsa.com'];
+      if (USO_OWNERS.indexOf((email||'').toLowerCase()) >= 0) {
+        var sec = document.getElementById('up-secret'); if (sec) sec.hidden = false;
       }
-      if (emailEl) emailEl.textContent = email;
 
       /* ===== Visibilidad del menú por ROL de área =====
          Regla: un usuario con rol de área (p.ej. "comercial") ve SOLO los grupos de su(s) área(s).
@@ -2157,6 +2196,18 @@ function exportXLSX() {
   } catch(e) {
     console.warn('No se pudo cargar usuario:', e);
   }
+})();
+
+/* Menú de cuenta: abrir/cerrar el popover del avatar */
+(function(){
+  var btn = document.getElementById('m3l-avatar-btn');
+  var pop = document.getElementById('user-pop');
+  if (!btn || !pop) return;
+  function open(){ pop.hidden=false; btn.setAttribute('aria-expanded','true'); }
+  function close(){ pop.hidden=true; btn.setAttribute('aria-expanded','false'); }
+  btn.addEventListener('click', function(e){ e.stopPropagation(); pop.hidden ? open() : close(); });
+  document.addEventListener('click', function(e){ if(!pop.hidden && !pop.contains(e.target) && !btn.contains(e.target)) close(); });
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape') close(); });
 })();
 </script>
 <script>

@@ -18,6 +18,20 @@
     --blue:#3987e5;--green:#4ade80;--grid:rgba(255,255,255,0.06);
     --radius-sm:6px;--radius-md:9px;--radius-lg:13px;
   }
+
+  :root[data-theme="light"]{
+    --bg-page:#f4f6fa;--bg-surface:#ffffff;--bg-card:#ffffff;--bg-input:#ffffff;--bg-hover:#eef1f7;--bg-active:#e8f5ec;
+    --border:rgba(15,23,42,0.10);--border-md:rgba(15,23,42,0.16);--border-accent:rgba(31,157,87,0.40);
+    --text-primary:#131722;--text-secondary:#4a5268;--text-muted:#6b7488;--accent:#1f9d57;--accent-dim:rgba(31,157,87,0.14);
+    --s1:#2f74d0;--s2:#c04a1e;--s3:#12805a;--s4:#a06c00;--s5:#b8436e;--s6:#6b7280;
+    --blue:#2f74d0;--green:#1f9d57;--grid:rgba(15,23,42,0.08);
+  }
+
+  /* ===== Accesibilidad: tamaño de texto + tema claro/oscuro ===== */
+  .acc{display:inline-flex;align-items:center;gap:4px}
+  .acc .ab{min-width:30px;height:30px;padding:0 7px;border:1px solid var(--border-md);background:var(--bg-input);color:var(--text-secondary);border-radius:7px;cursor:pointer;font-family:inherit;font-size:12px;display:inline-flex;align-items:center;justify-content:center}
+  .acc .ab:hover{background:var(--bg-hover);color:var(--text-primary)}
+  .acc .ab.big{font-size:16px;font-weight:700}
   html,body{height:100%;font-family:'Inter',-apple-system,sans-serif;font-size:13px;background:var(--bg-page);color:var(--text-primary);-webkit-font-smoothing:antialiased}
   .topbar{position:fixed;top:0;left:0;right:0;z-index:100;height:52px;background:var(--bg-surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1.25rem;gap:12px}
   .logo{display:flex;align-items:center;gap:10px}.logo-mark{width:30px;height:30px;object-fit:contain}.logo-name{font-weight:700;font-size:14px}
@@ -170,6 +184,9 @@
     <div class="spacer"></div>
     <button class="btn btn-accent" id="btn-upd" onclick="cargarDatos()">↻ Actualizar</button>
     <button class="btn" onclick="exportCSV()">⭳ Exportar</button>
+    <div class="acc" title="Tamaño de texto"><button class="ab" id="fs-down" title="Reducir texto">A−</button><button class="ab big" id="fs-up" title="Aumentar texto">A+</button></div>
+    <div class="acc"><button class="ab" id="theme-tg" title="Cambiar tema claro/oscuro">☀︎</button></div>
+
   </div>
 
   <div class="note">Cantidades por tipo desde <b>opsxrangofechas</b> (despachado). El <b>valorizado cuadra con la cartola</b> (ella manda): la tarifa base se back-calcula por cliente para que, aplicando <b>+20% en 24 horas</b> y <b>+40% en Express</b> (LD y Retiro Cliente a tarifa base), el total coincida con lo facturado. Total cartola: <b id="cart-ref">–</b>.</div>
@@ -614,6 +631,23 @@ function exportCSV(){
 window.addEventListener('resize',function(){clearTimeout(window._rz);window._rz=setTimeout(renderAll,150);});
 initFilters();
 if(LIVE&&!isLocal){cargarDatos();}else{if(LIVE&&isLocal)document.getElementById('src-tag').textContent='local · publica en Azure para datos en vivo';renderAll();}
+/* ===== Accesibilidad: tamaño de texto + tema claro/oscuro ===== */
+var FSLEVELS=[1,1.15,1.3,1.5], fsIdx=1;
+function applyFS(){ document.documentElement.style.zoom=FSLEVELS[fsIdx]; try{localStorage.setItem('emis_fs',fsIdx);}catch(e){} }
+function applyTheme(t){
+  document.documentElement.setAttribute('data-theme',t);
+  var b=document.getElementById('theme-tg'); if(b)b.textContent=(t==='light'?'☾':'☀︎');
+  try{localStorage.setItem('emis_theme',t);}catch(e){}
+  if(typeof renderAll==='function'){ try{ renderAll(); }catch(e){} }   /* repinta los SVG con los colores del tema */
+}
+document.getElementById('fs-down').addEventListener('click',function(){ fsIdx=Math.max(0,fsIdx-1); applyFS(); });
+document.getElementById('fs-up').addEventListener('click',function(){ fsIdx=Math.min(FSLEVELS.length-1,fsIdx+1); applyFS(); });
+document.getElementById('theme-tg').addEventListener('click',function(){ applyTheme(document.documentElement.getAttribute('data-theme')==='light'?'dark':'light'); });
+(function(){ try{
+  var t=localStorage.getItem('emis_theme'); if(t)applyTheme(t);
+  var f=parseInt(localStorage.getItem('emis_fs'),10); if(!isNaN(f)&&f>=0&&f<FSLEVELS.length){fsIdx=f;applyFS();}
+}catch(e){} })();
+
 </script>
 </body>
 </html>

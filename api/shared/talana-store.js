@@ -32,6 +32,14 @@ const VENTANA_GRACIA_DIAS = Number(process.env.TALANA_GRACIA_DIAS || 5);
 // Vida útil de los maestros: cambian poco (altas, cambios de turno).
 const TTL_MAESTROS_MIN = Number(process.env.TALANA_TTL_MAESTROS_MIN || 720); // 12 h
 
+// Versión del esquema de maestros. Se sube cuando un cambio de código exige
+// regenerar el snapshot aunque no haya vencido por tiempo. v2: carga priorizada
+// de turnos/asignaciones (los días y las asignaciones se traen antes que el
+// catálogo /workShift/, para que éste no agote el presupuesto y deje el snapshot
+// sin horario teórico). El sincronizador sólo estampa esta versión cuando las
+// asignaciones se resolvieron; así un snapshot viejo sin ellas se rehace.
+const ESQUEMA_MAESTROS = Number(process.env.TALANA_ESQUEMA_MAESTROS || 2);
+
 const K_MAESTROS = 'talana/maestros.json';
 const K_ESTADO   = 'talana/estado.json';
 // Traída de ausencias a medio camino: se guarda para poder reanudarla en la
@@ -115,6 +123,11 @@ const guardarMaestros = (c, m) => escribir(c, K_MAESTROS, { ...m, _guardado: new
 
 function maestrosVencidos(maestros) {
   if (!maestros || !maestros._guardado) return true;
+  // Migración de esquema por versión: un snapshot de una versión anterior a la
+  // carga priorizada de turnos/asignaciones (o uno que quedó sin asignaciones
+  // por presupuesto, que por eso NO se estampó) se regenera aunque no haya
+  // vencido por tiempo.
+  if (maestros._v !== ESQUEMA_MAESTROS) return true;
   // Migración de esquema: si el snapshot fue generado antes de que las
   // sucursales trajeran la ubicación del recinto (lat/lng/rango, para la
   // validación GPS del marcaje), se fuerza una regeneración aunque no haya
@@ -248,5 +261,5 @@ module.exports = {
   leerAusenciasMes, guardarAusenciasMes, ausenciasVencidas, mesesDelRango, mesDe,
   leerAvanceAusencias, guardarAvanceAusencias, limpiarAvanceAusencias,
   leerEstado, guardarEstado,
-  hoyIso, CONTAINER, VENTANA_GRACIA_DIAS, TTL_MAESTROS_MIN
+  hoyIso, CONTAINER, VENTANA_GRACIA_DIAS, TTL_MAESTROS_MIN, ESQUEMA_MAESTROS
 };

@@ -192,6 +192,7 @@
   .chart-card { background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:18px;margin-bottom:14px; }
   .chart-hdr { display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px; }
   .chart-title { font-size:14px;font-weight:600;color:var(--text-primary); }
+  .tipo-seg { margin-left:auto; flex-shrink:0; }
   .chart-wrap { position:relative;height:420px; }
 
   /* STATE MESSAGES */
@@ -367,6 +368,10 @@
     <div class="chart-hdr">
       <div class="chart-title" id="chart-title">Emisiones vs Transferencias por mes</div>
       <span class="kpi-sub" id="chart-sub">Mostrando datos confirmados del período</span>
+      <div class="seg tipo-seg" id="seg-tipo" title="Cambiar la forma del gráfico">
+        <button class="seg-btn on" data-t="barras">&#9642; Barras</button>
+        <button class="seg-btn" data-t="linea">&#128200; Lineal</button>
+      </div>
     </div>
     <div class="chart-wrap"><canvas id="canvas"></canvas></div>
   </div>
@@ -406,6 +411,7 @@ var clienteFiltro = '';
 var chartInstance = null;
 var fIncAnul = false;          /* las anuladas se excluyen por defecto */
 var clavesActuales = [];       /* mapea el índice del gráfico a su período */
+var tipoGrafico = 'barras';    /* 'barras' | 'linea' — aplica a todas las métricas */
 var HIST_PROXY='/api/historial-proxy';
 var HIST_DIRECT='https://apirdt1.azurewebsites.net/api/RDTOut/historialxnropedido';
 
@@ -654,8 +660,8 @@ function dibujarChart() {
   if (metricaActiva === 'emi-vs-tra') {
     titulo = 'Emisiones vs Transferencias solicitadas por ' + nombreAgrupador();
     datasets = [
-      { label: 'Emisiones',                data: claves.map(function(k) { return mapa[k].emi;    }), backgroundColor: '#60a5fa' },
-      { label: 'Transferencias solicitadas', data: claves.map(function(k) { return mapa[k].traSol; }), backgroundColor: '#4ade80' }
+      { label: 'Emisiones',                data: claves.map(function(k) { return mapa[k].emi;    }), backgroundColor: '#60a5fa', __color: '#60a5fa' },
+      { label: 'Transferencias solicitadas', data: claves.map(function(k) { return mapa[k].traSol; }), backgroundColor: '#4ade80', __color: '#4ade80' }
     ];
     renderBarChart(labels, datasets, titulo);
   } else if (metricaActiva === 'diferencia') {
@@ -663,6 +669,7 @@ function dibujarChart() {
     datasets = [{
       label: 'Diferencia (Emi − Tra solic.)',
       data: claves.map(function(k) { return mapa[k].emi - mapa[k].traSol; }),
+      __color: '#fcd34d',
       backgroundColor: claves.map(function(k) {
         var d = mapa[k].emi - mapa[k].traSol;
         return d >= 0 ? '#fcd34d' : '#f87171';
@@ -678,6 +685,7 @@ function dibujarChart() {
     datasets = [{
       label: '% Diferencia',
       data: data,
+      __color: '#fcd34d',
       borderColor: '#fcd34d',
       backgroundColor: 'rgba(252,211,77,0.15)',
       tension: 0.25,
@@ -691,7 +699,7 @@ function dibujarChart() {
     datasets = [{
       label: 'Pallets confirmados',
       data: claves.map(function(k) { return mapa[k].traPallets; }),
-      backgroundColor: '#c4b5fd'
+      backgroundColor: '#c4b5fd', __color: '#c4b5fd'
     }];
     renderBarChart(labels, datasets, titulo);
   }
@@ -713,22 +721,44 @@ function nombreAgrupador() {
   return agrupadorActivo === 'dia' ? 'día' : (agrupadorActivo === 'sem' ? 'semana' : 'mes');
 }
 
-function renderBarChart(labels, datasets, titulo) {
-  if (chartInstance) chartInstance.destroy();
-  var ctx = $('canvas').getContext('2d');
-  chartInstance = new Chart(ctx, {
-    type: 'bar',
-    data: { labels: labels, datasets: datasets },
-    options: chartOptions(false)
+/* Barras y línea comparten el mismo render: la forma la decide tipoGrafico,
+   así el botón "Lineal" funciona en las cuatro métricas. */
+function renderBarChart(labels, datasets, titulo)         { renderChart(labels, datasets, false); }
+function renderLineChart(labels, datasets, titulo, isPct) { renderChart(labels, datasets, isPct); }
+
+function colorDe(ds, i) {
+  if (ds.__color) return ds.__color;
+  if (typeof ds.borderColor === 'string') return ds.borderColor;
+  if (typeof ds.backgroundColor === 'string') return ds.backgroundColor;
+  return ['#60a5fa', '#4ade80', '#fcd34d', '#c4b5fd'][i % 4];
+}
+function aLinea(datasets) {
+  return datasets.map(function(ds, i) {
+    var c = colorDe(ds, i);
+    var d = Object.assign({}, ds);
+    d.borderColor = c;
+    d.backgroundColor = (c.charAt(0) === '#') ? c + '22' : c;
+    d.borderWidth = 2; d.tension = 0.25; d.pointRadius = 3; d.pointBackgroundColor = c;
+    d.fill = datasets.length === 1;
+    return d;
   });
 }
-
-function renderLineChart(labels, datasets, titulo, isPct) {
+function aBarras(datasets) {
+  return datasets.map(function(ds, i) {
+    var d = Object.assign({}, ds);
+    /* si venía con un color por barra (p.ej. Diferencia: verde/rojo) se respeta */
+    d.backgroundColor = Array.isArray(ds.backgroundColor) ? ds.backgroundColor : colorDe(ds, i);
+    delete d.tension; delete d.fill; delete d.pointRadius; delete d.pointBackgroundColor; delete d.borderWidth;
+    return d;
+  });
+}
+function renderChart(labels, datasets, isPct) {
+  if (typeof Chart === 'undefined') return;
   if (chartInstance) chartInstance.destroy();
-  var ctx = $('canvas').getContext('2d');
-  chartInstance = new Chart(ctx, {
-    type: 'line',
-    data: { labels: labels, datasets: datasets },
+  var linea = (tipoGrafico === 'linea');
+  chartInstance = new Chart($('canvas').getContext('2d'), {
+    type: linea ? 'line' : 'bar',
+    data: { labels: labels, datasets: linea ? aLinea(datasets) : aBarras(datasets) },
     options: chartOptions(isPct)
   });
 }
@@ -1037,6 +1067,26 @@ window.addEventListener('DOMContentLoaded', function() {
     abrirHist(a.getAttribute('data-ped'), a.getAttribute('data-op'), a.getAttribute('data-etapa'));
   });
   document.addEventListener('keydown', function(e){ if(e.key==='Escape'){ cerrarHist(); cerrarDrill(); } });
+
+  // Forma del gráfico: barras o lineal (aplica a todas las métricas)
+  document.querySelectorAll('#seg-tipo .seg-btn').forEach(function(b) {
+    b.addEventListener('click', function() {
+      document.querySelectorAll('#seg-tipo .seg-btn').forEach(function(x) { x.classList.remove('on'); });
+      b.classList.add('on');
+      tipoGrafico = b.getAttribute('data-t');
+      try { localStorage.setItem('transf_tipo', tipoGrafico); } catch (e) {}
+      if (raw.length) redibujar();
+    });
+  });
+  try {
+    var tg = localStorage.getItem('transf_tipo');
+    if (tg === 'linea' || tg === 'barras') {
+      tipoGrafico = tg;
+      document.querySelectorAll('#seg-tipo .seg-btn').forEach(function(x) {
+        x.classList.toggle('on', x.getAttribute('data-t') === tg);
+      });
+    }
+  } catch (e) {}
 
   cargarDatos();   // precarga automática del mes en curso
 });

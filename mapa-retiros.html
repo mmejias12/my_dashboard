@@ -324,8 +324,10 @@ var BASEMAPS={
          url:"https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
          attr:"Mapa base © Esri", maxZoom:16, oscurecer:0 },
   osm: { nombre:"Calles",
-         url:"https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-         attr:"© OpenStreetMap contributors", maxZoom:19, oscurecer:150 },
+         /* NO usar tile.openstreetmap.org: son servidores de voluntarios y
+            bloquean este uso con 403 "Access blocked". Esri sí lo permite. */
+         url:"https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+         attr:"Mapa base © Esri, HERE, Garmin, OpenStreetMap contributors", maxZoom:18, oscurecer:135 },
   sat: { nombre:"Satélite",
          url:"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
          attr:"Imágenes © Esri, Maxar, Earthstar Geographics", maxZoom:18, oscurecer:60 },

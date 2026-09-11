@@ -1093,7 +1093,7 @@
 
     <div class="table-card">
       <div class="table-toolbar">
-        <span class="table-count" id="tcnt">Cargando el mes en curso…</span>
+        <span class="table-count" id="tcnt">Cargando el día de hoy…</span>
       </div>
       <div class="table-wrap">
         <table>
@@ -1110,7 +1110,7 @@
             <th onclick="sortBy('usuario')">Usuario ↕</th>
           </tr></thead>
           <tbody id="tbody">
-            <tr><td colspan="10"><div class="state-msg"><div class="spinner"></div>Cargando el mes en curso…</div></td></tr>
+            <tr><td colspan="10"><div class="state-msg"><div class="spinner"></div>Cargando el día de hoy…</div></td></tr>
           </tbody>
         </table>
       </div>
@@ -1376,11 +1376,13 @@ window.addEventListener('DOMContentLoaded', function() {
   var yyyy = hoy.getFullYear();
   var mm   = String(hoy.getMonth() + 1).padStart(2, '0');
   var dd   = String(hoy.getDate()).padStart(2, '0');
-  var hoyStr    = yyyy + '-' + mm + '-' + dd;
-  var primerDia = yyyy + '-' + mm + '-01';
-  rgIniciar(primerDia, hoyStr);          // arma el selector con el mes en curso
+  var hoyStr = yyyy + '-' + mm + '-' + dd;
+  /* Arranca con EL DÍA DE HOY, no con el mes entero: entrar a la app (o
+     refrescarla) no puede costar una espera. Desde ahí, ‹ va a ayer y el
+     selector tiene "Mes en curso" y el resto de los períodos a un clic. */
+  rgIniciar(hoyStr, hoyStr);
   logUso('(ingreso a la app)', '');  // marca sesión/usuario activo
-  loadData();                            // ── precarga: el mes en curso sale solo ──
+  loadData();                        // ── precarga: el día de hoy, y listo ──
 });
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1479,6 +1481,10 @@ function rgPintarPill(){
   var n=rgLargo(rg.d1,rg.d2);
   document.getElementById('rg-dias').textContent = n+(n===1?' día':' días');
   document.getElementById('rg-next').disabled = (rg.d2 >= rgTopeSup());
+  // el tooltip dice exactamente a qué se mueve, que depende del largo del rango
+  var pv=document.getElementById('rg-prev'), nx=document.getElementById('rg-next');
+  if(pv) pv.title = (n===1 ? 'Ayer' : (n===7 ? 'Semana anterior' : 'Los '+n+' días anteriores')) + ' (con Shift, un día)';
+  if(nx) nx.title = (n===1 ? 'Mañana' : (n===7 ? 'Semana siguiente' : 'Los '+n+' días siguientes')) + ' (con Shift, un día)';
 }
 
 /* Corre la ventana completa sin abrir el calendario.
@@ -1690,12 +1696,24 @@ document.addEventListener('mouseover', function(e){
    se puede recortar aquí mismo con _perteneceAlPeriodo, sin volver a consultar:
    si n1 >= d1 entonces n1-30 >= d1-30, o sea el buffer también está cubierto.
    Se vence a los 5 minutos porque el día en curso sigue moviéndose. */
-var _memRango = null;                 // {d1, d2, payload, ts}
-var MEM_VIGENCIA_MS = 5*60*1000;
-function _memSirve(d1, d2){
-  return _memRango && _memRango.payload &&
-         d1 >= _memRango.d1 && d2 <= _memRango.d2 &&
-         (Date.now() - _memRango.ts) < MEM_VIGENCIA_MS;
+var _memWins = [];                    // [{d1, d2, payload, ts}] — las últimas ventanas traídas
+var MEM_VIGENCIA_MS = 5*60*1000, MEM_MAX = 6;
+/* Devuelve la ventana vigente que CONTENGA el rango pedido, o null.
+   Se guardan varias para que ir y volver con las flechas (hoy → ayer → hoy)
+   no vuelva a consultar: con una sola ventana, cada paso pisaba la anterior. */
+function _memBuscar(d1, d2){
+  var ahora = Date.now();
+  _memWins = _memWins.filter(function(w){ return (ahora - w.ts) < MEM_VIGENCIA_MS; });
+  for (var i = _memWins.length - 1; i >= 0; i--) {
+    var w = _memWins[i];
+    if (d1 >= w.d1 && d2 <= w.d2) return w;
+  }
+  return null;
+}
+function _memGuardar(d1, d2, payload){
+  _memWins = _memWins.filter(function(w){ return !(w.d1 === d1 && w.d2 === d2); });
+  _memWins.push({ d1:d1, d2:d2, payload:payload, ts:Date.now() });
+  while (_memWins.length > MEM_MAX) _memWins.shift();
 }
 
 /* CARGAR DATOS */
@@ -1724,10 +1742,11 @@ function loadData(forzar) {
   var d1  = document.getElementById('d1').value;
   var d2  = document.getElementById('d2').value;
 
-  // ── Lectura instantánea: el rango ya está dentro de lo descargado ──
-  if (forzar !== true && _memSirve(d1, d2)) {
-    raw = _memRango.payload.filter(function(r) { return _perteneceAlPeriodo(r, d1, d2); });
-    _pintarPeriodo(raw, true);
+  // ── Lectura instantánea: el rango ya está dentro de algo ya descargado ──
+  var _win = (forzar !== true) ? _memBuscar(d1, d2) : null;
+  if (_win) {
+    raw = _win.payload.filter(function(r) { return _perteneceAlPeriodo(r, d1, d2); });
+    _pintarPeriodo(raw, true, _win.ts);
     btn.disabled = false; btn.textContent = '↻ Recargar'; if(overlay) overlay.classList.remove('visible');
     return;
   }
@@ -1749,7 +1768,7 @@ function loadData(forzar) {
     })
     .then(function(data) {
       var dataApi = Array.isArray(data) ? data : [data];
-      _memRango = { d1:d1, d2:d2, payload:dataApi, ts:Date.now() };   // queda en memoria
+      _memGuardar(d1, d2, dataApi);   // queda en memoria para volver sin consultar
       // Regla interna del periodo: retiros por fecha de confirmación, resto por fecha
       // requerida. Descarta los registros del buffer que no correspondan al rango real.
       raw = dataApi.filter(function(r) { return _perteneceAlPeriodo(r, d1, d2); });
@@ -1769,7 +1788,7 @@ function loadData(forzar) {
 
 /* Pinta el período ya filtrado. Lo comparten la respuesta del API y el recorte
    en memoria, para que se vean exactamente igual. */
-function _pintarPeriodo(datos, deMemoria) {
+function _pintarPeriodo(datos, deMemoria, tsMemoria) {
   var tbody = document.getElementById('tbody');
   if (!datos.length) {
     tbody.innerHTML = '<tr><td colspan="10"><div class="state-msg">Sin registros para el rango seleccionado</div></td></tr>';
@@ -1788,7 +1807,7 @@ function _pintarPeriodo(datos, deMemoria) {
   document.getElementById('tag-row').style.display    = 'flex';
   var now = new Date();
   document.getElementById('last-upd').textContent =
-    (deMemoria ? 'En memoria · consultado ' + new Date(_memRango.ts).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'})
+    (deMemoria ? 'En memoria · consultado ' + new Date(tsMemoria || Date.now()).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'})
                : 'Actualizado ' + now.toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit', second:'2-digit'}));
   if (typeof window.agData === 'function') {
     var _em=0, _ret=0;

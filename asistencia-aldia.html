@@ -1189,8 +1189,15 @@ function abrirMapaPersonas(){
   cargarLeaflet().then(function(){
     if(!_leafletMap){
       _leafletMap = L.map('mp-map', { zoomControl:true, attributionControl:true });
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19, attribution: '© OpenStreetMap'
+      // OpenStreetMap bloquea con 403 el acceso directo a sus tiles desde apps
+      // ("tile usage policy": osm.wiki/Blocked) cuando llegan en ráfaga, como
+      // hace un mapa al mover/zoom. Se usan los basemaps de CARTO (Voyager), que
+      // están pensados para embeberse directo en el navegador y dan calles y
+      // etiquetas claras donde los puntos verde/rojo se leen bien.
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        maxZoom: 20,
+        subdomains: 'abcd',
+        attribution: '© OpenStreetMap · © CARTO'
       }).addTo(_leafletMap);
       _leafletCapas = L.layerGroup().addTo(_leafletMap);
     }

@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.14.0/dist/tabler-icons.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.14.0/dist/tabler-icons.min.css">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -18,6 +19,55 @@
   --bg-active:#1a2a1f;--border-accent:rgba(74,222,128,.35);
   --c-a:#60a5fa; --c-b:#f59e0b;
 }
+:root{ --danger:#f87171;--danger-bg:rgba(248,113,113,.12);--warn:#fbbf24;--warn-bg:rgba(251,191,36,.12);
+        --ok:#4ade80;--ok-bg:rgba(74,222,128,.12); }
+/* ===== TEMA CLARO (sol/luna) ===== */
+:root[data-theme="light"]{
+  --bg-page:#f4f6fa;--bg-surface:#ffffff;--bg-card:#ffffff;--bg-input:#eef1f6;--bg-hover:#e9eef6;
+  --border:rgba(15,23,42,.10);--border-md:rgba(15,23,42,.18);
+  --text-pri:#101828;--text-sec:#475467;--text-muted:#667085;
+  --accent:#15803d;--bg-active:#e7f6ec;--border-accent:rgba(21,128,61,.40);
+  --c-a:#1d4ed8; --c-b:#b45309;
+  --danger:#b91c1c;--danger-bg:rgba(185,28,28,.10);--warn:#b45309;--warn-bg:rgba(180,83,9,.12);
+  --ok:#15803d;--ok-bg:rgba(21,128,61,.12);
+}
+:root[data-theme="light"] .ctrl-date,
+:root[data-theme="light"] .ctrl-select{color-scheme:light}
+:root[data-theme="light"] .var-up{color:#15803d}
+:root[data-theme="light"] .var-dn{color:#b91c1c}
+:root[data-theme="light"] .sidebar.collapsed .s-hdr::after{background:#1f2937}
+:root[data-theme="light"] ::-webkit-scrollbar-thumb{background:rgba(15,23,42,.18)}
+
+/* Accesibilidad: en la barra de contenido, NUNCA en .topbar
+   (el workspace de pestañas inyecta .topbar{display:none}) */
+.acc-grp{display:inline-flex;gap:6px;align-items:center}
+.acc-btn{background:var(--bg-input);border:1px solid var(--border-md);color:var(--text-sec);width:34px;height:32px;
+         border-radius:7px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;transition:all .15s}
+.acc-btn:hover{color:var(--accent);border-color:var(--border-accent);background:var(--bg-hover)}
+.acc-btn .aaa{font-weight:700;letter-spacing:-1px;line-height:1}
+.acc-btn .aaa b:nth-child(1){font-size:9px}.acc-btn .aaa b:nth-child(2){font-size:12px}.acc-btn .aaa b:nth-child(3){font-size:15px}
+.acc-btn i{font-size:16px}
+
+/* Barra de acciones bajo los dos paneles */
+.acciones{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;margin:.875rem 0 0}
+.btn-sec{font-size:12px;padding:8px 14px;border:1px solid var(--border-md);border-radius:6px;background:transparent;
+         color:var(--text-sec);cursor:pointer;font-family:inherit;transition:all .12s}
+.btn-sec:hover{background:var(--bg-hover);color:var(--text-pri)}
+.chk{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-sec);cursor:pointer;user-select:none}
+.chk input{accent-color:var(--accent);cursor:pointer}
+
+/* Chips de diagnóstico */
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:.875rem 0 0;justify-content:center}
+.chip{font-size:11px;padding:4px 11px;border-radius:11px;font-weight:500;line-height:1.45;border:1px solid transparent}
+.chip.ok{background:var(--ok-bg);color:var(--ok);border-color:var(--ok-bg)}
+.chip.warn{background:var(--warn-bg);color:var(--warn);border-color:var(--warn-bg)}
+.chip.info{background:var(--bg-hover);color:var(--text-sec);border-color:var(--border-md)}
+.chip.bad{background:var(--danger-bg);color:var(--danger);border-color:var(--danger-bg)}
+.aviso{font-size:11.5px;line-height:1.5;padding:10px 13px;border-radius:9px;margin:.875rem 0 0;
+       background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-bg);display:none}
+.sin-graf{display:flex;align-items:center;justify-content:center;height:100%;text-align:center;
+          color:var(--text-muted);font-size:12px;padding:1rem}
+
 html,body{min-height:100%;font-family:'Inter',sans-serif;font-size:13px;background:var(--bg-page);color:var(--text-pri);-webkit-font-smoothing:antialiased}
 .topbar{position:sticky;top:0;z-index:200;height:50px;background:var(--bg-surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1.25rem;gap:12px}
 .logo{display:flex;align-items:center;gap:9px;text-decoration:none;color:inherit;cursor:pointer}
@@ -116,9 +166,9 @@ html,body{min-height:100%;font-family:'Inter',sans-serif;font-size:13px;backgrou
 .comp-tbl .val-a{color:var(--c-a);font-family:'JetBrains Mono',monospace;font-weight:600;text-align:right}
 .comp-tbl .val-b{color:var(--c-b);font-family:'JetBrains Mono',monospace;font-weight:600;text-align:right}
 .comp-tbl .variacion{text-align:center;font-weight:600;font-size:12px}
-.var-up{color:#4ade80}
-.var-dn{color:#f87171}
-.var-eq{color:#9da3b4}
+.var-up{color:var(--ok)}
+.var-dn{color:var(--danger)}
+.var-eq{color:var(--text-sec)}
 
 /* CHARTS */
 .charts-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:.875rem}
@@ -154,7 +204,7 @@ html,body{min-height:100%;font-family:'Inter',sans-serif;font-size:13px;backgrou
   <div class="topbar-right">
     <div class="avatar" id="at-avatar" title="Cargando...">?</div>
     <span class="user-email" id="at-user-email">Cargando...</span>
-    <a href="/logout" title="Cerrar sesión" style="margin-left:10px;color:#f87171;text-decoration:none;font-size:12px;font-weight:600;padding:4px 10px;border-radius:6px;background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.2);">Cerrar sesión</a>
+    <a href="/logout" title="Cerrar sesión" style="margin-left:10px;color:var(--danger);text-decoration:none;font-size:12px;font-weight:600;padding:4px 10px;border-radius:6px;background:var(--danger-bg);border:1px solid var(--danger-bg);">Cerrar sesión</a>
   </div>
 </div>
 
@@ -231,7 +281,7 @@ html,body{min-height:100%;font-family:'Inter',sans-serif;font-size:13px;backgrou
           <div class="ctrl-group"><span class="ctrl-label">Desde</span><input type="date" id="a1" class="ctrl-date"></div>
           <div class="ctrl-group"><span class="ctrl-label">Hasta</span><input type="date" id="a2" class="ctrl-date"></div>
           <div class="ctrl-group"><span class="ctrl-label">Filtrar cliente (opcional)</span>
-            <select id="a-cli" class="ctrl-select"><option value="">Todos los clientes</option></select></div>
+            <select id="a-cli" class="ctrl-select" onchange="aplicarFiltros()"><option value="">Todos los clientes</option></select></div>
         </div>
       </div>
       <div class="comp-panel pb">
@@ -240,13 +290,30 @@ html,body{min-height:100%;font-family:'Inter',sans-serif;font-size:13px;backgrou
           <div class="ctrl-group"><span class="ctrl-label">Desde</span><input type="date" id="b1" class="ctrl-date"></div>
           <div class="ctrl-group"><span class="ctrl-label">Hasta</span><input type="date" id="b2" class="ctrl-date"></div>
           <div class="ctrl-group"><span class="ctrl-label">Filtrar cliente (opcional)</span>
-            <select id="b-cli" class="ctrl-select"><option value="">Todos los clientes</option></select></div>
+            <select id="b-cli" class="ctrl-select" onchange="aplicarFiltros()"><option value="">Todos los clientes</option></select></div>
         </div>
       </div>
     </div>
-    <button class="btn-comp" id="btn-comp" onclick="comparar()">⚖ Comparar</button>
+    <div class="acciones">
+      <button class="btn-comp" id="btn-comp" onclick="comparar()" style="margin:0">⚖ Comparar</button>
+      <button class="btn-sec" id="btn-reset" onclick="periodosPorDefecto(true)" title="Vuelve a la comparación por defecto: los dos períodos con el mismo número de días">↺ Mes anterior vs mes en curso</button>
+      <label class="chk" title="Una operación anulada no se despacha ni se confirma: si entra al cálculo, infla la Cant. Solicitada y hunde el % de cumplimiento">
+        <input type="checkbox" id="chk-anuladas" onchange="comparar()"> Incluir operaciones anuladas
+      </label>
+      <span class="acc-grp">
+        <button class="acc-btn" id="btn-fs" onclick="ciclarFs()" title="Tamaño de texto" aria-label="Cambiar tamaño de texto">
+          <span class="aaa"><b>a</b><b>A</b><b>A</b></span>
+        </button>
+        <button class="acc-btn" id="btn-tema" onclick="toggleTheme()" title="Tema claro / oscuro" aria-label="Cambiar tema">
+          <i class="ti ti-moon" id="ico-tema"></i>
+        </button>
+      </span>
+    </div>
 
-    <div id="empty-state" style="margin-top:1rem"><div class="chart-card"><div class="state-msg">Configura los dos períodos y presiona "Comparar"</div></div></div>
+    <div class="chips" id="chips"></div>
+    <div class="aviso" id="aviso-tramo"></div>
+
+    <div id="empty-state" style="margin-top:1rem"><div class="chart-card"><div class="state-msg"><div class="spinner"></div>Cargando mes anterior vs mes en curso…</div></div></div>
     <div id="content" style="display:none;margin-top:1rem">
 
       <!-- TABLA MÉTRICAS -->
@@ -265,7 +332,7 @@ html,body{min-height:100%;font-family:'Inter',sans-serif;font-size:13px;backgrou
       <!-- GRÁFICOS -->
       <div class="charts-row">
         <div class="chart-card">
-          <div class="chart-title">Comparativo diario — cant. confirmada</div>
+          <div class="chart-title">Comparativo diario — cant. confirmada <span style="color:var(--text-muted);font-weight:400">· alineado por día del mes</span></div>
           <div class="chart-wrap"><canvas id="chart-diario"></canvas></div>
         </div>
         <div class="chart-card">
@@ -302,30 +369,95 @@ var API_PROXY='/api/ops';
 var API_DIRECT='https://apirdt1.azurewebsites.net/api/rdtd9fd8f96a6970ff1e18c510952fddd45cc182e3cdrt/pbi/OpsXRangoFechas';
 var isLocal=location.protocol==='file:';
 var isDev=['localhost','127.0.0.1'].includes(location.hostname);
-var rawA=[], rawB=[];
+var rawA=[], rawB=[];                 // filas de retiro ya filtradas
+var universoA=[], universoB=[];       // TODAS las filas del rango (para el selector de clientes)
 var chartDiario=null, chartClientes=null;
+var diag={};                          // diagnóstico del último cálculo
 
 /* sidebar JS al final del archivo */
 
+function pad2(n){ return String(n).padStart(2,'0'); }
+function isoDe(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
+
+/* Períodos por defecto: mes anterior (A) vs mes en curso (B), IGUALANDO el tramo.
+   Comparar un mes entero contra un mes a medias siempre da B más bajo y eso no
+   es una caída: es un período más corto. Por eso A se corta en el mismo día. */
+function periodosPorDefecto(recargar){
+  var h=new Date();
+  var y=h.getFullYear(), m=h.getMonth(), d=h.getDate();
+  var bY=y, bM=m, bHasta=d;
+  // Los primeros días del mes no hay casi nada que comparar: en ese caso
+  // se comparan los DOS últimos meses cerrados en vez de un día contra un día.
+  if(d<=2){
+    bM=m-1; if(bM<0){ bM=11; bY--; }
+    bHasta=new Date(bY,bM+1,0).getDate();
+  }
+  var aY=bY, aM=bM-1; if(aM<0){ aM=11; aY--; }
+  var tramo=Math.min(bHasta, new Date(aY,aM+1,0).getDate());   // mismo nº de días en ambos
+  document.getElementById('a1').value=isoDe(new Date(aY,aM,1));
+  document.getElementById('a2').value=isoDe(new Date(aY,aM,tramo));
+  document.getElementById('b1').value=isoDe(new Date(bY,bM,1));
+  document.getElementById('b2').value=isoDe(new Date(bY,bM,tramo));
+  if(recargar) comparar();
+}
+
 window.addEventListener('DOMContentLoaded',function(){
-  var h=new Date(),y=h.getFullYear(),m=String(h.getMonth()+1).padStart(2,'0'),d=String(h.getDate()).padStart(2,'0');
-  // Período B: mes actual
-  document.getElementById('b1').value=y+'-'+m+'-01';
-  document.getElementById('b2').value=y+'-'+m+'-'+d;
-  // Período A: mes anterior
-  var mesAnt=new Date(h);mesAnt.setMonth(mesAnt.getMonth()-1);
-  var yA=mesAnt.getFullYear(),mA=String(mesAnt.getMonth()+1).padStart(2,'0');
-  var diasMes=new Date(yA,mesAnt.getMonth()+1,0).getDate();
-  document.getElementById('a1').value=yA+'-'+mA+'-01';
-  document.getElementById('a2').value=yA+'-'+mA+'-'+String(diasMes).padStart(2,'0');
+  periodosPorDefecto(false);
   var g2=document.getElementById('g2');
   if(g2) g2.style.maxHeight=(g2.scrollHeight+100)+'px';
+  initAcc();
+  comparar();                    // ── precarga: se dispara sola al abrir ──
 });
+
+/* ---------- Accesibilidad (aAA + sol/luna) ---------- */
+var FSLEVELS=[1,1.15,1.3,1.5], fsIdx=0, temaActual='dark';
+function applyFs(){
+  document.documentElement.style.zoom=FSLEVELS[fsIdx];
+  try{ localStorage.setItem('cmpr_fs', fsIdx); }catch(e){}
+  var b=document.getElementById('btn-fs');
+  if(b) b.title='Tamaño de texto '+Math.round(FSLEVELS[fsIdx]*100)+'%';
+}
+function ciclarFs(){ fsIdx=(fsIdx+1)%FSLEVELS.length; applyFs(); }
+function applyTheme(t, repintar){
+  temaActual=t;
+  document.documentElement.setAttribute('data-theme',t);
+  try{ localStorage.setItem('cmpr_theme',t); }catch(e){}
+  var i=document.getElementById('ico-tema');
+  if(i) i.className='ti '+(t==='dark'?'ti-moon':'ti-sun');
+  // los gráficos toman los colores de las variables CSS: hay que repintarlos
+  if(repintar && document.getElementById('content').style.display!=='none') renderComparativo();
+}
+function toggleTheme(){ applyTheme(temaActual==='dark'?'light':'dark', true); }
+function initAcc(){
+  try{ var f=parseInt(localStorage.getItem('cmpr_fs'),10); if(!isNaN(f)&&f>=0&&f<FSLEVELS.length) fsIdx=f; }catch(e){}
+  applyFs();
+  var t='dark'; try{ var g=localStorage.getItem('cmpr_theme'); if(g==='light'||g==='dark') t=g; }catch(e){}
+  applyTheme(t,false);
+}
+function cvar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
 
 function fetchOps(d1, d2){
   var url=(isLocal||isDev)?API_DIRECT+'?fechaInicial='+d1+'&fechaFinal='+d2:API_PROXY+'?fechaInicio='+d1+'&fechaFin='+d2;
   return fetch(url,{headers:{'Accept':'application/json'}}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();});
 }
+
+/* ── Reglas de negocio, alineadas con el resto del m3link ── */
+/* 'Retiro' exacto dejaba fuera cualquier variante (igual que 'Emision 24 horas'
+   quedaba fuera en el top10). Se agrupa por PREFIJO: 'Retiro', 'Retiro LD', etc.
+   Ojo: 'Emision Retiro Cliente' NO entra, porque parte con 'emision'. */
+function esRetiro(r){ return (''+(r.operacion||'')).trim().toLowerCase().indexOf('retiro')===0; }
+/* Una operación anulada no se despacha ni se confirma: si entra al cálculo
+   infla la Cant. Solicitada y hunde el % de cumplimiento. */
+function esAnulada(r){ return (''+(r.etapaOperacion||'')).toLowerCase().indexOf('anulad')>=0; }
+function esRedtec(n){ return (''+(n||'')).toUpperCase().indexOf('REDTEC')>=0; }
+/* El cliente es la contraparte: el nombre que NO es REDTEC */
+function contraparteDe(r){
+  var o=r.clienteOrigenStr||'', d=r.clienteDestinoStr||'';
+  if(o&&!esRedtec(o)) return o;
+  if(d&&!esRedtec(d)) return d;
+  return o||d||'Sin cliente';
+}
+function incluirAnuladas(){ var c=document.getElementById('chk-anuladas'); return !!(c&&c.checked); }
 
 function comparar(){
   var btn=document.getElementById('btn-comp');
@@ -335,45 +467,117 @@ function comparar(){
 
   var a1=document.getElementById('a1').value, a2=document.getElementById('a2').value;
   var b1=document.getElementById('b1').value, b2=document.getElementById('b2').value;
-  var aCli=document.getElementById('a-cli').value;
-  var bCli=document.getElementById('b-cli').value;
+  if(!a1||!a2||!b1||!b2){ mostrarError('Faltan fechas en alguno de los dos períodos.'); return; }
+  if(a2<a1||b2<b1){ mostrarError('Alguno de los períodos tiene la fecha "hasta" antes que la "desde".'); return; }
 
   Promise.all([fetchOps(a1,a2), fetchOps(b1,b2)])
     .then(function(results){
-      rawA=Array.isArray(results[0])?results[0]:[];
-      rawB=Array.isArray(results[1])?results[1]:[];
-
-      // Solo retiros
-      rawA=rawA.filter(function(r){return (r.operacion||'').trim()==='Retiro';});
-      rawB=rawB.filter(function(r){return (r.operacion||'').trim()==='Retiro';});
-
-      // Filtrar cliente si aplica
-      if(aCli) rawA=rawA.filter(function(r){return r.clienteOrigenStr===aCli||r.clienteDestinoStr===aCli;});
-      if(bCli) rawB=rawB.filter(function(r){return r.clienteOrigenStr===bCli||r.clienteDestinoStr===bCli;});
-
-      // Poblar selectores con todos los clientes
-      var allClientes=[...new Set([].concat(
-        rawA.map(function(r){return r.clienteOrigenStr||'';}),
-        rawB.map(function(r){return r.clienteOrigenStr||'';})
-      ))].filter(Boolean).sort();
-      ['a-cli','b-cli'].forEach(function(id){
-        var sel=document.getElementById(id);
-        var cur=sel.value;
-        sel.innerHTML='<option value="">Todos los clientes</option>';
-        allClientes.forEach(function(c){sel.innerHTML+='<option value="'+escHtml(c)+'"'+(c===cur?' selected':'')+'>'+escHtml(c)+'</option>';});
-      });
-
-      renderComparativo(a1,a2,b1,b2);
+      universoA=Array.isArray(results[0])?results[0]:[];
+      universoB=Array.isArray(results[1])?results[1]:[];
+      aplicarFiltros(a1,a2,b1,b2);
       btn.disabled=false;btn.textContent='⚖ Comparar';
     })
     .catch(function(e){
-      document.getElementById('empty-state').innerHTML='<div class="chart-card"><div class="state-msg" style="color:#f87171">Error: '+e.message+'</div></div>';
-      btn.disabled=false;btn.textContent='⚖ Comparar';
+      mostrarError('No se pudo consultar el API: '+e.message);
     });
 }
+function mostrarError(msg){
+  var btn=document.getElementById('btn-comp');
+  document.getElementById('empty-state').innerHTML=
+    '<div class="chart-card"><div class="state-msg" style="color:var(--danger)">'+escHtml(msg)+'</div></div>';
+  document.getElementById('content').style.display='none';
+  btn.disabled=false;btn.textContent='⚖ Comparar';
+}
 
-function renderComparativo(a1,a2,b1,b2){
+/* Aplica retiro / anuladas / cliente sobre el universo ya descargado.
+   Cambiar de cliente NO vuelve a pedir datos al API. */
+function aplicarFiltros(a1,a2,b1,b2){
+  a1=a1||document.getElementById('a1').value; a2=a2||document.getElementById('a2').value;
+  b1=b1||document.getElementById('b1').value; b2=b2||document.getElementById('b2').value;
+  var aCli=document.getElementById('a-cli').value, bCli=document.getElementById('b-cli').value;
+
+  var retA=universoA.filter(esRetiro), retB=universoB.filter(esRetiro);
+
+  // diagnóstico: qué tipos de operación entraron y cuáles se dejaron fuera
+  var tipos={}, descartados={};
+  universoA.concat(universoB).forEach(function(r){
+    var op=(''+(r.operacion||'')).trim();
+    if(esRetiro(r)) tipos[op]=(tipos[op]||0)+1;
+    else if(op.toLowerCase().indexOf('retiro')>=0) descartados[op]=(descartados[op]||0)+1;
+  });
+
+  var anulA=retA.filter(esAnulada).length, anulB=retB.filter(esAnulada).length;
+  if(!incluirAnuladas()){ retA=retA.filter(function(r){return !esAnulada(r);});
+                          retB=retB.filter(function(r){return !esAnulada(r);}); }
+
+  // Selector de clientes: se arma con el universo COMPLETO, no con lo ya filtrado.
+  // Antes se reconstruía con los datos filtrados y quedaba con un solo cliente,
+  // así que no se podía cambiar de cliente sin recargar la página.
+  var todos={};
+  retA.concat(retB).forEach(function(r){ var c=contraparteDe(r); if(c) todos[c]=1; });
+  var lista=Object.keys(todos).sort();
+  ['a-cli','b-cli'].forEach(function(id){
+    var sel=document.getElementById(id), cur=sel.value, html='<option value="">Todos los clientes</option>';
+    lista.forEach(function(c){ html+='<option value="'+escHtml(c)+'"'+(c===cur?' selected':'')+'>'+escHtml(c)+'</option>'; });
+    sel.innerHTML=html;
+    if(cur && lista.indexOf(cur)<0) sel.value='';   // el cliente ya no existe en el período
+  });
+  aCli=document.getElementById('a-cli').value; bCli=document.getElementById('b-cli').value;
+
+  rawA = aCli ? retA.filter(function(r){return contraparteDe(r)===aCli;}) : retA;
+  rawB = bCli ? retB.filter(function(r){return contraparteDe(r)===bCli;}) : retB;
+
+  diag={ a1:a1,a2:a2,b1:b1,b2:b2, tipos:tipos, descartados:descartados,
+         anuladas:anulA+anulB, clientes:lista.length, cliA:aCli, cliB:bCli,
+         diasA:daysBetween(a1,a2), diasB:daysBetween(b1,b2) };
+  pintarChips();
+  renderComparativo();
+}
+
+function pintarChips(){
+  var c=[];
+  var nTipos=Object.keys(diag.tipos||{});
+  c.push('<span class="chip info">Operaciones incluidas: '+
+         (nTipos.length? nTipos.map(escHtml).join(' · ') : 'ninguna')+'</span>');
+  var desc=Object.keys(diag.descartados||{});
+  if(desc.length) c.push('<span class="chip info" title="Estas NO son retiros de logística inversa: parten con otra operación">'+
+                         'Fuera del análisis: '+desc.map(escHtml).join(' · ')+'</span>');
+  if(diag.anuladas){
+    c.push(incluirAnuladas()
+      ? '<span class="chip warn">'+diag.anuladas+' operación(es) anulada(s) INCLUIDAS: inflan la Cant. Solicitada</span>'
+      : '<span class="chip ok">'+diag.anuladas+' operación(es) anulada(s) excluida(s)</span>');
+  }
+  c.push('<span class="chip info">'+diag.clientes+' cliente(s) con retiros en el período</span>');
+  // Cada panel filtra su propio cliente: si no son el mismo, las cifras de A y B
+  // no hablan del mismo negocio y la columna "Variación" no significa nada.
+  if(diag.cliA!==diag.cliB){
+    c.push('<span class="chip bad">Filtros de cliente distintos · A: '+escHtml(diag.cliA||'todos')+
+           ' vs B: '+escHtml(diag.cliB||'todos')+' — la variación compara cosas distintas</span>');
+  } else if(diag.cliA){
+    c.push('<span class="chip info">Filtrado por '+escHtml(diag.cliA)+' en ambos períodos</span>');
+  }
+
+  // ¿Los dos períodos cubren el mismo tramo?
+  var av=document.getElementById('aviso-tramo');
+  if(diag.diasA===diag.diasB){
+    c.push('<span class="chip ok">Tramo parejo · '+diag.diasA+' días cada período</span>');
+    av.style.display='none'; av.innerHTML='';
+  } else {
+    c.push('<span class="chip warn">Tramos distintos · A '+diag.diasA+' días vs B '+diag.diasB+' días</span>');
+    av.style.display='block';
+    av.innerHTML='⚠ <strong>Los dos períodos no cubren la misma cantidad de días</strong> (A: '+diag.diasA+
+      ', B: '+diag.diasB+'). Los totales —operaciones, solicitada, confirmada— no son comparables entre sí: '+
+      'la diferencia puede ser sólo que un período es más corto. Para esa lectura usa el <strong>promedio diario</strong> '+
+      'y el <strong>% de cumplimiento</strong>, o aprieta “Mes anterior vs mes en curso” para igualar el tramo.';
+  }
+  document.getElementById('chips').innerHTML=c.join('');
+}
+
+function renderComparativo(){
+  var a1=diag.a1, a2=diag.a2, b1=diag.b1, b2=diag.b2;
   var mA=calcMetricas(rawA,a1,a2), mB=calcMetricas(rawB,b1,b2);
+  var gridC=cvar('--border'), tickC=cvar('--text-muted'), legC=cvar('--text-sec');
+  var colA=cvar('--c-a')||'#60a5fa', colB=cvar('--c-b')||'#f59e0b';
   document.getElementById('empty-state').innerHTML='';
   document.getElementById('content').style.display='block';
 
@@ -393,9 +597,12 @@ function renderComparativo(a1,a2,b1,b2){
   metricas.forEach(function(m){
     var varHtml='—';
     if(m.num&&m.vA!==m.vB){
-      var diff=m.vB-m.vA, pct=m.vA>0?Math.round((diff/m.vA)*100):0;
+      var diff=m.vB-m.vA;
       var up=m.inv?diff<0:diff>0;
-      varHtml='<span class="'+(up?'var-up':'var-dn')+'">'+(diff>0?'↑':'↓')+' '+Math.abs(pct)+'%</span>';
+      // sin base en A no hay porcentaje que calcular: antes salía "↑ 0%"
+      var txt = (m.vA>0) ? (Math.abs(Math.round((diff/m.vA)*100))+'%')
+                         : ('+'+Math.abs(diff).toLocaleString('es-CL')+' (sin base en A)');
+      varHtml='<span class="'+(up?'var-up':'var-dn')+'">'+(diff>0?'↑':'↓')+' '+txt+'</span>';
     } else if(m.pctComp){
       var dp=m.pctComp.b-m.pctComp.a;
       if(dp!==0) varHtml='<span class="'+(dp>0?'var-up':'var-dn')+'">'+(dp>0?'+':'')+dp+' pts</span>';
@@ -410,27 +617,42 @@ function renderComparativo(a1,a2,b1,b2){
   });
   document.getElementById('tbody-metricas').innerHTML=html;
 
-  // Gráfico diario
+  // Gráfico diario — ALINEADO POR DÍA DEL MES.
+  // Antes se juntaban las fechas de A y de B en un solo eje ordenado, así que
+  // A ocupaba la primera mitad del gráfico y B la segunda: no comparaba nada.
   var diasA=agruparPorDia(rawA), diasB=agruparPorDia(rawB);
-  var allDays=[...new Set([...Object.keys(diasA),...Object.keys(diasB)])].sort();
+  var porDiaA=porDiaDelMes(diasA), porDiaB=porDiaDelMes(diasB);
+  var maxDia=Math.max.apply(null,[1].concat(Object.keys(porDiaA.v).map(Number))
+                                   .concat(Object.keys(porDiaB.v).map(Number)));
+  var ejes=[]; for(var dd=1; dd<=maxDia; dd++) ejes.push(dd);
+  if(pintarGrafico('chart-diario')){
   if(chartDiario) chartDiario.destroy();
   chartDiario=new Chart(document.getElementById('chart-diario').getContext('2d'),{
     type:'line',
-    data:{labels:allDays.map(fmtDateShort),datasets:[
-      {label:'Período A',data:allDays.map(function(d){return diasA[d]||0;}),
-        borderColor:'#60a5fa',backgroundColor:'rgba(96,165,250,.1)',borderWidth:2,pointRadius:3,tension:.3,fill:false},
-      {label:'Período B',data:allDays.map(function(d){return diasB[d]||0;}),
-        borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,.1)',borderWidth:2,pointRadius:3,tension:.3,fill:false,borderDash:[5,3]}
+    data:{labels:ejes.map(String),datasets:[
+      {label:'A · '+etiquetaPeriodo(a1,a2),data:ejes.map(function(d){return porDiaA.v[d]||0;}),
+        __fechas:porDiaA.f,
+        borderColor:colA,backgroundColor:colA+'22',borderWidth:2,pointRadius:3,tension:.3,fill:false},
+      {label:'B · '+etiquetaPeriodo(b1,b2),data:ejes.map(function(d){return porDiaB.v[d]||0;}),
+        __fechas:porDiaB.f,
+        borderColor:colB,backgroundColor:colB+'22',borderWidth:2,pointRadius:3,tension:.3,fill:false,borderDash:[5,3]}
     ]},
     options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{labels:{color:'#9da3b4',font:{size:11}}},
-        tooltip:{backgroundColor:'#1e222d',borderColor:'rgba(255,255,255,.1)',borderWidth:1,
-          titleColor:'#e8eaf0',bodyColor:'#9da3b4',
-          callbacks:{label:function(ctx){return ' '+ctx.dataset.label+': '+ctx.parsed.y.toLocaleString('es-CL')+' pallets';}}}},
-      scales:{x:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#5a6070',font:{size:10}},border:{color:'rgba(255,255,255,.07)'}},
-        y:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#5a6070',font:{size:10}},border:{color:'rgba(255,255,255,.07)'}}}
+      plugins:{legend:{labels:{color:legC,font:{size:11}}},
+        tooltip:{backgroundColor:cvar('--bg-card'),borderColor:cvar('--border-md'),borderWidth:1,
+          titleColor:cvar('--text-pri'),bodyColor:cvar('--text-sec'),
+          callbacks:{
+            title:function(items){ return 'Día '+items[0].label+' del mes'; },
+            label:function(ctx){
+              var f=(ctx.dataset.__fechas||{})[Number(ctx.label)];
+              return ' '+ctx.dataset.label+(f?' ('+fmtDateShort(f)+')':'')+': '+ctx.parsed.y.toLocaleString('es-CL')+' pallets';
+            }}}},
+      scales:{x:{title:{display:true,text:'Día del mes',color:tickC,font:{size:10}},
+                 grid:{color:gridC},ticks:{color:tickC,font:{size:10}},border:{color:gridC}},
+        y:{grid:{color:gridC},ticks:{color:tickC,font:{size:10}},border:{color:gridC}}}
     }
   });
+  }
 
   // Top clientes comparativo
   var cliA=agruparPorCliente(rawA), cliB=agruparPorCliente(rawB);
@@ -438,36 +660,42 @@ function renderComparativo(a1,a2,b1,b2){
   allCli.sort(function(a,b){return ((cliB[b]||0)+(cliA[b]||0))-((cliB[a]||0)+(cliA[a]||0));});
   var topCli=allCli.slice(0,8);
   var shortNames=topCli.map(function(c){return c.split(' ').slice(0,2).join(' ');});
+  if(pintarGrafico('chart-clientes')){
   if(chartClientes) chartClientes.destroy();
   chartClientes=new Chart(document.getElementById('chart-clientes').getContext('2d'),{
     type:'bar',
     data:{labels:shortNames,datasets:[
-      {label:'Período A',data:topCli.map(function(c){return cliA[c]||0;}),
-        backgroundColor:'rgba(96,165,250,.6)',borderColor:'#60a5fa',borderWidth:1,borderRadius:3},
-      {label:'Período B',data:topCli.map(function(c){return cliB[c]||0;}),
-        backgroundColor:'rgba(245,158,11,.6)',borderColor:'#f59e0b',borderWidth:1,borderRadius:3}
+      {label:'A · '+etiquetaPeriodo(a1,a2),data:topCli.map(function(c){return cliA[c]||0;}),
+        backgroundColor:colA+'99',borderColor:colA,borderWidth:1,borderRadius:3},
+      {label:'B · '+etiquetaPeriodo(b1,b2),data:topCli.map(function(c){return cliB[c]||0;}),
+        backgroundColor:colB+'99',borderColor:colB,borderWidth:1,borderRadius:3}
     ]},
     options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{labels:{color:'#9da3b4',font:{size:11}}},
-        tooltip:{backgroundColor:'#1e222d',borderColor:'rgba(255,255,255,.1)',borderWidth:1,
-          titleColor:'#e8eaf0',bodyColor:'#9da3b4',
-          callbacks:{label:function(ctx){return ' '+ctx.dataset.label+': '+ctx.parsed.y.toLocaleString('es-CL')+' pallets';}}}},
-      scales:{x:{grid:{display:false},ticks:{color:'#9da3b4',font:{size:10}},border:{color:'rgba(255,255,255,.07)'}},
-        y:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#5a6070',font:{size:10}},border:{color:'rgba(255,255,255,.07)'}}}
+      plugins:{legend:{labels:{color:legC,font:{size:11}}},
+        tooltip:{backgroundColor:cvar('--bg-card'),borderColor:cvar('--border-md'),borderWidth:1,
+          titleColor:cvar('--text-pri'),bodyColor:cvar('--text-sec'),
+          callbacks:{title:function(it){ return topCli[it[0].dataIndex]||it[0].label; },
+                     label:function(ctx){return ' '+ctx.dataset.label+': '+ctx.parsed.y.toLocaleString('es-CL')+' pallets';}}}},
+      scales:{x:{grid:{display:false},ticks:{color:legC,font:{size:10}},border:{color:gridC}},
+        y:{grid:{color:gridC},ticks:{color:tickC,font:{size:10}},border:{color:gridC}}}
     }
   });
+  }
 
   // Tabla clientes
   var htmlTbl='';
+  // el conteo de operaciones se hace con el MISMO criterio que la suma (contraparteDe)
+  var opsPorCli=function(data){ var m={}; data.forEach(function(r){ var k=contraparteDe(r); m[k]=(m[k]||0)+1; }); return m; };
+  var nA=opsPorCli(rawA), nB=opsPorCli(rawB);
   allCli.forEach(function(c){
     var vA=cliA[c]||0, vB=cliB[c]||0;
-    var opsA=(rawA.filter(function(r){return r.clienteOrigenStr===c||r.clienteDestinoStr===c;}).length);
-    var opsB=(rawB.filter(function(r){return r.clienteOrigenStr===c||r.clienteDestinoStr===c;}).length);
+    var opsA=nA[c]||0;
+    var opsB=nB[c]||0;
     var diff=vB-vA;
     var varHtml=diff===0?'<span class="var-eq">—</span>':
       '<span class="'+(diff>0?'var-up':'var-dn')+'">'+(diff>0?'↑':'↓')+' '+Math.abs(diff).toLocaleString('es-CL')+'</span>';
     htmlTbl+='<tr>'
-      +'<td title="'+escHtml(c)+'">'+c+'</td>'
+      +'<td title="'+escHtml(c)+'">'+escHtml(c)+'</td>'
       +'<td class="mono" style="text-align:right;color:var(--c-a)">'+opsA+'</td>'
       +'<td class="mono" style="text-align:right;color:var(--c-a)">'+vA.toLocaleString('es-CL')+'</td>'
       +'<td class="mono" style="text-align:right;color:var(--c-b)">'+opsB+'</td>'
@@ -485,23 +713,53 @@ function calcMetricas(data,d1,d2){
   var pct=sol>0?Math.round((conf/sol)*100):0;
   var dias=daysBetween(d1,d2)||1;
   var avg=Math.round(conf/dias);
-  var cliSet=new Set(data.map(function(r){return r.clienteOrigenStr||r.clienteDestinoStr||'';}));
-  cliSet.delete('');
-  var diasSet=new Set(data.map(function(r){return (r.fechaRequerida||'').substring(0,10);}));
+  var cliSet=new Set(data.map(contraparteDe));
+  cliSet.delete(''); cliSet.delete('Sin cliente');
+  var diasSet=new Set(data.map(fechaDe).filter(Boolean));
   return {ops:ops,sol:sol,conf:conf,pend:pend,pct:pct,avg:avg,clientes:cliSet.size,diasAct:diasSet.size};
 }
+/* Una sola definición de "la fecha de la operación" para todo el archivo:
+   antes el gráfico usaba fechaRequerida||horaIngreso y el KPI de días activos
+   sólo fechaRequerida, así que podían no coincidir. */
+function fechaDe(r){ return (r.fechaRequerida||r.horaIngreso||'').substring(0,10); }
 function agruparPorDia(data){
   var m={};
-  data.forEach(function(r){var f=(r.fechaRequerida||r.horaIngreso||'').substring(0,10);if(f) m[f]=(m[f]||0)+(r.cantidadConfirmada||0);});
+  data.forEach(function(r){var f=fechaDe(r); if(f) m[f]=(m[f]||0)+(r.cantidadConfirmada||0);});
   return m;
+}
+/* Reindexa {'2026-08-15':120} como {15:120} para poder superponer dos meses.
+   Devuelve también la fecha real de cada día, para el tooltip. */
+function porDiaDelMes(mapa){
+  var v={}, f={};
+  Object.keys(mapa).forEach(function(iso){
+    var d=parseInt(iso.substring(8,10),10);
+    if(!d) return;
+    v[d]=(v[d]||0)+mapa[iso];
+    f[d]=iso;
+  });
+  return {v:v,f:f};
 }
 function agruparPorCliente(data){
   var m={};
-  data.forEach(function(r){var k=r.clienteOrigenStr||r.clienteDestinoStr||'Sin cliente';m[k]=(m[k]||0)+(r.cantidadConfirmada||0);});
+  data.forEach(function(r){var k=contraparteDe(r);m[k]=(m[k]||0)+(r.cantidadConfirmada||0);});
   return m;
 }
-function daysBetween(d1,d2){return Math.round((new Date(d2)-new Date(d1))/86400000)+1;}
+function daysBetween(d1,d2){return Math.round((new Date(d2+'T12:00:00')-new Date(d1+'T12:00:00'))/86400000)+1;}
 function fmtDateShort(s){var p=s.split('-');return p[2]+'/'+p[1];}
+function etiquetaPeriodo(d1,d2){ return fmtDateShort(d1)+'–'+fmtDateShort(d2); }
+/* Chart.js viene de CDN: si no carga, el canvas queda en blanco sin avisar.
+   Mejor decirlo y dejar la tabla de métricas y la de clientes funcionando. */
+function pintarGrafico(idCanvas){
+  var cv=document.getElementById(idCanvas);
+  if(typeof Chart!=='undefined' && cv) return true;
+  if(cv){
+    var d=document.createElement('div');
+    d.className='sin-graf';
+    d.innerHTML='No se pudo cargar la librería de gráficos.<br>Las tablas de arriba siguen siendo válidas.';
+    cv.parentNode.replaceChild(d,cv);
+  }
+  return false;
+}
 function escHtml(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 </script>
 

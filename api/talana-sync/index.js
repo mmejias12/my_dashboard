@@ -23,8 +23,10 @@ const store   = require('../shared/talana-store.js');
 
 const KEY = process.env.OS_INGESTA_KEY;
 
-// Margen bajo el corte de la plataforma para alcanzar a escribir la respuesta.
-const PRESUPUESTO_POR_DEFECTO = Number(process.env.TALANA_PRESUPUESTO_MS || 32000);
+// Margen bajo el corte de la plataforma (~45 s) para alcanzar a escribir la
+// respuesta. Con las páginas grandes de turnos/asignaciones la fase de maestros
+// gasta bastantes menos peticiones, así que este techo deja holgura de sobra.
+const PRESUPUESTO_POR_DEFECTO = Number(process.env.TALANA_PRESUPUESTO_MS || 34000);
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -169,9 +171,15 @@ async function sincronizarMaestros(desde, hasta, presupuesto, informe) {
   const sucursales = marca(await mapa.traerSucursales(opts));
   const centros    = marca(await mapa.traerCentrosCosto(opts));
   const empleados  = marca(await mapa.traerEmpleados(opts));
+  // Asignaciones ANTES que los turnos. Las asignaciones (persona↔turno) y los
+  // días (el horario del turno) son, juntos, el horario teórico: lo crítico. El
+  // catálogo /workShift/ —que sólo aporta nombre y tolerancia y va al final de
+  // traerTurnos, con freno de presupuesto— no debe poder robarles el presupuesto
+  // a ninguno de los dos. Traer las asignaciones aquí las pone a salvo aunque el
+  // catálogo (que ahora Talana sí responde y pagina) se ponga caro.
+  const asignaciones = marca(await mapa.traerAsignaciones(opts));
   const turnos     = await mapa.traerTurnos(opts);
   if (!turnos.completo) completo = false;
-  const asignaciones = marca(await mapa.traerAsignaciones(opts));
 
   // Los días manuales dependen del rango; se traen con holgura de un mes para
   // que un cambio de mes en el reporte no obligue a resincronizar.
@@ -209,6 +217,13 @@ async function sincronizarMaestros(desde, hasta, presupuesto, informe) {
     );
   }
 
+  // La versión de esquema sólo se estampa si las asignaciones se RESOLVIERON:
+  // llegaron, vinieron vacías de forma definitiva, o Talana declaró un 403
+  // (todos esos casos dejan completo:true). Si quedaron a medias por presupuesto
+  // (completo:false), NO se estampa, y el snapshot se considera vencido para que
+  // la próxima pasada reintente en vez de congelar 12 h un snapshot sin horario.
+  const asignacionesResueltas = asignaciones.completo === true;
+
   return {
     sucursales: sucursales.data,
     departamentos: centros.data,
@@ -218,6 +233,7 @@ async function sincronizarMaestros(desde, hasta, presupuesto, informe) {
     diasManuales: manuales.data,
     rangoDiasManuales: { desde: mapa.sumarDias(desde, -31), hasta: mapa.sumarDias(hasta, 31) },
     degradaciones,
+    _v: asignacionesResueltas ? store.ESQUEMA_MAESTROS : 1,
     _completo: completo
   };
 }

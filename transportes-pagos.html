@@ -421,6 +421,26 @@ thead th.center{text-align:center}
 .modal-close{background:var(--s3);border:1px solid var(--border-md);color:var(--t2);width:32px;height:32px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;transition:all .15s;flex-shrink:0;font-family:'DM Sans',sans-serif;line-height:1}
 .modal-close:hover{background:var(--s4);color:var(--t1)}
 .modal-body{padding:18px 20px;overflow-y:auto;flex:1}
+/* Selector de transportista para imprimir */
+.sp-lista{display:flex;flex-direction:column;gap:7px}
+.sp-fila{display:flex;align-items:center;gap:14px;width:100%;text-align:left;cursor:pointer;
+         background:var(--s3);border:1px solid var(--border);border-radius:9px;padding:11px 14px;
+         color:var(--t1);font-family:'DM Sans',sans-serif;font-size:13px;transition:all .14s}
+.sp-fila:hover{border-color:var(--blue);background:var(--s4);transform:translateX(2px)}
+.sp-fila:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.sp-pat{font-family:'DM Mono',monospace;font-weight:600;font-size:13.5px;min-width:76px}
+.sp-quien{flex:1;min-width:0}
+.sp-quien .n{font-weight:500}
+.sp-quien .rs{font-size:11px;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sp-cifras{display:flex;gap:16px;align-items:baseline;flex-shrink:0}
+.sp-cifra{text-align:right}
+.sp-cifra .v{font-family:'DM Mono',monospace;font-size:13px;font-weight:600}
+.sp-cifra .l{font-size:9.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.4px}
+.sp-flecha{color:var(--t3);font-size:15px;flex-shrink:0}
+.sp-fila:hover .sp-flecha{color:var(--blue)}
+.sp-warn{font-size:10px;color:var(--amber);background:var(--amber-d);
+         border:1px solid rgba(244,168,54,.25);border-radius:4px;padding:2px 7px;white-space:nowrap}
+.sp-nota{font-size:11.5px;color:var(--t2);margin-bottom:12px;line-height:1.55}
 .hist-info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:18px}
 .hist-info-block{background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
 .hist-info-lbl{font-size:9.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin-bottom:3px}
@@ -463,6 +483,8 @@ thead th.center{text-align:center}
 @media print {
   body{background:white;color:#222}
   .hdr,.sidebar,.config-panel,.tabs,.kpi-grid,.alert,.validator,.pf-select-row,.btn-go,.btn-xls,.btn-print,.no-print{display:none !important}
+  /* Agregados: los chips de diagnóstico, el aviso y el estado vacío son de pantalla, no del documento */
+  .diag,.cbar-end,.chk-inline,.modal-backdrop,.pf-aviso,.empty,.pf-filter-bar{display:none !important}
   /* Forzar expansión de la tabla scrolleable al imprimir para que se vean TODAS las filas */
   .tbl-wrap{max-height:none !important;overflow:visible !important;border:none !important}
   .scroll{max-height:none !important;overflow:visible !important;border:none !important}
@@ -1017,16 +1039,19 @@ function procesarRespuesta(arr, desde, hasta, deMemoria, ts){
   }
 
   const todosProc = arr.map(procesarViaje);
-  // Sin patente = aún no asignado a un camión ("Por Confirmar"/"Despachar"): no es facturable
   const conPatente = todosProc.filter(v => v.patente && v.patente.trim().length > 0);
-  const sinPatente = todosProc.length - conPatente.length;
+
+  /* Los conteos de los chips son SOBRE EL PERÍODO, no sobre la ventana ampliada.
+     Contra la base real esto importa: de ~19.000 filas que devuelve RDTOut casi
+     todas no son viajes spot, y el chip "18.223 sin patente" no decía nada. Lo
+     que sí importa es cuántas se confirmaron DENTRO del período sin camión
+     asignado: ésas se están dejando de pagar por un dato que falta. */
+  const enPeriodo = v => { const f = fechaSolo(v.fechaConfirmacion); return f && f >= desde && f <= hasta; };
+  const sinPatente = todosProc.filter(v => !(v.patente && v.patente.trim()) && enPeriodo(v)).length;
 
   // Se paga por fecha de CONFIRMACIÓN. Comparación por texto: las fechas del API
   // vienen como "YYYY-MM-DD…" y new Date() las movería de día por la zona horaria.
-  VIAJES_PROC = conPatente.filter(v => {
-    const f = fechaSolo(v.fechaConfirmacion);
-    return f && f >= desde && f <= hasta;
-  });
+  VIAJES_PROC = conPatente.filter(enPeriodo);
 
   // Cuántos se habrían perdido sin ampliar la ventana hacia atrás
   const rescatados = VIAJES_PROC.filter(v => {
@@ -1034,9 +1059,10 @@ function procesarRespuesta(arr, desde, hasta, deMemoria, ts){
     return fr && fr < desde;
   }).length;
   const anuladas = VIAJES_PROC.filter(v => v.anulada).length;
-  const fueraRango = conPatente.length - VIAJES_PROC.length;
+  // Lo posterior se paga en el próximo período; lo anterior es el buffer (ya pagado)
+  const posteriores = conPatente.filter(v => { const f=fechaSolo(v.fechaConfirmacion); return f && f > hasta; }).length;
 
-  DIAG = { desde, hasta, sinPatente, fueraRango, rescatados, anuladas,
+  DIAG = { desde, hasta, sinPatente, posteriores, rescatados, anuladas,
            traidos: arr.length, deMemoria, ts,
            desdeAPI: sumarDias(desde, -RETIRO_BUFFER_DIAS) };
 
@@ -1059,8 +1085,8 @@ function renderDiag(){
   c.push(`<span class="chip">Ventana pedida al API <b>${fmtDate(d.desdeAPI)} → ${fmtDate(d.hasta)}</b> · ${d.traidos} registros</span>`);
   if(d.rescatados) c.push(`<span class="chip ok" title="Pedidos antes de que empezara el período y confirmados dentro. Sin ampliar la ventana del API no habrían llegado y no se pagarían.">${d.rescatados} viaje${d.rescatados===1?'':'s'} recuperado${d.rescatados===1?'':'s'} por el buffer de ${RETIRO_BUFFER_DIAS} días</span>`);
   if(d.anuladas) c.push(`<span class="chip warn">${d.anuladas} anulada${d.anuladas===1?'':'s'} ${incluirAnuladas()?'incluida'+(d.anuladas===1?'':'s'):'excluida'+(d.anuladas===1?'':'s')}</span>`);
-  if(d.sinPatente) c.push(`<span class="chip" title="Aún sin camión asignado en M3Link; no son facturables">${d.sinPatente} sin patente</span>`);
-  if(d.fueraRango) c.push(`<span class="chip">${d.fueraRango} fuera del período (se pagan en otro)</span>`);
+  if(d.sinPatente) c.push(`<span class="chip warn" title="Confirmadas dentro del período pero sin camión asignado en M3Link: no se pueden facturar hasta que alguien complete la patente">${d.sinPatente} confirmada${d.sinPatente===1?'':'s'} sin patente</span>`);
+  if(d.posteriores) c.push(`<span class="chip" title="Confirmadas después del cierre del período">${d.posteriores} para el próximo período</span>`);
   const base = viajesBase();
   const sinTar = base.filter(v => v.sinTarifa).length;
   const amb = base.filter(v => v.tarifaAmbigua).length;
@@ -1871,6 +1897,92 @@ function renderPrefactura(){
   cont.innerHTML = html;
 }
 
+/* ══ Elegir transportista antes de imprimir ══════════════════════════════ */
+function resumenPorPatente(){
+  const por = {};
+  viajesBase().forEach(v => {
+    if(!v.patente) return;
+    if(SEMANAS_SEL.size && !SEMANAS_SEL.has(v.semana)) return;
+    if(!por[v.patente]){
+      const c = CAMIONES[v.patente] || {};
+      por[v.patente] = { patente:v.patente, chofer:c.chofer||v.chofer||'—',
+                         razonSocial:c.razonSocial||'', capacidad:c.capacidad||null,
+                         viajes:0, pallets:0, neto:0, sinTarifa:0 };
+    }
+    const r = por[v.patente];
+    r.viajes++; r.pallets += v.cantidadConfirmada||0; r.neto += v.total||0;
+    if(v.sinTarifa) r.sinTarifa++;
+  });
+  return Object.values(por).sort((a,b)=>b.neto-a.neto);
+}
+
+function abrirSelectorPrefactura(){
+  const cont = document.getElementById('sp-body');
+  const sub  = document.getElementById('sp-sub');
+  const filas = resumenPorPatente();
+  const desde = document.getElementById('fi').value, hasta = document.getElementById('ff').value;
+  let periodo = fmtDate(desde) + ' → ' + fmtDate(hasta);
+  if(SEMANAS_SEL.size){
+    const a = [...SEMANAS_SEL].sort((x,y)=>x-y);
+    periodo += ' · ' + (a.length===1 ? 'Semana '+a[0] : 'Semanas '+a.join(', '));
+  }
+  sub.textContent = periodo;
+
+  if(!filas.length){
+    cont.innerHTML = '<div class="empty"><div class="empty-ico">📄</div><div class="empty-txt">Sin viajes en el período</div><div class="empty-sub">Elige otro rango de fechas y vuelve a intentar</div></div>';
+  } else {
+    let html = '<div class="sp-nota">Cada transportista se imprime por separado. Elige uno y se abrirá el diálogo de impresión con su prefactura ya armada.</div><div class="sp-lista">';
+    filas.forEach(r => {
+      html += `<button type="button" class="sp-fila" data-pat="${r.patente}">
+        <span class="sp-pat">${r.patente}</span>
+        <span class="sp-quien">
+          <div class="n">${r.chofer}</div>
+          <div class="rs">${r.razonSocial || 'sin razón social en el catálogo'}${r.capacidad?' · '+r.capacidad+' pallets':''}</div>
+        </span>
+        ${r.sinTarifa ? `<span class="sp-warn">${r.sinTarifa} sin tarifa</span>` : ''}
+        <span class="sp-cifras">
+          <span class="sp-cifra"><div class="v">${fmtInt(r.viajes)}</div><div class="l">viajes</div></span>
+          <span class="sp-cifra"><div class="v">${fmtInt(r.pallets)}</div><div class="l">pallets</div></span>
+          <span class="sp-cifra"><div class="v" style="color:var(--green)">${fmtCLP(r.neto)}</div><div class="l">neto</div></span>
+        </span>
+        <span class="sp-flecha">›</span>
+      </button>`;
+    });
+    html += '</div>';
+    cont.innerHTML = html;
+    cont.querySelectorAll('.sp-fila').forEach(b => {
+      b.addEventListener('click', () => elegirYImprimir(b.getAttribute('data-pat')));
+    });
+  }
+  document.getElementById('modal-prefac').classList.add('on');
+  const primero = cont.querySelector('.sp-fila');
+  if(primero) primero.focus();
+}
+
+function cerrarSelectorPrefactura(){
+  document.getElementById('modal-prefac').classList.remove('on');
+}
+
+function elegirYImprimir(patente){
+  cerrarSelectorPrefactura();
+  switchTab('prefactura');
+  const sel = document.getElementById('selPrefactura');
+  sel.value = patente;
+  PF_OP_FILTER = '';            // se imprime la prefactura completa, no un filtro de pantalla
+  renderPrefactura();
+  imprimirPrefactura();
+}
+
+/* Nunca mandar a imprimir una pantalla sin documento. */
+function imprimirPrefactura(){
+  if(!document.getElementById('pf-doc-print')){
+    setAlerta('No hay prefactura que imprimir','warn');
+    abrirSelectorPrefactura();
+    return;
+  }
+  setTimeout(() => window.print(), 250);
+}
+
 function setPfFilter(op){
   PF_OP_FILTER = op;
   renderPrefactura();
@@ -2138,13 +2250,16 @@ function switchTab(t){
 document.getElementById('btnCargar').addEventListener('click', () => cargarViajes(true));
 document.getElementById('chkAnuladas').addEventListener('change', () => { construirFiltros(); renderTodo(); });
 document.getElementById('btnExcel').addEventListener('click', exportarExcel);
-document.getElementById('btnPDF').addEventListener('click', ()=>{
-  switchTab('prefactura');
-  setTimeout(()=>window.print(), 300);
-});
+/* Antes esto hacía switchTab + window.print() a los 300 ms sin preguntar nada:
+   si todavía no habías elegido transportista, el diálogo de impresión salía
+   igual y encima de la pantalla "Selecciona un transportista", y recién al
+   cancelarlo aparecía el selector. Ahora el botón abre el selector. */
+document.getElementById('btnPDF').addEventListener('click', abrirSelectorPrefactura);
 document.getElementById('btnEnviarCorreo').addEventListener('click', enviarPrefacturaCorreo);
 document.getElementById('btnImprimirPF').addEventListener('click', ()=>{
-  window.print();
+  // Dentro de la pestaña ya hay un transportista a la vista; si no, preguntamos
+  if(!document.getElementById('selPrefactura').value){ abrirSelectorPrefactura(); return; }
+  imprimirPrefactura();
 });
 
 ['filtroLinea','busqueda'].forEach(id=>{
@@ -2177,6 +2292,11 @@ document.addEventListener('click', (e)=>{
   }
 });
 document.getElementById('selPrefactura').addEventListener('change', renderPrefactura);
+document.addEventListener('keydown', (e)=>{
+  if(e.key === 'Escape' && document.getElementById('modal-prefac').classList.contains('on')){
+    cerrarSelectorPrefactura();
+  }
+});
 
 /* Arranca en el mes en curso y CARGA SOLO: este módulo existe para pagar el
    mes, no para mirar un día suelto.
@@ -2368,6 +2488,19 @@ document.addEventListener('keydown', (e)=>{
 
 </script>
 <!-- MODAL HISTORIAL DEL PEDIDO -->
+<div class="modal-backdrop" id="modal-prefac" onclick="if(event.target===this)cerrarSelectorPrefactura()">
+  <div class="modal-box" style="max-width:720px">
+    <div class="modal-head">
+      <div>
+        <div class="modal-head-title" style="font-family:'DM Sans',sans-serif">Imprimir prefactura</div>
+        <div class="modal-head-sub" id="sp-sub">Elige el transportista</div>
+      </div>
+      <button class="modal-close" onclick="cerrarSelectorPrefactura()" aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body" id="sp-body"></div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modal-hist" onclick="if(event.target===this)cerrarModalHistorial()">
   <div class="modal-box">
     <div class="modal-head">

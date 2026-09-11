@@ -162,6 +162,10 @@ html,body{min-height:100%;font-family:'Inter',sans-serif;font-size:13px;backgrou
 @media(max-width:900px){.quads{grid-template-columns:1fr}}
 .quad{background:var(--bg-card);border:1px solid var(--border);border-radius:13px;padding:1rem}
 .quad-title{font-size:11.5px;font-weight:600;color:var(--text-sec);margin-bottom:.75rem;display:flex;align-items:center;gap:6px}
+.gseg{margin-left:auto;display:inline-flex;background:var(--bg-input);border:1px solid var(--border-md);border-radius:8px;overflow:hidden;flex-shrink:0}
+.gseg button{background:transparent;border:0;color:var(--text-sec);font-family:inherit;font-size:10.5px;padding:4px 9px;cursor:pointer;white-space:nowrap}
+.gseg button.on{background:var(--accent);color:#0f1117;font-weight:600}
+.gseg button:hover:not(.on){background:var(--bg-hover);color:var(--text-pri)}
 .quad-icon{font-size:14px}
 .chart-wrap{position:relative;height:220px}
 
@@ -308,7 +312,7 @@ html,body{min-height:100%;font-family:'Inter',sans-serif;font-size:13px;backgrou
     <!-- CUADRANTES -->
     <div class="quads" id="quads" style="display:none">
       <div class="quad">
-        <div class="quad-title"><span class="quad-icon">🏢</span>Top 10 clientes — cant. confirmada</div>
+        <div class="quad-title"><span class="quad-icon">🏢</span>Top 10 clientes — cant. confirmada<div class="gseg" id="seg-tipo" title="Cambiar la forma del gráfico"><button data-t="barras" class="on">&#9642; Barras</button><button data-t="linea">&#128200; Lineal</button></div></div>
         <div class="chart-wrap"><canvas id="chart-clientes"></canvas></div>
       </div>
       <div class="quad">
@@ -338,6 +342,7 @@ var isDev=['localhost','127.0.0.1'].includes(location.hostname);
 var raw=[], opActual='Emision', chartClientes=null;
 var fIncAnul=false;
 var ultimoTop={};   /* guarda los rankings para el drill */
+var tipoGrafico='barras';   /* forma del gráfico de clientes */
 
 var OPS = [
   {key:'Emision',       label:'Emisión',        color:'#60a5fa'},
@@ -415,6 +420,16 @@ window.addEventListener('DOMContentLoaded',function(){
   if(g2) g2.style.maxHeight=(g2.scrollHeight+100)+'px';
 
   document.getElementById('chk-anul').onchange=function(){ fIncAnul=this.checked; if(raw.length) renderAll(); };
+  document.querySelectorAll('#seg-tipo button').forEach(function(b){
+    b.addEventListener('click',function(){
+      document.querySelectorAll('#seg-tipo button').forEach(function(x){x.classList.remove('on');});
+      b.classList.add('on'); tipoGrafico=b.getAttribute('data-t');
+      try{localStorage.setItem('top10_tipo',tipoGrafico);}catch(e){}
+      if(raw.length) renderAll();
+    });
+  });
+  try{ var tg=localStorage.getItem('top10_tipo'); if(tg){ tipoGrafico=tg;
+    document.querySelectorAll('#seg-tipo button').forEach(function(x){x.classList.toggle('on',x.getAttribute('data-t')===tg);}); } }catch(e){}
   document.getElementById('d1').onchange=loadData;
   document.getElementById('d2').onchange=loadData;
   document.addEventListener('keydown',function(e){ if(e.key==='Escape'){ cerrarHist(); cerrarDrill(); } });
@@ -553,18 +568,25 @@ function renderBarChart(data, color){
   });
   var vals=data.map(function(d){return d[1];});
   if(chartClientes) chartClientes.destroy();
+  var esLinea=(tipoGrafico==='linea');
   chartClientes=new Chart(document.getElementById('chart-clientes').getContext('2d'),{
-    type:'bar',
-    data:{labels:labels,datasets:[{label:'Cant. Confirmada',data:vals,
-      backgroundColor:color+'aa',borderColor:color,borderWidth:1,borderRadius:3}]},
+    type:esLinea?'line':'bar',
+    data:{labels:labels,datasets:[Object.assign(
+      {label:'Cant. Confirmada',data:vals},
+      esLinea
+        ? {borderColor:color,backgroundColor:color+'22',borderWidth:2,tension:.25,pointRadius:3,pointBackgroundColor:color,fill:true}
+        : {backgroundColor:color+'aa',borderColor:color,borderWidth:1,borderRadius:3}
+    )]},
     options:{
-      indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      /* el ranking va en barras horizontales; en línea pasa a horizontal normal */
+      indexAxis:esLinea?'x':'y',responsive:true,maintainAspectRatio:false,
       onHover:function(e,el){e.native.target.style.cursor=el.length?'pointer':'default';},
       onClick:function(e,el){ if(el.length) abrirDrill('cliente', data[el[0].index][0]); },
       plugins:{legend:{display:false},tooltip:{backgroundColor:'#1e222d',
         borderColor:'rgba(255,255,255,.1)',borderWidth:1,titleColor:'#e8eaf0',bodyColor:'#9da3b4',
         callbacks:{title:function(ctx){return data[ctx[0].dataIndex][0];},
-                   label:function(ctx){return ' '+ctx.parsed.x.toLocaleString('es-CL')+' pallets (clic para el detalle)';}}}},
+                   label:function(ctx){var v=esLinea?ctx.parsed.y:ctx.parsed.x;
+                     return ' '+(v||0).toLocaleString('es-CL')+' pallets (clic para el detalle)';}}}},
       scales:{
         x:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#5a6070',font:{size:10}},
            border:{color:'rgba(255,255,255,.07)'}},

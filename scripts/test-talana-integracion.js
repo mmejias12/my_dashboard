@@ -656,6 +656,77 @@ console.log('\nSnapshot escrito por una versión anterior del mapeo');
   });
 }
 
+console.log('\nCarga priorizada de turnos y asignaciones (regresión)');
+
+{
+  // Regresión real de septiembre de 2026: Talana habilitó /workShift/ (antes
+  // daba 403 y costaba una sola petición fallida). Al responder 200 pasó a
+  // paginar; como se pedía ANTES de las asignaciones, se comía el presupuesto y
+  // el snapshot quedaba con turnos pero SIN asignaciones → sin horario teórico
+  // → sin P/S, justo lo que funcionaba y se rompió. El arreglo: asignaciones y
+  // días se piden antes que el catálogo, y el catálogo lleva freno de
+  // presupuesto. Aquí se comprueba ese CABLEADO de orden.
+  const catalogoPrevio = FIXTURES['/workShift/'];
+  FIXTURES['/workShift/'] = [
+    { id: 296456, name: 'Turno Día',   workShiftType: 'W', tolerance: 10 },
+    { id: 296457, name: 'Turno Noche', workShiftType: 'W', tolerance: 5  }
+  ];
+  // El escenario anterior dejó estas dos en 403; se restauran para esta prueba.
+  FIXTURES['/workShiftPersonRange/'] = [
+    { id: 5001, fromDate: '2026-01-01', toDate: null, workShift: 296456, person: 1475433 },
+    { id: 5002, fromDate: '2026-01-01', toDate: null, workShift: 296457, person: 3301888 }
+  ];
+  FIXTURES['/specificDay-paginado/'] = [];
+
+  llamadas.length = 0;
+  const r = await llamarSync({ desde: HOY, hasta: HOY, maestros: true });
+
+  const iAsig = llamadas.indexOf('/workShiftPersonRange/');
+  const iDias = llamadas.indexOf('/rotativeDay/');
+  const iCat  = llamadas.indexOf('/workShift/');
+
+  prueba('con /workShift/ disponible el sync sigue terminando sin pendientes', () => {
+    assert.strictEqual(r.json.ok, true, JSON.stringify(r.json.avisos));
+    assert.strictEqual(r.json.pendientes, 0);
+  });
+
+  prueba('asignaciones y días se piden ANTES que el catálogo /workShift/', () => {
+    assert.ok(iAsig >= 0 && iDias >= 0 && iCat >= 0, `faltó alguna llamada: ${llamadas.join(', ')}`);
+    assert.ok(iAsig < iCat, `asignaciones (${iAsig}) debe ir antes que el catálogo (${iCat})`);
+    assert.ok(iDias < iCat, `los días (${iDias}) deben ir antes que el catálogo (${iCat})`);
+  });
+
+  const est = await llamarApi('/_estado');
+  prueba('con el catálogo disponible NO hay degradación y sí hay horario teórico', () => {
+    assert.strictEqual(est.json.catalogo_turnos_degradado, null, String(est.json.catalogo_turnos_degradado));
+    assert.strictEqual(est.json.asignaciones, 2);
+    assert.strictEqual(est.json.sin_horario_teorico, false);
+  });
+
+  prueba('el snapshot resuelto queda estampado con la versión de esquema', () => {
+    const m = JSON.parse(BLOBS.get('talana/maestros.json'));
+    assert.strictEqual(m._v, store.ESQUEMA_MAESTROS, 'debe llevar _v para no regenerarse en cada pasada');
+    assert.strictEqual(m.asignaciones.length, 2);
+  });
+
+  FIXTURES['/workShift/'] = catalogoPrevio;   // dejar el fixture como estaba
+}
+
+console.log('\nAuto-reparación del snapshot de maestros por versión de esquema');
+
+prueba('un snapshot sin _v se considera vencido aunque esté fresco', () => {
+  // Aquí vivía el snapshot roto: fresco, con rango y fotos, pero con
+  // asignaciones:0. Sin _v (esquema viejo) debe regenerarse en vez de servirse.
+  const base = {
+    _guardado: new Date().toISOString(),
+    sucursales: [{ id: 1, rango: 60 }],
+    empleados:  [{ code: '1', photo: '' }]
+  };
+  assert.strictEqual(store.maestrosVencidos({ ...base }), true, 'sin _v debe estar vencido');
+  assert.strictEqual(store.maestrosVencidos({ ...base, _v: store.ESQUEMA_MAESTROS }), false, 'con la versión al día, vigente');
+  assert.strictEqual(store.maestrosVencidos({ ...base, _v: store.ESQUEMA_MAESTROS - 1 }), true, 'una versión más vieja se regenera');
+});
+
 console.log(`\n${ok} pruebas de integración pasaron${process.exitCode ? ' (con fallos)' : ''}.\n`);
 
 })().catch(e => { console.error('\nFALLO NO CAPTURADO:\n', e); process.exitCode = 1; });

@@ -1189,15 +1189,14 @@ function abrirMapaPersonas(){
   cargarLeaflet().then(function(){
     if(!_leafletMap){
       _leafletMap = L.map('mp-map', { zoomControl:true, attributionControl:true });
-      // OpenStreetMap bloquea con 403 el acceso directo a sus tiles desde apps
-      // ("tile usage policy": osm.wiki/Blocked) cuando llegan en ráfaga, como
-      // hace un mapa al mover/zoom. Se usan los basemaps de CARTO (Voyager), que
-      // están pensados para embeberse directo en el navegador y dan calles y
-      // etiquetas claras donde los puntos verde/rojo se leen bien.
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        maxZoom: 20,
-        subdomains: 'abcd',
-        attribution: '© OpenStreetMap · © CARTO'
+      // Los tiles públicos gratuitos se han ido cerrando: OpenStreetMap bloquea
+      // con 403 el acceso directo desde apps ("tile usage policy", osm.wiki/Blocked)
+      // y CARTO ahora exige API key y estampa el mapa con "API KEY REQUIRED". Se
+      // usan los basemaps de Esri/ArcGIS, que sirven SIN key ni marca de agua y
+      // dan calles y etiquetas claras. OJO: el orden de la URL es {z}/{y}/{x}.
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 19,
+        attribution: 'Tiles © Esri'
       }).addTo(_leafletMap);
       _leafletCapas = L.layerGroup().addTo(_leafletMap);
     }

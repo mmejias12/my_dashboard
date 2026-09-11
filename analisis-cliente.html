@@ -139,6 +139,12 @@ html,body{min-height:100%;font-family:'Inter',sans-serif;font-size:13px;backgrou
 @media(max-width:900px){.charts-2col{grid-template-columns:1fr}}
 .chart-card{background:var(--bg-card);border:1px solid var(--border);border-radius:13px;padding:1rem}
 .chart-title{font-size:11.5px;font-weight:600;margin-bottom:.75rem;color:var(--text-sec)}
+.ch-hdr{display:flex;align-items:center;gap:8px;margin-bottom:.75rem}
+.ch-hdr .chart-title{margin-bottom:0}
+.gseg{margin-left:auto;display:inline-flex;background:var(--bg-input);border:1px solid var(--border-md);border-radius:8px;overflow:hidden;flex-shrink:0}
+.gseg button{background:transparent;border:0;color:var(--text-sec);font-family:inherit;font-size:10.5px;padding:4px 9px;cursor:pointer;white-space:nowrap}
+.gseg button.on{background:var(--accent);color:#0f1117;font-weight:600}
+.gseg button:hover:not(.on){background:var(--bg-hover);color:var(--text-pri)}
 .chart-wrap{position:relative;height:200px}
 
 /* RANK LIST */
@@ -293,11 +299,23 @@ html,body{min-height:100%;font-family:'Inter',sans-serif;font-size:13px;backgrou
       <!-- Charts row 1 -->
       <div class="charts-2col">
         <div class="chart-card">
-          <div class="chart-title">Actividad diaria — cant. confirmada por día</div>
+          <div class="ch-hdr">
+            <div class="chart-title">Actividad diaria — cant. confirmada por día</div>
+            <div class="gseg" id="seg-diario" title="Cambiar la forma del gráfico">
+              <button data-t="linea" class="on">&#128200; Lineal</button>
+              <button data-t="barras">&#9642; Barras</button>
+            </div>
+          </div>
           <div class="chart-wrap"><canvas id="chart-diario"></canvas></div>
         </div>
         <div class="chart-card">
-          <div class="chart-title">Distribución por tipo de operación</div>
+          <div class="ch-hdr">
+            <div class="chart-title">Distribución por tipo de operación</div>
+            <div class="gseg" id="seg-tipos" title="Cambiar la forma del gráfico">
+              <button data-t="torta" class="on">&#9679; Torta</button>
+              <button data-t="barras">&#9642; Barras</button>
+            </div>
+          </div>
           <div class="chart-wrap"><canvas id="chart-tipos"></canvas></div>
         </div>
       </div>
@@ -352,7 +370,8 @@ var chartDiario=null, chartTipos=null;
 /* Cliente que se precarga solo al abrir la vista (si no está en el período, toma el de más movimiento) */
 var CLIENTE_DEFECTO='cambiaso';
 /* Estado de filtros */
-var fOp='__ALL__', fIncAnul=false, fDrill=null;   /* fDrill = {campo:'bodega'|'chofer', valor:'…'} */
+var fOp='__ALL__', fIncAnul=false, fDrill=null;
+var tipoDiario='linea', tipoTipos='torta';   /* forma de cada gráfico */   /* fDrill = {campo:'bodega'|'chofer', valor:'…'} */
 
 var OP_COLORS={'Emision':'#60a5fa','Retiro':'#4ade80','Devolucion ':'#f87171',
   'Transferencias':'#f59e0b','Relocalizacion':'#8b5cf6','Traspasos':'#06b6d4',
@@ -490,11 +509,16 @@ function renderCliente(){
   /* Si el CDN de Chart.js no cargó, igual mostramos KPIs, rankings y tabla */
   if(typeof Chart==='undefined'){ marcarSinGraficos(); } else {
   if(chartDiario) chartDiario.destroy();
+  var esLinea=(tipoDiario==='linea');
   chartDiario=new Chart(document.getElementById('chart-diario').getContext('2d'),{
-    type:'line',
-    data:{labels:dias.map(fmtDateShort),datasets:[{label:'Conf.',data:dias.map(function(d){return diasMap[d];}),
-      borderColor:'#4ade80',backgroundColor:'rgba(74,222,128,.1)',borderWidth:2,
-      pointRadius:dias.length>20?2:4,pointHoverRadius:6,tension:.3,fill:true}]},
+    type:esLinea?'line':'bar',
+    data:{labels:dias.map(fmtDateShort),datasets:[Object.assign(
+      {label:'Conf.',data:dias.map(function(d){return diasMap[d];})},
+      esLinea
+        ? {borderColor:'#4ade80',backgroundColor:'rgba(74,222,128,.1)',borderWidth:2,
+           pointRadius:dias.length>20?2:4,pointHoverRadius:6,tension:.3,fill:true}
+        : {backgroundColor:'#4ade80cc',borderColor:'#4ade80',borderWidth:1,borderRadius:3}
+    )]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
       tooltip:{backgroundColor:'#1e222d',borderColor:'rgba(255,255,255,.1)',borderWidth:1,
         titleColor:'#e8eaf0',bodyColor:'#9da3b4',
@@ -509,16 +533,19 @@ function renderCliente(){
   filtrado.forEach(function(r){var k=r.operacion||'Otros';tipoMap[k]=(tipoMap[k]||0)+(r.cantidadConfirmada||0);});
   var tipoKeys=Object.keys(tipoMap);
   if(chartTipos) chartTipos.destroy();
+  var esTorta=(tipoTipos==='torta');
   chartTipos=new Chart(document.getElementById('chart-tipos').getContext('2d'),{
-    type:'doughnut',
+    type:esTorta?'doughnut':'bar',
     data:{labels:tipoKeys,datasets:[{data:tipoKeys.map(function(k){return tipoMap[k];}),
       backgroundColor:tipoKeys.map(function(k){return (OP_COLORS[k]||'#6b7280')+'cc';}),
       borderColor:tipoKeys.map(function(k){return OP_COLORS[k]||'#6b7280';}),
       borderWidth:2,hoverOffset:6}]},
-    options:{responsive:true,maintainAspectRatio:false,cutout:'55%',
+    options:{responsive:true,maintainAspectRatio:false,cutout:esTorta?'55%':undefined,
+      indexAxis:esTorta?'x':'y',
+      scales:esTorta?undefined:{x:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#5a6070',font:{size:10}}},y:{grid:{display:false},ticks:{color:'#9da3b4',font:{size:10}}}},
       onHover:function(e,el){e.native.target.style.cursor=el.length?'pointer':'default';},
       onClick:function(e,el){ if(!el.length)return; var k=tipoKeys[el[0].index]; setOp(fOp===k?'__ALL__':k); },
-      plugins:{legend:{position:'right',labels:{color:'#9da3b4',font:{size:10},padding:8,boxWidth:10,boxHeight:10}},
+      plugins:{legend:{display:esTorta,position:'right',labels:{color:'#9da3b4',font:{size:10},padding:8,boxWidth:10,boxHeight:10}},
         tooltip:{backgroundColor:'#1e222d',borderColor:'rgba(255,255,255,.1)',borderWidth:1,
           titleColor:'#e8eaf0',bodyColor:'#9da3b4',
           callbacks:{label:function(ctx){return ' '+ctx.label+': '+ctx.raw.toLocaleString('es-CL')+' pallets (clic para filtrar)';}}}
@@ -682,6 +709,30 @@ window.addEventListener('DOMContentLoaded',function(){
       else setDrill({campo:it.getAttribute('data-campo'),valor:it.getAttribute('data-valor')});
     });
   });
+
+  // Forma de cada gráfico
+  document.querySelectorAll('#seg-diario button').forEach(function(b){
+    b.addEventListener('click',function(){
+      document.querySelectorAll('#seg-diario button').forEach(function(x){x.classList.remove('on');});
+      b.classList.add('on'); tipoDiario=b.getAttribute('data-t');
+      try{localStorage.setItem('ac_diario',tipoDiario);}catch(e){}
+      if(clienteActual&&raw.length) renderCliente();
+    });
+  });
+  document.querySelectorAll('#seg-tipos button').forEach(function(b){
+    b.addEventListener('click',function(){
+      document.querySelectorAll('#seg-tipos button').forEach(function(x){x.classList.remove('on');});
+      b.classList.add('on'); tipoTipos=b.getAttribute('data-t');
+      try{localStorage.setItem('ac_tipos',tipoTipos);}catch(e){}
+      if(clienteActual&&raw.length) renderCliente();
+    });
+  });
+  try{
+    var td=localStorage.getItem('ac_diario'); if(td){ tipoDiario=td;
+      document.querySelectorAll('#seg-diario button').forEach(function(x){x.classList.toggle('on',x.getAttribute('data-t')===td);}); }
+    var tt=localStorage.getItem('ac_tipos'); if(tt){ tipoTipos=tt;
+      document.querySelectorAll('#seg-tipos button').forEach(function(x){x.classList.toggle('on',x.getAttribute('data-t')===tt);}); }
+  }catch(e){}
 
   loadData();                                             /* precarga automática al abrir */
 });

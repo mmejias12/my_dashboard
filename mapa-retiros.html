@@ -83,6 +83,8 @@ html,body { height:100%; font-family:"Inter",sans-serif; font-size:13px;
   font-size:10.5px;cursor:pointer;font-weight:500;transition:all .12s;
   background:var(--bg-card);color:var(--text-sec); }
 
+.leg-go{cursor:pointer;border-radius:5px;transition:background .12s}
+.leg-go:hover{background:rgba(255,255,255,.07)}
 .leg-item { display:flex;align-items:center;justify-content:space-between;padding:3px 0; }
 .leg-left { display:flex;align-items:center;gap:7px; }
 .leg-dot { width:9px;height:9px;border-radius:50%; }
@@ -147,6 +149,14 @@ html,body { height:100%; font-family:"Inter",sans-serif; font-size:13px;
       <div class="vbtn active" id="vbtn-chile" onclick="setVista('chile')">🇨🇱 Chile</div>
       <div class="vbtn" id="vbtn-stgo" onclick="setVista('stgo')">🏙 Santiago</div>
     </div>
+    <div class="ctrl-label" style="margin-top:8px">Mapa base</div>
+    <div class="view-btns" id="base-btns">
+      <div class="vbtn active" data-b="dark" onclick="setBase('dark')">🌑 Oscuro</div>
+      <div class="vbtn" data-b="osm" onclick="setBase('osm')">🛣 Calles</div>
+      <div class="vbtn" data-b="sat" onclick="setBase('sat')">🛰 Satélite</div>
+      <div class="vbtn" data-b="none" onclick="setBase('none')">⬛ Sin mapa</div>
+    </div>
+    <div id="base-aviso" style="display:none;font-size:10px;color:#fcd34d;margin-top:5px;line-height:1.4"></div>
     <div class="ctrl-label" style="margin-top:8px">Modo de vista</div>
     <div class="view-btns">
       <div class="vbtn active" id="vmode-cols" onclick="setModo('cols')">⬛ Columnas</div>
@@ -182,6 +192,7 @@ html,body { height:100%; font-family:"Inter",sans-serif; font-size:13px;
   </div>
 </div>
 
+<div id="attrib" style="position:fixed;right:8px;bottom:6px;z-index:5;font-size:9.5px;color:rgba(255,255,255,.45);background:rgba(0,0,0,.35);padding:2px 7px;border-radius:5px;pointer-events:none"></div>
 <script src="https://cdn.jsdelivr.net/npm/deck.gl@8.9.35/dist.min.js"></script>
 <script>
 var BODEGAS = {
@@ -279,7 +290,15 @@ window.addEventListener("load",function(){
   var h=new Date(),y=h.getFullYear(),m=String(h.getMonth()+1).padStart(2,"0"),d=String(h.getDate()).padStart(2,"0");
   document.getElementById("d2").value=y+"-"+m+"-"+d;
   document.getElementById("d1").value=y+"-"+m+"-01";
+  try{ var b=localStorage.getItem("mapa_base"); if(b&&BASEMAPS[b]) baseActual=b; }catch(e){}
+  document.querySelectorAll("#base-btns .vbtn").forEach(function(x){
+    x.className="vbtn"+(x.getAttribute("data-b")===baseActual?" active":"");
+  });
+  document.getElementById("attrib").textContent=BASEMAPS[baseActual].attr;
   initDeck();
+  document.getElementById("d1").addEventListener("change",loadData);
+  document.getElementById("d2").addEventListener("change",loadData);
+  loadData();                       // el mapa se dibuja solo con el mes en curso
 });
 
 function initDeck(){
@@ -289,17 +308,72 @@ function initDeck(){
     initialViewState:{longitude:-70.65,latitude:-34.5,zoom:5.8,pitch:50,bearing:-12,minZoom:4,maxZoom:14},
     controller:true,
     onViewStateChange:function(o){deckInst.setProps({viewState:o.viewState});},
-    layers:[baseTiles()],
+    layers:[baseTiles(), veloOscuro()].filter(Boolean),
     views:[new deck.MapView({repeat:false})],
     _typedArrayManagerProps:{overAlloc:1,poolSize:0}
   });
 }
 
+/* ─── Mapas base ───────────────────────────────────────────────────────────
+   El mapa venía apuntando a CARTO (a.basemaps.cartocdn.com). CARTO pasó a
+   exigir API key, así que sus teselas llegan estampadas con "API KEY
+   REQUIRED" — de ahí el cartel repetido sobre todo el mapa. Estas fuentes no
+   piden llave. Si una fallara, se cae solo a "sin mapa", que nunca falla. */
+var BASEMAPS={
+  dark:{ nombre:"Oscuro",
+         url:"https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+         attr:"Mapa base © Esri", maxZoom:16, oscurecer:0 },
+  osm: { nombre:"Calles",
+         url:"https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+         attr:"© OpenStreetMap contributors", maxZoom:19, oscurecer:150 },
+  sat: { nombre:"Satélite",
+         url:"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+         attr:"Imágenes © Esri, Maxar, Earthstar Geographics", maxZoom:18, oscurecer:60 },
+  none:{ nombre:"Sin mapa", url:null, attr:"", maxZoom:16, oscurecer:0 }
+};
+var baseActual="dark", baseFallos=0;
+
+function setBase(b){
+  if(!BASEMAPS[b]) return;
+  baseActual=b; baseFallos=0;
+  try{ localStorage.setItem("mapa_base",b); }catch(e){}
+  document.querySelectorAll("#base-btns .vbtn").forEach(function(x){
+    x.className="vbtn"+(x.getAttribute("data-b")===b?" active":"");
+  });
+  document.getElementById("attrib").textContent=BASEMAPS[b].attr;
+  document.getElementById("base-aviso").style.display="none";
+  if(deckInst) renderLayers();
+}
+
+/* Velo oscuro sobre el mapa base para que no compita con los datos */
+function veloOscuro(){
+  var o=BASEMAPS[baseActual].oscurecer;
+  if(!o) return null;
+  return new deck.SolidPolygonLayer({
+    id:"velo",
+    data:[[[-180,-85],[180,-85],[180,85],[-180,85]]],
+    getPolygon:function(d){return d;},
+    getFillColor:[8,10,17,o],
+    stroked:false, pickable:false
+  });
+}
+
 function baseTiles(){
+  var cfg=BASEMAPS[baseActual];
+  if(!cfg.url) return null;                 // "sin mapa": sólo los datos
   return new deck.TileLayer({
-    id:"base-tiles",
-    data:"https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-    minZoom:0,maxZoom:19,tileSize:256,
+    id:"base-tiles-"+baseActual,
+    data:cfg.url,
+    minZoom:0,maxZoom:cfg.maxZoom,tileSize:256,
+    onTileError:function(){
+      // si el proveedor no responde, se avisa y se sigue sin mapa base
+      if(++baseFallos===6){
+        var av=document.getElementById("base-aviso");
+        av.textContent="El mapa base no respondió. Se muestran sólo los datos.";
+        av.style.display="block";
+        setBase("none");
+      }
+    },
     renderSubLayers:function(props){
       var bbox=props.tile.bbox;
       return new deck.BitmapLayer(props,{
@@ -528,7 +602,7 @@ function buildFlowLayers(t){
     fontFamily:"JetBrains Mono, monospace",fontWeight:700,
     background:true,getBackgroundColor:[192,23,12,160],backgroundPadding:[5,2,5,2]
   });
-  return [baseTiles(),rutas,pulsos,plantas,plantasLbl];
+  return [baseTiles(), veloOscuro(), rutas, pulsos, plantas, plantasLbl].filter(Boolean);
 }
 
 function startAnim(){
@@ -556,6 +630,7 @@ function datosVista(){
 
 function renderLayers(){
   if(!deckInst)return;
+  var capasBase=[baseTiles(), veloOscuro()].filter(Boolean);
   if(modoVista==="flow"){
     buildFlowPaths();
     deckInst.setProps({layers:buildFlowLayers(0)});
@@ -608,7 +683,7 @@ function renderLayers(){
     updateTriggers:{getText:[vistaActual,agrupStgo,metricaStgo],getPosition:[metricaStgo,agrupStgo]}
   });
 
-  deckInst.setProps({layers:[baseTiles(),glowLayer,colLayer,lblLayer]});
+  deckInst.setProps({layers:capasBase.concat([glowLayer,colLayer,lblLayer])});
 }
 
 function showTip(info){
@@ -670,6 +745,15 @@ function renderFilters(){
   document.getElementById("filter-card").style.display="block";
 }
 
+/* Vuela la cámara hasta un punto del ranking */
+function volarA(lng,lat){
+  if(!deckInst||isNaN(lng)||isNaN(lat))return;
+  deckInst.setProps({initialViewState:{
+    longitude:lng, latitude:lat, zoom:11.5, pitch:55, bearing:-8,
+    transitionDuration:900
+  }});
+}
+
 function renderLegend(){
   var vis=datosVista().slice();
   var esComuna = vistaActual==="stgo" && agrupStgo==="comuna";
@@ -679,7 +763,7 @@ function renderLegend(){
   top.forEach(function(p){
     var c=RC[p.retailer]||RC.OT,v=metVal(p),pct=Math.round((v/maxV)*100);
     var nom = esComuna ? p.comuna : (p.comuna? (p.comuna+" \u00b7 "+(p.ciudad||p.nombre)) : (p.ciudad||p.nombre));
-    html+='<div class="leg-item"><div class="leg-left"><div class="leg-dot" style="background:rgb('+c[0]+","+c[1]+","+c[2]+')"></div><span class="leg-name">'+String(nom).substring(0,20)+'</span></div><span class="leg-val">'+v.toLocaleString("es-CL")+"</span></div>"+
+    html+='<div class="leg-item leg-go" data-lng="'+p.coords[0]+'" data-lat="'+p.coords[1]+'" title="Clic para volar hasta aquí"><div class="leg-left"><div class="leg-dot" style="background:rgb('+c[0]+","+c[1]+","+c[2]+')"></div><span class="leg-name">'+String(nom).substring(0,20)+'</span></div><span class="leg-val">'+v.toLocaleString("es-CL")+"</span></div>"+
       '<div class="leg-bar-wrap"><div class="leg-bar" style="width:'+pct+"%;background:rgb("+c[0]+","+c[1]+","+c[2]+')"></div></div>';
   });
   var titulo = document.querySelector("#legend-card .sec-title");
@@ -687,7 +771,13 @@ function renderLegend(){
     var met = (vistaActual==="stgo"&&metricaStgo==="ops")?"operaciones":"pallets";
     titulo.textContent = esComuna ? ("Top comunas \u00b7 "+met) : ("Top ubicaciones \u00b7 "+met);
   }
-  document.getElementById("legend").innerHTML=html;
+  var cont=document.getElementById("legend");
+  cont.innerHTML=html;
+  cont.querySelectorAll(".leg-go").forEach(function(el){
+    el.onclick=function(){
+      volarA(parseFloat(el.getAttribute("data-lng")), parseFloat(el.getAttribute("data-lat")));
+    };
+  });
   document.getElementById("legend-card").style.display="block";
 }
 

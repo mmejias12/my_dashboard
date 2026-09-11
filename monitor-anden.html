@@ -16,6 +16,19 @@
   --r:12px;
   --sans: system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
 }
+/* ---------- navegador de días ---------- */
+.daynav{display:flex;align-items:center;gap:5px;margin-left:14px;background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:4px 5px}
+.daynav.hist{border-color:rgba(250,178,25,.45);background:rgba(250,178,25,.07)}
+.dn-btn{background:transparent;border:1px solid var(--line);color:var(--good);width:30px;height:28px;border-radius:8px;cursor:pointer;font-size:13px;line-height:1;display:flex;align-items:center;justify-content:center;transition:background .12s}
+.dn-btn:hover:not(:disabled){background:var(--surface-3)}
+.dn-btn:disabled{opacity:.25;cursor:not-allowed}
+.dn-lbl{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:104px;line-height:1.15;padding:0 2px}
+.dn-lbl b{font-size:12.5px;letter-spacing:-.01em}
+.dn-lbl span{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.daynav.hist .dn-lbl span{color:var(--warning)}
+.dn-hoy{background:transparent;border:1px solid var(--line);color:var(--text-2);height:28px;padding:0 9px;border-radius:8px;cursor:pointer;font-size:11px;font-family:inherit}
+.dn-hoy:hover{background:var(--surface-3);color:var(--text)}
+.dn-hoy.hide{display:none}
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;height:100%}
 body{background:var(--plane);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased;overflow:hidden}
@@ -196,6 +209,12 @@ h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
       <h1>Monitor de andén · Despacho</h1>
       <div class="sub">Emisiones · guía emitida (RDTOut) → paso por túnel (SPOTVISION)</div>
     </div>
+    <div class="daynav" id="daynav">
+      <button class="dn-btn" id="dn-prev" title="Día anterior">&#9664;</button>
+      <div class="dn-lbl"><b id="dn-fecha">&mdash;</b><span id="dn-rel">hoy</span></div>
+      <button class="dn-btn" id="dn-next" title="Día siguiente" disabled>&#9654;</button>
+      <button class="dn-hoy hide" id="dn-hoy" title="Volver al día en curso">Hoy</button>
+    </div>
     <div class="sp"></div>
     <div id="aud-aviso" class="aud-aviso">Sonido desactivado — el navegador exige un clic</div>
     <button class="btn" id="btn-sonido">Activar sonido</button>
@@ -262,6 +281,22 @@ const DEMO = false;                                 // true = simulación local 
 const API_PASOS   = '/api/spotvision-conciliacion'; // pasos por el túnel
 const API_GUIAS   = '/api/guias-pendientes';        // guías emitidas del día
 const API_CORREO  = '/api/alerta-correo';           // envío de la alerta por correo
+/* Fecha que se está mirando. Siempre abre en el día en curso; las flechas
+   permiten retroceder a días ya cerrados, sólo para consultar cómo estuvo
+   el cruce (no se alerta ni se envían correos por un día vencido). */
+function hoySantiago(){
+  return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Santiago',
+    year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+}
+function moverDia(iso, n){
+  const d = new Date(iso + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0,10);
+}
+let FECHA_VISTA = hoySantiago();
+let HIST_CARGADO = false;
+const esHoy = () => FECHA_VISTA === hoySantiago();
+
 const POLL_MS     = 15000;                          // sin webhook, cada cuánto preguntamos
 const VENCE_MIN   = 240;                            // guía sin paso: se marca demorada
 const TOLERANCIA  = 0;                              // pallets de diferencia aceptados
@@ -1111,15 +1146,13 @@ async function pedirJSON(url){
 async function cargarGuiasReales(){
   // arrastre=3: las emisiones de días anteriores que nunca cruzaron siguen a la
   // vista en vez de desaparecer a la medianoche.
-  const gs = await pedirJSON(API_GUIAS + '?tipo=emision&arrastre=3');
+  const gs = await pedirJSON(API_GUIAS + '?tipo=emision&arrastre=3&fecha=' + FECHA_VISTA);
   S.esperando = gs.filter(g=>enAlcance(g.patente))
                   .map(g=>({...g, hora_emision:new Date(g.hora_emision).getTime()}));
 }
 async function pollPasosReales(){
   // Fecha local de Santiago, no UTC: pasadas las 20:00 toISOString ya es mañana.
-  const hoy = new Intl.DateTimeFormat('en-CA',{timeZone:'America/Santiago',
-    year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-  const d = await pedirJSON(`${API_PASOS}?desde=${hoy}&hasta=${hoy}&tipo=emision`);
+  const d = await pedirJSON(`${API_PASOS}?desde=${FECHA_VISTA}&hasta=${FECHA_VISTA}&tipo=emision`);
   // Cada paso se registra aislado: si uno viene con algo que la pantalla no
   // sabe leer, se anota en consola y los demás siguen entrando. Antes una sola
   // carga con problemas cortaba el forEach, dejaba el ciclo en "SIN CONEXIÓN"
@@ -1247,9 +1280,56 @@ if(DEMO){
   // corta), el ciclo siguiente entraría con el histórico del día ya en modo
   // "alertar" y dispararía de golpe un pop-up, un sonido y un correo por cada
   // camión que pasó en la mañana.
+  function pintarDia(){
+    const nav = $('#daynav');
+    const f = new Date(FECHA_VISTA + 'T12:00:00Z');
+    $('#dn-fecha').textContent = new Intl.DateTimeFormat('es-CL',
+      {weekday:'short', day:'2-digit', month:'short', timeZone:'UTC'}).format(f);
+    const hoy = esHoy();
+    const ayer = FECHA_VISTA === moverDia(hoySantiago(), -1);
+    $('#dn-rel').textContent = hoy ? 'día en curso' : (ayer ? 'ayer · cerrado' : 'día cerrado');
+    $('#dn-next').disabled = hoy;                 // nunca al futuro
+    $('#dn-hoy').classList.toggle('hide', hoy);
+    nav.classList.toggle('hist', !hoy);
+    const p = $('#pill-vivo');
+    if(!hoy){
+      p.classList.remove('hide');
+      p.style.borderColor = 'rgba(250,178,25,.5)'; p.style.color = 'var(--warning)';
+      p.querySelector('.viva').style.background = 'var(--warning)';
+      p.lastChild.textContent = 'DÍA CERRADO · SÓLO CONSULTA';
+    } else {
+      p.style.borderColor = ''; p.style.color = '';
+      p.querySelector('.viva').style.background = '';
+    }
+  }
+
+  function irADia(nuevaFecha){
+    if(nuevaFecha > hoySantiago()) return;        // no se puede mirar el futuro
+    FECHA_VISTA = nuevaFecha;
+    HIST_CARGADO = false;
+    // Un día vencido no debe sonar, avisar ni mandar correos: S.arranque
+    // ya es la compuerta que silencia las alertas, así que la dejamos puesta.
+    S.arranque = true;
+    S.eventos = [];
+    S.esperando = [];
+    pintarDia();
+    $('#esperando').innerHTML = '<div class="vacio">Consultando guías…</div>';
+    $('#eventos').innerHTML   = '<div class="vacio">Consultando pasos…</div>';
+    ciclo();
+  }
+
+  $('#dn-prev').onclick = ()=> irADia(moverDia(FECHA_VISTA, -1));
+  $('#dn-next').onclick = ()=> irADia(moverDia(FECHA_VISTA, +1));
+  $('#dn-hoy').onclick  = ()=> irADia(hoySantiago());
+  pintarDia();
+
   const ciclo = ()=> cargarGuiasReales()
     .then(()=>pollPasosReales())
-    .then(()=>{ marcarViva(); S.arranque = false; render(); })
+    .then(()=>{
+      if(esHoy()){ marcarViva(); S.arranque = false; }   // sólo el día en curso alerta
+      else { HIST_CARGADO = true; pintarDia(); }
+      render();
+    })
     .catch(marcarCaida);
 
   // La primera consulta tarda unos segundos (RDTOut devuelve el mes completo).
@@ -1259,7 +1339,10 @@ if(DEMO){
   $('#pill-vivo').lastChild.textContent = 'CONECTANDO';
 
   ciclo();                             // desde el primer ciclo bueno, sí se alerta
-  setInterval(ciclo, POLL_MS);
+  setInterval(()=>{
+    if(!esHoy() && HIST_CARGADO) return;   // un día cerrado no cambia: no se repregunta
+    ciclo();
+  }, POLL_MS);
   setInterval(render, 30000);          // refresca los minutos de espera
 }
 </script>

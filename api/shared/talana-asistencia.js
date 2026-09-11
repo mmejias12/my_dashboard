@@ -210,7 +210,8 @@ async function traerEmpleados(opts = {}) {
   const params = { 'solo-activos': 'true' };
   if (opts.activoEn) params.active_on = String(opts.activoEn).replace(/-/g, '');
 
-  const { items, completo } = await talana.listar('/contracts-resumed-paginated/', params, opts);
+  const { items, completo } = await talana.listar('/contracts-resumed-paginated/', params,
+    { ...opts, pageSize: Number(process.env.TALANA_PAGE_SIZE_TURNOS || 500) });
 
   // Una persona puede tener más de un contrato: nos quedamos con el más reciente.
   const porPersona = new Map();
@@ -296,33 +297,24 @@ async function traerFotos(opts = {}) {
  *   /specificDay-paginado/→ días de los turnos manuales   (date concreta)
  */
 async function traerTurnos(opts = {}) {
-  // /workShift/ es el catálogo (nombre, tipo, tolerancia). El token de REDTEC
-  // recibe 403 en este recurso, así que NO puede ser obligatorio: si falla, el
-  // catálogo se reconstruye a partir de los días, que sí responden. Se pierde
-  // el nombre real del turno y la tolerancia, no el horario.
-  let catalogo = {};
-  let catalogoDegradado = null;
-  let turnosCompleto = true;
-  try {
-    const turnos = await talana.listar('/workShift/', {}, opts);
-    turnosCompleto = turnos.completo;
-    for (const t of turnos.items) {
-      catalogo[String(t.id)] = {
-        id: t.id,
-        name: t.name || ('Turno ' + t.id),
-        type: t.workShiftType || 'W',
-        tolerance: Number(t.tolerance || 0),
-        snackDuration: t.snackDuration || null,
-        schedule: t.schedule || '',
-        publicId: t.publicId || null
-      };
-    }
-  } catch (e) {
-    catalogoDegradado = `/workShift/ → ${e.status || 'error'}: ${e.message.slice(0, 160)}`;
-  }
+  // Página grande a propósito: cada petición a Talana cuesta ~3,3 s por el
+  // límite de tasa, así que menos páginas = menos presupuesto gastado. Estos
+  // recursos son chicos (cientos de filas) y entran de sobra en una página.
+  const grande = { ...opts, pageSize: Number(process.env.TALANA_PAGE_SIZE_TURNOS || 500) };
 
-  const semanales = await talana.listar('/rotativeDay/', {}, opts);
-  const rotativos = await talana.listar('/specialRotativeDay/', {}, opts);
+  // Los DÍAS (/rotativeDay/ y /specialRotativeDay/) SON el horario teórico: es
+  // lo crítico y va PRIMERO. El catálogo /workShift/ sólo aporta el nombre real
+  // y la tolerancia, y si falta se infiere de los días —así que se pide DESPUÉS
+  // y sólo si sobra presupuesto.
+  //
+  // Por qué este orden importa: Talana habilitó /workShift/ (antes devolvía 403
+  // y costaba una sola petición fallida). Al responder 200 ahora pagina, y si se
+  // pidiera primero se comería el presupuesto y dejaría SIN cargar tanto los
+  // días como las asignaciones —que se traen justo después de los turnos—, y sin
+  // asignaciones no hay horario teórico ni P/S. Pidiéndolo al final, nunca puede
+  // volver a robarle el presupuesto a lo crítico.
+  const semanales = await talana.listar('/rotativeDay/', {}, grande);
+  const rotativos = await talana.listar('/specialRotativeDay/', {}, grande);
 
   // Convención de días deducida del propio dato, no adivinada.
   const dc = detectarDiaCero(semanales.items);
@@ -342,6 +334,36 @@ async function traerTurnos(opts = {}) {
     diasRotativos[k].sort((a, b) => (a.orden || 0) - (b.orden || 0));
   }
 
+  // Catálogo AL FINAL y opcional. Un 403 —o quedarse sin presupuesto— sólo
+  // cuesta el nombre real y la tolerancia; el horario ya está en los días.
+  let catalogo = {};
+  let catalogoDegradado = null;
+  let catalogoCompleto = true;
+  if (!opts.presupuesto || !opts.presupuesto.agotado(6000)) {
+    try {
+      const turnos = await talana.listar('/workShift/', {}, grande);
+      catalogoCompleto = turnos.completo;
+      for (const t of turnos.items) {
+        catalogo[String(t.id)] = {
+          id: t.id,
+          name: t.name || ('Turno ' + t.id),
+          type: t.workShiftType || 'W',
+          tolerance: Number(t.tolerance || 0),
+          snackDuration: t.snackDuration || null,
+          schedule: t.schedule || '',
+          publicId: t.publicId || null
+        };
+      }
+    } catch (e) {
+      catalogoDegradado = `/workShift/ → ${e.status || 'error'}: ${e.message.slice(0, 160)}`;
+    }
+  } else {
+    // No es una degradación de permisos: se aplazó por presupuesto. Los nombres
+    // se infieren de los días; el reporte funciona igual.
+    catalogoDegradado = '/workShift/ → aplazado (sin presupuesto en esta pasada; se infiere de los días)';
+    catalogoCompleto = false;
+  }
+
   // Turnos que aparecen en los días pero no en el catálogo (por el 403, o
   // porque el catálogo llegó incompleto): se infiere el tipo de dónde salieron.
   for (const k of Object.keys(diasSemanales)) {
@@ -357,7 +379,7 @@ async function traerTurnos(opts = {}) {
     diaCeroDetectado: dc.detectado,
     diaCeroVotos: dc.votos,
     catalogoDegradado,
-    completo: turnosCompleto && semanales.completo && rotativos.completo
+    completo: catalogoCompleto && semanales.completo && rotativos.completo
   };
 }
 
@@ -409,7 +431,8 @@ function normalizarDia(d, orden) {
  */
 async function traerAsignaciones(opts) {
   try {
-    const { items, completo } = await talana.listar('/workShiftPersonRange/', {}, opts);
+    const { items, completo } = await talana.listar('/workShiftPersonRange/', {},
+      { ...opts, pageSize: Number(process.env.TALANA_PAGE_SIZE_TURNOS || 500) });
     const data = items.map(a => ({
       id: a.id,
       person: a.person,
@@ -430,7 +453,8 @@ async function traerAsignaciones(opts) {
 async function traerDiasManuales(desde, hasta, opts) {
   try {
     const { items, completo } = await talana.listar(
-      '/specificDay-paginado/', { min_date: desde, max_date: hasta }, opts
+      '/specificDay-paginado/', { min_date: desde, max_date: hasta },
+      { ...opts, pageSize: Number(process.env.TALANA_PAGE_SIZE_TURNOS || 500) }
     );
     const porTurnoFecha = {};   // "workShiftId|fecha" → definicion
     for (const d of items) {

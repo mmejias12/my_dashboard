@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -35,6 +35,23 @@
     --c-emi: #60a5fa;
     --radius-sm:6px; --radius-md:9px; --radius-lg:13px;
   }
+  :root[data-theme="light"]{
+    --bg-page:#f4f6fa;--bg-surface:#ffffff;--bg-card:#ffffff;--bg-input:#ffffff;--bg-hover:#eef1f7;--bg-active:#e8f5ec;
+    --border:rgba(15,23,42,0.10);--border-md:rgba(15,23,42,0.16);--border-accent:rgba(31,157,87,0.40);
+    --text-primary:#131722;--text-secondary:#4a5268;--text-muted:#6b7488;
+    --accent:#1f9d57;--accent-dim:rgba(31,157,87,0.14);
+    --st-conf:#1f9d57; --st-conf-bg:rgba(31,157,87,0.12);
+    --st-pend:#6b7488; --st-pend-bg:rgba(107,116,136,0.10);
+    --st-rgo:#c2610a;  --st-rgo-bg:rgba(194,97,10,0.14);
+    --st-rev:#d6455a;  --st-rev-bg:rgba(214,69,90,0.14);
+    --st-ndesp:#7c53d6;--st-ndesp-bg:rgba(124,83,214,0.12);
+    --c-emi:#2f74d0;
+  }
+  .acc{display:inline-flex;align-items:center;gap:4px;margin-left:6px}
+  .acc .ab{min-width:30px;height:30px;padding:0 7px;border:1px solid var(--border-md);background:var(--bg-input);color:var(--text-secondary);border-radius:7px;cursor:pointer;font-family:inherit;font-size:12px;display:inline-flex;align-items:center;justify-content:center}
+  .acc .ab:hover{background:var(--bg-hover);color:var(--text-primary)}
+  .acc .ab.big{font-size:16px;font-weight:700}
+  .fchip{display:inline-flex;align-items:center;gap:6px;background:var(--bg-active);border:1px solid var(--border-accent);color:var(--accent);border-radius:20px;padding:3px 10px;font-size:11px}
   html,body { height:100%; font-family:'Inter',-apple-system,sans-serif; font-size:13px; background:var(--bg-page); color:var(--text-primary); -webkit-font-smoothing:antialiased; }
 
   /* TOPBAR */
@@ -344,6 +361,12 @@
 
       <button id="btn-load" class="btn" onclick="cargarDatos()">🔄 Cargar / refrescar</button>
       <button class="btn btn-sec" onclick="exportarExcel()">↓ Excel</button>
+      <label style="display:flex;align-items:center;gap:6px;margin-left:10px;font-size:12px;color:var(--text-secondary);cursor:pointer">
+        <input type="checkbox" id="chk-anul" style="accent-color:var(--accent)"> incluir anuladas
+      </label>
+      <div class="acc" title="Tamaño de texto"><button class="ab" id="fs-down" title="Reducir texto">A&#8722;</button><button class="ab big" id="fs-up" title="Aumentar texto">A+</button></div>
+      <div class="acc"><button class="ab" id="theme-tg" title="Cambiar tema claro/oscuro">&#9728;&#65038;</button></div>
+      <span id="filtro-chips" style="display:none;gap:6px;margin-left:auto"></span>
     </div>
   </div>
 
@@ -471,6 +494,7 @@ var raw = [];
 var clienteFiltro = '';
 var modoMostrar   = 'todos';  // 'todos' | 'criticos'
 var resumenClientes = [];     // resultado calculado
+var fIncAnul = false;         // las anuladas se excluyen por defecto
 
 // Helpers
 var $ = function(id) { return document.getElementById(id); };
@@ -593,10 +617,16 @@ function esTransferencia(r) {
   return op.indexOf('transfer') >= 0 || op.indexOf('trans diferenciada') >= 0;
 }
 
+// Una transferencia ANULADA no tiene despacho ni confirmación, así que el
+// clasificador la marcaría como "sin despacho" o la haría envejecer hasta
+// "reversa". Son pedidos cancelados, no un problema operativo: se excluyen.
+function esAnulada(r) { return ('' + (r.etapaOperacion || '')).toLowerCase().indexOf('anulad') >= 0; }
+
 // Devuelve registros de transferencia filtrados por cliente
 function transferenciasFiltradas() {
   return raw.filter(function(r) {
     if (!esTransferencia(r)) return false;
+    if (!fIncAnul && esAnulada(r)) return false;
     if (clienteFiltro && (r.clienteOrigenStr || '').trim() !== clienteFiltro) return false;
     return true;
   });
@@ -704,7 +734,17 @@ function renderTablaClientes() {
   }).join('');
 }
 
+function pintarChips() {
+  var cont = $('filtro-chips'); if (!cont) return;
+  var n = raw.filter(function(r){ return esTransferencia(r) && esAnulada(r); }).length;
+  cont.innerHTML = (!fIncAnul && n > 0)
+    ? '<span class="fchip">' + n + ' transferencia' + (n !== 1 ? 's' : '') + ' anulada' + (n !== 1 ? 's' : '') + ' excluida' + (n !== 1 ? 's' : '') + '</span>'
+    : '';
+  cont.style.display = cont.innerHTML ? 'inline-flex' : 'none';
+}
+
 function procesarYRender() {
+  pintarChips();
   resumenClientes = agruparPorCliente();
   calcularAlertasGlobales();
   renderTablaClientes();
@@ -1054,7 +1094,29 @@ window.addEventListener('DOMContentLoaded', function() {
     clienteFiltro = this.value;
     if (raw.length) procesarYRender();
   });
+
+  // Anuladas y accesibilidad
+  $('chk-anul').addEventListener('change', function(){ fIncAnul = this.checked; if (raw.length) procesarYRender(); });
+  $('dias-back').addEventListener('change', cargarDatos);
+  $('fs-down').addEventListener('click', function(){ fsIdx=Math.max(0,fsIdx-1); applyFS(); });
+  $('fs-up').addEventListener('click', function(){ fsIdx=Math.min(FSLEVELS.length-1,fsIdx+1); applyFS(); });
+  $('theme-tg').addEventListener('click', function(){ applyTheme(document.documentElement.getAttribute('data-theme')==='light'?'dark':'light'); });
+  try {
+    var t=localStorage.getItem('trcli_theme'); if(t) applyTheme(t);
+    var f=parseInt(localStorage.getItem('trcli_fs'),10); if(!isNaN(f)&&f>=0&&f<FSLEVELS.length){ fsIdx=f; applyFS(); }
+  } catch(e) {}
+
+  cargarDatos();   // precarga automática al abrir
 });
+
+/* ===== Accesibilidad: tamaño de texto + tema claro/oscuro ===== */
+var FSLEVELS=[1,1.15,1.3,1.5], fsIdx=1;
+function applyFS(){ document.documentElement.style.zoom=FSLEVELS[fsIdx]; try{localStorage.setItem('trcli_fs',fsIdx);}catch(e){} }
+function applyTheme(t){
+  document.documentElement.setAttribute('data-theme',t);
+  var b=$('theme-tg'); if(b)b.textContent=(t==='light'?'\u263e':'\u2600\ufe0e');
+  try{localStorage.setItem('trcli_theme',t);}catch(e){}
+}
 </script>
 
 <!-- ══ SIDEBAR: acordeón, colapso, buscador (idéntico a m3link_dashboard_dark.html) ══ -->

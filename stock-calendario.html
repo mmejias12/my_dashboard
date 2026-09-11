@@ -16,6 +16,54 @@
     --in-emision:#4ade80;--in-reversa:#22d3ee;--in-transf:#818cf8;--in-otras:#a3e635;
     --out-devol:#f87171;--out-retiro:#fb923c;--out-transf:#c084fc;--out-reconf:#fbbf24;--out-otras:#f472b6;--out-reub:#94a3b8;
   }
+  :root{ --danger:#f87171;--danger-bg:rgba(248,113,113,.12);--warn:#fbbf24;--warn-bg:rgba(251,191,36,.12);
+         --ov-bg:rgba(15,17,23,.82); }
+  /* ===== TEMA CLARO (sol/luna) ===== */
+  :root[data-theme="light"]{
+    --bg-page:#f4f6fa;--bg-surface:#ffffff;--bg-card:#ffffff;--bg-input:#eef1f6;--bg-hover:#e9eef6;--bg-active:#e7f6ec;
+    --border:rgba(15,23,42,.10);--border-md:rgba(15,23,42,.18);--border-accent:rgba(21,128,61,.40);
+    --text-primary:#101828;--text-secondary:#475467;--text-muted:#667085;
+    --accent:#15803d;--accent-dim:rgba(21,128,61,0.12);
+    --in-emision:#15803d;--in-reversa:#0e7490;--in-transf:#4338ca;--in-otras:#4d7c0f;
+    --out-devol:#b91c1c;--out-retiro:#c2410c;--out-transf:#7e22ce;--out-reconf:#b45309;--out-otras:#be185d;--out-reub:#475569;
+    --danger:#b91c1c;--danger-bg:rgba(185,28,28,.10);--warn:#b45309;--warn-bg:rgba(180,83,9,.12);
+    --ov-bg:rgba(244,246,250,.88);
+  }
+  :root[data-theme="light"] .cal-cell.finde{ background:#eef2f8; }
+
+  /* Accesibilidad: en la barra de controles, NUNCA en .topbar
+     (el workspace de pestañas inyecta .topbar{display:none}) */
+  .acc-grp{display:inline-flex;gap:6px;align-items:center;}
+  .acc-btn{background:var(--bg-input);border:1px solid var(--border-md);color:var(--text-secondary);width:34px;height:30px;
+           border-radius:7px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;transition:all .15s;}
+  .acc-btn:hover{color:var(--accent);border-color:var(--border-accent);background:var(--bg-hover);}
+  .acc-btn .aaa{font-weight:700;letter-spacing:-1px;line-height:1;}
+  .acc-btn .aaa b:nth-child(1){font-size:9px;} .acc-btn .aaa b:nth-child(2){font-size:12px;} .acc-btn .aaa b:nth-child(3){font-size:15px;}
+  .acc-btn i{font-size:16px;}
+  .hoy-btn{height:30px;padding:0 12px;border-radius:6px;background:var(--bg-input);border:1px solid var(--border-md);
+           color:var(--text-secondary);cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;transition:all .15s;}
+  .hoy-btn:hover:not(:disabled){background:var(--accent);color:#0f1117;border-color:var(--accent);}
+  .hoy-btn:disabled{opacity:.45;cursor:default;}
+  .mes-nav button.nav-off{opacity:.35;cursor:not-allowed;}
+  .mes-nav button.nav-off:hover{background:var(--bg-input);color:var(--text-primary);}
+
+  /* Auditoría de cuadre */
+  .cal-cell .cal-flag{position:absolute;top:6px;right:7px;font-size:11px;color:var(--warn);line-height:1;}
+  .cal-cell.err{opacity:.75;border-color:var(--danger-bg);}
+  .cal-cell.err .cal-empty-txt{color:var(--danger);}
+  .cal-hoy-tag{position:absolute;top:6px;right:7px;font-size:8.5px;font-weight:700;letter-spacing:.4px;
+               color:var(--accent);background:var(--accent-dim);border-radius:6px;padding:1px 5px;}
+  .warn-note{font-size:11.5px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-bg);
+             border-radius:var(--radius-md);padding:9px 12px;margin-bottom:14px;display:none;}
+  .warn-note button{margin-left:8px;background:transparent;border:1px solid currentColor;color:inherit;
+                    border-radius:5px;padding:2px 9px;font:inherit;font-size:11px;cursor:pointer;}
+  .cal-vacio{grid-column:1/-1;text-align:center;padding:44px 20px;color:var(--text-muted);font-size:13px;
+             border:1px dashed var(--border-md);border-radius:10px;}
+  .cal-vacio i{font-size:32px;display:block;margin-bottom:10px;opacity:.5;}
+  .cuadre-box{margin-top:14px;padding:10px 12px;border-radius:7px;font-size:11.5px;line-height:1.5;
+              border:1px solid var(--border-md);background:var(--bg-card);}
+  .cuadre-ok{color:var(--accent);} .cuadre-bad{color:var(--danger);}
+
   *{box-sizing:border-box;margin:0;padding:0;}
   html,body{height:100%;font-family:'Inter',sans-serif;font-size:13px;background:var(--bg-page);color:var(--text-primary);-webkit-font-smoothing:antialiased;}
   .topbar{position:fixed;top:0;left:0;right:0;z-index:100;height:50px;background:var(--bg-surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1.25rem;gap:12px;}
@@ -29,7 +77,7 @@
   .topbar-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
   .avatar{width:27px;height:27px;border-radius:50%;background:#1a2a1f;color:var(--accent);font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;border:1px solid var(--border-accent);}
   .user-email{font-size:11.5px;color:var(--text-secondary);}
-  .logout-btn{color:#f87171;text-decoration:none;font-size:12px;font-weight:600;padding:4px 10px;border-radius:6px;background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.2);}
+  .logout-btn{color:var(--danger);text-decoration:none;font-size:12px;font-weight:600;padding:4px 10px;border-radius:6px;background:var(--danger-bg);border:1px solid var(--danger-bg);}
   .back-btn{font-size:11.5px;color:var(--text-secondary);text-decoration:none;padding:5px 11px;border:1px solid var(--border-md);border-radius:6px;transition:all .15s;display:flex;align-items:center;gap:5px;}
   .back-btn:hover{color:var(--text-primary);background:var(--bg-hover);}
   .wrap{max-width:1200px;margin:0 auto;padding:0 1.5rem 3rem;}
@@ -74,14 +122,14 @@
   .cal-dif{font-size:11px;font-family:'JetBrains Mono',monospace;font-weight:600;}
   .cal-dif.up{color:var(--accent);} .cal-dif.down{color:var(--out-devol);}
 
-  .overlay{position:fixed;inset:0;background:rgba(15,17,23,.82);backdrop-filter:blur(3px);z-index:500;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;}
+  .overlay{position:fixed;inset:0;background:var(--ov-bg);backdrop-filter:blur(3px);z-index:500;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;}
   .overlay.show{display:flex;}
   .spinner{width:42px;height:42px;border:3px solid var(--border-md);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;}
   @keyframes spin{to{transform:rotate(360deg);}}
   .ov-txt{font-size:13px;font-weight:500;} .ov-prog{width:220px;height:5px;background:var(--bg-input);border-radius:3px;overflow:hidden;}
   .ov-prog-bar{height:100%;background:var(--accent);width:0%;transition:width .3s;}
 
-  .modal{position:fixed;inset:0;background:rgba(15,17,23,.8);backdrop-filter:blur(4px);z-index:600;display:none;align-items:center;justify-content:center;padding:20px;}
+  .modal{position:fixed;inset:0;background:var(--ov-bg);backdrop-filter:blur(4px);z-index:600;display:none;align-items:center;justify-content:center;padding:20px;}
   .modal.show{display:flex;}
   .modal-card{background:var(--bg-surface);border:1px solid var(--border-md);border-radius:13px;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,.5);overflow:hidden;}
   .modal-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
@@ -246,10 +294,20 @@
       <button class="on" data-u="clientes" onclick="setUniverso('clientes')">Clientes</button>
       <button data-u="retail" onclick="setUniverso('retail')">Retail</button>
     </div>
+    <span class="acc-grp">
+      <button class="acc-btn" id="btn-fs" onclick="ciclarFs()" title="Tamaño de texto" aria-label="Cambiar tamaño de texto">
+        <span class="aaa"><b>a</b><b>A</b><b>A</b></span>
+      </button>
+      <button class="acc-btn" id="btn-tema" onclick="toggleTheme()" title="Tema claro / oscuro" aria-label="Cambiar tema">
+        <i class="ti ti-moon" id="ico-tema"></i>
+      </button>
+    </span>
+
     <div class="mes-nav">
       <button id="btn-prev" onclick="cambiarMes(-1)" title="Mes anterior">‹</button>
       <span class="mes-titulo" id="mes-titulo">—</span>
-      <button id="btn-hoy" onclick="cambiarMes(1)" title="Mes siguiente">›</button>
+      <button id="btn-next" onclick="cambiarMes(1)" title="Mes siguiente">›</button>
+      <button class="hoy-btn" id="btn-hoy" onclick="irAHoy()" title="Volver al mes en curso">Hoy</button>
     </div>
     <span class="status-pill" id="cache-badge" style="display:none"></span>
     <button class="refresh-btn" onclick="refrescar()" title="Volver a consultar el API (ignorar memoria)"><i class="ti ti-refresh"></i></button>
@@ -260,7 +318,10 @@
     <div class="res-item"><span class="res-lbl">Saldo final</span><span class="res-val" id="r-fin" style="color:var(--accent)">—</span></div>
     <div class="res-item"><span class="res-lbl">Variación mes</span><span class="res-val" id="r-delta">—</span></div>
     <div class="res-item"><span class="res-lbl">Días con dato</span><span class="res-val" id="r-dias">—</span></div>
+    <div class="res-item"><span class="res-lbl">Días que cuadran</span><span class="res-val" id="r-cuadre">—</span></div>
   </div>
+
+  <div class="warn-note" id="warn-dias"></div>
 
   <div class="cal-grid" id="cal-grid"></div>
 </div>
@@ -399,7 +460,8 @@ var RET_PROXY='/api/stock-retail-proxy';
 
 var universo='clientes';
 var anio, mes;              // mes 0-11
-var diasData={};            // 'YYYY-MM-DD' -> objeto normalizado | null
+var diasData={};            // 'YYYY-MM-DD' -> objeto normalizado | null (null = el API no trajo datos)
+var diasError={};           // 'YYYY-MM-DD' -> true  (la consulta FALLÓ: no es lo mismo que "sin movimiento")
 var forzarRefresh=false;
 function refrescar(){ forzarRefresh=true; cargar(); }
 
@@ -433,14 +495,29 @@ function num(v){var n=Number(v);return isNaN(n)?0:n;}
 function setUniverso(u){
   universo=u;
   document.querySelectorAll('#seg-universo button').forEach(function(b){b.classList.toggle('on',b.dataset.u===u);});
-  if(Object.keys(diasData).length) cargar();
+  cargar();   // siempre: si el mes no tenía datos igual hay que reconsultar el otro universo
 }
+function hoyLocal(){ var d=new Date(); d.setHours(12,0,0,0); return d; }
+/* Último mes con días cerrados: el actual, salvo el día 1 (aún no vence ninguno) */
+function mesTope(){
+  var h=hoyLocal();
+  if(h.getDate()===1) return { y:(h.getMonth()===0? h.getFullYear()-1 : h.getFullYear()), m:(h.getMonth()===0?11:h.getMonth()-1) };
+  return { y:h.getFullYear(), m:h.getMonth() };
+}
+function enTope(){ var t=mesTope(); return anio===t.y && mes===t.m; }
 function cambiarMes(delta){
+  if(delta>0 && enTope()) return;              // nunca al futuro
   mes+=delta; if(mes<0){mes=11;anio--;} if(mes>11){mes=0;anio++;}
+  var t=mesTope();
+  if(anio>t.y || (anio===t.y && mes>t.m)){ anio=t.y; mes=t.m; }
   actualizarTituloMes(); cargar();
 }
+function irAHoy(){ var t=mesTope(); if(anio===t.y&&mes===t.m) return; anio=t.y; mes=t.m; actualizarTituloMes(); cargar(); }
 function actualizarTituloMes(){
   document.getElementById('mes-titulo').textContent=NOMBRE_MES[mes]+' '+anio;
+  var tope=enTope();
+  var n=document.getElementById('btn-next'); if(n){ n.classList.toggle('nav-off',tope); n.title=tope?'Ya estás en el último mes con datos':'Mes siguiente'; }
+  var b=document.getElementById('btn-hoy'); if(b) b.disabled=tope;
 }
 
 /* fetch de un día (rango desde=hasta=día) */
@@ -465,11 +542,12 @@ function ov(show,txt,pct){
 }
 
 async function cargar(){
-  var hoy=new Date(); hoy.setHours(12,0,0,0);
+  var hoy=hoyLocal();
   var ultimoDia=new Date(anio,mes+1,0).getDate();
-  // no consultar días futuros
+  // sólo días VENCIDOS: del mes en curso llegamos hasta ayer
   var limite = (anio===hoy.getFullYear()&&mes===hoy.getMonth()) ? hoy.getDate()-1 : ultimoDia;
   if(anio>hoy.getFullYear()||(anio===hoy.getFullYear()&&mes>hoy.getMonth())) limite=0;
+  if(limite<0) limite=0;
 
   // ── Caché de sesión: universo + mes ──
   var cacheKey='calStock_'+universo+'_'+anio+'-'+pad(mes+1);
@@ -482,7 +560,7 @@ async function cargar(){
         // meses pasados nunca cambian → cache siempre válido.
         // mes actual: válido solo si cubre hasta el último día vencido.
         if(!esMesActual || parsed.limite>=limite){
-          diasData=parsed.dias; render();
+          diasData=parsed.dias; diasError={}; render();
           setCacheBadge(true);
           console.log('[Calendario] cache '+cacheKey);
           return;
@@ -492,8 +570,17 @@ async function cargar(){
   }
   forzarRefresh=false;
 
-  diasData={};
-  document.getElementById('btn-hoy').disabled=true;
+  diasData={}; diasError={};
+  document.getElementById('btn-prev').disabled=true;
+  document.getElementById('btn-next').disabled=true;
+
+  if(limite===0){   // mes en curso el día 1, o mes futuro: no hay nada cerrado que pedir
+    setCacheBadge(false); render();
+    document.getElementById('btn-prev').disabled=false;
+    document.getElementById('btn-next').disabled=false;
+    return;
+  }
+
   ov(true,'Consultando '+NOMBRE_MES[mes]+'…',0);
 
   var fechas=[];
@@ -505,15 +592,39 @@ async function cargar(){
     var grupo=fechas.slice(i,i+lote);
     ov(true,'Cargando días '+(i+1)+'–'+Math.min(i+lote,fechas.length)+' de '+fechas.length, Math.round(i/Math.max(fechas.length,1)*100));
     await Promise.all(grupo.map(function(g){
-      return fetchDia(g.iso).then(function(j){diasData[g.iso]=norm(j);}).catch(function(){diasData[g.iso]=null;});
+      return fetchDia(g.iso)
+        .then(function(j){ diasData[g.iso]=norm(j); })
+        /* Un día que FALLA no es un día sin movimiento: antes los dos quedaban
+           en null y la celda se veía igual, así que un corte del API pasaba
+           por "ese día no hubo nada". Ahora se marca aparte. */
+        .catch(function(e){ diasData[g.iso]=null; diasError[g.iso]=true; console.warn('[Calendario] '+g.iso+' falló:', e.message); });
     }));
   }
   ov(false);
-  document.getElementById('btn-hoy').disabled=false;
-  // guardar en cache
-  try { sessionStorage.setItem(cacheKey, JSON.stringify({dias:diasData, limite:limite, guardado:new Date().toISOString()})); } catch(e){}
+  document.getElementById('btn-prev').disabled=false;
+  document.getElementById('btn-next').disabled=false;
+  // guardar en cache SOLO si no hubo fallas (si no, se congela un mes incompleto)
+  if(!Object.keys(diasError).length){
+    try { sessionStorage.setItem(cacheKey, JSON.stringify({dias:diasData, limite:limite, guardado:new Date().toISOString()})); } catch(e){}
+  }
   setCacheBadge(false);
   render();
+}
+
+/* ¿Cuadra el día? saldoInicial + entradas − salidas = saldoFinal.
+   Además cruza la suma de flujos listados contra totalEntradas/totalSalida
+   del propio API: si no coinciden, el API trae movimientos que este tablero
+   no está mostrando (no es un error del dato, es una categoría que falta). */
+function cuadreDia(o){
+  var flujos=FLUJOS[universo], ent=0, sal=0;
+  flujos.forEach(function(f){ var v=o[f.campo]||0; if(f.sign>0) ent+=v; else sal+=v; });
+  var calc=o.saldoInicial+ent-sal;
+  var difEnt=Math.round(ent-(o.totalEntradas||0)), difSal=Math.round(sal-(o.totalSalida||0));
+  return { ent:ent, sal:sal, calc:calc,
+           resSaldo:Math.round(o.saldoFinal-calc),
+           difEnt:difEnt, difSal:difSal,
+           ok:Math.round(o.saldoFinal-calc)===0,          // integridad del saldo
+           cubre:(difEnt===0 && difSal===0) };            // ¿el tablero muestra TODAS las categorías?
 }
 function setCacheBadge(fromCache){
   var b=document.getElementById('cache-badge'); if(!b)return;
@@ -536,26 +647,65 @@ function render(){
   var saldos=[]; Object.keys(diasData).forEach(function(k){if(diasData[k])saldos.push(diasData[k].saldoFinal);});
   var minS=Math.min.apply(null,saldos.concat([0])), maxS=Math.max.apply(null,saldos.concat([1]));
 
+  var hoy=hoyLocal(), isoHoy=iso(hoy.getFullYear(),hoy.getMonth(),hoy.getDate());
+  var descuadres=0, conDato=0, sinCubrir=0;
   for(var d=1;d<=ultimoDia;d++){
     var key=iso(anio,mes,d), o=diasData[key];
     var dow=(new Date(anio,mes,d).getDay()+6)%7;
     var esFinde=(dow>=5);
+    var marcaHoy=(key===isoHoy)?'<span class="cal-hoy-tag">HOY</span>':'';
     if(!o){
-      html+='<div class="cal-cell '+(esFinde?'finde':'')+' nodata"><div class="cal-num">'+d+'</div><div class="cal-empty-txt">—</div></div>';
+      var err=!!diasError[key];
+      var txt = err ? 'sin respuesta' : (key>=isoHoy ? 'aún no cierra' : '—');
+      html+='<div class="cal-cell '+(esFinde?'finde':'')+' nodata'+(err?' err':'')+'"'+
+            (err?' title="La consulta a RDTOut falló para este día"':'')+'>'+
+            '<div class="cal-num">'+d+'</div>'+marcaHoy+
+            '<div class="cal-empty-txt">'+txt+'</div></div>';
       continue;
     }
+    conDato++;
+    var c=cuadreDia(o); if(!c.ok) descuadres++; if(!c.cubre) sinCubrir++;
     // intensidad relativa para barra
     var rel=maxS>minS?((o.saldoFinal-minS)/(maxS-minS)):0.5;
     var difCls=o.diferencia>0?'up':(o.diferencia<0?'down':'');
     var difTxt=(o.diferencia>0?'+':'')+nfmt(o.diferencia);
-    html+='<div class="cal-cell '+(esFinde?'finde':'')+'" onclick="abrirDia(\''+key+'\')">'+
-      '<div class="cal-num">'+d+'</div>'+
+    var flag=marcaHoy;
+    if(!c.ok)          flag='<span class="cal-flag" title="Descuadre de '+nfmt(Math.abs(c.resSaldo))+' pallets">⚠</span>';
+    else if(!c.cubre)  flag='<span class="cal-flag" style="color:var(--in-transf)" title="El API trae movimientos en categorías que este tablero no lista">◆</span>';
+    html+='<div class="cal-cell '+(esFinde?'finde':'')+'" onclick="abrirDia(\''+key+'\')" title="Clic para ver el desglose del día">'+
+      '<div class="cal-num">'+d+'</div>'+flag+
       '<div class="cal-saldo">'+nfmt(o.saldoFinal)+'</div>'+
       '<div class="cal-bar-wrap"><div class="cal-bar" style="width:'+Math.round(rel*100)+'%"></div></div>'+
       '<div class="cal-dif '+difCls+'">'+difTxt+'</div>'+
     '</div>';
   }
+  if(conDato===0){
+    var t=mesTope(), esFuturo=(anio>t.y||(anio===t.y&&mes>t.m));
+    html='<div class="cal-vacio"><i class="ti ti-calendar-off"></i>'+
+      (esFuturo ? 'Todavía no hay días cerrados en '+NOMBRE_MES[mes]+' '+anio+'.'
+                : 'RDTOut no devolvió datos para '+NOMBRE_MES[mes]+' '+anio+'.')+
+      '</div>';
+  }
   grid.innerHTML=html;
+
+  // aviso de días sin respuesta
+  var nErr=Object.keys(diasError).length, wn=document.getElementById('warn-dias');
+  if(wn){
+    var avisos=[];
+    if(nErr) avisos.push('⚠ '+nErr+' día(s) no respondieron: aparecen como “sin respuesta” y NO significan que no hubo movimiento. '+
+                         '<button onclick="refrescar()">Reintentar</button>');
+    if(sinCubrir) avisos.push('◆ '+sinCubrir+' día(s) traen movimientos en categorías que este tablero no lista '+
+                              '(el total de entradas/salidas del API no calza con la suma de los flujos mostrados). '+
+                              'Clic en el día para ver la cifra.');
+    if(avisos.length){ wn.style.display='block'; wn.innerHTML=avisos.join('<br>'); }
+    else { wn.style.display='none'; wn.innerHTML=''; }
+  }
+  var rc=document.getElementById('r-cuadre');
+  if(rc){
+    rc.textContent = conDato ? ((conDato-descuadres)+' / '+conDato) : '—';
+    rc.style.color = descuadres ? cvar('--warn') : cvar('--accent');
+    rc.title = descuadres ? descuadres+' día(s) con descuadre entre flujos y saldo final' : 'Todos los días cuadran';
+  }
 
   // resumen del mes
   var dias=Object.keys(diasData).filter(function(k){return diasData[k];}).sort();
@@ -598,6 +748,30 @@ function abrirDia(key){
         '<div class="mname">Diferencia neta del día</div><div class="mbar-wrap"></div>'+
         '<div class="mval '+difCls+'">'+(o.diferencia>=0?'+':'')+nfmt(o.diferencia)+'</div></div>';
 
+  // ---- veredicto del cuadre ----
+  var c=cuadreDia(o), box='';
+  if(c.ok){
+    box='<span class="cuadre-ok"><strong>✓ El saldo cuadra.</strong></span> '+
+        nfmt(o.saldoInicial)+' + '+nfmt(c.ent)+' de entradas − '+nfmt(c.sal)+' de salidas = <strong>'+nfmt(o.saldoFinal)+'</strong>.';
+  } else {
+    box='<span class="cuadre-bad"><strong>⚠ Descuadre de '+nfmt(Math.abs(c.resSaldo))+' pallets.</strong></span> '+
+        'Los flujos listados dan '+nfmt(c.calc)+' y el saldo final declarado es '+nfmt(o.saldoFinal)+'.';
+  }
+  /* Segunda comprobación, independiente del saldo: ¿las categorías que mostramos
+     suman lo mismo que el totalEntradas/totalSalida que declara el API? Si no,
+     el API trae movimientos que este tablero no está listando. */
+  if(!c.cubre){
+    box+='<br><span class="cuadre-bad">◆ Faltan categorías.</span> El API declara '+
+         nfmt(o.totalEntradas)+' de entradas y '+nfmt(o.totalSalida)+' de salidas; las categorías mostradas suman '+
+         nfmt(c.ent)+' y '+nfmt(c.sal)+
+         (c.difEnt?' ('+nfmt(Math.abs(c.difEnt))+' de entrada sin listar)':'')+
+         (c.difSal?' ('+nfmt(Math.abs(c.difSal))+' de salida sin listar)':'')+'.';
+  } else if(c.ok){
+    box+=' Las entradas y salidas declaradas por el API coinciden con las categorías mostradas.';
+  }
+  if(diasError[key]) box='<span class="cuadre-bad">Este día no respondió.</span>';
+  html+='<div class="cuadre-box">'+box+'</div>';
+
   document.getElementById('modal-body').innerHTML=html;
   document.getElementById('modal').classList.add('show');
 }
@@ -618,9 +792,36 @@ function filaFlujo(ico,name,val,col,pct,sign){
 }
 function cerrarModal(){document.getElementById('modal').classList.remove('show');}
 
+/* ---------- Accesibilidad (aAA + sol/luna) ----------
+   En la barra de controles: el workspace de pestañas oculta .topbar. */
+var FSLEVELS=[1,1.15,1.3,1.5], fsIdx=0, temaActual='dark';
+function applyFs(){
+  document.documentElement.style.zoom=FSLEVELS[fsIdx];
+  try{ localStorage.setItem('cal_fs', fsIdx); }catch(e){}
+  var b=document.getElementById('btn-fs');
+  if(b) b.title='Tamaño de texto '+Math.round(FSLEVELS[fsIdx]*100)+'%';
+}
+function ciclarFs(){ fsIdx=(fsIdx+1)%FSLEVELS.length; applyFs(); }
+function applyTheme(t){
+  temaActual=t;
+  document.documentElement.setAttribute('data-theme', t);
+  try{ localStorage.setItem('cal_theme', t); }catch(e){}
+  var i=document.getElementById('ico-tema');
+  if(i) i.className='ti '+(t==='dark'?'ti-moon':'ti-sun');
+  if(anio!==undefined) render();   // los colores salen de variables CSS: hay que repintar
+}
+function toggleTheme(){ applyTheme(temaActual==='dark'?'light':'dark'); }
+
 /* Init */
 (function(){
-  var h=new Date(); anio=h.getFullYear(); mes=h.getMonth();
+  var t=mesTope(); anio=t.y; mes=t.m;   // el día 1 arranca en el mes anterior, no en blanco
+
+  try{ var f=parseInt(localStorage.getItem('cal_fs'),10); if(!isNaN(f)&&f>=0&&f<FSLEVELS.length) fsIdx=f; }catch(e){}
+  applyFs();
+  var tm='dark'; try{ var g=localStorage.getItem('cal_theme'); if(g==='light'||g==='dark') tm=g; }catch(e){}
+  temaActual=tm; document.documentElement.setAttribute('data-theme',tm);
+  var ic=document.getElementById('ico-tema'); if(ic) ic.className='ti '+(tm==='dark'?'ti-moon':'ti-sun');
+
   actualizarTituloMes();
   fetch('/.auth/me').then(function(r){return r.json();}).then(function(d){
     if(d&&d.clientPrincipal){
@@ -630,7 +831,14 @@ function cerrarModal(){document.getElementById('modal').classList.remove('show')
       if(a){a.textContent=ini;a.title=email;}if(e)e.textContent=email;
     }
   }).catch(function(){});
-  document.addEventListener('keydown',function(e){if(e.key==='Escape')cerrarModal();});
+  document.addEventListener('keydown',function(e){
+    if(e.key==='Escape'){ cerrarModal(); return; }
+    if(document.getElementById('modal').classList.contains('show')) return;
+    var a=document.activeElement;
+    if(a && (a.tagName==='INPUT'||a.tagName==='TEXTAREA')) return;
+    if(e.key==='ArrowLeft'){ e.preventDefault(); cambiarMes(-1); }
+    if(e.key==='ArrowRight'){ e.preventDefault(); cambiarMes(1); }
+  });
   cargar();
 })();
 

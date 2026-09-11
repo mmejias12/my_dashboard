@@ -168,12 +168,7 @@ async function sincronizarMaestros(desde, hasta, presupuesto, informe) {
 
   const sucursales = marca(await mapa.traerSucursales(opts));
   const centros    = marca(await mapa.traerCentrosCosto(opts));
-  // Fotos de perfil (dato no sensible, URL pública). Si falla, el reporte cae a
-  // las iniciales; no debe detener la sincronización.
-  let fotos = {};
-  try { fotos = await mapa.traerFotos(opts); }
-  catch (e) { informe.avisos.push('No se pudieron traer las fotos de perfil: ' + e.message); }
-  const empleados  = marca(await mapa.traerEmpleados({ presupuesto, fotos }));
+  const empleados  = marca(await mapa.traerEmpleados(opts));
   const turnos     = await mapa.traerTurnos(opts);
   if (!turnos.completo) completo = false;
   const asignaciones = marca(await mapa.traerAsignaciones(opts));
@@ -183,6 +178,21 @@ async function sincronizarMaestros(desde, hasta, presupuesto, informe) {
   const manuales = marca(await mapa.traerDiasManuales(
     mapa.sumarDias(desde, -31), mapa.sumarDias(hasta, 31), opts
   ));
+
+  // Fotos de perfil AL FINAL y sólo si sobra presupuesto: son varias páginas de
+  // /personas-paginadas/ y NO deben competir con los turnos ni las marcas (si se
+  // pusieran antes, agotaban el presupuesto y el catálogo de turnos quedaba
+  // vacío). Dato no sensible; si no alcanzan, el reporte las trae al vuelo.
+  let fotos = {};
+  if (!presupuesto.agotado(8000)) {
+    try { fotos = await mapa.traerFotos(opts); }
+    catch (e) { informe.avisos.push('No se pudieron traer las fotos de perfil: ' + e.message); }
+  }
+  if (Object.keys(fotos).length) {
+    for (const e of empleados.data) {
+      if (!e.photo) e.photo = fotos[String(e.personaId != null ? e.personaId : e.code)] || '';
+    }
+  }
 
   if (!completo) informe.avisos.push('Maestros incompletos: se agotó el presupuesto, se completarán en la siguiente pasada.');
 

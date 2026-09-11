@@ -55,14 +55,9 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;backgr
 .hdr-logo img{width:30px;height:30px;object-fit:contain;filter:drop-shadow(0 1px 2px rgba(0,0,0,.3))}
 .hdr-link{font-size:11px;color:var(--t2);text-decoration:none;padding:4px 10px;border:1px solid var(--border-md);border-radius:6px;transition:all .15s;display:flex;align-items:center;gap:5px}
 .hdr-link:hover{color:var(--t1);background:var(--s3)}
-.hdr-avatar{width:26px;height:26px;border-radius:50%;background:#1a2a1f;color:#4ade80;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;border:1px solid rgba(74,222,128,.35)}
-.hdr-email{font-size:11px;color:var(--t2)}
-.hdr-logout{color:#f87171;text-decoration:none;font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:6px;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.2);transition:background .15s}
-.hdr-logout:hover{background:rgba(248,113,113,.18)}
 .hdr-brand{font-size:13px;font-weight:600;color:var(--t1)}
 .hdr-pipe{width:1px;height:16px;background:var(--border-md)}
 .hdr-section{font-size:12px;color:var(--t2)}
-.hdr-right{margin-left:auto;display:flex;align-items:center;gap:10px}
 .live-badge{display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:10.5px;font-weight:500;border:1px solid}
 .live-badge.verde{color:var(--green);border-color:rgba(30,201,106,.25);background:rgba(30,201,106,.07)}
 .live-badge.gris{color:var(--t3);border-color:var(--border);background:transparent}
@@ -220,6 +215,10 @@ tr.parada-larga td:first-child{box-shadow:inset 3px 0 0 var(--amber)}
 .btn-xls{background:var(--green-d);color:var(--green);border:1px solid rgba(30,201,106,.2);border-radius:6px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:opacity .15s;white-space:nowrap}
 .btn-xls:hover{opacity:.8}
 .config-info{font-size:11px;color:var(--t3);align-self:center}
+.cbar-end{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.cbar-end .live-badge{padding:5px 11px;font-size:11px}
+.cbar-end .hdr-link{font-size:11.5px;padding:6px 11px}
+@media(max-width:820px){.cbar-end{margin-left:0;width:100%;justify-content:flex-start}}
 
 /* ── KPI ROW ── */
 .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
@@ -364,16 +363,6 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
   <span class="hdr-brand">REDTEC</span>
   <div class="hdr-pipe"></div>
   <span class="hdr-section">Transportes · Tiempos en Puntos</span>
-  <div class="hdr-right">
-    <a href="transportes-pagos.html" class="hdr-link" title="Ir a Pagos SPOT">💰 Pagos SPOT</a>
-    <div class="live-badge gris" id="badge-estado">
-      <span class="pulse gris" id="badge-dot"></span>
-      <span id="badge-txt">Sin cargar</span>
-    </div>
-    <div class="hdr-avatar" id="at-avatar" title="Cargando...">?</div>
-    <span class="hdr-email" id="at-user-email">Cargando...</span>
-    <a href="/logout" class="hdr-logout" title="Cerrar sesión">Cerrar sesión</a>
-  </div>
 </header>
 
 <!-- LAYOUT -->
@@ -475,7 +464,14 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
         <span id="btn-ico">↻</span> Recargar
       </button>
       <button class="btn-xls" id="btn-xls" onclick="exportarExcel()" style="display:none">⬇ Excel</button>
-      <span class="config-info" id="config-info"></span>
+      <div class="cbar-end">
+        <span class="config-info" id="config-info"></span>
+        <div class="live-badge gris" id="badge-estado" title="Estado de la consulta al GPS">
+          <span class="pulse gris" id="badge-dot"></span>
+          <span id="badge-txt">Sin cargar</span>
+        </div>
+        <a href="transportes-pagos.html" class="hdr-link" title="Ir a Pagos SPOT">💰 Pagos SPOT</a>
+      </div>
     </div>
 
     <!-- LOADER -->
@@ -1514,14 +1510,14 @@ async function cargarDatos(forzar){
   const mem = (forzar !== true) ? _gpsLeer(claveMem) : null;
   if(mem){
     aplicarFilas(mem.filas, flotaSelIni);
-    setBadge('verde','verde', DB.length + ' paradas');
-    setInfo(DB.length + ' paradas · en memoria · consultado ' +
+    setBadge('verde','verde','En memoria');
+    setInfo(DB.length + ' paradas · consultado ' +
             new Date(mem.ts).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'}), '');
     if(DB.length) document.getElementById('btn-xls').style.display = '';
     return;
   }
 
-  setBadge('amber','amber','Consultando API...');
+  setBadge('amber','amber','Consultando…');
   setInfo('Consultando GPS Condor (' + minStop + ' min mín.)','');
   mostrarLoader(true, 'Consultando el GPS…<b>' + rgEtiqueta(fi, ff) +
     (flotaSelIni==='all' ? ' · 11 placas' : ' · ' + flotaSelIni) + '</b>');
@@ -1552,8 +1548,8 @@ async function cargarDatos(forzar){
       setInfo('Sin paradas para el período. Prueba bajar el tiempo mínimo o ampliar fechas.','');
     } else {
       const nPlacas = new Set(DB.map(r=>r.placa)).size;
-      setBadge('verde','verde', DB.length + ' paradas');
-      setInfo(DB.length + ' paradas · ' + nPlacas + ' placas activas · OK','');
+      setBadge('verde','verde','Al día');
+      setInfo(DB.length + ' paradas · ' + nPlacas + ' placas activas','');
       document.getElementById('btn-xls').style.display = '';
     }
 
@@ -2456,7 +2452,7 @@ async function cargarPlacaExtra(placa, silencioso){
     DB_FILTERED = [...DB];
     PAG_PAGE = 1;
 
-    setBadge('verde','verde', DB.length + ' paradas');
+    setBadge('verde','verde','Al día');
     setInfo(DB.length + ' paradas · ' + new Set(DB.map(r=>r.placa)).size + ' placa(s) con datos','');
     setBtnPlaca(placa, consolidadas.length > 0 ? 'on' : 'sindata');
 
@@ -2841,26 +2837,6 @@ function renderTendencias(){
 
 </script>
 
-<!-- Usuario autenticado (Microsoft Entra ID) -->
-<script>
-(async function loadUserAT() {
-  try {
-    var r = await fetch('/.auth/me');
-    var data = await r.json();
-    if (data && data.clientPrincipal) {
-      var email = data.clientPrincipal.userDetails || '';
-      var namePart = email.indexOf('@') > 0 ? email.split('@')[0] : email;
-      var parts = namePart.replace(/[._-]/g, ' ').trim().split(/\s+/);
-      var initials = (parts[0] || '?').charAt(0).toUpperCase();
-      if (parts[1]) initials += parts[1].charAt(0).toUpperCase();
-      var avatarEl = document.getElementById('at-avatar');
-      var emailEl = document.getElementById('at-user-email');
-      if (avatarEl) { avatarEl.textContent = initials; avatarEl.title = email; }
-      if (emailEl) emailEl.textContent = email;
-    }
-  } catch(e) { console.warn('No se pudo cargar usuario:', e); }
-})();
-</script>
 
 </body>
 </html>

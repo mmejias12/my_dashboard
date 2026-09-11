@@ -248,6 +248,11 @@
   .rg-dia.ini { border-radius:7px 0 0 7px; } .rg-dia.fin { border-radius:0 7px 7px 0; }
   .rg-dia.ini.fin { border-radius:7px; }
   .rg-dia.hoy:not(.ini):not(.fin) { box-shadow:inset 0 0 0 1px var(--accent); }
+  /* días por venir: se pueden elegir (solicitudes programadas) pero se marcan */
+  .rg-dia.prog:not(.ini):not(.fin):not(.rango) { color:var(--text-secondary); }
+  .rg-dia.prog::after { content:'';display:block;height:2px;width:10px;margin:-4px auto 0;
+                        border-bottom:1px dotted var(--text-muted); }
+  .rg-dia.prog.ini::after, .rg-dia.prog.fin::after { border-bottom-color:#0f1117; }
 
   .rg-salto { position:absolute;inset:0;background:var(--bg-card);border-radius:var(--radius-sm);
               z-index:5;padding:4px;display:none; }
@@ -262,7 +267,8 @@
   .rg-mopt.on { background:var(--accent-dim);border-color:var(--accent);color:var(--accent);font-weight:700; }
 
   .rg-foot { display:flex;align-items:center;gap:8px;margin-top:11px;padding-top:10px;border-top:1px solid var(--border);flex-wrap:wrap; }
-  .rg-resumen { font-size:11.5px;color:var(--text-secondary);line-height:1.4; }
+  .rg-resumen { font-size:11.5px;color:var(--text-secondary);line-height:1.4;flex:1 1 240px;min-width:0; }
+  .rg-acciones { display:flex;gap:8px;margin-left:auto;flex-shrink:0; }
   .rg-resumen b { color:var(--text-primary); }
   .rg-resumen.tope { color:#fbbf24; }
   .rg-btn { font-size:12px;padding:7px 15px;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:600;border:1px solid; }
@@ -983,15 +989,16 @@
             </div>
             <div class="rg-foot">
               <span class="rg-resumen" id="rg-resumen"></span>
-              <span style="margin-left:auto"></span>
-              <button class="rg-btn ghost" onclick="rgCerrar()">Cancelar</button>
-              <button class="rg-btn ok" id="rg-aplicar" onclick="rgAplicar()">Aplicar y cargar</button>
+              <span class="rg-acciones">
+                <button class="rg-btn ghost" onclick="rgCerrar()">Cancelar</button>
+                <button class="rg-btn ok" id="rg-aplicar" onclick="rgAplicar()">Aplicar y cargar</button>
+              </span>
             </div>
           </div>
         </div>
         <input type="date" id="d1" hidden><input type="date" id="d2" hidden>
       </div>
-      <button class="btn" id="btn-load" onclick="loadData()" title="Volver a consultar el mismo período">↻ Recargar</button>
+      <button class="btn" id="btn-load" onclick="loadData(true)" title="Volver a consultar el API e ignorar lo que hay en memoria">↻ Recargar</button>
       <button class="btn" onclick="exportXLSX()">↓ Exportar Excel</button>
       <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
         <select class="sel" id="op-filter" onchange="applyFilters()">
@@ -1382,13 +1389,20 @@ window.addEventListener('DOMContentLoaded', function() {
    verdad: todo el resto del archivo (loadData, updateStats, exportXLSX, el
    agente) los lee igual que antes. Este componente sólo los escribe.
    ═══════════════════════════════════════════════════════════════════════════ */
-var RG_MAX_DIAS = 180;   // tope duro: pasado eso el API se pega
+var RG_MAX_DIAS = 180;    // tope duro del rango: pasado eso el API se pega
+/* Los retiros y transferencias se SOLICITAN con anticipación, así que el
+   calendario tiene que dejar mirar hacia adelante (lo pidió Log. Inversa).
+   90 días es el horizonte: suficiente para la planificación, acotado para que
+   nadie se vaya a 2030 sin querer. */
+var RG_MAX_FUTURO = 90;
 var RG_MESES   = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 var RG_MESES_C = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 var RG_DOW     = ['L','M','M','J','V','S','D'];
 var rg = { d1:null, d2:null, t1:null, t2:null, hover:null, base:null, anio:null, abierto:false };
 
 function rgHoyD(){ var d=new Date(); d.setHours(12,0,0,0); return d; }
+function rgTopeSup(){ return rgSum(rgIso(rgHoyD()), RG_MAX_FUTURO); }   // último día elegible
+function rgMesTope(){ var t=rgF(rgTopeSup()); return new Date(t.getFullYear(), t.getMonth(), 1, 12); }
 function rgIso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function rgF(iso){ return new Date(iso+'T12:00:00'); }
 function rgSum(iso,n){ var d=rgF(iso); d.setDate(d.getDate()+n); return rgIso(d); }
@@ -1431,7 +1445,11 @@ function rgAtajos(){
     {t:'30 días',  a:rgSum(hoy,-29),  b:hoy},
     {t:'60 días',  a:rgSum(hoy,-59),  b:hoy},
     {t:'90 días',  a:rgSum(hoy,-89),  b:hoy},
-    {t:'180 días', a:rgSum(hoy,-179), b:hoy, n:'máx'}
+    {t:'180 días', a:rgSum(hoy,-179), b:hoy, n:'máx'},
+    {g:'Programado'},
+    {t:'Próximos 7 días',  a:hoy, b:rgSum(hoy,6)},
+    {t:'Próximos 30 días', a:hoy, b:rgSum(hoy,29)},
+    {t:'Mes completo',     a:iniMes, b:rgIso(new Date(h.getFullYear(),h.getMonth()+1,0,12)), n:'con futuro'}
   ];
 }
 
@@ -1440,11 +1458,15 @@ function rgIniciar(a,b){
   document.getElementById('d1').value=a;
   document.getElementById('d2').value=b;
   rgPintarPill();
+  /* OJO: va en fase de CAPTURA. Si corre en burbujeo lo hace DESPUÉS del
+     handler que repinta el popover, y para entonces el día que se acaba de
+     clickear ya fue reemplazado por innerHTML: w.contains(e.target) da false
+     y el calendario se cerraba al elegir el primer día. */
   document.addEventListener('click', function(e){
     if(!rg.abierto) return;
     var w=document.querySelector('.rango-wrap');
     if(w && !w.contains(e.target)) rgCerrar();
-  });
+  }, true);
   document.addEventListener('keydown', function(e){
     if(!rg.abierto) return;
     if(e.key==='Escape'){ e.preventDefault(); rgCerrar(); }
@@ -1456,7 +1478,7 @@ function rgPintarPill(){
   document.getElementById('rg-texto').textContent = rgTexto(rg.d1, rg.d2);
   var n=rgLargo(rg.d1,rg.d2);
   document.getElementById('rg-dias').textContent = n+(n===1?' día':' días');
-  document.getElementById('rg-next').disabled = (rg.d2 >= rgIso(rgHoyD()));
+  document.getElementById('rg-next').disabled = (rg.d2 >= rgTopeSup());
 }
 
 /* Corre la ventana completa sin abrir el calendario.
@@ -1466,9 +1488,9 @@ function rgDesplazar(dir, ev){
   if(bl && bl.disabled) return;              // ya hay una consulta en curso
   var unDia = ev && ev.shiftKey;
   var largo = unDia ? 1 : rgLargo(rg.d1, rg.d2);
-  var hoy = rgIso(rgHoyD());
+  var tope = rgTopeSup();
   var n1=rgSum(rg.d1, dir*largo), n2=rgSum(rg.d2, dir*largo);
-  if(n2>hoy){ var exceso=rgLargo(hoy,n2)-1; n1=rgSum(n1,-exceso); n2=hoy; }
+  if(n2>tope){ var exceso=rgLargo(tope,n2)-1; n1=rgSum(n1,-exceso); n2=tope; }
   if(n1===rg.d1 && n2===rg.d2) return;
   rg.d1=n1; rg.d2=n2;
   document.getElementById('d1').value=n1;
@@ -1483,9 +1505,8 @@ function rgAbrir(ev){
   rg.abierto=true; rg.t1=rg.d1; rg.t2=rg.d2; rg.hover=null;
   var f=rgF(rg.d2);
   rg.base=new Date(f.getFullYear(), f.getMonth()-1, 1, 12);   // el mes del "hasta" a la derecha
-  var tope=rgHoyD();
-  if(rg.base > new Date(tope.getFullYear(), tope.getMonth()-1, 1, 12))
-    rg.base=new Date(tope.getFullYear(), tope.getMonth()-1, 1, 12);
+  var mt=rgMesTope(), maxBase=new Date(mt.getFullYear(), mt.getMonth()-1, 1, 12);
+  if(rg.base > maxBase) rg.base=maxBase;
   document.getElementById('rg-pop').classList.add('abierto');
   document.getElementById('rg-pill').classList.add('abierto');
   document.body.classList.add('rg-abierto');
@@ -1503,7 +1524,7 @@ function rgCerrar(){
 }
 
 function rgMoverMes(n){
-  var tope=rgHoyD(), maxBase=new Date(tope.getFullYear(), tope.getMonth()-1, 1, 12);
+  var mt=rgMesTope(), maxBase=new Date(mt.getFullYear(), mt.getMonth()-1, 1, 12);
   var nb=new Date(rg.base.getFullYear(), rg.base.getMonth()+n, 1, 12);
   if(nb>maxBase) nb=maxBase;
   rg.base=nb; rgPintarPop();
@@ -1515,17 +1536,17 @@ function rgToggleSalto(){
   if(abrir){ rg.anio=new Date(rg.base.getFullYear(), rg.base.getMonth()+1, 1, 12).getFullYear(); rgPintarSalto(); }
 }
 function rgMoverAnio(n){
-  var maxA=rgHoyD().getFullYear();
+  var maxA=rgMesTope().getFullYear();
   rg.anio=Math.min(rg.anio+n, maxA);
   rgPintarSalto();
 }
 function rgPintarSalto(){
-  var hoy=rgHoyD(), maxA=hoy.getFullYear();
+  var mt=rgMesTope(), maxA=mt.getFullYear();
   document.getElementById('rg-anio').textContent=rg.anio;
   document.getElementById('rg-anio-next').disabled=(rg.anio>=maxA);
   var html='';
   for(var m=0;m<12;m++){
-    var futuro=(rg.anio>maxA)||(rg.anio===maxA && m>hoy.getMonth());
+    var futuro=(rg.anio>maxA)||(rg.anio===maxA && m>mt.getMonth());
     var der=new Date(rg.base.getFullYear(), rg.base.getMonth()+1, 1, 12);
     var sel=(der.getFullYear()===rg.anio && der.getMonth()===m);
     html+='<button class="rg-mopt'+(sel?' on':'')+'" data-salto="'+m+'"'+(futuro?' disabled':'')+'>'+RG_MESES_C[m]+'</button>';
@@ -1547,9 +1568,9 @@ function rgPintarPop(){
   var b2=new Date(rg.base.getFullYear(), rg.base.getMonth()+1, 1, 12);
   document.getElementById('rg-mtit-txt').textContent=RG_MESES[rg.base.getMonth()]+' '+rg.base.getFullYear()+
       ' – '+RG_MESES[b2.getMonth()]+' '+b2.getFullYear();
-  var tope=rgHoyD();
-  document.getElementById('rg-mnext').disabled = (b2.getFullYear()>tope.getFullYear() ||
-      (b2.getFullYear()===tope.getFullYear() && b2.getMonth()>=tope.getMonth()));
+  var mt=rgMesTope();
+  document.getElementById('rg-mnext').disabled = (b2.getFullYear()>mt.getFullYear() ||
+      (b2.getFullYear()===mt.getFullYear() && b2.getMonth()>=mt.getMonth()));
 
   document.getElementById('rg-meses').innerHTML = rgMesHTML(rg.base)+rgMesHTML(b2);
   rgPintarResumen();
@@ -1557,7 +1578,7 @@ function rgPintarPop(){
 
 function rgMesHTML(base){
   var y=base.getFullYear(), m=base.getMonth();
-  var hoy=rgIso(rgHoyD());
+  var hoy=rgIso(rgHoyD()), tope=rgTopeSup();
   var ini=new Date(y,m,1,12), fin=new Date(y,m+1,0,12);
   var primerLun=rgLunes(ini);
   // límite por el tope de 180 días mientras se elige el fin
@@ -1576,9 +1597,8 @@ function rgMesHTML(base){
     h+='<button class="rg-sem" data-sem="'+rgIso(cur)+'" title="Seleccionar la semana completa">'+rgSemISO(cur)+'</button>';
     for(var d=0; d<7; d++){
       var iso=rgIso(cur), esteMes=(cur.getMonth()===m);
-      var futuro=(iso>hoy);
-      var dis=futuro || (limSup && iso>limSup);
-      var cls='rg-dia'+(esteMes?'':' fuera')+(iso===hoy?' hoy':'');
+      var dis=(iso>tope) || (limSup && iso>limSup);
+      var cls='rg-dia'+(esteMes?'':' fuera')+(iso===hoy?' hoy':'')+(iso>hoy?' prog':'');
       if(lo&&hi&&iso>lo&&iso<hi) cls+=' rango';
       if(lo&&iso===lo) cls+=' ini';
       if(hi&&iso===hi) cls+=' fin';
@@ -1601,7 +1621,9 @@ function rgPintarResumen(){
     ? ' · sobre '+(RG_MAX_DIAS-30)+' días se acorta el margen de retiros para no colgar el API'
     : '';
   el.className='rg-resumen';
-  el.innerHTML='<b>'+rgTexto(rg.t1,rg.t2)+'</b> · '+n+(n===1?' día':' días')+' de '+RG_MAX_DIAS+extra;
+  var hoy=rgIso(rgHoyD());
+  var prog = (rg.t2>hoy) ? ' · incluye días por venir (solicitudes programadas)' : '';
+  el.innerHTML='<b>'+rgTexto(rg.t1,rg.t2)+'</b> · '+n+(n===1?' día':' días')+' de '+RG_MAX_DIAS+prog+extra;
 }
 
 function rgFijarTemp(a,b){ rg.t1=a; rg.t2=b; rg.hover=null; }
@@ -1637,9 +1659,9 @@ document.addEventListener('click', function(e){
     return;
   }
   if(t.hasAttribute('data-sem')){
-    var lun=t.getAttribute('data-sem'), dom=rgSum(lun,6), hoy=rgIso(rgHoyD());
-    if(lun>hoy) return;
-    if(dom>hoy) dom=hoy;
+    var lun=t.getAttribute('data-sem'), dom=rgSum(lun,6), tope=rgTopeSup();
+    if(lun>tope) return;
+    if(dom>tope) dom=tope;
     rgFijarTemp(lun,dom); rgPintarPop();
     return;
   }
@@ -1662,8 +1684,22 @@ document.addEventListener('mouseover', function(e){
   rgPintarResumen();
 });
 
+/* ── Memoria del último período traído ──────────────────────────────────────
+   El API se pide con un buffer de RETIRO_BUFFER_DIAS hacia atrás, así que la
+   respuesta guardada cubre [d1-30, d2]. Cualquier rango CONTENIDO en [d1,d2]
+   se puede recortar aquí mismo con _perteneceAlPeriodo, sin volver a consultar:
+   si n1 >= d1 entonces n1-30 >= d1-30, o sea el buffer también está cubierto.
+   Se vence a los 5 minutos porque el día en curso sigue moviéndose. */
+var _memRango = null;                 // {d1, d2, payload, ts}
+var MEM_VIGENCIA_MS = 5*60*1000;
+function _memSirve(d1, d2){
+  return _memRango && _memRango.payload &&
+         d1 >= _memRango.d1 && d2 <= _memRango.d2 &&
+         (Date.now() - _memRango.ts) < MEM_VIGENCIA_MS;
+}
+
 /* CARGAR DATOS */
-function loadData() {
+function loadData(forzar) {
   var btn   = document.getElementById('btn-load');
   var tbody = document.getElementById('tbody');
   var overlay = document.getElementById('loading-overlay');
@@ -1687,6 +1723,15 @@ function loadData() {
 
   var d1  = document.getElementById('d1').value;
   var d2  = document.getElementById('d2').value;
+
+  // ── Lectura instantánea: el rango ya está dentro de lo descargado ──
+  if (forzar !== true && _memSirve(d1, d2)) {
+    raw = _memRango.payload.filter(function(r) { return _perteneceAlPeriodo(r, d1, d2); });
+    _pintarPeriodo(raw, true);
+    btn.disabled = false; btn.textContent = '↻ Recargar'; if(overlay) overlay.classList.remove('visible');
+    return;
+  }
+
   // Retiros por fecha de confirmación: ampliamos el inicio de la consulta hacia atrás
   // para traer también retiros requeridos antes del rango pero confirmados dentro de él.
   var d1Consulta = _desplazarDias(d1, -RETIRO_BUFFER_DIAS);
@@ -1704,32 +1749,11 @@ function loadData() {
     })
     .then(function(data) {
       var dataApi = Array.isArray(data) ? data : [data];
+      _memRango = { d1:d1, d2:d2, payload:dataApi, ts:Date.now() };   // queda en memoria
       // Regla interna del periodo: retiros por fecha de confirmación, resto por fecha
       // requerida. Descarta los registros del buffer que no correspondan al rango real.
       raw = dataApi.filter(function(r) { return _perteneceAlPeriodo(r, d1, d2); });
-      if (raw.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="10"><div class="state-msg">Sin registros para el rango seleccionado</div></td></tr>';
-        document.getElementById('tcnt').textContent = '0 registros';
-        btn.disabled = false; btn.textContent = '↻ Recargar'; if(overlay) overlay.classList.remove('visible');
-        return;
-      }
-      filtered = raw.slice(); cp = 1; sc = null;
-      updateStats(); buildTags(); render();
-      document.getElementById('stats').style.display   = 'grid';
-      document.getElementById('pg').style.display      = 'flex';
-    document.getElementById('totals-bar').style.display = 'flex';
-      document.getElementById('tag-row').style.display = 'flex';
-      var now = new Date();
-document.getElementById('last-upd').textContent = 'Actualizado ' + now.toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
-  if (typeof window.agData === 'function') {
-    var _em=0, _ret=0;
-    for(var _i=0;_i<raw.length;_i++){
-      var _op=(raw[_i].operacion||'').toLowerCase();
-      if(_op.indexOf('emision')>=0) _em++;
-      if(_op.trim()==='retiro') _ret++;
-    }
-    window.agData(_em + ' em · ' + _ret + ' ret · ' + raw.length + ' reg.');
-  }
+      _pintarPeriodo(raw, false);
       btn.disabled = false; btn.textContent = '↻ Recargar'; if(overlay) overlay.classList.remove('visible');
     })
     .catch(function(err) {
@@ -1741,6 +1765,40 @@ document.getElementById('last-upd').textContent = 'Actualizado ' + now.toLocaleT
       document.getElementById('tcnt').textContent = 'Error';
       btn.disabled = false; btn.textContent = '↻ Recargar'; if(overlay) overlay.classList.remove('visible');
     });
+}
+
+/* Pinta el período ya filtrado. Lo comparten la respuesta del API y el recorte
+   en memoria, para que se vean exactamente igual. */
+function _pintarPeriodo(datos, deMemoria) {
+  var tbody = document.getElementById('tbody');
+  if (!datos.length) {
+    tbody.innerHTML = '<tr><td colspan="10"><div class="state-msg">Sin registros para el rango seleccionado</div></td></tr>';
+    document.getElementById('tcnt').textContent = '0 registros';
+    document.getElementById('stats').style.display = 'none';
+    document.getElementById('pg').style.display = 'none';
+    document.getElementById('totals-bar').style.display = 'none';
+    document.getElementById('tag-row').style.display = 'none';
+    return;
+  }
+  filtered = raw.slice(); cp = 1; sc = null;
+  updateStats(); buildTags(); render();
+  document.getElementById('stats').style.display      = 'grid';
+  document.getElementById('pg').style.display         = 'flex';
+  document.getElementById('totals-bar').style.display = 'flex';
+  document.getElementById('tag-row').style.display    = 'flex';
+  var now = new Date();
+  document.getElementById('last-upd').textContent =
+    (deMemoria ? 'En memoria · consultado ' + new Date(_memRango.ts).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'})
+               : 'Actualizado ' + now.toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit', second:'2-digit'}));
+  if (typeof window.agData === 'function') {
+    var _em=0, _ret=0;
+    for(var _i=0;_i<raw.length;_i++){
+      var _op=(raw[_i].operacion||'').toLowerCase();
+      if(_op.indexOf('emision')>=0) _em++;
+      if(_op.trim()==='retiro') _ret++;
+    }
+    window.agData(_em + ' em · ' + _ret + ' ret · ' + raw.length + ' reg.');
+  }
 }
 
 /* STATS */

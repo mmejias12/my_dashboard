@@ -187,6 +187,104 @@
   .cbar { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:.875rem 1rem;display:flex;align-items:flex-end;gap:.875rem;margin-bottom:.875rem;flex-wrap:wrap; }
   .ctrl-group { display:flex;flex-direction:column;gap:4px; }
   .ctrl-label { font-size:11px;color:var(--text-secondary); }
+  /* ═══════════ SELECTOR DE PERÍODO ═══════════ */
+  .rango-wrap { display:flex;align-items:stretch;position:relative; }
+  .rg-nav { width:30px;border:1px solid var(--border-md);background:var(--bg-input);color:var(--text-secondary);
+            cursor:pointer;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;
+            transition:all .13s;font-family:inherit; }
+  .rg-nav.izq { border-radius:var(--radius-sm) 0 0 var(--radius-sm);border-right:none; }
+  .rg-nav.der { border-radius:0 var(--radius-sm) var(--radius-sm) 0;border-left:none; }
+  .rg-nav:hover:not(:disabled) { background:var(--accent);color:#0f1117;border-color:var(--accent); }
+  .rg-nav:disabled { opacity:.28;cursor:not-allowed; }
+  .rg-pill { display:flex;align-items:center;gap:9px;min-width:255px;padding:8px 12px;cursor:pointer;
+             border:1px solid var(--border-md);background:var(--bg-input);color:var(--text-primary);
+             font-family:inherit;font-size:13px;transition:all .13s;text-align:left; }
+  .rg-pill:hover, .rg-pill.abierto { border-color:var(--accent); }
+  .rg-pill > i { color:var(--accent);font-size:15px;flex-shrink:0; }
+  .rg-pill b { margin-left:auto;font-size:10.5px;font-weight:600;color:var(--text-secondary);
+               background:var(--bg-hover);border-radius:9px;padding:2px 8px;white-space:nowrap; }
+
+  .rg-pop { position:absolute;top:calc(100% + 8px);left:0;z-index:400;display:none;
+            background:var(--bg-card);border:1px solid var(--border-md);border-radius:var(--radius-md);
+            box-shadow:0 20px 55px rgba(0,0,0,.6);padding:12px;min-width:660px; }
+  .rg-pop.abierto { display:block; }
+  .rg-cols { display:flex;gap:12px; }
+  .rg-atajos { display:flex;flex-direction:column;gap:1px;width:158px;flex-shrink:0;
+               border-right:1px solid var(--border);padding-right:10px; }
+  .rg-gtit { font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;
+             color:var(--text-muted);padding:9px 7px 3px; }
+  .rg-atajo { text-align:left;background:transparent;border:none;color:var(--text-secondary);font-family:inherit;
+              font-size:12px;padding:6px 8px;border-radius:6px;cursor:pointer;transition:all .11s;
+              display:flex;align-items:center;gap:6px;width:100%; }
+  .rg-atajo:hover { background:var(--bg-hover);color:var(--text-primary); }
+  .rg-atajo.on { background:var(--accent-dim);color:var(--accent);font-weight:600; }
+  .rg-atajo small { margin-left:auto;font-size:10px;color:var(--text-muted);font-weight:400; }
+
+  .rg-cal { flex:1;min-width:0;position:relative; }
+  .rg-cal-head { display:flex;align-items:center;gap:6px;margin-bottom:9px; }
+  .rg-mnav { width:27px;height:27px;border-radius:6px;border:1px solid var(--border-md);background:var(--bg-input);
+             color:var(--text-primary);cursor:pointer;font-size:15px;line-height:1;font-family:inherit; }
+  .rg-mnav:hover:not(:disabled) { background:var(--accent);color:#0f1117;border-color:var(--accent); }
+  .rg-mnav:disabled { opacity:.28;cursor:not-allowed; }
+  .rg-mtit { flex:1;background:transparent;border:1px solid transparent;color:var(--text-primary);font-family:inherit;
+             font-size:12.5px;font-weight:600;cursor:pointer;border-radius:6px;padding:5px 8px; }
+  .rg-mtit:hover { background:var(--bg-hover);border-color:var(--border-md); }
+  .rg-mtit i { font-size:11px;color:var(--text-muted);margin-left:5px; }
+  .rg-meses { display:flex;gap:16px; }
+  .rg-mes { flex:1;min-width:0; }
+  .rg-mes-tit { font-size:11.5px;font-weight:600;text-align:center;margin-bottom:6px;color:var(--text-secondary); }
+  .rg-grid { display:grid;grid-template-columns:24px repeat(7,1fr);gap:2px; }
+  .rg-dow { font-size:9.5px;text-align:center;color:var(--text-muted);font-weight:700;padding:2px 0; }
+  .rg-sem { font-size:9.5px;color:var(--text-muted);background:transparent;border:none;font-family:inherit;
+            cursor:pointer;border-radius:5px;padding:0;font-style:italic;height:27px; }
+  .rg-sem:hover { background:var(--accent-dim);color:var(--accent); }
+  .rg-dia { font-size:11.5px;height:27px;border:none;background:transparent;color:var(--text-primary);
+            font-family:inherit;cursor:pointer;border-radius:6px;transition:background .1s;padding:0; }
+  .rg-dia:hover:not(:disabled) { background:var(--bg-hover); }
+  .rg-dia.fuera { color:var(--text-muted);opacity:.32; }
+  .rg-dia:disabled { opacity:.16;cursor:not-allowed;background:transparent !important; }
+  .rg-dia.rango { background:var(--accent-dim);border-radius:0; }
+  .rg-dia.ini, .rg-dia.fin { background:var(--accent);color:#0f1117;font-weight:700; }
+  .rg-dia.ini { border-radius:7px 0 0 7px; } .rg-dia.fin { border-radius:0 7px 7px 0; }
+  .rg-dia.ini.fin { border-radius:7px; }
+  .rg-dia.hoy:not(.ini):not(.fin) { box-shadow:inset 0 0 0 1px var(--accent); }
+
+  .rg-salto { position:absolute;inset:0;background:var(--bg-card);border-radius:var(--radius-sm);
+              z-index:5;padding:4px;display:none; }
+  .rg-salto.abierto { display:block; }
+  .rg-anios { display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:10px; }
+  .rg-anio { font-size:13px;font-weight:700;min-width:60px;text-align:center; }
+  .rg-mgrid { display:grid;grid-template-columns:repeat(4,1fr);gap:6px; }
+  .rg-mopt { font-size:12px;padding:11px 0;border-radius:7px;border:1px solid var(--border);background:var(--bg-input);
+             color:var(--text-primary);cursor:pointer;font-family:inherit; }
+  .rg-mopt:hover:not(:disabled) { background:var(--accent);color:#0f1117;border-color:var(--accent); }
+  .rg-mopt:disabled { opacity:.22;cursor:not-allowed; }
+  .rg-mopt.on { background:var(--accent-dim);border-color:var(--accent);color:var(--accent);font-weight:700; }
+
+  .rg-foot { display:flex;align-items:center;gap:8px;margin-top:11px;padding-top:10px;border-top:1px solid var(--border);flex-wrap:wrap; }
+  .rg-resumen { font-size:11.5px;color:var(--text-secondary);line-height:1.4; }
+  .rg-resumen b { color:var(--text-primary); }
+  .rg-resumen.tope { color:#fbbf24; }
+  .rg-btn { font-size:12px;padding:7px 15px;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:600;border:1px solid; }
+  .rg-btn.ok { background:var(--accent);border-color:var(--accent);color:#0f1117; }
+  .rg-btn.ok:hover { filter:brightness(1.08); }
+  .rg-btn.ghost { background:transparent;border-color:var(--border-md);color:var(--text-secondary); }
+  .rg-btn.ghost:hover { color:var(--text-primary);background:var(--bg-hover); }
+  .rg-btn:disabled { opacity:.4;cursor:not-allowed;filter:none; }
+
+  @media (max-width:760px) {
+    .rg-pop { position:fixed;left:8px;right:8px;top:auto;bottom:8px;min-width:0;max-height:88vh;overflow:auto;z-index:10000; }
+    .rg-cols { flex-direction:column; }
+    .rg-atajos { width:auto;border-right:none;border-bottom:1px solid var(--border);padding:0 0 8px;
+                 flex-direction:row;flex-wrap:wrap;gap:4px; }
+    .rg-gtit { width:100%;padding:4px 2px 0; }
+    .rg-atajo { width:auto;background:var(--bg-input);border:1px solid var(--border); }
+    .rg-atajo small { display:none; }
+    .rg-meses .rg-mes:first-child { display:none; }   /* en móvil se ve el mes más reciente */
+    .rg-pill { min-width:0;flex:1; }
+    body.rg-abierto #agB { display:none; }
+  }
+
   .ctrl-date { font-size:13px;padding:8px 11px;border:1px solid var(--border-md);border-radius:var(--radius-sm);background:var(--bg-input);color:var(--text-primary);outline:none;font-family:'Inter',sans-serif;width:160px;color-scheme:dark; }
   .ctrl-date:focus { border-color:var(--accent); }
   .btn { font-size:12.5px;padding:8px 16px;border:1px solid var(--border-md);border-radius:var(--radius-sm);background:var(--bg-input);color:var(--text-primary);cursor:pointer;transition:background .12s;font-family:'Inter',sans-serif;font-weight:500;display:inline-flex;align-items:center;gap:6px;white-space:nowrap; }
@@ -848,14 +946,52 @@
 
     <div class="cbar">
       <div class="ctrl-group">
-        <span class="ctrl-label">Desde</span>
-        <input type="date" id="d1" class="ctrl-date">
+        <span class="ctrl-label">Período</span>
+        <div class="rango-wrap">
+          <button class="rg-nav izq" id="rg-prev" onclick="rgDesplazar(-1,event)"
+                  title="Período anterior (con Shift, un día)">&lsaquo;</button>
+          <button class="rg-pill" id="rg-pill" onclick="rgAbrir(event)" aria-haspopup="dialog" aria-expanded="false">
+            <i class="ti ti-calendar-event"></i><span id="rg-texto">—</span><b id="rg-dias"></b>
+          </button>
+          <button class="rg-nav der" id="rg-next" onclick="rgDesplazar(1,event)"
+                  title="Período siguiente (con Shift, un día)">&rsaquo;</button>
+
+          <!-- OJO: nada de stopPropagation aquí. Toda la interacción del popover va por
+               delegación en document, y cortar la propagación la mataba entera.
+               El cierre por clic afuera ya comprueba que el clic no esté en .rango-wrap. -->
+          <div class="rg-pop" id="rg-pop" role="dialog" aria-label="Elegir período">
+            <div class="rg-cols">
+              <div class="rg-atajos" id="rg-atajos"></div>
+              <div class="rg-cal">
+                <div class="rg-cal-head">
+                  <button class="rg-mnav" id="rg-mprev" onclick="rgMoverMes(-1)" title="Mes anterior">&lsaquo;</button>
+                  <button class="rg-mtit" id="rg-mtit" onclick="rgToggleSalto()" title="Ir directo a un mes">
+                    <span id="rg-mtit-txt">—</span><i class="ti ti-chevron-down"></i>
+                  </button>
+                  <button class="rg-mnav" id="rg-mnext" onclick="rgMoverMes(1)" title="Mes siguiente">&rsaquo;</button>
+                </div>
+                <div class="rg-meses" id="rg-meses"></div>
+                <div class="rg-salto" id="rg-salto">
+                  <div class="rg-anios">
+                    <button class="rg-mnav" onclick="rgMoverAnio(-1)">&lsaquo;</button>
+                    <span class="rg-anio" id="rg-anio">—</span>
+                    <button class="rg-mnav" id="rg-anio-next" onclick="rgMoverAnio(1)">&rsaquo;</button>
+                  </div>
+                  <div class="rg-mgrid" id="rg-mgrid"></div>
+                </div>
+              </div>
+            </div>
+            <div class="rg-foot">
+              <span class="rg-resumen" id="rg-resumen"></span>
+              <span style="margin-left:auto"></span>
+              <button class="rg-btn ghost" onclick="rgCerrar()">Cancelar</button>
+              <button class="rg-btn ok" id="rg-aplicar" onclick="rgAplicar()">Aplicar y cargar</button>
+            </div>
+          </div>
+        </div>
+        <input type="date" id="d1" hidden><input type="date" id="d2" hidden>
       </div>
-      <div class="ctrl-group">
-        <span class="ctrl-label">Hasta</span>
-        <input type="date" id="d2" class="ctrl-date">
-      </div>
-      <button class="btn" id="btn-load" onclick="loadData()">Cargar datos</button>
+      <button class="btn" id="btn-load" onclick="loadData()" title="Volver a consultar el mismo período">↻ Recargar</button>
       <button class="btn" onclick="exportXLSX()">↓ Exportar Excel</button>
       <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
         <select class="sel" id="op-filter" onchange="applyFilters()">
@@ -950,7 +1086,7 @@
 
     <div class="table-card">
       <div class="table-toolbar">
-        <span class="table-count" id="tcnt">Sin datos — seleccione un período y presione "Cargar datos"</span>
+        <span class="table-count" id="tcnt">Cargando el mes en curso…</span>
       </div>
       <div class="table-wrap">
         <table>
@@ -967,7 +1103,7 @@
             <th onclick="sortBy('usuario')">Usuario ↕</th>
           </tr></thead>
           <tbody id="tbody">
-            <tr><td colspan="10"><div class="state-msg">Presione "Cargar datos" para consultar el API</div></td></tr>
+            <tr><td colspan="10"><div class="state-msg"><div class="spinner"></div>Cargando el mes en curso…</div></td></tr>
           </tbody>
         </table>
       </div>
@@ -1235,9 +1371,295 @@ window.addEventListener('DOMContentLoaded', function() {
   var dd   = String(hoy.getDate()).padStart(2, '0');
   var hoyStr    = yyyy + '-' + mm + '-' + dd;
   var primerDia = yyyy + '-' + mm + '-01';
-  document.getElementById('d1').value = primerDia;
-  document.getElementById('d2').value = hoyStr;
+  rgIniciar(primerDia, hoyStr);          // arma el selector con el mes en curso
   logUso('(ingreso a la app)', '');  // marca sesión/usuario activo
+  loadData();                            // ── precarga: el mes en curso sale solo ──
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SELECTOR DE PERÍODO
+   Los <input type="date"> siguen existiendo (ocultos) y son la única fuente de
+   verdad: todo el resto del archivo (loadData, updateStats, exportXLSX, el
+   agente) los lee igual que antes. Este componente sólo los escribe.
+   ═══════════════════════════════════════════════════════════════════════════ */
+var RG_MAX_DIAS = 180;   // tope duro: pasado eso el API se pega
+var RG_MESES   = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+var RG_MESES_C = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+var RG_DOW     = ['L','M','M','J','V','S','D'];
+var rg = { d1:null, d2:null, t1:null, t2:null, hover:null, base:null, anio:null, abierto:false };
+
+function rgHoyD(){ var d=new Date(); d.setHours(12,0,0,0); return d; }
+function rgIso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function rgF(iso){ return new Date(iso+'T12:00:00'); }
+function rgSum(iso,n){ var d=rgF(iso); d.setDate(d.getDate()+n); return rgIso(d); }
+function rgLargo(a,b){ return Math.round((rgF(b)-rgF(a))/86400000)+1; }
+function rgLunes(d){ var x=new Date(d.getTime()); x.setDate(x.getDate()-((x.getDay()+6)%7)); x.setHours(12,0,0,0); return x; }
+/* Nº de semana ISO (lunes primero), la misma convención de la cartola */
+function rgSemISO(d){
+  var t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  t.setUTCDate(t.getUTCDate()-((t.getUTCDay()+6)%7)+3);
+  var p1=new Date(Date.UTC(t.getUTCFullYear(),0,4));
+  return 1+Math.round(((t-p1)/86400000-3+((p1.getUTCDay()+6)%7))/7);
+}
+function rgTexto(a,b){
+  var A=rgF(a), B=rgF(b), mA=RG_MESES_C[A.getMonth()], mB=RG_MESES_C[B.getMonth()];
+  if(a===b) return A.getDate()+' '+mA+' '+A.getFullYear();
+  if(A.getFullYear()===B.getFullYear()&&A.getMonth()===B.getMonth()) return A.getDate()+' – '+B.getDate()+' '+mB+' '+B.getFullYear();
+  if(A.getFullYear()===B.getFullYear()) return A.getDate()+' '+mA+' – '+B.getDate()+' '+mB+' '+B.getFullYear();
+  return A.getDate()+' '+mA+' '+String(A.getFullYear()).slice(2)+' – '+B.getDate()+' '+mB+' '+String(B.getFullYear()).slice(2);
+}
+
+/* Atajos de un clic. El que calza con el rango actual queda marcado. */
+function rgAtajos(){
+  var h=rgHoyD(), hoy=rgIso(h);
+  var lun=rgIso(rgLunes(h)), lunPas=rgSum(lun,-7);
+  var iniMes=rgIso(new Date(h.getFullYear(),h.getMonth(),1,12));
+  var iniMesAnt=rgIso(new Date(h.getFullYear(),h.getMonth()-1,1,12));
+  var finMesAnt=rgIso(new Date(h.getFullYear(),h.getMonth(),0,12));
+  return [
+    {g:'Rápido'},
+    {t:'Hoy',            a:hoy,           b:hoy},
+    {t:'Ayer',           a:rgSum(hoy,-1), b:rgSum(hoy,-1)},
+    {t:'Esta semana',    a:lun,           b:hoy,            n:'sem '+rgSemISO(h)},
+    {t:'Semana pasada',  a:lunPas,        b:rgSum(lunPas,6),n:'sem '+rgSemISO(rgF(lunPas))},
+    {g:'Meses'},
+    {t:'Mes en curso',   a:iniMes,        b:hoy},
+    {t:'Mes pasado',     a:iniMesAnt,     b:finMesAnt},
+    {g:'Últimos…'},
+    {t:'7 días',   a:rgSum(hoy,-6),   b:hoy},
+    {t:'14 días',  a:rgSum(hoy,-13),  b:hoy},
+    {t:'30 días',  a:rgSum(hoy,-29),  b:hoy},
+    {t:'60 días',  a:rgSum(hoy,-59),  b:hoy},
+    {t:'90 días',  a:rgSum(hoy,-89),  b:hoy},
+    {t:'180 días', a:rgSum(hoy,-179), b:hoy, n:'máx'}
+  ];
+}
+
+function rgIniciar(a,b){
+  rg.d1=a; rg.d2=b;
+  document.getElementById('d1').value=a;
+  document.getElementById('d2').value=b;
+  rgPintarPill();
+  document.addEventListener('click', function(e){
+    if(!rg.abierto) return;
+    var w=document.querySelector('.rango-wrap');
+    if(w && !w.contains(e.target)) rgCerrar();
+  });
+  document.addEventListener('keydown', function(e){
+    if(!rg.abierto) return;
+    if(e.key==='Escape'){ e.preventDefault(); rgCerrar(); }
+    if(e.key==='Enter' && rg.t1 && rg.t2){ e.preventDefault(); rgAplicar(); }
+  });
+}
+
+function rgPintarPill(){
+  document.getElementById('rg-texto').textContent = rgTexto(rg.d1, rg.d2);
+  var n=rgLargo(rg.d1,rg.d2);
+  document.getElementById('rg-dias').textContent = n+(n===1?' día':' días');
+  document.getElementById('rg-next').disabled = (rg.d2 >= rgIso(rgHoyD()));
+}
+
+/* Corre la ventana completa sin abrir el calendario.
+   Con Shift, un día a la vez (para moverse dentro de la misma semana). */
+function rgDesplazar(dir, ev){
+  var bl=document.getElementById('btn-load');
+  if(bl && bl.disabled) return;              // ya hay una consulta en curso
+  var unDia = ev && ev.shiftKey;
+  var largo = unDia ? 1 : rgLargo(rg.d1, rg.d2);
+  var hoy = rgIso(rgHoyD());
+  var n1=rgSum(rg.d1, dir*largo), n2=rgSum(rg.d2, dir*largo);
+  if(n2>hoy){ var exceso=rgLargo(hoy,n2)-1; n1=rgSum(n1,-exceso); n2=hoy; }
+  if(n1===rg.d1 && n2===rg.d2) return;
+  rg.d1=n1; rg.d2=n2;
+  document.getElementById('d1').value=n1;
+  document.getElementById('d2').value=n2;
+  rgPintarPill();
+  loadData();
+}
+
+function rgAbrir(ev){
+  if(ev) ev.stopPropagation();
+  if(rg.abierto){ rgCerrar(); return; }
+  rg.abierto=true; rg.t1=rg.d1; rg.t2=rg.d2; rg.hover=null;
+  var f=rgF(rg.d2);
+  rg.base=new Date(f.getFullYear(), f.getMonth()-1, 1, 12);   // el mes del "hasta" a la derecha
+  var tope=rgHoyD();
+  if(rg.base > new Date(tope.getFullYear(), tope.getMonth()-1, 1, 12))
+    rg.base=new Date(tope.getFullYear(), tope.getMonth()-1, 1, 12);
+  document.getElementById('rg-pop').classList.add('abierto');
+  document.getElementById('rg-pill').classList.add('abierto');
+  document.body.classList.add('rg-abierto');
+  document.getElementById('rg-pill').setAttribute('aria-expanded','true');
+  document.getElementById('rg-salto').classList.remove('abierto');
+  rgPintarPop();
+}
+function rgCerrar(){
+  rg.abierto=false;
+  document.body.classList.remove('rg-abierto');
+  document.getElementById('rg-pop').classList.remove('abierto');
+  document.getElementById('rg-pill').classList.remove('abierto');
+  document.getElementById('rg-pill').setAttribute('aria-expanded','false');
+  document.getElementById('rg-salto').classList.remove('abierto');
+}
+
+function rgMoverMes(n){
+  var tope=rgHoyD(), maxBase=new Date(tope.getFullYear(), tope.getMonth()-1, 1, 12);
+  var nb=new Date(rg.base.getFullYear(), rg.base.getMonth()+n, 1, 12);
+  if(nb>maxBase) nb=maxBase;
+  rg.base=nb; rgPintarPop();
+}
+function rgToggleSalto(){
+  var s=document.getElementById('rg-salto');
+  var abrir=!s.classList.contains('abierto');
+  s.classList.toggle('abierto', abrir);
+  if(abrir){ rg.anio=new Date(rg.base.getFullYear(), rg.base.getMonth()+1, 1, 12).getFullYear(); rgPintarSalto(); }
+}
+function rgMoverAnio(n){
+  var maxA=rgHoyD().getFullYear();
+  rg.anio=Math.min(rg.anio+n, maxA);
+  rgPintarSalto();
+}
+function rgPintarSalto(){
+  var hoy=rgHoyD(), maxA=hoy.getFullYear();
+  document.getElementById('rg-anio').textContent=rg.anio;
+  document.getElementById('rg-anio-next').disabled=(rg.anio>=maxA);
+  var html='';
+  for(var m=0;m<12;m++){
+    var futuro=(rg.anio>maxA)||(rg.anio===maxA && m>hoy.getMonth());
+    var der=new Date(rg.base.getFullYear(), rg.base.getMonth()+1, 1, 12);
+    var sel=(der.getFullYear()===rg.anio && der.getMonth()===m);
+    html+='<button class="rg-mopt'+(sel?' on':'')+'" data-salto="'+m+'"'+(futuro?' disabled':'')+'>'+RG_MESES_C[m]+'</button>';
+  }
+  document.getElementById('rg-mgrid').innerHTML=html;
+}
+
+function rgPintarPop(){
+  // atajos
+  var ats=rgAtajos(), ha='';
+  ats.forEach(function(x,i){
+    if(x.g){ ha+='<div class="rg-gtit">'+x.g+'</div>'; return; }
+    var on=(x.a===rg.t1 && x.b===rg.t2);
+    ha+='<button class="rg-atajo'+(on?' on':'')+'" data-at="'+i+'">'+x.t+(x.n?'<small>'+x.n+'</small>':'')+'</button>';
+  });
+  document.getElementById('rg-atajos').innerHTML=ha;
+
+  // cabecera de meses
+  var b2=new Date(rg.base.getFullYear(), rg.base.getMonth()+1, 1, 12);
+  document.getElementById('rg-mtit-txt').textContent=RG_MESES[rg.base.getMonth()]+' '+rg.base.getFullYear()+
+      ' – '+RG_MESES[b2.getMonth()]+' '+b2.getFullYear();
+  var tope=rgHoyD();
+  document.getElementById('rg-mnext').disabled = (b2.getFullYear()>tope.getFullYear() ||
+      (b2.getFullYear()===tope.getFullYear() && b2.getMonth()>=tope.getMonth()));
+
+  document.getElementById('rg-meses').innerHTML = rgMesHTML(rg.base)+rgMesHTML(b2);
+  rgPintarResumen();
+}
+
+function rgMesHTML(base){
+  var y=base.getFullYear(), m=base.getMonth();
+  var hoy=rgIso(rgHoyD());
+  var ini=new Date(y,m,1,12), fin=new Date(y,m+1,0,12);
+  var primerLun=rgLunes(ini);
+  // límite por el tope de 180 días mientras se elige el fin
+  // mientras se elige el fin, los días fuera del tope quedan apagados
+  var limSup=null;
+  if(rg.t1 && !rg.t2) limSup=rgSum(rg.t1, RG_MAX_DIAS-1);
+  var a=rg.t1, b=rg.t2 || rg.hover;
+  var lo=a, hi=b;
+  if(a&&b&&b<a){ lo=b; hi=a; }
+
+  var h='<div class="rg-mes"><div class="rg-mes-tit">'+RG_MESES[m]+' '+y+'</div><div class="rg-grid">';
+  h+='<div></div>';
+  for(var i=0;i<7;i++) h+='<div class="rg-dow">'+RG_DOW[i]+'</div>';
+  var cur=new Date(primerLun.getTime());
+  while(cur<=fin){
+    h+='<button class="rg-sem" data-sem="'+rgIso(cur)+'" title="Seleccionar la semana completa">'+rgSemISO(cur)+'</button>';
+    for(var d=0; d<7; d++){
+      var iso=rgIso(cur), esteMes=(cur.getMonth()===m);
+      var futuro=(iso>hoy);
+      var dis=futuro || (limSup && iso>limSup);
+      var cls='rg-dia'+(esteMes?'':' fuera')+(iso===hoy?' hoy':'');
+      if(lo&&hi&&iso>lo&&iso<hi) cls+=' rango';
+      if(lo&&iso===lo) cls+=' ini';
+      if(hi&&iso===hi) cls+=' fin';
+      if(a&&!b&&iso===a) cls+=' ini fin';
+      h+='<button class="'+cls+'" data-dia="'+iso+'"'+(dis?' disabled':'')+'>'+cur.getDate()+'</button>';
+      cur.setDate(cur.getDate()+1);
+    }
+  }
+  return h+'</div></div>';
+}
+
+function rgPintarResumen(){
+  var el=document.getElementById('rg-resumen'), ap=document.getElementById('rg-aplicar');
+  if(!rg.t1){ el.className='rg-resumen'; el.innerHTML='Elige el primer día del período.'; ap.disabled=true; return; }
+  if(!rg.t2){ el.className='rg-resumen'; el.innerHTML='<b>'+rgTexto(rg.t1,rg.t1)+'</b> — ahora elige el último día (máx. '+RG_MAX_DIAS+' días).'; ap.disabled=true; return; }
+  var n=rgLargo(rg.t1,rg.t2);
+  ap.disabled=false;
+  if(n>RG_MAX_DIAS){ el.className='rg-resumen tope'; el.innerHTML='⚠ '+n+' días: el máximo son '+RG_MAX_DIAS+'. Se recortará al aplicar.'; return; }
+  var extra = (n > RG_MAX_DIAS-30)
+    ? ' · sobre '+(RG_MAX_DIAS-30)+' días se acorta el margen de retiros para no colgar el API'
+    : '';
+  el.className='rg-resumen';
+  el.innerHTML='<b>'+rgTexto(rg.t1,rg.t2)+'</b> · '+n+(n===1?' día':' días')+' de '+RG_MAX_DIAS+extra;
+}
+
+function rgFijarTemp(a,b){ rg.t1=a; rg.t2=b; rg.hover=null; }
+
+function rgAplicar(){
+  if(!rg.t1) return;
+  var a=rg.t1, b=rg.t2||rg.t1;
+  if(b<a){ var x=a; a=b; b=x; }
+  if(rgLargo(a,b)>RG_MAX_DIAS) a=rgSum(b, -(RG_MAX_DIAS-1));   // recorte duro
+  rg.d1=a; rg.d2=b;
+  document.getElementById('d1').value=a;
+  document.getElementById('d2').value=b;
+  rgPintarPill(); rgCerrar(); loadData();
+}
+
+/* Toda la interacción del popover por delegación */
+document.addEventListener('click', function(e){
+  var t=e.target.closest ? e.target.closest('[data-dia],[data-sem],[data-at],[data-salto]') : null;
+  if(!t || !rg.abierto) return;
+  e.stopPropagation();
+  if(t.hasAttribute('data-at')){
+    var x=rgAtajos()[Number(t.getAttribute('data-at'))];
+    if(x&&x.a){ rgFijarTemp(x.a,x.b); rgAplicar(); }   // un clic = listo
+    return;
+  }
+  if(t.hasAttribute('data-salto')){
+    var mm=Number(t.getAttribute('data-salto'));
+    rg.base=new Date(rg.anio, mm-1, 1, 12);
+    var tope=rgHoyD(), maxBase=new Date(tope.getFullYear(), tope.getMonth()-1, 1, 12);
+    if(rg.base>maxBase) rg.base=maxBase;
+    document.getElementById('rg-salto').classList.remove('abierto');
+    rgPintarPop();
+    return;
+  }
+  if(t.hasAttribute('data-sem')){
+    var lun=t.getAttribute('data-sem'), dom=rgSum(lun,6), hoy=rgIso(rgHoyD());
+    if(lun>hoy) return;
+    if(dom>hoy) dom=hoy;
+    rgFijarTemp(lun,dom); rgPintarPop();
+    return;
+  }
+  var iso=t.getAttribute('data-dia');
+  if(rg.t1 && !rg.t2){
+    if(iso<rg.t1) rg.t1=iso; else rg.t2=iso;
+  } else { rg.t1=iso; rg.t2=null; }
+  rg.hover=null;
+  rgPintarPop();
+});
+document.addEventListener('mouseover', function(e){
+  if(!rg.abierto || !rg.t1 || rg.t2) return;
+  var t=e.target.closest ? e.target.closest('[data-dia]') : null;
+  if(!t || t.disabled) return;
+  var iso=t.getAttribute('data-dia');
+  if(iso===rg.hover) return;
+  rg.hover=iso;
+  document.getElementById('rg-meses').innerHTML =
+    rgMesHTML(rg.base)+rgMesHTML(new Date(rg.base.getFullYear(), rg.base.getMonth()+1, 1, 12));
+  rgPintarResumen();
 });
 
 /* CARGAR DATOS */
@@ -1259,7 +1681,7 @@ function loadData() {
   if (isLocal) {
     tbody.innerHTML = '<tr><td colspan="10"><div class="err-msg">Abre esta pagina desde el sitio publicado en Azure, no desde archivo local.</div></td></tr>';
     document.getElementById('tcnt').textContent = 'Modo local';
-    btn.disabled = false; btn.textContent = 'Cargar datos'; if(overlay) overlay.classList.remove('visible');
+    btn.disabled = false; btn.textContent = '↻ Recargar'; if(overlay) overlay.classList.remove('visible');
     return;
   }
 
@@ -1268,6 +1690,11 @@ function loadData() {
   // Retiros por fecha de confirmación: ampliamos el inicio de la consulta hacia atrás
   // para traer también retiros requeridos antes del rango pero confirmados dentro de él.
   var d1Consulta = _desplazarDias(d1, -RETIRO_BUFFER_DIAS);
+  // El API se pega pasados ~180 días. El buffer de retiros se SUMABA encima del
+  // rango elegido (180 elegidos = 210 pedidos), así que aquí se acota la ventana
+  // real: si hace falta, se sacrifica parte del margen de retiros, no el rango.
+  var minConsulta = _desplazarDias(d2, -(RG_MAX_DIAS - 1));
+  if (d1Consulta < minConsulta) d1Consulta = minConsulta;
   var url = (isDev ? API_DIRECT : API_PROXY) + '?fechaInicio=' + d1Consulta + '&fechaFin=' + d2;
 
   fetch(url, { headers: { 'Accept': 'application/json' } })
@@ -1283,7 +1710,7 @@ function loadData() {
       if (raw.length === 0) {
         tbody.innerHTML = '<tr><td colspan="10"><div class="state-msg">Sin registros para el rango seleccionado</div></td></tr>';
         document.getElementById('tcnt').textContent = '0 registros';
-        btn.disabled = false; btn.textContent = 'Cargar datos'; if(overlay) overlay.classList.remove('visible');
+        btn.disabled = false; btn.textContent = '↻ Recargar'; if(overlay) overlay.classList.remove('visible');
         return;
       }
       filtered = raw.slice(); cp = 1; sc = null;
@@ -1303,7 +1730,7 @@ document.getElementById('last-upd').textContent = 'Actualizado ' + now.toLocaleT
     }
     window.agData(_em + ' em · ' + _ret + ' ret · ' + raw.length + ' reg.');
   }
-      btn.disabled = false; btn.textContent = 'Cargar datos'; if(overlay) overlay.classList.remove('visible');
+      btn.disabled = false; btn.textContent = '↻ Recargar'; if(overlay) overlay.classList.remove('visible');
     })
     .catch(function(err) {
       var isCors = err.message.indexOf('Failed to fetch') >= 0 || err.message.indexOf('NetworkError') >= 0;
@@ -1312,7 +1739,7 @@ document.getElementById('last-upd').textContent = 'Actualizado ' + now.toLocaleT
         : 'Error: ' + err.message + '. Revisa consola F12.';
       tbody.innerHTML = '<tr><td colspan="10"><div class="err-msg">' + msg + '</div></td></tr>';
       document.getElementById('tcnt').textContent = 'Error';
-      btn.disabled = false; btn.textContent = 'Cargar datos'; if(overlay) overlay.classList.remove('visible');
+      btn.disabled = false; btn.textContent = '↻ Recargar'; if(overlay) overlay.classList.remove('visible');
     });
 }
 
@@ -2498,7 +2925,7 @@ document.addEventListener('click', function(e){
       'Hola! Soy el agente de operaciones REDTEC.<br><br>' +
       'Puedo analizar el período cargado: emisiones, retiros, transferencias, ' +
       'clientes pendientes y cantidades.<br><br>' +
-      '<span style="color:#4a4f66;font-size:10.5px">Carga un período con el botón "Cargar datos" para activar el análisis.</span>'
+      '<span style="color:#4a4f66;font-size:10.5px">Elige un período arriba para activar el análisis.</span>'
     );
   }
 

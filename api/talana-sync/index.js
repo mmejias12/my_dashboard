@@ -170,7 +170,11 @@ async function sincronizarMaestros(desde, hasta, presupuesto, informe) {
 
   const sucursales = marca(await mapa.traerSucursales(opts));
   const centros    = marca(await mapa.traerCentrosCosto(opts));
-  const empleados  = marca(await mapa.traerEmpleados(opts));
+  // Árbol de áreas (unidad organizacional) para resolver gerencia → subárea por
+  // empleado. Una sola petición barata (~42 nodos); si falla, el área cae al
+  // nombre de la propia unidad y el reporte sigue agrupando, sólo que más plano.
+  const arbolUO    = await mapa.traerUnidadesOrg(opts);
+  const empleados  = marca(await mapa.traerEmpleados({ ...opts, arbolUO }));
   // Asignaciones ANTES que los turnos. Las asignaciones (persona↔turno) y los
   // días (el horario del turno) son, juntos, el horario teórico: lo crítico. El
   // catálogo /workShift/ —que sólo aporta nombre y tolerancia y va al final de

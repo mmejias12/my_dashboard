@@ -192,12 +192,9 @@ td.sem-red:hover::after,td.sem-orange:hover::after{opacity:1;transform:translate
       <button class="seg-btn" onclick="setPeriod('hoy',this)">Hoy 🟢</button>
     </div>
     <select class="seg-btn" id="month-sel" style="background:var(--bg-input);color:var(--t1);padding:7px 12px;border:1px solid var(--border-md);font-weight:600" onchange="onChangeMonth()"></select>
-    <select class="seg-btn" id="week-sel" style="display:none;background:var(--bg-input);color:var(--t1);padding:7px 12px;border:1px solid var(--border-md)" onchange="onChangeWeek()">
-      <option value="22">S22 · 25-31 may</option>
-      <option value="21">S21 · 18-24 may</option>
-      <option value="20">S20 · 11-17 may</option>
-      <option value="19">S19 · 4-10 may</option>
-    </select>
+    <!-- Las opciones se generan en construirSelectorSemanas(): antes estaban
+         fijas en S19–S22 (mayo 2026) y el año iba escrito a mano. -->
+    <select class="seg-btn" id="week-sel" style="display:none;background:var(--bg-input);color:var(--t1);padding:7px 12px;border:1px solid var(--border-md)" onchange="onChangeWeek()"></select>
     <div style="flex:1"></div>
     <span style="font-size:11.5px;color:var(--t3)">Auto-refresh 5 min · Última: <strong style="color:var(--t1);font-family:'DM Mono',monospace" id="last-update">—</strong></span>
   </div>
@@ -570,7 +567,7 @@ const WEEKS=[19,20,21,22];
 // ═══════════════════════════════════════════════════════════════
 // ESTADO
 // ═══════════════════════════════════════════════════════════════
-let plant='todas', period='mensual', currentWeek=22;
+let plant='todas', period='mensual', currentWeek=null, currentWeekYear=null;
 
 // Mes seleccionado en formato 'YYYY-MM' (default = mes actual)
 const _hoy = new Date();
@@ -592,7 +589,7 @@ function monthRange(monthStr){
   const esActual = (y === today.getFullYear() && m === today.getMonth()+1);
   let hasta;
   if (esActual) {
-    hasta = today.toISOString().slice(0,10);
+    hasta = hoyLocalIso();
   } else {
     const lastDay = new Date(y, m, 0).getDate();
     hasta = `${y}-${String(m).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
@@ -628,25 +625,82 @@ const fmtM = v => '$'+(v/1e6).toFixed(1)+'M';
 const fmtK = v => v.toLocaleString('es-CL');
 const periodLabel = () => {
   if (period === 'mensual') return monthLabel(currentMonth);
-  if (period === 'semanal') return 'S'+currentWeek+' · '+(ranges[currentWeek]||'');
+  if (period === 'semanal') return 'S'+currentWeek+' · '+rangoSemanaTxt(currentWeekYear, currentWeek);
   return 'Hoy ' + new Date().toLocaleDateString('es-CL');
 };
-const ranges = {19:'4-10 may',20:'11-17 may',21:'18-24 may',22:'25-31 may'};
+
+/* El diccionario `ranges` estaba congelado en las semanas 19 a 22 (mayo 2026),
+   igual que las <option> del selector. El rótulo ahora se calcula. */
+const MESES_C = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+function rangoSemanaTxt(anio, semana){
+  if(!anio || !semana) return '';
+  const w = isoWeekToDates(anio, semana);
+  const a = new Date(w.lunes + 'T12:00:00'), b = new Date(w.domingo + 'T12:00:00');
+  const mA = MESES_C[a.getMonth()], mB = MESES_C[b.getMonth()];
+  return mA === mB
+    ? a.getDate() + '-' + b.getDate() + ' ' + mB
+    : a.getDate() + ' ' + mA + ' - ' + b.getDate() + ' ' + mB;
+}
+
+/* Últimas 10 semanas ISO terminadas o en curso, calculadas al abrir. */
+function construirSelectorSemanas(){
+  const sel = document.getElementById('week-sel');
+  if(!sel) return;
+  const hoy = hoyLocalIso();
+  let anio = anioISO(hoy), sem = semanaISO(hoy);
+  currentWeek = currentWeek || sem;
+  currentWeekYear = currentWeekYear || anio;
+  const opts = [];
+  for(let i = 0; i < 10; i++){
+    opts.push({ a: anio, s: sem });
+    sem--;
+    if(sem < 1){ anio--; sem = semanaISO(anio + '-12-28'); }   // el 28-dic siempre cae en la última semana ISO
+  }
+  sel.innerHTML = opts.map(o =>
+    '<option value="' + o.a + '|' + o.s + '"' +
+    ((o.a === currentWeekYear && o.s === currentWeek) ? ' selected' : '') + '>' +
+    'S' + o.s + ' · ' + rangoSemanaTxt(o.a, o.s) + '</option>').join('');
+}
 
 // ═══════════════════════════════════════════════════════════════
 // LIVE TRANSPORTE — fetch, procesar, agregar
 // ═══════════════════════════════════════════════════════════════
 
+/* Semana ISO real. La versión anterior restaba dos fechas LOCALES en
+   milisegundos y dividía por 604800000; con el cambio de hora de Chile esa
+   resta queda con una hora de sobra y el Math.ceil salta de semana. Resultado
+   medido: de abril a la primera semana de septiembre devolvía una semana DE
+   MÁS, y como aggOp() busca los viajes en la semana N mientras procesar() los
+   guardaba en la N+1, la tabla de Transporte quedaba entera en cero. */
 function semanaISO(d){
-  const date = new Date(d);
-  if(isNaN(date)) return null;
-  const target = new Date(date.valueOf());
-  const dayNr = (date.getDay() + 6) % 7;
-  target.setDate(target.getDate() - dayNr + 3);
-  const firstThursday = target.valueOf();
-  target.setMonth(0, 1);
-  if(target.getDay() !== 4) target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
-  return 1 + Math.ceil((firstThursday - target) / 604800000);
+  const s = fechaSolo(d);
+  if(!s) return null;
+  const f = new Date(s + 'T12:00:00');
+  if(isNaN(f)) return null;
+  const t = new Date(Date.UTC(f.getFullYear(), f.getMonth(), f.getDate()));
+  t.setUTCDate(t.getUTCDate() - ((t.getUTCDay()+6)%7) + 3);
+  const p1 = new Date(Date.UTC(t.getUTCFullYear(), 0, 4));
+  return 1 + Math.round(((t - p1)/86400000 - 3 + ((p1.getUTCDay()+6)%7)) / 7);
+}
+/* Año ISO: la semana 1 de enero puede pertenecer al año anterior. */
+function anioISO(d){
+  const s = fechaSolo(d);
+  if(!s) return null;
+  const f = new Date(s + 'T12:00:00');
+  const t = new Date(Date.UTC(f.getFullYear(), f.getMonth(), f.getDate()));
+  t.setUTCDate(t.getUTCDate() - ((t.getUTCDay()+6)%7) + 3);
+  return t.getUTCFullYear();
+}
+/* Las fechas del API llegan como "YYYY-MM-DD…". new Date() sobre eso las lee
+   en UTC y en Chile retrocede al día anterior: se comparan como texto. */
+function fechaSolo(s){
+  if(!s) return '';
+  if(s instanceof Date) return isNaN(s) ? '' : (s.getFullYear()+'-'+String(s.getMonth()+1).padStart(2,'0')+'-'+String(s.getDate()).padStart(2,'0'));
+  return String(s).substring(0,10);
+}
+function hoyLocalIso(){
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
 
 function isoWeekToDates(year, week){
@@ -666,24 +720,41 @@ function isoWeekToDates(year, week){
 
 function calcularRangoFechas(){
   if (period === 'hoy') {
-    const hoy = new Date().toISOString().slice(0,10);
+    // toISOString() convierte a UTC: pasadas las ~21:00 en Chile pedía MAÑANA
+    // y la pestaña "Hoy" se iba a ceros sin explicación.
+    const hoy = hoyLocalIso();
     return { desde: hoy, hasta: hoy };
   }
   if (period === 'semanal') {
-    const w = isoWeekToDates(2026, currentWeek);
+    const w = isoWeekToDates(currentWeekYear || anioISO(hoyLocalIso()), currentWeek);
     return { desde: w.lunes, hasta: w.domingo };
   }
   // Mensual: usa el mes seleccionado
   return monthRange(currentMonth);
 }
 
+/* Todo por PREFIJO en minúsculas. La emisión ya lo hacía, pero retiro y
+   devolución comparaban con ===, así que 'Retiro LD', 'Retiro CD Retail' y
+   'Retiro Ruta RM' no entraban: la fila de plena carga mostraba menos viajes
+   de los que hubo y el % salía inflado. */
 function clasificarOperacion(opStr){
-  const op = (opStr||'').trim();
-  if (op.startsWith('Emision')) return 'em';        // Emision, Emision 24 horas, Emision LD, Emision Retiro Cliente
-  if (op === 'Retiro') return 'ret';
-  if (op === 'Devolucion' || op === 'Devolución') return 'devol';
-  if (op === 'Relocalizacion' || op === 'Relocalización') return 'reloc';
+  const op = (opStr||'').trim().toLowerCase();
+  if (op.indexOf('emision') === 0 || op.indexOf('emisión') === 0) return 'em';
+  if (op.indexOf('retiro') === 0) return 'ret';
+  if (op.indexOf('devoluc') === 0) return 'devol';
+  if (op.indexOf('relocaliz') === 0) return 'reloc';
   return null; // Transferencias y otros se excluyen de esta sección
+}
+
+/* En una emisión el destino es el cliente, pero en un retiro o devolución el
+   destino es REDTEC: `clienteDestinoStr || clienteOrigenStr` hacía que los
+   modales de Reversa y Riesgo listaran "REDTEC" como cliente. */
+function contraparteDe(raw){
+  const o = (raw.clienteOrigenStr || ''), d = (raw.clienteDestinoStr || '');
+  const esRdt = s => String(s).toUpperCase().indexOf('REDTEC') >= 0;
+  if (d && !esRdt(d)) return d;
+  if (o && !esRdt(o)) return o;
+  return d || o || '—';
 }
 
 function procesarViajesTransporte(rawArr){
@@ -1000,7 +1071,7 @@ function procesarOperaciones(viajes){
       if (detallesReversa.length < 50) detallesReversa.push({
         nroPedido: raw.nroPedido,
         dteNro: raw.dteNro,
-        cliente: raw.clienteDestinoStr || raw.clienteOrigenStr || '—',
+        cliente: contraparteDe(raw),
         destino: raw.bodegaDestinoStr || '—',
         pallets: palletsAfectados(raw),
         dias: diasDesde,
@@ -1012,7 +1083,7 @@ function procesarOperaciones(viajes){
         if (detallesReversa.length < 50) detallesReversa.push({
           nroPedido: raw.nroPedido,
           dteNro: raw.dteNro,
-          cliente: raw.clienteDestinoStr || raw.clienteOrigenStr || '—',
+          cliente: contraparteDe(raw),
           destino: raw.bodegaDestinoStr || '—',
           pallets: palletsAfectados(raw),
           dias: diasDesde,
@@ -1023,7 +1094,7 @@ function procesarOperaciones(viajes){
         if (detallesRiesgo.length < 50) detallesRiesgo.push({
           nroPedido: raw.nroPedido,
           dteNro: raw.dteNro,
-          cliente: raw.clienteDestinoStr || raw.clienteOrigenStr || '—',
+          cliente: contraparteDe(raw),
           destino: raw.bodegaDestinoStr || '—',
           pallets: palletsAfectados(raw),
           dias: diasDesde,
@@ -1214,7 +1285,7 @@ function aggOp(){
     // === MODO LIVE ===
     let weeks;
     if (period === 'hoy') {
-      weeks = [semanaISO(new Date())];
+      weeks = [semanaISO(hoyLocalIso())];
     } else if (period === 'semanal') {
       weeks = [currentWeek];
     } else {
@@ -1244,7 +1315,11 @@ function aggProd(){
   const weeks = period==='mensual' ? WEEKS : [currentWeek];
   const tot = {insp:0,buenos:0,reparables:0,reparados:0,rechazo:0,pintados:0,litros:0,iccNum:0,iucNum:0};
   plantas.forEach(pl => weeks.forEach(w => {
-    const d = dataProd[pl][w];
+    /* dataProd sólo tiene las semanas 19-22 (mayo 2026). Antes no reventaba
+       porque el selector estaba congelado en ese rango; ahora que ofrece las
+       semanas reales hay que tolerar que la semana pedida no exista. */
+    const d = (dataProd[pl] || {})[w];
+    if (!d) return;
     tot.insp+=d.insp; tot.buenos+=d.buenos; tot.reparables+=d.reparables;
     tot.reparados+=d.reparados; tot.rechazo+=d.rechazo; tot.pintados+=d.pintados;
     tot.litros+=d.litros;
@@ -1364,7 +1439,10 @@ function cellEmpty(){
 // RENDER
 // ═══════════════════════════════════════════════════════════════
 function render(){
-  if (period==='semanal') currentWeek = parseInt(document.getElementById('week-sel').value);
+  if (period==='semanal'){
+    const v = String(document.getElementById('week-sel').value||'').split('|');
+    if(v.length===2){ currentWeekYear = parseInt(v[0]); currentWeek = parseInt(v[1]); }
+  }
   renderTransporte();
   renderProduccion();
   renderComercial();
@@ -1392,13 +1470,17 @@ function actualizarBadgesMockup(){
 
     if (!enMockup) return;
 
-    // Si está en mockup y el usuario eligió otro mes que no sea mayo → badge
-    if (period === 'mensual' && currentMonth !== '2026-05') {
+    /* Antes el aviso sólo salía en la vista mensual y sólo si el mes no era
+       mayo: en "Hoy" y "Semanal" las cifras de referencia de mayo 2026 se
+       mostraban sin ninguna marca, indistinguibles de datos en vivo.
+       Producción, Costos y Flota no tienen endpoint todavía, así que su badge
+       tiene que estar siempre. */
+    if (true) {
       const title = h.querySelector('.section-title');
       if (title) {
         const badge = document.createElement('span');
         badge.className = 'mockup-badge';
-        badge.textContent = 'mockup · mayo';
+        badge.textContent = 'referencia · mayo 2026';
         badge.title = `Esta sección aún no está conectada a live. Los datos visibles son de Mayo 2026, no del mes seleccionado (${monthLabel(currentMonth)}).`;
         title.insertAdjacentElement('afterend', badge);
       }
@@ -1666,7 +1748,7 @@ function abrirModalCarga(tipo){
 
       const fecha = raw.fechaDespacho || raw.fechaConfirmacion || raw.horaIngreso;
       if (!fecha) return;
-      if (period === 'semanal' && semanaISO(fecha) !== currentWeek) return;
+      if (period === 'semanal' && (semanaISO(fecha) !== currentWeek || anioISO(fecha) !== currentWeekYear)) return;
       if (period === 'hoy' && semanaISO(fecha) !== semanaISO(new Date())) return;
 
       const cantidad = Number(raw.cantidadConfirmada) || 0;
@@ -1795,7 +1877,8 @@ function aggProdFor(pl){
   const weeks = period==='mensual' ? WEEKS : [currentWeek];
   const tot = {insp:0,buenos:0,reparables:0,reparados:0,rechazo:0,pintados:0,iccNum:0,iucNum:0};
   weeks.forEach(w => {
-    const d = dataProd[pl][w];
+    const d = (dataProd[pl] || {})[w];
+    if (!d) return;
     tot.insp+=d.insp; tot.buenos+=d.buenos; tot.reparables+=d.reparables;
     tot.reparados+=d.reparados; tot.rechazo+=d.rechazo; tot.pintados+=d.pintados;
     tot.iccNum += d.icc * d.reparados;
@@ -2062,6 +2145,8 @@ function setPeriod(p, el){
 }
 
 function onChangeWeek(){
+  const v = String(document.getElementById('week-sel').value||'').split('|');
+  if(v.length===2){ currentWeekYear = parseInt(v[0]); currentWeek = parseInt(v[1]); }
   render();
   if (period === 'semanal') cargarTodoLive();
 }
@@ -2085,6 +2170,7 @@ setInterval(() => {
 
 // First render: paint mockup, luego cargar live (UX: usuario ve datos al toque)
 poblarSelectorMeses();
+construirSelectorSemanas();
 tick();
 render();
 cargarTodoLive();

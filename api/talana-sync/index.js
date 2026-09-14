@@ -105,7 +105,21 @@ module.exports = async function (context, req) {
       return;
     }
 
-    // ── 2) Marcas, día por día ──────────────────────────────────────────────
+    // ── 2) Ausencias PRIMERO ──────────────────────────────────────────────────
+    // Van antes que las marcas a propósito. La traída de ausencias es "todo o
+    // nada" —los bloques por mes sólo se reescriben cuando la traída COMPLETA
+    // entera (3 peticiones con page_size grande)— y necesita ese tramo contiguo
+    // de presupuesto. Las marcas, en cambio, se guardan día por día y son
+    // reanudables, así que toleran ir después y recuperar el atraso en pasadas
+    // siguientes. Con las marcas primero, su backlog se comía el presupuesto y el
+    // mes en curso de ausencias quedaba crónicamente sin refrescar: por eso
+    // faltaban las licencias recién cargadas. Los endpoints "resumed" ignoran los
+    // filtros de fecha y devuelven el histórico completo; se traen una vez y se
+    // reparten por mes.
+    const ausenciasPendientes = await sincronizarAusencias(container, desde, hasta, presupuesto, informe);
+    informe.ausencias_pendientes = Boolean(ausenciasPendientes);
+
+    // ── 3) Marcas, día por día ────────────────────────────────────────────────
     const fechas = mapa.rangoDias(desde, hasta);
     const pendientes = await store.diasPendientes(container, fechas);
     // Del día más reciente hacia atrás: si el presupuesto se corta, lo primero
@@ -125,13 +139,6 @@ module.exports = async function (context, req) {
         if (e.status === 429) break;   // no insistir: hay bloqueo activo
       }
     }
-
-    // ── 3) Ausencias ────────────────────────────────────────────────────────
-    // Los endpoints "resumed" ignoran los filtros de fecha y devuelven el
-    // histórico completo, así que pedirlos mes a mes traería lo mismo cada vez.
-    // Se traen UNA vez y se reparten por mes.
-    const ausenciasPendientes = await sincronizarAusencias(container, desde, hasta, presupuesto, informe);
-    informe.ausencias_pendientes = Boolean(ausenciasPendientes);
 
     await store.guardarEstado(container, {
       ultima_sync: new Date().toISOString(),

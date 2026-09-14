@@ -296,7 +296,7 @@ html, body { height:100%; font-family:'Inter',sans-serif; font-size:13px; backgr
         <span class="ctrl-label">Hasta</span>
         <input type="date" id="d2" class="ctrl-date">
       </div>
-      <button class="btn" id="btn-load" onclick="loadData()">Cargar datos</button>
+      <button class="btn" id="btn-load" onclick="loadData()">↻ Recargar</button>
       <div class="period-badge" id="period-badge" style="display:none">
         <span id="period-text">—</span>
       </div>
@@ -377,7 +377,7 @@ html, body { height:100%; font-family:'Inter',sans-serif; font-size:13px; backgr
 
     <div id="empty-state">
       <div class="chart-card">
-        <div class="state-msg">Seleccione un período y presione "Cargar datos"</div>
+        <div class="state-msg">Cargando el mes en curso…</div>
       </div>
     </div>
 
@@ -410,6 +410,9 @@ window.addEventListener('DOMContentLoaded', function() {
   document.getElementById('d1').value = yyyy+'-'+mm+'-01';
   var g2 = document.getElementById('g2');
   if (g2) g2.style.maxHeight = (g2.scrollHeight+100)+'px';
+  /* Precarga: era la última vista del menú que todavía exigía apretar un botón
+     para ver algo. El resto del portal ya abre con el período por defecto. */
+  setTimeout(loadData, 200);
 });
 
 /* ── LOAD DATA ───────────────────────────────────────────── */
@@ -435,11 +438,11 @@ function loadData() {
       renderAll(d1, d2);
       document.getElementById('empty-state').innerHTML = '';
       document.getElementById('last-upd').textContent = 'Actualizado ' + new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-      btn.disabled = false; btn.textContent = 'Cargar datos';
+      btn.disabled = false; btn.textContent = '↻ Recargar';
     })
     .catch(function(err) {
       document.getElementById('empty-state').innerHTML = '<div class="chart-card"><div class="state-msg">Error: ' + err.message + '</div></div>';
-      btn.disabled = false; btn.textContent = 'Cargar datos';
+      btn.disabled = false; btn.textContent = '↻ Recargar';
     });
 }
 
@@ -474,7 +477,7 @@ function renderKPIs() {
     totalTxn     += (r.NroTransacciones || 0);
     var ret = r.Retailer || 'OT';
     retailerMap[ret] = (retailerMap[ret]||0) + (r.TotalPallets||0);
-    fechaSet[r.FechaConfirmacion] = true;
+    fechaSet[String(r.FechaConfirmacion||'').substring(0,10)] = true;  // era el timestamp completo: cada hora contaba como un día
   });
   var diasHabiles = Object.keys(fechaSet).length || 1;
   var avg = Math.round(totalPallets / diasHabiles);
@@ -533,6 +536,20 @@ function fmtDateLabel(s) {
 
 /* ── LINE CHART ──────────────────────────────────────────── */
 var lineData = {};
+function chartDisponible(cv, msg){
+  if (typeof Chart !== 'undefined') return true;
+  /* Sin esta guarda, un CDN bloqueado hacía que `new Chart` lanzara dentro de
+     renderAll() y el catch de loadData mostraba "Error: Chart is not defined":
+     se perdían también los KPIs y la tabla pivote, que no necesitan Chart. */
+  var el = document.getElementById(cv);
+  if (el && el.parentNode) {
+    el.parentNode.innerHTML = '<div style="padding:26px;text-align:center;color:#8a90a8;font-size:12.5px">'
+      + (msg || 'No se pudo cargar la librería de gráficos') + '<br><span style="font-size:11px;opacity:.75">'
+      + 'Los indicadores y la tabla de abajo sí están al día.</span></div>';
+  }
+  return false;
+}
+
 function renderLineChart(d1, d2) {
   var dates = getAllDates(d1, d2);
   // Acumular DEV por fecha y retailer
@@ -561,6 +578,7 @@ function renderLineChart(d1, d2) {
   });
 
   if (chartLinea) chartLinea.destroy();
+  if (!chartDisponible('chart-linea')) return;
   var ctx = document.getElementById('chart-linea').getContext('2d');
   chartLinea = new Chart(ctx, {
     type: 'line',
@@ -683,6 +701,7 @@ function renderBarChart(d1, d2) {
   });
 
   if (chartBarras) chartBarras.destroy();
+  if (!chartDisponible('chart-barras')) return;
   var ctx = document.getElementById('chart-barras').getContext('2d');
   chartBarras = new Chart(ctx, {
     type: 'bar',

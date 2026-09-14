@@ -682,7 +682,16 @@ document.getElementById('cb-exp').addEventListener('click',function(){
   var L=[dimLbl+';'+METRIC_LBL[R.metric]]; R.rows.forEach(function(x){ L.push(x.k+';'+(R.metric==='margenPct'?(x.v*100).toFixed(1):Math.round(x.v))); });
   var blob=new Blob([L.join('\n')],{type:'text/csv;charset=utf-8'}), a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='constructor_blancos.csv'; a.click();
 });
-document.getElementById('foot-upd').textContent='Cargado '+new Date().toLocaleString('es-CL');
+/* Decía "Cargado <hoy>" sobre datos embebidos que pueden ser de hace semanas:
+   se lee como que la vista está al día. Ahora muestra hasta dónde llega el dato. */
+(function(){
+  var meses=Object.keys(HIST||{}).filter(function(k){return /^\d{4}-\d{2}$/.test(k);}).sort();
+  var ult=meses.length?meses[meses.length-1]:null;
+  var NOM=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  document.getElementById('foot-upd').textContent = ult
+    ? ('Datos hasta '+NOM[parseInt(ult.substring(5,7),10)-1]+' '+ult.substring(0,4))
+    : 'Sin datos cargados';
+})();
 /* restaurar preferencias */
 (function(){ try{ var t=localStorage.getItem('blancos_theme'); if(t)applyTheme(t); var f=parseInt(localStorage.getItem('blancos_fs'),10); if(!isNaN(f)&&f>=0&&f<FSLEVELS.length){fsIdx=f;applyFS();} }catch(e){} })();
 (function(){ if(!months().length){ document.getElementById('src-tag').textContent='sin datos'; return; } fillSelectors(); })();

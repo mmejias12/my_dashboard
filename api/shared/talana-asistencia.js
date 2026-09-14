@@ -202,6 +202,52 @@ async function traerCentrosCosto(opts) {
 }
 
 /**
+ * Árbol de unidades organizacionales (id → { nombre, parent }). Es el árbol de
+ * ÁREAS de REDTEC: nodos raíz (parent null) = gerencia (área1); sus hijos =
+ * subárea (área2). Se trae para poder agrupar la dotación por área y no por
+ * centro de costo (que es contable). Barato: ~42 nodos en una sola página. Si
+ * falla, se devuelve vacío y la resolución cae al nombre de la propia unidad.
+ */
+async function traerUnidadesOrg(opts = {}) {
+  try {
+    const { items } = await talana.listar('/unidadOrganizacional/', {}, { ...opts, pageSize: 500 });
+    const arbol = {};
+    for (const u of items || []) {
+      if (u && u.id != null) {
+        arbol[String(u.id)] = { nombre: u.nombre || '', parent: (u.parent != null ? String(u.parent) : null) };
+      }
+    }
+    return arbol;
+  } catch (e) {
+    return {};
+  }
+}
+
+/**
+ * Resuelve área1 (gerencia, la raíz del árbol) y área2 (subárea, el hijo de la
+ * raíz) subiendo por `parent` desde la unidad de la persona. Necesario porque
+ * los NOMBRES de unidad se repiten ("Gerencia" cuelga de 5 raíces distintas):
+ * hay que resolver por id, no por nombre. Con un árbol de dos niveles,
+ * área2 es la propia unidad de la persona.
+ */
+function resolverAreas(uoId, arbol) {
+  if (uoId == null || !arbol) return { area1: '', area2: '' };
+  const id = String(uoId);
+  if (!arbol[id]) return { area1: '', area2: '' };
+  const cadena = [];               // [raíz, …, hoja]
+  let cur = id;
+  const visto = {};
+  while (cur != null && arbol[cur] && !visto[cur]) {
+    visto[cur] = true;
+    cadena.unshift(arbol[cur]);
+    cur = arbol[cur].parent;
+  }
+  const area1 = cadena.length ? cadena[0].nombre : '';
+  const area2 = cadena.length > 1 ? cadena[1].nombre : area1;
+  return { area1, area2 };
+}
+
+/**
  * Empleados vigentes, desde los contratos resumidos.
  * `activo_en` (YYYY-MM-DD) acota a quienes tenían contrato vigente ese día;
  * si se omite, se piden sólo los activos hoy.
@@ -227,6 +273,10 @@ async function traerEmpleados(opts = {}) {
     const suc = c.sucursal || {};
     const cc  = c.centroCosto || {};
     const uo  = c.unidadOrganizacional || {};
+    // Área funcional resuelta contra el árbol de unidades (opts.arbolUO):
+    // area1 = gerencia (raíz), area2 = subárea (hijo de la raíz). Sirve para
+    // agrupar la dotación por área y no por centro de costo (que es contable).
+    const areas = resolverAreas(uo.id, opts.arbolUO);
     return {
       code:              String(c.empleado || p.id),
       personaId:         c.empleado || p.id,
@@ -253,6 +303,12 @@ async function traerEmpleados(opts = {}) {
       departmentCode:    cc.codigo || (cc.id ? String(cc.id) : ''),
       departmentName:    cc.nombre || uo.nombre || '',
       gerencia:          uo.nombre || '',
+      // Unidad de la persona (hoja del árbol) y su área resuelta: area1 =
+      // gerencia (raíz), area2 = subárea. departmentName sigue siendo el centro
+      // de costo. Se resuelve por id porque los nombres de unidad se repiten.
+      unidadOrganizacionalId: uo.id != null ? uo.id : null,
+      area1:             areas.area1 || uo.nombre || '',
+      area2:             areas.area2 || uo.nombre || '',
       position:          c.cargo || '',
       jornada:           (c.jornada && c.jornada.nombre) || '',
       horasJornada:      c.horasDeLaJornada || null,
@@ -866,7 +922,8 @@ function formatearAsignaciones({ empleados, asignaciones, turnos, desde, hasta }
 }
 
 module.exports = {
-  traerSucursales, traerCentrosCosto, traerEmpleados, traerFotos, traerTurnos,
+  traerSucursales, traerCentrosCosto, traerUnidadesOrg, resolverAreas,
+  traerEmpleados, traerFotos, traerTurnos,
   traerAsignaciones, traerDiasManuales, traerMarcasDia, traerAusencias,
   construirHorarios, formatearAsignaciones,
   rangoDias, sumarDias, isoDia, indiceDiaSemana, aMinutos, fechaHora,

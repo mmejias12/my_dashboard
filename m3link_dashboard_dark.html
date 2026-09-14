@@ -951,6 +951,11 @@
     </div>
 
     <div class="cbar">
+      <div class="a11y" role="group" aria-label="Tamaño de la vista">
+        <button type="button" class="a11y-b" id="ops-fs-down" title="Reducir el tamaño de la vista" aria-label="Reducir tamaño">A&minus;</button>
+        <button type="button" class="a11y-v" id="ops-fs-val" title="Volver al 100%" aria-label="Tamaño actual, clic para volver al 100%">100%</button>
+        <button type="button" class="a11y-b big" id="ops-fs-up" title="Aumentar el tamaño de la vista" aria-label="Aumentar tamaño">A+</button>
+      </div>
       <div class="ctrl-group">
         <span class="ctrl-label">Período</span>
         <div class="rango-wrap">
@@ -3096,6 +3101,67 @@ document.addEventListener('click', function(e){
 })();
 </script>
 <!-- ══════════════ FIN FIESTAS PATRIAS ══════════════ -->
+
+
+<!-- Accesibilidad de la vista Ops: tamano de texto (A- / % / A+).
+     Escala solo el contenido de la vista (cabecera, filtros, KPIs, tabla y el
+     modal de historial). El sidebar, la topbar y las pestanas no se tocan.
+     Preferencia por usuario en localStorage: ops_fs -->
+<style id="ops-a11y-css">
+  .cbar .a11y{ display:flex;align-items:center;gap:2px;padding:2px;
+    border:1px solid var(--border-md);background:var(--bg-input);
+    border-radius:var(--radius-md);flex:none; }
+  .cbar .a11y button{ font:inherit;cursor:pointer;border:0;background:transparent;
+    color:var(--text-secondary);border-radius:calc(var(--radius-md) - 3px);
+    height:24px;display:flex;align-items:center;justify-content:center;
+    transition:background .15s ease,color .15s ease; }
+  .cbar .a11y .a11y-b{ width:26px;font-size:12px;font-weight:700;line-height:1; }
+  .cbar .a11y .a11y-b.big{ font-size:14px; }
+  .cbar .a11y .a11y-b:hover:not(:disabled){ background:var(--bg-hover);color:var(--text-primary); }
+  .cbar .a11y .a11y-b:disabled{ opacity:.35;cursor:default; }
+  .cbar .a11y .a11y-v{ min-width:46px;font-size:11px;font-weight:600;
+    font-variant-numeric:tabular-nums;color:var(--text-muted);padding:0 4px; }
+  .cbar .a11y .a11y-v:hover{ background:var(--bg-hover);color:var(--text-primary); }
+  .cbar .a11y .a11y-v.on{ color:var(--accent); }
+  .cbar .a11y button:focus-visible{ outline:2px solid var(--accent);outline-offset:1px; }
+
+  body.ops-z .main > .page-header,
+  body.ops-z .main > .cbar,
+  body.ops-z .main > .tag-row,
+  body.ops-z .main > #filter-chip-row,
+  body.ops-z .main > .stats,
+  body.ops-z .main > .table-card,
+  body.ops-z #modal-overlay{ zoom:var(--ops-z,1); }
+</style>
+<script>
+(function(){
+  var NIVELES=[.9,1,1.15,1.3,1.5], idx=1, CLAVE='ops_fs';
+  var bDown=document.getElementById('ops-fs-down'),
+      bUp  =document.getElementById('ops-fs-up'),
+      bVal =document.getElementById('ops-fs-val');
+  if(!bDown||!bUp||!bVal) return;
+
+  function aplicar(guardar){
+    var z=NIVELES[idx];
+    document.body.classList.toggle('ops-z', z!==1);
+    document.body.style.setProperty('--ops-z', z);
+    bVal.textContent=Math.round(z*100)+'%';
+    bVal.classList.toggle('on', z!==1);
+    bDown.disabled=(idx===0);
+    bUp.disabled=(idx===NIVELES.length-1);
+    if(guardar){ try{ localStorage.setItem(CLAVE, idx); }catch(e){} }
+  }
+  bDown.addEventListener('click',function(){ if(idx>0){ idx--; aplicar(true);} });
+  bUp  .addEventListener('click',function(){ if(idx<NIVELES.length-1){ idx++; aplicar(true);} });
+  bVal .addEventListener('click',function(){ idx=1; aplicar(true); });
+
+  try{
+    var g=parseInt(localStorage.getItem(CLAVE),10);
+    if(!isNaN(g) && g>=0 && g<NIVELES.length) idx=g;
+  }catch(e){}
+  aplicar(false);
+})();
+</script>
 
 </body>
 </html>

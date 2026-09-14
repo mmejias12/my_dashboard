@@ -755,7 +755,12 @@ function procesar(){
   $('empty').style.display='none';
   $('content').style.display='block';
   renderKPIs();
-  renderCharts();
+  /* Antes un CDN caído hacía que `new Chart` lanzara dentro del try de cargar()
+     y la vista se ocultaba entera con el mensaje "No se pudo consultar el API",
+     que además era falso: el API había respondido bien. */
+  try { renderCharts(); }
+  catch(e){ console.warn('gráficos:', e && e.message);
+            setStatus('warn','Datos cargados · los gráficos no están disponibles'); }
   poblarFiltros();
   renderTabla();
 }

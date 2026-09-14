@@ -306,6 +306,13 @@ body{zoom:var(--escala,1)}
 .cal-areacount{margin-left:auto;background:var(--s1);border:1px solid var(--br);border-radius:10px;padding:1px 8px;font-size:10px;color:var(--t2);font-weight:600;flex-shrink:0}
 .cal-areabar{flex:1;padding:8px 12px;font-size:10.5px;color:var(--t3);display:flex;align-items:center;gap:5px;white-space:nowrap;position:sticky;left:190px}
 .cal-prow.oculta{display:none}
+.cal-subarearow{display:flex;border-top:1px solid var(--br);background:var(--s2);cursor:pointer}
+.cal-subarearow:hover .cal-subarealabel{background:var(--s3)}
+.cal-subarealabel{width:190px;min-width:190px;padding:5px 12px 5px 26px;position:sticky;left:0;z-index:2;background:var(--s2);border-right:1px solid var(--brm);font-size:10.5px;font-weight:600;color:var(--t2);display:flex;align-items:center;gap:6px}
+.cal-subareaname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-subareacount{margin-left:auto;background:var(--s1);border:1px solid var(--br);border-radius:9px;padding:1px 7px;font-size:9.5px;color:var(--t3);font-weight:600;flex-shrink:0}
+.cal-subarearow.colapsada .cal-areacaret{transform:rotate(-90deg)}
+.cal-subarearow.oculta{display:none}
 .cal-cell{width:38px;min-width:38px;height:34px;border-right:1px solid var(--br);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .12s;position:relative}
 .cal-cell:hover{transform:scale(1.12);z-index:5;box-shadow:0 0 0 2px var(--cyan)}
 .cal-cell.finde{background:color-mix(in srgb,var(--ovc) 1.5%,transparent)}
@@ -2938,8 +2945,9 @@ function abrirModalEmpleado(code) {
   // ── Contrato y organización ──
   html += '<div class="modal-section"><h3>Contrato y organización</h3><div class="modal-grid">';
   html += '<div><div class="lbl">Cargo</div><div class="val">' + esc(emp.position || '—') + '</div></div>';
-  html += '<div><div class="lbl">Gerencia</div><div class="val">' + esc(emp.gerencia || '—') + '</div></div>';
-  html += '<div><div class="lbl">Área / Depto.</div><div class="val">' + esc(empDepartamento(emp)) + '</div></div>';
+  html += '<div><div class="lbl">Gerencia</div><div class="val">' + esc(emp.area1 || emp.gerencia || '—') + '</div></div>';
+  html += '<div><div class="lbl">Subárea</div><div class="val">' + esc(emp.area2 || emp.gerencia || '—') + '</div></div>';
+  html += '<div><div class="lbl">Centro de costo</div><div class="val">' + esc(empDepartamento(emp)) + '</div></div>';
   html += '<div><div class="lbl">Sucursal</div><div class="val">' + esc(empSucursalAdmin(emp)) + '</div></div>';
   html += '<div><div class="lbl">Jornada</div><div class="val">' + esc(emp.jornada || '—') + (emp.horasJornada ? ' · '+emp.horasJornada+' h' : '') + '</div></div>';
   html += '<div><div class="lbl">Tipo de contrato</div><div class="val">' + esc(emp.tipoContrato || '—') + '</div></div>';
@@ -3394,20 +3402,38 @@ function poblarFiltrosArea(){
 function pillTxt(edo){ return {p:'P',a:'A',pe:'P/E',ps:'P/S',lic:'Lic',vac:'Vac'}[edo]||'·'; }
 
 /* ── Agrupación por área en el calendario ── */
-var AREAS_COLAPSADAS_KEY = 'talana_areas_colapsadas_v1';
+// Colapso en DOS niveles: gerencia (área1) y subárea (área2). Las claves llevan
+// prefijo y la subárea va namespaced por su gerencia, porque los nombres de
+// subárea se repiten ("Gerencia" cuelga de varias gerencias).
+var AREAS_COLAPSADAS_KEY = 'talana_areas_colapsadas_v2';
 var areasColapsadas = (function(){ try{ return JSON.parse(localStorage.getItem(AREAS_COLAPSADAS_KEY))||{}; }catch(e){ return {}; } })();
-function areaColapsada(area){ return !!areasColapsadas[area]; }
-function toggleArea(area){
-  areasColapsadas[area] = !areasColapsadas[area];
-  try{ localStorage.setItem(AREAS_COLAPSADAS_KEY, JSON.stringify(areasColapsadas)); }catch(e){}
-  // Mostrar/ocultar sin repintar todo el calendario.
-  var filas = document.querySelectorAll('.cal-prow[data-area="'+(window.CSS&&CSS.escape?CSS.escape(area):area)+'"]');
-  filas.forEach(function(f){ f.classList.toggle('oculta', areasColapsadas[area]); });
-  var caret = null;
-  document.querySelectorAll('.cal-arearow').forEach(function(row){
-    var nm = row.querySelector('.cal-areaname');
-    if(nm && nm.textContent===area) row.classList.toggle('colapsada', areasColapsadas[area]);
+function guardarColapsadas(){ try{ localStorage.setItem(AREAS_COLAPSADAS_KEY, JSON.stringify(areasColapsadas)); }catch(e){} }
+function claveA1(a1){ return 'A1::'+a1; }
+function claveA2(a1,a2){ return 'A2::'+a1+'||'+a2; }
+function a1Colapsada(a1){ return !!areasColapsadas[claveA1(a1)]; }
+function a2Colapsada(a1,a2){ return !!areasColapsadas[claveA2(a1,a2)]; }
+/* Escapa una cadena para incrustarla dentro de un onclick="…('x')". */
+function jsq(s){ return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+/* Colapsa/expande una GERENCIA (área1): oculta sus subencabezados y sus filas.
+   Una fila puede seguir oculta por su propia subárea colapsada. */
+function toggleArea1(a1){
+  var k=claveA1(a1); areasColapsadas[k]=!areasColapsadas[k]; guardarColapsadas();
+  var col=!!areasColapsadas[k];
+  document.querySelectorAll('.cal-subarearow').forEach(function(r){ if(r.getAttribute('data-a1')===a1) r.classList.toggle('oculta', col); });
+  document.querySelectorAll('.cal-prow').forEach(function(f){
+    if(f.getAttribute('data-a1')!==a1) return;
+    var a2col=!!areasColapsadas[f.getAttribute('data-a2key')];
+    f.classList.toggle('oculta', col||a2col);
   });
+  document.querySelectorAll('.cal-arearow').forEach(function(row){ if(row.getAttribute('data-a1')===a1) row.classList.toggle('colapsada', col); });
+}
+/* Colapsa/expande una SUBÁREA (área2). No togglea su gerencia padre. */
+function toggleSubarea(a1,a2,ev){
+  if(ev&&ev.stopPropagation) ev.stopPropagation();
+  var k=claveA2(a1,a2); areasColapsadas[k]=!areasColapsadas[k]; guardarColapsadas();
+  var col=!!areasColapsadas[k], a1col=a1Colapsada(a1);
+  document.querySelectorAll('.cal-prow').forEach(function(f){ if(f.getAttribute('data-a2key')===k) f.classList.toggle('oculta', col||a1col); });
+  document.querySelectorAll('.cal-subarearow').forEach(function(row){ if(row.getAttribute('data-a2key')===k) row.classList.toggle('colapsada', col); });
 }
 /* Nombre de pila en Title Case (Talana entrega los nombres en MAYÚSCULAS). */
 function tituloNombre(s){
@@ -3526,10 +3552,10 @@ function renderCalendario(preservarScroll){
   head += '</div>';
 
   // Una fila de celdas de días para una persona (se reutiliza en cada grupo).
-  function filaPersona(e){
+  function filaPersona(e, a1, a2key, oculta){
     var code = e.code, nombre = empNombreCompleto(e), rut = e.identification||'—';
-    var oculta = areaColapsada(e.departmentName||'(Sin área)') ? ' oculta' : '';
-    var fila = '<div class="cal-prow'+oculta+'" data-area="'+esc(e.departmentName||'(Sin área)')+'"><div class="cal-pname cal-pname-click" title="Ver ficha completa de '+esc(nombre)+'" onclick="abrirModalEmpleado(\''+code+'\')">'+avatarEmp(e,'chico')+'<div class="cal-pname-txt"><span class="cal-pn">'+esc(nombre)+'</span><span class="cal-pr">'+esc(rut)+'</span></div></div>';
+    var oc = oculta ? ' oculta' : '';
+    var fila = '<div class="cal-prow'+oc+'" data-a1="'+esc(a1)+'" data-a2key="'+esc(a2key)+'"><div class="cal-pname cal-pname-click" title="Ver ficha completa de '+esc(nombre)+'" onclick="abrirModalEmpleado(\''+code+'\')">'+avatarEmp(e,'chico')+'<div class="cal-pname-txt"><span class="cal-pn">'+esc(nombre)+'</span><span class="cal-pr">'+esc(rut)+'</span></div></div>';
     for (var dia=1; dia<=ultimo; dia++){
       var fecha = calIso(calAnio, calMes, dia);
       var f = new Date(calAnio, calMes, dia); var dow=f.getDay(); var finde=(dow===0||dow===6);
@@ -3548,24 +3574,47 @@ function renderCalendario(preservarScroll){
     return fila + '</div>';
   }
 
-  // Agrupar por área (departmentName). Cada grupo lleva su encabezado colapsable
-  // con el conteo y el jefe del área (la jefatura más frecuente entre sus
-  // integrantes) visible en la banda y en el tooltip.
-  var grupos = {};
-  personas.forEach(function(e){ var a=e.departmentName||'(Sin área)'; (grupos[a]=grupos[a]||[]).push(e); });
-  var areas = Object.keys(grupos).sort(function(a,b){ return a.localeCompare(b,'es'); });
+  // Agrupar en DOS niveles: gerencia (área1) → subárea (área2). Cada nivel es
+  // colapsable. area1/area2 vienen resueltos en el snapshot (desde el árbol de
+  // unidades organizacionales); si faltaran, se cae al centro de costo para no
+  // romper la vista. El jefe de cada banda = la jefatura más frecuente entre sus
+  // integrantes.
+  function a1De(e){ return e.area1 || e.departmentName || '(Sin área)'; }
+  function a2De(e){ return e.area2 || e.area1 || e.departmentName || '(Sin subárea)'; }
+  var grupos = {};   // area1 → { subs:{ area2 → [emp] }, total }
+  personas.forEach(function(e){
+    var a1=a1De(e), a2=a2De(e);
+    var g = grupos[a1] || (grupos[a1] = { subs:{}, total:0 });
+    (g.subs[a2] = g.subs[a2] || []).push(e); g.total++;
+  });
+  var area1s = Object.keys(grupos).sort(function(a,b){ return a.localeCompare(b,'es'); });
 
   var body = '';
-  areas.forEach(function(area){
-    var miembros = grupos[area];
-    var jefe = jefeDeArea(miembros);
-    var colap = areaColapsada(area);
-    var tip = jefe ? ('Jefatura del área: '+jefe) : 'Sin jefatura registrada';
-    body += '<div class="cal-arearow'+(colap?' colapsada':'')+'" title="'+esc(tip)+'" onclick="toggleArea(\''+esc(area).replace(/'/g,"\\'")+'\')">'
-          + '<div class="cal-arealabel"><span class="cal-areacaret">▾</span><span class="cal-areaname">'+esc(area)+'</span><span class="cal-areacount">'+miembros.length+'</span></div>'
-          + '<div class="cal-areabar">'+(jefe ? '👤 '+esc(jefe) : '<span style="opacity:.6">sin jefatura registrada</span>')+'</div>'
+  area1s.forEach(function(a1){
+    var g = grupos[a1];
+    var col1 = a1Colapsada(a1);
+    var subs = Object.keys(g.subs).sort(function(a,b){ return a.localeCompare(b,'es'); });
+    var todos = []; subs.forEach(function(s){ todos = todos.concat(g.subs[s]); });
+    var jefe1 = jefeDeArea(todos);
+    var tip1 = 'Gerencia: '+a1 + (jefe1?(' · '+jefe1):'');
+    // Encabezado GERENCIA (área1)
+    body += '<div class="cal-arearow'+(col1?' colapsada':'')+'" data-a1="'+esc(a1)+'" title="'+esc(tip1)+'" onclick="toggleArea1(\''+jsq(a1)+'\')">'
+          + '<div class="cal-arealabel"><span class="cal-areacaret">▾</span><span class="cal-areaname">'+esc(a1)+'</span><span class="cal-areacount">'+g.total+'</span></div>'
+          + '<div class="cal-areabar">'+(jefe1 ? '👤 '+esc(jefe1) : '<span style="opacity:.6">gerencia</span>')+'</div>'
           + '</div>';
-    miembros.forEach(function(e){ body += filaPersona(e); });
+    subs.forEach(function(a2){
+      var miembros = g.subs[a2];
+      var k2 = claveA2(a1,a2);
+      var col2 = a2Colapsada(a1,a2);
+      var jefe2 = jefeDeArea(miembros);
+      var tip2 = jefe2 ? ('Jefatura: '+jefe2) : 'Sin jefatura registrada';
+      // Encabezado SUBÁREA (área2) — se oculta si su gerencia está colapsada.
+      body += '<div class="cal-subarearow'+(col2?' colapsada':'')+(col1?' oculta':'')+'" data-a1="'+esc(a1)+'" data-a2key="'+esc(k2)+'" title="'+esc(tip2)+'" onclick="toggleSubarea(\''+jsq(a1)+'\',\''+jsq(a2)+'\',event)">'
+            + '<div class="cal-subarealabel"><span class="cal-areacaret">▾</span><span class="cal-subareaname">'+esc(a2)+'</span><span class="cal-subareacount">'+miembros.length+'</span></div>'
+            + '<div class="cal-areabar">'+(jefe2 ? '👤 '+esc(jefe2) : '<span style="opacity:.5">sin jefatura</span>')+'</div>'
+            + '</div>';
+      miembros.forEach(function(e){ body += filaPersona(e, a1, k2, (col1||col2)); });
+    });
   });
 
   cont.innerHTML = head + body;

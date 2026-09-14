@@ -2857,6 +2857,246 @@ document.addEventListener('click', function(e){
 })();
 </script>
 
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     FIESTAS PATRIAS · capa decorativa de temporada (REDTEC 2026)
+     Todo vive dentro de este bloque: para quitarlo, borrar desde este
+     comentario hasta el cierre "FIN FIESTAS PATRIAS". No modifica el
+     layout — cada elemento es position:absolute con pointer-events:none.
+     Se activa sólo entre D18.desde y D18.hasta (MM-DD).
+     ══════════════════════════════════════════════════════════════════════ -->
+<style id="d18-css">
+  .d18 .topbar .logo{ position:relative; }
+
+  /* 1 · guirnalda de banderines (borde superior de la barra) */
+  #d18-guirnalda{ position:absolute;left:0;right:0;top:0;height:15px;z-index:-1;
+    pointer-events:none;opacity:.72; }
+  #d18-guirnalda .fl{ transform-box:fill-box;transform-origin:top center;
+    animation:d18-sway 3.6s ease-in-out infinite alternate; }
+  @keyframes d18-sway{ from{transform:rotate(-4deg)} to{transform:rotate(4deg)} }
+
+  /* 2 · aviso central */
+  #d18-aviso{ position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    z-index:1;pointer-events:none;display:flex;align-items:center;gap:9px;
+    height:26px;padding:0 15px;border-radius:999px;overflow:hidden;white-space:nowrap;
+    background:linear-gradient(180deg,rgba(217,33,40,.16),rgba(217,33,40,.07));
+    border:1px solid rgba(217,33,40,.34);
+    box-shadow:0 0 0 1px rgba(0,0,0,.25) inset,0 1px 8px rgba(217,33,40,.10); }
+  #d18-aviso .d18-txt{ font-size:12px;font-weight:600;letter-spacing:.055em;
+    color:#FFE9D9;text-transform:uppercase; }
+  #d18-aviso .d18-est{ width:11px;height:11px;flex:none;fill:#E3C07E; }
+  #d18-aviso::after{ content:"";position:absolute;top:0;bottom:0;width:44px;left:-60px;
+    background:linear-gradient(100deg,transparent,rgba(255,255,255,.28),transparent);
+    animation:d18-brillo 7s ease-in-out infinite; }
+  @keyframes d18-brillo{ 0%,72%{left:-60px} 92%,100%{left:110%} }
+  #d18-aviso .d18-msg{ display:flex;align-items:center;gap:9px; }
+  #d18-aviso .d18-alt{ position:absolute;inset:0;justify-content:center;opacity:0; }
+  .d18-rotar #d18-aviso .d18-base{ animation:d18-msgA 11s ease-in-out infinite; }
+  .d18-rotar #d18-aviso .d18-alt { animation:d18-msgB 11s ease-in-out infinite; }
+  @keyframes d18-msgA{ 0%,42%{opacity:1} 50%,92%{opacity:0} 100%{opacity:1} }
+  @keyframes d18-msgB{ 0%,42%{opacity:0} 50%,92%{opacity:1} 100%{opacity:0} }
+  @media (max-width:1100px){ #d18-aviso{ display:none; } }
+
+  /* 3 · chupalla sobre la R */
+  #d18-chupalla{ position:absolute;width:29px;height:20px;left:-3px;top:-11px;
+    transform:rotate(-19deg);transform-origin:70% 100%;pointer-events:none;
+    animation:d18-saludo 11s ease-in-out infinite; }
+  @keyframes d18-saludo{
+    0%,86%{ transform:rotate(-19deg) translateY(0) scale(1) }
+    90%   { transform:rotate(-31deg) translateY(-3px) scale(1.04) }
+    94%   { transform:rotate(-14deg) translateY(-1px) scale(1.02) }
+    100%  { transform:rotate(-19deg) translateY(0) scale(1) } }
+  .d18 .topbar .logo:hover #d18-chupalla{
+    transform:rotate(-31deg) translateY(-3px) scale(1.05);animation:none; }
+
+  /* 4 · franja tricolor al pie de la barra */
+  #d18-tricolor{ position:absolute;left:50%;bottom:-1px;width:190px;height:2px;z-index:1;
+    transform:translateX(-50%);pointer-events:none;
+    background:linear-gradient(90deg,#2B4C86 0 33.4%,#EDEFF3 33.4% 66.7%,#D92128 66.7% 100%); }
+
+  /* 5 · banderines de bienvenida */
+  #d18-confeti{ position:fixed;inset:0;z-index:9998;pointer-events:none; }
+
+  @media (prefers-reduced-motion:reduce){
+    #d18-guirnalda .fl,#d18-chupalla,#d18-aviso .d18-base,#d18-aviso .d18-alt{ animation:none!important; }
+    #d18-aviso::after{ display:none; }
+  }
+</style>
+<script>
+(function(){
+  /* ── interruptores ─────────────────────────────────────────────── */
+  var D18 = {
+    desde:'09-11', hasta:'09-22',   // ventana activa (MM-DD, ambos inclusive)
+    guirnalda:true,                 // banderines colgando de la barra
+    aviso:true,                     // píldora central
+    rotar:true,                     // alternar los dos mensajes
+    chupalla:true,                  // sombrero sobre la R
+    tricolor:true,                  // franja de bandera bajo la barra
+    confeti:true,                   // banderines al ingresar (1 vez al día)
+    msg1:'¡Felices Fiestas Patrias!',
+    msg2:'REDTEC saluda a Chile'
+  };
+
+  /* ── ¿estamos dentro de la ventana? ────────────────────────────── */
+  var hoy = new Date(), p = function(n){ return (n<10?'0':'')+n; };
+  var md = p(hoy.getMonth()+1)+'-'+p(hoy.getDate());
+  if (md < D18.desde || md > D18.hasta) return;
+
+  var NS='http://www.w3.org/2000/svg';
+  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var ESTRELLA='M0,-11 L2.6,-3.4 L10.5,-3.4 L4,1.3 L6.5,8.9 L0,4.2 L-6.5,8.9 L-4,1.3 L-10.5,-3.4 L-2.6,-3.4 Z';
+
+  function montar(){
+    var bar = document.querySelector('.topbar');
+    if (!bar || document.getElementById('d18-css-on')) return;
+    document.body.classList.add('d18');
+    if (D18.rotar) document.body.classList.add('d18-rotar');
+    var marca = document.createElement('span');
+    marca.id='d18-css-on'; marca.style.display='none'; bar.appendChild(marca);
+
+    /* 1 · guirnalda */
+    if (D18.guirnalda){
+      var g = document.createElementNS(NS,'svg');
+      g.id='d18-guirnalda'; g.setAttribute('aria-hidden','true');
+      bar.insertBefore(g, bar.firstChild);
+      pintarGuirnalda();
+      var rt; addEventListener('resize', function(){
+        clearTimeout(rt); rt=setTimeout(pintarGuirnalda,150);
+      });
+    }
+
+    /* 2 · aviso central */
+    if (D18.aviso){
+      var a = document.createElement('div');
+      a.id='d18-aviso'; a.setAttribute('aria-hidden','true');
+      a.innerHTML =
+        '<span class="d18-msg d18-base"><svg class="d18-est" viewBox="-12 -12 24 24"><path d="'+ESTRELLA+'"/></svg>'+
+        '<span class="d18-txt">'+D18.msg1+'</span></span>'+
+        (D18.rotar ? '<span class="d18-msg d18-alt"><svg class="d18-est" viewBox="-12 -12 24 24"><path d="'+ESTRELLA+'"/></svg>'+
+        '<span class="d18-txt">'+D18.msg2+'</span></span>' : '');
+      bar.appendChild(a);
+    }
+
+    /* 3 · chupalla sobre la R */
+    if (D18.chupalla){
+      var logo = bar.querySelector('.logo');
+      if (logo){
+        var h = document.createElementNS(NS,'svg');
+        h.id='d18-chupalla'; h.setAttribute('viewBox','0 0 64 44'); h.setAttribute('aria-hidden','true');
+        h.innerHTML =
+          '<defs>'+
+          '<linearGradient id="d18pj" x1="0" y1="0" x2="0" y2="1">'+
+          '<stop offset="0" stop-color="#F0D49C"/><stop offset=".55" stop-color="#D2A75B"/><stop offset="1" stop-color="#A87E36"/></linearGradient>'+
+          '<linearGradient id="d18pjb" x1="0" y1="0" x2="1" y2="0">'+
+          '<stop offset="0" stop-color="#BF9147"/><stop offset=".45" stop-color="#EBCB8D"/><stop offset="1" stop-color="#AD8339"/></linearGradient>'+
+          '</defs>'+
+          '<ellipse cx="32" cy="31" rx="29" ry="7.6" fill="url(#d18pjb)" stroke="#6E5019" stroke-width="1.6"/>'+
+          '<path d="M19.6 29.5C19 14 24.4 7.4 32 7.4s13 6.6 12.4 22.1z" fill="url(#d18pj)" stroke="#6E5019" stroke-width="1.6"/>'+
+          '<path d="M19.9 23.4c4.3 3.1 19.9 3.1 24.2 0l.2 4.4c-4.3 3.1-20.3 3.1-24.6 0z" fill="#1F1F26"/>'+
+          '<path d="M20.1 23.6c.7.5 1.6.9 2.3 1.2l.35 4.5c-.8-.3-1.75-.75-2.45-1.3z" fill="#D92128"/>'+
+          '<path d="M22.4 24.8c.75.28 1.6.5 2.3.65l.3 4.5c-.8-.15-1.7-.4-2.25-.65z" fill="#EDEFF3"/>'+
+          '<path d="M24.7 25.45c.75.15 1.6.27 2.3.34l.28 4.5c-.8-.08-1.7-.22-2.28-.34z" fill="#2B4C86"/>'+
+          '<path d="M9 32.4c6.4 3 42.6 3 46 0" fill="none" stroke="#F6E3B4" stroke-width="1" opacity=".45"/>'+
+          '<path d="M23 12.6c5-2.4 13-2.4 18 0" fill="none" stroke="#F6E3B4" stroke-width="1" opacity=".35"/>';
+        logo.appendChild(h);
+      }
+    }
+
+    /* 4 · franja tricolor */
+    if (D18.tricolor){
+      var t = document.createElement('div');
+      t.id='d18-tricolor'; t.setAttribute('aria-hidden','true');
+      bar.appendChild(t);
+    }
+
+    /* 5 · banderines de bienvenida (1 vez al día) */
+    if (D18.confeti && !reduce){
+      var clave = 'd18_bienvenida';
+      var hoyISO = hoy.getFullYear()+'-'+md;
+      var visto=null; try{ visto = localStorage.getItem(clave); }catch(e){}
+      if (visto !== hoyISO){
+        try{ localStorage.setItem(clave, hoyISO); }catch(e){}
+        setTimeout(confeti, 500);
+      }
+    }
+  }
+
+  /* ── guirnalda ─────────────────────────────────────────────────── */
+  function pintarGuirnalda(){
+    var g = document.getElementById('d18-guirnalda'); if(!g) return;
+    var bar = document.querySelector('.topbar');
+    var w = Math.round(bar.getBoundingClientRect().width) || 1200, h = 15;
+    g.setAttribute('width', w); g.setAttribute('height', h);
+    g.setAttribute('viewBox', '0 0 '+w+' '+h);
+    g.setAttribute('preserveAspectRatio','none');
+    while (g.firstChild) g.removeChild(g.firstChild);
+    var n = Math.max(6, Math.round(w/26)), sag = 5, d = '';
+    for (var i=0;i<n;i++){
+      var x0 = i*w/n, x1 = (i+1)*w/n;
+      d += 'M'+x0.toFixed(1)+',1 Q'+((x0+x1)/2).toFixed(1)+','+(1+sag)+' '+x1.toFixed(1)+',1 ';
+    }
+    var cuerda = document.createElementNS(NS,'path');
+    cuerda.setAttribute('d', d); cuerda.setAttribute('fill','none');
+    cuerda.setAttribute('stroke','#5A6270'); cuerda.setAttribute('stroke-width','1');
+    g.appendChild(cuerda);
+    var cols = ['#D92128','#EDEFF3','#2B4C86'];
+    for (var j=0;j<n;j++){
+      var cx = (j+.5)*w/n, cy = 1+sag*.75, bw = 7, bh = 10;
+      var grp = document.createElementNS(NS,'g');
+      grp.setAttribute('class','fl');
+      grp.style.animationDelay = (-(j%7)*.42)+'s';
+      var pth = document.createElementNS(NS,'path');
+      pth.setAttribute('d','M'+(cx-bw/2)+','+cy+' L'+(cx+bw/2)+','+cy+' L'+cx+','+(cy+bh)+' Z');
+      pth.setAttribute('fill', cols[j%3]);
+      pth.setAttribute('opacity', cols[j%3]==='#EDEFF3' ? '.78' : '.95');
+      grp.appendChild(pth); g.appendChild(grp);
+    }
+  }
+
+  /* ── banderines cayendo ────────────────────────────────────────── */
+  function confeti(){
+    var cv = document.createElement('canvas');
+    cv.id='d18-confeti'; cv.setAttribute('aria-hidden','true');
+    document.body.appendChild(cv);
+    var ctx = cv.getContext('2d');
+    var dpr = Math.min(2, window.devicePixelRatio||1);
+    var W = innerWidth, H = innerHeight;
+    cv.width = W*dpr; cv.height = H*dpr; cv.style.width=W+'px'; cv.style.height=H+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    var cols = ['#D92128','#EDEFF3','#2B4C86','#D2A75B'], piezas = [];
+    for (var i=0;i<46;i++) piezas.push({
+      x: Math.random()*W, y: -10-Math.random()*90,
+      vy: 60+Math.random()*90, vx: (Math.random()-.5)*40,
+      a: Math.random()*Math.PI, va: (Math.random()-.5)*4.5,
+      w: 4+Math.random()*4, h: 6+Math.random()*5,
+      c: cols[(Math.random()*cols.length)|0], tri: Math.random()<.55
+    });
+    var t0 = performance.now(), ini = t0;
+    (function anim(t){
+      var dt = Math.min(.05, (t-t0)/1000), vida = (t-ini)/1000; t0 = t;
+      ctx.clearRect(0,0,W,H);
+      var fade = vida>2.1 ? Math.max(0, 1-(vida-2.1)/.7) : 1;
+      for (var k=0;k<piezas.length;k++){
+        var p = piezas[k];
+        p.y += p.vy*dt; p.x += p.vx*dt; p.a += p.va*dt; p.vx *= .996;
+        ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.a);
+        ctx.globalAlpha = .9*fade; ctx.fillStyle = p.c;
+        if (p.tri){ ctx.beginPath(); ctx.moveTo(-p.w/2,-p.h/2); ctx.lineTo(p.w/2,-p.h/2);
+                    ctx.lineTo(0,p.h/2); ctx.closePath(); ctx.fill(); }
+        else ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);
+        ctx.restore();
+      }
+      if (vida < 3.2) requestAnimationFrame(anim);
+      else if (cv.parentNode) cv.parentNode.removeChild(cv);
+    })(t0);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', montar);
+  else montar();
+})();
+</script>
+<!-- ══════════════ FIN FIESTAS PATRIAS ══════════════ -->
+
 </body>
 </html>
 <!-- ═══════════════════════════════════════════════════════════

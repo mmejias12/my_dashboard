@@ -951,11 +951,6 @@
     </div>
 
     <div class="cbar">
-      <div class="a11y" role="group" aria-label="Tamaño de la vista">
-        <button type="button" class="a11y-b" id="ops-fs-down" title="Reducir el tamaño de la vista" aria-label="Reducir tamaño">A&minus;</button>
-        <button type="button" class="a11y-v" id="ops-fs-val" title="Volver al 100%" aria-label="Tamaño actual, clic para volver al 100%">100%</button>
-        <button type="button" class="a11y-b big" id="ops-fs-up" title="Aumentar el tamaño de la vista" aria-label="Aumentar tamaño">A+</button>
-      </div>
       <div class="ctrl-group">
         <span class="ctrl-label">Período</span>
         <div class="rango-wrap">
@@ -1006,6 +1001,14 @@
       <button class="btn" id="btn-load" onclick="loadData(true)" title="Volver a consultar el API e ignorar lo que hay en memoria">↻ Recargar</button>
       <button class="btn" onclick="exportXLSX()">↓ Exportar Excel</button>
       <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        <div class="a11y" role="group" aria-label="Tamaño de la vista">
+          <button type="button" class="a11y-b" id="ops-fs-down" title="Reducir el tamaño de la vista" aria-label="Reducir tamaño">A&minus;</button>
+          <button type="button" class="a11y-v" id="ops-fs-val" title="Volver al 100%" aria-label="Tamaño actual, clic para volver al 100%">100%</button>
+          <button type="button" class="a11y-b big" id="ops-fs-up" title="Aumentar el tamaño de la vista" aria-label="Aumentar tamaño">A+</button>
+        </div>
+        <div class="a11y">
+          <button type="button" class="a11y-b tema" id="ops-theme" title="Cambiar a tema claro" aria-label="Cambiar tema">&#9788;</button>
+        </div>
         <select class="sel" id="op-filter" onchange="applyFilters()">
           <option value="">Todas las operaciones</option>
           <option value="emision">Emisiones</option>
@@ -1047,7 +1050,7 @@
           </div>
           <div class="res-item">
             <span class="res-label">Traspasos</span>
-            <span class="res-val" id="r-tras" style="color:#a78bfa">—</span>
+            <span class="res-val" id="r-tras" style="color:var(--e-purple)">—</span>
           </div>
         </div>
       </div>
@@ -1124,12 +1127,12 @@
         <div class="total-sep"></div>
         <div class="total-item">
           <span class="total-item-label">Sol.</span>
-          <span class="total-item-val" id="tot-sol" style="color:#9da3b4">—</span>
+          <span class="total-item-val" id="tot-sol" style="color:var(--text-secondary)">—</span>
         </div>
         <div class="total-sep"></div>
         <div class="total-item">
           <span class="total-item-label">Desp.</span>
-          <span class="total-item-val" id="tot-desp" style="color:#fcd34d">—</span>
+          <span class="total-item-val" id="tot-desp" style="color:var(--e-yellow)">—</span>
         </div>
         <div class="total-sep"></div>
         <div class="total-item">
@@ -1140,7 +1143,7 @@
         <div class="total-item" id="pend-wrapper" style="cursor:help"
              onmouseenter="showPendTip(event)" onmouseleave="hidePendTip()">
           <span class="total-item-label">Pendiente ⓘ</span>
-          <span class="total-item-val" id="tot-pend" style="color:#f87171">—</span>
+          <span class="total-item-val" id="tot-pend" style="color:var(--e-red)">—</span>
         </div>
         <div id="col-totals-section" style="display:none;display:flex;align-items:center;gap:6px;margin-left:8px">
           <div class="total-sep"></div>
@@ -2163,7 +2166,7 @@ function render() {
     var pedidoId = r.nroPedido || '';
     var rowIdx = start + i;
     rows += '<tr>'
-      + '<td data-label="Nº pedido" class="mono" style="font-weight:500;color:var(--accent);cursor:pointer;text-decoration:underline;text-decoration-color:rgba(74,222,128,.4)" onclick="openModal(' + rowIdx + ')">'  + (pedidoId || '&mdash;') + '</td>'
+      + '<td data-label="Nº pedido" class="mono" style="font-weight:500;color:var(--accent);cursor:pointer;text-decoration:underline;text-decoration-color:var(--accent)" onclick="openModal(' + rowIdx + ')">'  + (pedidoId || '&mdash;') + '</td>'
       + '<td data-label="Cliente origen" title="' + (r.clienteOrigenStr||'') + '">'                  + (r.clienteOrigenStr||'&mdash;') + '</td>'
       + '<td data-label="Cliente destino" title="' + (r.clienteDestinoStr||'') + '">'                 + (r.clienteDestinoStr||'&mdash;') + '</td>'
       + '<td data-label="Operación">' + opBadge(r.operacion) + '</td>'
@@ -2231,9 +2234,9 @@ function renderTotals() {
   var pendEl   = document.getElementById('tot-pend');
   pendEl.textContent = totPend.toLocaleString('es-CL');
   if (totPend < 0) {
-    pendEl.style.color = '#f87171';
+    pendEl.style.color = 'var(--e-red)';
   } else if (totPend > 0) {
-    pendEl.style.color = '#fcd34d';
+    pendEl.style.color = 'var(--e-yellow)';
   } else {
     pendEl.style.color = 'var(--accent)';
   }
@@ -2327,8 +2330,8 @@ function renderTimelineHistorial(eventos, registro) {
   if (!cont) return;
 
   if (!eventos.length) {
-    cont.innerHTML = '<div class="modal-error" style="background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.08);color:#9da3b4">'+
-      '<div class="modal-error-title" style="color:#9da3b4">Sin historial</div>'+
+    cont.innerHTML = '<div class="modal-error" style="background:var(--bg-input);border-color:var(--border);color:var(--text-secondary)">'+
+      '<div class="modal-error-title" style="color:var(--text-secondary)">Sin historial</div>'+
       'No hay eventos registrados para este pedido.</div>';
     return;
   }
@@ -2611,11 +2614,11 @@ function exportXLSX() {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <div id="pend-tip-box" style="display:none;position:fixed;width:270px;
-  background:#1e222d;border:1px solid rgba(248,113,113,.35);border-radius:9px;
-  padding:.75rem;font-size:11px;color:#9da3b4;line-height:1.65;z-index:9999;
+  background:var(--bg-card);border:1px solid rgba(248,113,113,.35);border-radius:9px;
+  padding:.75rem;font-size:11px;color:var(--text-secondary);line-height:1.65;z-index:9999;
   box-shadow:0 10px 30px rgba(0,0,0,.6);pointer-events:none;">
-  <div style="font-size:11.5px;font-weight:600;color:#f87171;margin-bottom:6px">⚠ ¿Por qué hay pendiente?</div>
-  <strong style="color:#e8eaf0">Pendiente = Despachado − Confirmado</strong><br><br>
+  <div style="font-size:11.5px;font-weight:600;color:var(--e-red);margin-bottom:6px">⚠ ¿Por qué hay pendiente?</div>
+  <strong style="color:var(--text-primary)">Pendiente = Despachado − Confirmado</strong><br><br>
   Puede indicar:<br>
   • Pallets despachados aún no confirmados por el cliente<br>
   • Diferencias en recepción (daño, merma o rechazo)<br>
@@ -3103,10 +3106,15 @@ document.addEventListener('click', function(e){
 <!-- ══════════════ FIN FIESTAS PATRIAS ══════════════ -->
 
 
-<!-- Accesibilidad de la vista Ops: tamano de texto (A- / % / A+).
-     Escala solo el contenido de la vista (cabecera, filtros, KPIs, tabla y el
-     modal de historial). El sidebar, la topbar y las pestanas no se tocan.
-     Preferencia por usuario en localStorage: ops_fs -->
+
+
+
+<!-- Accesibilidad de la vista Ops: tamano de texto (A- / % / A+) y tema claro/oscuro.
+     El zoom escala solo el contenido de la vista (cabecera, filtros, KPIs, tabla y el
+     modal de historial); el sidebar, la topbar y las pestanas no se tocan.
+     El tema se aplica a todo el panel via data-theme en <html>; la paleta clara son
+     overrides ADITIVOS, no se modifico ninguna regla original.
+     Preferencias por usuario en localStorage: ops_fs / ops_theme -->
 <style id="ops-a11y-css">
   .cbar .a11y{ display:flex;align-items:center;gap:2px;padding:2px;
     border:1px solid var(--border-md);background:var(--bg-input);
@@ -3117,6 +3125,7 @@ document.addEventListener('click', function(e){
     transition:background .15s ease,color .15s ease; }
   .cbar .a11y .a11y-b{ width:26px;font-size:12px;font-weight:700;line-height:1; }
   .cbar .a11y .a11y-b.big{ font-size:14px; }
+  .cbar .a11y .a11y-b.tema{ width:28px;font-size:14px; }
   .cbar .a11y .a11y-b:hover:not(:disabled){ background:var(--bg-hover);color:var(--text-primary); }
   .cbar .a11y .a11y-b:disabled{ opacity:.35;cursor:default; }
   .cbar .a11y .a11y-v{ min-width:46px;font-size:11px;font-weight:600;
@@ -3125,6 +3134,7 @@ document.addEventListener('click', function(e){
   .cbar .a11y .a11y-v.on{ color:var(--accent); }
   .cbar .a11y button:focus-visible{ outline:2px solid var(--accent);outline-offset:1px; }
 
+  /* zoom: solo los bloques de la vista */
   body.ops-z .main > .page-header,
   body.ops-z .main > .cbar,
   body.ops-z .main > .tag-row,
@@ -3132,16 +3142,204 @@ document.addEventListener('click', function(e){
   body.ops-z .main > .stats,
   body.ops-z .main > .table-card,
   body.ops-z #modal-overlay{ zoom:var(--ops-z,1); }
+
+  /* ══════════════ PALETA CLARA ══════════════ */
+  :root[data-theme="light"]{
+    --bg-page:       #f2f4f8;
+    --bg-surface:    #ffffff;
+    --bg-card:       #ffffff;
+    --bg-input:      #f0f2f7;
+    --bg-hover:      #e6eaf2;
+    --bg-active:     #e7f5ec;
+    --border:        rgba(16,24,40,0.10);
+    --border-md:     rgba(16,24,40,0.18);
+    --border-accent: rgba(21,128,61,0.40);
+    --text-primary:  #101420;
+    --text-secondary:#495261;
+    --text-muted:    #757e8c;
+    --accent:        #15803d;
+    --accent-dim:    rgba(21,128,61,0.12);
+    --red-logo:      #C0170C;
+    --b-em-bg: rgba(37,99,235,0.12);  --b-em-tx:#1d4ed8;
+    --b-ret-bg:rgba(180,83,9,0.13);   --b-ret-tx:#92600a;
+    --b-dev-bg:rgba(21,128,61,0.13);  --b-dev-tx:#12703a;
+    --b-tra-bg:rgba(124,58,237,0.12); --b-tra-tx:#6d28d9;
+    --b-rel-bg:rgba(225,29,72,0.10);  --b-rel-tx:#be123c;
+    --e-green:#15803d; --e-red:#c2261f; --e-yellow:#b45309;
+    --e-blue:#2563eb;  --e-purple:#6d28d9; --e-orange:#c2410c;
+    color-scheme:light;
+  }
+
+  /* --- armazon --- */
+  :root[data-theme="light"] .loading-overlay{ background:rgba(242,244,248,.88); }
+  :root[data-theme="light"] .avatar{ background:#e7f5ec; }
+  :root[data-theme="light"] .avatar-btn:hover .avatar{ box-shadow:0 0 0 3px rgba(37,99,235,.18); }
+  :root[data-theme="light"] .user-pop{ box-shadow:0 20px 50px rgba(16,24,40,.18); }
+  :root[data-theme="light"] .user-pop .up-item.secret{ color:#1d4ed8; }
+  :root[data-theme="light"] .user-pop .up-item.danger{ color:#b91c1c; }
+  :root[data-theme="light"] .user-pop .up-item.danger:hover{ background:rgba(185,28,28,.08); }
+  :root[data-theme="light"] .sidebar.collapsed .s-hdr::after{ background:#1f2430;
+    border:1px solid rgba(255,255,255,.12);box-shadow:0 4px 16px rgba(16,24,40,.28); }
+  :root[data-theme="light"] .sb-toggle:hover{ color:#C0170C;background:rgba(192,23,12,.07); }
+  :root[data-theme="light"] .s-hdr.open{ background:rgba(192,23,12,.07);color:#C0170C; }
+  :root[data-theme="light"] .dup-tag{ color:#64748b; }
+  :root[data-theme="light"] .fav-star{ color:#b45309; }
+  :root[data-theme="light"] .btn-help{ background:rgba(37,99,235,.10);
+    border:1px solid rgba(37,99,235,.28);color:#1d4ed8; }
+  :root[data-theme="light"] .btn-help:hover{ background:rgba(37,99,235,.18); }
+  :root[data-theme="light"] #tabdock::-webkit-scrollbar-thumb{ background:rgba(16,24,40,.16); }
+  :root[data-theme="light"] .tabchip .tc-x:hover{ background:rgba(16,24,40,.12); }
+  :root[data-theme="light"] ::-webkit-scrollbar-thumb{ background:rgba(16,24,40,.18); }
+  :root[data-theme="light"] ::-webkit-scrollbar-thumb:hover{ background:rgba(16,24,40,.30); }
+
+  /* --- modal de ayuda --- */
+  :root[data-theme="light"] .help-overlay{ background:rgba(16,24,40,.45); }
+  :root[data-theme="light"] .help-modal{ background:linear-gradient(135deg,#ffffff 0%,#f4f6fb 100%);
+    border:1px solid rgba(192,23,12,.22);box-shadow:0 30px 80px rgba(16,24,40,.22); }
+  :root[data-theme="light"] .help-modal-header{ background:linear-gradient(135deg,#ffffff 0%,#f4f6fb 100%);
+    border-bottom:1px solid rgba(16,24,40,.10); }
+  :root[data-theme="light"] .help-modal-title i{ color:#1d4ed8; }
+  :root[data-theme="light"] .help-modal-close{ color:#64748b; }
+  :root[data-theme="light"] .help-modal-close:hover{ background:rgba(16,24,40,.06); }
+  :root[data-theme="light"] .help-section-title{ color:#C0170C;border-bottom:1px solid rgba(192,23,12,.18); }
+  :root[data-theme="light"] .help-item{ border-bottom:1px solid rgba(16,24,40,.06); }
+  :root[data-theme="light"] .help-item .help-ico{ background:rgba(192,23,12,.10);color:#C0170C; }
+  :root[data-theme="light"] .help-item .help-desc{ color:#495261; }
+  :root[data-theme="light"] .help-modal,
+  :root[data-theme="light"] .help-item .help-name,
+  :root[data-theme="light"] .help-modal-close:hover{ color:#101420; }
+
+  /* --- selector de periodo: texto sobre el acento --- */
+  :root[data-theme="light"] .rg-nav:hover:not(:disabled),
+  :root[data-theme="light"] .rg-mnav:hover:not(:disabled),
+  :root[data-theme="light"] .rg-mopt:hover:not(:disabled),
+  :root[data-theme="light"] .rg-dia.ini,
+  :root[data-theme="light"] .rg-dia.fin,
+  :root[data-theme="light"] .rg-btn.ok{ color:#ffffff; }
+  :root[data-theme="light"] .rg-dia.prog.ini::after,
+  :root[data-theme="light"] .rg-dia.prog.fin::after{ border-bottom-color:#ffffff; }
+  :root[data-theme="light"] .rg-pop{ box-shadow:0 20px 55px rgba(16,24,40,.20); }
+  :root[data-theme="light"] .rg-resumen.tope{ color:#b45309; }
+
+  /* --- tabla y chips --- */
+  :root[data-theme="light"] .b-other{ background:rgba(16,24,40,.06); }
+  :root[data-theme="light"] .ret-bod-item{ background:rgba(16,24,40,.04); }
+  :root[data-theme="light"] .ret-fecha-aviso{ color:#c2410c;border-top:1px solid rgba(194,65,12,.22); }
+  :root[data-theme="light"] .chip-bod{ background:rgba(21,128,61,.10);border:1px solid rgba(21,128,61,.25); }
+  :root[data-theme="light"] .totals-bar{ border-top:1px solid rgba(16,24,40,.14);background:rgba(16,24,40,.035); }
+  :root[data-theme="light"] .total-sep{ background:rgba(16,24,40,.14); }
+  :root[data-theme="light"] .em-tooltip-wrap .em-tooltip{ border:1px solid rgba(16,24,40,.14);
+    box-shadow:0 8px 24px rgba(16,24,40,.18); }
+  :root[data-theme="light"] .em-tooltip::after{ border-top-color:rgba(16,24,40,.14); }
+  :root[data-theme="light"] .pend-tip-title{ color:#c2261f; }
+
+  /* --- modal de historial --- */
+  :root[data-theme="light"] .modal-overlay{ background:rgba(16,24,40,.45); }
+  :root[data-theme="light"] .modal-box{ background:#ffffff;border:1px solid rgba(16,24,40,.14);
+    box-shadow:0 24px 60px rgba(16,24,40,.22); }
+  :root[data-theme="light"] .modal-head{ border-bottom:1px solid rgba(16,24,40,.09); }
+  :root[data-theme="light"] .modal-title,
+  :root[data-theme="light"] .info-value,
+  :root[data-theme="light"] .tl-stage{ color:#101420; }
+  :root[data-theme="light"] .modal-subtitle,
+  :root[data-theme="light"] .info-label,
+  :root[data-theme="light"] .timeline-title,
+  :root[data-theme="light"] .tl-date,
+  :root[data-theme="light"] .tl-k,
+  :root[data-theme="light"] .obs-label,
+  :root[data-theme="light"] .tl-chip-arrow,
+  :root[data-theme="light"] .totals-label,
+  :root[data-theme="light"] .total-item-label{ color:#757e8c; }
+  :root[data-theme="light"] .modal-close{ border:1px solid rgba(16,24,40,.14);color:#495261; }
+  :root[data-theme="light"] .modal-close:hover{ background:rgba(16,24,40,.07); }
+  :root[data-theme="light"] .info-block{ background:rgba(16,24,40,.035); }
+  :root[data-theme="light"] .obs-box{ background:rgba(16,24,40,.035);
+    border-left:2px solid rgba(16,24,40,.14);color:#495261; }
+  :root[data-theme="light"] .preview-note{ color:#757e8c;border-top:1px solid rgba(16,24,40,.08); }
+  :root[data-theme="light"] .timeline::before{ background:rgba(16,24,40,.14); }
+  :root[data-theme="light"] .tl-v{ color:#495261; }
+  :root[data-theme="light"] .tl-dot.done{ border-color:#15803d;background:rgba(21,128,61,.14); }
+  :root[data-theme="light"] .tl-dot.done::after{ background:#15803d; }
+  :root[data-theme="light"] .tl-dot.pending{ border-color:#98a1ae;background:rgba(16,24,40,.04); }
+  :root[data-theme="light"] .tl-dot.active{ border-color:#2563eb;background:rgba(37,99,235,.14); }
+  :root[data-theme="light"] .tl-dot.active::after{ background:#2563eb; }
+  :root[data-theme="light"] .tl-dot.warn{ border-color:#c2261f;background:rgba(194,38,31,.12); }
+  :root[data-theme="light"] .tl-dot.warn::after{ background:#c2261f; }
+  :root[data-theme="light"] .tl-v.green{ color:#15803d; }
+  :root[data-theme="light"] .tl-v.blue{ color:#2563eb; }
+  :root[data-theme="light"] .tl-v.amber{ color:#b45309; }
+  :root[data-theme="light"] .tl-v.red{ color:#c2261f; }
+  :root[data-theme="light"] .tl-chip{ background:rgba(37,99,235,.09);
+    border:1px solid rgba(37,99,235,.28);color:#1d4ed8; }
+  :root[data-theme="light"] .tl-chip.green{ background:rgba(21,128,61,.09);
+    border-color:rgba(21,128,61,.30);color:#15803d; }
+  :root[data-theme="light"] .tl-chip.amber{ background:rgba(180,83,9,.09);
+    border-color:rgba(180,83,9,.28);color:#b45309; }
+  :root[data-theme="light"] .tl-chip.red{ background:rgba(194,38,31,.08);
+    border-color:rgba(194,38,31,.28);color:#a81d18; }
+  :root[data-theme="light"] .tl-chip.purple{ background:rgba(124,58,237,.09);
+    border-color:rgba(124,58,237,.28);color:#6d28d9; }
+  :root[data-theme="light"] .modal-loading{ color:#495261; }
+  :root[data-theme="light"] .modal-spinner{ border:2px solid rgba(16,24,40,.15);border-top-color:#2563eb; }
+  :root[data-theme="light"] .modal-error{ background:rgba(194,38,31,.07);
+    border:1px solid rgba(194,38,31,.25);color:#a81d18; }
+  :root[data-theme="light"] .modal-error-title{ color:#c2261f; }
+  :root[data-theme="light"] .tl-skeleton::before,
+  :root[data-theme="light"] .tl-skel-item::before{ background:rgba(16,24,40,.07); }
+  :root[data-theme="light"] .tl-skel-line{ background:rgba(16,24,40,.06); }
+
+  /* --- agente --- */
+  :root[data-theme="light"] #agP{ background:#ffffff;border:1px solid rgba(16,24,40,.12);
+    box-shadow:0 20px 60px rgba(16,24,40,.25); }
+  :root[data-theme="light"] #agH{ background:linear-gradient(135deg,#fdf1f0,#fae7e5);
+    border-bottom:1px solid rgba(192,57,43,.20); }
+  :root[data-theme="light"] #agHN{ color:#101420; }
+  :root[data-theme="light"] #agHS{ color:#757e8c; }
+  :root[data-theme="light"] #agX,
+  :root[data-theme="light"] #agClr{ color:#757e8c; }
+  :root[data-theme="light"] #agX:hover,
+  :root[data-theme="light"] #agClr:hover{ background:rgba(16,24,40,.06);color:#101420; }
+  :root[data-theme="light"] #agSt{ background:#15803d;box-shadow:0 0 5px #15803d; }
+  :root[data-theme="light"] #agBdot{ background:#15803d;border:2px solid rgba(255,255,255,.85); }
+  :root[data-theme="light"] #agCtx{ background:rgba(21,128,61,.09);
+    border-bottom:1px solid rgba(21,128,61,.18);color:#15803d; }
+  :root[data-theme="light"] #agCtx.nd{ background:rgba(180,83,9,.09);
+    border-bottom-color:rgba(180,83,9,.18);color:#b45309; }
+  :root[data-theme="light"] .aav.us{ background:rgba(16,24,40,.08);color:#495261; }
+  :root[data-theme="light"] .ab.ai{ background:rgba(16,24,40,.05);color:#101420; }
+  :root[data-theme="light"] .ab.us{ background:rgba(192,57,43,.12);color:#101420; }
+  :root[data-theme="light"] .adots span{ background:#98a1ae; }
+  :root[data-theme="light"] #agSugs{ border-top:1px solid rgba(16,24,40,.08); }
+  :root[data-theme="light"] #agIn{ border-top:1px solid rgba(16,24,40,.08); }
+  :root[data-theme="light"] .asug{ background:rgba(16,24,40,.04);
+    border:1px solid rgba(16,24,40,.10);color:#495261; }
+  :root[data-theme="light"] .asug:hover{ background:rgba(16,24,40,.08);color:#101420; }
+  :root[data-theme="light"] #agTxt{ background:#ffffff;border:1px solid rgba(16,24,40,.16);color:#101420; }
+  :root[data-theme="light"] #agM::-webkit-scrollbar-thumb{ background:rgba(16,24,40,.18); }
+
+  /* --- capa diciochera sobre fondo claro --- */
+  :root[data-theme="light"] #d18-aviso{
+    background:linear-gradient(180deg,rgba(217,33,40,.12),rgba(217,33,40,.05));
+    border-color:rgba(217,33,40,.32);box-shadow:0 1px 8px rgba(217,33,40,.10); }
+  :root[data-theme="light"] #d18-aviso .d18-txt{ color:#9C1A20; }
+  :root[data-theme="light"] #d18-aviso .d18-est{ fill:#A9791F; }
+  :root[data-theme="light"] #d18-aviso::after{
+    background:linear-gradient(100deg,transparent,rgba(255,255,255,.65),transparent); }
+  :root[data-theme="light"] #d18-guirnalda{ opacity:.95; }
+  :root[data-theme="light"] #d18-guirnalda path[fill="#EDEFF3"]{ fill:#C3CAD6; }
+  :root[data-theme="light"] #d18-guirnalda path[stroke="#5A6270"]{ stroke:#9AA3B2; }
 </style>
 <script>
 (function(){
-  var NIVELES=[.9,1,1.15,1.3,1.5], idx=1, CLAVE='ops_fs';
+  /* ---- tamano ---- */
+  var NIVELES=[.9,1,1.15,1.3,1.5], idx=1;
   var bDown=document.getElementById('ops-fs-down'),
       bUp  =document.getElementById('ops-fs-up'),
-      bVal =document.getElementById('ops-fs-val');
-  if(!bDown||!bUp||!bVal) return;
+      bVal =document.getElementById('ops-fs-val'),
+      bTema=document.getElementById('ops-theme');
+  if(!bDown||!bUp||!bVal||!bTema) return;
 
-  function aplicar(guardar){
+  function aplicarFS(guardar){
     var z=NIVELES[idx];
     document.body.classList.toggle('ops-z', z!==1);
     document.body.style.setProperty('--ops-z', z);
@@ -3149,17 +3347,30 @@ document.addEventListener('click', function(e){
     bVal.classList.toggle('on', z!==1);
     bDown.disabled=(idx===0);
     bUp.disabled=(idx===NIVELES.length-1);
-    if(guardar){ try{ localStorage.setItem(CLAVE, idx); }catch(e){} }
+    if(guardar){ try{ localStorage.setItem('ops_fs', idx); }catch(e){} }
   }
-  bDown.addEventListener('click',function(){ if(idx>0){ idx--; aplicar(true);} });
-  bUp  .addEventListener('click',function(){ if(idx<NIVELES.length-1){ idx++; aplicar(true);} });
-  bVal .addEventListener('click',function(){ idx=1; aplicar(true); });
+  bDown.addEventListener('click',function(){ if(idx>0){ idx--; aplicarFS(true);} });
+  bUp  .addEventListener('click',function(){ if(idx<NIVELES.length-1){ idx++; aplicarFS(true);} });
+  bVal .addEventListener('click',function(){ idx=1; aplicarFS(true); });
+
+  /* ---- tema ---- */
+  function aplicarTema(t, guardar){
+    var claro = (t==='light');
+    document.documentElement.setAttribute('data-theme', claro?'light':'dark');
+    bTema.innerHTML = claro ? '&#9790;' : '&#9788;';           /* luna / sol */
+    bTema.title = claro ? 'Cambiar a tema oscuro' : 'Cambiar a tema claro';
+    if(guardar){ try{ localStorage.setItem('ops_theme', claro?'light':'dark'); }catch(e){} }
+  }
+  bTema.addEventListener('click',function(){
+    aplicarTema(document.documentElement.getAttribute('data-theme')==='light'?'dark':'light', true);
+  });
 
   try{
-    var g=parseInt(localStorage.getItem(CLAVE),10);
+    var g=parseInt(localStorage.getItem('ops_fs'),10);
     if(!isNaN(g) && g>=0 && g<NIVELES.length) idx=g;
   }catch(e){}
-  aplicar(false);
+  var t='dark'; try{ t=localStorage.getItem('ops_theme')||'dark'; }catch(e){}
+  aplicarFS(false); aplicarTema(t, false);
 })();
 </script>
 
@@ -3308,7 +3519,7 @@ document.addEventListener('click', function(e){
       'Hola! Soy el agente de operaciones REDTEC.<br><br>' +
       'Puedo analizar el período cargado: emisiones, retiros, transferencias, ' +
       'clientes pendientes y cantidades.<br><br>' +
-      '<span style="color:#4a4f66;font-size:10.5px">Elige un período arriba para activar el análisis.</span>'
+      '<span style="color:var(--text-muted);font-size:10.5px">Elige un período arriba para activar el análisis.</span>'
     );
   }
 
@@ -3432,7 +3643,7 @@ document.addEventListener('click', function(e){
       var el = document.getElementById('agLD');
       if (el) el.remove();
       if (data.error) {
-        agAdd('ai', '<span style="color:#f56060">Error: ' + (data.error.message || 'Sin respuesta') + '</span>');
+        agAdd('ai', '<span style="color:var(--e-red)">Error: ' + (data.error.message || 'Sin respuesta') + '</span>');
         hist.pop();
       } else {
         var reply = data.content[0].text;
@@ -3446,7 +3657,7 @@ document.addEventListener('click', function(e){
     .catch(function(e) {
       var el = document.getElementById('agLD');
       if (el) el.remove();
-      agAdd('ai', '<span style="color:#f56060">No se pudo conectar. Reintenta.</span>');
+      agAdd('ai', '<span style="color:var(--e-red)">No se pudo conectar. Reintenta.</span>');
       hist.pop();
       busy = false;
       document.getElementById('agGo').disabled = false;

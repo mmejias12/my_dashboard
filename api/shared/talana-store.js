@@ -36,9 +36,11 @@ const TTL_MAESTROS_MIN = Number(process.env.TALANA_TTL_MAESTROS_MIN || 720); // 
 // regenerar el snapshot aunque no haya vencido por tiempo. v2: carga priorizada
 // de turnos/asignaciones (los días y las asignaciones se traen antes que el
 // catálogo /workShift/, para que éste no agote el presupuesto y deje el snapshot
-// sin horario teórico). El sincronizador sólo estampa esta versión cuando las
+// sin horario teórico). v3: cada empleado trae su área resuelta (area1 gerencia
+// → area2 subárea, desde el árbol de unidad organizacional) para agrupar la
+// dotación por área. El sincronizador sólo estampa esta versión cuando las
 // asignaciones se resolvieron; así un snapshot viejo sin ellas se rehace.
-const ESQUEMA_MAESTROS = Number(process.env.TALANA_ESQUEMA_MAESTROS || 2);
+const ESQUEMA_MAESTROS = Number(process.env.TALANA_ESQUEMA_MAESTROS || 3);
 
 const K_MAESTROS = 'talana/maestros.json';
 const K_ESTADO   = 'talana/estado.json';

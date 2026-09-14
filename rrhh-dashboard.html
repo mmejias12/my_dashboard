@@ -440,7 +440,9 @@ function nz(v){ return (v===null||v===undefined||v==='') ? '—' : v; }
 /* Talana devuelve saldos como 8.333333333333329: se muestran con un decimal. */
 function dias(n){ return (n===null||n===undefined||isNaN(n)) ? '—' : (Math.round(n*10)/10).toString(); }
 function fecha(s){ if(!s) return '—'; var p=String(s).slice(0,10).split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : s; }
-function hoyIso(){ var d=new Date(); return d.toISOString().slice(0,10); }
+/* toISOString() convierte a UTC: pasadas las ~21:00 en Chile devolvía mañana,
+   y en "Vacaciones próximas" desaparecía quien termina vacaciones hoy. */
+function hoyIso(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function antiguedad(desde){
   if(!desde) return null;
   var d=new Date(String(desde).slice(0,10)+'T00:00:00'), h=new Date();

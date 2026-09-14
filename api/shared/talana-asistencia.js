@@ -612,8 +612,13 @@ async function traerAusencias(opts = {}, avance = null) {
     try {
       const r = await talana.listar(f.recurso, {}, {
         ...opts,
-        // Estos recursos son grandes: páginas más gruesas = menos peticiones.
-        pageSize: Number(process.env.TALANA_PAGE_SIZE_AUSENCIAS || 500),
+        // Página MUY grande a propósito: cada recurso resumido cabe entero en una
+        // sola página (absentism ~1.4k, vacations ~2.6k, admin ~40), así que la
+        // traída completa son ~3 peticiones en vez de ~15. Con 500 no alcanzaba a
+        // terminar dentro del presupuesto y el bloque del mes en curso se quedaba
+        // congelado: por eso faltaban licencias recién cargadas. Verificado en
+        // vivo que Talana devuelve el histórico completo en una página a 3000.
+        pageSize: Number(process.env.TALANA_PAGE_SIZE_AUSENCIAS || 3000),
         desdePath: typeof cursor === 'string' ? cursor : undefined
       });
       for (const a of r.items) data.push(mapearAusencia(a, f));

@@ -91,6 +91,17 @@ body.tt-z .main > *{zoom:var(--tt-z,1)}
 .a11y-btn.md{font-size:12.5px}
 .a11y-btn.lg{font-size:15px}
 .a11y-btn.tema{font-size:14px;padding:5px 9px}
+
+/* ── PINES DEL MAPA ──────────────────────────────────────────────────────
+   Latido lento en el halo, no en el pin: mover el pin mismo marea y descoloca
+   la lectura de la posición. Los puntos críticos NO laten — quedan fijos, que
+   es lo que los separa del resto cuando todo lo demás respira. */
+@keyframes pinLatido{0%,100%{transform:translate(-50%,-50%) scale(.72);opacity:.55}50%{transform:translate(-50%,-50%) scale(1.75);opacity:0}}
+.pin-wrap{position:relative;width:100%;height:100%}
+.pin-halo{position:absolute;left:50%;top:38%;border-radius:50%;transform:translate(-50%,-50%);animation:pinLatido 3.6s ease-in-out infinite;pointer-events:none}
+.pin-fijo .pin-halo{animation:none;opacity:.42;transform:translate(-50%,-50%) scale(1.15)}
+.pin-svg{position:absolute;left:0;top:0;filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
+@media (prefers-reduced-motion: reduce){ .pin-halo{animation:none;opacity:.4} }
 html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;background:var(--bg);color:var(--t1);-webkit-font-smoothing:antialiased;line-height:1.5}
 
 /* ── SCROLLBAR ── */
@@ -2976,18 +2987,32 @@ function pintarMapa(){
     const col = esVol ? (COLOR_TIPO[p.tipo] || '#8b93ad') : colorDemora(p.prom, cortes);
     const esBase = p.fuente === 'base';
 
-    const m = L.circleMarker([p.coords[1], p.coords[0]], {
-      radius: r,
-      color: esBase ? '#ffffff' : '#0b0d15',
-      weight: esBase ? 2.5 : 1.2,
-      fillColor: col,
-      fillOpacity: esVol ? .72 : .82
+    /* Pin, no círculo: el pin apunta a un lugar, el círculo sólo cubre un
+       área — y acá la posición importa. El tamaño sigue diciendo el valor. */
+    const alto = Math.round(26 + base*20);
+    const ancho = Math.round(alto*0.68);
+    const critico = p.prom >= cortes[3];          // el tramo rojo de la demora
+    const halo = Math.round(alto*0.62);
+    const html = `<div class="pin-wrap ${critico ? 'pin-fijo' : ''}">
+        <span class="pin-halo" style="width:${halo}px;height:${halo}px;background:${col}"></span>
+        <svg class="pin-svg" width="${ancho}" height="${alto}" viewBox="0 0 24 34" aria-hidden="true">
+          <path d="M12 0C5.6 0 .5 5.1.5 11.5.5 20.1 12 34 12 34s11.5-13.9 11.5-22.5C23.5 5.1 18.4 0 12 0z"
+                fill="${col}" stroke="${critico ? '#ffffff' : 'rgba(11,13,21,.75)'}" stroke-width="${critico ? 2.2 : 1.4}"/>
+          <circle cx="12" cy="11.4" r="4.1" fill="rgba(11,13,21,.82)"/>
+          ${esBase ? '<circle cx="12" cy="11.4" r="1.9" fill="#fff"/>' : ''}
+        </svg>
+      </div>`;
+    const m = L.marker([p.coords[1], p.coords[0]], {
+      icon: L.divIcon({className:'', iconSize:[ancho, alto], iconAnchor:[Math.round(ancho/2), alto], html}),
+      riseOnHover: true,
+      zIndexOffset: critico ? 1000 : 0
     }).addTo(capaMapa);
 
     m.bindTooltip(
       '<b>'+escTT(p.nombre)+'</b><br>'
       + '<span style="color:#555">'+escTT(p.comuna||'')+(p.zona?' · zona '+p.zona:'')+'</span><br>'
-      + fmtMins(p.min)+' en '+p.vis+' visita(s) · promedio <b>'+fmtMins(p.prom)+'</b>',
+      + fmtMins(p.min)+' en '+p.vis+' visita(s) · promedio <b>'+fmtMins(p.prom)+'</b>'
+      + (p.fuente==='comuna' ? '<br><span style="color:#8a6d1f">ubicación aproximada (centro de comuna)</span>' : ''),
       {direction:'top', offset:[0,-4], opacity:.96}
     );
     m.on('click', () => detallePuntoMapa(p));
@@ -2999,7 +3024,7 @@ function pintarMapa(){
     if(esBase){
       L.marker([p.coords[1], p.coords[0]], {
         interactive:false,
-        icon: L.divIcon({className:'', iconSize:[74,18], iconAnchor:[37, -Math.round(r)-4],
+        icon: L.divIcon({className:'', iconSize:[74,18], iconAnchor:[37, -6],
           html:'<div style="background:#0b0d15;color:#fff;border:1px solid #2dd4d4;border-radius:5px;font:600 10px/16px \'DM Sans\',sans-serif;text-align:center;white-space:nowrap">BASE</div>'})
       }).addTo(capaMapa);
     }
@@ -3056,7 +3081,9 @@ function detallePuntoMapa(d){
         }).join('')}</div>`
         : `<div style="color:var(--t3);font-size:12px">${OPS_ESTADO==='ok' ? 'Sin operaciones de RDTOut en los días en que la flota estuvo acá. Puede ser una parada sin respaldo documental, o un recinto que RDTOut nombra distinto.' : 'Entra a "Recorrido del día" para cargar el cruce con RDTOut.'}</div>`}
       <div style="margin-top:12px;font-size:11px;color:var(--t3)">
-        Ubicado por ${d.fuente==='base'?'coordenada propia de la base':d.fuente==='recinto'?'el catálogo de recintos':'la comuna escrita en la dirección del GPS'}${d.fuente!=='base'?' — centroide de comuna, no ubicación exacta':''}.
+        ${d.fuente==='base' ? 'Ubicación real de la base.'
+          : d.fuente==='direccion' ? 'Ubicación real: dirección del recinto geocodificada.'
+          : 'Ubicación APROXIMADA: centro de la comuna. Este recinto no tiene dirección geocodificada todavía.'}
       </div>
     </div>
   </div>`;
@@ -3112,6 +3139,8 @@ async function renderMapa(){
   chips.innerHTML = [
     chip(`<b style="color:var(--t1)">${MAPA_PUNTOS.length}</b> ${mapaAgrupActual==='comuna'?'comunas':'puntos'} en Santiago`),
     chip(`<b style="color:var(--t1)">${fmtMins(minUbic)}</b> de flota detenida`),
+    (() => { const ap = MAPA_PUNTOS.filter(p=>p.fuente==='comuna').length;
+             return ap ? chip(`${ap} con ubicación aproximada`) : ''; })(),
     lento ? chip(`más lento: <b style="color:var(--amber)">${escTT(lento.nombre)}</b> · ${fmtMins(lento.prom)} por visita`, 'var(--amber-d)') : '',
     MAPA_SIN_UBICAR.length ? chip(`<b style="color:var(--amber)">${MAPA_SIN_UBICAR.length}</b> sin ubicar · ${fmtMins(minSin)}`, 'var(--amber-d)') : '',
     MAPA_FUERA.n ? chip(`${MAPA_FUERA.n} fuera de Santiago · ${fmtMins(MAPA_FUERA.min)}`) : ''

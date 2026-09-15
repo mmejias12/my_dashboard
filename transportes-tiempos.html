@@ -1964,8 +1964,12 @@ function setFormaTipo(f){
 function renderChartTipo(){
   if(chartTipo){ chartTipo.destroy(); chartTipo = null; }
 
-  const tipos = ['CD Retail','Sala Retail','Cliente','REDTEC','Sin geocerca'];
-  const colores = ['#4b8df8','#1ec96a','#f4a836','#2dd4d4','#6b7280'];
+  /* "Sin geocerca" queda FUERA del promedio por tipo de recinto: son
+     direcciones que el GPS no sabe nombrar —pernoctes, esperas en la calle,
+     el perímetro de un recinto— y mezclarlas con los tiempos de atención de
+     un CD ensucia la comparación. Se siguen viendo en Por punto y en Detalle. */
+  const tipos = ['CD Retail','Sala Retail','Cliente','REDTEC'];
+  const colores = ['#4b8df8','#1ec96a','#f4a836','#2dd4d4'];
 
   const vals = tipos.map(t => {
     const rows = DB.filter(r => r.tipo === t);
@@ -1982,7 +1986,11 @@ function renderChartTipo(){
   }
 
   const leg = document.getElementById('legend-tipo');
-  if(leg) leg.innerHTML = tipos.map((t,i) => `<div class="leg-item"><div class="leg-dot" style="background:${colores[i]}"></div>${t}: ${vals[i]>0?fmtMins(vals[i]):'sin datos'}</div>`).join('');
+  if(leg){
+    const nSin = DB.filter(r => r.tipo === 'Sin geocerca').length;
+    leg.innerHTML = tipos.map((t,i) => `<div class="leg-item"><div class="leg-dot" style="background:${colores[i]}"></div>${t}: ${vals[i]>0?fmtMins(vals[i]):'sin datos'}</div>`).join('')
+      + (nSin ? `<div class="leg-item" style="color:var(--t3)" title="No entran en este promedio: son direcciones sin geocerca y ensuciarían la comparación">· ${nSin} parada(s) sin geocerca, excluidas</div>` : '');
+  }
 
   if(!hayChart()){ avisoSinChart('chart-tipo'); return; }
 
@@ -2603,7 +2611,8 @@ const TABS = ['resumen','puntos','choferes','recorrido','mapa','detalle','tenden
       no se inventa a cuál corresponde cada una.
    ══════════════════════════════════════════════════════════════════════ */
 
-let OPS_RDT = [];          // ventana completa que entrega el API
+let OPS_RDT = [];          // sólo las operaciones donde REDTEC es una de las partes
+let OPS_DESCARTADAS = 0;   // movimientos entre terceros, fuera del alcance de la flota
 let IDX_OPS = new Map();   // nombre normalizado -> [ops]
 let CLAVES_OPS = [];       // [{k, t:[tokens]}] para el match aproximado
 let PROM_PUNTO = {};       // punto -> minutos promedio en el período cargado
@@ -2631,10 +2640,16 @@ const STOP_REC = new Set(['CD','DE','LA','EL','LOS','LAS','SA','SPA','LTDA','LIM
 const toksRec = s => normRec(s).split(' ').filter(t => t && !STOP_REC.has(t) && t.length > 1);
 function jaccard(a,b){ const A=new Set(a),B=new Set(b); let i=0; A.forEach(x=>{if(B.has(x))i++;}); const u=A.size+B.size-i; return u?i/u:0; }
 
-/* La contraparte de una operación es el lado que NO es REDTEC */
+/* La contraparte de una operación es el lado que NO es REDTEC. Como OPS_RDT
+   ya sólo trae operaciones con REDTEC de un lado, esto siempre da el recinto
+   del cliente o del retail. */
 function contraparteOp(o){
   const d = o.bodegaDestinoStr || '', g = o.bodegaOrigenStr || '';
   return /REDTEC/i.test(d) ? g : d;
+}
+/* Sentido de la carga, desde REDTEC: sale (emisión) o entra (retiro/devolución) */
+function sentidoOp(o){
+  return /REDTEC/i.test(o.bodegaOrigenStr||'') ? 'sale' : 'entra';
 }
 function diasDeOp(o){
   return [o.fechaConfirmacion, o.fechaDespacho, o.fechaRequerida]
@@ -2648,8 +2663,24 @@ async function cargarOps(){
     const r = await fetch('/api/ops?desde=2026-01-01&hasta=2026-12-31', {signal: AbortSignal.timeout(60000)});
     const j = await r.json();
     const arr = Array.isArray(j) ? j : (j.data || j.items || j.result || []);
-    // Las anuladas no son un movimiento físico: no pueden explicar una parada
-    OPS_RDT = arr.filter(o => !/anulad/i.test(o.etapaOperacion || ''));
+    /* DOS FILTROS, y el segundo es el que hace que los números cierren:
+
+       1. Las anuladas no son un movimiento físico, no explican una parada.
+
+       2. Sólo las operaciones donde REDTEC está de UN LADO. Medido sobre la
+          ventana del API: de 18.225 operaciones, 10.765 son Transferencias,
+          1.561 Traspasos y 4.870 Relocalizaciones en las que REDTEC NO
+          aparece ni como origen ni como destino — son movimientos entre
+          terceros que nuestros camiones no hacen. Sólo 926 (5%) son de la
+          flota: 428 emisiones (REDTEC origen), 432 retiros (REDTEC destino)
+          y 66 devoluciones.
+          Sin este filtro pasaba lo que Mauro vio en pantalla: un punto con
+          2 visitas mostraba "Transferencia · 38 operaciones", que no tenían
+          nada que ver con el camión que paró ahí. */
+    const esDeLaFlota = o => /REDTEC/i.test(o.bodegaOrigenStr||'') || /REDTEC/i.test(o.bodegaDestinoStr||'');
+    const vivas = arr.filter(o => !/anulad/i.test(o.etapaOperacion || ''));
+    OPS_RDT = vivas.filter(esDeLaFlota);
+    OPS_DESCARTADAS = vivas.length - OPS_RDT.length;
     IDX_OPS = new Map();
     OPS_RDT.forEach(o => {
       const k = normRec(contraparteOp(o));
@@ -2928,8 +2959,11 @@ function construirPuntos(){
   const vm = {};
   DB.filter(r => placa==='all' || r.placa===placa).forEach(r => {
     const k = r.placa+'|'+r.punto+'|'+r.fecha;
-    if(!vm[k]) vm[k] = {placa:r.placa, punto:r.punto, tipo:r.tipo, fecha:r.fecha, min:0};
+    if(!vm[k]) vm[k] = {placa:r.placa, chofer:r.chofer, punto:r.punto, tipo:r.tipo, fecha:r.fecha,
+                        min:0, llegada:r.llegada, salida:r.salida};
     vm[k].min += r.minutos;
+    if(r.llegada < vm[k].llegada) vm[k].llegada = r.llegada;
+    if(r.salida  > vm[k].salida)  vm[k].salida  = r.salida;
   });
   const acc = {}, sinU = {};
   Object.values(vm).forEach(v => {
@@ -2940,11 +2974,12 @@ function construirPuntos(){
       nombre: mapaAgrupActual==='comuna' ? geo.comuna : v.punto,
       comuna: geo.comuna, tipo: v.tipo, fuente: geo.fuente, zona: geo.zona,
       coords: mapaAgrupActual==='comuna' ? (COMUNA_CENT[geo.comuna]||geo.coords) : geo.coords,
-      min:0, vis:0, placas:new Set(), puntos:new Set(), dias:new Set()
+      min:0, vis:0, placas:new Set(), puntos:new Set(), dias:new Set(), visitas:[]
     };
     const a = acc[clave];
     a.min += v.min; a.vis += 1;
     a.placas.add(v.placa); a.puntos.add(v.punto); a.dias.add(v.fecha);
+    a.visitas.push(v);
   });
   MAPA_SIN_UBICAR = Object.entries(sinU).sort((a,b)=>b[1]-a[1]);
   const todos = Object.values(acc).map(p => Object.assign(p, {prom: Math.round(p.min/p.vis)}));
@@ -3046,44 +3081,213 @@ function pintarMapa(){
   }
 }
 
-function detallePuntoMapa(d){
-  const cont = document.getElementById('mapa-detalle');
-  const ops = [];
-  [...d.puntos].forEach(p => {
-    [...d.dias].forEach(dia => {
-      const x = opsDeVisita(p, dia);
-      x.ops.forEach(o => ops.push(o));
+/* Camiones que visitaron un recinto en un día — sirve para saber si las
+   operaciones de RDTOut de ese día se le pueden atribuir a UN camión o si
+   son de varios. Sin esto, el detalle decía "2 camión(es)" y no cuáles. */
+function camionesEnRecintoDia(punto, fecha){
+  const s = new Set();
+  DB.forEach(r => { if(r.punto === punto && r.fecha === fecha) s.add(r.placa); });
+  return s;
+}
+
+function fmtPallets(n){ return (n||0).toLocaleString('es-CL'); }
+
+/* Reparte las operaciones de un conjunto de visitas entre lo que SALE
+   (emisión) y lo que ENTRA (retiro/devolución), separando lo que se puede
+   atribuir a un camión de lo que quedó compartido con otro. */
+function balanceDeVisitas(visitas){
+  const b = {saleP:0, entraP:0, saleN:0, entraN:0, ambiguasN:0, ambiguasP:0, ops:[], sinOp:0};
+  visitas.forEach(v => {
+    const x = opsDeVisita(v.punto, v.fecha);
+    if(!x.ops.length){ b.sinOp++; return; }
+    const compartido = camionesEnRecintoDia(v.punto, v.fecha).size > 1;
+    x.ops.forEach(o => {
+      const p = +o.cantidadConfirmada || 0;
+      const sale = sentidoOp(o) === 'sale';
+      b.ops.push({o, visita:v, compartido, sale, pallets:p});
+      if(compartido){ b.ambiguasN++; b.ambiguasP += p; return; }
+      if(sale){ b.saleP += p; b.saleN++; } else { b.entraP += p; b.entraN++; }
     });
   });
-  const porFamilia = {};
-  ops.forEach(o => {
-    const f = familiaOp(o.operacion).f;
-    if(!porFamilia[f]) porFamilia[f] = {n:0, pallets:0};
-    porFamilia[f].n++; porFamilia[f].pallets += (+o.cantidadConfirmada||0);
-  });
+  return b;
+}
+
+function detallePuntoMapa(d){
+  const cont = document.getElementById('mapa-detalle');
+  const visitas = (d.visitas||[]).slice().sort((a,b)=>String(b.llegada).localeCompare(String(a.llegada)));
+  const bal = balanceDeVisitas(visitas);
+  const hhmm = t => (String(t).split(' ')[1]||'').slice(0,5);
+
+  const kpi = (val, lab, color) => `<div style="background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;min-width:104px">
+    <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:600;color:${color||'var(--t1)'}">${val}</div>
+    <div style="font-size:9.5px;color:var(--t3);margin-top:2px;text-transform:uppercase;letter-spacing:.4px">${lab}</div></div>`;
+
+  const filas = visitas.map(v => {
+    const desvio = d.prom ? v.min - d.prom : 0;
+    const lento = d.prom && v.min > d.prom*1.5 && desvio >= 15;
+    const x = opsDeVisita(v.punto, v.fecha);
+    const compartido = camionesEnRecintoDia(v.punto, v.fecha).size > 1;
+    const detOps = x.ops.length
+      ? x.ops.slice(0,3).map(o => {
+          const f = familiaOp(o.operacion);
+          return `<div><span style="color:${f.c};font-weight:600">${escTT(f.f)}</span>
+            <span style="color:var(--t2)">${fmtPallets(+o.cantidadConfirmada||0)} pallets</span>
+            <span style="color:var(--t3);font-family:'DM Mono',monospace;font-size:10px">#${o.nroPedido}</span></div>`;
+        }).join('') + (x.ops.length>3 ? `<div style="color:var(--t3);font-size:10px">y ${x.ops.length-3} más</div>` : '')
+        + (compartido ? `<div style="color:var(--amber);font-size:10px">otro camión también estuvo acá ese día</div>` : '')
+      : `<span style="color:var(--t3)">${v.tipo==='REDTEC' ? 'base' : 'sin operación ese día'}</span>`;
+    return `<tr style="border-bottom:1px solid var(--border)${lento?';background:rgba(244,168,54,.06)':''}">
+      <td style="padding:7px 10px;white-space:nowrap">
+        <a href="#" onclick="event.preventDefault();detalleCamionDia('${v.placa}','${v.fecha}')"
+           style="color:var(--blue);text-decoration:none;font-weight:600;font-size:12px">🚚 ${v.placa}</a>
+        <div style="font-size:10px;color:var(--t3)">${escTT(v.chofer||'')}</div></td>
+      <td style="padding:7px 10px;white-space:nowrap;font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t2)">
+        ${v.fecha}<div style="color:var(--t3)">${hhmm(v.llegada)}–${hhmm(v.salida)}</div></td>
+      <td style="padding:7px 10px;text-align:right;white-space:nowrap">
+        <div style="font-family:'DM Mono',monospace;font-size:12.5px;font-weight:600;color:${lento?'var(--amber)':'var(--t1)'}">${fmtMins(v.min)}</div>
+        <div style="font-size:10px;color:var(--t3)">${d.prom?(desvio>=0?'+':'')+fmtMins(Math.abs(desvio)):''}</div></td>
+      <td style="padding:7px 10px;font-size:11.5px">${detOps}</td>
+    </tr>`;
+  }).join('');
+
   cont.innerHTML = `<div class="card" style="background:var(--s1)">
     <div class="card-hdr" style="flex-wrap:wrap;gap:8px">
-      <div class="card-title">🚚 ${escTT(d.nombre)} <span style="color:var(--t2);font-size:11.5px;margin-left:6px">${escTT(d.comuna||'')}</span></div>
+      <div class="card-title">🚚 ${escTT(d.nombre)} <span style="color:var(--t2);font-size:11.5px;margin-left:6px">${escTT(d.comuna||'')}${d.zona?' · zona '+d.zona:''}</span></div>
       <div class="cbar-end" style="font-size:11px;color:var(--t2)">
-        ${fmtMins(d.min)} · ${d.vis} visitas · promedio <b style="color:var(--t1)">${fmtMins(d.prom)}</b> · ${d.placas.size} camión(es)
+        ${d.placas.size} camión(es) · ${d.dias.size} día(s)
         <button class="a11y-btn sm" onclick="document.getElementById('mapa-detalle').innerHTML=''" style="margin-left:8px">×</button>
       </div>
     </div>
     <div class="card-body">
-      <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Qué se hizo ahí, según RDTOut</div>
-      ${Object.keys(porFamilia).length ? `<div style="display:flex;gap:8px;flex-wrap:wrap">${
-        Object.entries(porFamilia).sort((a,b)=>b[1].pallets-a[1].pallets).map(([f,v])=>{
-          const col = familiaOp(f).c;
-          return `<div style="background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:8px 12px">
-            <div style="color:${col};font-weight:600;font-size:12px">${escTT(f)}</div>
-            <div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--t1);margin-top:2px">${v.pallets.toLocaleString('es-CL')} pallets</div>
-            <div style="font-size:10px;color:var(--t3)">${v.n} operación(es)</div></div>`;
-        }).join('')}</div>`
-        : `<div style="color:var(--t3);font-size:12px">${OPS_ESTADO==='ok' ? 'Sin operaciones de RDTOut en los días en que la flota estuvo acá. Puede ser una parada sin respaldo documental, o un recinto que RDTOut nombra distinto.' : 'Entra a "Recorrido del día" para cargar el cruce con RDTOut.'}</div>`}
+      <div style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:14px">
+        ${kpi(d.vis, 'Visitas', 'var(--blue)')}
+        ${kpi(fmtMins(d.min), 'Tiempo total')}
+        ${kpi(fmtMins(d.prom), 'Promedio por visita', 'var(--amber)')}
+        ${kpi(fmtPallets(bal.saleP), 'Pallets emitidos', 'var(--blue)')}
+        ${kpi(fmtPallets(bal.entraP), 'Pallets retirados', 'var(--green)')}
+        ${bal.ambiguasP ? kpi(fmtPallets(bal.ambiguasP), 'sin asignar a un camión', 'var(--t3)') : ''}
+      </div>
+
+      <div class="tbl-wrap"><table style="width:100%;border-collapse:collapse">
+        <thead><tr style="border-bottom:1px solid var(--border)">
+          <th style="text-align:left;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Camión</th>
+          <th style="text-align:left;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Cuándo</th>
+          <th style="text-align:right;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Demoró</th>
+          <th style="text-align:left;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Qué hizo ahí</th>
+        </tr></thead>
+        <tbody>${filas}</tbody>
+      </table></div>
+
       <div style="margin-top:12px;font-size:11px;color:var(--t3)">
         ${d.fuente==='base' ? 'Ubicación real de la base.'
+          : d.fuente==='cliente' ? 'Ubicación real: del mapa de clientes de REDTEC.'
           : d.fuente==='direccion' ? 'Ubicación real: dirección del recinto geocodificada.'
-          : 'Ubicación APROXIMADA: centro de la comuna. Este recinto no tiene dirección geocodificada todavía.'}
+          : 'Ubicación APROXIMADA: centro de la comuna.'}
+        ${bal.ambiguasN ? ' · '+bal.ambiguasN+' operación(es) quedaron sin asignar porque más de un camión estuvo en el recinto ese día.' : ''}
+        Clic en la patente para ver el día completo de ese camión.
+      </div>
+    </div>
+  </div>`;
+  cont.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+/* ── DÍA COMPLETO DE UN CAMIÓN ──────────────────────────────────────────
+   Lo que pidió Mauro: al elegir una patente, ver todo lo que hizo ese día —
+   qué emitió, qué retiró, dónde y cuánto se demoró en cada parte. */
+function detalleCamionDia(placa, fecha){
+  const filas = DB.filter(r => r.placa === placa && r.fecha === fecha);
+  if(!filas.length) return;
+  const chofer = filas[0].chofer || FLOTA_NOMBRES[placa] || placa;
+
+  const vm = {};
+  filas.forEach(r => {
+    const k = r.punto;
+    if(!vm[k]) vm[k] = {placa, chofer:r.chofer, punto:r.punto, tipo:r.tipo, fecha:r.fecha, min:0, llegada:r.llegada, salida:r.salida};
+    vm[k].min += r.minutos;
+    if(r.llegada < vm[k].llegada) vm[k].llegada = r.llegada;
+    if(r.salida  > vm[k].salida)  vm[k].salida  = r.salida;
+  });
+  const visitas = Object.values(vm).sort((a,b)=>String(a.llegada).localeCompare(String(b.llegada)));
+  const bal = balanceDeVisitas(visitas);
+
+  const enBase = visitas.filter(v=>v.tipo==='REDTEC').reduce((s,v)=>s+v.min,0);
+  const enRuta = visitas.filter(v=>v.tipo!=='REDTEC').reduce((s,v)=>s+v.min,0);
+  const hhmm = t => (String(t).split(' ')[1]||'').slice(0,5);
+
+  const kpi = (val, lab, color) => `<div style="background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:10px 13px;min-width:112px">
+    <div style="font-family:'DM Mono',monospace;font-size:17px;font-weight:600;color:${color||'var(--t1)'}">${val}</div>
+    <div style="font-size:9.5px;color:var(--t3);margin-top:2px;text-transform:uppercase;letter-spacing:.4px">${lab}</div></div>`;
+
+  let modal = document.getElementById('modal-camion');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.id = 'modal-camion';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:9600;display:flex;align-items:center;justify-content:center;padding:20px';
+    modal.onclick = e => { if(e.target === modal) modal.remove(); };
+    document.body.appendChild(modal);
+  }
+
+  const filasHTML = visitas.map(v => {
+    const x = opsDeVisita(v.punto, v.fecha);
+    const compartido = camionesEnRecintoDia(v.punto, v.fecha).size > 1;
+    const prom = PROM_PUNTO[v.punto] || 0;
+    const lento = prom && v.min > prom*1.5 && v.min-prom >= 15;
+    const ops = x.ops.length
+      ? x.ops.slice(0,4).map(o => {
+          const f = familiaOp(o.operacion);
+          const sale = sentidoOp(o)==='sale';
+          return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <span style="color:${f.c};font-weight:600">${sale?'↑':'↓'} ${escTT(f.f)}</span>
+            <span style="color:var(--t2)">${fmtPallets(+o.cantidadConfirmada||0)} pallets</span>
+            <span style="color:var(--t3);font-family:'DM Mono',monospace;font-size:10px">#${o.nroPedido}</span>
+            ${compartido ? '<span style="color:var(--amber);font-size:10px">compartido</span>' : ''}</div>`;
+        }).join('')
+      : `<span style="color:var(--t3)">${v.tipo==='REDTEC'?'base — carga, descarga o espera':'sin operación registrada'}</span>`;
+    return `<tr style="border-bottom:1px solid var(--border)${lento?';background:rgba(244,168,54,.06)':''}">
+      <td style="padding:8px 10px;white-space:nowrap;font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t2)">${hhmm(v.llegada)}–${hhmm(v.salida)}</td>
+      <td style="padding:8px 10px;font-size:12.5px;color:var(--t1)">${escTT(v.punto)}<div style="font-size:10px;color:var(--t3)">${escTT(v.tipo)}</div></td>
+      <td style="padding:8px 10px;text-align:right;white-space:nowrap;font-family:'DM Mono',monospace;font-size:12.5px;color:${lento?'var(--amber)':'var(--t1)'};font-weight:600">${fmtMins(v.min)}
+        <div style="font-size:9.5px;color:var(--t3);font-weight:400">${prom?'prom '+fmtMins(prom):''}</div></td>
+      <td style="padding:8px 10px;font-size:11.5px">${ops}</td>
+    </tr>`;
+  }).join('');
+
+  const ini = String(chofer).split(' ').map(x=>x[0]).join('').substring(0,2).toUpperCase();
+  modal.innerHTML = `
+  <div style="background:var(--s2);border:1px solid var(--border-hi);border-radius:14px;width:min(1000px,96vw);max-height:90vh;overflow:auto;box-shadow:0 22px 60px rgba(0,0,0,.55)">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;position:sticky;top:0;background:var(--s2);z-index:2">
+      <div class="chofer-av">${ini}</div>
+      <div>
+        <div style="font-size:14px;font-weight:600;color:var(--t1)">${escTT(chofer)}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t2)">${placa} · ${fecha}</div>
+      </div>
+      <button onclick="document.getElementById('modal-camion').remove()" style="margin-left:auto;background:none;border:none;color:var(--t2);font-size:20px;cursor:pointer;padding:2px 8px">×</button>
+    </div>
+    <div style="padding:16px 20px;display:flex;gap:10px;flex-wrap:wrap">
+      ${kpi(visitas.length, 'Paradas', 'var(--blue)')}
+      ${kpi(fmtPallets(bal.saleP), '↑ Pallets emitidos', 'var(--blue)')}
+      ${kpi(fmtPallets(bal.entraP), '↓ Pallets retirados', 'var(--green)')}
+      ${kpi(fmtPallets(bal.saleP - bal.entraP), 'Balance del día', (bal.saleP-bal.entraP)>=0?'var(--blue)':'var(--green)')}
+      ${kpi(fmtMins(enRuta), 'Detenido en clientes')}
+      ${kpi(fmtMins(enBase), 'Detenido en base', 'var(--cyan)')}
+    </div>
+    ${bal.ambiguasN ? `<div style="margin:0 20px 12px;padding:9px 12px;background:var(--amber-d);border:1px solid rgba(244,168,54,.3);border-radius:8px;font-size:11.5px;color:var(--t2)">
+      <b style="color:var(--amber)">${bal.ambiguasN} operación(es) · ${fmtPallets(bal.ambiguasP)} pallets sin asignar.</b>
+      Otro camión de la flota estuvo en el mismo recinto ese día, así que no se puede saber cuál de los dos las hizo. No entran en los totales de arriba.
+    </div>` : ''}
+    <div style="padding:0 20px 20px">
+      <div class="tbl-wrap"><table style="width:100%;border-collapse:collapse">
+        <thead><tr style="border-bottom:1px solid var(--border)">
+          <th style="text-align:left;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Horario</th>
+          <th style="text-align:left;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Dónde</th>
+          <th style="text-align:right;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Demoró</th>
+          <th style="text-align:left;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Qué hizo (RDTOut)</th>
+        </tr></thead>
+        <tbody>${filasHTML}</tbody>
+      </table></div>
+      <div style="margin-top:10px;font-size:10.5px;color:var(--t3)">
+        ↑ sale carga desde REDTEC (emisión) · ↓ entra carga a REDTEC (retiro o devolución).
+        Las transferencias entre terceros no se muestran: no las hace la flota.
       </div>
     </div>
   </div>`;
@@ -3111,7 +3315,7 @@ async function renderMapa(){
   marcar([['volumen','mm-vol'],['demora','mm-dem']], mapaModo);
   marcar([['punto','mg-punto'],['comuna','mg-comuna']], mapaAgrupActual);
 
-  if(OPS_ESTADO === 'sin_cargar') cargarOps();   // sin await: el mapa no depende del cruce
+  if(OPS_ESTADO === 'sin_cargar') await cargarOps();   // el balance emitido/retirado lo necesita
 
   try{ await cargarLeaflet(); }
   catch(e){
@@ -3136,12 +3340,16 @@ async function renderMapa(){
   const minSin  = MAPA_SIN_UBICAR.reduce((s,[,m])=>s+m,0);
   const chip = (t,c) => `<span style="background:${c||'var(--s3)'};border:1px solid var(--border);border-radius:20px;padding:4px 11px;font-size:11px;color:var(--t2)">${t}</span>`;
   const lento = MAPA_PUNTOS.slice().sort((a,b)=>b.prom-a.prom)[0];
+  /* Desglose de lo que la flota movió en los puntos del mapa */
+  const balTot = balanceDeVisitas([].concat(...MAPA_PUNTOS.map(p=>p.visitas||[])));
   chips.innerHTML = [
     chip(`<b style="color:var(--t1)">${MAPA_PUNTOS.length}</b> ${mapaAgrupActual==='comuna'?'comunas':'puntos'} en Santiago`),
     chip(`<b style="color:var(--t1)">${fmtMins(minUbic)}</b> de flota detenida`),
     (() => { const ap = MAPA_PUNTOS.filter(p=>p.fuente==='comuna').length;
              return ap ? chip(`${ap} con ubicación aproximada`) : ''; })(),
     lento ? chip(`más lento: <b style="color:var(--amber)">${escTT(lento.nombre)}</b> · ${fmtMins(lento.prom)} por visita`, 'var(--amber-d)') : '',
+    chip(`<b style="color:var(--blue)">${fmtPallets(balTot.saleP)}</b> pallets emitidos · <b style="color:var(--green)">${fmtPallets(balTot.entraP)}</b> retirados`),
+    balTot.sinOp ? chip(`${balTot.sinOp} visita(s) sin operación en RDTOut`) : '',
     MAPA_SIN_UBICAR.length ? chip(`<b style="color:var(--amber)">${MAPA_SIN_UBICAR.length}</b> sin ubicar · ${fmtMins(minSin)}`, 'var(--amber-d)') : '',
     MAPA_FUERA.n ? chip(`${MAPA_FUERA.n} fuera de Santiago · ${fmtMins(MAPA_FUERA.min)}`) : ''
   ].filter(Boolean).join('');

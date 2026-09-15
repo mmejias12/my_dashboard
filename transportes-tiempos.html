@@ -666,22 +666,22 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
       <div style="display:flex;flex-direction:column;gap:12px">
         <div class="card" id="card-cd">
           <div class="section-title" style="color:var(--blue)">🔷 CD Retail</div>
-          <div class="tbl-wrap"><table><thead><tr><th>Punto</th><th>Código</th><th>Visitas</th><th>T. Promedio</th><th>T. Máximo</th><th>T. Mínimo</th><th>Bar</th><th>Estado</th></tr></thead><tbody id="tb-cd"></tbody></table></div>
+          <div class="tbl-wrap"><table><thead><tr><th>Punto</th><th>Código</th><th>Visitas</th><th>T. Promedio</th><th>T. Máximo</th><th>T. Mínimo</th><th title="Pallets emitidos ↑ y retirados ↓ según RDTOut">↑ Emitidos</th><th>↓ Retirados</th><th>Bar</th><th>Estado</th></tr></thead><tbody id="tb-cd"></tbody></table></div>
           <div id="empty-cd" class="empty" style="display:none"><div class="empty-ico">🔷</div><div class="empty-sub">Sin datos para CD Retail</div></div>
         </div>
         <div class="card" id="card-sala">
           <div class="section-title" style="color:var(--green)">🟢 Salas Retail</div>
-          <div class="tbl-wrap"><table><thead><tr><th>Punto</th><th>Código</th><th>Visitas</th><th>T. Promedio</th><th>T. Máximo</th><th>T. Mínimo</th><th>Bar</th><th>Estado</th></tr></thead><tbody id="tb-sala"></tbody></table></div>
+          <div class="tbl-wrap"><table><thead><tr><th>Punto</th><th>Código</th><th>Visitas</th><th>T. Promedio</th><th>T. Máximo</th><th>T. Mínimo</th><th title="Pallets emitidos ↑ y retirados ↓ según RDTOut">↑ Emitidos</th><th>↓ Retirados</th><th>Bar</th><th>Estado</th></tr></thead><tbody id="tb-sala"></tbody></table></div>
           <div id="empty-sala" class="empty" style="display:none"><div class="empty-ico">🟢</div><div class="empty-sub">Sin datos para Salas Retail</div></div>
         </div>
         <div class="card" id="card-cliente">
           <div class="section-title" style="color:var(--amber)">🟡 Clientes externos</div>
-          <div class="tbl-wrap"><table><thead><tr><th>Punto</th><th>Código</th><th>Visitas</th><th>T. Promedio</th><th>T. Máximo</th><th>T. Mínimo</th><th>Bar</th><th>Estado</th></tr></thead><tbody id="tb-cliente"></tbody></table></div>
+          <div class="tbl-wrap"><table><thead><tr><th>Punto</th><th>Código</th><th>Visitas</th><th>T. Promedio</th><th>T. Máximo</th><th>T. Mínimo</th><th title="Pallets emitidos ↑ y retirados ↓ según RDTOut">↑ Emitidos</th><th>↓ Retirados</th><th>Bar</th><th>Estado</th></tr></thead><tbody id="tb-cliente"></tbody></table></div>
           <div id="empty-cliente" class="empty" style="display:none"><div class="empty-ico">🟡</div><div class="empty-sub">Sin datos para Clientes externos</div></div>
         </div>
         <div class="card" id="card-otros">
           <div class="section-title" style="color:var(--purple)">🟣 Otros / REDTEC</div>
-          <div class="tbl-wrap"><table><thead><tr><th>Punto</th><th>Código</th><th>Visitas</th><th>T. Promedio</th><th>T. Máximo</th><th>T. Mínimo</th><th>Bar</th><th>Estado</th></tr></thead><tbody id="tb-otros"></tbody></table></div>
+          <div class="tbl-wrap"><table><thead><tr><th>Punto</th><th>Código</th><th>Visitas</th><th>T. Promedio</th><th>T. Máximo</th><th>T. Mínimo</th><th title="Pallets emitidos ↑ y retirados ↓ según RDTOut">↑ Emitidos</th><th>↓ Retirados</th><th>Bar</th><th>Estado</th></tr></thead><tbody id="tb-otros"></tbody></table></div>
           <div id="empty-otros" class="empty" style="display:none"><div class="empty-ico">🟣</div><div class="empty-sub">Sin datos para Otros</div></div>
         </div>
       </div>
@@ -1042,6 +1042,7 @@ const FLOTA_NOMBRES = {
 // Charts
 let chartTipo = null, chartDona = null, chartChoferes = null;
 let CHOFER_LISTA = [];   // última lista renderizada, para el detalle por chofer
+let VISITAS_POR_PUNTO = {};  // punto -> visitas consolidadas, para el detalle desde "Por punto"
 
 /* ═══════════════════════════════════════════════════════════════════════════
    SELECTOR DE PERÍODO (mismo componente del resto del m3link)
@@ -2142,6 +2143,9 @@ function renderTop15(){
 //  PUNTOS POR TIPO
 // ──────────────────────────────────────────────
 function renderPuntos(){
+  /* Los pallets por punto salen del cruce: si todavía no llegó, se pide y la
+     tabla se repinta sola cuando esté. */
+  if(OPS_ESTADO === 'sin_cargar') cargarOps();
   const tipos = {
     'CD Retail': {tbId:'tb-cd', emptyId:'empty-cd'},
     'Sala Retail': {tbId:'tb-sala', emptyId:'empty-sala'},
@@ -2154,9 +2158,28 @@ function renderPuntos(){
   const byTipoPunto = {};
   DB.forEach(r => {
     const k = r.tipo + '___' + r.punto;
-    if(!byTipoPunto[k]) byTipoPunto[k] = {tipo:r.tipo, punto:r.punto, cat:r.cat, mins:[]};
+    if(!byTipoPunto[k]) byTipoPunto[k] = {tipo:r.tipo, punto:r.punto, cat:r.cat, mins:[], placas:new Set()};
     byTipoPunto[k].mins.push(r.minutos);
+    byTipoPunto[k].placas.add(r.placa);
   });
+  /* Pallets por punto: se arma sobre las VISITAS consolidadas (placa+punto+día)
+     y con la misma atribución por patente que usa el resto del informe. */
+  const visitasPorPunto = {};
+  const vmP = {};
+  DB.forEach(r => {
+    const k = r.placa+'|'+r.punto+'|'+r.fecha;
+    if(!vmP[k]) vmP[k] = {placa:r.placa, chofer:r.chofer, punto:r.punto, tipo:r.tipo, fecha:r.fecha, min:0, llegada:r.llegada, salida:r.salida};
+    vmP[k].min += r.minutos;
+    if(r.llegada < vmP[k].llegada) vmP[k].llegada = r.llegada;
+    if(r.salida  > vmP[k].salida)  vmP[k].salida  = r.salida;
+  });
+  Object.values(vmP).forEach(v => { (visitasPorPunto[v.punto] = visitasPorPunto[v.punto] || []).push(v); });
+  const palletsPunto = {};
+  Object.entries(visitasPorPunto).forEach(([punto, vs]) => {
+    const b = balanceDeVisitas(vs);
+    palletsPunto[punto] = {sale:b.saleP, entra:b.entraP, amb:b.ambiguasP};
+  });
+  VISITAS_POR_PUNTO = visitasPorPunto;
   
   const renderTipoTabla = (tipo, tbId, emptyId) => {
     const rows = Object.values(byTipoPunto).filter(p => p.tipo === tipo)
@@ -2172,19 +2195,35 @@ function renderPuntos(){
     const html = rows.map(p => {
       const pct = Math.round(p.avg/maxAvg*100);
       const nc = p.avg>120?'crit':p.avg>60?'warn':'ok';
-      return `<tr>
+      const pal = palletsPunto[p.punto] || {sale:0, entra:0};
+      return `<tr style="cursor:pointer" onclick="detallePuntoPorNombre('${String(p.punto).replace(/'/g,"\\'")}')" title="Ver los camiones que pasaron por acá">
         <td class="bold">${p.punto}</td>
         <td class="mono" style="color:var(--t3)">${p.cat}</td>
         <td class="mono">${p.visitas}</td>
         <td class="bold mono">${fmtMins(p.avg)}</td>
         <td class="mono" style="color:var(--t3)">${fmtMins(p.max)}</td>
         <td class="mono" style="color:var(--t3)">${fmtMins(p.min)}</td>
+        <td class="mono" style="color:${pal.sale?'var(--blue)':'var(--t3)'}">${pal.sale?fmtPallets(pal.sale):'—'}</td>
+        <td class="mono" style="color:${pal.entra?'var(--green)':'var(--t3)'}">${pal.entra?fmtPallets(pal.entra):'—'}</td>
         <td><div class="mini-bar-wrap"><div class="mini-bar-bg"><div class="mini-bar-fill" style="width:${pct}%;background:${nc==='ok'?'var(--green)':nc==='warn'?'var(--amber)':'var(--red)'}"></div></div><span class="mini-bar-label">${p.avg}m</span></div></td>
         <td><span class="badge ${nc}">${p.avg>120?'🔴 Alto':p.avg>60?'🟡 Medio':'🟢 OK'}</span></td>
       </tr>`;
     }).join('');
-    
-    if(tb) tb.innerHTML = html;
+
+    /* Fila de totales: lo que se movió en toda la categoría */
+    const tSale = rows.reduce((a,p)=>a+((palletsPunto[p.punto]||{}).sale||0),0);
+    const tEntra = rows.reduce((a,p)=>a+((palletsPunto[p.punto]||{}).entra||0),0);
+    const tVis = rows.reduce((a,p)=>a+p.visitas,0);
+    const total = `<tr style="border-top:2px solid var(--border-md);background:var(--s3)">
+      <td class="bold" colspan="2">TOTAL ${escTT(tipo)} · ${rows.length} punto(s)</td>
+      <td class="mono bold">${tVis}</td>
+      <td colspan="3"></td>
+      <td class="mono bold" style="color:var(--blue)">${fmtPallets(tSale)}</td>
+      <td class="mono bold" style="color:var(--green)">${fmtPallets(tEntra)}</td>
+      <td colspan="2" style="color:var(--t3);font-size:11px">pallets del período</td>
+    </tr>`;
+
+    if(tb) tb.innerHTML = html + total;
   };
   
   renderTipoTabla('CD Retail','tb-cd','empty-cd');
@@ -2203,7 +2242,8 @@ function renderPuntos(){
     const maxA = otrosRows[0].avg||1;
     if(tbOtros) tbOtros.innerHTML = otrosRows.map(p => {
       const pct=Math.round(p.avg/maxA*100); const nc=p.avg>120?'crit':p.avg>60?'warn':'ok';
-      return `<tr><td class="bold">${p.punto}</td><td class="mono" style="color:var(--t3)">${p.tipo}</td><td class="mono">${p.visitas}</td><td class="bold mono">${fmtMins(p.avg)}</td><td class="mono" style="color:var(--t3)">${fmtMins(p.max)}</td><td class="mono" style="color:var(--t3)">${fmtMins(p.min)}</td><td><div class="mini-bar-wrap"><div class="mini-bar-bg"><div class="mini-bar-fill" style="width:${pct}%;background:${nc==='ok'?'var(--green)':nc==='warn'?'var(--amber)':'var(--red)'}"></div></div><span class="mini-bar-label">${p.avg}m</span></div></td><td><span class="badge ${nc}">${p.avg>120?'🔴 Alto':p.avg>60?'🟡 Medio':'🟢 OK'}</span></td></tr>`;
+      const pal = palletsPunto[p.punto] || {sale:0, entra:0};
+      return `<tr style="cursor:pointer" onclick="detallePuntoPorNombre('${String(p.punto).replace(/'/g,"\\'")}')" title="Ver los camiones que pasaron por acá"><td class="bold">${p.punto}</td><td class="mono" style="color:var(--t3)">${p.tipo}</td><td class="mono">${p.visitas}</td><td class="bold mono">${fmtMins(p.avg)}</td><td class="mono" style="color:var(--t3)">${fmtMins(p.max)}</td><td class="mono" style="color:var(--t3)">${fmtMins(p.min)}</td><td class="mono" style="color:${pal.sale?'var(--blue)':'var(--t3)'}">${pal.sale?fmtPallets(pal.sale):'—'}</td><td class="mono" style="color:${pal.entra?'var(--green)':'var(--t3)'}">${pal.entra?fmtPallets(pal.entra):'—'}</td><td><div class="mini-bar-wrap"><div class="mini-bar-bg"><div class="mini-bar-fill" style="width:${pct}%;background:${nc==='ok'?'var(--green)':nc==='warn'?'var(--amber)':'var(--red)'}"></div></div><span class="mini-bar-label">${p.avg}m</span></div></td><td><span class="badge ${nc}">${p.avg>120?'🔴 Alto':p.avg>60?'🟡 Medio':'🟢 OK'}</span></td></tr>`;
     }).join('');
   }
 }
@@ -2317,9 +2357,12 @@ function escTT(s){
    que no servía para gestionar. Ahora cada tarjeta y cada barra abre el
    detalle de ese camión: en qué se le va el tiempo, en qué puntos, y a qué
    hora trabaja — que es lo que permite decir por qué la tarde queda vacía. */
-function detalleChofer(placa){
+async function detalleChofer(placa){
   const rows = DB.filter(r => r.placa === placa);
   if(!rows.length) return;
+  /* El perfil ahora muestra emisiones y retiros, así que necesita el cruce
+     cargado aunque se entre por la pestaña "Por chofer". */
+  if(OPS_ESTADO === 'sin_cargar') await cargarOps();
   const chofer = rows[0].chofer || placa;
 
   // Visitas consolidadas (mismo punto + fecha = 1 visita), igual criterio que el resumen
@@ -2337,6 +2380,26 @@ function detalleChofer(placa){
   const dias     = new Set(visitas.map(v => v.fecha));
   const puntos   = new Set(visitas.map(v => v.punto));
   const avg      = visitas.length ? Math.round(totalMin / visitas.length) : 0;
+
+  /* Lo que movió en el período: emisiones, retiros y devoluciones con la
+     misma atribución por patente del resto del informe, más los km
+     estimados sumando cada día por separado (no tiene sentido unir el final
+     de un día con el comienzo del siguiente). */
+  const visitasBal = visitas.map(v => ({placa, punto:v.punto, fecha:v.fecha, min:v.minutos,
+                                        llegada:v.llegada, salida:v.salida, tipo:v.tipo}));
+  const bal = balanceDeVisitas(visitasBal);
+  let kmTot = 0, kmSin = 0;
+  [...dias].forEach(f => {
+    const k = kmRecorridos(visitasBal.filter(v => v.fecha === f));
+    kmTot += k.km; kmSin += k.sinCoord;
+  });
+  const porFam = {};
+  bal.ops.forEach(({o:op, att, sale, pallets}) => {
+    if(att === 'compartida') return;
+    const f = familiaOp(op.operacion).f;
+    if(!porFam[f]) porFam[f] = {n:0, pallets:0, color:familiaOp(op.operacion).c, sale};
+    porFam[f].n++; porFam[f].pallets += pallets;
+  });
 
   // Reparto del tiempo por tipo de recinto
   const porTipo = {};
@@ -2403,7 +2466,51 @@ function detalleChofer(placa){
       ${kpi(puntos.size, 'Puntos únicos', 'var(--purple)')}
       ${kpi(dias.size ? (visitas.length/dias.size).toFixed(1) : '0', 'Visitas por día', 'var(--green)')}
       ${kpi(horasLleg.length ? hFmt(horasLleg[Math.floor(horasLleg.length/2)]) : '—', 'Hora mediana de llegada', 'var(--cyan)')}
+      ${kpi(fmtPallets(bal.saleP), '↑ Pallets emitidos', 'var(--blue)')}
+      ${kpi(fmtPallets(bal.entraP), '↓ Pallets retirados', 'var(--green)')}
+      ${kpi(fmtPallets(bal.saleP + bal.entraP), 'Pallets movidos')}
+      ${kpi(kmTot ? kmTot+' km' : '—', 'Recorrido estimado', 'var(--purple)')}
     </div>
+
+    ${Object.keys(porFam).length ? `<div style="padding:0 20px 14px">
+      <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Qué movió</div>
+      <div style="display:flex;gap:9px;flex-wrap:wrap">${
+        Object.entries(porFam).sort((a,b)=>b[1].pallets-a[1].pallets).map(([f,v]) =>
+          `<div style="background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:9px 13px">
+            <div style="color:${v.color};font-weight:600;font-size:12px">${v.sale?'↑':'↓'} ${escTT(f)}</div>
+            <div style="font-family:'DM Mono',monospace;font-size:14px;color:var(--t1);margin-top:2px">${fmtPallets(v.pallets)} pallets</div>
+            <div style="font-size:10px;color:var(--t3)">${v.n} operación(es)</div></div>`).join('')}</div>
+      <div style="margin-top:8px;font-size:10.5px;color:var(--t3)">
+        ${bal.exactasN} confirmada(s) por patente${bal.inferidasN?` · ${bal.inferidasN} inferida(s)`:''}${bal.ambiguasN?` · ${bal.ambiguasN} sin asignar (${fmtPallets(bal.ambiguasP)} pallets)`:''}
+        ${kmSin?` · ${kmSin} tramo(s) sin coordenadas quedaron fuera del recorrido`:''}
+      </div>
+    </div>` : ''}
+
+    ${bal.ops.filter(x=>x.att!=='compartida').length ? `<div style="padding:0 20px 14px">
+      <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Operaciones del período</div>
+      <div class="tbl-wrap" style="max-height:230px;overflow:auto"><table style="width:100%;border-collapse:collapse">
+        <thead><tr style="border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--s2)">
+          <th style="text-align:left;padding:5px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Pedido</th>
+          <th style="text-align:left;padding:5px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Tipo</th>
+          <th style="text-align:left;padding:5px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Dónde</th>
+          <th style="text-align:right;padding:5px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Pallets</th>
+          <th style="text-align:left;padding:5px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Día</th>
+        </tr></thead>
+        <tbody>${bal.ops.filter(x=>x.att!=='compartida')
+          .sort((a,b)=>String(b.visita.fecha).localeCompare(String(a.visita.fecha)))
+          .slice(0,120).map(({o:op, visita, sale, att}) => {
+          const f = familiaOp(op.operacion);
+          return `<tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:5px 10px"><a href="#" onclick="event.preventDefault();historialPedido('${op.nroPedido}')"
+                 style="color:var(--blue);font-family:'DM Mono',monospace;font-size:11px;text-decoration:none;border-bottom:1px dotted currentColor">#${op.nroPedido}</a></td>
+            <td style="padding:5px 10px;font-size:11.5px;color:${f.c};font-weight:600">${sale?'↑':'↓'} ${escTT(f.f)}</td>
+            <td style="padding:5px 10px;font-size:11.5px;color:var(--t1)">${escTT(visita.punto)}</td>
+            <td style="padding:5px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t1)">${fmtPallets(+op.cantidadConfirmada||0)}</td>
+            <td style="padding:5px 10px;font-family:'DM Mono',monospace;font-size:11px;color:var(--t3)">${escTT(visita.fecha)}${att==='inferida'?' <span style="color:var(--t3)">·inf</span>':''}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>
+    </div>` : ''}
 
     <div style="padding:0 20px 16px">
       <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">En qué se le va el tiempo</div>
@@ -2692,6 +2799,10 @@ async function cargarOps(){
     });
     CLAVES_OPS = [...IDX_OPS.keys()].map(k => ({k, t: toksRec(k)}));
     OPS_ESTADO = 'ok';
+    _cacheMatch.clear();
+    /* Las tablas por punto se pintan antes de que llegue el cruce, así que
+       sin esto los pallets quedaban en cero hasta cambiar de pestaña. */
+    if(DB.length){ try{ renderPuntos(); }catch(e){} }
   }catch(e){
     console.warn('[cruce] no se pudo cargar RDTOut:', e.message);
     OPS_ESTADO = 'error';
@@ -2702,18 +2813,20 @@ async function cargarOps(){
 const _cacheMatch = new Map();
 function opsDeVisita(punto, dia){
   if(OPS_ESTADO !== 'ok') return {estado:'sin_rdtout', ops:[]};
+  /* Se prueba el nombre TAL CUAL primero y sólo después el alias: RDTOut a
+     veces usa el mismo nombre que la geocerca y el alias lo desviaba. */
   const alias = ALIAS_RECINTO[punto] || ALIAS_RECINTO[String(punto).trim()];
-  const objetivo = alias || punto;
-  let clave = _cacheMatch.get(objetivo);
+  let clave = _cacheMatch.get(punto);
   if(clave === undefined){
-    const exacta = normRec(objetivo);
-    if(IDX_OPS.has(exacta)) clave = exacta;
+    const directa = normRec(punto);
+    if(IDX_OPS.has(directa)) clave = directa;
+    else if(alias && IDX_OPS.has(normRec(alias))) clave = normRec(alias);
     else {
-      const tp = toksRec(objetivo); let best = null, bs = 0;
+      const tp = toksRec(alias || punto); let best = null, bs = 0;
       CLAVES_OPS.forEach(c => { const s = jaccard(tp, c.t); if(s > bs){ bs = s; best = c.k; } });
       clave = (bs >= 0.5) ? best : null;
     }
-    _cacheMatch.set(objetivo, clave);
+    _cacheMatch.set(punto, clave);
   }
   if(!clave) return {estado:'recinto_desconocido', ops:[]};
   const hits = (IDX_OPS.get(clave) || []).filter(o => diasDeOp(o).indexOf(dia) !== -1);
@@ -3431,8 +3544,53 @@ function balanceDeVisitas(visitas){
   return b;
 }
 
-function detallePuntoMapa(d){
-  const cont = document.getElementById('mapa-detalle');
+function cerrarDetallePunto(){
+  const m = document.getElementById('modal-punto');
+  if(m){ m.remove(); return; }
+  const c = document.getElementById('mapa-detalle');
+  if(c) c.innerHTML = '';
+}
+
+/* Abre el detalle de un punto desde la pestaña "Por punto" — arma el mismo
+   objeto que usa el mapa para no duplicar el render. */
+function detallePuntoPorNombre(punto){
+  const vs = (VISITAS_POR_PUNTO[punto] || []).slice();
+  if(!vs.length) return;
+  const geo = (typeof resolverCoords === 'function') ? resolverCoords(punto) : null;
+  const min = vs.reduce((a,v)=>a+v.min,0);
+  const d = {
+    nombre: punto,
+    comuna: geo ? geo.comuna : null,
+    zona: geo ? geo.zona : null,
+    fuente: geo ? geo.fuente : null,
+    tipo: vs[0].tipo,
+    vis: vs.length, min, prom: Math.round(min/vs.length),
+    placas: new Set(vs.map(v=>v.placa)),
+    puntos: new Set([punto]),
+    dias: new Set(vs.map(v=>v.fecha)),
+    visitas: vs
+  };
+  /* El detalle vive en el contenedor del mapa; si estamos en otra pestaña se
+     abre igual como modal flotante para no obligar a cambiar de vista. */
+  const enMapa = document.getElementById('view-mapa').style.display !== 'none';
+  if(!enMapa){
+    let m = document.getElementById('modal-punto');
+    if(!m){
+      m = document.createElement('div');
+      m.id = 'modal-punto';
+      m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:9550;display:flex;align-items:flex-start;justify-content:center;padding:24px;overflow:auto';
+      m.onclick = e => { if(e.target === m) m.remove(); };
+      document.body.appendChild(m);
+    }
+    m.innerHTML = '<div style="width:min(1000px,96vw)"></div>';
+    detallePuntoMapa(d, m.firstElementChild);   // destino explícito: nada de ids duplicados
+    return;
+  }
+  detallePuntoMapa(d);
+}
+
+function detallePuntoMapa(d, destino){
+  const cont = destino || document.getElementById('mapa-detalle');
   const visitas = (d.visitas||[]).slice().sort((a,b)=>String(b.llegada).localeCompare(String(a.llegada)));
   const bal = balanceDeVisitas(visitas);
   const hhmm = t => (String(t).split(' ')[1]||'').slice(0,5);
@@ -3482,7 +3640,7 @@ function detallePuntoMapa(d){
       <div class="card-title">🚚 ${escTT(d.nombre)} <span style="color:var(--t2);font-size:11.5px;margin-left:6px">${escTT(d.comuna||'')}${d.zona?' · zona '+d.zona:''}</span></div>
       <div class="cbar-end" style="font-size:11px;color:var(--t2)">
         ${d.placas.size} camión(es) · ${d.dias.size} día(s)
-        <button class="a11y-btn sm" onclick="document.getElementById('mapa-detalle').innerHTML=''" style="margin-left:8px">×</button>
+        <button class="a11y-btn sm" onclick="cerrarDetallePunto()" style="margin-left:8px">×</button>
       </div>
     </div>
     <div class="card-body">
@@ -3515,7 +3673,7 @@ function detallePuntoMapa(d){
       </div>
     </div>
   </div>`;
-  cont.scrollIntoView({behavior:'smooth', block:'nearest'});
+  if(!destino) cont.scrollIntoView({behavior:'smooth', block:'nearest'});
 }
 
 /* ── DÍA COMPLETO DE UN CAMIÓN ──────────────────────────────────────────

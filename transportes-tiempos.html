@@ -720,6 +720,7 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
               <button class="a11y-btn sm" id="mg-punto" onclick="mapaAgrup('punto')">Por punto</button>
               <button class="a11y-btn sm" id="mg-comuna" onclick="mapaAgrup('comuna')">Por comuna</button>
             </div>
+            <button class="a11y-btn sm" id="mz-zonas" onclick="mapaZonas()" title="Pintar las zonas tarifarias P1–P31 del mapa de clientes" style="background:var(--s3);border-color:var(--border)">Zonas</button>
             <select class="sinput" id="mapa-placa" style="width:180px" onchange="renderMapa()">
               <option value="all">Toda la flota</option>
             </select>
@@ -730,6 +731,7 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
           <div id="mapa-canvas" style="height:min(62vh,540px);border:1px solid var(--border);border-radius:10px;background:var(--s3);z-index:0"></div>
           <div id="mapa-leyenda" style="display:flex;flex-wrap:wrap;align-items:center;gap:2px;font-size:11px;color:var(--t2);margin-top:8px"></div>
           <div id="mapa-detalle" style="margin-top:12px"></div>
+          <div id="mapa-zonas"></div>
         </div>
       </div>
     </div>
@@ -2788,8 +2790,9 @@ async function renderRecorrido(){
   const vm = {};
   DB.filter(r => r.fecha === REC_FECHA && (filtro === 'all' || r.placa === filtro)).forEach(r => {
     const k = r.placa+'|'+r.punto;
-    if(!vm[k]) vm[k] = {placa:r.placa, chofer:r.chofer, punto:r.punto, tipo:r.tipo, min:0, llegada:r.llegada, salida:r.salida};
+    if(!vm[k]) vm[k] = {placa:r.placa, chofer:r.chofer, punto:r.punto, tipo:r.tipo, min:0, llegada:r.llegada, salida:r.salida, tramos:0};
     vm[k].min += r.minutos;
+    vm[k].tramos++;
     if(r.llegada < vm[k].llegada) vm[k].llegada = r.llegada;
     if(r.salida  > vm[k].salida)  vm[k].salida  = r.salida;
   });
@@ -2854,7 +2857,8 @@ async function renderRecorrido(){
             return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
               <span style="color:${f.c};font-weight:600">${escTT(f.f)}</span>
               <span style="color:var(--t2)">${(+o.cantidadConfirmada||0).toLocaleString('es-CL')} pallets</span>
-              <span style="color:var(--t3);font-family:'DM Mono',monospace;font-size:10.5px">#${o.nroPedido}</span>
+              <a href="#" onclick="event.preventDefault();historialPedido('${o.nroPedido}')"
+                 style="color:var(--blue);font-family:'DM Mono',monospace;font-size:10.5px;text-decoration:none;border-bottom:1px dotted currentColor">#${o.nroPedido}</a>
             </div>`;
           }).join('') + (ops.length>4 ? `<div style="color:var(--t3);font-size:10.5px">y ${ops.length-4} más</div>` : '')
         : `<span style="color:var(--t3)">${
@@ -2862,7 +2866,8 @@ async function renderRecorrido(){
              : v.x.estado==='recinto_desconocido' ? 'recinto no identificado en RDTOut'
              : v.x.estado==='sin_rdtout' ? '—' : 'sin operación registrada ese día'}</span>`;
       return `<tr style="border-bottom:1px solid var(--border)${lento?';background:rgba(244,168,54,.06)':''}">
-        <td style="padding:8px 10px;white-space:nowrap;font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t2)">${hhmm(v.llegada)}–${hhmm(v.salida)}</td>
+        <td style="padding:8px 10px;white-space:nowrap;font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t2)">${hhmm(v.llegada)}–${hhmm(v.salida)}
+        ${v.tramos>1 ? `<div style="font-size:9.5px;color:var(--amber);font-family:'DM Sans',sans-serif" title="No estuvo ahí de corrido: entró y salió ${v.tramos} veces. La columna Demoró suma sólo el tiempo realmente detenido.">entró ${v.tramos} veces, no de corrido</div>` : ''}</td>
         <td style="padding:8px 10px;font-size:12.5px;color:var(--t1)">🚚 ${escTT(v.punto)}
           <div style="font-size:10.5px;color:var(--t3)">${escTT(v.tipo)}</div></td>
         <td style="padding:8px 10px;text-align:right;white-space:nowrap">
@@ -3081,31 +3086,345 @@ function pintarMapa(){
   }
 }
 
-/* Camiones que visitaron un recinto en un día — sirve para saber si las
-   operaciones de RDTOut de ese día se le pueden atribuir a UN camión o si
-   son de varios. Sin esto, el detalle decía "2 camión(es)" y no cuáles. */
+/* ══════════════════════════════════════════════════════════════════════
+   ZONAS TARIFARIAS P1–P31
+
+   Los polígonos salen del Google My Maps "Clientes Redtec" que mantiene la
+   empresa. Se bajan UNA vez (el KML pesa 2,6 MB), se simplifican con
+   Douglas-Peucker a unos 420 puntos en total y se guardan simplificados en
+   localStorage (~7 KB). Las cargas siguientes son instantáneas y no vuelven
+   a pedirle nada a Google.
+
+   Si el mapa de Google no responde, el análisis por zona SIGUE FUNCIONANDO:
+   la zona de cada recinto ya está en el catálogo (campo z), los polígonos
+   sólo sirven para pintarlas.
+   ══════════════════════════════════════════════════════════════════════ */
+const KML_MID = '1QQv7Ql34nOs8pvMjwlGyTUSOBTunaMQ';
+const ZONAS_CACHE = 'tt_zonas_v1';
+let ZONAS = null, zonasEstado = 'sin_cargar', mapaVerZonas = false;
+let capaZonas = null;
+
+function dpSimplificar(pts, tol){
+  if(pts.length < 3) return pts;
+  const d2 = (p,a,b) => {
+    let x=a[0], y=a[1], dx=b[0]-x, dy=b[1]-y;
+    if(dx||dy){ const t=((p[0]-x)*dx+(p[1]-y)*dy)/(dx*dx+dy*dy);
+      if(t>1){x=b[0];y=b[1];} else if(t>0){x+=dx*t;y+=dy*t;} }
+    dx=p[0]-x; dy=p[1]-y; return dx*dx+dy*dy;
+  };
+  const simp = (a,f,l,out) => {
+    let mx=tol*tol, idx=-1;
+    for(let i=f+1;i<l;i++){ const d=d2(a[i],a[f],a[l]); if(d>mx){mx=d;idx=i;} }
+    if(idx>-1){ if(idx-f>1) simp(a,f,idx,out); out.push(a[idx]); if(l-idx>1) simp(a,idx,l,out); }
+  };
+  const out=[pts[0]]; simp(pts,0,pts.length-1,out); out.push(pts[pts.length-1]);
+  return out;
+}
+
+async function cargarZonas(){
+  if(ZONAS || zonasEstado === 'cargando') return ZONAS;
+  try{ const c = localStorage.getItem(ZONAS_CACHE);
+       if(c){ ZONAS = JSON.parse(c); zonasEstado='ok'; return ZONAS; } }catch(e){}
+  zonasEstado = 'cargando';
+  try{
+    const txt = await (await fetch(`https://www.google.com/maps/d/kml?mid=${KML_MID}&forcekml=1`,
+                                   {signal: AbortSignal.timeout(45000)})).text();
+    const doc = new DOMParser().parseFromString(txt, 'text/xml');
+    const fp = [...doc.querySelectorAll('Folder')]
+      .find(f => (f.querySelector(':scope > name')?.textContent||'') === 'Poligonos');
+    if(!fp) throw new Error('el mapa no trae la carpeta Poligonos');
+    ZONAS = [];
+    [...fp.querySelectorAll(':scope > Placemark')].forEach(pm => {
+      const n = pm.querySelector('name')?.textContent?.trim();
+      const anillos = [...pm.querySelectorAll('Polygon outerBoundaryIs coordinates')].map(c =>
+        dpSimplificar(
+          c.textContent.trim().split(/\s+/).map(t => { const [lo,la] = t.split(',').map(Number); return [lo,la]; }),
+          0.004
+        ).map(([lo,la]) => [+lo.toFixed(3), +la.toFixed(3)])
+      );
+      if(n && anillos.length) ZONAS.push({n, a:anillos});
+    });
+    try{ localStorage.setItem(ZONAS_CACHE, JSON.stringify(ZONAS)); }catch(e){}
+    zonasEstado = 'ok';
+  }catch(e){
+    console.warn('[zonas] no se pudieron cargar:', e.message);
+    zonasEstado = 'error';
+    ZONAS = null;
+  }
+  return ZONAS;
+}
+
+async function mapaZonas(){
+  mapaVerZonas = !mapaVerZonas;
+  if(mapaVerZonas && !ZONAS){
+    const b = document.getElementById('mz-zonas');
+    if(b) b.textContent = 'Cargando…';
+    await cargarZonas();
+    if(b) b.textContent = 'Zonas';
+  }
+  renderMapa();
+}
+
+/* ── ANÁLISIS POR ZONA ──────────────────────────────────────────────────
+   La zona de cada recinto ya viene en el catálogo, así que esto no depende
+   de los polígonos.
+
+   "Esperado" = la MEDIANA de la permanencia por visita de esa zona en el
+   período cargado. No es un estándar de la industria ni una meta inventada:
+   es cómo se comporta normalmente la propia operación de REDTEC en esa
+   zona. Una visita que se va muy por encima de su propia mediana es la que
+   vale la pena mirar.
+
+   OJO: con un solo día cargado la mediana se calcula sobre ese día y la
+   comparación pierde sentido. Se avisa en pantalla.                        */
+function analisisPorZona(){
+  const porZona = {};
+  MAPA_PUNTOS.forEach(p => {
+    const z = p.zona || (RECINTO_IDX[catNorm(p.nombre)]||{}).z;
+    if(!z) return;
+    if(!porZona[z]) porZona[z] = {zona:z, vis:0, min:0, puntos:new Set(), mins:[], placas:new Set(), saleP:0, entraP:0};
+    const a = porZona[z];
+    (p.visitas||[]).forEach(v => {
+      a.vis++; a.min += v.min; a.mins.push(v.min); a.placas.add(v.placa);
+    });
+    a.puntos.add(p.nombre);
+    const bal = balanceDeVisitas(p.visitas||[]);
+    a.saleP += bal.saleP; a.entraP += bal.entraP;
+  });
+  Object.values(porZona).forEach(a => {
+    a.mins.sort((x,y)=>x-y);
+    a.mediana = a.mins.length ? a.mins[Math.floor(a.mins.length/2)] : 0;
+    a.prom = a.vis ? Math.round(a.min/a.vis) : 0;
+    a.p90 = a.mins.length ? a.mins[Math.floor(a.mins.length*0.9)] : 0;
+    a.sobre = a.mins.filter(m => a.mediana && m > a.mediana*1.5).length;
+  });
+  return Object.values(porZona).sort((a,b)=>b.min-a.min);
+}
+
+function pintarZonas(){
+  if(!capaZonas) return;
+  capaZonas.clearLayers();
+  if(!mapaVerZonas || !ZONAS) return;
+  const an = {};
+  analisisPorZona().forEach(z => an[z.zona] = z);
+  const proms = Object.values(an).map(z=>z.prom).filter(Boolean).sort((a,b)=>a-b);
+  const q = f => proms.length ? proms[Math.min(proms.length-1, Math.floor(proms.length*f))] : 0;
+  const cortes = [q(.25), q(.5), q(.75), q(.9)];
+
+  ZONAS.forEach(z => {
+    const d = an[z.n];
+    const col = d ? colorDemora(d.prom, cortes) : '#6b7280';
+    z.a.forEach(anillo => {
+      const latlngs = anillo.map(([lo,la]) => [la, lo]);
+      const poly = L.polygon(latlngs, {
+        color: col, weight: d ? 2 : 1, opacity: d ? .85 : .35,
+        fillColor: col, fillOpacity: d ? .16 : .05, interactive: !!d
+      }).addTo(capaZonas);
+      if(d){
+        poly.bindTooltip(
+          `<b>Zona ${z.n}</b><br>${d.vis} visita(s) en ${d.puntos.size} recinto(s)<br>`
+          + `promedio <b>${fmtMins(d.prom)}</b> · mediana ${fmtMins(d.mediana)}<br>`
+          + `<span style="color:#555">${d.sobre} visita(s) sobre 1,5× la mediana</span>`,
+          {sticky:true, opacity:.96});
+      }
+    });
+  });
+}
+
+function tablaZonas(){
+  const filas = analisisPorZona();
+  if(!filas.length) return '';
+  const unDia = new Set(DB.map(r=>r.fecha)).size <= 1;
+  const tot = filas.reduce((s,z)=>s+z.min,0);
+  return `<div class="card" style="background:var(--s1);margin-top:12px">
+    <div class="card-hdr" style="flex-wrap:wrap;gap:8px">
+      <div class="card-title"><span class="card-title-dot" style="background:var(--purple)"></span>Demora por zona tarifaria</div>
+      <div class="cbar-end" style="font-size:11px;color:var(--t3)">${filas.length} zonas con actividad · ${fmtMins(tot)}</div>
+    </div>
+    <div class="card-body">
+      ${unDia ? `<div style="margin-bottom:10px;padding:8px 11px;background:var(--amber-d);border:1px solid rgba(244,168,54,.3);border-radius:8px;font-size:11.5px;color:var(--t2)">
+        Hay <b>un solo día</b> cargado, así que el "esperado" se calcula sobre ese mismo día y no dice mucho.
+        Carga un período más largo para que la mediana sea un patrón y no una foto.</div>` : ''}
+      <div class="tbl-wrap"><table style="width:100%;border-collapse:collapse">
+        <thead><tr style="border-bottom:1px solid var(--border)">
+          <th style="text-align:left;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Zona</th>
+          <th style="text-align:right;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Recintos</th>
+          <th style="text-align:right;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Visitas</th>
+          <th style="text-align:right;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Esperado<br><span style="font-weight:400;text-transform:none">mediana</span></th>
+          <th style="text-align:right;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Real<br><span style="font-weight:400;text-transform:none">promedio</span></th>
+          <th style="text-align:right;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Desvío</th>
+          <th style="text-align:right;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Fuera de patrón</th>
+          <th style="text-align:right;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">↑ / ↓ pallets</th>
+        </tr></thead>
+        <tbody>${filas.map(z => {
+          const dif = z.prom - z.mediana;
+          const malo = z.mediana && z.prom > z.mediana*1.3;
+          return `<tr style="border-bottom:1px solid var(--border)${malo?';background:rgba(244,168,54,.06)':''}">
+            <td style="padding:7px 10px;font-weight:600;color:var(--t1)">${escTT(z.zona)}</td>
+            <td style="padding:7px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t2)">${z.puntos.size}</td>
+            <td style="padding:7px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t2)">${z.vis}</td>
+            <td style="padding:7px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t2)">${fmtMins(z.mediana)}</td>
+            <td style="padding:7px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:12.5px;font-weight:600;color:${malo?'var(--amber)':'var(--t1)'}">${fmtMins(z.prom)}</td>
+            <td style="padding:7px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:11.5px;color:${dif>0?'var(--amber)':'var(--green)'}">${dif>=0?'+':'−'}${fmtMins(Math.abs(dif))}</td>
+            <td style="padding:7px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:11.5px;color:${z.sobre?'var(--amber)':'var(--t3)'}">${z.sobre}</td>
+            <td style="padding:7px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t2)">
+              <span style="color:var(--blue)">${fmtPallets(z.saleP)}</span> / <span style="color:var(--green)">${fmtPallets(z.entraP)}</span></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>
+      <div style="margin-top:10px;font-size:10.5px;color:var(--t3)">
+        "Esperado" es la mediana de permanencia por visita de la propia zona en el período cargado — el patrón de REDTEC, no un estándar externo.
+        "Fuera de patrón" cuenta las visitas que superan 1,5 veces esa mediana.
+        ${zonasEstado==='error' ? ' · Los polígonos no se pudieron cargar desde el mapa de clientes, pero este análisis no los necesita.' : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+/* Camiones que visitaron un recinto en un día — para saber si una operación
+   sin patente se le puede atribuir a UN camión o si quedó compartida. */
 function camionesEnRecintoDia(punto, fecha){
   const s = new Set();
   DB.forEach(r => { if(r.punto === punto && r.fecha === fecha) s.add(r.placa); });
   return s;
 }
 
+const placaOp = o => String(o.patente||'').trim().toUpperCase();
+
+/* ── ATRIBUCIÓN DE UNA OPERACIÓN A UN CAMIÓN ────────────────────────────
+   RDTOut SÍ trae la patente en las operaciones de la flota: medido sobre la
+   ventana del API, 349 de 428 emisiones (82%), 310 de 432 retiros (72%) y
+   45 de 51 devoluciones (88%) vienen con patente y chofer. O sea el 77%.
+   Cuando la patente está, no hay nada que adivinar: esa operación es de ese
+   camión, aunque otro haya estado en el mismo recinto el mismo día.
+
+   Sólo cuando la patente viene vacía se cae al criterio anterior: si un
+   único camión de la flota estuvo ahí ese día, es suyo; si hubo más de uno,
+   queda sin asignar.
+
+   'exacta'      → la patente de la operación es la de este camión
+   'inferida'    → sin patente, pero este fue el único camión en el recinto
+   'compartida'  → sin patente y hubo más de un camión: no se asigna
+   'de_otro'     → la patente es de otro camión: no es de esta visita        */
+function atribuirOp(o, placa, nCamiones){
+  const p = placaOp(o);
+  if(p) return p === String(placa).toUpperCase() ? 'exacta' : 'de_otro';
+  return nCamiones > 1 ? 'compartida' : 'inferida';
+}
+
 function fmtPallets(n){ return (n||0).toLocaleString('es-CL'); }
+
+/* ── KILÓMETROS: una ESTIMACIÓN, no el odómetro ─────────────────────────
+   El API del GPS que consumimos (GetStopsDataRangeByPlate) entrega PARADAS,
+   no el recorrido: no hay traza ni kilometraje. Lo que se puede calcular es
+   la distancia entre paradas consecutivas en línea recta y corregirla por un
+   factor de ruta. Sirve para comparar días y camiones entre sí; NO sirve
+   para liquidar combustible ni para pagarle a nadie.
+   El número real tendría que pedirlo el proveedor del GPS: si su servicio
+   expone un método de kilometraje o de ruta, se enchufa acá y esto se borra. */
+const FACTOR_RUTA = 1.3;   // calles vs línea recta, factor urbano habitual
+function kmEntre(a, b){
+  const R = 6371, rad = x => x*Math.PI/180;
+  const dLat = rad(b[1]-a[1]), dLon = rad(b[0]-a[0]);
+  const h = Math.sin(dLat/2)**2 + Math.cos(rad(a[1]))*Math.cos(rad(b[1]))*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+function kmRecorridos(visitas){
+  const ord = visitas.slice().sort((a,b)=>String(a.llegada).localeCompare(String(b.llegada)));
+  let km = 0, tramos = 0, sinCoord = 0;
+  for(let i=1; i<ord.length; i++){
+    const g1 = resolverCoords(ord[i-1].punto), g2 = resolverCoords(ord[i].punto);
+    if(!g1 || !g2){ sinCoord++; continue; }
+    km += kmEntre(g1.coords, g2.coords); tramos++;
+  }
+  return {km: Math.round(km*FACTOR_RUTA), tramos, sinCoord};
+}
+
+/* Historial de un pedido: /api/historial-proxy → RDTOut historialxnropedido.
+   Es el mismo endpoint que ya usan Emisiones_Detalle y analisis-cliente. */
+async function historialPedido(nro){
+  let modal = document.getElementById('modal-historial');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.id = 'modal-historial';
+    /* z-index sobre el modal del camión: este se abre ENCIMA de aquél */
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9700;display:flex;align-items:center;justify-content:center;padding:20px';
+    modal.onclick = e => { if(e.target === modal) modal.remove(); };
+    document.body.appendChild(modal);
+  }
+  const caja = h => `<div style="background:var(--s2);border:1px solid var(--border-hi);border-radius:12px;width:min(800px,94vw);max-height:86vh;overflow:auto;box-shadow:0 20px 56px rgba(0,0,0,.55)">${h}</div>`;
+  modal.innerHTML = caja(`<div style="padding:24px;color:var(--t2);font-size:12.5px">Cargando el historial del pedido ${escTT(nro)}…</div>`);
+  let datos = [];
+  try{
+    const r = await fetch('/api/historial-proxy?nroPedido=' + encodeURIComponent(nro), {signal:AbortSignal.timeout(20000)});
+    const j = await r.json();
+    datos = Array.isArray(j) ? j : (j.data || j.items || j.result || []);
+  }catch(e){
+    modal.innerHTML = caja(`<div style="padding:24px;color:var(--amber);font-size:12.5px">No se pudo traer el historial: ${escTT(e.message)}</div>`);
+    return;
+  }
+  if(!datos.length){
+    modal.innerHTML = caja(`<div style="padding:24px;color:var(--t3);font-size:12.5px">El pedido ${escTT(nro)} no tiene historial registrado.</div>`);
+    return;
+  }
+  datos.sort((a,b)=>String(a.fechaCreacionHistorial||'').localeCompare(String(b.fechaCreacionHistorial||'')));
+  const p0 = datos[datos.length-1];
+  const f = familiaOp(p0.operacion);
+  const fecha = t => String(t||'').replace('T',' ').slice(0,16);
+
+  modal.innerHTML = caja(`
+    <div style="padding:15px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;position:sticky;top:0;background:var(--s2)">
+      <div>
+        <div style="font-size:13.5px;font-weight:600;color:var(--t1)">Pedido <span style="font-family:'DM Mono',monospace">#${escTT(nro)}</span></div>
+        <div style="font-size:11.5px;color:var(--t2)"><span style="color:${f.c};font-weight:600">${escTT(f.f)}</span>
+          · ${escTT(p0.clienteDestinoStr && !/REDTEC/i.test(p0.clienteDestinoStr) ? p0.clienteDestinoStr : p0.clienteOrigenStr || '')}</div>
+      </div>
+      <button onclick="document.getElementById('modal-historial').remove()" style="margin-left:auto;background:none;border:none;color:var(--t2);font-size:20px;cursor:pointer;padding:2px 8px">×</button>
+    </div>
+    <div style="padding:14px 20px;display:flex;gap:9px;flex-wrap:wrap;border-bottom:1px solid var(--border)">
+      ${[['Solicitado',p0.cantidadSolicitada],['Despachado',p0.cantidadDespachada],['Confirmado',p0.cantidadConfirmada],['Pendiente',p0.cantidadPendiente]]
+        .map(([l,v])=>`<div style="background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:8px 12px">
+          <div style="font-family:'DM Mono',monospace;font-size:15px;color:var(--t1)">${fmtPallets(+v||0)}</div>
+          <div style="font-size:9.5px;color:var(--t3);text-transform:uppercase">${l}</div></div>`).join('')}
+      ${p0.patente ? `<div style="background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:8px 12px">
+          <div style="font-family:'DM Mono',monospace;font-size:15px;color:var(--blue)">${escTT(p0.patente)}</div>
+          <div style="font-size:9.5px;color:var(--t3);text-transform:uppercase">${escTT(p0.chofer||'patente')}</div></div>` : ''}
+    </div>
+    <div style="padding:16px 20px">
+      <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Línea de tiempo</div>
+      ${datos.map((h,i) => `<div style="display:flex;gap:11px;padding-bottom:${i===datos.length-1?0:12}px">
+          <div style="display:flex;flex-direction:column;align-items:center">
+            <div style="width:9px;height:9px;border-radius:50%;background:${i===datos.length-1?'var(--green)':'var(--border-hi)'};margin-top:4px"></div>
+            ${i===datos.length-1?'':'<div style="flex:1;width:1px;background:var(--border)"></div>'}
+          </div>
+          <div style="flex:1">
+            <div style="font-size:12.5px;color:var(--t1);font-weight:600">${escTT(h.etapaOperacion||'—')}</div>
+            <div style="font-size:11.5px;color:var(--t2)">${escTT(h.glosaHistorial||'')}</div>
+            <div style="font-size:10.5px;color:var(--t3);font-family:'DM Mono',monospace">${fecha(h.fechaCreacionHistorial)}${h.usuario?' · '+escTT(h.usuario):''}</div>
+          </div>
+        </div>`).join('')}
+      ${p0.observacion ? `<div style="margin-top:12px;padding:9px 12px;background:var(--s3);border-radius:8px;font-size:11.5px;color:var(--t2)"><b>Observación:</b> ${escTT(p0.observacion)}</div>` : ''}
+    </div>`);
+}
 
 /* Reparte las operaciones de un conjunto de visitas entre lo que SALE
    (emisión) y lo que ENTRA (retiro/devolución), separando lo que se puede
    atribuir a un camión de lo que quedó compartido con otro. */
 function balanceDeVisitas(visitas){
-  const b = {saleP:0, entraP:0, saleN:0, entraN:0, ambiguasN:0, ambiguasP:0, ops:[], sinOp:0};
+  const b = {saleP:0, entraP:0, saleN:0, entraN:0, ambiguasN:0, ambiguasP:0,
+             exactasN:0, inferidasN:0, ops:[], sinOp:0};
   visitas.forEach(v => {
     const x = opsDeVisita(v.punto, v.fecha);
-    if(!x.ops.length){ b.sinOp++; return; }
-    const compartido = camionesEnRecintoDia(v.punto, v.fecha).size > 1;
-    x.ops.forEach(o => {
+    const n = camionesEnRecintoDia(v.punto, v.fecha).size;
+    const propias = x.ops.filter(o => atribuirOp(o, v.placa, n) !== 'de_otro');
+    if(!propias.length){ b.sinOp++; return; }
+    propias.forEach(o => {
+      const att = atribuirOp(o, v.placa, n);
       const p = +o.cantidadConfirmada || 0;
       const sale = sentidoOp(o) === 'sale';
-      b.ops.push({o, visita:v, compartido, sale, pallets:p});
-      if(compartido){ b.ambiguasN++; b.ambiguasP += p; return; }
+      b.ops.push({o, visita:v, att, sale, pallets:p});
+      if(att === 'compartida'){ b.ambiguasN++; b.ambiguasP += p; return; }
+      if(att === 'exacta') b.exactasN++; else b.inferidasN++;
       if(sale){ b.saleP += p; b.saleN++; } else { b.entraP += p; b.entraN++; }
     });
   });
@@ -3126,15 +3445,23 @@ function detallePuntoMapa(d){
     const desvio = d.prom ? v.min - d.prom : 0;
     const lento = d.prom && v.min > d.prom*1.5 && desvio >= 15;
     const x = opsDeVisita(v.punto, v.fecha);
-    const compartido = camionesEnRecintoDia(v.punto, v.fecha).size > 1;
-    const detOps = x.ops.length
-      ? x.ops.slice(0,3).map(o => {
+    const nCam = camionesEnRecintoDia(v.punto, v.fecha).size;
+    const propias = x.ops.filter(o => atribuirOp(o, v.placa, nCam) !== 'de_otro');
+    const deOtro = x.ops.length - propias.length;
+    const detOps = propias.length
+      ? propias.slice(0,3).map(o => {
           const f = familiaOp(o.operacion);
-          return `<div><span style="color:${f.c};font-weight:600">${escTT(f.f)}</span>
+          const att = atribuirOp(o, v.placa, nCam);
+          const sale = sentidoOp(o)==='sale';
+          return `<div><span style="color:${f.c};font-weight:600">${sale?'↑':'↓'} ${escTT(f.f)}</span>
             <span style="color:var(--t2)">${fmtPallets(+o.cantidadConfirmada||0)} pallets</span>
-            <span style="color:var(--t3);font-family:'DM Mono',monospace;font-size:10px">#${o.nroPedido}</span></div>`;
-        }).join('') + (x.ops.length>3 ? `<div style="color:var(--t3);font-size:10px">y ${x.ops.length-3} más</div>` : '')
-        + (compartido ? `<div style="color:var(--amber);font-size:10px">otro camión también estuvo acá ese día</div>` : '')
+            <a href="#" onclick="event.preventDefault();historialPedido('${o.nroPedido}')"
+               style="color:var(--blue);font-family:'DM Mono',monospace;font-size:10px;text-decoration:none;border-bottom:1px dotted currentColor">#${o.nroPedido}</a>
+            ${att==='exacta' ? '<span style="color:var(--green);font-size:9.5px" title="RDTOut trae esta patente en la operación">✓ patente</span>'
+              : att==='compartida' ? '<span style="color:var(--amber);font-size:9.5px">sin asignar</span>'
+              : '<span style="color:var(--t3);font-size:9.5px" title="La operación no trae patente, pero este fue el único camión en el recinto ese día">inferida</span>'}</div>`;
+        }).join('') + (propias.length>3 ? `<div style="color:var(--t3);font-size:10px">y ${propias.length-3} más</div>` : '')
+        + (deOtro ? `<div style="color:var(--t3);font-size:10px">${deOtro} operación(es) de otra patente</div>` : '')
       : `<span style="color:var(--t3)">${v.tipo==='REDTEC' ? 'base' : 'sin operación ese día'}</span>`;
     return `<tr style="border-bottom:1px solid var(--border)${lento?';background:rgba(244,168,54,.06)':''}">
       <td style="padding:7px 10px;white-space:nowrap">
@@ -3202,14 +3529,16 @@ function detalleCamionDia(placa, fecha){
   const vm = {};
   filas.forEach(r => {
     const k = r.punto;
-    if(!vm[k]) vm[k] = {placa, chofer:r.chofer, punto:r.punto, tipo:r.tipo, fecha:r.fecha, min:0, llegada:r.llegada, salida:r.salida};
+    if(!vm[k]) vm[k] = {placa, chofer:r.chofer, punto:r.punto, tipo:r.tipo, fecha:r.fecha, min:0, llegada:r.llegada, salida:r.salida, tramos:0};
     vm[k].min += r.minutos;
+    vm[k].tramos++;
     if(r.llegada < vm[k].llegada) vm[k].llegada = r.llegada;
     if(r.salida  > vm[k].salida)  vm[k].salida  = r.salida;
   });
   const visitas = Object.values(vm).sort((a,b)=>String(a.llegada).localeCompare(String(b.llegada)));
   const bal = balanceDeVisitas(visitas);
 
+  const km = kmRecorridos(visitas);
   const enBase = visitas.filter(v=>v.tipo==='REDTEC').reduce((s,v)=>s+v.min,0);
   const enRuta = visitas.filter(v=>v.tipo!=='REDTEC').reduce((s,v)=>s+v.min,0);
   const hhmm = t => (String(t).split(' ')[1]||'').slice(0,5);
@@ -3229,22 +3558,29 @@ function detalleCamionDia(placa, fecha){
 
   const filasHTML = visitas.map(v => {
     const x = opsDeVisita(v.punto, v.fecha);
-    const compartido = camionesEnRecintoDia(v.punto, v.fecha).size > 1;
+    const nCam = camionesEnRecintoDia(v.punto, v.fecha).size;
+    const propias = x.ops.filter(o => atribuirOp(o, v.placa, nCam) !== 'de_otro');
     const prom = PROM_PUNTO[v.punto] || 0;
     const lento = prom && v.min > prom*1.5 && v.min-prom >= 15;
-    const ops = x.ops.length
-      ? x.ops.slice(0,4).map(o => {
+    const ops = propias.length
+      ? propias.slice(0,4).map(o => {
           const f = familiaOp(o.operacion);
           const sale = sentidoOp(o)==='sale';
+          const att = atribuirOp(o, v.placa, nCam);
           return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             <span style="color:${f.c};font-weight:600">${sale?'↑':'↓'} ${escTT(f.f)}</span>
             <span style="color:var(--t2)">${fmtPallets(+o.cantidadConfirmada||0)} pallets</span>
-            <span style="color:var(--t3);font-family:'DM Mono',monospace;font-size:10px">#${o.nroPedido}</span>
-            ${compartido ? '<span style="color:var(--amber);font-size:10px">compartido</span>' : ''}</div>`;
+            <a href="#" onclick="event.preventDefault();historialPedido('${o.nroPedido}')" title="Ver el historial de este pedido"
+               style="color:var(--blue);font-family:'DM Mono',monospace;font-size:10px;text-decoration:none;border-bottom:1px dotted currentColor">#${o.nroPedido}</a>
+            ${att==='exacta' ? '<span style="color:var(--green);font-size:9.5px">✓ patente</span>'
+              : att==='compartida' ? '<span style="color:var(--amber);font-size:9.5px">sin asignar</span>'
+              : '<span style="color:var(--t3);font-size:9.5px">inferida</span>'}
+            ${escTT(o.chofer||'') ? `<span style="color:var(--t3);font-size:9.5px">${escTT(o.chofer)}</span>` : ''}</div>`;
         }).join('')
       : `<span style="color:var(--t3)">${v.tipo==='REDTEC'?'base — carga, descarga o espera':'sin operación registrada'}</span>`;
     return `<tr style="border-bottom:1px solid var(--border)${lento?';background:rgba(244,168,54,.06)':''}">
-      <td style="padding:8px 10px;white-space:nowrap;font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t2)">${hhmm(v.llegada)}–${hhmm(v.salida)}</td>
+      <td style="padding:8px 10px;white-space:nowrap;font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t2)">${hhmm(v.llegada)}–${hhmm(v.salida)}
+        ${v.tramos>1 ? `<div style="font-size:9.5px;color:var(--amber);font-family:'DM Sans',sans-serif" title="No estuvo ahí de corrido: entró y salió ${v.tramos} veces. La columna Demoró suma sólo el tiempo realmente detenido.">entró ${v.tramos} veces, no de corrido</div>` : ''}</td>
       <td style="padding:8px 10px;font-size:12.5px;color:var(--t1)">${escTT(v.punto)}<div style="font-size:10px;color:var(--t3)">${escTT(v.tipo)}</div></td>
       <td style="padding:8px 10px;text-align:right;white-space:nowrap;font-family:'DM Mono',monospace;font-size:12.5px;color:${lento?'var(--amber)':'var(--t1)'};font-weight:600">${fmtMins(v.min)}
         <div style="font-size:9.5px;color:var(--t3);font-weight:400">${prom?'prom '+fmtMins(prom):''}</div></td>
@@ -3270,10 +3606,19 @@ function detalleCamionDia(placa, fecha){
       ${kpi(fmtPallets(bal.saleP - bal.entraP), 'Balance del día', (bal.saleP-bal.entraP)>=0?'var(--blue)':'var(--green)')}
       ${kpi(fmtMins(enRuta), 'Detenido en clientes')}
       ${kpi(fmtMins(enBase), 'Detenido en base', 'var(--cyan)')}
+      ${kpi(km.km ? km.km+' km' : '—', 'Recorrido estimado', 'var(--purple)')}
+    </div>
+    ${km.km ? `<div style="margin:0 20px 10px;font-size:10.5px;color:var(--t3)">
+      Los km son una ESTIMACIÓN: el GPS entrega paradas, no recorrido. Se mide la distancia entre paradas
+      consecutivas y se corrige por ${FACTOR_RUTA} para aproximar calles${km.sinCoord?`; ${km.sinCoord} tramo(s) sin coordenadas quedaron fuera`:''}.
+      No sirve para liquidar combustible.</div>` : ''}
+    <div style="margin:0 20px 12px;font-size:11px;color:var(--t3)">
+      ${bal.exactasN ? `<b style="color:var(--green)">${bal.exactasN}</b> operación(es) confirmadas por patente en RDTOut` : ''}
+      ${bal.inferidasN ? ` · ${bal.inferidasN} inferida(s) (la operación no trae patente y fue el único camión en el recinto)` : ''}
     </div>
     ${bal.ambiguasN ? `<div style="margin:0 20px 12px;padding:9px 12px;background:var(--amber-d);border:1px solid rgba(244,168,54,.3);border-radius:8px;font-size:11.5px;color:var(--t2)">
       <b style="color:var(--amber)">${bal.ambiguasN} operación(es) · ${fmtPallets(bal.ambiguasP)} pallets sin asignar.</b>
-      Otro camión de la flota estuvo en el mismo recinto ese día, así que no se puede saber cuál de los dos las hizo. No entran en los totales de arriba.
+      No traen patente y hubo más de un camión en ese recinto ese día, así que no se puede saber cuál las hizo. No entran en los totales de arriba.
     </div>` : ''}
     <div style="padding:0 20px 20px">
       <div class="tbl-wrap"><table style="width:100%;border-collapse:collapse">
@@ -3328,6 +3673,7 @@ async function renderMapa(){
        estampa las teselas — ya pasó en mapa-retiros. Ojo: {z}/{y}/{x}. */
     capaBase = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
       {maxZoom:19, attribution:'Tiles © Esri'}).addTo(mapaL);
+    capaZonas = L.layerGroup().addTo(mapaL);   // debajo de los pines
     capaMapa = L.layerGroup().addTo(mapaL);
     mapaL.setView([-33.47, -70.70], 10);
   }
@@ -3335,6 +3681,9 @@ async function renderMapa(){
 
   construirPuntos();
   pintarMapa();
+  pintarZonas();
+  const bz = document.getElementById('mz-zonas');
+  if(bz) bz.style.cssText = mapaVerZonas ? 'background:var(--purple-d);color:var(--purple);border-color:var(--purple)' : 'background:var(--s3);border-color:var(--border)';
 
   const minUbic = MAPA_PUNTOS.reduce((s,p)=>s+p.min,0);
   const minSin  = MAPA_SIN_UBICAR.reduce((s,[,m])=>s+m,0);
@@ -3353,6 +3702,9 @@ async function renderMapa(){
     MAPA_SIN_UBICAR.length ? chip(`<b style="color:var(--amber)">${MAPA_SIN_UBICAR.length}</b> sin ubicar · ${fmtMins(minSin)}`, 'var(--amber-d)') : '',
     MAPA_FUERA.n ? chip(`${MAPA_FUERA.n} fuera de Santiago · ${fmtMins(MAPA_FUERA.min)}`) : ''
   ].filter(Boolean).join('');
+
+  const cz = document.getElementById('mapa-zonas');
+  if(cz) cz.innerHTML = tablaZonas();
 
   if(MAPA_SIN_UBICAR.length && !document.getElementById('mapa-detalle').innerHTML){
     const top = MAPA_SIN_UBICAR.slice(0,8).map(([p,m])=>`<li style="margin:2px 0">${escTT(p)} <span style="color:var(--t3)">— ${fmtMins(m)}</span></li>`).join('');

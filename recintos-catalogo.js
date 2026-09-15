@@ -32,6 +32,23 @@ var RECINTOS = [{"k": "HALEON PUDAHUEL LA MARTINA 400", "n": "HALEON PUDAHUEL La
    direcciones sin geocerca del GPS. */
 var COMUNA_CENT = {"BUIN": [-70.7411, -33.7333], "CERRILLOS": [-70.718, -33.496], "CERRO NAVIA": [-70.742, -33.421], "COLINA": [-70.672, -33.202], "ESTACION CENTRAL": [-70.696, -33.46], "HUECHURABA": [-70.639, -33.367], "ISLA DE MAIPO": [-70.898, -33.752], "LA FLORIDA": [-70.568, -33.532], "LA PINTANA": [-70.63, -33.583], "LAMPA": [-70.876, -33.284], "MACUL": [-70.598, -33.49], "MAIPU": [-70.758, -33.517], "PAINE": [-70.741, -33.808], "PENAFLOR": [-70.876, -33.61], "PUDAHUEL": [-70.75, -33.442], "PUENTE ALTO": [-70.575, -33.611], "QUILICURA": [-70.729, -33.36], "RECOLETA": [-70.641, -33.402], "RENCA": [-70.728, -33.406], "SAN BERNARDO": [-70.7, -33.592], "SAN JOAQUIN": [-70.628, -33.497], "TALAGANTE": [-70.931, -33.664], "SAN ANTONIO": [-71.613, -33.593], "VALPARAISO": [-71.613, -33.047], "PLACILLA": [-71.568, -33.116], "HIJUELAS": [-71.133, -32.806], "RENGO": [-70.86, -34.406], "SANTIAGO": [-70.65, -33.442], "QUINTA NORMAL": [-70.7, -33.432], "CONCHALI": [-70.675, -33.383], "INDEPENDENCIA": [-70.664, -33.415], "PROVIDENCIA": [-70.61, -33.43], "NUNOA": [-70.598, -33.456], "LAS CONDES": [-70.545, -33.408], "VITACURA": [-70.578, -33.38], "LO BARNECHEA": [-70.48, -33.35], "LA REINA": [-70.545, -33.445], "PENALOLEN": [-70.545, -33.49], "SAN MIGUEL": [-70.652, -33.497], "PEDRO AGUIRRE CERDA": [-70.674, -33.487], "LO ESPEJO": [-70.688, -33.52], "LA CISTERNA": [-70.662, -33.533], "EL BOSQUE": [-70.675, -33.562], "LA GRANJA": [-70.628, -33.541], "SAN RAMON": [-70.645, -33.538], "LO PRADO": [-70.722, -33.443], "TIL TIL": [-70.93, -33.087], "CURACAVI": [-71.15, -33.4], "MELIPILLA": [-71.215, -33.688], "EL MONTE": [-70.983, -33.68], "CALERA DE TANGO": [-70.78, -33.62], "PIRQUE": [-70.59, -33.67], "SAN JOSE DE MAIPO": [-70.35, -33.64], "PADRE HURTADO": [-70.815, -33.573], "TALCA": [-71.665, -35.426], "SAN JAVIER": [-71.73, -35.594], "LINARES": [-71.597, -35.846], "LOS ANGELES": [-72.351, -37.469], "CHILLAN": [-72.103, -36.606], "TEMUCO": [-72.59, -38.735], "PUERTO MONTT": [-72.941, -41.469], "CONCEPCION": [-73.05, -36.827], "CORONEL": [-73.132, -37.026], "TALCAHUANO": [-73.117, -36.717], "OSORNO": [-73.133, -40.573], "LA CALERA": [-71.192, -32.788], "QUILLOTA": [-71.247, -32.88], "LIMACHE": [-71.267, -33.017], "LOS ANDES": [-70.598, -32.834], "SAN FELIPE": [-70.725, -32.75], "RANCAGUA": [-70.745, -34.17], "SANTA CRUZ": [-71.365, -34.639], "VALDIVIA": [-73.245, -39.814], "MELIPILLA CENTRO": [-71.215, -33.688]};
 
+
+/* ── COORDENADAS REALES ──────────────────────────────────────────────────
+   Geocodificadas UNA VEZ contra Nominatim (OpenStreetMap) usando la dirección
+   que ya trae cada recinto en el catálogo, y validadas: se descartó cualquier
+   resultado fuera de Chile o a más de 22 km del centroide de su propia comuna.
+   97 de 110 quedaron con coordenada exacta; el resto sigue cayendo en el
+   centroide de su comuna.
+
+   Esto NO se consulta en tiempo de ejecución: son valores fijos acá. El mapa
+   no depende de ningún servicio externo de geocodificación.
+
+   Motivo: el mapa dibujaba DEMARIA CD SANTIAGO —que el catálogo ubica en
+   Quilicura— dentro de Quinta Normal, porque el centroide de comuna más un
+   jitter de 5 km puede sacar un punto de su propia comuna. Con la dirección
+   geocodificada el pin cae donde está el recinto de verdad. */
+var COORD_RECINTO = {"HALEON PUDAHUEL LA MARTINA 400": [-70.7746,-33.45533],"DEMARIA PALLET PARKING 5": [-70.7746,-33.45533],"ENVASES CMF": [-70.7746,-33.45533],"EGA KAT LOGISTICA": [-70.79405,-33.43061],"QUINTA VESPUCIO": [-70.78191,-33.44909],"QUINTA ENEA": [-70.77201,-33.42769],"CD PRE-UNIC": [-70.76545,-33.4496],"ZTT01 CD TOTTUS LA FARFANA": [-70.77817,-33.4508],"VIRUTEX CD PUDAHUEL": [-70.80076,-33.43446],"DIST.CASANOVA SALAR DE ASCOTAN 1291 ENEA": [-70.77659,-33.43245],"HAMBURGO CD RENCA": [-70.76395,-33.4077],"ZAL03 CD ALVI AEROPARQUE": [-70.77695,-33.39148],"ALIMENTOS ANDINO RENCA": [-70.76684,-33.40726],"BRÜGGEN RENCA": [-70.76684,-33.40726],"ZWM08 WM RENTAPACK SANTIAGO": [-70.75261,-33.37492],"LAF CD RENCA": [-70.76684,-33.40726],"PRISA CD QUILICURA": [-70.77695,-33.39148],"EMB. ANDINA PLANTA RENCA": [-70.75036,-33.40123],"MARINETTI QUILICURA CD": [-70.76264,-33.39117],"PIBAMOUR CD FRIO": [-70.78046,-33.40384],"DEMARIA CD SANTIAGO": [-70.7617,-33.37782],"EMBO. METROPOLITANA QUILICURA": [-70.75025,-33.3661],"RABIE SANTIAGO": [-70.7478,-33.37604],"00748 HIPER RENCA": [-70.74562,-33.40255],"TUCAPEL PRODUCCION SANTIAGO": [-70.77892,-33.38404],"TUCAPEL SA": [-70.77892,-33.38404],"00671 HIPER QUILICURA MARCOLETA": [-70.74664,-33.35886],"00049 HIPER QUILICURA OHIGGINS": [-70.72766,-33.35627],"00041 HIPER HUECHURABA": [-70.67986,-33.36584],"RECUPAC S.A.": [-70.67833,-33.36222],"ZWM02 CD WM QUILICURA FRIO": [-70.69769,-33.36107],"CASTANO QUILICURA": [-70.70317,-33.34221],"INDUSTRIAS CLEANER LAMPA": [-70.73095,-33.31462],"LESAFFRE CD": [-70.72124,-33.34351],"PIBAMOUR CD BUENAVENTURA": [-70.70632,-33.33797],"DEMARIA WAREHOUSING": [-70.73706,-33.32611],"MARGARITA UAUY E HIJOS": [-70.7247,-33.32214],"NUTRISCO": [-70.71871,-33.32409],"DESA DIST ERRAZURRIZ LAMPA": [-70.72397,-33.31335],"INTERCOS COLINA": [-70.69172,-33.2306],"COMERCIAL CANADA QUILICURA": [-70.71787,-33.30137],"INDUSTRIAS CLEANER SCALPI QUILICURA LAUTARO 3005": [-70.70809,-33.3446],"MARITANO CD HUECHURABA": [-70.65151,-33.37164],"00086 HIPER RECOLETA": [-70.64123,-33.39359],"DEMARIA MEGA CARRASCAL": [-70.72208,-33.41531],"PF SANTIAGO PLANTA": [-70.67843,-33.41885],"TEBA LO VALLEDOR AV.GRL.VELAZQUEZ #3409 CERRILLOS": [-70.70627,-33.53105],"MARGOT IRENE RIVERA VILLA": [-70.73411,-33.52098],"PRISA PRILOGIC": [-70.70728,-33.49197],"VIRUTEX MELIPILLA": [-70.71636,-33.50719],"MOL HEREDIA MAIPU PLANTA": [-70.78084,-33.54386],"COMERCIAL CASTRO CD CERRILLOS": [-70.70267,-33.49747],"COMERCIAL ANDEN SALZ PLANTA": [-70.73931,-33.52504],"ZSB CD SALCO BRAND": [-70.71001,-33.54343],"VETERQUIMICA S.A.": [-70.7601,-33.56264],"BALLERINA PLANTA CERRILLOS": [-70.69701,-33.48503],"ARCOR CERRILLOS GRAL. VELASQUEZ 9309": [-70.68861,-33.48465],"DEMARIA MAQUILA LAB. DUKAY": [-70.78455,-33.31143],"INTERCOS DUKAY": [-70.78455,-33.31143],"CD FASA": [-70.85101,-33.44866],"IFCO CHILE QUILICURA": [-70.84058,-33.45119],"ZCS01 CD CENCOSUD NOVICIADO": [-70.84058,-33.45119],"ZUN01 CD UNIMARC LO AGUIRRE": [-70.82199,-33.4566],"PROALSA CD LO AGUIRRE": [-70.85727,-33.45947],"INDUSTRIAS CLEANER D Y C SAN BERNARDO": [-70.69794,-33.54533],"INTERCARRY CD LO ESPEJO": [-70.7101,-33.55947],"NUTRATRADE S.A - LAS ACACIAS": [-70.71,-33.55375],"COMERCIAL NABEK SPA": [-70.63296,-33.58841],"TEBA LO BLANCO AV. LO BLANCO #2561 LA PINTANA": [-70.63296,-33.58841],"TEBA GRAN AVENIDA AV. JOSE MIGUEL CARERRA 13365": [-70.69385,-33.57843],"NUTRATRADE S.A - LOS PINOS": [-70.71889,-33.57111],"DISTRIBUIDORA LAGOS SAN BDO": [-70.71059,-33.56716],"00693 HIPER LA PINTANA": [-70.62798,-33.58538],"MOLINO PUENTE ALTO CD": [-70.57418,-33.61304],"COLGATE INOCUO CBP": [-70.85226,-33.40116],"VIRUTEX MAMUT SAN JOAQUIN": [-70.63735,-33.48119],"00682 HIPER SAN JOAQUIN": [-70.62226,-33.48432],"00076 HIPER DEPARTAMENTAL": [-70.59162,-33.51132],"INTERCARRY CD MACUL": [-70.62065,-33.48284],"PROCTER AND GAMBLE": [-70.61733,-33.48362],"DEMARIA MEGA NOVICIADO": [-70.85409,-33.37916],"COLGATE - IMO CBP": [-70.83369,-33.35426],"NESTLE MAIPU C. MELIPILLA 15300": [-70.7537,-33.52568],"GOOD FOOD CD": [-70.87242,-33.62972],"WOODPALLETS": [-70.84954,-33.67572],"SOFTYS PLANTA TALAGANTE": [-70.91538,-33.66425],"PAIMASA ISLA DE MAIPO": [-70.90997,-33.75959],"THE PROTEIN COMPANY PAINE": [-70.86063,-33.81182],"ZWM11 CD WM EL PENON": [-70.71905,-33.62066],"SIADTALEB SAN BERNANDO CD BARRANCON 2080": [-70.71813,-33.61252],"M3034 MAYORISTA 10 RENGO": [-70.85156,-34.39732],"CAMBIASO VALPARAISO CD": [-71.56643,-33.11349],"COMERCIALIZADORA PANOR": [-71.5558,-33.13181],"ACONCAGUA FOODS": [-70.73128,-33.7345],"INDUSTRIAS CLEANER EMPREPA RENCA": [-70.77567,-33.40337],"DOS BANDERAS SANTIAGO": [-70.75025,-33.3661],"DOS BANDERAS PUDAHUEL BODEGA LEVEL": [-70.75649,-33.45557]};
+
 var RECINTO_IDX = {};
 RECINTOS.forEach(function(r){ if(!RECINTO_IDX[r.k]) RECINTO_IDX[r.k] = r; });
 
@@ -53,11 +70,18 @@ function catJac(a,b){
 
 /* Jitter determinístico: separa recintos dentro de una comuna sin moverlos
    entre consultas. Copiado tal cual de mapa-retiros.html. */
+/* El jitter ORIGINAL usaba 0.045°, que son unos 5 km: suficiente para sacar
+   un punto de su propia comuna. Se vio en vivo con DEMARIA CD SANTIAGO, que
+   el catálogo ubica en Quilicura y el mapa dibujaba en Quinta Normal — el
+   mapa contradecía su propia etiqueta. Bajado a 0.008° (unos 400 m de
+   dispersión), que separa lo suficiente para que no se apilen sin mentir
+   sobre la comuna. */
+var CAT_JITTER_GRADOS = 0.008;
 function catJitter(seed){
   var h = 0;
   for(var i=0; i<seed.length; i++){ h = (h*31 + seed.charCodeAt(i)) >>> 0; }
   var a = ((h%1000)/1000 - 0.5), b = (((h>>10)%1000)/1000 - 0.5);
-  return [a*0.045, b*0.045];
+  return [a*CAT_JITTER_GRADOS, b*CAT_JITTER_GRADOS];
 }
 
 /* La comuna viene dentro de la propia dirección que entrega el GPS:
@@ -131,9 +155,12 @@ function resolverCoords(puntoOriginal){
       }
       if(bs >= 0.6) r = RECINTO_IDX[best];
     }
-    if(r && COMUNA_CENT[catNorm(r.c)]){
+    if(r && COORD_RECINTO[r.k]){
+      /* Dirección geocodificada: ubicación real, sin jitter */
+      res = {coords: COORD_RECINTO[r.k].slice(), comuna:catNorm(r.c), zona:r.z||null, fuente:'direccion'};
+    } else if(r && COMUNA_CENT[catNorm(r.c)]){
       var c = COMUNA_CENT[catNorm(r.c)], j = catJitter(n);
-      res = {coords:[c[0]+j[0], c[1]+j[1]], comuna:catNorm(r.c), zona:r.z||null, fuente:'recinto'};
+      res = {coords:[c[0]+j[0], c[1]+j[1]], comuna:catNorm(r.c), zona:r.z||null, fuente:'comuna'};
     }
   }
 
@@ -142,7 +169,7 @@ function resolverCoords(puntoOriginal){
     var com = comunaDeDireccion(punto);
     if(com && COMUNA_CENT[com]){
       var c2 = COMUNA_CENT[com], j2 = catJitter(n);
-      res = {coords:[c2[0]+j2[0], c2[1]+j2[1]], comuna:com, zona:null, fuente:'direccion'};
+      res = {coords:[c2[0]+j2[0], c2[1]+j2[1]], comuna:com, zona:null, fuente:'comuna'};
     }
   }
 

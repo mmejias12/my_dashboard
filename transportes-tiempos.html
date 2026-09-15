@@ -7,8 +7,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<!-- Mapa: misma versión de deck.gl que ya usa mapa-retiros.html -->
-<script src="https://cdn.jsdelivr.net/npm/deck.gl@8.9.35/dist.min.js"></script>
 <!-- Catálogo de recintos y centroides, compartido con el mapa de Log. Inversa -->
 <script src="recintos-catalogo.js"></script>
 <style>
@@ -704,16 +702,12 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
           <div class="card-title"><span class="card-title-dot" style="background:var(--green)"></span>Dónde está la flota — distribución del tiempo</div>
           <div class="cbar-end">
             <div class="a11y-grp" style="padding:2px 3px">
-              <button class="a11y-btn sm" id="mv-stgo" onclick="mapaVista('stgo')">Santiago</button>
-              <button class="a11y-btn sm" id="mv-chile" onclick="mapaVista('chile')">Chile</button>
+              <button class="a11y-btn sm" id="mm-vol" onclick="mapaModoSet('volumen')" title="Dónde se concentra el tiempo de la flota">Volumen</button>
+              <button class="a11y-btn sm" id="mm-dem" onclick="mapaModoSet('demora')" title="Dónde nos hacen esperar más por visita">Demora</button>
             </div>
             <div class="a11y-grp" style="padding:2px 3px">
               <button class="a11y-btn sm" id="mg-punto" onclick="mapaAgrup('punto')">Por punto</button>
               <button class="a11y-btn sm" id="mg-comuna" onclick="mapaAgrup('comuna')">Por comuna</button>
-            </div>
-            <div class="a11y-grp" style="padding:2px 3px">
-              <button class="a11y-btn sm" id="mm-min" onclick="mapaMetrica('min')">Minutos</button>
-              <button class="a11y-btn sm" id="mm-vis" onclick="mapaMetrica('vis')">Visitas</button>
             </div>
             <select class="sinput" id="mapa-placa" style="width:180px" onchange="renderMapa()">
               <option value="all">Toda la flota</option>
@@ -722,18 +716,8 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
         </div>
         <div class="card-body">
           <div id="mapa-chips" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"></div>
-          <div style="position:relative;height:560px;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:#06070c">
-            <canvas id="deck-canvas" style="width:100%;height:100%"></canvas>
-            <div id="mapa-tip" style="position:absolute;pointer-events:none;display:none;background:var(--s2);border:1px solid var(--border-hi);border-radius:8px;padding:8px 11px;font-size:11.5px;color:var(--t1);box-shadow:0 8px 24px rgba(0,0,0,.5);max-width:280px;z-index:5"></div>
-            <div style="position:absolute;left:10px;bottom:8px;display:flex;gap:4px;z-index:4">
-              <button class="a11y-btn sm" onclick="mapaBase('dark')" style="background:var(--s2);border-color:var(--border)">Oscuro</button>
-              <button class="a11y-btn sm" onclick="mapaBase('osm')" style="background:var(--s2);border-color:var(--border)">Calles</button>
-              <button class="a11y-btn sm" onclick="mapaBase('sat')" style="background:var(--s2);border-color:var(--border)">Satélite</button>
-              <button class="a11y-btn sm" onclick="mapaBase('none')" style="background:var(--s2);border-color:var(--border)">Sin mapa</button>
-            </div>
-            <div id="mapa-attrib" style="position:absolute;right:8px;bottom:8px;font-size:9.5px;color:#8b93ad;background:rgba(0,0,0,.45);padding:2px 6px;border-radius:4px;z-index:4"></div>
-            <div id="mapa-aviso" style="position:absolute;top:10px;left:10px;display:none;background:var(--amber-d);border:1px solid var(--amber);color:var(--amber);border-radius:8px;padding:8px 12px;font-size:11.5px;z-index:6"></div>
-          </div>
+          <div id="mapa-canvas" style="height:min(62vh,540px);border:1px solid var(--border);border-radius:10px;background:var(--s3);z-index:0"></div>
+          <div id="mapa-leyenda" style="display:flex;flex-wrap:wrap;align-items:center;gap:2px;font-size:11px;color:var(--t2);margin-top:8px"></div>
           <div id="mapa-detalle" style="margin-top:12px"></div>
         </div>
       </div>
@@ -2872,110 +2856,73 @@ async function renderRecorrido(){
   }).join('');
 }
 /* ══════════════════════════════════════════════════════════════════════
-   MAPA — dónde está la flota
+   MAPA DE LA FLOTA (Leaflet)
+
+   Primero se hizo con columnas 3D y no servía: unos tubos de colores sobre
+   un fondo negro no dicen nada al que tiene que tomar una decisión. Se
+   rehizo con el mismo enfoque del mapa de asistencia — mapa de calles
+   plano, burbujas, tooltip al pasar el mouse — que es legible de inmediato.
 
    Las coordenadas NO vienen del GPS: el API entrega el nombre de la
    geocerca y nada más. Salen de recintos-catalogo.js, que resuelve en tres
-   pasos — base propia, recinto del catálogo, o la comuna escrita dentro de
-   la propia dirección que entrega el GPS. Por eso son centroides de comuna
-   con jitter, no la ubicación exacta del camión: el mapa responde "cómo se
-   reparte el tiempo de la flota", no "en qué esquina estuvo".
+   pasos: base propia, recinto del catálogo, o la comuna escrita dentro de
+   la propia dirección. Son centroides de comuna con jitter, así que el mapa
+   responde "cómo se reparte el tiempo de la flota", no "en qué esquina
+   estuvo el camión".
 
-   Lo que no se puede ubicar NO se esconde: sale contado en un chip y
-   listado abajo, que es como el catálogo se va completando.
+   Dos modos, porque son dos preguntas distintas:
+   · VOLUMEN  — tamaño = tiempo total. Dónde se concentra la operación.
+   · DEMORA   — color = minutos promedio por visita. Dónde nos hacen esperar.
+     Este es el que encuentra los San Luis: puntos chicos en volumen pero
+     que se comen media jornada cada vez que se va.
    ══════════════════════════════════════════════════════════════════════ */
-let deckInst = null, mapaBaseActual = 'dark', mapaFallos = 0;
-let mapaVistaActual = 'stgo', mapaAgrupActual = 'punto', mapaMetricaActual = 'min';
+let mapaL = null, capaMapa = null, capaBase = null;
+let mapaModo = 'volumen';        // 'volumen' | 'demora'
+let mapaAgrupActual = 'punto';   // 'punto' | 'comuna'
 let MAPA_PUNTOS = [], MAPA_SIN_UBICAR = [], MAPA_FUERA = {n:0, min:0};
 
-const MAPA_BASES = {
-  dark:{nombre:'Oscuro', url:'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', attr:'Mapa base © Esri', maxZoom:16, velo:0},
-  /* NO usar tile.openstreetmap.org: devuelve 403 por política de uso. Esri sí. */
-  osm: {nombre:'Calles', url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', attr:'Mapa base © Esri, HERE, Garmin, OpenStreetMap contributors', maxZoom:18, velo:135},
-  sat: {nombre:'Satélite', url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr:'Imágenes © Esri, Maxar, Earthstar Geographics', maxZoom:18, velo:60},
-  none:{nombre:'Sin mapa', url:null, attr:'', maxZoom:16, velo:0}
-};
-const VISTA_STGO  = {longitude:-70.70, latitude:-33.47, zoom:9.6, pitch:52, bearing:-8};
-const VISTA_CHILE = {longitude:-71.20, latitude:-35.20, zoom:5.4, pitch:45, bearing:-10};
-
-/* Camión del mapa: SVG propio embebido, para no depender de que la fuente
-   del equipo tenga el emoji. */
-const ICONO_CAMION = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDY0IDQwIj48ZyBmaWxsPSJub25lIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMyIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHJlY3QgeD0iMyIgeT0iOCIgd2lkdGg9IjM0IiBoZWlnaHQ9IjE5IiByeD0iMiIgZmlsbD0iI2ZmZmZmZiIgZmlsbC1vcGFjaXR5PSIwLjkyIi8+PHBhdGggZD0iTTM3IDE0aDExbDggOHY1SDM3eiIgZmlsbD0iI2ZmZmZmZiIgZmlsbC1vcGFjaXR5PSIwLjkyIi8+PC9nPjxjaXJjbGUgY3g9IjE1IiBjeT0iMzAiIHI9IjUiIGZpbGw9IiMxYTFjMjgiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLXdpZHRoPSIyLjUiLz48Y2lyY2xlIGN4PSI0NiIgY3k9IjMwIiByPSI1IiBmaWxsPSIjMWExYzI4IiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMi41Ii8+PC9zdmc+';
-
 const COLOR_TIPO = {
-  'CD Retail':   [75,141,248],
-  'Sala Retail': [30,201,106],
-  'Cliente':     [244,168,54],
-  'REDTEC':      [45,212,212],
-  'Sin geocerca':[155,125,250]
+  'CD Retail':   '#4b8df8',
+  'Sala Retail': '#1ec96a',
+  'Cliente':     '#f4a836',
+  'REDTEC':      '#2dd4d4',
+  'Sin geocerca':'#9b7dfa'
 };
+/* Rampa de demora: del verde tranquilo al rojo. El color nunca va solo —
+   el tamaño y la etiqueta dicen lo mismo, para que no dependa de distinguir
+   tonos. */
+const RAMPA_DEMORA = ['#1ec96a','#a3c936','#f4c430','#f08a24','#e5484d'];
 
-function hayDeck(){ return typeof deck !== 'undefined' && typeof resolverCoords === 'function'; }
-
-function mapaBase(b){
-  if(!MAPA_BASES[b]) return;
-  mapaBaseActual = b; mapaFallos = 0;
-  try{ localStorage.setItem('tt_mapa_base', b); }catch(e){}
-  document.getElementById('mapa-attrib').textContent = MAPA_BASES[b].attr;
-  document.getElementById('mapa-aviso').style.display = 'none';
-  if(deckInst) pintarCapas();
+function cargarLeaflet(){
+  if(window.L) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
+    document.head.appendChild(css);
+    const js = document.createElement('script');
+    js.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+    js.onload = resolve;
+    js.onerror = () => reject(new Error('No se pudo cargar Leaflet'));
+    document.head.appendChild(js);
+  });
 }
-function mapaVista(v){ mapaVistaActual = v; if(deckInst) deckInst.setProps({initialViewState: Object.assign({}, v==='stgo'?VISTA_STGO:VISTA_CHILE, {transitionDuration:700})}); renderMapa(); }
+
+function mapaModoSet(m){ mapaModo = m; renderMapa(); }
 function mapaAgrup(a){ mapaAgrupActual = a; renderMapa(); }
-function mapaMetrica(m){ mapaMetricaActual = m; renderMapa(); }
-
-function initDeck(){
-  if(deckInst || !hayDeck()) return;
-  deckInst = new deck.Deck({
-    canvas:'deck-canvas', width:'100%', height:'100%',
-    initialViewState: mapaVistaActual==='stgo' ? VISTA_STGO : VISTA_CHILE,
-    controller:true,
-    onViewStateChange: o => deckInst.setProps({viewState:o.viewState}),
-    views:[new deck.MapView({repeat:false})],
-    layers:[],
-    _typedArrayManagerProps:{overAlloc:1, poolSize:0}
-  });
-}
-
-function capaTeselas(){
-  const cfg = MAPA_BASES[mapaBaseActual];
-  if(!cfg.url) return null;
-  return new deck.TileLayer({
-    id:'tiles-'+mapaBaseActual, data:cfg.url, minZoom:0, maxZoom:cfg.maxZoom, tileSize:256,
-    onTileError: () => {
-      if(++mapaFallos === 6){
-        const a = document.getElementById('mapa-aviso');
-        a.textContent = 'El mapa base no respondió. Se muestran sólo los datos.';
-        a.style.display = 'block';
-        mapaBase('none');
-      }
-    },
-    renderSubLayers: props => {
-      const b = props.tile.bbox;
-      return new deck.BitmapLayer(props, {data:null, image:props.data, bounds:[b.west,b.south,b.east,b.north]});
-    }
-  });
-}
-function capaVelo(){
-  const v = MAPA_BASES[mapaBaseActual].velo;
-  if(!v) return null;
-  return new deck.SolidPolygonLayer({id:'velo', data:[[[-180,-85],[180,-85],[180,85],[-180,85]]],
-    getPolygon:d=>d, getFillColor:[8,10,17,v], stroked:false, pickable:false});
-}
 
 function construirPuntos(){
   const placa = (document.getElementById('mapa-placa')||{}).value || 'all';
-  // visita = misma placa + punto + día (igual criterio que el resto del informe)
+  // visita = misma placa + punto + día (mismo criterio que el resto del informe)
   const vm = {};
   DB.filter(r => placa==='all' || r.placa===placa).forEach(r => {
     const k = r.placa+'|'+r.punto+'|'+r.fecha;
     if(!vm[k]) vm[k] = {placa:r.placa, punto:r.punto, tipo:r.tipo, fecha:r.fecha, min:0};
     vm[k].min += r.minutos;
   });
-  const acc = {}; MAPA_SIN_UBICAR = [];
-  const sinU = {};
+  const acc = {}, sinU = {};
   Object.values(vm).forEach(v => {
-    const geo = resolverCoords(v.punto);
+    const geo = (typeof resolverCoords === 'function') ? resolverCoords(v.punto) : null;
     if(!geo){ sinU[v.punto] = (sinU[v.punto]||0) + v.min; return; }
     const clave = mapaAgrupActual==='comuna' ? ('C|'+geo.comuna) : ('P|'+v.punto);
     if(!acc[clave]) acc[clave] = {
@@ -2987,116 +2934,113 @@ function construirPuntos(){
     const a = acc[clave];
     a.min += v.min; a.vis += 1;
     a.placas.add(v.placa); a.puntos.add(v.punto); a.dias.add(v.fecha);
-    if(mapaAgrupActual==='comuna' && a.tipo !== v.tipo && v.tipo !== 'REDTEC') a.tipo = a.tipo || v.tipo;
   });
   MAPA_SIN_UBICAR = Object.entries(sinU).sort((a,b)=>b[1]-a[1]);
-  const todos = Object.values(acc);
-  MAPA_PUNTOS = todos.filter(p => mapaVistaActual!=='stgo' || esSantiago(p.coords));
-  /* Lo que queda fuera del encuadre NO desaparece en silencio: se cuenta y se
-     dice, porque si no el total del mapa deja de cuadrar con el del informe. */
+  const todos = Object.values(acc).map(p => Object.assign(p, {prom: Math.round(p.min/p.vis)}));
+  MAPA_PUNTOS = todos.filter(p => esSantiago(p.coords));
+  /* Lo que queda fuera del encuadre NO desaparece en silencio: si no, el
+     total del mapa deja de cuadrar con el del informe. */
   const fuera = todos.filter(p => MAPA_PUNTOS.indexOf(p) === -1);
   MAPA_FUERA = {n: fuera.length, min: fuera.reduce((s,p)=>s+p.min,0)};
   return MAPA_PUNTOS;
 }
 
-function pintarCapas(){
-  if(!deckInst) return;
-  const base = [capaTeselas(), capaVelo()].filter(Boolean);
-  const pts = MAPA_PUNTOS;
-  const val = p => mapaMetricaActual==='min' ? p.min : p.vis;
-  const maxV = Math.max(1, ...pts.map(val));
-  const esComuna = mapaAgrupActual==='comuna';
-  const radio = mapaVistaActual==='stgo' ? (esComuna ? 2400 : 900) : 6000;
-  const elevMax = mapaVistaActual==='stgo' ? (esComuna ? 85000 : 52000) : 150000;
-
-  const cols = new deck.ColumnLayer({
-    id:'cols', data:pts, diskResolution:esComuna?6:18, radius:radio, extruded:true, pickable:true,
-    getPosition:d=>d.coords,
-    getElevation:d=>Math.max(400, (val(d)/maxV)*elevMax),
-    getFillColor:d=>{const c=COLOR_TIPO[d.tipo]||[139,147,173]; return [c[0],c[1],c[2],200];},
-    getLineColor:d=>{const c=COLOR_TIPO[d.tipo]||[139,147,173]; return [c[0],c[1],c[2],255];},
-    lineWidthMinPixels:1,
-    onHover: info => mostrarTip(info),
-    onClick: info => { if(info && info.object) detallePuntoMapa(info.object); },
-    updateTriggers:{getElevation:[mapaMetricaActual,mapaAgrupActual,mapaVistaActual], getFillColor:[mapaAgrupActual]},
-    transitions:{getElevation:{duration:450, type:'spring'}}
-  });
-
-  const brillo = new deck.ScatterplotLayer({
-    id:'brillo', data:pts, pickable:false, opacity:.12, stroked:false, filled:true,
-    radiusMinPixels:5, radiusMaxPixels:60,
-    getPosition:d=>d.coords,
-    getRadius:d=>Math.max(radio*1.7, (val(d)/maxV)*(radio*13)),
-    getFillColor:d=>{const c=COLOR_TIPO[d.tipo]||[139,147,173]; return [c[0],c[1],c[2],60];},
-    updateTriggers:{getRadius:[mapaMetricaActual,mapaAgrupActual,mapaVistaActual]}
-  });
-
-  /* El camión sobre la columna: marca dónde estuvo parado de verdad.
-     Va como IconLayer con un SVG propio en data URI y NO como emoji en un
-     TextLayer: el emoji depende de que la fuente del equipo lo tenga, y si no
-     lo tiene deck.gl dibuja un cuadrito vacío sobre cada columna. */
-  const umbral = maxV*0.10;
-  const camiones = new deck.IconLayer({
-    id:'camiones', data:pts.filter(p => val(p) >= umbral), pickable:false,
-    getPosition:d=>[d.coords[0], d.coords[1], Math.max(400,(val(d)/maxV)*elevMax) + 1800],
-    getIcon:()=>({url:ICONO_CAMION, width:64, height:40, anchorY:40}),
-    getSize:26, sizeUnits:'pixels',
-    updateTriggers:{getPosition:[mapaMetricaActual,mapaAgrupActual,mapaVistaActual]}
-  });
-
-  const etiquetas = new deck.TextLayer({
-    id:'labels', data:pts.filter(p => val(p) >= maxV*0.14), pickable:false,
-    getPosition:d=>[d.coords[0], d.coords[1], Math.max(400,(val(d)/maxV)*elevMax) + 5200],
-    getText:d=>{
-      const v = val(d);
-      const txt = mapaMetricaActual==='min' ? fmtMins(v) : (v+' vis.');
-      return (esComuna ? d.nombre+' · ' : '') + txt;
-    },
-    getSize:12, getColor:[255,255,255,225], getTextAnchor:'middle', getAlignmentBaseline:'bottom',
-    fontFamily:"'DM Mono', monospace", fontWeight:600,
-    updateTriggers:{getText:[mapaMetricaActual,mapaAgrupActual], getPosition:[mapaMetricaActual,mapaAgrupActual,mapaVistaActual]}
-  });
-
-  deckInst.setProps({layers: base.concat([brillo, cols, camiones, etiquetas])});
+function colorDemora(prom, cortes){
+  for(let i=cortes.length-1; i>=0; i--) if(prom >= cortes[i]) return RAMPA_DEMORA[i+1] || RAMPA_DEMORA[RAMPA_DEMORA.length-1];
+  return RAMPA_DEMORA[0];
 }
 
-function mostrarTip(info){
-  const el = document.getElementById('mapa-tip');
-  if(!el) return;
-  if(!info || !info.object){ el.style.display='none'; return; }
-  const d = info.object;
-  el.style.display = 'block';
-  el.style.left = (info.x + 14) + 'px';
-  el.style.top  = (info.y + 14) + 'px';
-  el.innerHTML = `<div style="font-weight:600;margin-bottom:3px">🚚 ${escTT(d.nombre)}</div>
-    <div style="color:var(--t2);font-size:11px">${escTT(d.comuna||'')}${d.zona?' · zona '+d.zona:''}</div>
-    <div style="margin-top:4px;font-family:'DM Mono',monospace">${fmtMins(d.min)} · ${d.vis} visita(s)</div>
-    <div style="color:var(--t3);font-size:10.5px;margin-top:3px">${d.placas.size} camión(es) · promedio ${fmtMins(Math.round(d.min/d.vis))}</div>
-    <div style="color:var(--t3);font-size:10px;margin-top:4px">Clic para ver qué hizo ahí</div>`;
+function pintarMapa(){
+  if(!mapaL || !window.L) return;
+  capaMapa.clearLayers();
+  const pts = MAPA_PUNTOS;
+  if(!pts.length) return;
+
+  const maxMin = Math.max(1, ...pts.map(p=>p.min));
+  const maxVis = Math.max(1, ...pts.map(p=>p.vis));
+  /* Cortes de demora autocalibrados sobre los propios datos del período:
+     los cuartiles de la permanencia promedio. Nada de umbrales inventados. */
+  const proms = pts.map(p=>p.prom).sort((a,b)=>a-b);
+  const q = f => proms[Math.min(proms.length-1, Math.floor(proms.length*f))];
+  const cortes = [q(.25), q(.5), q(.75), q(.9)];
+
+  const bounds = [];
+  /* De mayor a menor: así las burbujas chicas quedan ARRIBA y no se pierden
+     debajo de una grande (varios recintos comparten el centroide de comuna). */
+  const orden = pts.slice().sort((a,b) => (mapaModo==='volumen' ? b.min-a.min : b.vis-a.vis));
+  orden.forEach(p => {
+    const esVol = mapaModo === 'volumen';
+    // El área (no el radio) representa el valor: raíz cuadrada
+    const base = esVol ? Math.sqrt(p.min/maxMin) : Math.sqrt(p.vis/maxVis);
+    const r = 7 + base*26;
+    const col = esVol ? (COLOR_TIPO[p.tipo] || '#8b93ad') : colorDemora(p.prom, cortes);
+    const esBase = p.fuente === 'base';
+
+    const m = L.circleMarker([p.coords[1], p.coords[0]], {
+      radius: r,
+      color: esBase ? '#ffffff' : '#0b0d15',
+      weight: esBase ? 2.5 : 1.2,
+      fillColor: col,
+      fillOpacity: esVol ? .72 : .82
+    }).addTo(capaMapa);
+
+    m.bindTooltip(
+      '<b>'+escTT(p.nombre)+'</b><br>'
+      + '<span style="color:#555">'+escTT(p.comuna||'')+(p.zona?' · zona '+p.zona:'')+'</span><br>'
+      + fmtMins(p.min)+' en '+p.vis+' visita(s) · promedio <b>'+fmtMins(p.prom)+'</b>',
+      {direction:'top', offset:[0,-4], opacity:.96}
+    );
+    m.on('click', () => detallePuntoMapa(p));
+    bounds.push([p.coords[1], p.coords[0]]);
+
+    // La base lleva rótulo fijo: es el ancla para leer todo lo demás.
+    // El rótulo va DEBAJO del círculo, desplazado por su propio radio, para
+    // que no lo tape cuando la burbuja es grande.
+    if(esBase){
+      L.marker([p.coords[1], p.coords[0]], {
+        interactive:false,
+        icon: L.divIcon({className:'', iconSize:[74,18], iconAnchor:[37, -Math.round(r)-4],
+          html:'<div style="background:#0b0d15;color:#fff;border:1px solid #2dd4d4;border-radius:5px;font:600 10px/16px \'DM Sans\',sans-serif;text-align:center;white-space:nowrap">BASE</div>'})
+      }).addTo(capaMapa);
+    }
+  });
+
+  if(bounds.length) mapaL.fitBounds(bounds, {padding:[40,40], maxZoom:12});
+
+  // Leyenda
+  const leg = document.getElementById('mapa-leyenda');
+  if(mapaModo === 'volumen'){
+    leg.innerHTML = '<span style="color:var(--t3);margin-right:6px">Tamaño = tiempo total · Color =</span>' +
+      Object.entries(COLOR_TIPO).map(([t,c]) =>
+        `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:10px"><span style="width:10px;height:10px;border-radius:50%;background:${c};display:inline-block"></span>${t}</span>`).join('');
+  } else {
+    const et = ['hasta '+fmtMins(cortes[0]), fmtMins(cortes[0])+'–'+fmtMins(cortes[1]), fmtMins(cortes[1])+'–'+fmtMins(cortes[2]), fmtMins(cortes[2])+'–'+fmtMins(cortes[3]), 'más de '+fmtMins(cortes[3])];
+    leg.innerHTML = '<span style="color:var(--t3);margin-right:6px">Tamaño = nº de visitas · Color = demora promedio</span>' +
+      RAMPA_DEMORA.map((c,i) =>
+        `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:10px"><span style="width:10px;height:10px;border-radius:2px;background:${c};display:inline-block"></span>${et[i]}</span>`).join('');
+  }
 }
 
 function detallePuntoMapa(d){
   const cont = document.getElementById('mapa-detalle');
-  const puntos = [...d.puntos];
-  // Operaciones de RDTOut en esos puntos, dentro de los días con visita
   const ops = [];
-  puntos.forEach(p => {
+  [...d.puntos].forEach(p => {
     [...d.dias].forEach(dia => {
       const x = opsDeVisita(p, dia);
-      x.ops.forEach(o => ops.push({dia, punto:p, o}));
+      x.ops.forEach(o => ops.push(o));
     });
   });
   const porFamilia = {};
-  ops.forEach(({o}) => {
+  ops.forEach(o => {
     const f = familiaOp(o.operacion).f;
     if(!porFamilia[f]) porFamilia[f] = {n:0, pallets:0};
     porFamilia[f].n++; porFamilia[f].pallets += (+o.cantidadConfirmada||0);
   });
   cont.innerHTML = `<div class="card" style="background:var(--s1)">
-    <div class="card-hdr">
+    <div class="card-hdr" style="flex-wrap:wrap;gap:8px">
       <div class="card-title">🚚 ${escTT(d.nombre)} <span style="color:var(--t2);font-size:11.5px;margin-left:6px">${escTT(d.comuna||'')}</span></div>
       <div class="cbar-end" style="font-size:11px;color:var(--t2)">
-        ${fmtMins(d.min)} · ${d.vis} visitas · promedio ${fmtMins(Math.round(d.min/d.vis))} · ${d.placas.size} camión(es)
+        ${fmtMins(d.min)} · ${d.vis} visitas · promedio <b style="color:var(--t1)">${fmtMins(d.prom)}</b> · ${d.placas.size} camión(es)
         <button class="a11y-btn sm" onclick="document.getElementById('mapa-detalle').innerHTML=''" style="margin-left:8px">×</button>
       </div>
     </div>
@@ -3121,11 +3065,11 @@ function detallePuntoMapa(d){
 async function renderMapa(){
   const chips = document.getElementById('mapa-chips');
   if(!DB.length){ chips.innerHTML = '<span style="color:var(--t3);font-size:12px">Carga un período para ver el mapa</span>'; return; }
-  if(!hayDeck()){
-    chips.innerHTML = '<span style="color:var(--amber);font-size:12px">⚠ No se pudo cargar la librería del mapa (deck.gl) o el catálogo de recintos. El resto del informe funciona igual.</span>';
+  if(typeof resolverCoords !== 'function'){
+    chips.innerHTML = '<span style="color:var(--amber);font-size:12px">⚠ Falta recintos-catalogo.js: sin él no hay coordenadas que dibujar.</span>';
     return;
   }
-  // Selector de placas
+
   const sel = document.getElementById('mapa-placa');
   const placas = [...new Set(DB.map(r=>r.placa))].sort();
   const prev = sel.value;
@@ -3133,33 +3077,52 @@ async function renderMapa(){
     placas.map(p=>`<option value="${p}">${p} — ${escTT(FLOTA_NOMBRES[p]||'')}</option>`).join('');
   if(prev && (prev==='all' || placas.indexOf(prev)!==-1)) sel.value = prev;
 
-  ['stgo','chile'].forEach(v=>{const b=document.getElementById('mv-'+v); if(b) b.style.cssText = mapaVistaActual===v?'background:var(--blue-d);color:var(--blue);border-color:var(--blue)':'';});
-  ['punto','comuna'].forEach(a=>{const b=document.getElementById('mg-'+a); if(b) b.style.cssText = mapaAgrupActual===a?'background:var(--blue-d);color:var(--blue);border-color:var(--blue)':'';});
-  [['min','mm-min'],['vis','mm-vis']].forEach(([m,id])=>{const b=document.getElementById(id); if(b) b.style.cssText = mapaMetricaActual===m?'background:var(--blue-d);color:var(--blue);border-color:var(--blue)':'';});
+  const marcar = (ids, activo) => ids.forEach(([v,id]) => {
+    const b = document.getElementById(id);
+    if(b) b.style.cssText = (v===activo) ? 'background:var(--blue-d);color:var(--blue);border-color:var(--blue)' : '';
+  });
+  marcar([['volumen','mm-vol'],['demora','mm-dem']], mapaModo);
+  marcar([['punto','mg-punto'],['comuna','mg-comuna']], mapaAgrupActual);
 
-  if(OPS_ESTADO === 'sin_cargar') await cargarOps();
-  initDeck();
+  if(OPS_ESTADO === 'sin_cargar') cargarOps();   // sin await: el mapa no depende del cruce
+
+  try{ await cargarLeaflet(); }
+  catch(e){
+    chips.innerHTML = '<span style="color:var(--amber);font-size:12px">⚠ No se pudo cargar el mapa (CDN bloqueado). El resto del informe funciona igual.</span>';
+    return;
+  }
+  if(!mapaL){
+    mapaL = L.map('mapa-canvas', {zoomControl:true, attributionControl:true, scrollWheelZoom:true});
+    /* Esri sirve sin API key. OSM bloquea con 403 y CARTO exige llave y
+       estampa las teselas — ya pasó en mapa-retiros. Ojo: {z}/{y}/{x}. */
+    capaBase = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+      {maxZoom:19, attribution:'Tiles © Esri'}).addTo(mapaL);
+    capaMapa = L.layerGroup().addTo(mapaL);
+    mapaL.setView([-33.47, -70.70], 10);
+  }
+  setTimeout(() => mapaL.invalidateSize(), 50);
+
   construirPuntos();
-  pintarCapas();
-  document.getElementById('mapa-attrib').textContent = MAPA_BASES[mapaBaseActual].attr;
+  pintarMapa();
 
   const minUbic = MAPA_PUNTOS.reduce((s,p)=>s+p.min,0);
   const minSin  = MAPA_SIN_UBICAR.reduce((s,[,m])=>s+m,0);
   const chip = (t,c) => `<span style="background:${c||'var(--s3)'};border:1px solid var(--border);border-radius:20px;padding:4px 11px;font-size:11px;color:var(--t2)">${t}</span>`;
+  const lento = MAPA_PUNTOS.slice().sort((a,b)=>b.prom-a.prom)[0];
   chips.innerHTML = [
-    chip(`<b style="color:var(--t1)">${MAPA_PUNTOS.length}</b> ${mapaAgrupActual==='comuna'?'comunas':'puntos'} en el mapa`),
-    chip(`<b style="color:var(--t1)">${fmtMins(minUbic)}</b> ubicados`),
+    chip(`<b style="color:var(--t1)">${MAPA_PUNTOS.length}</b> ${mapaAgrupActual==='comuna'?'comunas':'puntos'} en Santiago`),
+    chip(`<b style="color:var(--t1)">${fmtMins(minUbic)}</b> de flota detenida`),
+    lento ? chip(`más lento: <b style="color:var(--amber)">${escTT(lento.nombre)}</b> · ${fmtMins(lento.prom)} por visita`, 'var(--amber-d)') : '',
     MAPA_SIN_UBICAR.length ? chip(`<b style="color:var(--amber)">${MAPA_SIN_UBICAR.length}</b> sin ubicar · ${fmtMins(minSin)}`, 'var(--amber-d)') : '',
-    MAPA_FUERA.n ? chip(`${MAPA_FUERA.n} fuera de Santiago · ${fmtMins(MAPA_FUERA.min)}`) : '',
-    chip('centroides de comuna — distribución, no ubicación exacta')
+    MAPA_FUERA.n ? chip(`${MAPA_FUERA.n} fuera de Santiago · ${fmtMins(MAPA_FUERA.min)}`) : ''
   ].filter(Boolean).join('');
 
-  if(MAPA_SIN_UBICAR.length){
+  if(MAPA_SIN_UBICAR.length && !document.getElementById('mapa-detalle').innerHTML){
     const top = MAPA_SIN_UBICAR.slice(0,8).map(([p,m])=>`<li style="margin:2px 0">${escTT(p)} <span style="color:var(--t3)">— ${fmtMins(m)}</span></li>`).join('');
     document.getElementById('mapa-detalle').innerHTML = `<div class="card" style="background:var(--s1)">
       <div class="card-hdr"><div class="card-title"><span class="card-title-dot" style="background:var(--amber)"></span>Puntos sin ubicar (${MAPA_SIN_UBICAR.length})</div></div>
       <div class="card-body" style="font-size:12px;color:var(--t2)">
-        <div style="margin-bottom:8px">No están en el catálogo de recintos y su nombre no trae comuna, así que no pueden dibujarse. Agregarlos a <code style="font-family:'DM Mono',monospace">recintos-catalogo.js</code> los incorpora al mapa y también al de Logística Inversa.</div>
+        <div style="margin-bottom:8px">No están en el catálogo de recintos y su nombre no trae comuna, así que no pueden dibujarse. Agregarlos a <code style="font-family:'DM Mono',monospace">recintos-catalogo.js</code> los incorpora a este mapa y también al de Logística Inversa.</div>
         <ul style="margin:0;padding-left:18px">${top}</ul>
       </div></div>`;
   }

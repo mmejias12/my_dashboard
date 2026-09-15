@@ -583,6 +583,7 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
       <div class="tab active" id="t-resumen" onclick="switchTab('resumen')">Resumen</div>
       <div class="tab" id="t-puntos" onclick="switchTab('puntos')">Por punto</div>
       <div class="tab" id="t-choferes" onclick="switchTab('choferes')">Por chofer</div>
+      <div class="tab" id="t-recorrido" onclick="switchTab('recorrido')">Recorrido del día</div>
       <div class="tab" id="t-detalle" onclick="switchTab('detalle')">Detalle completo</div>
       <div class="tab" id="t-tendencias" onclick="switchTab('tendencias')">Tendencias</div>
       <div class="tab" id="t-config" onclick="switchTab('config')" style="display:none">Configuración API</div>
@@ -691,6 +692,29 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
     </div>
 
     <!-- ===== TAB: DETALLE ===== -->
+    <!-- ===== TAB: RECORRIDO DEL DÍA (GPS × RDTOut) ===== -->
+    <div id="view-recorrido" style="display:none">
+      <div class="card">
+        <div class="card-hdr" style="flex-wrap:wrap;gap:10px">
+          <div class="card-title"><span class="card-title-dot" style="background:var(--cyan)"></span>Recorrido del día — dónde estuvo cada camión y qué hizo ahí</div>
+          <div class="cbar-end">
+            <div class="a11y-grp" style="padding:2px 3px">
+              <button class="a11y-btn sm" onclick="recDia(-1)" title="Día anterior">‹</button>
+              <span id="rec-fecha" style="font-family:'DM Mono',monospace;font-size:12px;color:var(--t1);padding:0 8px;min-width:96px;text-align:center">—</span>
+              <button class="a11y-btn sm" onclick="recDia(1)" title="Día siguiente">›</button>
+            </div>
+            <select class="sinput" id="rec-placa" style="width:190px" onchange="renderRecorrido()">
+              <option value="all">Todos los camiones</option>
+            </select>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="rec-chips" class="diag" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"></div>
+          <div id="rec-body"></div>
+        </div>
+      </div>
+    </div>
+
     <div id="view-detalle" style="display:none">
       <div class="card">
         <div class="card-hdr">
@@ -2508,9 +2532,303 @@ function paginar(dir){
 // ──────────────────────────────────────────────
 //  TABS
 // ──────────────────────────────────────────────
-const TABS = ['resumen','puntos','choferes','detalle','tendencias','config'];
+const TABS = ['resumen','puntos','choferes','recorrido','detalle','tendencias','config'];
+
+/* ══════════════════════════════════════════════════════════════════════
+   CRUCE GPS × RDTOut — "Recorrido del día"
+
+   El GPS dice DÓNDE estuvo el camión y CUÁNTO; RDTOut dice QUÉ hizo
+   (emisión / retiro / devolución / transferencia, cuántos pallets, para
+   qué cliente). Nadie los había juntado, y por eso el informe parecía
+   incompleto: tenía la mitad de la historia.
+
+   Cómo se unen, y por qué NO por patente: en RDTOut el campo `patente`
+   viene vacío en la enorme mayoría de las filas, así que es inservible
+   como llave. La llave real es NOMBRE DE RECINTO + DÍA: si el camión
+   estuvo en "ZWM11 CD WM EL PEÑON" el 21-ago y ese día hay una operación
+   cuya contraparte es ese mismo recinto, esa es la operación de esa
+   visita. Medido sobre agosto: el 91% de las geocercas con nombre tiene
+   equivalente en RDTOut y el 63% de las visitas encuentra su operación.
+
+   DOS LÍMITES QUE HAY QUE TENER PRESENTES:
+   1. /api/ops IGNORA el rango que se le pide: devuelve siempre la misma
+      ventana móvil (~32 días). Verificado pidiendo 2 días y 3 meses: la
+      respuesta es idéntica, 18.321 filas. Así que el cruce sólo existe
+      para los días dentro de esa ventana; para tener historia hay que
+      guardar un snapshot propio.
+   2. Si dos camiones visitan el mismo recinto el mismo día, las
+      operaciones de ese día son de los dos: se muestran como candidatas,
+      no se inventa a cuál corresponde cada una.
+   ══════════════════════════════════════════════════════════════════════ */
+
+let OPS_RDT = [];          // ventana completa que entrega el API
+let IDX_OPS = new Map();   // nombre normalizado -> [ops]
+let CLAVES_OPS = [];       // [{k, t:[tokens]}] para el match aproximado
+let PROM_PUNTO = {};       // punto -> minutos promedio en el período cargado
+let REC_FECHA = null;      // día que se está mirando
+let OPS_ESTADO = 'sin_cargar';
+
+/* Recintos cuyo nombre en el GPS no se parece al de RDTOut. Verificados
+   contra los nombres reales del API el 15-09-2026. Los marcados PROPUESTO
+   hay que confirmarlos con Transporte antes de darlos por buenos. */
+const ALIAS_RECINTO = {
+  'PRODUCTOS FERNANDEZ PZ':    'PRODUCTOS FERNANDEZ SA',
+  'PRODUCTOS FERNANDEZ P1':    'PRODUCTOS FERNANDEZ SA',
+  'PRODUCTOS FERNANDEZ P2':    'PRODUCTOS FERNANDEZ SA',
+  'PRODUCTOS FERNANDEZ FMP':   'PRODUCTOS FERNANDEZ SA',
+  'PF SANTIAGO PLANTA':        'PRODUCTOS FERNANDEZ SA',      // PROPUESTO
+  'CASTANO CD QULICURA':       'CASTANO QUILICURA',
+  'EMBOTELLADORA METROPOLITANA':'EMBOTELLADORA METROPOLITANA S.A.',
+  'EMBOTELLADORA EMSA COLBUN': 'EMBO. METROPOLITANA Colbun',
+  'MOLINERA HEREDIA LTDA.':    'HEREDIA MOLINOS SA'           // PROPUESTO
+};
+
+const normRec = s => String(s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
+  .replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+const STOP_REC = new Set(['CD','DE','LA','EL','LOS','LAS','SA','SPA','LTDA','LIMITADA','CHILE','PLANTA','BODEGA','SUCURSAL','S','A']);
+const toksRec = s => normRec(s).split(' ').filter(t => t && !STOP_REC.has(t) && t.length > 1);
+function jaccard(a,b){ const A=new Set(a),B=new Set(b); let i=0; A.forEach(x=>{if(B.has(x))i++;}); const u=A.size+B.size-i; return u?i/u:0; }
+
+/* La contraparte de una operación es el lado que NO es REDTEC */
+function contraparteOp(o){
+  const d = o.bodegaDestinoStr || '', g = o.bodegaOrigenStr || '';
+  return /REDTEC/i.test(d) ? g : d;
+}
+function diasDeOp(o){
+  return [o.fechaConfirmacion, o.fechaDespacho, o.fechaRequerida]
+    .map(f => String(f||'').slice(0,10)).filter(Boolean);
+}
+
+async function cargarOps(){
+  if(OPS_ESTADO === 'ok' || OPS_ESTADO === 'cargando') return;
+  OPS_ESTADO = 'cargando';
+  try{
+    const r = await fetch('/api/ops?desde=2026-01-01&hasta=2026-12-31', {signal: AbortSignal.timeout(60000)});
+    const j = await r.json();
+    const arr = Array.isArray(j) ? j : (j.data || j.items || j.result || []);
+    // Las anuladas no son un movimiento físico: no pueden explicar una parada
+    OPS_RDT = arr.filter(o => !/anulad/i.test(o.etapaOperacion || ''));
+    IDX_OPS = new Map();
+    OPS_RDT.forEach(o => {
+      const k = normRec(contraparteOp(o));
+      if(!k) return;
+      if(!IDX_OPS.has(k)) IDX_OPS.set(k, []);
+      IDX_OPS.get(k).push(o);
+    });
+    CLAVES_OPS = [...IDX_OPS.keys()].map(k => ({k, t: toksRec(k)}));
+    OPS_ESTADO = 'ok';
+  }catch(e){
+    console.warn('[cruce] no se pudo cargar RDTOut:', e.message);
+    OPS_ESTADO = 'error';
+  }
+}
+
+/* Devuelve las operaciones de RDTOut que explican una visita */
+const _cacheMatch = new Map();
+function opsDeVisita(punto, dia){
+  if(OPS_ESTADO !== 'ok') return {estado:'sin_rdtout', ops:[]};
+  const alias = ALIAS_RECINTO[punto] || ALIAS_RECINTO[String(punto).trim()];
+  const objetivo = alias || punto;
+  let clave = _cacheMatch.get(objetivo);
+  if(clave === undefined){
+    const exacta = normRec(objetivo);
+    if(IDX_OPS.has(exacta)) clave = exacta;
+    else {
+      const tp = toksRec(objetivo); let best = null, bs = 0;
+      CLAVES_OPS.forEach(c => { const s = jaccard(tp, c.t); if(s > bs){ bs = s; best = c.k; } });
+      clave = (bs >= 0.5) ? best : null;
+    }
+    _cacheMatch.set(objetivo, clave);
+  }
+  if(!clave) return {estado:'recinto_desconocido', ops:[]};
+  const hits = (IDX_OPS.get(clave) || []).filter(o => diasDeOp(o).indexOf(dia) !== -1);
+  if(!hits.length) return {estado:'sin_operacion', ops:[], recinto:clave};
+  return {estado: hits.length === 1 ? 'cruce' : 'cruce_multiple', ops:hits, recinto:clave};
+}
+
+function familiaOp(t){
+  const s = String(t||'').toLowerCase();
+  if(s.startsWith('emision')) return {f:'Emisión', c:'var(--blue)'};
+  if(s.startsWith('retiro')) return {f:'Retiro', c:'var(--green)'};
+  if(s.startsWith('devolucion')) return {f:'Devolución', c:'var(--amber)'};
+  if(s.startsWith('transferencia') || s.startsWith('trans')) return {f:'Transferencia', c:'var(--purple)'};
+  if(s.startsWith('relocalizacion')) return {f:'Relocalización', c:'var(--cyan)'};
+  if(s.startsWith('traspaso')) return {f:'Traspaso', c:'var(--cyan)'};
+  return {f: t || 'Otro', c:'var(--t3)'};
+}
+
+/* Promedio de permanencia por punto sobre TODO el período cargado: es el
+   patrón contra el que se compara cada visita ("se demoró más de lo normal
+   en este lugar"). Autocalibrado, sin estándares inventados. */
+function calcularPromedios(){
+  const acc = {};
+  const vm = {};
+  DB.forEach(r => {
+    const k = r.placa+'|'+r.punto+'|'+r.fecha;
+    if(!vm[k]) vm[k] = {punto:r.punto, min:0};
+    vm[k].min += r.minutos;
+  });
+  Object.values(vm).forEach(v => {
+    if(!acc[v.punto]) acc[v.punto] = {n:0, min:0};
+    acc[v.punto].n++; acc[v.punto].min += v.min;
+  });
+  PROM_PUNTO = {};
+  Object.entries(acc).forEach(([p,d]) => { PROM_PUNTO[p] = Math.round(d.min/d.n); });
+}
+
+function recDia(paso){
+  const dias = [...new Set(DB.map(r => r.fecha))].sort();
+  if(!dias.length) return;
+  let i = dias.indexOf(REC_FECHA);
+  if(i === -1) i = dias.length - 1;
+  i = Math.max(0, Math.min(dias.length-1, i + paso));
+  REC_FECHA = dias[i];
+  renderRecorrido();
+}
+
+async function renderRecorrido(){
+  const cont = document.getElementById('rec-body');
+  const chips = document.getElementById('rec-chips');
+  if(!cont) return;
+  if(!DB.length){ cont.innerHTML = '<div class="empty"><div class="empty-ico">🚚</div><div class="empty-sub">Carga un período para ver el recorrido</div></div>'; chips.innerHTML=''; return; }
+
+  const dias = [...new Set(DB.map(r => r.fecha))].sort();
+  if(!REC_FECHA || dias.indexOf(REC_FECHA) === -1) REC_FECHA = dias[dias.length-1];
+  document.getElementById('rec-fecha').textContent = REC_FECHA;
+
+  // Selector de placas
+  const sel = document.getElementById('rec-placa');
+  const placas = [...new Set(DB.map(r => r.placa))].sort();
+  const prev = sel.value;
+  sel.innerHTML = '<option value="all">Todos los camiones</option>' +
+    placas.map(p => `<option value="${p}">${p} — ${escTT(FLOTA_NOMBRES[p]||'')}</option>`).join('');
+  if(placas.indexOf(prev) !== -1 || prev === 'all') sel.value = prev;
+
+  if(OPS_ESTADO === 'sin_cargar'){
+    cont.innerHTML = '<div class="empty"><div class="empty-sub">Cruzando con RDTOut…</div></div>';
+    await cargarOps();
+  }
+  calcularPromedios();
+
+  const filtro = sel.value;
+  // Visitas del día (consolidadas por placa+punto)
+  const vm = {};
+  DB.filter(r => r.fecha === REC_FECHA && (filtro === 'all' || r.placa === filtro)).forEach(r => {
+    const k = r.placa+'|'+r.punto;
+    if(!vm[k]) vm[k] = {placa:r.placa, chofer:r.chofer, punto:r.punto, tipo:r.tipo, min:0, llegada:r.llegada, salida:r.salida};
+    vm[k].min += r.minutos;
+    if(r.llegada < vm[k].llegada) vm[k].llegada = r.llegada;
+    if(r.salida  > vm[k].salida)  vm[k].salida  = r.salida;
+  });
+  const visitas = Object.values(vm).sort((a,b) => a.llegada.localeCompare(b.llegada));
+
+  // Cruce
+  let nCruce=0, nMulti=0, nSinOp=0, nDesc=0, pallets=0;
+  visitas.forEach(v => {
+    v.x = opsDeVisita(v.punto, v.fecha || REC_FECHA);
+    if(v.x.estado==='cruce') nCruce++;
+    else if(v.x.estado==='cruce_multiple') nMulti++;
+    else if(v.x.estado==='sin_operacion') nSinOp++;
+    else if(v.x.estado==='recinto_desconocido') nDesc++;
+    v.x.ops.forEach(o => { pallets += (+o.cantidadConfirmada || 0); });
+  });
+
+  const chip = (txt, color) => `<span style="background:${color||'var(--s3)'};border:1px solid var(--border);border-radius:20px;padding:4px 11px;font-size:11px;color:var(--t2)">${txt}</span>`;
+  chips.innerHTML = [
+    chip(`<b style="color:var(--t1)">${visitas.length}</b> visitas`),
+    chip(`<b style="color:var(--green)">${nCruce+nMulti}</b> con operación en RDTOut`, 'var(--green-d)'),
+    nMulti ? chip(`${nMulti} con más de un candidato`, 'var(--amber-d)') : '',
+    nSinOp ? chip(`${nSinOp} sin operación ese día`, 'var(--amber-d)') : '',
+    nDesc ? chip(`${nDesc} recinto no identificado en RDTOut`) : '',
+    chip(`<b style="color:var(--t1)">${pallets.toLocaleString('es-CL')}</b> pallets confirmados`),
+    OPS_ESTADO==='ok' ? '' : chip('⚠ RDTOut no disponible', 'var(--red-d)')
+  ].filter(Boolean).join('');
+
+  if(!visitas.length){ cont.innerHTML = '<div class="empty"><div class="empty-sub">Sin paradas ese día</div></div>'; return; }
+
+  // Agrupar por camión
+  const porPlaca = {};
+  visitas.forEach(v => { (porPlaca[v.placa] = porPlaca[v.placa] || []).push(v); });
+
+  const H0 = 5, H1 = 23, SPAN = (H1-H0)*60;
+  const minDia = t => { const p = (String(t).split(' ')[1]||'0:0').split(':'); return (+p[0])*60 + (+p[1]); };
+  const hhmm = t => (String(t).split(' ')[1]||'').slice(0,5);
+
+  cont.innerHTML = Object.entries(porPlaca).map(([placa, vs]) => {
+    const chofer = vs[0].chofer || FLOTA_NOMBRES[placa] || placa;
+    const totMin = vs.reduce((s,v)=>s+v.min,0);
+    const enBase = vs.filter(v => v.tipo === 'REDTEC').reduce((s,v)=>s+v.min,0);
+
+    const barras = vs.map(v => {
+      const ini = Math.max(0, minDia(v.llegada) - H0*60);
+      const anc = Math.max(0.6, Math.min(SPAN-ini, v.min));
+      const col = v.tipo==='REDTEC' ? 'var(--r-redtec)' : v.tipo==='CD Retail' ? 'var(--r-cd)'
+                : v.tipo==='Sala Retail' ? 'var(--r-sala)' : v.tipo==='Cliente' ? 'var(--r-cliente)' : 'var(--r-otros)';
+      return `<div title="${escTT(v.punto)} · ${hhmm(v.llegada)}–${hhmm(v.salida)} · ${fmtMins(v.min)}"
+        style="position:absolute;left:${(ini/SPAN*100).toFixed(2)}%;width:${(anc/SPAN*100).toFixed(2)}%;top:6px;bottom:6px;background:${col};border-radius:3px;opacity:.85;min-width:2px"></div>`;
+    }).join('');
+    const horas = [];
+    for(let h=H0; h<=H1; h+=3) horas.push(`<span style="position:absolute;left:${(((h-H0)*60)/SPAN*100).toFixed(2)}%;font-size:9px;color:var(--t3);font-family:'DM Mono',monospace">${String(h).padStart(2,'0')}</span>`);
+
+    const filas = vs.map(v => {
+      const prom = PROM_PUNTO[v.punto] || 0;
+      const desvio = prom ? Math.round((v.min - prom)) : 0;
+      const lento = prom && v.min > prom*1.5 && v.min - prom >= 15;
+      const ops = v.x.ops;
+      const detOps = ops.length
+        ? ops.slice(0,4).map(o => {
+            const f = familiaOp(o.operacion);
+            return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+              <span style="color:${f.c};font-weight:600">${escTT(f.f)}</span>
+              <span style="color:var(--t2)">${(+o.cantidadConfirmada||0).toLocaleString('es-CL')} pallets</span>
+              <span style="color:var(--t3);font-family:'DM Mono',monospace;font-size:10.5px">#${o.nroPedido}</span>
+            </div>`;
+          }).join('') + (ops.length>4 ? `<div style="color:var(--t3);font-size:10.5px">y ${ops.length-4} más</div>` : '')
+        : `<span style="color:var(--t3)">${
+             v.tipo === 'REDTEC' ? 'base — carga, descarga o espera'
+             : v.x.estado==='recinto_desconocido' ? 'recinto no identificado en RDTOut'
+             : v.x.estado==='sin_rdtout' ? '—' : 'sin operación registrada ese día'}</span>`;
+      return `<tr style="border-bottom:1px solid var(--border)${lento?';background:rgba(244,168,54,.06)':''}">
+        <td style="padding:8px 10px;white-space:nowrap;font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t2)">${hhmm(v.llegada)}–${hhmm(v.salida)}</td>
+        <td style="padding:8px 10px;font-size:12.5px;color:var(--t1)">🚚 ${escTT(v.punto)}
+          <div style="font-size:10.5px;color:var(--t3)">${escTT(v.tipo)}</div></td>
+        <td style="padding:8px 10px;text-align:right;white-space:nowrap">
+          <div style="font-family:'DM Mono',monospace;font-size:12.5px;color:${lento?'var(--amber)':'var(--t1)'};font-weight:600">${fmtMins(v.min)}</div>
+          <div style="font-size:10px;color:var(--t3)">${prom ? 'prom. del punto '+fmtMins(prom)+(desvio>0?' · +'+fmtMins(desvio):'') : ''}</div>
+        </td>
+        <td style="padding:8px 10px;font-size:12px">${detOps}</td>
+      </tr>`;
+    }).join('');
+
+    return `<div class="card" style="margin-bottom:12px;background:var(--s1)">
+      <div class="card-hdr" style="gap:10px;flex-wrap:wrap">
+        <div class="card-title"><span style="font-size:15px">🚚</span> ${escTT(chofer)}
+          <span style="font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t2);margin-left:6px">${placa}</span></div>
+        <div class="cbar-end" style="font-size:11px;color:var(--t2)">
+          ${vs.length} parada(s) · ${fmtMins(totMin)} detenido · ${fmtMins(enBase)} en base
+        </div>
+      </div>
+      <div class="card-body">
+        <div style="position:relative;height:34px;background:var(--s3);border:1px solid var(--border);border-radius:6px;margin-bottom:4px">${barras}</div>
+        <div style="position:relative;height:12px;margin-bottom:10px">${horas.join('')}</div>
+        <div class="tbl-wrap"><table style="width:100%;border-collapse:collapse">
+          <thead><tr style="border-bottom:1px solid var(--border)">
+            <th style="text-align:left;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Horario</th>
+            <th style="text-align:left;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Dónde estuvo</th>
+            <th style="text-align:right;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Cuánto</th>
+            <th style="text-align:left;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Qué hizo ahí (RDTOut)</th>
+          </tr></thead>
+          <tbody>${filas}</tbody>
+        </table></div>
+      </div>
+    </div>`;
+  }).join('');
+}
 function switchTab(tab){
   if(tab === 'tendencias'){ renderBotonesPlaca(); if(DB.length) renderTendencias(); }
+  /* El cruce con RDTOut se pide sólo al entrar a la pestaña: son ~18.000
+     filas y no tiene sentido pagarlas si nadie va a mirar el recorrido. */
+  if(tab === 'recorrido'){ renderRecorrido(); }
   TABS.forEach(t => {
     document.getElementById('view-'+t).style.display = t===tab?'':'none';
     const el = document.getElementById('t-'+t);

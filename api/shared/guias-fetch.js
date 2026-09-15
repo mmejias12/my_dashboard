@@ -54,19 +54,38 @@ const OPERACIONES_DESPACHO = (process.env.OPERACIONES_DESPACHO || '')
 
 /**
  * Clasifica la operación. El tablero trata distinto cada tipo:
- *  - emision:    el camión SALE con carga; se compara contra lo declarado.
- *  - retiro:     el camión LLEGA con pallets del cliente; se compara contra la
- *                solicitud de retiro y contra lo confirmado en la inspección.
- *  - devolucion: tampoco es un despacho; se marca para que nadie la lea como tal.
+ *  - emision:        el camión SALE con carga; se compara contra lo declarado.
+ *  - retiro:         el camión LLEGA con pallets del cliente; se compara contra
+ *                    la solicitud de retiro y lo confirmado en la inspección.
+ *  - devolucion:     tampoco es un despacho; se marca para que nadie la lea así.
+ *  - relocalizacion: traslado de pallets ENTRE DEPENDENCIAS DE REDTEC. El camión
+ *                    no sale de la planta, así que no hay nada que cruzar.
  */
 function clasificar(op, dteNro) {
+  const o = (op || '').trim().toLowerCase();
+
+  // RELOCALIZACIÓN INTERNA — va ANTES del DTE, y es a propósito.
+  //
+  // Un traslado entre dependencias de REDTEC también emite documento de
+  // traslado, así que dteNro > 0 lo hacía caer en 'emision' y el monitor de
+  // andén lo cruzaba contra el conteo de la cámara como si fuera un despacho:
+  // cada relocalización terminaba en rojo — faltante, sobrante o directamente
+  // "camión sin guía" — y con correo a operaciones. No es un despacho: el
+  // vehículo no abandona las instalaciones.
+  //
+  // El fragmento 'relocaliz' cubre tanto "Relocalización" como "Relocalizacion"
+  // porque el acento viene después, y es exactamente el mismo criterio que ya
+  // usan m3link_dashboard_dark.html, top10.html y semaforo-gerencial.html
+  // ("Traslados internos entre recintos REDTEC"). En la cartola esta operación
+  // llega con netoCLP = 0: no se factura porque no se vende nada.
+  if (o.indexOf('relocaliz') >= 0) return 'relocalizacion';
+
   // El DTE es la señal dura: las emisiones generan documento (serie 72xxx,
   // incremental) y llegan con dteNro > 0; los retiros y devoluciones traen
   // dteNro en 0 y se identifican por nroDocumento. Se ve nítido en los datos:
   // el pedido 4087445 (emisión) trae dte 72137 y documento vacío, mientras el
   // 4106282 (retiro) trae dte 0 y documento 80717024.
   if (Number(dteNro) > 0) return 'emision';
-  const o = (op || '').trim().toLowerCase();
   if (o.startsWith('emision')) return 'emision';
   if (o.startsWith('retiro')) return 'retiro';
   if (o.startsWith('devolucion')) return 'devolucion';

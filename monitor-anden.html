@@ -12,6 +12,9 @@
   --text:#FFFFFF; --text-2:#AEB6C4; --muted:#79818F;
   --series-1:#3987e5;
   --good:#0ca30c; --warning:#fab219; --critical:#d03b3b;
+  /* El morado de las relocalizaciones es el mismo del panel principal y
+     del top 10, para que la operación se reconozca entre pantallas. */
+  --reloc:#8b5cf6; --reloc-cl:#b99cf7;
   --brand:#E02B20;
   --r:12px;
   --sans: system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
@@ -108,6 +111,33 @@ h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
 .ev.sobrante{border-left-color:var(--critical)}
 .ev.sin_guia,.ev.sin_patente,.ev.fuera_alcance{border-left-color:var(--muted)}
 .ev.fusion{border-left-color:var(--warning)}
+.ev.relocalizacion_interna{border-left-color:var(--reloc)}
+.reloc-por{color:var(--reloc-cl);font-size:11px}
+
+/* ---------- relocalización interna ---------- */
+.btn.reloc{background:rgba(139,92,246,.14);border-color:rgba(139,92,246,.5);color:var(--reloc-cl)}
+.btn.reloc:hover:not(:disabled){border-color:rgba(139,92,246,.85)}
+.reloc-bloc{border-left-color:var(--reloc)!important}
+.reloc-tt{color:var(--reloc-cl)}
+.reloc-panel{background:var(--surface-2);border:1px solid rgba(139,92,246,.42);border-radius:11px;
+             padding:14px 16px;margin-top:10px}
+.reloc-panel.hide{display:none}
+.reloc-panel .tt{font-size:13px;font-weight:600;color:var(--reloc-cl);margin-bottom:6px}
+.reloc-panel .campos{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:11px 0 0}
+.reloc-panel .campo{background:var(--surface-3);border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+.reloc-panel .campo .k{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
+.reloc-panel .campo .v{font-size:13px;margin-top:2px;font-variant-numeric:tabular-nums;word-break:break-all}
+.reloc-txt{width:100%;background:var(--surface-3);border:1px solid var(--line);border-radius:8px;
+           color:var(--text);font:inherit;font-size:12.5px;padding:8px 10px;margin-top:8px;
+           resize:vertical;min-height:38px}
+.reloc-txt:focus{outline:none;border-color:rgba(139,92,246,.6)}
+.reloc-chk{display:flex;gap:10px;align-items:flex-start;font-size:12.5px;color:var(--text);
+           cursor:pointer;background:rgba(139,92,246,.10);border:1px solid rgba(139,92,246,.35);
+           border-radius:8px;padding:10px 12px;margin-top:8px;line-height:1.4}
+.reloc-chk input{margin:2px 0 0;flex:none;width:16px;height:16px;accent-color:var(--reloc);cursor:pointer}
+.reloc-nota{font-size:11.5px;color:var(--text-2);margin-top:9px;line-height:1.5}
+.reloc-acc{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center}
+.reloc-est{font-size:11.5px;color:var(--muted);flex:1;min-width:180px}
 .ev .gh{font-size:15px;width:20px;text-align:center;flex:none}
 .ev .pat{font-weight:600;letter-spacing:.03em;font-variant-numeric:tabular-nums}
 .ev .det{font-size:12px;color:var(--text-2)}
@@ -134,6 +164,10 @@ h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
   box-shadow:0 30px 80px rgba(0,0,0,.7)}
 .modal.on{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1)}
 .modal.critica{border-color:rgba(208,59,59,.55);box-shadow:0 0 0 1px rgba(208,59,59,.25),0 30px 80px rgba(0,0,0,.7)}
+/* Una relocalización no es una alerta: con el marco ámbar de aviso se leía
+   como un problema pendiente justo después de que el supervisor lo cerró. */
+.modal.reloc{border-color:rgba(139,92,246,.5)}
+.reloc .mhead .ico{background:rgba(139,92,246,.18);color:var(--reloc-cl)}
 .mhead{padding:16px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
 .mhead .ico{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;font-size:19px;flex:none}
 .critica .mhead .ico{background:rgba(208,59,59,.18);color:#f08a8a}
@@ -347,6 +381,21 @@ const REGLAS = {
   // visible igual, porque el operador necesita saber que el camión pasó.
   fuera_alcance:{nivel:'ok',     gh:'↩', tit:'Paso registrado · no es un despacho',
                 acc:'', sonido:null, correo:false},
+  /* RELOCALIZACIÓN INTERNA. Traslado de pallets entre dependencias de REDTEC:
+     el camión se mueve dentro de la planta y no sale. No hay despacho, así que
+     no hay nada que cruzar contra una guía y no corresponde alertar.
+
+     Llega por dos caminos, y los dos terminan acá:
+       · RDTOut trae la operación 'Relocalización' para esa patente ese día, y
+         el monitor la reconoce solo (v.relocAuto).
+       · No hay documento y el paso caía en "camión sin guía": el Supervisor de
+         Despacho lo clasifica y firma la confirmación expresa (v.reloc).
+
+     OJO CON LO QUE ESTO **NO** ES: no es una autorización de salida ni una
+     excepción a la regla de Diferencia Cero. Si el vehículo después sale de la
+     planta, ese movimiento es otro Evento de Control y se cruza como siempre. */
+  relocalizacion_interna:{nivel:'ok', gh:'⇄', tit:'Relocalización interna · movimiento entre dependencias',
+                acc:'', sonido:null, correo:false},
 };
 
 /* Tipo de operación. Sirve para que quien mire la pantalla distinga de un
@@ -357,6 +406,7 @@ const TIPOS = {
   emision:    {et:'EMISIÓN',    c:'#3987e5', nota:'Sale con carga. Se compara contra lo declarado en la guía.'},
   retiro:     {et:'RETIRO',     c:'#9085e9', nota:'No es un despacho: el camión llega con pallets del cliente. Se compara contra la solicitud de retiro y lo confirmado en la inspección.'},
   devolucion: {et:'DEVOLUCIÓN', c:'#199e70', nota:'Devolución de pallets. No corresponde tratarla como despacho.'},
+  relocalizacion:{et:'RELOCALIZACIÓN', c:'#8b5cf6', nota:'Traslado de pallets entre dependencias internas de REDTEC. No es un despacho: el vehículo no sale de las instalaciones, así que no se cruza contra guía.'},
   otro:       {et:'—',          c:'#79818F', nota:''},
 };
 const tipoDe = t => TIPOS[t] || TIPOS.otro;
@@ -424,6 +474,10 @@ const S = {
   cerradas: new Set(),      // cargas ya evaluadas en firme
   atendidas: new Set(),     // marcadas por el operador (sobreviven a la recarga)
   retenidos: new Set(),
+  registro: {},             // bitácora del servidor: carga_id -> estado vigente
+  registroVivo: null,       // ¿la bitácora responde? null = todavía no se sabe
+  pendientes: [],           // confirmaciones que no alcanzaron a llegar al servidor
+  usuario: null,            // quién está mirando, según /.auth/me
   cola: [],                 // alertas esperando pantalla
   enPantalla: null,         // carga_id de la alerta abierta
   arranque: true,           // primera sincronización: entra el histórico sin alertar
@@ -441,6 +495,12 @@ function cargarEstado(){
     const g = JSON.parse(localStorage.getItem(CLAVE()) || '{}');
     S.atendidas = new Set(g.atendidas || []);
     S.retenidos = new Set(g.retenidos || []);
+    /* Confirmaciones que el servidor no alcanzó a recibir. No son una copia de
+       la bitácora — la bitácora vive en el servidor y se vuelve a pedir en cada
+       ciclo — sino lo que todavía le debemos. De acá se reconstruye lo que el
+       supervisor ya decidió, para que una recarga no lo borre de la pantalla. */
+    S.pendientes = Array.isArray(g.pendientes) ? g.pendientes : [];
+    aplicarPendientes();
     return g.prefs || {};
   }catch(e){ return {}; }        // modo incógnito o storage bloqueado
 }
@@ -449,6 +509,7 @@ function guardarEstado(){
     localStorage.setItem(CLAVE(), JSON.stringify({
       atendidas: [...new Set(S.eventos.filter(e=>e.atendida).map(e=>e.carga_id))],
       retenidos: [...new Set(S.eventos.filter(e=>e.retenido).map(e=>e.carga_id))],
+      pendientes: S.pendientes.slice(0, 60),
       prefs: {sonido:S.sonidoOn, notif:S.notifOn, detalle:S.detallePorBulto},
     }));
   }catch(e){ /* sin storage el monitor igual funciona, sólo no recuerda */ }
@@ -564,6 +625,141 @@ async function enviarCorreo(v){
 }
 
 /* =====================================================================
+   BITÁCORA DEL ANDÉN  ·  /api/anden-evento
+   Qué decidió el Supervisor de Despacho sobre cada Evento de Control, con
+   nombre y hora del servidor. Antes esto vivía sólo en el localStorage de
+   una pestaña: ni quién, ni compartido, ni auditable. La regla de
+   RELOCALIZACIÓN INTERNA pide dejar registro de patente, fecha y hora,
+   usuario que confirma, clasificación y la confirmación expresa de que el
+   vehículo no saldrá — y nada de eso se sostiene desde el navegador.
+   ===================================================================== */
+const API_ANDEN = '/api/anden-evento';
+
+const LEYENDA_RELOC = 'Esta acción no constituye una autorización de salida ni una excepción a la '
+                    + 'regla de Diferencia Cero, dado que el movimiento no corresponde a un despacho.';
+
+/* Quién está mirando. Lo entrega Static Web Apps; el servidor vuelve a leer la
+   identidad de su propio header al escribir, así que esto es sólo para poder
+   mostrarle al supervisor con qué nombre va a firmar. */
+async function cargarUsuario(){
+  if(S.usuario) return S.usuario;
+  try{
+    const r = await fetch('/.auth/me', {headers:{'Accept':'application/json'}});
+    if(!r.ok) return null;
+    const d = await r.json();
+    const p = d && d.clientPrincipal;
+    if(!p || !p.userDetails) return null;
+    S.usuario = {email:p.userDetails,
+                 roles:(p.userRoles||[]).filter(x=>x!=='anonymous'&&x!=='authenticated')};
+    return S.usuario;
+  }catch(e){ return null; }
+}
+
+async function enviarEvento(ev){
+  if(DEMO) return {ok:false, error:'modo demo'};
+  try{
+    const r = await fetch(API_ANDEN, {method:'POST', headers:{'Content-Type':'application/json'},
+                                      body:JSON.stringify(ev)});
+    const ct = r.headers.get('content-type') || '';
+    if(!ct.includes('json')){
+      // 404 = la Function todavía no está publicada; 200 con HTML = login.
+      return {ok:false, error: r.status===404 ? 'la bitácora aún no está publicada' : ('HTTP '+r.status)};
+    }
+    const d = await r.json();
+    if(!r.ok || !d.ok) return {ok:false, error: d.error || ('HTTP '+r.status)};
+    return {ok:true, ts:d.evento && d.evento.ts, usuario:d.evento && d.evento.usuario};
+  }catch(e){ return {ok:false, error:'sin conexión'}; }
+}
+
+function encolarPendiente(ev){
+  S.pendientes.push(ev);
+  if(S.pendientes.length > 60) S.pendientes.shift();
+  guardarEstado();
+}
+
+/* Lo que el supervisor ya decidió pero el servidor no alcanzó a recibir se
+   sigue viendo en pantalla: si no, una alerta cerrada volvería a sonar. */
+function aplicarPendientes(){
+  S.pendientes.forEach(ev=>{
+    if(ev.accion !== 'relocalizacion_interna') return;
+    if(S.registro[ev.carga_id]) return;
+    S.registro[ev.carga_id] = {
+      carga_id:ev.carga_id, patente:ev.patente||null, clasificacion:'relocalizacion_interna',
+      atendida:true, retenido:false, usuario:ev.usuario||null, ts:ev.ts||null,
+      detalle:ev.detalle||null, no_sale:true, estado_previo:ev.estado_previo||null, local:true,
+    };
+  });
+}
+
+async function cargarRegistro(){
+  if(DEMO){ aplicarPendientes(); return; }
+  try{
+    const r = await fetch(`${API_ANDEN}?fecha=${FECHA_VISTA}`, {headers:{'Accept':'application/json'}});
+    const ct = r.headers.get('content-type') || '';
+    if(!r.ok || !ct.includes('json')){ S.registroVivo = false; aplicarPendientes(); return; }
+    const d = await r.json();
+    S.registroVivo = d.registro === 'blob';
+    S.registro = d.estado || {};
+    Object.keys(S.registro).forEach(id=>{
+      if(S.registro[id].atendida) S.atendidas.add(id);
+      if(S.registro[id].retenido) S.retenidos.add(id);
+    });
+    // Lo que el servidor ya tiene deja de ser una deuda.
+    S.pendientes = S.pendientes.filter(ev=>{
+      const e = S.registro[ev.carga_id];
+      if(!e) return true;
+      if(ev.accion === 'relocalizacion_interna') return e.clasificacion !== 'relocalizacion_interna';
+      if(ev.accion === 'reversion')              return e.clasificacion !== null;
+      if(ev.accion === 'retenido')               return !e.retenido;
+      if(ev.accion === 'atendida')               return !e.atendida;
+      return true;
+    });
+    aplicarPendientes();
+  }catch(e){ S.registroVivo = false; aplicarPendientes(); }
+}
+
+async function reintentarPendientes(){
+  if(DEMO || !S.pendientes.length) return;
+  const quedan = [];
+  for(const ev of S.pendientes){
+    const r = await enviarEvento(ev);
+    if(r.ok){
+      const reg = S.registro[ev.carga_id];
+      if(reg && reg.local){ reg.local = false; reg.usuario = r.usuario || reg.usuario; reg.ts = r.ts || reg.ts; }
+    }else quedan.push(ev);
+  }
+  const cambio = quedan.length !== S.pendientes.length;
+  S.pendientes = quedan;
+  if(cambio){ guardarEstado(); render(); }
+}
+
+/* Registro al pasar: atender y retener también dejan huella, con nombre y hora
+   del servidor. No bloquea la pantalla — si falla, queda en la cola. */
+function registrarAccion(v, accion, extra){
+  const ev = Object.assign({
+    carga_id:v.carga_id, accion, patente:v.patente||null, fecha_carga:v.fecha_hora_carga,
+    pallets_camara:(v.total_pallets ?? null), bultos:(v.total_bultos ?? null),
+    estado_previo:v.estado,
+  }, extra||{});
+  enviarEvento(ev).then(r=>{ if(!r.ok) encolarPendiente(ev); });
+}
+
+/* La bitácora manda sobre el motor: lo que el supervisor clasificó no se
+   vuelve a cruzar contra una guía, venga de donde venga la evaluación. */
+function aplicarRegistro(v){
+  const reg = S.registro[v.carga_id];
+  if(!reg) return;
+  if(reg.retenido) v.retenido = true;
+  if(reg.atendida) v.atendida = true;
+  if(reg.clasificacion === 'relocalizacion_interna'){
+    v.estado = 'relocalizacion_interna';
+    v.diferencia = null;
+    v.filaAfectada = null;
+    v.reloc = reg;
+  }
+}
+
+/* =====================================================================
    EVALUACIÓN — el corazón: paso por el túnel contra guía esperada
    ===================================================================== */
 /* ¿En qué fila está la diferencia? Sólo se puede si el payload trae la
@@ -635,6 +831,17 @@ function evaluar(carga){
             diferencia:null, filaAfectada:null, fusion:partirFusion(carga)};
   }
 
+  // 1a-bis. RELOCALIZACIÓN INTERNA declarada en RDTOut. El documento del día
+  //     para esa patente es un traslado entre dependencias de REDTEC: el camión
+  //     se mueve dentro de la planta y no sale. No hay despacho que comparar,
+  //     así que no se cruza y no se alerta. Se muestra igual, porque el andén
+  //     necesita saber que el camión pasó por el túnel.
+  const relocDoc = (carga.guias_alternativas||[]).find(g => g.tipo==='relocalizacion');
+  if(carga.patente && relocDoc){
+    return {...carga, guia:null, estado:'relocalizacion_interna', diferencia:null,
+            filaAfectada:null, otroDoc:relocDoc, relocAuto:true};
+  }
+
   // 1b. Sin emisión, pero con un retiro o devolución de esa patente ese día.
   //     No es un camión sin documento: es un movimiento que este monitor no
   //     compara. Marcarlo "sin guía" disparaba una alerta crítica por cada
@@ -685,6 +892,9 @@ function registrarPaso(carga){
   // Estado atendido guardado de una sesión anterior: sobrevive a la recarga.
   if(!previo && S.atendidas.has(carga.carga_id)) v.atendida = true;
   if(!previo && S.retenidos.has(carga.carga_id)) v.retenido = true;
+
+  // Lo que el Supervisor de Despacho ya clasificó pesa más que el motor.
+  aplicarRegistro(v);
 
   const r = regla(v.estado);
   // Sólo se alerta por una carga CERRADA: comparar una que sigue sumando
@@ -854,12 +1064,148 @@ document.addEventListener('keydown', e=>{
   if(c && (e.key==='Enter'||e.key===' ')){ e.preventDefault(); abrirVisor(+c.dataset.i); }
 });
 
+/* ¿Se puede clasificar este evento como relocalización interna?
+   Sólo tiene sentido sobre un evento que hoy está alertando. Si RDTOut ya dijo
+   que era una relocalización (relocAuto), no hay nada que confirmar: el
+   documento ya lo dice. Y si ya fue clasificado, tampoco. */
+function puedeClasificar(v){
+  return !v.reloc && !v.relocAuto && regla(v.estado).nivel !== 'ok';
+}
+
+function fechaHoraTxt(iso){
+  const d = new Date(iso);
+  return isNaN(d) ? '—' : `${ddmm(d)} a las ${hhmm(d)}`;
+}
+
+/* El registro, ya hecho: lo que quedó firmado y por quién. */
+function blocReloc(v){
+  if(v.relocAuto && !v.reloc && v.otroDoc){
+    return `<div class="aviso-fila reloc-bloc">
+      <b class="reloc-tt">RELOCALIZACIÓN INTERNA</b> — el documento del día para esta patente es la
+      relocalización ${refDoc(v.otroDoc)} por ${n0(v.otroDoc.pallets_declarados)} pallets:
+      un traslado de pallets entre dependencias de REDTEC.
+      <br>La declara <b>RDTOut</b>, así que no hace falta confirmarla. El monitor <b>no la cruza</b>
+      contra el conteo de la cámara: no es un despacho y el vehículo no sale de la planta.
+      <br><span style="color:var(--muted)">${LEYENDA_RELOC}</span></div>`;
+  }
+  if(!v.reloc) return '';
+  const g = v.reloc;
+  return `<div class="aviso-fila reloc-bloc">
+    <b class="reloc-tt">RELOCALIZACIÓN INTERNA</b> — movimiento de pallets entre dependencias de REDTEC.
+    <br>Confirmada por <b>${esc(g.usuario || 'sin identificar')}</b> el ${fechaHoraTxt(g.ts)}.
+    ${g.detalle ? `<br>Detalle: ${esc(g.detalle)}` : ''}
+    <br>Quedó registrada la confirmación expresa de que <b>el vehículo no saldrá de las
+    instalaciones</b> como consecuencia de este movimiento.
+    <br><span style="color:var(--muted)">${LEYENDA_RELOC}</span>
+    ${g.local ? `<br><b style="color:var(--warning)">⚠ Por ahora sólo en este equipo: la bitácora del
+      servidor no respondió. Se reintenta sola en cada ciclo.</b>` : ''}</div>`;
+}
+
+/* El formulario de confirmación. Va oculto hasta que el supervisor lo pide:
+   abrir una alerta crítica y encontrarse con un formulario invita a cerrarla
+   por ahí en vez de resolver el problema real. */
+function panelReloc(v){
+  if(!puedeClasificar(v)) return '';
+  const f = new Date(v.fecha_hora_carga);
+  return `<div class="reloc-panel hide" id="reloc-panel">
+    <div class="tt">⇄ Clasificar como RELOCALIZACIÓN INTERNA</div>
+    <div class="reloc-nota">Tránsito de un camión que traslada pallets <b>entre dependencias internas
+      de REDTEC</b>, sin que el movimiento corresponda a un despacho. Al confirmarlo, este Evento de
+      Control deja de cruzarse contra una guía y la alerta se cierra.</div>
+    <div class="campos">
+      <div class="campo"><div class="k">Patente</div><div class="v">${esc(v.patente || 'sin patente')}</div></div>
+      <div class="campo"><div class="k">Fecha y hora del paso</div><div class="v">${isNaN(f)?'—':ddmm(f)+' '+hhmm(f)}</div></div>
+      <div class="campo"><div class="k">Usuario que confirma</div><div class="v" id="reloc-user">consultando…</div></div>
+      <div class="campo"><div class="k">Pallets contados por la cámara</div><div class="v">${n0(v.total_pallets)}</div></div>
+    </div>
+    <textarea class="reloc-txt" id="reloc-detalle" maxlength="180"
+      placeholder="Detalle del movimiento — desde qué dependencia hacia cuál (opcional)"></textarea>
+    <label class="reloc-chk" for="reloc-ok"><input type="checkbox" id="reloc-ok">
+      <span>Confirmo expresamente que <b>el vehículo NO saldrá de las instalaciones</b> como
+      consecuencia de este movimiento.</span></label>
+    <div class="reloc-nota"><b>${LEYENDA_RELOC}</b></div>
+    <div class="reloc-acc">
+      <button class="btn reloc" id="reloc-confirmar" disabled>Confirmar relocalización</button>
+      <button class="btn" id="reloc-cancelar">Cancelar</button>
+      <span class="reloc-est" id="reloc-est"></span>
+    </div>
+  </div>`;
+}
+
+async function confirmarReloc(v){
+  const chk = $('#reloc-ok'), est = $('#reloc-est'), ok = $('#reloc-confirmar');
+  if(!chk || !chk.checked) return;                 // la casilla es la firma
+  const u = await cargarUsuario();
+  if(!u){ est.textContent = 'No se puede registrar sin sesión identificada.'; return; }
+
+  ok.disabled = true;
+  est.textContent = 'Registrando…';
+  const ev = {
+    carga_id: v.carga_id,
+    accion: 'relocalizacion_interna',
+    patente: v.patente || null,
+    fecha_carga: v.fecha_hora_carga,
+    pallets_camara: (v.total_pallets ?? null),
+    bultos: (v.total_bultos ?? null),
+    detalle: (($('#reloc-detalle') || {}).value || '').trim().slice(0, 180) || null,
+    no_sale: true,
+    estado_previo: v.estado,
+    usuario: u.email,          // sólo para mostrarlo si el POST no llega; el
+                               // servidor firma con su propio header
+  };
+  const r = await enviarEvento(ev);
+
+  /* Decidió el supervisor, así que la pantalla obedece pase lo que pase con el
+     servidor. Si el POST no llegó, queda marcado como registro local y en cola:
+     lo que no se puede hacer es dejar sonando una alerta ya resuelta, ni fingir
+     que quedó guardada cuando no es así. */
+  S.registro[v.carga_id] = {
+    carga_id: v.carga_id, patente: ev.patente, clasificacion: 'relocalizacion_interna',
+    atendida: true, retenido: false, usuario: (r.usuario || u.email),
+    ts: (r.ts || new Date().toISOString()), detalle: ev.detalle, no_sale: true,
+    estado_previo: ev.estado_previo, local: !r.ok,
+  };
+  S.atendidas.add(v.carga_id);
+  aplicarRegistro(v);
+  v.atendida = true;
+  guardarEstado();
+
+  if(r.ok){ cerrarModal(v.carga_id); return; }
+  encolarPendiente(ev);
+  est.innerHTML = `<b style="color:var(--warning)">Clasificada en este equipo, pero la bitácora del
+    servidor no respondió</b> (${esc(r.error)}). Se reintenta sola en cada ciclo.`;
+  ok.textContent = 'Cerrar';
+  ok.disabled = false;
+  ok.onclick = ()=>cerrarModal(v.carga_id);
+}
+
+async function revertirReloc(v){
+  const previo = (v.reloc && v.reloc.estado_previo) || 'sin_guia';
+  const ev = {carga_id:v.carga_id, accion:'reversion', patente:v.patente||null,
+              fecha_carga:v.fecha_hora_carga, estado_previo:previo,
+              motivo:'reversión de la clasificación desde el monitor'};
+  const r = await enviarEvento(ev);
+  if(!r.ok) encolarPendiente(ev);
+  /* La bitácora es append-only: la reversión se escribe encima, no borra nada.
+     En pantalla el evento vuelve al estado que traía antes de clasificarse. */
+  delete S.registro[v.carga_id];
+  S.pendientes = S.pendientes.filter(p =>
+    !(p.carga_id === v.carga_id && p.accion === 'relocalizacion_interna'));
+  S.atendidas.delete(v.carga_id);
+  delete v.reloc;
+  v.estado = previo;
+  v.atendida = false;
+  guardarEstado();
+  cerrarModal(v.carga_id);
+}
+
 function abrirModal(v){
   const r = regla(v.estado);
   // Un camión puede salir con más de una guía: se compara contra la suma.
   const dec = v.pallets_declarados_total ?? v.guia?.pallets_declarados;
   const docs = v.guias || (v.guia ? [v.guia] : []);
-  const col = r.nivel==='critica' ? 'var(--critical)' : 'var(--warning)';
+  const col = v.estado==='relocalizacion_interna' ? 'var(--reloc-cl)'
+            : r.nivel==='critica' ? 'var(--critical)' : 'var(--warning)';
 
   $('#mcont').innerHTML = `
     <div class="mhead">
@@ -875,11 +1221,13 @@ function abrirModal(v){
         ${v.consolidada
           ? `${docs.length} guías · ${esc(v.guia.chofer||'sin chofer')}`
           : v.guia ? `${refDoc(v.guia)} · ${esc(v.guia.chofer||'sin chofer')} · ${esc(v.guia.cliente||'—')}`
-                   : 'Sin guía asociada en RDTOut'}
+                   : v.estado==='relocalizacion_interna'
+                     ? 'Movimiento interno · no lleva guía de despacho'
+                     : 'Sin guía asociada en RDTOut'}
       </div>
 
       <div class="gran">
-        <div><div class="lab">${v.estado==='fuera_alcance'?'No se compara':v.guia?.tipo==='retiro'?'RDTOut confirma':'Guía declara'}</div><div class="v">${dec!=null?n0(dec):'—'}</div></div>
+        <div><div class="lab">${v.estado==='fuera_alcance'||v.estado==='relocalizacion_interna'?'No se compara':v.guia?.tipo==='retiro'?'RDTOut confirma':'Guía declara'}</div><div class="v">${dec!=null?n0(dec):'—'}</div></div>
         <div><div class="lab">Cámara cuenta</div><div class="v">${n0(v.total_pallets)}</div></div>
         <div><div class="lab">Diferencia</div>
           <div class="v" style="color:${v.diferencia?col:'var(--text)'}">${v.diferencia==null?'—':(v.diferencia>0?'+':'')+n0(v.diferencia)}</div></div>
@@ -904,12 +1252,15 @@ function abrirModal(v){
         <br><br>Buscar en <b>Emisiones sin cruce</b> un despacho de ${n0(v.fusion.dos.pallets)} pallets a esa hora:
         ese camión sí salió.</div>` : ''}
 
-      ${v.otroDoc ? `<div class="aviso-fila" style="border-left-color:${tipoDe(v.otroDoc.tipo).c}">
+      ${v.otroDoc && !v.relocAuto ? `<div class="aviso-fila" style="border-left-color:${tipoDe(v.otroDoc.tipo).c}">
         <b style="color:${tipoDe(v.otroDoc.tipo).c}">${tipoDe(v.otroDoc.tipo).et}</b> —
         el documento del día para esta patente es el ${v.otroDoc.tipo==='retiro'?'retiro':'documento'}
         ${refDoc(v.otroDoc)} por ${n0(v.otroDoc.pallets_declarados)} pallets.
         Este monitor vigila despachos, así que <b>no lo compara</b>: la revisión del retiro va contra la
         inspección, en el informe de conciliación.</div>` : ''}
+
+      ${blocReloc(v)}
+      ${panelReloc(v)}
 
       ${v.guia?.tipo && v.guia.tipo !== 'emision' ? `<div class="aviso-fila" style="border-left-color:${tipoDe(v.guia.tipo).c}">
         <b style="color:${tipoDe(v.guia.tipo).c}">${tipoDe(v.guia.tipo).et}</b> — ${esc(tipoDe(v.guia.tipo).nota)}</div>` : ''}
@@ -931,8 +1282,12 @@ function abrirModal(v){
       ${r.correo ? `<div class="cola"><span class="gh">✉</span> Alerta ${DEMO?'encolada (demo)':'enviada'} a operaciones de despacho</div>` : ''}
     </div>
     <div class="mfoot">
-      <button class="btn urg" id="m-retener">Camión retenido</button>
-      <button class="btn" id="m-atendida">Marcar atendida</button>
+      ${puedeClasificar(v) ? `<button class="btn reloc" id="m-reloc"
+        title="Traslado de pallets entre dependencias de REDTEC: no es un despacho">⇄ Relocalización interna</button>` : ''}
+      ${v.reloc ? `<button class="btn" id="m-revertir"
+        title="Deja sin efecto la clasificación y devuelve el evento a su estado anterior">Revertir clasificación</button>` : ''}
+      ${v.reloc ? '' : `<button class="btn urg" id="m-retener">Camión retenido</button>
+      <button class="btn" id="m-atendida">Marcar atendida</button>`}
       <button class="btn" id="m-cerrar">Cerrar</button>
       <div class="sp"></div>
       <button class="btn" id="m-silencio">Silenciar</button>
@@ -940,18 +1295,54 @@ function abrirModal(v){
 
   S.enPantalla = v.carga_id;
   const modal = $('#modal');
-  modal.className = 'modal on ' + (r.nivel==='critica'?'critica':'aviso');
+  modal.className = 'modal on ' + (v.estado==='relocalizacion_interna' ? 'reloc'
+                                 : r.nivel==='critica' ? 'critica' : 'aviso');
   modal.setAttribute('aria-hidden','false');
   $('#scrim').classList.add('on');
   $('#m-cerrar').onclick = ()=>cerrarModal(v.carga_id);
-  $('#m-atendida').onclick = ()=>{ v.atendida = true; S.atendidas.add(v.carga_id); cerrarModal(v.carga_id); };
-  $('#m-retener').onclick = ()=>{ v.atendida = true; v.retenido = true;
-                                  S.atendidas.add(v.carga_id); S.retenidos.add(v.carga_id);
-                                  cerrarModal(v.carga_id); };
+  const bAt = $('#m-atendida'), bRet = $('#m-retener');
+  if(bAt) bAt.onclick = ()=>{ v.atendida = true; S.atendidas.add(v.carga_id);
+                              registrarAccion(v, 'atendida'); cerrarModal(v.carga_id); };
+  if(bRet) bRet.onclick = ()=>{ v.atendida = true; v.retenido = true;
+                                S.atendidas.add(v.carga_id); S.retenidos.add(v.carga_id);
+                                registrarAccion(v, 'retenido'); cerrarModal(v.carga_id); };
   $('#m-silencio').onclick = ()=>{ S.sonidoOn=false; $('#btn-sonido').classList.remove('on');
                                    $('#btn-sonido').textContent='Activar sonido';
                                    $('#aud-aviso').classList.remove('hide'); guardarEstado(); };
-  $('#m-retener').focus();
+
+  /* ── Relocalización interna ───────────────────────────────────────────── */
+  const bReloc = $('#m-reloc');
+  if(bReloc){
+    bReloc.onclick = async ()=>{
+      const p = $('#reloc-panel');
+      p.classList.remove('hide');
+      bReloc.disabled = true;
+      p.scrollIntoView({block:'nearest', behavior:'smooth'});
+      const chk = $('#reloc-ok'), ok = $('#reloc-confirmar'), est = $('#reloc-est');
+      const u = await cargarUsuario();
+      const el = $('#reloc-user');
+      if(el) el.textContent = u ? u.email : 'sin sesión identificada';
+      if(!u){
+        // La regla exige registrar al usuario que confirma: sin identidad no
+        // hay confirmación que valga, así que no se deja firmar en blanco.
+        chk.disabled = true;
+        est.innerHTML = '<b style="color:var(--warning)">No se puede confirmar sin sesión '
+                      + 'identificada</b>: la regla exige registrar al usuario que confirma.';
+        return;
+      }
+      if(S.registroVivo === false){
+        est.innerHTML = '<b style="color:var(--warning)">La bitácora del servidor no responde.</b> '
+                      + 'La confirmación queda en este equipo y se reintenta sola.';
+      }
+      chk.onchange = ()=>{ ok.disabled = !chk.checked; };
+    };
+    $('#reloc-cancelar').onclick = ()=>{ $('#reloc-panel').classList.add('hide'); bReloc.disabled = false; };
+    $('#reloc-confirmar').onclick = ()=>confirmarReloc(v);
+  }
+  const bRev = $('#m-revertir');
+  if(bRev) bRev.onclick = ()=>revertirReloc(v);
+
+  (bRet || bReloc || $('#m-cerrar')).focus();
 }
 function cerrarModal(id){
   $('#modal').classList.remove('on'); $('#modal').setAttribute('aria-hidden','true');
@@ -1005,7 +1396,9 @@ function render(){
   // --- KPIs de la jornada ---
   // Los pasos que no son despacho no entran en el conteo de la jornada: si
   // entraran, "9 pasos / 5 conciliados / 1 desviación" no cerraría nunca.
-  const fuera = S.eventos.filter(e=>e.estado==='fuera_alcance').length;
+  // Una relocalización interna tampoco es un despacho: el camión no sale.
+  const relocs = S.eventos.filter(e=>e.estado==='relocalizacion_interna').length;
+  const fuera = S.eventos.filter(e=>e.estado==='fuera_alcance').length + relocs;
   const pasados = S.eventos.length - fuera;
   const ok = S.eventos.filter(e=>e.estado==='ok').length;
   const falt = S.eventos.filter(e=>e.estado==='faltante');
@@ -1024,7 +1417,7 @@ function render(){
     const clic = (i===5 && v>0) ? ' click" id="kpi-pendientes' : '';
     return `<div class="kpi ${c}${clic}"><div class="lab">${l}</div><div class="val">${n0(v)}</div>
       ${i===5&&v>0?'<div style="font-size:10px;color:var(--muted);margin-top:2px">clic para revisarlas</div>':''}
-      ${i===1&&fuera?`<div style="font-size:10px;color:var(--muted);margin-top:2px">+${fuera} paso${fuera>1?'s':''} que no son despacho</div>`:''}
+      ${i===1&&fuera?`<div style="font-size:10px;color:var(--muted);margin-top:2px">+${fuera} paso${fuera>1?'s':''} que no ${fuera>1?'son':'es'} despacho${relocs?` · ${relocs} relocalizaci${relocs>1?'ones':'ón'} interna${relocs>1?'s':''}`:''}</div>`:''}
       ${i===0&&sinCamara.length?`<div style="font-size:10px;color:var(--muted);margin-top:2px">+${sinCamara.length} sin registro de cámara</div>`:''}</div>`;
   }).join('');
   const kp = $('#kpi-pendientes');
@@ -1081,15 +1474,16 @@ function render(){
   $('#cnt-ev').textContent = S.eventos.length;
   $('#eventos').innerHTML = S.eventos.length ? S.eventos.map(v=>{
     const r = regla(v.estado);
-    const col = v.estado==='fuera_alcance' ? 'var(--muted)'
+    const col = v.estado==='relocalizacion_interna' ? 'var(--reloc-cl)'
+              : v.estado==='fuera_alcance' ? 'var(--muted)'
               : r.nivel==='critica'?'var(--critical)':r.nivel==='aviso'?'var(--warning)':'var(--good)';
     const pendiente = r.nivel!=='ok' && !v.atendida;
     return `<div class="ev ${v.estado}${pendiente?' pendiente':''}" data-id="${esc(v.carga_id)}"
                  tabindex="0" role="button" aria-label="Ver alerta de ${esc(v.patente||'sin patente')}">
       <span class="gh" style="color:${col}">${r.gh}</span>
       <div style="min-width:0">
-        <div class="pat">${esc(v.patente||'sin patente')}${v.retenido?' <span class="pend">RETENIDO</span>':pendiente?' <span class="pend">SIN ATENDER</span>':v.historico?' · <span style="color:var(--muted);font-size:11px">previo a la sesión</span>':v.atendida?' · <span style="color:var(--muted);font-size:11px">atendida</span>':''}</div>
-        <div class="det">${v.guia?tag(v.guia.tipo)+' ':''}${v.otroDoc?tag(v.otroDoc.tipo)+' ':''}${v.guia?(v.guia.tipo==='emision'?'guía ':'doc ')+esc(v.guia.numero)+(v.consolidada?` <span class="pend" style="color:var(--good);border-color:rgba(12,163,12,.5)">+${(v.guias||[]).length-1} GUÍA${(v.guias||[]).length>2?'S':''}</span>`:'')+' · ':''}${n0(v.total_pallets)} pallets en ${v.total_bultos} filas</div>
+        <div class="pat">${esc(v.patente||'sin patente')}${v.retenido?' <span class="pend">RETENIDO</span>':pendiente?' <span class="pend">SIN ATENDER</span>':v.reloc?` · <span class="reloc-por">relocalización confirmada por ${esc(String(v.reloc.usuario||'—').split('@')[0])}${v.reloc.local?' · sin sincronizar':''}</span>`:v.relocAuto?' · <span class="reloc-por">relocalización declarada en RDTOut</span>':v.historico?' · <span style="color:var(--muted);font-size:11px">previo a la sesión</span>':v.atendida?' · <span style="color:var(--muted);font-size:11px">atendida</span>':''}</div>
+        <div class="det">${v.reloc&&!v.otroDoc?tag('relocalizacion')+' ':''}${v.guia?tag(v.guia.tipo)+' ':''}${v.otroDoc?tag(v.otroDoc.tipo)+' ':''}${v.guia?(v.guia.tipo==='emision'?'guía ':'doc ')+esc(v.guia.numero)+(v.consolidada?` <span class="pend" style="color:var(--good);border-color:rgba(12,163,12,.5)">+${(v.guias||[]).length-1} GUÍA${(v.guias||[]).length>2?'S':''}</span>`:'')+' · ':''}${n0(v.total_pallets)} pallets en ${v.total_bultos} filas</div>
       </div>
       ${v.diferencia ? `<div class="dif" style="color:${col}">${v.diferencia>0?'+':''}${n0(v.diferencia)}</div>` : ''}
       <div class="hora">${hhmm(new Date(v.fecha_hora_carga))}</div>
@@ -1312,6 +1706,7 @@ if(DEMO){
     S.arranque = true;
     S.eventos = [];
     S.esperando = [];
+    S.registro = {};          // la bitácora es de un día: se vuelve a pedir
     pintarDia();
     $('#esperando').innerHTML = '<div class="vacio">Consultando guías…</div>';
     $('#eventos').innerHTML   = '<div class="vacio">Consultando pasos…</div>';
@@ -1323,8 +1718,14 @@ if(DEMO){
   $('#dn-hoy').onclick  = ()=> irADia(hoySantiago());
   pintarDia();
 
-  const ciclo = ()=> cargarGuiasReales()
+  /* La bitácora se lee PRIMERO. Si se leyera después, el primer ciclo
+     evaluaría con el motor pelado y una relocalización ya confirmada volvería
+     a entrar como "camión sin guía": sonido, pop-up y correo por algo que el
+     supervisor cerró ayer. */
+  const ciclo = ()=> cargarRegistro()
+    .then(()=>cargarGuiasReales())
     .then(()=>pollPasosReales())
+    .then(()=>reintentarPendientes())
     .then(()=>{
       if(esHoy()){ marcarViva(); S.arranque = false; }   // sólo el día en curso alerta
       else { HIST_CARGADO = true; pintarDia(); }

@@ -2,15 +2,35 @@ const https = require('https');
 
 const API_HOST = 'web1ws.shareservice.co';
 const API_PATH = '/WsReports.asmx/GetStopsDataRangeByPlate';
-const LOGIN    = 'redtec chile';
-const PASSWORD = 'redtec2023';
 
-const FLEET = ['BJCL13','CCRC36','CPVW43','FV2792','LS3119','NC8771','RW5303','SP3393','VG1943','XC9869','YG5106'];
+// Credenciales: mover a Application Settings en el portal (GPS_LOGIN / GPS_PASSWORD).
+// El fallback existe sólo para no romper el despliegue actual; la contraseña
+// estuvo expuesta en el HTML del cliente, así que hay que ROTARLA en el proveedor.
+const LOGIN    = process.env.GPS_LOGIN    || 'redtec chile';
+const PASSWORD = process.env.GPS_PASSWORD || 'redtec2023';
+
+// Flota real. XC9869 e YG5106 NO son vehículos: el API responde a esas dos
+// patentes con las paradas de TODA la cuenta (2.945 paradas en agosto 2026,
+// idénticas entre sí y superconjunto de las 9 placas reales). Si se dejan en
+// la flota, cada consulta duplica el universo completo y todo promedio de
+// flota queda inflado. Verificado el 15-09-2026.
+const FLEET = ['BJCL13','CCRC36','CPVW43','FV2792','LS3119','NC8771','RW5303','SP3393','VG1943'];
+
+// Identificadores comodín: devuelven la cuenta completa, no un vehículo.
+// Se bloquean salvo que se pidan a propósito con ?cuenta=1.
+const CATCH_ALL = ['XC9869','YG5106'];
 
 const MAX_CONCURRENT = 2;
 const DELAY_MS       = 800;
 const RETRY_MAX      = 2;
 const RETRY_DELAY_MS = 2500;
+
+// El API responde de forma intermitente con 200 y cuerpo vacío (~30 ms, contra
+// ~250 ms de una respuesta buena). Antes eso se leía como "el camión no se
+// movió". Ahora una respuesta vacía se reintenta y, si nunca llega data, la
+// placa se reporta como SIN RESPUESTA, que es distinto de SIN ACTIVIDAD.
+const EMPTY_RETRY_MAX   = 3;
+const EMPTY_RETRY_DELAY = 1500;
 
 module.exports = async function (context, req) {
   if (req.method === 'OPTIONS') {
@@ -19,10 +39,20 @@ module.exports = async function (context, req) {
   }
 
   var q = req.query || {};
+  var verCuenta = q.cuenta === '1' || q.cuenta === 'true';
+  var debug     = q.debug  === '1' || q.debug  === 'true';
+
   var plates;
   if (q.plate)       plates = [q.plate.trim()];
   else if (q.plates) plates = q.plates.split(',').map(function(p){return p.trim();}).filter(Boolean);
-  else               plates = FLEET;
+  else               plates = verCuenta ? [CATCH_ALL[0]] : FLEET;
+
+  // Bloqueo de comodines salvo petición explícita
+  var bloqueadas = [];
+  if (!verCuenta) {
+    bloqueadas = plates.filter(function(p){ return CATCH_ALL.indexOf(p.toUpperCase()) !== -1; });
+    plates     = plates.filter(function(p){ return CATCH_ALL.indexOf(p.toUpperCase()) === -1; });
+  }
 
   var sStartDate1 = q.desde || '';
   var sStartDate2 = q.hasta || '';
@@ -35,19 +65,46 @@ module.exports = async function (context, req) {
 
   var startMs = Date.now();
   var results = await runWithThrottle(plates, function(plate){
-    return queryPlateWithRetry(plate, sStartDate1, sStartDate2, iTime);
+    return queryPlateUntilData(plate, sStartDate1, sStartDate2, iTime);
   });
   var elapsedMs = Date.now() - startMs;
 
-  var allItems = [];
-  var errors   = [];
-  var okCount  = 0;
+  var allItems  = [];
+  var errors    = [];
+  var estados   = [];
+  var okCount   = 0;
+  var vistos    = {};   // dedup por placa|location|start
+  var duplicados = 0;
 
   results.forEach(function(r) {
-    if (!r.ok) { errors.push({plate:r.plate, error:r.error}); return; }
+    if (!r.ok) {
+      errors.push({plate:r.plate, error:r.error});
+      estados.push({plate:r.plate, estado:'error', intentos:r.intentos||0, error:r.error});
+      return;
+    }
     var parsed = parsePlateXML(r.xml, r.plate);
-    if (parsed.items.length > 0) { okCount++; allItems = allItems.concat(parsed.items); }
+    if (parsed.items.length > 0) {
+      okCount++;
+      parsed.items.forEach(function(it){
+        var k = it.plate+'|'+it.location+'|'+it.start;
+        if (vistos[k]) { duplicados++; return; }
+        vistos[k] = 1; allItems.push(it);
+      });
+      estados.push({plate:r.plate, estado:'con_datos', intentos:r.intentos, paradas:parsed.items.length, chofer:parsed.name});
+    } else {
+      // Se agotaron los reintentos sin una sola parada: NO afirmamos que no hubo
+      // actividad, decimos que el API no entregó datos.
+      var e = {plate:r.plate, estado:'sin_respuesta', intentos:r.intentos, ms:r.msPorIntento};
+      if (debug) e.muestra = String(r.xml||'').substring(0,200);
+      estados.push(e);
+    }
   });
+
+  bloqueadas.forEach(function(p){
+    estados.push({plate:p, estado:'bloqueada', motivo:'identificador comodín: devuelve la cuenta completa, no un vehículo. Usar ?cuenta=1 si se quiere a propósito.'});
+  });
+
+  var sinRespuesta = estados.filter(function(e){return e.estado==='sin_respuesta';}).length;
 
   context.res = {
     status: 200,
@@ -57,13 +114,26 @@ module.exports = async function (context, req) {
       'Cache-Control':'no-cache',
       'X-Debug-Plates-Total':String(results.length),
       'X-Debug-Plates-Ok':String(okCount),
+      'X-Debug-Plates-NoData':String(sinRespuesta),
       'X-Debug-Plates-Error':String(errors.length),
       'X-Debug-Elapsed-Ms':String(elapsedMs)
     },
     body: JSON.stringify({
       ok:true, desde:sStartDate1, hasta:sStartDate2,
       time:iTime, elapsedMs:elapsedMs,
-      total:allItems.length, items:allItems, errors:errors
+      total:allItems.length, items:allItems, errors:errors,
+      // Nuevo: estado por placa. 'sin_respuesta' NO significa que el camión
+      // estuvo detenido; significa que el dato no llegó y no se puede concluir.
+      placas: estados,
+      resumen: {
+        consultadas: results.length,
+        con_datos: okCount,
+        sin_respuesta: sinRespuesta,
+        con_error: errors.length,
+        bloqueadas: bloqueadas.length,
+        duplicados_descartados: duplicados,
+        confiable: sinRespuesta === 0 && errors.length === 0
+      }
     })
   };
 };
@@ -71,14 +141,11 @@ module.exports = async function (context, req) {
 function parsePlateXML(xml, plateId) {
   var result = {plate:plateId, name:'', items:[]};
 
-  // Nombre del chofer desde atributo Name
   var nameM = xml.match(/Name="([^"]*)"/);
   if (nameM) result.name = nameM[1];
 
-  // Si no hay items, retornar vacío
   if (xml.indexOf('<ITEM>') === -1) return result;
 
-  // Dividir por <ITEM> manualmente — más robusto que regex con flags
   var parts = xml.split('<ITEM>');
   for (var i = 1; i < parts.length; i++) {
     var block = parts[i].split('</ITEM>')[0];
@@ -104,7 +171,6 @@ function parsePlateXML(xml, plateId) {
   return result;
 }
 
-// Extraer texto entre <TAG> y </TAG> — sin regex, solo indexOf
 function extractTag(text, tag) {
   var open  = '<' + tag + '>';
   var close = '</' + tag + '>';
@@ -122,13 +188,29 @@ async function runWithThrottle(items, asyncFn) {
     var batch = items.slice(i, i+MAX_CONCURRENT);
     var batchResult = await Promise.all(batch.map(function(item){
       return asyncFn(item)
-        .then(function(xml){return{plate:item,ok:true,xml:xml};})
-        .catch(function(err){return{plate:item,ok:false,error:err.message};});
+        .then(function(r){return{plate:item,ok:true,xml:r.xml,intentos:r.intentos,msPorIntento:r.ms};})
+        .catch(function(err){return{plate:item,ok:false,error:err.message,intentos:err.intentos||0};});
     }));
     results = results.concat(batchResult);
     if (i+MAX_CONCURRENT < items.length) await sleep(DELAY_MS);
   }
   return results;
+}
+
+// Reintenta mientras la respuesta venga vacía. Devuelve el último XML recibido
+// junto con cuántos intentos costó y cuánto demoró cada uno (una respuesta
+// vacía de ~30 ms es el síntoma del rechazo del proveedor).
+async function queryPlateUntilData(plate, s1, s2, iTime) {
+  var ms = [];
+  var xml = '';
+  for (var intento = 1; intento <= EMPTY_RETRY_MAX; intento++) {
+    var t0 = Date.now();
+    xml = await queryPlateWithRetry(plate, s1, s2, iTime);
+    ms.push(Date.now()-t0);
+    if (xml.indexOf('<ITEM>') !== -1) return {xml:xml, intentos:intento, ms:ms};
+    if (intento < EMPTY_RETRY_MAX) await sleep(EMPTY_RETRY_DELAY);
+  }
+  return {xml:xml, intentos:EMPTY_RETRY_MAX, ms:ms};
 }
 
 async function queryPlateWithRetry(plate, s1, s2, iTime) {

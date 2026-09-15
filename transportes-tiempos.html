@@ -42,6 +42,53 @@
   --radius:8px;
   --radius-lg:12px;
 }
+
+/* ── TEMA CLARO ─────────────────────────────────────────────────────────
+   Bloque ADITIVO: no se modificó ninguna regla original. Esta página nació
+   sólo oscura, así que basta redefinir los tokens y los pocos colores que
+   estaban duros y no pasaban por var(). Los `color:#fff` que quedan van
+   siempre sobre fondo --blue, así que siguen siendo correctos en claro. */
+:root[data-theme="light"]{
+  --bg:#f4f6fb;
+  --s1:#ffffff;
+  --s2:#ffffff;
+  --s3:#f2f5fa;
+  --s4:#e8edf6;
+  --border:rgba(16,24,48,.10);
+  --border-md:rgba(16,24,48,.17);
+  --border-hi:rgba(16,24,48,.30);
+  --t1:#141a2e;
+  --t2:#535b78;
+  --t3:#858da8;
+  --green:#0f9d52;  --green-d:rgba(15,157,82,.12);
+  --blue:#2563eb;   --blue-d:rgba(37,99,235,.10);
+  --amber:#b8710a;  --amber-d:rgba(184,113,10,.13);
+  --red:#d33b3b;    --red-d:rgba(211,59,59,.10);
+  --purple:#6d4fd6; --purple-d:rgba(109,79,214,.12);
+  --cyan:#0d8f8f;   --cyan-d:rgba(13,143,143,.12);
+  --r-cd:#2563eb; --r-sala:#0f9d52; --r-cliente:#b8710a; --r-redtec:#0d8f8f; --r-otros:#6d4fd6;
+}
+:root[data-theme="light"] body{background:var(--bg)}
+:root[data-theme="light"] tbody tr:hover{background:rgba(16,24,48,.04)}
+/* El "vacío" del loader de la R: en claro se lee como silueta gris, no rosado */
+:root[data-theme="light"] .lr-ghost{filter:grayscale(1)}
+
+/* ── ZOOM DE CONTENIDO (a− / A+) ───────────────────────────────────────
+   Escala sólo lo que cuelga de .main; el sidebar y los modales quedan
+   a tamaño normal para no romper la navegación. */
+body.tt-z .main > *{zoom:var(--tt-z,1)}
+
+/* ── CONTROLES DE ACCESIBILIDAD Y TEMA ─────────────────────────────────
+   REGLA DE ORO: viven en la barra de contenido (.config-panel/.cbar-end),
+   NUNCA en el .topbar — el workspace de pestañas del m3link inyecta
+   .topbar{display:none} en las vistas embebidas y los haría desaparecer. */
+.a11y-grp{display:flex;align-items:center;gap:4px;background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:3px 4px}
+.a11y-btn{background:none;border:1px solid transparent;border-radius:6px;color:var(--t2);cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:700;line-height:1;padding:5px 8px;transition:all .15s}
+.a11y-btn:hover{background:var(--s4);color:var(--t1);border-color:var(--border-md)}
+.a11y-btn.sm{font-size:10.5px}
+.a11y-btn.md{font-size:12.5px}
+.a11y-btn.lg{font-size:15px}
+.a11y-btn.tema{font-size:14px;padding:5px 9px}
 html,body{min-height:100%;font-family:'DM Sans',sans-serif;font-size:13px;background:var(--bg);color:var(--t1);-webkit-font-smoothing:antialiased;line-height:1.5}
 
 /* ── SCROLLBAR ── */
@@ -214,7 +261,7 @@ tr.parada-larga td:first-child{box-shadow:inset 3px 0 0 var(--amber)}
 .btn-go:disabled{opacity:.4;cursor:not-allowed}
 .btn-xls{background:var(--green-d);color:var(--green);border:1px solid rgba(30,201,106,.2);border-radius:6px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:opacity .15s;white-space:nowrap}
 .btn-xls:hover{opacity:.8}
-.config-info{font-size:11px;color:var(--t3);align-self:center}
+.config-info{font-size:11px;color:var(--t3);align-self:center;max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cbar-end{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
 .cbar-end .live-badge{padding:5px 11px;font-size:11px}
 .cbar-end .hdr-link{font-size:11.5px;padding:6px 11px}
@@ -455,8 +502,7 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
           <option value="RW5303">RW5303 — Gonzalo Campos</option>
           <option value="SP3393">SP3393 — César Anabálón</option>
           <option value="VG1943">VG1943 — Víctor Vega</option>
-          <option value="XC9869">XC9869 — Hugo Nuñez</option>
-          <option value="YG5106">YG5106 — Miguel Gómez</option>
+          <!-- XC9869 e YG5106 quitadas: no son vehículos, devuelven la cuenta completa (ver FLOTA_NOMBRES) -->
         </select>
       </div>
       <div class="field">
@@ -468,6 +514,12 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
       </button>
       <button class="btn-xls" id="btn-xls" onclick="exportarExcel()" style="display:none">⬇ Excel</button>
       <div class="cbar-end">
+        <div class="a11y-grp" title="Tamaño del contenido">
+          <button class="a11y-btn sm" onclick="ttZoom(-1)" title="Reducir">a</button>
+          <button class="a11y-btn md" onclick="ttZoom(0)"  title="Tamaño normal">A</button>
+          <button class="a11y-btn lg" onclick="ttZoom(1)"  title="Aumentar">A</button>
+        </div>
+        <button class="a11y-btn tema" id="btn-tema" onclick="ttTema()" title="Cambiar tema" style="background:var(--s3);border-color:var(--border)">🌙</button>
         <span class="config-info" id="config-info"></span>
         <div class="live-badge gris" id="badge-estado" title="Estado de la consulta al GPS">
           <span class="pulse gris" id="badge-dot"></span>
@@ -542,6 +594,10 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
         <div class="card">
           <div class="card-hdr">
             <div class="card-title"><span class="card-title-dot" style="background:var(--blue)"></span>Tiempo promedio por tipo de recinto</div>
+            <div class="a11y-grp" style="padding:2px 3px" title="Forma del gráfico">
+              <button class="a11y-btn sm" id="tipo-f-linea" onclick="setFormaTipo('linea')">Lineal</button>
+              <button class="a11y-btn sm" id="tipo-f-barras" onclick="setFormaTipo('barras')">Barras</button>
+            </div>
           </div>
           <div class="card-body">
             <div class="chart-wrap"><canvas id="chart-tipo"></canvas></div>
@@ -829,6 +885,68 @@ let CFG = {
   proxyBase: '/api/gps-stops-proxy'
 };
 
+/* ── ACCESIBILIDAD (a− A A+) Y TEMA (sol/luna) ──────────────────────────
+   Los botones viven en .cbar-end, dentro de la barra de contenido. */
+const TT_ZOOMS = [1, 1.15, 1.3, 1.5];
+let ttZ = 0;
+
+function ttAplicarZoom(){
+  const z = TT_ZOOMS[ttZ];
+  document.body.classList.toggle('tt-z', z !== 1);
+  document.documentElement.style.setProperty('--tt-z', z);
+  try{ localStorage.setItem('tt_fs', String(ttZ)); }catch(e){}
+}
+function ttZoom(dir){
+  if(dir === 0) ttZ = 0;
+  else ttZ = Math.max(0, Math.min(TT_ZOOMS.length - 1, ttZ + dir));
+  ttAplicarZoom();
+}
+function ttSetTema(t, repintar){
+  if(t === 'light') document.documentElement.setAttribute('data-theme','light');
+  else document.documentElement.removeAttribute('data-theme');
+  const b = document.getElementById('btn-tema');
+  if(b) b.textContent = (t === 'light') ? '☀️' : '🌙';
+  try{ localStorage.setItem('tt_theme', t); }catch(e){}
+  /* Chart.js no reacciona a las variables CSS: los gráficos hay que
+     repintarlos a mano cuando cambia el tema. */
+  if(repintar){ try{ renderAll(); }catch(e){ console.warn('[tema] repintado', e.message); } }
+}
+function ttTema(){
+  const actual = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  ttSetTema(actual === 'light' ? 'dark' : 'light', true);
+}
+function ttInitUI(){
+  let t = 'dark', z = 0;
+  try{
+    t = localStorage.getItem('tt_theme') || 'dark';
+    z = parseInt(localStorage.getItem('tt_fs') || '0', 10) || 0;
+  }catch(e){}
+  ttZ = Math.max(0, Math.min(TT_ZOOMS.length - 1, z));
+  ttAplicarZoom();
+  ttSetTema(t, false);
+}
+
+/* Colores para Chart.js según el tema (recibe valores, no var()) */
+function esClaro(){ return document.documentElement.getAttribute('data-theme') === 'light'; }
+function cTick(){ return esClaro() ? '#535b78' : '#7b82a0'; }
+function cGrid(){ return esClaro() ? 'rgba(16,24,48,.08)' : 'rgba(255,255,255,.04)'; }
+
+/* Guarda por si el CDN de Chart.js no carga: sin esto la vista completa
+   revienta con "Chart is not defined" y no se ve ni la tabla. */
+function hayChart(){ return typeof Chart !== 'undefined'; }
+function avisoSinChart(idCanvas){
+  const el = document.getElementById(idCanvas);
+  if(!el || el.dataset.avisado) return;
+  const cont = el.parentElement;
+  if(!cont) return;
+  el.style.display = 'none';
+  const d = document.createElement('div');
+  d.style.cssText = 'display:flex;align-items:center;justify-content:center;height:100%;min-height:120px;color:var(--t3);font-size:12px;text-align:center;padding:16px;line-height:1.6';
+  d.textContent = 'No se pudo cargar la librería de gráficos (CDN bloqueado). Los datos de abajo están completos.';
+  cont.appendChild(d);
+  el.dataset.avisado = '1';
+}
+
 // ── FLOTA PRECARGADA desde Excel real ──────────────
 // Nombres confirmados — si el API los trae en Name= se usan esos,
 // si vienen vacíos se usa este diccionario como fallback.
@@ -855,6 +973,7 @@ const FLOTA_NOMBRES = {
 
 // Charts
 let chartTipo = null, chartDona = null, chartChoferes = null;
+let CHOFER_LISTA = [];   // última lista renderizada, para el detalle por chofer
 
 /* ═══════════════════════════════════════════════════════════════════════════
    SELECTOR DE PERÍODO (mismo componente del resto del m3link)
@@ -1191,6 +1310,7 @@ document.addEventListener('DOMContentLoaded', () => {
   /* Arranca con EL DÍA DE HOY: entrar al módulo no puede costar una espera.
      Para ayer están las flechas y para un período, el selector. */
   const hoy = fmt(new Date());
+  ttInitUI();                    // tema y zoom guardados, antes de pintar nada
   rgIniciar(hoy, hoy);
   loadConfig();
   renderEmptyCharts();
@@ -1661,7 +1781,7 @@ function mostrarDiagnostico(msgExtra){
   if(!panel){
     panel = document.createElement('div');
     panel.id = 'diag-panel';
-    panel.style.cssText = 'background:#1a0808;border:1px solid rgba(240,86,86,.3);border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:10px';
+    panel.style.cssText = 'background:var(--red-d);border:1px solid rgba(240,86,86,.3);border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:10px';
     const kpi = document.querySelector('.kpi-row');
     if(kpi) kpi.parentNode.insertBefore(panel, kpi);
   }
@@ -1670,7 +1790,7 @@ function mostrarDiagnostico(msgExtra){
 
   panel.innerHTML = `
     <div style="color:var(--red);font-weight:600;font-size:12px">⛔ Error conectando al proxy GPS Condor</div>
-    <div style="font-size:12px;color:#c87070;line-height:1.7">
+    <div style="font-size:12px;color:var(--red);line-height:1.7">
       <strong>Error:</strong> <code style="color:var(--amber);font-family:'DM Mono',monospace">${msg}</code><br>
       El proxy espera: <code style="color:var(--cyan);font-family:'DM Mono',monospace">/api/gps-stops-proxy?desde=2026/04/21 00:00:00&amp;hasta=2026/04/21 23:59:59&amp;time=60</code>
     </div>
@@ -1764,24 +1884,64 @@ function renderKPIs(){
 // ──────────────────────────────────────────────
 //  CHART TIPO
 // ──────────────────────────────────────────────
+/* Forma del gráfico de tipo de recinto: 'linea' (por defecto) o 'barras'.
+   Se guarda la preferencia, igual que en analisis-transferencias. */
+let FORMA_TIPO = 'linea';
+try{ FORMA_TIPO = localStorage.getItem('tt_forma_tipo') || 'linea'; }catch(e){}
+
+function setFormaTipo(f){
+  FORMA_TIPO = (f === 'barras') ? 'barras' : 'linea';
+  try{ localStorage.setItem('tt_forma_tipo', FORMA_TIPO); }catch(e){}
+  renderChartTipo();
+}
+
 function renderChartTipo(){
-  if(chartTipo){ chartTipo.destroy(); }
-  
+  if(chartTipo){ chartTipo.destroy(); chartTipo = null; }
+
   const tipos = ['CD Retail','Sala Retail','Cliente','REDTEC','Sin geocerca'];
   const colores = ['#4b8df8','#1ec96a','#f4a836','#2dd4d4','#6b7280'];
-  
+
   const vals = tipos.map(t => {
     const rows = DB.filter(r => r.tipo === t);
     if(!rows.length) return 0;
     return Math.round(rows.reduce((s,r) => s+r.minutos, 0) / rows.length);
   });
-  
+
+  // Marcar el botón activo
+  const bl = document.getElementById('tipo-f-linea'), bb = document.getElementById('tipo-f-barras');
+  if(bl && bb){
+    const on  = 'background:var(--blue-d);color:var(--blue);border-color:var(--blue)';
+    bl.style.cssText = FORMA_TIPO === 'linea'  ? on : '';
+    bb.style.cssText = FORMA_TIPO === 'barras' ? on : '';
+  }
+
+  const leg = document.getElementById('legend-tipo');
+  if(leg) leg.innerHTML = tipos.map((t,i) => `<div class="leg-item"><div class="leg-dot" style="background:${colores[i]}"></div>${t}: ${vals[i]>0?fmtMins(vals[i]):'sin datos'}</div>`).join('');
+
+  if(!hayChart()){ avisoSinChart('chart-tipo'); return; }
+
+  const esLinea = FORMA_TIPO === 'linea';
   const ctx = document.getElementById('chart-tipo').getContext('2d');
   chartTipo = new Chart(ctx, {
-    type: 'bar',
+    type: esLinea ? 'line' : 'bar',
     data: {
       labels: tipos,
-      datasets: [{
+      datasets: [ esLinea ? {
+        label: 'T. promedio (min)',
+        data: vals,
+        borderColor: '#4b8df8',
+        backgroundColor: 'rgba(75,141,248,.12)',
+        borderWidth: 2.5,
+        tension: .35,
+        fill: true,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        /* El punto conserva el color de su tipo de recinto: así la línea
+           sigue diciendo de qué categoría es cada valor. */
+        pointBackgroundColor: colores,
+        pointBorderColor: colores,
+        pointBorderWidth: 2
+      } : {
         label: 'T. promedio (min)',
         data: vals,
         backgroundColor: colores.map(c => c+'33'),
@@ -1794,18 +1954,14 @@ function renderChartTipo(){
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false }, tooltip: {
-        callbacks: { label: ctx => ' ' + fmtMins(ctx.raw) }
+        callbacks: { label: c => ' ' + fmtMins(c.raw) }
       }},
       scales: {
-        y: { ticks: { color: '#7b82a0', font:{size:11}, callback: v => v+'m' }, grid: { color: 'rgba(255,255,255,.04)' }, border:{dash:[4,4]} },
-        x: { ticks: { color: '#7b82a0', font:{size:11} }, grid: { display:false } }
+        y: { ticks: { color: cTick(), font:{size:11}, callback: v => v+'m' }, grid: { color: cGrid() }, border:{dash:[4,4]} },
+        x: { ticks: { color: cTick(), font:{size:11} }, grid: { display:false } }
       }
     }
   });
-  
-  // Leyenda
-  const leg = document.getElementById('legend-tipo');
-  leg.innerHTML = tipos.map((t,i) => `<div class="leg-item"><div class="leg-dot" style="background:${colores[i]}"></div>${t}: ${vals[i]>0?fmtMins(vals[i]):'sin datos'}</div>`).join('');
 }
 
 function renderEmptyCharts(){
@@ -1829,6 +1985,7 @@ function renderChartDona(){
   const vals = tipos.map(t => DB.filter(r=>r.tipo===t).length);
   const total = vals.reduce((s,v)=>s+v,0);
   
+  if(!hayChart()){ avisoSinChart('chart-dona'); return; }
   const ctx = document.getElementById('chart-dona').getContext('2d');
   chartDona = new Chart(ctx, {
     type: 'doughnut',
@@ -2003,35 +2160,49 @@ function renderChoferes(){
     puntos: c.puntos.size
   })).sort((a,b) => b.visitas - a.visitas);
 
+  CHOFER_LISTA = lista;
+
   // Chart
-  if(chartChoferes) chartChoferes.destroy();
-  const ctx = document.getElementById('chart-choferes').getContext('2d');
-  chartChoferes = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: lista.map(c => c.placa),
-      datasets:[
-        { label:'Visitas consolidadas', data:lista.map(c=>c.visitas), backgroundColor:'rgba(75,141,248,.7)', borderColor:'#4b8df8', borderWidth:1.5, borderRadius:4, yAxisID:'y' },
-        { label:'T. Prom. por visita (min)', data:lista.map(c=>c.avg), type:'line', borderColor:'#f4a836', borderWidth:2, pointRadius:4, pointBackgroundColor:'#f4a836', tension:.3, yAxisID:'y1' }
-      ]
-    },
-    options: {
-      responsive:true, maintainAspectRatio:false,
-      plugins:{
-        legend:{ labels:{color:'#7b82a0',font:{size:11}} },
-        tooltip:{
-          callbacks:{
-            label: ctx => ctx.dataset.label + ': ' + (ctx.datasetIndex===1 ? fmtMins(ctx.raw) : ctx.raw)
-          }
-        }
+  if(chartChoferes){ chartChoferes.destroy(); chartChoferes = null; }
+  if(hayChart()){
+    const ctx = document.getElementById('chart-choferes').getContext('2d');
+    chartChoferes = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: lista.map(c => c.placa),
+        datasets:[
+          { label:'Visitas consolidadas', data:lista.map(c=>c.visitas), backgroundColor:'rgba(75,141,248,.7)', borderColor:'#4b8df8', borderWidth:1.5, borderRadius:4, yAxisID:'y' },
+          { label:'T. Prom. por visita (min)', data:lista.map(c=>c.avg), type:'line', borderColor:'#f4a836', borderWidth:2, pointRadius:4, pointBackgroundColor:'#f4a836', tension:.3, yAxisID:'y1' }
+        ]
       },
-      scales:{
-        y:{ ticks:{color:'#7b82a0',font:{size:11}}, grid:{color:'rgba(255,255,255,.04)'}, position:'left', title:{display:true,text:'Visitas',color:'#7b82a0',font:{size:11}} },
-        y1:{ ticks:{color:'#f4a836',font:{size:11}, callback:v=>fmtMins(v)}, position:'right', grid:{display:false} },
-        x:{ ticks:{color:'#7b82a0',font:{size:11}}, grid:{display:false} }
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        /* Clic en la barra → detalle del chofer */
+        onClick: (evt, els) => {
+          if(!els || !els.length) return;
+          const placa = lista[els[0].index] && lista[els[0].index].placa;
+          if(placa) detalleChofer(placa);
+        },
+        onHover: (evt, els) => { evt.native.target.style.cursor = (els && els.length) ? 'pointer' : 'default'; },
+        plugins:{
+          legend:{ labels:{color:cTick(),font:{size:11}} },
+          tooltip:{
+            callbacks:{
+              label: c => c.dataset.label + ': ' + (c.datasetIndex===1 ? fmtMins(c.raw) : c.raw),
+              footer: () => 'Clic para ver el detalle'
+            }
+          }
+        },
+        scales:{
+          y:{ ticks:{color:cTick(),font:{size:11}}, grid:{color:cGrid()}, position:'left', title:{display:true,text:'Visitas',color:cTick(),font:{size:11}} },
+          y1:{ ticks:{color:'#f4a836',font:{size:11}, callback:v=>fmtMins(v)}, position:'right', grid:{display:false} },
+          x:{ ticks:{color:cTick(),font:{size:11}}, grid:{display:false} }
+        }
       }
-    }
-  });
+    });
+  } else {
+    avisoSinChart('chart-choferes');
+  }
 
   // Grid cards
   const grid = document.getElementById('chofer-grid');
@@ -2042,13 +2213,14 @@ function renderChoferes(){
 
   grid.innerHTML = lista.map(c => {
     const ini = c.chofer.split(' ').map(p=>p[0]).join('').substring(0,2).toUpperCase();
-    return `<div class="chofer-card">
+    return `<div class="chofer-card" style="cursor:pointer" onclick="detalleChofer('${c.placa}')" title="Ver el detalle de ${escTT(c.chofer)}">
       <div class="chofer-top">
         <div class="chofer-av">${ini}</div>
         <div>
-          <div class="chofer-name">${c.chofer}</div>
+          <div class="chofer-name">${escTT(c.chofer)}</div>
           <div class="chofer-placa">${c.placa}</div>
         </div>
+        <div style="margin-left:auto;color:var(--t3);font-size:15px">›</div>
       </div>
       <div class="chofer-stats">
         <div class="chofer-stat"><div class="chofer-stat-val">${c.visitas}</div><div class="chofer-stat-label">Visitas</div></div>
@@ -2059,8 +2231,180 @@ function renderChoferes(){
   }).join('');
 }
 
+function escTT(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, ch =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+/* ── DETALLE POR CHOFER ─────────────────────────────────────────────────
+   Faltaba: el informe mostraba la tarjeta con tres números y ahí moría, así
+   que no servía para gestionar. Ahora cada tarjeta y cada barra abre el
+   detalle de ese camión: en qué se le va el tiempo, en qué puntos, y a qué
+   hora trabaja — que es lo que permite decir por qué la tarde queda vacía. */
+function detalleChofer(placa){
+  const rows = DB.filter(r => r.placa === placa);
+  if(!rows.length) return;
+  const chofer = rows[0].chofer || placa;
+
+  // Visitas consolidadas (mismo punto + fecha = 1 visita), igual criterio que el resumen
+  const vmap = {};
+  rows.forEach(r => {
+    const k = r.punto + '|' + r.fecha;
+    if(!vmap[k]) vmap[k] = {punto:r.punto, tipo:r.tipo, fecha:r.fecha, dia:r.dia, minutos:0, llegada:r.llegada, salida:r.salida};
+    vmap[k].minutos += r.minutos;
+    if(r.llegada < vmap[k].llegada) vmap[k].llegada = r.llegada;
+    if(r.salida  > vmap[k].salida)  vmap[k].salida  = r.salida;
+  });
+  const visitas = Object.values(vmap).sort((a,b) => b.llegada.localeCompare(a.llegada));
+
+  const totalMin = visitas.reduce((s,v) => s+v.minutos, 0);
+  const dias     = new Set(visitas.map(v => v.fecha));
+  const puntos   = new Set(visitas.map(v => v.punto));
+  const avg      = visitas.length ? Math.round(totalMin / visitas.length) : 0;
+
+  // Reparto del tiempo por tipo de recinto
+  const porTipo = {};
+  visitas.forEach(v => {
+    if(!porTipo[v.tipo]) porTipo[v.tipo] = {n:0, min:0};
+    porTipo[v.tipo].n++; porTipo[v.tipo].min += v.minutos;
+  });
+  const tiposOrd = Object.entries(porTipo).sort((a,b) => b[1].min - a[1].min);
+  const colorTipo = {'CD Retail':'var(--r-cd)','Sala Retail':'var(--r-sala)','Cliente':'var(--r-cliente)','REDTEC':'var(--r-redtec)','Sin geocerca':'var(--r-otros)'};
+
+  // Jornada: en qué hora del día empieza cada parada (sin librería, barras CSS)
+  const H0 = 5, H1 = 22;
+  const porHora = {};
+  for(let h = H0; h <= H1; h++) porHora[h] = 0;
+  let horasLleg = [];
+  visitas.forEach(v => {
+    const hh = parseInt((v.llegada.split(' ')[1] || '0:0').split(':')[0], 10);
+    horasLleg.push(hh + (parseInt((v.llegada.split(' ')[1]||'0:0').split(':')[1],10)||0)/60);
+    if(hh >= H0 && hh <= H1) porHora[hh]++;
+  });
+  const maxHora = Math.max(1, ...Object.values(porHora));
+  horasLleg.sort((a,b) => a-b);
+  const hFmt = x => String(Math.floor(x)).padStart(2,'0') + ':' + String(Math.round((x%1)*60)).padStart(2,'0');
+
+  // Ranking de puntos
+  const porPunto = {};
+  visitas.forEach(v => {
+    if(!porPunto[v.punto]) porPunto[v.punto] = {punto:v.punto, tipo:v.tipo, n:0, min:0};
+    porPunto[v.punto].n++; porPunto[v.punto].min += v.minutos;
+  });
+  const puntosOrd = Object.values(porPunto)
+    .map(p => ({...p, avg: Math.round(p.min / p.n)}))
+    .sort((a,b) => b.min - a.min).slice(0, 12);
+
+  const kpi = (val, lab, color) => `<div style="background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;flex:1;min-width:110px">
+    <div style="font-family:'DM Mono',monospace;font-size:17px;font-weight:600;color:${color||'var(--t1)'}">${val}</div>
+    <div style="font-size:10px;color:var(--t3);margin-top:3px;text-transform:uppercase;letter-spacing:.4px">${lab}</div></div>`;
+
+  let modal = document.getElementById('modal-chofer');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.id = 'modal-chofer';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:9500;display:flex;align-items:center;justify-content:center;padding:20px';
+    modal.onclick = e => { if(e.target === modal) modal.remove(); };
+    document.body.appendChild(modal);
+  }
+  const ini = chofer.split(' ').map(p=>p[0]).join('').substring(0,2).toUpperCase();
+
+  modal.innerHTML = `
+  <div style="background:var(--s2);border:1px solid var(--border-hi);border-radius:14px;width:min(980px,96vw);max-height:90vh;overflow:auto;box-shadow:0 22px 60px rgba(0,0,0,.55)">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;position:sticky;top:0;background:var(--s2);z-index:2">
+      <div class="chofer-av">${ini}</div>
+      <div>
+        <div style="font-size:14px;font-weight:600;color:var(--t1)">${escTT(chofer)}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t2)">${placa} · ${dias.size} día(s) con actividad</div>
+      </div>
+      <button onclick="document.getElementById('modal-chofer').remove()" style="margin-left:auto;background:none;border:none;color:var(--t2);font-size:20px;cursor:pointer;padding:2px 8px">×</button>
+    </div>
+
+    <div style="padding:16px 20px;display:flex;gap:10px;flex-wrap:wrap">
+      ${kpi(visitas.length, 'Visitas', 'var(--blue)')}
+      ${kpi(fmtMins(totalMin), 'Tiempo detenido')}
+      ${kpi(fmtMins(avg), 'Promedio por visita', 'var(--amber)')}
+      ${kpi(puntos.size, 'Puntos únicos', 'var(--purple)')}
+      ${kpi(dias.size ? (visitas.length/dias.size).toFixed(1) : '0', 'Visitas por día', 'var(--green)')}
+      ${kpi(horasLleg.length ? hFmt(horasLleg[Math.floor(horasLleg.length/2)]) : '—', 'Hora mediana de llegada', 'var(--cyan)')}
+    </div>
+
+    <div style="padding:0 20px 16px">
+      <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">En qué se le va el tiempo</div>
+      ${tiposOrd.map(([t,d]) => {
+        const pct = totalMin ? (d.min/totalMin*100) : 0;
+        return `<div style="margin-bottom:7px">
+          <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--t2);margin-bottom:3px">
+            <span><b style="color:var(--t1)">${escTT(t)}</b> · ${d.n} visita(s)</span>
+            <span style="font-family:'DM Mono',monospace">${fmtMins(d.min)} · ${pct.toFixed(1)}%</span>
+          </div>
+          <div style="height:7px;background:var(--s4);border-radius:4px;overflow:hidden">
+            <div style="height:100%;width:${pct.toFixed(1)}%;background:${colorTipo[t]||'var(--t3)'};border-radius:4px"></div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    <div style="padding:0 20px 16px">
+      <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Jornada — paradas iniciadas por hora</div>
+      <div style="display:flex;align-items:flex-end;gap:3px;height:80px;background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:8px">
+        ${Object.keys(porHora).map(h => {
+          const n = porHora[h], alto = n ? Math.max(6, n/maxHora*58) : 2;
+          const tarde = (+h) >= 14;
+          return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px" title="${h}:00 — ${n} parada(s)">
+            <div style="width:100%;height:${alto}px;background:${n ? (tarde ? 'var(--amber)' : 'var(--blue)') : 'var(--border-md)'};border-radius:3px 3px 0 0;opacity:${n?.85:.5}"></div>
+            <div style="font-size:8.5px;color:var(--t3);font-family:'DM Mono',monospace">${h}</div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div style="font-size:10.5px;color:var(--t3);margin-top:6px">En ámbar, las paradas que empiezan desde las 14:00. Si la barra ámbar casi no existe, ese camión termina su jornada al mediodía.</div>
+    </div>
+
+    <div style="padding:0 20px 16px">
+      <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Dónde para más (top 12 por tiempo)</div>
+      <div class="tbl-wrap"><table style="width:100%;border-collapse:collapse">
+        <thead><tr style="border-bottom:1px solid var(--border)">
+          <th style="text-align:left;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Punto</th>
+          <th style="text-align:left;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Tipo</th>
+          <th style="text-align:right;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Visitas</th>
+          <th style="text-align:right;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">T. prom</th>
+          <th style="text-align:right;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">T. total</th>
+        </tr></thead>
+        <tbody>${puntosOrd.map(p => `<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:6px 10px;font-size:12px;color:var(--t1)">${escTT(p.punto)}</td>
+          <td style="padding:6px 10px;font-size:11.5px;color:${colorTipo[p.tipo]||'var(--t2)'}">${escTT(p.tipo)}</td>
+          <td style="padding:6px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t2)">${p.n}</td>
+          <td style="padding:6px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t2)">${fmtMins(p.avg)}</td>
+          <td style="padding:6px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t1)">${fmtMins(p.min)}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>
+
+    <div style="padding:0 20px 20px">
+      <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Detalle de visitas${visitas.length > 150 ? ' (últimas 150)' : ''}</div>
+      <div class="tbl-wrap" style="max-height:300px;overflow:auto"><table style="width:100%;border-collapse:collapse">
+        <thead><tr style="border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--s2)">
+          <th style="text-align:left;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Fecha</th>
+          <th style="text-align:left;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Punto</th>
+          <th style="text-align:right;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Llegada</th>
+          <th style="text-align:right;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Salida</th>
+          <th style="text-align:right;padding:6px 10px;font-size:10px;color:var(--t3);text-transform:uppercase">Tiempo</th>
+        </tr></thead>
+        <tbody>${visitas.slice(0,150).map(v => `<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:6px 10px;font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t2)">${v.fecha} <span style="color:var(--t3)">${escTT(v.dia||'')}</span></td>
+          <td style="padding:6px 10px;font-size:12px;color:var(--t1)">${escTT(v.punto)}</td>
+          <td style="padding:6px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t2)">${escTT((v.llegada.split(' ')[1]||'').slice(0,5))}</td>
+          <td style="padding:6px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t2)">${escTT((String(v.salida||'').split(' ')[1]||'').slice(0,5))}</td>
+          <td style="padding:6px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t1)">${fmtMins(v.minutos)}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>
+  </div>`;
+}
+
 function renderChartChoferes(){
   if(chartChoferes) chartChoferes.destroy();
+  if(!hayChart()){ avisoSinChart('chart-choferes'); return; }
   const ctx = document.getElementById('chart-choferes').getContext('2d');
   chartChoferes = new Chart(ctx, {
     type:'bar', data:{labels:[], datasets:[{label:'Visitas',data:[]}]},
@@ -2802,6 +3146,7 @@ function renderTendencias(){
 
   // Gráfico Retail
   if(chartTendRetail) chartTendRetail.destroy();
+  if(!hayChart()){ avisoSinChart('chart-tend-retail'); return; }
   const ctxR = document.getElementById('chart-tend-retail').getContext('2d');
   chartTendRetail = new Chart(ctxR, {
     type: 'line',
@@ -2869,6 +3214,7 @@ function renderTendencias(){
 
   // Gráfico Clientes
   if(chartTendCli) chartTendCli.destroy();
+  if(!hayChart()){ avisoSinChart('chart-tend-cli'); return; }
   const ctxC = document.getElementById('chart-tend-cli').getContext('2d');
   chartTendCli = new Chart(ctxC, {
     type: 'line',

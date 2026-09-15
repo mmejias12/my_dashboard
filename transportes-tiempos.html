@@ -343,6 +343,9 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
 .btn-placa-num.off{background:var(--s2);border-color:var(--border);color:var(--t3);opacity:.4}
 .btn-placa-num.error{background:var(--red-d);border-color:var(--red);color:var(--red)}
 .btn-placa-num.sindata{background:var(--s3);border-color:var(--border-md);color:var(--t3);opacity:.55;border-style:dashed}
+/* SIN RESPUESTA ≠ SIN ACTIVIDAD: el API no entregó el dato de esa placa.
+   Va en ámbar y no apagada, porque es un problema a resolver, no un camión detenido. */
+.btn-placa-num.sinrespuesta{background:var(--amber-d);border-color:var(--amber);color:var(--amber);border-style:dashed}
 .btn-placa-num.loading,.btn-placa-num.pulsing{background:var(--amber-d);border-color:var(--amber);color:var(--amber);animation:pp 1s infinite}
 .btn-placa-num:hover:not(.loading){opacity:1;border-color:var(--border-hi)}
 .btn-sem{background:var(--s3);border:1px solid var(--border);border-radius:5px;color:var(--t2);padding:4px 10px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s}
@@ -481,9 +484,12 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
           <div class="lr-ring"></div><div class="lr-ghost"></div>
           <div class="lr-mask"><div class="lr-liquid b"></div><div class="lr-liquid"></div><div class="lr-brillo"></div></div>
         </div>
-        <div class="lr-txt" id="gps-loader-txt">Consultando el GPS…<b>11 placas · puede tardar unos segundos</b></div>
+        <div class="lr-txt" id="gps-loader-txt">Consultando el GPS…<b>9 placas · puede tardar unos segundos</b></div>
       </div>
     </div>
+
+    <!-- Aviso de dato incompleto: se enciende solo cuando alguna placa no respondió -->
+    <div id="aviso-incompleto" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding:10px 14px;background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.35);border-radius:10px;font-size:12px;color:var(--t1);line-height:1.5"></div>
 
     <!-- KPIs -->
     <div class="kpi-row" id="kpi-row">
@@ -750,17 +756,13 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
           <div class="card-title"><span class="card-title-dot" style="background:var(--blue)"></span>Configuración de conexión GPS Condor</div>
         </div>
         <div class="card-body" style="display:flex;flex-direction:column;gap:14px;max-width:520px">
-          <div class="field">
-            <label>URL Base API (WSDL)</label>
-            <input type="text" class="sinput" id="cfg-url" value="(la define el proxy en el servidor)" style="width:100%" disabled />
-          </div>
-          <div class="field">
-            <label>Usuario (sLogin)</label>
-            <input type="text" class="sinput" id="cfg-user" value="— autenticación en el servidor —" style="width:100%" disabled />
-          </div>
-          <div class="field">
-            <label>Contraseña (sPassword)</label>
-            <input type="text" class="sinput" id="cfg-pass" value="— no se guarda en el navegador —" style="width:100%" disabled />
+          <!-- Los campos de usuario y contraseña se eliminaron: no se usaban y un
+               campo de credencial en pantalla invita a que alguien escriba una.
+               La autenticación ocurre sólo en el servidor. -->
+          <div style="background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12px;color:var(--t2);display:flex;flex-direction:column;gap:6px">
+            <div style="color:var(--green);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px">🔒 Credenciales</div>
+            <div>Esta página <b>no tiene ni puede tener</b> el usuario ni la contraseña del GPS. Todas las consultas van a <code style="font-family:'DM Mono',monospace;color:var(--cyan)">/api/gps-stops-proxy</code>, que autentica del lado servidor.</div>
+            <div style="color:var(--t3);font-size:11px">La credencial vive en las Application Settings del Static Web App, en <code style="font-family:'DM Mono',monospace">GPS_LOGIN</code> y <code style="font-family:'DM Mono',monospace">GPS_PASSWORD</code>. No está en este archivo ni en el navegador.</div>
           </div>
           <div style="background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12px;color:var(--t2);display:flex;flex-direction:column;gap:8px">
             <div style="color:var(--amber);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px">📌 Endpoint activo</div>
@@ -774,7 +776,6 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
             <code style="display:block;margin-top:6px;font-family:'DM Mono',monospace;font-size:11px;color:var(--green)">/api/gps-stops-proxy?desde=2026/04/21 00:00:00&hasta=2026/04/21 23:59:59&time=60</code>
           </div>
           <div style="display:flex;gap:8px">
-            <button class="btn-go" onclick="guardarConfig()">💾 Guardar</button>
             <button class="btn-xls" onclick="testApi()">🔌 Test conexión</button>
           </div>
           <div id="cfg-result" style="font-size:12px;color:var(--t2)"></div>
@@ -807,6 +808,13 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
 // ──────────────────────────────────────────────
 let DB = []; // filas procesadas (unión de todas las placas activas)
 let DB_PLACAS = {}; // caché por placa: {placa: [rows]}
+/* Estado de la ÚLTIMA consulta por placa, tal como lo reporta el proxy:
+   'con_datos' | 'sin_respuesta' | 'error' | 'bloqueada'.
+   Existe porque el API del GPS responde vacío de forma intermitente (HTTP 200
+   en ~30 ms, contra ~250 ms de una respuesta buena) y antes eso se pintaba
+   como "sin actividad", o sea un camión que sí trabajó aparecía detenido.
+   Una placa SIN RESPUESTA no se puede promediar ni concluir: se reintenta. */
+let DB_ESTADO = {}; // {placa: {estado, intentos, ts}}
 let PLACAS_ACTIVAS = new Set(); // placas cuyos datos están en DB
 let DB_FILTERED = [];
 let PAG_PAGE = 1;
@@ -824,6 +832,15 @@ let CFG = {
 // ── FLOTA PRECARGADA desde Excel real ──────────────
 // Nombres confirmados — si el API los trae en Name= se usan esos,
 // si vienen vacíos se usa este diccionario como fallback.
+/* XC9869 e YG5106 SE QUITARON el 15-09-2026: no son vehículos. El API responde
+   a esas dos patentes con las paradas de TODA la cuenta — 2.945 paradas en
+   agosto, conjuntos idénticos entre sí y superconjunto del 100% de las paradas
+   de cada placa real. Con ellas dentro, cada carga metía el universo completo
+   dos veces más y todo promedio de flota quedaba inflado (24.528 h de detención
+   en un mes que sólo tiene 6.696 h-camión). Además eran el origen de la
+   contradicción de nombres: aquí decían HUGO NUÑEZ / MIGUEL GOMEZ y las
+   tarjetas mostraban ISMAEL CAMPOS, que es el Name= del primer registro del
+   volcado de la cuenta. El proxy ahora las bloquea salvo ?cuenta=1. */
 const FLOTA_NOMBRES = {
   'BJCL13': 'ISMAEL CAMPOS',
   'CCRC36': 'JUAN CARLOS VEGA',
@@ -833,9 +850,7 @@ const FLOTA_NOMBRES = {
   'NC8771': 'JULIO BULNES',
   'RW5303': 'GONZALO CAMPOS',
   'SP3393': 'CESAR ANABALON',
-  'VG1943': 'VICTOR VEGA',
-  'XC9869': 'HUGO NUÑEZ',
-  'YG5106': 'MIGUEL GOMEZ'
+  'VG1943': 'VICTOR VEGA'
 };
 
 // Charts
@@ -2201,22 +2216,30 @@ async function testApi(){
     const ok      = r.headers.get('X-Debug-Plates-Ok')  || '?';
     const total   = r.headers.get('X-Debug-Plates-Total')|| '?';
 
+    /* El proxy devuelve JSON, no XML. La versión anterior buscaba <Response,
+       <Plate y NoData="true", que no existen en la respuesta, así que este test
+       SIEMPRE caía en "formato inesperado" y no servía para diagnosticar nada.
+       Ahora lee el bloque `resumen` que agrega el proxy. */
+    let j = null;
+    try { j = JSON.parse(txt); } catch(_){}
+
     if(!r.ok){
       res.innerHTML = `<span style="color:var(--red)">✗ Proxy HTTP ${r.status}: ${txt.substring(0,120)}</span>`;
-    } else if(txt.includes('<Response') || txt.includes('<Plate')){
-      // Contar placas con data
-      const conData  = (txt.match(/NoData="true"/g)||[]).length;
-      const totalPl  = (txt.match(/<Plate /g)||[]).length;
-      const errores  = (txt.match(/<Error /g)||[]).length;
-      const sinData  = conData;
-      const activas  = totalPl - sinData;
-      res.innerHTML  = `<span style="color:var(--green)">✓ Proxy OK</span>
-        <span style="color:var(--t2);font-size:11.5px;margin-left:8px">${elapsed}ms · ${totalPl} placas consultadas · ${activas} con data · ${sinData} sin actividad${errores>0?' · <span style="color:var(--amber)">'+errores+' errores</span>':''}</span>
-        <br><span style="color:var(--t3);font-size:11px">URL: ${urlProxy}</span>`;
-    } else if(txt.includes('110')){
-      res.innerHTML = `<span style="color:var(--amber)">⚠ Proxy OK — sin paradas ayer (tiempo mínimo 60 min, prueba bajar)</span>`;
+    } else if(j && j.ok){
+      const rs = j.resumen || {};
+      const sinResp = rs.sin_respuesta || 0;
+      const conErr  = rs.con_error || 0;
+      const fiable  = rs.confiable !== false && sinResp === 0 && conErr === 0;
+      const detalle = (j.placas || [])
+        .filter(p => p.estado !== 'con_datos')
+        .map(p => `${p.plate} (${p.estado})`).join(', ');
+      res.innerHTML = `<span style="color:${fiable ? 'var(--green)' : 'var(--amber)'}">${fiable ? '✓ Proxy OK · muestra completa' : '⚠ Proxy OK · muestra INCOMPLETA'}</span>
+        <span style="color:var(--t2);font-size:11.5px;margin-left:8px">${elapsed}ms · ${rs.consultadas ?? total} placas consultadas · ${rs.con_datos ?? ok} con datos${sinResp ? ' · <span style="color:var(--amber)">'+sinResp+' sin respuesta</span>' : ''}${conErr ? ' · <span style="color:var(--red)">'+conErr+' con error</span>' : ''}${rs.duplicados_descartados ? ' · '+rs.duplicados_descartados+' duplicados descartados' : ''}</span>
+        ${detalle ? `<br><span style="color:var(--amber);font-size:11px">${detalle}</span>` : ''}
+        ${!fiable ? '<br><span style="color:var(--t3);font-size:11px">Sin respuesta ≠ sin actividad: el API devuelve vacío de forma intermitente. Reintenta antes de concluir que un camión estuvo detenido.</span>' : ''}
+        <br><span style="color:var(--t3);font-size:11px">${j.total} paradas · URL: ${urlProxy}</span>`;
     } else {
-      res.innerHTML = `<span style="color:var(--amber)">⚠ Proxy respondió pero formato inesperado (${txt.length} bytes): ${txt.substring(0,100)}</span>`;
+      res.innerHTML = `<span style="color:var(--amber)">⚠ Proxy respondió pero no es el JSON esperado (${txt.length} bytes): ${txt.substring(0,100)}</span>`;
     }
   } catch(e){
     const esCors = e.message.includes('fetch') || e.message.includes('network') || e.message.includes('Failed');
@@ -2357,25 +2380,33 @@ function setInfo(txt, tipo){
 
 function mostrarResumenPlacas(){
   const TODAS = Object.keys(FLOTA_NOMBRES);
-  const conData    = TODAS.filter(p => DB_PLACAS[p] && DB_PLACAS[p].length > 0);
-  const sinData    = TODAS.filter(p => DB_PLACAS[p] && DB_PLACAS[p].length === 0);
-  const noCargadas = TODAS.filter(p => DB_PLACAS[p] === undefined);
+  /* Cuatro estados, no tres. La distinción que faltaba es SIN RESPUESTA:
+     el API no entregó el dato. Antes caía en "sin actividad" y se leía como
+     un camión detenido — así fue como SP3393 apareció con 4 registros en
+     agosto cuando en realidad había hecho 219 paradas. */
+  const noRespondio = p => DB_ESTADO[p] && (DB_ESTADO[p].estado === 'sin_respuesta' || DB_ESTADO[p].estado === 'error');
+  const conData      = TODAS.filter(p => DB_PLACAS[p] && DB_PLACAS[p].length > 0);
+  const sinActividad = TODAS.filter(p => DB_PLACAS[p] && DB_PLACAS[p].length === 0 && !noRespondio(p));
+  const sinRespuesta = TODAS.filter(p => noRespondio(p));
+  const noCargadas   = TODAS.filter(p => DB_PLACAS[p] === undefined && !noRespondio(p));
 
-  const fila = (p, estado, color) => {
+  const fila = (p, estado, color, resalte) => {
     const nombre = FLOTA_NOMBRES[p] || p;
     const visitas = DB_PLACAS[p] ? DB_PLACAS[p].length : '—';
-    return `<tr style="border-bottom:1px solid var(--border)">
+    const inten = DB_ESTADO[p] && DB_ESTADO[p].intentos ? ` · ${DB_ESTADO[p].intentos} intento(s)` : '';
+    return `<tr style="border-bottom:1px solid var(--border);${resalte ? 'background:rgba(245,158,11,.07)' : ''}">
       <td style="padding:7px 12px;font-family:'DM Mono',monospace;font-size:12px;color:var(--t2)">${p}</td>
       <td style="padding:7px 12px;font-size:12.5px;color:var(--t1)">${nombre}</td>
-      <td style="padding:7px 12px;text-align:center"><span class="badge ${color}">${estado}</span></td>
-      <td style="padding:7px 12px;text-align:right;font-family:'DM Mono',monospace;font-size:12px;color:var(--t2)">${visitas !== '—' ? visitas + ' reg.' : '—'}</td>
+      <td style="padding:7px 12px;text-align:center"><span class="badge ${color}" ${resalte ? 'style="background:rgba(245,158,11,.18);color:#f59e0b;border-color:rgba(245,158,11,.5)"' : ''}>${estado}</span></td>
+      <td style="padding:7px 12px;text-align:right;font-family:'DM Mono',monospace;font-size:12px;color:var(--t2)">${visitas !== '—' ? visitas + ' reg.' : '—'}${inten}</td>
     </tr>`;
   };
 
   const rows = [
-    ...conData.map(p    => fila(p, 'Con datos',   'ok')),
-    ...sinData.map(p    => fila(p, 'Sin datos',   'warn')),
-    ...noCargadas.map(p => fila(p, 'No cargado',  'otros')),
+    ...conData.map(p      => fila(p, 'Con datos',     'ok')),
+    ...sinRespuesta.map(p => fila(p, 'Sin respuesta', 'warn', true)),
+    ...sinActividad.map(p => fila(p, 'Sin actividad', 'otros')),
+    ...noCargadas.map(p   => fila(p, 'No consultada', 'otros')),
   ].join('');
 
   // Crear modal
@@ -2406,11 +2437,17 @@ function mostrarResumenPlacas(){
           <tbody>${rows}</tbody>
         </table>
       </div>
-      <div style="padding:12px 18px;border-top:1px solid var(--border);font-size:11px;color:var(--t3);display:flex;gap:16px">
+      <div style="padding:12px 18px;border-top:1px solid var(--border);font-size:11px;color:var(--t3);display:flex;gap:16px;align-items:center;flex-wrap:wrap">
         <span>✅ ${conData.length} con datos</span>
-        <span>⚠️ ${sinData.length} sin actividad</span>
+        <span style="color:${sinRespuesta.length ? '#f59e0b' : 'var(--t3)'}">⚠️ ${sinRespuesta.length} sin respuesta</span>
+        <span>🌙 ${sinActividad.length} sin actividad</span>
         <span>⬜ ${noCargadas.length} no consultadas</span>
+        ${sinRespuesta.length ? '<button class="btn-go" style="font-size:11px;padding:4px 10px;margin-left:auto" onclick="document.getElementById(\'modal-placas\').remove();reintentarSinRespuesta()">↻ Reintentar las sin respuesta</button>' : ''}
       </div>
+      ${sinRespuesta.length ? `<div style="padding:0 18px 14px;font-size:11px;color:var(--t3);line-height:1.5">
+        <b style="color:#f59e0b">Sin respuesta no es sin actividad.</b> El API del GPS devuelve vacío de forma
+        intermitente (HTTP 200 en ~30 ms). Esas placas no se pueden dar por detenidas ni entran en los
+        promedios de flota de esta pantalla.</div>` : ''}
     </div>`;
 }
 
@@ -2439,14 +2476,34 @@ async function cargarPlacaExtra(placa, silencioso){
 
     const res  = await fetch(url, {signal: AbortSignal.timeout(60000)});
     const data = await res.json();
+
+    /* El proxy ahora informa el estado por placa. 'sin_respuesta' significa que
+       el API no entregó datos después de reintentar — NO que el camión estuvo
+       detenido. En ese caso no se cachea nada: se deja la placa como no
+       consultada para poder reintentarla, en vez de congelar un cero falso. */
+    const infoPlaca = (data.placas || []).find(p => p.plate === placa) || null;
+    const estado    = infoPlaca ? infoPlaca.estado : (data.total > 0 ? 'con_datos' : 'sin_respuesta');
+    DB_ESTADO[placa] = {estado: estado, intentos: infoPlaca ? infoPlaca.intentos : null, ts: Date.now()};
+
+    if(estado === 'sin_respuesta' || estado === 'error' || estado === 'bloqueada'){
+      delete DB_PLACAS[placa];      // que quede "no consultada", no "sin actividad"
+      PLACAS_ACTIVAS.delete(placa);
+      reconstruirDB();
+      DB_FILTERED = [...DB];
+      setBtnPlaca(placa, 'sinrespuesta');
+      avisarDatoIncompleto();
+      if(!silencioso) renderAll();
+      return false;
+    }
+
     const rows = parseJSONProxy(data);
     const consolidadas = consolidarMedianoche(rows).filter(r => r.fecha >= fi && r.fecha <= ff);
 
-    DB_PLACAS[placa] = consolidadas; // guardar siempre (vacío = sin datos en período)
+    DB_PLACAS[placa] = consolidadas; // el API respondió: vacío aquí sí es sin actividad en el período
     if(consolidadas.length > 0){
       PLACAS_ACTIVAS.add(placa);    // solo entra a activas si tiene datos reales
     } else {
-      PLACAS_ACTIVAS.delete(placa); // sin datos → fuera de activas
+      PLACAS_ACTIVAS.delete(placa); // sin actividad → fuera de activas
     }
     reconstruirDB();
     DB_FILTERED = [...DB];
@@ -2455,14 +2512,47 @@ async function cargarPlacaExtra(placa, silencioso){
     setBadge('verde','verde','Al día');
     setInfo(DB.length + ' paradas · ' + new Set(DB.map(r=>r.placa)).size + ' placa(s) con datos','');
     setBtnPlaca(placa, consolidadas.length > 0 ? 'on' : 'sindata');
+    avisarDatoIncompleto();
 
     if(!silencioso) renderAll();
     return true;
   } catch(e){
     console.warn('[MultiPlaca] Error cargando', placa, e.message);
+    DB_ESTADO[placa] = {estado:'error', error:e.message, ts:Date.now()};
+    delete DB_PLACAS[placa];  // un error no es "sin actividad"
     setBtnPlaca(placa, 'error');
+    avisarDatoIncompleto();
     return false;
   }
+}
+
+/* Aviso visible cuando el período mostrado NO está completo. Sin esto, un
+   promedio de flota calculado sobre 6 de 9 camiones se lee como si fueran 9. */
+function avisarDatoIncompleto(){
+  const faltan = Object.keys(FLOTA_NOMBRES).filter(p =>
+    DB_ESTADO[p] && (DB_ESTADO[p].estado === 'sin_respuesta' || DB_ESTADO[p].estado === 'error'));
+  const el = document.getElementById('aviso-incompleto');
+  if(!el) return;
+  if(!faltan.length){ el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  el.innerHTML = '<span style="font-weight:600">⚠ Dato incompleto</span>'
+    + '<span>El API no respondió por ' + faltan.length + ' placa(s): <b>' + faltan.join(', ') + '</b>. '
+    + 'No están detenidas — no llegó su dato. Los totales y promedios de flota de esta pantalla '
+    + 'están calculados sin ellas.</span>'
+    + '<button class="btn-go" style="font-size:11px;padding:4px 10px;margin-left:auto" onclick="reintentarSinRespuesta()">↻ Reintentar</button>';
+}
+
+async function reintentarSinRespuesta(){
+  const faltan = Object.keys(FLOTA_NOMBRES).filter(p =>
+    DB_ESTADO[p] && (DB_ESTADO[p].estado === 'sin_respuesta' || DB_ESTADO[p].estado === 'error'));
+  if(!faltan.length) return;
+  setInfo('Reintentando ' + faltan.length + ' placa(s) sin respuesta…','amber');
+  for(const p of faltan){
+    await cargarPlacaExtra(p, true);
+    await new Promise(r => setTimeout(r, 900));   // el API tiene rate-limit
+  }
+  renderAll();
+  avisarDatoIncompleto();
 }
 
 async function cargarTodasPlacas(){

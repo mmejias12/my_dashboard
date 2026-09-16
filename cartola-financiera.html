@@ -249,6 +249,7 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
 .ctrl-date { font-size:13px;padding:8px 11px;border:1px solid var(--border-md);border-radius:var(--radius-sm);
   background:var(--bg-input);color:var(--text-pri);outline:none;font-family:'Inter',sans-serif;
   width:160px;color-scheme:dark; }
+:root[data-theme="light"] .ctrl-date { color-scheme:light; }
 .ctrl-date:focus { border-color:var(--c-uf); }
 .btn { font-size:12.5px;padding:8px 16px;border:1px solid var(--border-md);border-radius:var(--radius-sm);
   background:var(--bg-input);color:var(--text-pri);cursor:pointer;font-family:'Inter',sans-serif;
@@ -501,6 +502,117 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
 .pivot-toolbar { display:flex;align-items:center;gap:10px;
   margin-bottom:.875rem;flex-wrap:wrap; }
 
+
+/* ═══════════ TEMA CLARO ═══════════ */
+:root[data-theme="light"] {
+  --bg-page:#f3f5f9; --bg-surface:#ffffff; --bg-card:#ffffff;
+  --bg-input:#ffffff; --bg-hover:#eaeef5;
+  --border:rgba(15,17,23,0.10); --border-md:rgba(15,17,23,0.20);
+  --text-pri:#15181f; --text-sec:#4a5364; --text-muted:#7b8494;
+  --accent:#0d8f4f;
+  --c-uf:#1a5fd0; --c-clp:#9a6b00; --c-warn:#c62828; --c-ok:#0d8f4f;
+  --c-arriendo:#0d8f4f; --c-emision:#1a5fd0; --c-transf:#a25c00;
+  --c-dev:#c62828; --c-traspaso:#6135c9; --c-twm:#026f9c; --c-comp:#9c1f97;
+  --accent-dim:rgba(13,143,79,.12); --border-accent:rgba(13,143,79,.35);
+  --shadow-card:0 1px 3px rgba(15,17,23,.08);
+}
+:root { --shadow-card:none; }
+:root[data-theme="light"] .ctrl-date { color-scheme:light; }
+:root[data-theme="light"] .top-bar-wrap { background:rgba(15,17,23,.08); }
+:root[data-theme="light"] .chart-card,
+:root[data-theme="light"] .tipo-card,
+:root[data-theme="light"] .kpi-flow,
+:root[data-theme="light"] .cbar,
+:root[data-theme="light"] .alert-card { box-shadow:var(--shadow-card); }
+:root[data-theme="light"] .sb-toggle:hover { color:#c0170c;background:rgba(192,23,12,.06); }
+:root[data-theme="light"] .s-hdr.open { background:rgba(192,23,12,.09);color:#c0170c; }
+:root[data-theme="light"] .sidebar.collapsed .s-hdr::after { background:#15181f; }
+:root[data-theme="light"] .tipo-card.is-info { opacity:.85; }
+
+/* ═══════════ CONTROLES DE VISTA (topbar) ═══════════ */
+.view-ctrls { display:flex;align-items:center;gap:4px;padding:3px 5px;
+  border:1px solid var(--border-md);border-radius:20px;background:var(--bg-input); }
+.vc-btn { border:none;background:transparent;color:var(--text-sec);cursor:pointer;
+  font-family:inherit;line-height:1;padding:4px 7px;border-radius:12px;transition:all .13s;
+  display:flex;align-items:center;justify-content:center; }
+.vc-btn:hover { background:var(--bg-hover);color:var(--text-pri); }
+.vc-btn:disabled { opacity:.35;cursor:not-allowed; }
+.vc-btn.a-min { font-size:10.5px;font-weight:600; }
+.vc-btn.a-max { font-size:14px;font-weight:700; }
+.vc-btn i { font-size:15px; }
+.vc-zoom { font-size:10px;color:var(--text-muted);min-width:30px;text-align:center;
+  font-family:'JetBrains Mono',monospace;cursor:pointer;user-select:none; }
+.vc-sep { width:1px;height:16px;background:var(--border-md); }
+#ico-tema { color:#fbbf24; }
+:root[data-theme="light"] #ico-tema { color:#6135c9; }
+
+/* ═══════════ MODAL DETALLE CLIENTE ═══════════ */
+#tbody-clientes tr.cli-row { cursor:pointer;transition:background .1s; }
+#tbody-clientes tr.cli-row:hover { background:var(--bg-hover); }
+#tbody-clientes tr.cli-row:hover td:first-child { color:var(--c-uf); }
+.cli-hint { font-size:9px;color:var(--text-muted);margin-left:6px;opacity:0;transition:opacity .1s; }
+#tbody-clientes tr.cli-row:hover .cli-hint { opacity:1; }
+
+.cd-overlay { position:fixed;inset:0;background:rgba(0,0,0,.66);backdrop-filter:blur(3px);
+  z-index:900;display:none;align-items:flex-start;justify-content:center;padding:28px 16px;overflow-y:auto; }
+.cd-overlay.open { display:flex; }
+:root[data-theme="light"] .cd-overlay { background:rgba(15,17,23,.42); }
+.cd-modal { background:var(--bg-page);border:1px solid var(--border-md);border-radius:var(--radius-lg);
+  width:100%;max-width:1180px;box-shadow:0 18px 50px rgba(0,0,0,.5);animation:cdIn .16s ease-out; }
+@keyframes cdIn { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:none} }
+.cd-head { position:sticky;top:0;z-index:2;background:var(--bg-surface);
+  border-bottom:1px solid var(--border);border-radius:var(--radius-lg) var(--radius-lg) 0 0;
+  padding:.875rem 1.125rem;display:flex;align-items:flex-start;gap:12px; }
+.cd-title { font-size:15px;font-weight:700;line-height:1.25; }
+.cd-sub { font-size:10.5px;color:var(--text-muted);margin-top:3px;
+  font-family:'JetBrains Mono',monospace; }
+.cd-close { margin-left:auto;background:var(--bg-input);border:1px solid var(--border-md);
+  color:var(--text-sec);width:28px;height:28px;border-radius:7px;cursor:pointer;font-size:15px;
+  line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:inherit; }
+.cd-close:hover { background:var(--bg-hover);color:var(--text-pri); }
+.cd-body { padding:1rem 1.125rem 1.25rem; }
+.cd-sec { font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;
+  color:var(--text-muted);margin:1.125rem 0 .5rem;display:flex;align-items:center;gap:8px; }
+.cd-sec:first-child { margin-top:0; }
+.cd-sec::after { content:'';flex:1;height:1px;background:var(--border); }
+
+.cd-kpis { display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:7px; }
+.cd-kpi { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:.6rem .7rem; }
+.cd-kpi-l { font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px; }
+.cd-kpi-v { font-size:16px;font-weight:600;margin-top:3px;line-height:1.1; }
+.cd-kpi-s { font-size:9.5px;color:var(--text-sec);margin-top:2px; }
+
+.cd-badges { display:flex;gap:5px;flex-wrap:wrap;margin-top:6px; }
+.cd-badge { font-size:9px;padding:2px 8px;border-radius:9px;font-weight:600;letter-spacing:.3px; }
+.bg-ok   { background:rgba(74,222,128,.15);color:var(--c-ok); }
+.bg-warn { background:rgba(248,113,113,.15);color:var(--c-warn); }
+.bg-gold { background:rgba(252,211,77,.15);color:var(--c-clp); }
+.bg-blue { background:rgba(96,165,250,.15);color:var(--c-uf); }
+
+.cd-chart-wrap { background:var(--bg-card);border:1px solid var(--border);
+  border-radius:var(--radius-md);padding:.75rem;height:210px;position:relative; }
+.cd-tbl-wrap { border:1px solid var(--border);border-radius:var(--radius-md);
+  overflow:auto;max-height:290px;background:var(--bg-card); }
+.cd-tbl { width:100%;border-collapse:collapse;font-size:11px; }
+.cd-tbl th { position:sticky;top:0;z-index:1;background:var(--bg-surface);color:var(--text-muted);
+  font-size:9.5px;text-transform:uppercase;letter-spacing:.4px;font-weight:600;
+  padding:7px 9px;text-align:left;border-bottom:1px solid var(--border-md);white-space:nowrap; }
+.cd-tbl td { padding:5px 9px;border-bottom:1px solid var(--border);white-space:nowrap; }
+.cd-tbl tr:last-child td { border-bottom:none; }
+.cd-tbl tbody tr:hover { background:var(--bg-hover); }
+.cd-tbl .num { text-align:right;font-family:'JetBrains Mono',monospace; }
+.cd-tbl tr.cd-tot td { background:var(--bg-surface);font-weight:700;border-top:2px solid var(--border-md); }
+.cd-tbl tr.cd-mes td { background:var(--bg-hover);font-weight:600;font-size:10.5px; }
+.cd-flag { font-size:8.5px;padding:1px 5px;border-radius:6px;margin-left:5px;font-weight:600; }
+.fl-tar { background:rgba(248,113,113,.18);color:var(--c-warn); }
+.fl-neg { background:rgba(232,121,249,.18);color:var(--c-comp); }
+.cd-note { font-size:10px;color:var(--text-muted);margin-top:6px;line-height:1.5; }
+.cd-alert { background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.28);
+  border-radius:var(--radius-md);padding:.55rem .75rem;font-size:11px;margin-bottom:6px;
+  display:flex;gap:8px;align-items:flex-start;line-height:1.45; }
+.cd-alert b { color:var(--c-warn); }
+@media(max-width:820px){ .cd-modal{max-width:100%;} .cd-body{padding:.75rem;} }
+
 </style>
 </head>
 <body>
@@ -511,6 +623,13 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
   <div class="topbar-title"><div class="live-dot"></div>Cartola Financiera</div>
   <div class="topbar-right">
     <span class="last-upd" id="last-upd"></span>
+    <div class="view-ctrls">
+      <button class="vc-btn a-min" id="btn-zoom-menos" onclick="ajustarZoom(-1)" title="Reducir tamaño (Ctrl+Alt+-)">A</button>
+      <span class="vc-zoom" id="lbl-zoom" onclick="ajustarZoom(0)" title="Volver al 100%">100%</span>
+      <button class="vc-btn a-max" id="btn-zoom-mas" onclick="ajustarZoom(1)" title="Aumentar tamaño (Ctrl+Alt++)">A</button>
+      <span class="vc-sep"></span>
+      <button class="vc-btn" onclick="alternarTema()" title="Cambiar tema claro / oscuro"><i class="ti ti-moon" id="ico-tema"></i></button>
+    </div>
     <a href="m3link_dashboard_dark.html" class="back-btn">← Dashboard</a>
     <div id="ct-avatar" style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#E31E24,#c0181e);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:12px;cursor:pointer;" title="Cargando...">?</div>
     <span id="ct-user" style="font-size:11px;color:var(--text-sec);">Cargando...</span>
@@ -741,6 +860,7 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
         <span class="section-title">Detalle por cliente</span>
         <span class="section-badge badge-blue">Período seleccionado</span>
         <span class="section-sub" id="detalle-count">— clientes</span>
+        <span class="section-sub" style="margin-left:8px;opacity:.75">· haz clic en un cliente para ver su detalle completo</span>
       </div>
       <div class="chart-card" style="padding:.75rem;margin-bottom:.875rem">
         <div class="clientes-tbl-wrap">
@@ -898,6 +1018,21 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
   </div><!-- /main -->
 </div><!-- /layout -->
 
+<!-- ═══════════ MODAL DETALLE DE CLIENTE ═══════════ -->
+<div class="cd-overlay" id="cd-overlay" onclick="if(event.target===this)cerrarDetalleCliente()">
+  <div class="cd-modal" role="dialog" aria-modal="true" aria-labelledby="cd-title">
+    <div class="cd-head">
+      <div style="min-width:0">
+        <div class="cd-title" id="cd-title">—</div>
+        <div class="cd-sub" id="cd-sub">—</div>
+        <div class="cd-badges" id="cd-badges"></div>
+      </div>
+      <button class="cd-close" onclick="cerrarDetalleCliente()" title="Cerrar (Esc)">&times;</button>
+    </div>
+    <div class="cd-body" id="cd-body"></div>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script>
 var API_PROXY  = '/api/cartola-proxy';
@@ -906,7 +1041,8 @@ var isLocal = location.protocol === 'file:';
 var isDev   = ['localhost','127.0.0.1'].includes(location.hostname);
 
 var raw = [];
-var chartTop = null, chartTipo = null;
+var chartTop = null, chartTipo = null, chartCliente = null;
+var CD = { code:null };
 
 // ── REGLAS DE NEGOCIO (alineadas con la cartola revisada) ─────────────────────
 // Ex-clientes: contrato terminado, mantienen inventario en el pool y por eso
@@ -993,6 +1129,95 @@ function toggleExClientes(v) {
   excluirEx = !!v; invalidarBase();
   if (raw.length) renderAll(document.getElementById('d1').value, document.getElementById('d2').value);
 }
+
+
+// ── TEMA CLARO / OSCURO + TAMAÑO ──────────────────────────────────────────────
+var ZOOMS = [80, 90, 100, 110, 125, 140, 160];
+
+function cssVar(n, fb) {
+  try {
+    var v = getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+    return v || fb;
+  } catch(e) { return fb; }
+}
+// Paleta viva para Chart.js: se lee del tema activo en cada render
+function chartTheme() {
+  return {
+    grid:   cssVar('--border', 'rgba(255,255,255,.07)'),
+    tick:   cssVar('--text-sec', '#9da3b4'),
+    tickMu: cssVar('--text-muted', '#5a6070'),
+    surf:   cssVar('--bg-surface', '#1e222d'),
+    pri:    cssVar('--text-pri', '#e8eaf0'),
+    brd:    cssVar('--border-md', 'rgba(255,255,255,.12)')
+  };
+}
+
+function aplicarTema(t, guardar) {
+  var claro = (t === 'light');
+  if (claro) document.documentElement.setAttribute('data-theme', 'light');
+  else       document.documentElement.removeAttribute('data-theme');
+  var ico = document.getElementById('ico-tema');
+  if (ico) ico.className = 'ti ' + (claro ? 'ti-sun' : 'ti-moon');
+  if (guardar) { try { localStorage.setItem('m3link_tema', claro ? 'light' : 'dark'); } catch(e){} }
+  // Los gráficos llevan colores fijados al crearse: hay que rehacerlos
+  if (typeof raw !== 'undefined' && raw.length) {
+    try { renderCharts(agruparPorCliente()); } catch(e){}
+    if (CD.code) { try { pintarGraficoCliente(CD.code); } catch(e){} }
+  }
+}
+function alternarTema() {
+  var claro = document.documentElement.getAttribute('data-theme') === 'light';
+  aplicarTema(claro ? 'dark' : 'light', true);
+}
+
+function aplicarZoom(z, guardar) {
+  var m = document.querySelector('.main');
+  if (m) m.style.zoom = (z / 100);
+  var md = document.querySelector('.cd-modal');       // el modal escala igual que el contenido
+  if (md) md.style.zoom = (z / 100);
+  var lbl = document.getElementById('lbl-zoom');
+  if (lbl) lbl.textContent = z + '%';
+  var i = ZOOMS.indexOf(z);
+  var bMin = document.getElementById('btn-zoom-menos'), bMax = document.getElementById('btn-zoom-mas');
+  if (bMin) bMin.disabled = (i <= 0);
+  if (bMax) bMax.disabled = (i >= ZOOMS.length - 1);
+  if (guardar) { try { localStorage.setItem('m3link_zoom', String(z)); } catch(e){} }
+  // El zoom por CSS descoloca el canvas de Chart.js: rehacerlo es lo único seguro
+  setTimeout(function(){
+    if (typeof raw !== 'undefined' && raw.length) {
+      try { renderCharts(agruparPorCliente()); } catch(e){}
+      if (CD.code) { try { pintarGraficoCliente(CD.code); } catch(e){} }
+    }
+  }, 90);
+}
+function ajustarZoom(d) {
+  var act = 100;
+  try { act = parseInt(localStorage.getItem('m3link_zoom') || '100', 10); } catch(e){}
+  if (ZOOMS.indexOf(act) < 0) act = 100;
+  if (d === 0) { aplicarZoom(100, true); return; }
+  var i = ZOOMS.indexOf(act) + d;
+  if (i < 0) i = 0;
+  if (i > ZOOMS.length - 1) i = ZOOMS.length - 1;
+  aplicarZoom(ZOOMS[i], true);
+}
+
+(function(){
+  var t = 'dark', z = 100;
+  try { t = localStorage.getItem('m3link_tema') || 'dark'; } catch(e){}
+  try { z = parseInt(localStorage.getItem('m3link_zoom') || '100', 10); } catch(e){}
+  if (ZOOMS.indexOf(z) < 0) z = 100;
+  aplicarTema(t, false);
+  document.addEventListener('DOMContentLoaded', function(){ aplicarTema(t, false); aplicarZoom(z, false); });
+})();
+
+document.addEventListener('keydown', function(e){
+  if ((e.ctrlKey||e.metaKey) && e.altKey) {
+    if (e.key==='+'||e.key==='=') { e.preventDefault(); ajustarZoom(1); }
+    if (e.key==='-'||e.key==='_') { e.preventDefault(); ajustarZoom(-1); }
+    if (e.key==='0')              { e.preventDefault(); ajustarZoom(0); }
+  }
+  if (e.key === 'Escape' && CD.code) cerrarDetalleCliente();
+});
 
 // ── SIDEBAR ───────────────────────────────────────────────────────────────────
 function tog(id, hdr) {
@@ -1649,6 +1874,7 @@ function renderCharts(clientes) {
   var colors = ['#60a5fa','#4ade80','#f59e0b','#ef4444','#8b5cf6',
                 '#06b6d4','#f87171','#a3e635','#fb923c','#e879f9'];
   if (chartTop) chartTop.destroy();
+  var TH = chartTheme();
   chartTop = new Chart(document.getElementById('chart-top').getContext('2d'), {
     type:'bar',
     data:{ labels:labels, datasets:[{label:'CLP',data:vals,
@@ -1657,13 +1883,13 @@ function renderCharts(clientes) {
     options:{
       indexAxis:'y', responsive:true, maintainAspectRatio:false,
       plugins:{legend:{display:false}, tooltip:{
-        backgroundColor:'#1e222d',borderColor:'rgba(255,255,255,.1)',borderWidth:1,
-        titleColor:'#e8eaf0',bodyColor:'#9da3b4',
+        backgroundColor:TH.surf,borderColor:TH.brd,borderWidth:1,
+        titleColor:TH.pri,bodyColor:TH.tick,
         callbacks:{label:function(ctx){return ' '+fmtCLP(ctx.parsed.x);}}}},
       scales:{
-        x:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#5a6070',font:{size:10},
-           callback:function(v){return '$'+Math.round(v/1000000)+'M';}},border:{color:'rgba(255,255,255,.07)'}},
-        y:{grid:{display:false},ticks:{color:'#9da3b4',font:{size:10}},border:{color:'rgba(255,255,255,.07)'}}
+        x:{grid:{color:TH.grid},ticks:{color:TH.tickMu,font:{size:10},
+           callback:function(v){return '$'+Math.round(v/1000000)+'M';}},border:{color:TH.grid}},
+        y:{grid:{display:false},ticks:{color:TH.tick,font:{size:10}},border:{color:TH.grid}}
       }
     }
   });
@@ -1691,10 +1917,10 @@ function renderCharts(clientes) {
       borderColor:tipoColors,borderWidth:2,hoverOffset:8}]},
     options:{
       responsive:true,maintainAspectRatio:false,cutout:'60%',
-      plugins:{legend:{position:'right',labels:{color:'#9da3b4',font:{size:11},
+      plugins:{legend:{position:'right',labels:{color:TH.tick,font:{size:11},
         padding:12,boxWidth:12,boxHeight:12}},
-        tooltip:{backgroundColor:'#1e222d',borderColor:'rgba(255,255,255,.1)',borderWidth:1,
-          titleColor:'#e8eaf0',bodyColor:'#9da3b4',
+        tooltip:{backgroundColor:TH.surf,borderColor:TH.brd,borderWidth:1,
+          titleColor:TH.pri,bodyColor:TH.tick,
           callbacks:{label:function(ctx){
             var total=ctx.dataset.data.reduce(function(a,b){return a+b;},0);
             var pct=total?Math.round(ctx.raw/total*100):0;
@@ -1713,8 +1939,8 @@ function renderTablaClientes(clientes) {
   var html = '';
   clientes.forEach(function(c) {
     var otros = c.traspasoClp + c.relocaliza + c.ajusteInv + c.otrosClp;
-    html += '<tr'+(c.esEx?' style="opacity:.6"':'')+'>'
-      + '<td title="'+c.code+'">'+c.name+(c.esEx?'<span class="tag-ex">'+(c.exAlcance==='arriendo'?'ARRIENDO NO FACT.':'NO FACTURABLE')+'</span>':'')+'</td>'
+    html += '<tr class="cli-row" onclick="abrirDetalleCliente(\''+c.code+'\')"'+(c.esEx?' style="opacity:.6"':'')+'>'
+      + '<td title="Ver detalle completo de '+c.name.replace(/"/g,'')+'">'+c.name+(c.esEx?'<span class="tag-ex">'+(c.exAlcance==='arriendo'?'ARRIENDO NO FACT.':'NO FACTURABLE')+'</span>':'')+'<span class="cli-hint">ver detalle ›</span></td>'
       + '<td class="mono" style="text-align:right">'+Math.round(c.pallets).toLocaleString('es-CL')+'</td>'
       + '<td class="mono" style="text-align:right;color:var(--c-arriendo)">'+fmtCLP(c.arriendo)+'</td>'
       + '<td class="mono" style="text-align:right;color:var(--c-emision)">'+fmtCLP(c.emision)+'</td>'
@@ -1750,6 +1976,283 @@ function renderTablaClientes(clientes) {
   document.getElementById('tbody-clientes').innerHTML = html;
 }
 
+
+// ══════════════ MODAL: DETALLE COMPLETO DE UN CLIENTE ══════════════════════════
+var CD_OPS = [
+  ['ARRIENDO DIAS PALLET','Días pallet arriendo','--c-arriendo','días pallet'],
+  ['EMISION','Emisiones','--c-emision','pallets'],
+  ['TRANSFERENCIA','Transferencias','--c-transf','pallets'],
+  ['TRANSFERENCIA WALMART','Transf. Walmart','--c-twm','pallets'],
+  ['COMPENSACION LOGISTICA','Compensación logística','--c-comp','unidades'],
+  ['DEVOLUCION','Devoluciones','--c-dev','pallets'],
+  ['TRASPASO','Traspasos','--c-traspaso','pallets'],
+  ['RELOCALIZA','Relocalizaciones','--text-muted','pallets']
+];
+function cdOpLabel(op){
+  op = (op||'').toUpperCase();
+  if (op === 'DEVOLUCIONES') op = 'DEVOLUCION';
+  for (var i=0;i<CD_OPS.length;i++) if (CD_OPS[i][0]===op) return CD_OPS[i][1];
+  return formatTransLabel(op);
+}
+function cdOpColor(op){
+  op = (op||'').toUpperCase();
+  if (op === 'DEVOLUCIONES') op = 'DEVOLUCION';
+  for (var i=0;i<CD_OPS.length;i++) if (CD_OPS[i][0]===op) return 'var('+CD_OPS[i][2]+')';
+  return 'var(--text-sec)';
+}
+// Tarifa habitual del cliente por concepto = la más repetida en el período cargado
+function cdTarifasHabituales(regs){
+  var acc = {};
+  regs.forEach(function(r){
+    var q = r.cantidad||0, u = r.netoUF||0;
+    if (!q || !u) return;
+    var op = (r.operacion||'').toUpperCase();
+    var t  = (u/q).toFixed(5);
+    if (!acc[op]) acc[op] = {};
+    acc[op][t] = (acc[op][t]||0) + 1;
+  });
+  var out = {};
+  Object.keys(acc).forEach(function(op){
+    var mejor = null, n = -1;
+    Object.keys(acc[op]).forEach(function(t){ if (acc[op][t] > n) { n = acc[op][t]; mejor = t; } });
+    out[op] = { tarifa: parseFloat(mejor), veces: n, total: Object.keys(acc[op]).reduce(function(a,k){return a+acc[op][k];},0) };
+  });
+  return out;
+}
+
+function abrirDetalleCliente(code) {
+  var clientes = agruparPorCliente();
+  var c = null;
+  for (var i=0;i<clientes.length;i++) if (clientes[i].code === code) { c = clientes[i]; break; }
+  if (!c) return;
+  CD.code = code;
+
+  var regs = baseRegs().filter(function(r){ return r.cardCode === code; });
+  var totalPeriodo = 0;
+  clientes.forEach(function(x){ totalPeriodo += x.totalCLP; });
+  var rank = clientes.findIndex(function(x){ return x.code === code; }) + 1;
+  var tarifas = cdTarifasHabituales(regs);
+
+  // ── cabecera ──
+  set('cd-title', c.name);
+  set('cd-sub', c.code + '  ·  ' + regs.length.toLocaleString('es-CL') + ' registros  ·  ' +
+      document.getElementById('period-text').textContent);
+
+  var badges = '';
+  if (c.esEx) badges += '<span class="cd-badge bg-gold">'+(c.exAlcance==='arriendo'?'ARRIENDO NO FACTURABLE':'CLIENTE NO FACTURABLE')+'</span>';
+  badges += '<span class="cd-badge '+(c.tieneEmision?'bg-ok':'bg-warn')+'">'+(c.tieneEmision?'Con emisión':'Sin emisión')+'</span>';
+  badges += '<span class="cd-badge '+(c.tieneTransf?'bg-ok':'bg-warn')+'">'+(c.tieneTransf?'Con transferencias':'Sin transferencias')+'</span>';
+  badges += '<span class="cd-badge bg-blue">#'+rank+' del período</span>';
+  document.getElementById('cd-badges').innerHTML = badges;
+
+  var H = '';
+
+  // ── alertas ──
+  var negs = regs.filter(function(r){ return (r.netoCLP||0) < 0; });
+  var malas = regs.filter(function(r){
+    var op=(r.operacion||'').toUpperCase(); var q=r.cantidad||0, u=r.netoUF||0;
+    if (!q || !u || !tarifas[op]) return false;
+    return Math.abs(u/q - tarifas[op].tarifa) > 0.0001;
+  });
+  var avisos = '';
+  if (negs.length) {
+    var sumNeg = negs.reduce(function(a,r){return a+r.netoCLP;},0);
+    avisos += '<div class="cd-alert"><span>⚠</span><div><b>'+negs.length+' ajuste'+(negs.length>1?'s':'')+' retroactivo'+(negs.length>1?'s':'')+'</b> por '+fmtCLP(sumNeg)+
+      '. Son correcciones de períodos anteriores cargadas con la fecha del día en que se hicieron.</div></div>';
+  }
+  if (malas.length) {
+    avisos += '<div class="cd-alert"><span>⚠</span><div><b>'+malas.length+' registro'+(malas.length>1?'s':'')+' con tarifa fuera de lo habitual</b>'+
+      '. En esos días la cantidad y el monto no corresponden a la misma tarifa. Aparecen marcados en la tabla de movimientos.</div></div>';
+  }
+  if (avisos) H += '<div class="cd-sec">Puntos de atención</div>' + avisos;
+
+  // ── KPIs ──
+  var pct = totalPeriodo ? (c.totalCLP/totalPeriodo*100) : 0;
+  H += '<div class="cd-sec">Resumen del período</div><div class="cd-kpis">'
+    + cdKpi('Total facturado', fmtCLP(c.totalCLP), 'var(--c-clp)', pct.toFixed(2).replace('.',',')+'% del período')
+    + cdKpi('Total UF', fmtUF(c.totalUF), 'var(--c-uf)', 'Puesto #'+rank+' de '+clientes.length)
+    + cdKpi('Pallets / unidades', Math.round(c.pallets).toLocaleString('es-CL'), 'var(--text-pri)', 'Suma de todos los conceptos')
+    + cdKpi('Arriendo', fmtCLP(c.arriendo), 'var(--c-arriendo)', Math.round(c.palletsArr).toLocaleString('es-CL')+' días pallet')
+    + cdKpi('Emisiones', fmtCLP(c.emision), 'var(--c-emision)', Math.round(c.palletsEm).toLocaleString('es-CL')+' pallets')
+    + cdKpi('Transferencias', fmtCLP(c.transferencia+c.twm), 'var(--c-transf)', 'Incluye Walmart')
+    + '</div>';
+
+  // ── desglose por concepto ──
+  var porOp = {};
+  regs.forEach(function(r){
+    var op=(r.operacion||'').toUpperCase(); if (op==='DEVOLUCIONES') op='DEVOLUCION';
+    if (!porOp[op]) porOp[op] = {clp:0,uf:0,qty:0,n:0};
+    porOp[op].clp += r.netoCLP||0; porOp[op].uf += r.netoUF||0;
+    porOp[op].qty += r.cantidad||0; porOp[op].n++;
+  });
+  H += '<div class="cd-sec">Desglose por concepto</div><div class="cd-tbl-wrap"><table class="cd-tbl">'
+    + '<thead><tr><th>Concepto</th><th class="num">Cantidad</th><th class="num">Tarifa habitual</th>'
+    + '<th class="num">Monto UF</th><th class="num">Monto CLP</th><th class="num">% del cliente</th><th class="num">Días</th></tr></thead><tbody>';
+  var ordenOps = CD_OPS.map(function(x){return x[0];});
+  Object.keys(porOp).sort(function(a,b){
+    var ia=ordenOps.indexOf(a), ib=ordenOps.indexOf(b);
+    return (ia<0?99:ia)-(ib<0?99:ib);
+  }).forEach(function(op){
+    var v = porOp[op];
+    var tar = tarifas[op] ? tarifas[op].tarifa : null;
+    H += '<tr><td style="color:'+cdOpColor(op)+';font-weight:600">'+cdOpLabel(op)+'</td>'
+      + '<td class="num">'+Math.round(v.qty).toLocaleString('es-CL')+'</td>'
+      + '<td class="num" style="color:var(--text-muted)">'+(tar!==null?tar.toFixed(5).replace('.',','):'—')+'</td>'
+      + '<td class="num" style="color:var(--c-uf)">'+fmtUF(v.uf)+'</td>'
+      + '<td class="num">'+fmtCLP(v.clp)+'</td>'
+      + '<td class="num" style="color:var(--text-muted)">'+(c.totalCLP?(v.clp/c.totalCLP*100).toFixed(1).replace('.',','):'0')+'%</td>'
+      + '<td class="num" style="color:var(--text-muted)">'+v.n+'</td></tr>';
+  });
+  H += '<tr class="cd-tot"><td>TOTAL</td><td class="num">'+Math.round(c.pallets).toLocaleString('es-CL')+'</td><td></td>'
+    + '<td class="num">'+fmtUF(c.totalUF)+'</td><td class="num">'+fmtCLP(c.totalCLP)+'</td><td class="num">100%</td>'
+    + '<td class="num">'+regs.length+'</td></tr></tbody></table></div>'
+    + '<div class="cd-note">La tarifa habitual es la más repetida del cliente en el período cargado, en UF por unidad.</div>';
+
+  // ── gráfico ──
+  H += '<div class="cd-sec">Evolución diaria</div><div class="cd-chart-wrap"><canvas id="cd-chart"></canvas></div>';
+
+  // ── mes × transacción (lo del resumen mensual) ──
+  var ct = RM.byClienteTrans[code];
+  if (ct) {
+    H += '<div class="cd-sec">Mes × transacción</div><div class="cd-tbl-wrap"><table class="cd-tbl">'
+      + '<thead><tr><th>Mes / transacción</th><th class="num">Operaciones</th><th class="num">Pallets</th>'
+      + '<th class="num">UF</th><th class="num">CLP</th></tr></thead><tbody>';
+    Object.keys(ct.meses).sort().forEach(function(mes){
+      var m = ct.meses[mes];
+      H += '<tr class="cd-mes"><td>'+formatMesLabel(mes)+'</td>'
+        + '<td class="num">'+m.total.n+'</td><td class="num">'+Math.round(m.total.pal).toLocaleString('es-CL')+'</td>'
+        + '<td class="num">'+fmtUF(m.total.uf)+'</td><td class="num">'+fmtCLP(m.total.clp)+'</td></tr>';
+      Object.keys(m.trans).sort().forEach(function(op){
+        var t = m.trans[op];
+        H += '<tr><td style="padding-left:22px;color:'+cdOpColor(op)+'">'+cdOpLabel(op)+'</td>'
+          + '<td class="num">'+t.n+'</td><td class="num">'+Math.round(t.pal).toLocaleString('es-CL')+'</td>'
+          + '<td class="num" style="color:var(--c-uf)">'+fmtUF(t.uf)+'</td><td class="num">'+fmtCLP(t.clp)+'</td></tr>';
+        Object.keys(t.semanas).sort(function(a,b){return a-b;}).forEach(function(sem){
+          var w = t.semanas[sem];
+          H += '<tr><td style="padding-left:40px;color:var(--text-muted);font-size:10px">S'
+            + String(sem).padStart(2,'0') + ' · ' + rmRangoSemana(w.fechaRef) + '</td>'
+            + '<td class="num" style="color:var(--text-muted)">'+w.n+'</td>'
+            + '<td class="num" style="color:var(--text-muted)">'+Math.round(w.pal).toLocaleString('es-CL')+'</td>'
+            + '<td class="num" style="color:var(--text-muted)">'+fmtUF(w.uf)+'</td>'
+            + '<td class="num" style="color:var(--text-muted)">'+fmtCLP(w.clp)+'</td></tr>';
+        });
+      });
+    });
+    H += '<tr class="cd-tot"><td>TOTAL</td><td class="num">'+ct.totalGlobal.n+'</td>'
+      + '<td class="num">'+Math.round(ct.totalGlobal.pal).toLocaleString('es-CL')+'</td>'
+      + '<td class="num">'+fmtUF(ct.totalGlobal.uf)+'</td><td class="num">'+fmtCLP(ct.totalGlobal.clp)+'</td></tr>'
+      + '</tbody></table></div>';
+  }
+
+  // ── movimientos día a día ──
+  var ordenados = regs.slice().sort(function(a,b){
+    if (a.fecha === b.fecha) return (a.operacion||'') < (b.operacion||'') ? -1 : 1;
+    return a.fecha < b.fecha ? -1 : 1;
+  });
+  H += '<div class="cd-sec">Movimientos día a día ('+ordenados.length+')</div><div class="cd-tbl-wrap"><table class="cd-tbl">'
+    + '<thead><tr><th>Fecha</th><th>Concepto</th><th class="num">Cantidad</th><th class="num">Tarifa</th>'
+    + '<th class="num">UF</th><th class="num">CLP</th></tr></thead><tbody>';
+  ordenados.forEach(function(r){
+    var op=(r.operacion||'').toUpperCase(); if (op==='DEVOLUCIONES') op='DEVOLUCION';
+    var q=r.cantidad||0, u=r.netoUF||0;
+    var tarReal = (q && u) ? (u/q) : null;
+    var flag = '';
+    if (tarReal !== null && tarifas[op] && Math.abs(tarReal - tarifas[op].tarifa) > 0.0001)
+      flag = '<span class="cd-flag fl-tar" title="La tarifa implícita no coincide con la habitual del cliente">tarifa</span>';
+    if ((r.netoCLP||0) < 0)
+      flag += '<span class="cd-flag fl-neg" title="Ajuste retroactivo">ajuste</span>';
+    H += '<tr><td style="font-family:\'JetBrains Mono\',monospace">'+String(r.fecha).substring(0,10)+'</td>'
+      + '<td style="color:'+cdOpColor(op)+'">'+cdOpLabel(op)+flag+'</td>'
+      + '<td class="num">'+Math.round(q).toLocaleString('es-CL')+'</td>'
+      + '<td class="num" style="color:var(--text-muted)">'+(tarReal!==null?tarReal.toFixed(5).replace('.',','):'—')+'</td>'
+      + '<td class="num" style="color:var(--c-uf)">'+fmtUF(u)+'</td>'
+      + '<td class="num"'+((r.netoCLP||0)<0?' style="color:var(--c-warn)"':'')+'>'+fmtCLP(r.netoCLP||0)+'</td></tr>';
+  });
+  H += '</tbody></table></div>';
+
+  document.getElementById('cd-body').innerHTML = H;
+  try {
+    var zz = parseInt(localStorage.getItem('m3link_zoom') || '100', 10);
+    if (ZOOMS.indexOf(zz) >= 0 && zz !== 100) document.querySelector('.cd-modal').style.zoom = (zz/100);
+  } catch(e){}
+  document.getElementById('cd-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  pintarGraficoCliente(code);
+}
+
+function cdKpi(label, valor, color, sub) {
+  return '<div class="cd-kpi"><div class="cd-kpi-l">'+label+'</div>'
+    + '<div class="cd-kpi-v" style="color:'+color+'">'+valor+'</div>'
+    + '<div class="cd-kpi-s">'+sub+'</div></div>';
+}
+
+function pintarGraficoCliente(code) {
+  var el = document.getElementById('cd-chart');
+  if (!el) return;
+  var regs = baseRegs().filter(function(r){ return r.cardCode === code; });
+  var fechas = [];
+  regs.forEach(function(r){ var f = String(r.fecha).substring(0,10); if (fechas.indexOf(f) < 0) fechas.push(f); });
+  fechas.sort();
+  var usados = [];
+  CD_OPS.forEach(function(o){
+    var hay = regs.some(function(r){
+      var op=(r.operacion||'').toUpperCase(); if (op==='DEVOLUCIONES') op='DEVOLUCION';
+      return op===o[0] && Math.abs(r.netoCLP||0) > 0;
+    });
+    if (hay) usados.push(o);
+  });
+  var ds = usados.map(function(o){
+    return {
+      label: o[1],
+      data: fechas.map(function(f){
+        var t = 0;
+        regs.forEach(function(r){
+          var op=(r.operacion||'').toUpperCase(); if (op==='DEVOLUCIONES') op='DEVOLUCION';
+          if (op===o[0] && String(r.fecha).substring(0,10)===f) t += r.netoCLP||0;
+        });
+        return Math.round(t);
+      }),
+      backgroundColor: cssVar(o[2], '#60a5fa'),
+      borderWidth: 0, borderRadius: 2
+    };
+  });
+  var TH = chartTheme();
+  if (chartCliente) { try { chartCliente.destroy(); } catch(e){} chartCliente = null; }
+  chartCliente = new Chart(el.getContext('2d'), {
+    type: 'bar',
+    data: { labels: fechas.map(function(f){ return f.substring(8,10)+'/'+f.substring(5,7); }), datasets: ds },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{ position:'bottom', labels:{ color:TH.tick, font:{size:10}, boxWidth:10, boxHeight:10, padding:9 } },
+        tooltip:{ backgroundColor:TH.surf, borderColor:TH.brd, borderWidth:1,
+          titleColor:TH.pri, bodyColor:TH.tick, footerColor:TH.pri,
+          callbacks:{
+            label:function(ctx){ return ' '+ctx.dataset.label+': '+fmtCLP(ctx.parsed.y); },
+            footer:function(items){
+              var t=0; items.forEach(function(i){ t += i.parsed.y; });
+              return 'Total día: '+fmtCLP(t);
+            }
+          } }
+      },
+      scales:{
+        x:{ stacked:true, grid:{display:false}, ticks:{ color:TH.tickMu, font:{size:9} }, border:{color:TH.grid} },
+        y:{ stacked:true, grid:{color:TH.grid},
+            ticks:{ color:TH.tickMu, font:{size:9},
+              callback:function(v){ return Math.abs(v)>=1000000 ? '$'+(v/1000000).toFixed(1)+'M' : '$'+Math.round(v/1000)+'K'; } },
+            border:{color:TH.grid} }
+      }
+    }
+  });
+}
+
+function cerrarDetalleCliente() {
+  document.getElementById('cd-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+  CD.code = null;
+  if (chartCliente) { try { chartCliente.destroy(); } catch(e){} chartCliente = null; }
+}
+
 // ── BLOQUE 5: ALERTAS ─────────────────────────────────────────────────────────
 function renderAlertas(clientes) {
   var vigentes = clientes.filter(function(c){return c.exAlcance !== 'total';});
@@ -1783,7 +2286,7 @@ function renderAlertList(cntId, listId, items, color, valField) {
   var html = '';
   items.slice(0,8).forEach(function(c) {
     html += '<div class="alert-item" style="border-left-color:'+color+'">'
-      + '<strong style="color:#e8eaf0">'+c.name+'</strong>'
+      + '<strong style="color:var(--text-pri)">'+c.name+'</strong>'
       + ' — '+fmtCLP(c[valField]||c.totalCLP)
       + '</div>';
   });

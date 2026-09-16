@@ -4320,6 +4320,21 @@ async function cargarPlacaExtra(placa, silencioso){
     const res  = await fetch(url, {signal: AbortSignal.timeout(60000)});
     const data = await res.json();
 
+    /* El proxy responde 500 con un mensaje claro si las credenciales del GPS
+       no están en Application Settings. Sin esto, esa falla de configuración
+       se leía como "el camión no respondió" y mandaba a buscar por el lado
+       equivocado. */
+    if(data && data.ok === false && data.error){
+      DB_ESTADO[placa] = {estado:'error', error:data.error, ts:Date.now()};
+      delete DB_PLACAS[placa];
+      PLACAS_ACTIVAS.delete(placa);
+      setBtnPlaca(placa, 'error');
+      setInfo(data.error, 'rojo');
+      console.error('[GPS]', data.error, data.comoArreglar || '');
+      avisarDatoIncompleto();
+      return false;
+    }
+
     /* El proxy ahora informa el estado por placa. 'sin_respuesta' significa que
        el API no entregó datos después de reintentar — NO que el camión estuvo
        detenido. En ese caso no se cachea nada: se deja la placa como no

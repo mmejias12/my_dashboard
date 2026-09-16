@@ -2805,12 +2805,32 @@ let OPS_ESTADO = 'sin_cargar';
 /* Recintos cuyo nombre en el GPS no se parece al de RDTOut. Verificados
    contra los nombres reales del API el 15-09-2026. Los marcados PROPUESTO
    hay que confirmarlos con Transporte antes de darlos por buenos. */
+/* Clave = nombre de la GEOCERCA del GPS. Valor = nombre de la BODEGA en
+   RDTOut. Se verifican a mano: bajar el umbral del match difuso genera falsos
+   positivos que después nadie detecta.
+
+   CORREGIDO EL 16-09-2026. Las cuatro plantas de Productos Fernández apuntaban
+   a 'PRODUCTOS FERNANDEZ SA', un nombre que RDTOut NO usa: ahí las bodegas se
+   llaman 'PF TALCA PLANTA 1/2/PIZZAS' etc. El alias desviaba el match hacia un
+   nombre inexistente y el difuso tampoco alcanzaba (sin tokens en común), así
+   que toda la operación de Talca aparecía como "sin operación registrada" en
+   el punto, mientras las mismas operaciones salían en "sin parada del GPS" en
+   la ficha del camión. Las dos mitades estaban, pero no se juntaban. */
 const ALIAS_RECINTO = {
-  'PRODUCTOS FERNANDEZ PZ':    'PRODUCTOS FERNANDEZ SA',
-  'PRODUCTOS FERNANDEZ P1':    'PRODUCTOS FERNANDEZ SA',
-  'PRODUCTOS FERNANDEZ P2':    'PRODUCTOS FERNANDEZ SA',
-  'PRODUCTOS FERNANDEZ FMP':   'PRODUCTOS FERNANDEZ SA',
-  'PF SANTIAGO PLANTA':        'PRODUCTOS FERNANDEZ SA',      // PROPUESTO
+  'PRODUCTOS FERNANDEZ P1':    'PF TALCA PLANTA 1',
+  'PRODUCTOS FERNANDEZ P2':    'PF TALCA PLANTA 2',
+  'PRODUCTOS FERNANDEZ PZ':    'PF TALCA PLANTA PIZZAS',
+  'PRODUCTOS FERNANDEZ P4':    'PF TALCA PLANTA 4',
+  'PRODUCTOS FERNANDEZ FMP':   'PF FRIGORIFICO MATERIA PRIMA',
+  'TAK S.A':                   'TAK CURICO San Rafael',
+  /* Mayorista 10: el GPS escribe "MAYORISTA 10 <ciudad>" y RDTOut "M10 <ciudad>
+     <calle>". Sólo comparten el código y la ciudad, así que el match difuso da
+     0,29 y no alcanza el umbral. Las cuatro sucursales fallaban igual. */
+  'M3169 MAYORISTA 10 LINARES':   'M3169 M10 LINARES BRASIL 646',
+  'M3007 MAYORISTA 10 BELLOTO':   'M3007 M10 BELLOTO BADEN POWELL',
+  'M3041 MAYORISTA 10 SAN FELIPE':'M3041 M10 SAN FELIPE STO DGO',
+  'M3069 MAYORISTA 10 SANTA CRUZ':'M3069 M10 SANTA CRUZ S FURGO',
+  'AGROINDUSTRIAL ITATA LTDA.':'AGROINDUSTRIAL ITATA COCHARCAS',
   'CASTANO CD QULICURA':       'CASTANO QUILICURA',
   'EMBOTELLADORA METROPOLITANA':'EMBOTELLADORA METROPOLITANA S.A.',
   'EMBOTELLADORA EMSA COLBUN': 'EMBO. METROPOLITANA Colbun',
@@ -3822,10 +3842,15 @@ function detallePuntoMapa(d, destino){
         ${kpi(d.vis, 'Visitas', 'var(--blue)')}
         ${kpi(fmtMins(d.min), 'Tiempo total')}
         ${kpi(fmtMins(d.prom), 'Promedio por visita', 'var(--amber)')}
-        ${kpi(fmtPallets(bal.saleP), 'Pallets emitidos', 'var(--blue)')}
-        ${kpi(fmtPallets(bal.entraP), 'Pallets retirados', 'var(--green)')}
+        ${kpi(fmtPallets(bal.saleP), 'Emitidos EN ESTE PUNTO', 'var(--blue)')}
+        ${kpi(fmtPallets(bal.entraP), 'Retirados EN ESTE PUNTO', 'var(--green)')}
         ${bal.ambiguasP ? kpi(fmtPallets(bal.ambiguasP), 'sin asignar a un camión', 'var(--t3)') : ''}
       </div>
+      ${(!bal.saleP || !bal.entraP) ? `<div style="margin:-6px 0 12px;font-size:11px;color:var(--t3)">
+        ${!bal.saleP && !bal.entraP ? 'Ninguna de estas visitas tiene operación en RDTOut.'
+          : !bal.saleP ? 'Este punto sólo recibe retiros: la flota no emite carga acá. Si un camión de la lista muestra emisiones en su ficha, fueron en otro punto del mismo día.'
+          : 'Este punto sólo recibe emisiones: la flota no retira carga acá. Si un camión de la lista muestra retiros en su ficha, fueron en otro punto del mismo día.'}
+      </div>` : ''}
 
       <div class="tbl-wrap"><table style="width:100%;border-collapse:collapse">
         <thead><tr style="border-bottom:1px solid var(--border)">
@@ -3878,7 +3903,16 @@ function detalleCamionDia(placa, fecha){
   const sueltas = opsSinParada(placa, new Set([fecha]), bal.ops);
   sueltas.forEach(o => { if(sentidoOp(o)==='sale') bal.saleP += palletsOp(o); else bal.entraP += palletsOp(o); });
   const enBase = visitas.filter(v=>v.tipo==='REDTEC').reduce((s,v)=>s+v.min,0);
-  const enRuta = visitas.filter(v=>v.tipo!=='REDTEC').reduce((s,v)=>s+v.min,0);
+  /* "Detenido en clientes" contaba TODO lo que no fuera base, incluidas las
+     paradas sin geocerca: un camión estacionado el fin de semana en un camino
+     de San Javier sumaba 47 h como si hubiera estado esperando en un cliente.
+     Ahora el tiempo sin geocerca se muestra aparte y no contamina el KPI. */
+  const enRuta = visitas.filter(v=>v.tipo!=='REDTEC' && v.tipo!=='Sin geocerca').reduce((s,v)=>s+v.min,0);
+  const sinGeo = visitas.filter(v=>v.tipo==='Sin geocerca').reduce((s,v)=>s+v.min,0);
+  /* Una parada que cruza la medianoche se consolida entera contra el día en
+     que empezó. Es correcto como "estuvo ahí de corrido", pero engaña si se
+     lee como tiempo DE ESE DÍA, así que se avisa. */
+  const largas = visitas.filter(v=>v.min >= 20*60);
   const hhmm = t => (String(t).split(' ')[1]||'').slice(0,5);
 
   const kpi = (val, lab, color) => `<div style="background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:10px 13px;min-width:112px">
@@ -3944,8 +3978,15 @@ function detalleCamionDia(placa, fecha){
       ${kpi(fmtPallets(bal.saleP - bal.entraP), 'Balance del día', (bal.saleP-bal.entraP)>=0?'var(--blue)':'var(--green)')}
       ${kpi(fmtMins(enRuta), 'Detenido en clientes')}
       ${kpi(fmtMins(enBase), 'Detenido en base', 'var(--cyan)')}
+      ${sinGeo ? kpi(fmtMins(sinGeo), 'Detenido sin geocerca', 'var(--purple)') : ''}
       ${kpi(km.km ? km.km+' km' : '—', 'Recorrido estimado', 'var(--purple)')}
     </div>
+    ${largas.length ? `<div style="margin:0 20px 12px;padding:9px 12px;background:var(--amber-d);border:1px solid rgba(244,168,54,.3);border-radius:8px;font-size:11.5px;color:var(--t2)">
+      <b style="color:var(--amber)">${largas.length} parada(s) de más de 20 horas seguidas.</b>
+      ${largas.map(v=>escTT(v.punto)+' ('+fmtMins(v.min)+')').join(' · ')}.
+      El camión estuvo ahí de corrido cruzando uno o más días —típicamente estacionado el fin de semana—,
+      pero el tiempo se carga entero al día en que la parada empezó. No lo leas como tiempo de esta jornada.
+    </div>` : ''}
     ${km.km ? `<div style="margin:0 20px 10px;font-size:10.5px;color:var(--t3)">
       Los km son una ESTIMACIÓN: el GPS entrega paradas, no recorrido. Se mide la distancia entre paradas
       consecutivas y se corrige por ${FACTOR_RUTA} para aproximar calles${km.sinCoord?`; ${km.sinCoord} tramo(s) sin coordenadas quedaron fuera`:''}.

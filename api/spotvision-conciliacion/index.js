@@ -35,6 +35,8 @@ module.exports = async function (context, req) {
     });
 
     const r = conciliar(cargas, guias, {
+      cierreS: Number(req.query.cierre_s) || undefined,
+      // ?cierre_min= sigue funcionando; si viene, manda sobre cierre_s
       cierreMin: Number(req.query.cierre_min) || undefined,
       tolerancia: Number(req.query.tolerancia) || undefined,
       campoConteo: req.query.campo === 'bultos' ? 'total_bultos' : 'total_pallets',

@@ -1063,12 +1063,42 @@ const FLOTA_NOMBRES = {
   'NC8771': 'JULIO BULNES',
   'RW5303': 'GONZALO CAMPOS',
   'SP3393': 'CESAR ANABALON',
-  'VG1943': 'VICTOR VEGA',
+  'VG1943': 'ALEJANDRO PENDOLA',
   /* Talca: identificadas por sus operaciones en RDTOut (Productos Fernández
      Talca, Dimak Talca, TAK Curicó). CKWR19 tiene GPS y reporta normal. */
   'CKWR19': 'CRISTIAN GUZMAN',
   'GXVL57': ''
 };
+/* ── Propiedad de la flota y reemplazos ──────────────────────────────────
+   Dato entregado por Mauro (Innovación y Desarrollo) el 16-09-2026.
+
+   Los camiones de Santiago no son de REDTEC: pertenecen a dos titulares,
+   Juan Carlos Vega y Víctor Vega. Cuando el chofer habitual está con licencia
+   o de vacaciones, lo cubre el DUEÑO del camión.
+
+   Esto explica el desalineamiento de nombres que el informe venía marcando
+   como sospechoso: el GPS rotula la patente con su chofer habitual (etiqueta
+   fija que mantiene el proveedor) y RDTOut registra quién hizo REALMENTE la
+   operación. Si el nombre de RDTOut es el del titular de esa patente, no es
+   un error de dato: es un reemplazo normal. Sólo un tercero ajeno a la
+   patente amerita revisarse. */
+const FLOTA_TITULAR = {
+  'VG1943': ['JUAN CARLOS VEGA','VICTOR VEGA'],
+  'NC8771': ['JUAN CARLOS VEGA','VICTOR VEGA'],
+  'CCRC36': ['JUAN CARLOS VEGA','VICTOR VEGA'],
+  'LS3119': ['VICTOR VEGA'],
+  'SP3393': ['JUAN CARLOS VEGA']
+};
+/* Chofer habitual por patente. CCRC36 no tiene chofer fijo: la toma Juan
+   Carlos Vega cuando no hay quién la maneje. */
+const FLOTA_SIN_CHOFER_FIJO = {'CCRC36': 1};
+
+function esTitular(placa, nombre){
+  const t = FLOTA_TITULAR[placa] || [];
+  const n = catNorm(nombre||'');
+  return t.some(x => catNorm(x) === n);
+}
+
 /* Plaza de cada camión, para poder mirar la operación por separado */
 const FLOTA_PLAZA = {
   'BJCL13':'Santiago','CCRC36':'Santiago','CPVW43':'Santiago','FV2792':'Santiago',
@@ -2494,6 +2524,8 @@ async function detalleChofer(placa){
       <div>
         <div style="font-size:14px;font-weight:600;color:var(--t1)">${escTT(chofer)}</div>
         <div style="font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t2)">${placa}${FLOTA_PLAZA[placa]?' · '+FLOTA_PLAZA[placa]:''} · ${dias.size} día(s) con actividad</div>
+        ${(FLOTA_TITULAR[placa]||[]).length ? `<div style="font-size:10.5px;color:var(--t3);margin-top:2px">
+          Camión de ${FLOTA_TITULAR[placa].map(escTT).join(' y ')}${FLOTA_SIN_CHOFER_FIJO[placa] ? ' · sin chofer fijo' : ''}</div>` : ''}
       </div>
       <button onclick="document.getElementById('modal-chofer').remove()" style="margin-left:auto;background:none;border:none;color:var(--t2);font-size:20px;cursor:pointer;padding:2px 8px">×</button>
     </div>
@@ -3535,14 +3567,37 @@ function bloqueSinParada(ops){
 
 /* El chofer que va manejando lo sabe RDTOut, no el GPS: el nombre del GPS es
    el que tiene cargado el proveedor y puede estar desactualizado. */
+/* Un nombre distinto entre GPS y RDTOut casi nunca es un error de dato: es el
+   titular del camión cubriendo al chofer habitual. Antes esto salía como
+   advertencia ámbar y mandaba a investigar algo normal. Ahora se separan los
+   dos casos y sólo el tercero ajeno a la patente queda marcado. */
 function avisoChofer(placa, ops, choferGPS){
   const nombres = [...new Set(ops.map(x => String((x.o||x).chofer||'').trim()).filter(Boolean))];
   const distinto = nombres.filter(n => catNorm(n) !== catNorm(choferGPS||''));
   if(!distinto.length) return '';
-  return `<div style="margin:0 20px 12px;padding:9px 12px;background:var(--amber-d);border:1px solid rgba(244,168,54,.3);border-radius:8px;font-size:11.5px;color:var(--t2)">
-    <b style="color:var(--amber)">El GPS dice ${escTT(choferGPS||'—')} y RDTOut dice ${distinto.map(escTT).join(', ')}.</b>
-    El nombre del GPS lo mantiene el proveedor y puede estar viejo; el de RDTOut es el que quedó asignado al pedido.
-  </div>`;
+
+  const reemplazos = distinto.filter(n => esTitular(placa, n));
+  const ajenos     = distinto.filter(n => !esTitular(placa, n));
+  const bloques    = [];
+
+  if(reemplazos.length){
+    const t = FLOTA_TITULAR[placa] || [];
+    bloques.push(`<div style="margin:0 20px 12px;padding:9px 12px;background:var(--s3);border:1px solid var(--border);border-radius:8px;font-size:11.5px;color:var(--t2)">
+      <b style="color:var(--t1)">Manejó ${reemplazos.map(escTT).join(', ')}, no ${escTT(choferGPS||'—')}.</b>
+      Es ${t.length > 1 ? 'uno de los titulares' : 'el titular'} de ${escTT(placa)} cubriendo al chofer habitual
+      —lo normal cuando hay licencia o vacaciones—, así que el dato está bien: el GPS rotula la patente con su
+      chofer de siempre y RDTOut registra quién hizo la operación.
+    </div>`);
+  }
+  if(ajenos.length){
+    bloques.push(`<div style="margin:0 20px 12px;padding:9px 12px;background:var(--amber-d);border:1px solid rgba(244,168,54,.3);border-radius:8px;font-size:11.5px;color:var(--t2)">
+      <b style="color:var(--amber)">El GPS dice ${escTT(choferGPS||'—')} y RDTOut dice ${ajenos.map(escTT).join(', ')}.</b>
+      ${ajenos.length === 1 ? 'Ese nombre no es' : 'Esos nombres no son'} el chofer habitual ni
+      ${(FLOTA_TITULAR[placa]||[]).length ? 'titular de esta patente' : 'un titular conocido'}, así que vale la pena
+      confirmarlo con Transportes.
+    </div>`);
+  }
+  return bloques.join('');
 }
 
 /* ── KILÓMETROS: una ESTIMACIÓN, no el odómetro ─────────────────────────

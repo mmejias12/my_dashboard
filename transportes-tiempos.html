@@ -4227,7 +4227,7 @@ function mostrarResumenPlacas(){
      el API no entregó el dato. Antes caía en "sin actividad" y se leía como
      un camión detenido — así fue como SP3393 apareció con 4 registros en
      agosto cuando en realidad había hecho 219 paradas. */
-  const noRespondio = p => DB_ESTADO[p] && (DB_ESTADO[p].estado === 'sin_respuesta' || DB_ESTADO[p].estado === 'error' || DB_ESTADO[p].estado === 'limite_proveedor');
+  const noRespondio = p => DB_ESTADO[p] && (DB_ESTADO[p].estado === 'sin_respuesta' || DB_ESTADO[p].estado === 'error' || DB_ESTADO[p].estado === 'limite_proveedor' || DB_ESTADO[p].estado === 'pendiente');
   const conData      = TODAS.filter(p => DB_PLACAS[p] && DB_PLACAS[p].length > 0);
   const sinActividad = TODAS.filter(p => DB_PLACAS[p] && DB_PLACAS[p].length === 0 && !noRespondio(p));
   const sinRespuesta = TODAS.filter(p => noRespondio(p));
@@ -4339,12 +4339,18 @@ async function cargarPlacaExtra(placa, silencioso){
        el API no entregó datos después de reintentar — NO que el camión estuvo
        detenido. En ese caso no se cachea nada: se deja la placa como no
        consultada para poder reintentarla, en vez de congelar un cero falso. */
+    /* El proxy sólo alcanza a consultar las placas que le caben en los 45
+       segundos que le da Azure; el resto vuelve en 'pendientes'. Una placa
+       pendiente NO fue consultada, así que no puede leerse como sin actividad. */
+    const pendiente = (data.pendientes || []).indexOf(placa) !== -1;
     const infoPlaca = (data.placas || []).find(p => p.plate === placa) || null;
-    const estado    = infoPlaca ? infoPlaca.estado : (data.total > 0 ? 'con_datos' : 'sin_respuesta');
+    const estado    = pendiente ? 'pendiente'
+                    : infoPlaca ? infoPlaca.estado
+                    : (data.total > 0 ? 'con_datos' : 'sin_respuesta');
     DB_ESTADO[placa] = {estado: estado, intentos: infoPlaca ? infoPlaca.intentos : null,
                         motivo: infoPlaca ? infoPlaca.motivo : null, ts: Date.now()};
 
-    if(estado === 'sin_respuesta' || estado === 'error' || estado === 'bloqueada' || estado === 'limite_proveedor'){
+    if(estado === 'sin_respuesta' || estado === 'error' || estado === 'bloqueada' || estado === 'limite_proveedor' || estado === 'pendiente'){
       delete DB_PLACAS[placa];      // que quede "no consultada", no "sin actividad"
       PLACAS_ACTIVAS.delete(placa);
       reconstruirDB();
@@ -4390,7 +4396,7 @@ async function cargarPlacaExtra(placa, silencioso){
 function avisarDatoIncompleto(){
   const faltan = Object.keys(FLOTA_NOMBRES).filter(p =>
     DB_ESTADO[p] && (DB_ESTADO[p].estado === 'sin_respuesta' || DB_ESTADO[p].estado === 'error'
-                  || DB_ESTADO[p].estado === 'limite_proveedor'));
+                  || DB_ESTADO[p].estado === 'limite_proveedor' || DB_ESTADO[p].estado === 'pendiente'));
   const el = document.getElementById('aviso-incompleto');
   if(!el) return;
   if(!faltan.length){ el.style.display = 'none'; return; }
@@ -4411,7 +4417,7 @@ function avisarDatoIncompleto(){
 async function reintentarSinRespuesta(){
   const faltan = Object.keys(FLOTA_NOMBRES).filter(p =>
     DB_ESTADO[p] && (DB_ESTADO[p].estado === 'sin_respuesta' || DB_ESTADO[p].estado === 'error'
-                  || DB_ESTADO[p].estado === 'limite_proveedor'));
+                  || DB_ESTADO[p].estado === 'limite_proveedor' || DB_ESTADO[p].estado === 'pendiente'));
   if(!faltan.length) return;
   setInfo('Reintentando ' + faltan.length + ' placa(s) sin respuesta…','amber');
   for(const p of faltan){

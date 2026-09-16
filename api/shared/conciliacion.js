@@ -6,7 +6,7 @@
  *  1. CARGA VIVA. Seccion 7 de la guia de SPOTVISION: total_pallets, total_bultos
  *     y la lista de bultos CRECEN mientras el camion se descarga. Comparar antes
  *     de que la carga cierre produce faltantes falsos. Una carga se considera
- *     cerrada cuando no recibe bultos nuevos hace CIERRE_MIN minutos.
+ *     cerrada cuando no recibe bultos nuevos hace CIERRE_S segundos.
  *  2. CRUCE. La API no trae numero de guia: la unica llave disponible es
  *     patente + dia. Como un camion tiene VARIOS movimientos en el mismo dia,
  *     el cruce se resuelve como una asignacion, no paso por paso (ver abajo).
@@ -18,10 +18,31 @@
  * 10 pallets = 2 bultos). Confirmar con SPOTVISION antes de operar en serio.
  */
 
-const CIERRE_MIN = 3;       // minutos sin bultos nuevos para dar la carga por cerrada.
-                            // El paso por el tunel dura ~4 s (medido en C920), asi que
-                            // 3 min es holgado; los 25 originales venian del modelo de
-                            // descarga de la seccion 7, que no aplica a un tunel de salida.
+/**
+ * VENTANA DE CIERRE: segundos sin bultos nuevos para dar la carga por cerrada.
+ *
+ * La historia del numero importa, porque explica por que estaba tan alto:
+ *   25 min  el modelo de DESCARGA de la seccion 7 de la guia de SPOTVISION. Ese
+ *           modelo es de recepcion, donde el camion se descarga de a poco. No
+ *           aplica a un tunel de salida, que es lo que tenemos.
+ *    3 min  primera correccion, ya sabiendo que la pasada dura segundos.
+ *   20 s    el numero real, que fija operaciones: la pasada toma 6 a 9 s y el
+ *           carro de arrastre suma otros ~9, asi que 20 s cubre camion + carro.
+ *           Es ademas el mismo corte que SPOTVISION aplica de su lado para no
+ *           partir una unidad en dos cargas (bajaron de 30 s a 20 s).
+ *
+ * OJO CON LA UNIDAD. Esto se media en MINUTOS con un toFixed(1), o sea en pasos
+ * de 6 segundos: pedir 20 s cerraba de verdad a los 24, y 18, 20 y 21 s eran el
+ * mismo valor. Por eso el umbral vive en segundos.
+ *
+ * NUESTRA VENTANA NO PUEDE SER MENOR QUE LA DE SPOTVISION mas su latencia de
+ * publicacion: si lo fuera, estariamos comparando una carga que ellos todavia
+ * pueden completar. Con las dos en 20 s quedamos al ras, asi que se puede subir
+ * sin desplegar con la app setting CIERRE_SEGUNDOS. La senal de que quedo corta
+ * es un faltante que se corrige solo en el ciclo siguiente.
+ */
+const CIERRE_S = Number(process.env.CIERRE_SEGUNDOS) || 20;
+const CIERRE_MIN = CIERRE_S / 60;   // se sigue publicando por compatibilidad
 const VENTANA_H = 12;       // horas maximas entre emision de guia y llegada
 const TOLERANCIA = 0;       // pallets de diferencia que aun se consideran OK
 
@@ -249,7 +270,10 @@ function sonCorrelativas(nums) {
 
 function conciliar(cargas, guias, opts = {}) {
   const {
-    cierreMin = CIERRE_MIN,
+    // En segundos. `cierreMin` se sigue aceptando para no romper a quien ya
+    // llamaba con ?cierre_min=, pero si viene, manda.
+    cierreS = CIERRE_S,
+    cierreMin = null,
     ventanaH = VENTANA_H,
     tolerancia = TOLERANCIA,
     campoConteo = 'total_pallets',
@@ -260,6 +284,10 @@ function conciliar(cargas, guias, opts = {}) {
     soloEmisiones = false,
     ahora = Date.now(),
   } = opts;
+
+  const cierre = Number.isFinite(Number(cierreMin)) && Number(cierreMin) > 0
+    ? Number(cierreMin) * 60
+    : cierreS;
 
   const { guiaDe, cargaDe, guiasPorLlave, llave } =
     asignar(cargas, guias, campoConteo, soloEmisiones);
@@ -276,8 +304,11 @@ function conciliar(cargas, guias, opts = {}) {
     const ultimo = tiempos.length ? Math.max(...tiempos) : t0;
 
     const duracionMin = +((ultimo - t0) / 60000).toFixed(1);
-    const minutosSinBultos = +((ahora - ultimo) / 60000).toFixed(1);
-    const cerrada = minutosSinBultos >= cierreMin;
+    // En segundos: con una ventana de 20 s, redondear a decimas de minuto
+    // (pasos de 6 s) hacia imposible expresar el umbral.
+    const segundosSinBultos = +((ahora - ultimo) / 1000).toFixed(1);
+    const minutosSinBultos = +(segundosSinBultos / 60).toFixed(1);
+    const cerrada = segundosSinBultos >= cierre;
 
     // pausa mas larga entre detecciones consecutivas: el tiempo muerto real
     const serie = [t0, ...tiempos].sort((a, b) => a - b);
@@ -331,6 +362,7 @@ function conciliar(cargas, guias, opts = {}) {
       diferencia,
       cerrada,
       duracion_min: duracionMin,
+      segundos_sin_bultos: segundosSinBultos,
       minutos_sin_bultos: minutosSinBultos,
       pausa_max_min: +pausaMax.toFixed(1),
       ritmo_bultos_min: duracionMin > 0 ? +((c.bultos || []).length / duracionMin).toFixed(2) : null,
@@ -368,7 +400,8 @@ function conciliar(cargas, guias, opts = {}) {
       !cargaDe.has(gi) && (!soloEmisiones || g.tipo === 'emision')),
     parametros_consolidacion: { max_documentos: MAX_DOCS },
     parametros: {
-      cierre_min: cierreMin, ventana_h: ventanaH, tolerancia_pallets: tolerancia,
+      cierre_s: cierre, cierre_min: +(cierre / 60).toFixed(2),
+      ventana_h: ventanaH, tolerancia_pallets: tolerancia,
       campo_conteo: campoConteo, solo_emisiones: soloEmisiones,
     },
   };
@@ -376,5 +409,5 @@ function conciliar(cargas, guias, opts = {}) {
 
 module.exports = {
   conciliar, asignar, analizarDeteccion, consolidar, sonCorrelativas,
-  CIERRE_MIN, VENTANA_H, TOLERANCIA, CORTE_S, CORTE_LARGO_S,
+  CIERRE_S, CIERRE_MIN, VENTANA_H, TOLERANCIA, CORTE_S, CORTE_LARGO_S,
 };

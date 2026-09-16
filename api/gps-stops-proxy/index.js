@@ -14,23 +14,52 @@ const PASSWORD = process.env.GPS_PASSWORD || 'redtec2023';
 // idénticas entre sí y superconjunto de las 9 placas reales). Si se dejan en
 // la flota, cada consulta duplica el universo completo y todo promedio de
 // flota queda inflado. Verificado el 15-09-2026.
-const FLEET = ['BJCL13','CCRC36','CPVW43','FV2792','LS3119','NC8771','RW5303','SP3393','VG1943'];
+const FLEET = ['BJCL13','CCRC36','CPVW43','FV2792','LS3119','NC8771','RW5303','SP3393','VG1943',
+               // Talca — identificadas por sus operaciones en RDTOut (Productos
+               // Fernández Talca, Dimak Talca, TAK Curicó). CKWR19 reporta normal.
+               'CKWR19','GXVL57'];
 
 // Identificadores comodín: devuelven la cuenta completa, no un vehículo.
 // Se bloquean salvo que se pidan a propósito con ?cuenta=1.
 const CATCH_ALL = ['XC9869','YG5106'];
 
-const MAX_CONCURRENT = 2;
-const DELAY_MS       = 800;
+// ── Límite del proveedor ──────────────────────────────────────────────────
+// VERIFICADO EL 16-09-2026. El API responde HTTP 200 con este cuerpo cuando se
+// le consulta demasiado seguido:
+//     <code>109</code>
+//     <description>El tiempo entre consulta debe ser mayor a 20 segundos.</description>
+// Antes eso se leía como "el camión no se movió". Era la causa de fondo de
+// TODAS las placas que aparecían en cero: con 800 ms entre consultas, sólo la
+// primera placa del lote pasaba y las otras diez eran rechazadas en silencio.
+//
+// Alcance medido: la ventana es POR CUENTA, no por patente — otra patente
+// dentro de los 20 s también se rechaza. Pero repetir la MISMA consulta
+// (misma patente y mismo rango) devuelve la respuesta cacheada al instante,
+// así que la segunda pasada del día es rápida y el costo de 21 s por placa se
+// paga sólo en la carga fría.
+const PROVIDER_GAP_MS = 21000;
+const MAX_CONCURRENT = 1;      // serializado a la fuerza: el límite es por cuenta
+const DELAY_MS       = PROVIDER_GAP_MS;
 const RETRY_MAX      = 2;
-const RETRY_DELAY_MS = 2500;
+const RETRY_DELAY_MS = PROVIDER_GAP_MS;
 
 // El API responde de forma intermitente con 200 y cuerpo vacío (~30 ms, contra
 // ~250 ms de una respuesta buena). Antes eso se leía como "el camión no se
 // movió". Ahora una respuesta vacía se reintenta y, si nunca llega data, la
 // placa se reporta como SIN RESPUESTA, que es distinto de SIN ACTIVIDAD.
-const EMPTY_RETRY_MAX   = 3;
-const EMPTY_RETRY_DELAY = 1500;
+const EMPTY_RETRY_MAX   = 2;
+const EMPTY_RETRY_DELAY = PROVIDER_GAP_MS;
+
+// Lee el código de estado que devuelve el proveedor, para poder distinguir
+// "me estás consultando muy seguido" de "esta patente no tuvo paradas".
+function codigoProveedor(xml){
+  var m = String(xml||'').match(/<code>\s*(\d+)\s*<\/code>/i);
+  return m ? m[1] : null;
+}
+function mensajeProveedor(xml){
+  var m = String(xml||'').match(/<description>([^<]*)<\/description>/i);
+  return m ? m[1].trim() : '';
+}
 
 module.exports = async function (context, req) {
   if (req.method === 'OPTIONS') {
@@ -94,7 +123,10 @@ module.exports = async function (context, req) {
     } else {
       // Se agotaron los reintentos sin una sola parada: NO afirmamos que no hubo
       // actividad, decimos que el API no entregó datos.
-      var e = {plate:r.plate, estado:'sin_respuesta', intentos:r.intentos, ms:r.msPorIntento};
+      var e = {plate:r.plate,
+               estado: r.limitado ? 'limite_proveedor' : 'sin_respuesta',
+               intentos:r.intentos, ms:r.msPorIntento};
+      if (r.limitado) e.motivo = r.msgProveedor || 'El proveedor exige más de 20 segundos entre consultas.';
       if (debug) e.muestra = String(r.xml||'').substring(0,200);
       estados.push(e);
     }
@@ -105,6 +137,7 @@ module.exports = async function (context, req) {
   });
 
   var sinRespuesta = estados.filter(function(e){return e.estado==='sin_respuesta';}).length;
+  var limitadas    = estados.filter(function(e){return e.estado==='limite_proveedor';}).length;
 
   context.res = {
     status: 200,
@@ -115,6 +148,7 @@ module.exports = async function (context, req) {
       'X-Debug-Plates-Total':String(results.length),
       'X-Debug-Plates-Ok':String(okCount),
       'X-Debug-Plates-NoData':String(sinRespuesta),
+      'X-Debug-Plates-RateLimited':String(limitadas),
       'X-Debug-Plates-Error':String(errors.length),
       'X-Debug-Elapsed-Ms':String(elapsedMs)
     },
@@ -129,10 +163,12 @@ module.exports = async function (context, req) {
         consultadas: results.length,
         con_datos: okCount,
         sin_respuesta: sinRespuesta,
+        limite_proveedor: limitadas,
         con_error: errors.length,
         bloqueadas: bloqueadas.length,
         duplicados_descartados: duplicados,
-        confiable: sinRespuesta === 0 && errors.length === 0
+        gap_proveedor_ms: PROVIDER_GAP_MS,
+        confiable: sinRespuesta === 0 && limitadas === 0 && errors.length === 0
       }
     })
   };
@@ -188,7 +224,8 @@ async function runWithThrottle(items, asyncFn) {
     var batch = items.slice(i, i+MAX_CONCURRENT);
     var batchResult = await Promise.all(batch.map(function(item){
       return asyncFn(item)
-        .then(function(r){return{plate:item,ok:true,xml:r.xml,intentos:r.intentos,msPorIntento:r.ms};})
+        .then(function(r){return{plate:item,ok:true,xml:r.xml,intentos:r.intentos,msPorIntento:r.ms,
+                                 limitado:r.limitado,msgProveedor:r.msgProveedor};})
         .catch(function(err){return{plate:item,ok:false,error:err.message,intentos:err.intentos||0};});
     }));
     results = results.concat(batchResult);
@@ -203,14 +240,24 @@ async function runWithThrottle(items, asyncFn) {
 async function queryPlateUntilData(plate, s1, s2, iTime) {
   var ms = [];
   var xml = '';
+  var limitado = false, msgProv = '';
   for (var intento = 1; intento <= EMPTY_RETRY_MAX; intento++) {
     var t0 = Date.now();
     xml = await queryPlateWithRetry(plate, s1, s2, iTime);
     ms.push(Date.now()-t0);
     if (xml.indexOf('<ITEM>') !== -1) return {xml:xml, intentos:intento, ms:ms};
-    if (intento < EMPTY_RETRY_MAX) await sleep(EMPTY_RETRY_DELAY);
+
+    var cod = codigoProveedor(xml);
+    if (cod === '109') {
+      // Rechazo por frecuencia, no ausencia de datos. Esperar la ventana
+      // completa del proveedor antes de volver a preguntar.
+      limitado = true; msgProv = mensajeProveedor(xml);
+      if (intento < EMPTY_RETRY_MAX) { await sleep(PROVIDER_GAP_MS); continue; }
+    } else if (intento < EMPTY_RETRY_MAX) {
+      await sleep(EMPTY_RETRY_DELAY);
+    }
   }
-  return {xml:xml, intentos:EMPTY_RETRY_MAX, ms:ms};
+  return {xml:xml, intentos:EMPTY_RETRY_MAX, ms:ms, limitado:limitado, msgProveedor:msgProv};
 }
 
 async function queryPlateWithRetry(plate, s1, s2, iTime) {

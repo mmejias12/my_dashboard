@@ -30,7 +30,7 @@ var RECINTOS = [{"k": "HALEON PUDAHUEL LA MARTINA 400", "n": "HALEON PUDAHUEL La
 /* Centroides aproximados (lon, lat). Las 27 primeras vienen del catálogo
    original; el resto se agregó al ver las comunas que aparecen en las
    direcciones sin geocerca del GPS. */
-var COMUNA_CENT = {"BUIN": [-70.7411, -33.7333], "CERRILLOS": [-70.718, -33.496], "CERRO NAVIA": [-70.742, -33.421], "COLINA": [-70.672, -33.202], "ESTACION CENTRAL": [-70.696, -33.46], "HUECHURABA": [-70.639, -33.367], "ISLA DE MAIPO": [-70.898, -33.752], "LA FLORIDA": [-70.568, -33.532], "LA PINTANA": [-70.63, -33.583], "LAMPA": [-70.876, -33.284], "MACUL": [-70.598, -33.49], "MAIPU": [-70.758, -33.517], "PAINE": [-70.741, -33.808], "PENAFLOR": [-70.876, -33.61], "PUDAHUEL": [-70.75, -33.442], "PUENTE ALTO": [-70.575, -33.611], "QUILICURA": [-70.729, -33.36], "RECOLETA": [-70.641, -33.402], "RENCA": [-70.728, -33.406], "SAN BERNARDO": [-70.7, -33.592], "SAN JOAQUIN": [-70.628, -33.497], "TALAGANTE": [-70.931, -33.664], "SAN ANTONIO": [-71.613, -33.593], "VALPARAISO": [-71.613, -33.047], "PLACILLA": [-71.568, -33.116], "HIJUELAS": [-71.133, -32.806], "RENGO": [-70.86, -34.406], "SANTIAGO": [-70.65, -33.442], "QUINTA NORMAL": [-70.7, -33.432], "CONCHALI": [-70.675, -33.383], "INDEPENDENCIA": [-70.664, -33.415], "PROVIDENCIA": [-70.61, -33.43], "NUNOA": [-70.598, -33.456], "LAS CONDES": [-70.545, -33.408], "VITACURA": [-70.578, -33.38], "LO BARNECHEA": [-70.48, -33.35], "LA REINA": [-70.545, -33.445], "PENALOLEN": [-70.545, -33.49], "SAN MIGUEL": [-70.652, -33.497], "PEDRO AGUIRRE CERDA": [-70.674, -33.487], "LO ESPEJO": [-70.688, -33.52], "LA CISTERNA": [-70.662, -33.533], "EL BOSQUE": [-70.675, -33.562], "LA GRANJA": [-70.628, -33.541], "SAN RAMON": [-70.645, -33.538], "LO PRADO": [-70.722, -33.443], "TIL TIL": [-70.93, -33.087], "CURACAVI": [-71.15, -33.4], "MELIPILLA": [-71.215, -33.688], "EL MONTE": [-70.983, -33.68], "CALERA DE TANGO": [-70.78, -33.62], "PIRQUE": [-70.59, -33.67], "SAN JOSE DE MAIPO": [-70.35, -33.64], "PADRE HURTADO": [-70.815, -33.573], "TALCA": [-71.665, -35.426], "SAN JAVIER": [-71.73, -35.594], "LINARES": [-71.597, -35.846], "LOS ANGELES": [-72.351, -37.469], "CHILLAN": [-72.103, -36.606], "TEMUCO": [-72.59, -38.735], "PUERTO MONTT": [-72.941, -41.469], "CONCEPCION": [-73.05, -36.827], "CORONEL": [-73.132, -37.026], "TALCAHUANO": [-73.117, -36.717], "OSORNO": [-73.133, -40.573], "LA CALERA": [-71.192, -32.788], "QUILLOTA": [-71.247, -32.88], "LIMACHE": [-71.267, -33.017], "LOS ANDES": [-70.598, -32.834], "SAN FELIPE": [-70.725, -32.75], "RANCAGUA": [-70.745, -34.17], "SANTA CRUZ": [-71.365, -34.639], "VALDIVIA": [-73.245, -39.814], "MELIPILLA CENTRO": [-71.215, -33.688]};
+var COMUNA_CENT = {"BUIN": [-70.7411, -33.7333], "CERRILLOS": [-70.718, -33.496], "CERRO NAVIA": [-70.742, -33.421], "COLINA": [-70.672, -33.202], "ESTACION CENTRAL": [-70.696, -33.46], "HUECHURABA": [-70.639, -33.367], "ISLA DE MAIPO": [-70.898, -33.752], "LA FLORIDA": [-70.568, -33.532], "LA PINTANA": [-70.63, -33.583], "LAMPA": [-70.876, -33.284], "MACUL": [-70.598, -33.49], "MAIPU": [-70.758, -33.517], "PAINE": [-70.741, -33.808], "PENAFLOR": [-70.876, -33.61], "PUDAHUEL": [-70.75, -33.442], "PUENTE ALTO": [-70.575, -33.611], "QUILICURA": [-70.729, -33.36], "RECOLETA": [-70.641, -33.402], "RENCA": [-70.728, -33.406], "SAN BERNARDO": [-70.7, -33.592], "SAN JOAQUIN": [-70.628, -33.497], "TALAGANTE": [-70.931, -33.664], "SAN ANTONIO": [-71.613, -33.593], "VALPARAISO": [-71.613, -33.047], "PLACILLA": [-71.568, -33.116], "HIJUELAS": [-71.133, -32.806], "RENGO": [-70.86, -34.406], "SANTIAGO": [-70.65, -33.442], "QUINTA NORMAL": [-70.7, -33.432], "CONCHALI": [-70.675, -33.383], "INDEPENDENCIA": [-70.664, -33.415], "PROVIDENCIA": [-70.61, -33.43], "NUNOA": [-70.598, -33.456], "LAS CONDES": [-70.545, -33.408], "VITACURA": [-70.578, -33.38], "LO BARNECHEA": [-70.48, -33.35], "LA REINA": [-70.545, -33.445], "PENALOLEN": [-70.545, -33.49], "SAN MIGUEL": [-70.652, -33.497], "PEDRO AGUIRRE CERDA": [-70.674, -33.487], "LO ESPEJO": [-70.688, -33.52], "LA CISTERNA": [-70.662, -33.533], "EL BOSQUE": [-70.675, -33.562], "LA GRANJA": [-70.628, -33.541], "SAN RAMON": [-70.645, -33.538], "LO PRADO": [-70.722, -33.443], "TIL TIL": [-70.93, -33.087], "CURACAVI": [-71.15, -33.4], "MELIPILLA": [-71.215, -33.688], "EL MONTE": [-70.983, -33.68], "CALERA DE TANGO": [-70.78, -33.62], "PIRQUE": [-70.59, -33.67], "SAN JOSE DE MAIPO": [-70.35, -33.64], "PADRE HURTADO": [-70.815, -33.573], "TALCA": [-71.665, -35.426], "SAN JAVIER": [-71.73, -35.594], "LINARES": [-71.597, -35.846], "LOS ANGELES": [-72.351, -37.469], "CHILLAN": [-72.103, -36.606], "TEMUCO": [-72.59, -38.735], "PUERTO MONTT": [-72.941, -41.469], "CONCEPCION": [-73.05, -36.827], "CORONEL": [-73.132, -37.026], "TALCAHUANO": [-73.117, -36.717], "OSORNO": [-73.133, -40.573], "LA CALERA": [-71.192, -32.788], "QUILLOTA": [-71.247, -32.88], "LIMACHE": [-71.267, -33.017], "LOS ANDES": [-70.598, -32.834], "SAN FELIPE": [-70.725, -32.75], "RANCAGUA": [-70.745, -34.17], "SANTA CRUZ": [-71.365, -34.639], "VALDIVIA": [-73.245, -39.814], "MELIPILLA CENTRO": [-71.215, -33.688], "COQUIMBO": [-71.3436, -29.9533], "LA SERENA": [-71.2542, -29.9027], "OVALLE": [-71.1994, -30.6017], "ILLAPEL": [-71.1667, -31.63], "VICUNA": [-70.71, -30.032], "COPIAPO": [-70.332, -27.366], "VALLENAR": [-70.758, -28.576], "ANTOFAGASTA": [-70.4, -23.65], "CALAMA": [-68.933, -22.455], "IQUIQUE": [-70.14, -20.214], "ARICA": [-70.312, -18.478], "PAN DE AZUCAR": [-71.309, -29.966], "CURICO": [-71.239, -34.983], "SAN RAFAEL": [-71.513, -35.017], "MOLINA": [-71.282, -35.113], "COLBUN": [-71.411, -35.696], "PANGUILEMO": [-71.62, -35.363], "SAN CLEMENTE": [-71.485, -35.537], "CONSTITUCION": [-72.411, -35.333], "PARRAL": [-71.829, -36.143], "CAUQUENES": [-72.352, -35.967], "SAN CARLOS": [-71.96, -36.424], "COCHARCAS": [-72.043, -36.531], "NIQUEN": [-71.94, -36.29], "CHILLAN VIEJO": [-72.122, -36.623], "BULNES": [-72.298, -36.742], "COELEMU": [-72.705, -36.487], "QUILLON": [-72.468, -36.737], "YUMBEL": [-72.568, -37.098], "SAN PEDRO DE LA PAZ": [-73.1, -36.84], "CHIGUAYANTE": [-73.027, -36.925], "HUALPEN": [-73.093, -36.793], "PENCO": [-72.995, -36.74], "LOTA": [-73.156, -37.09], "ARAUCO": [-73.317, -37.246], "CANETE": [-73.398, -37.801], "ANGOL": [-72.707, -37.797], "VICTORIA": [-72.334, -38.231], "LAUTARO": [-72.436, -38.531], "PUCON": [-71.955, -39.27], "VILLARRICA": [-72.227, -39.281], "LONCOCHE": [-72.632, -39.37], "LA UNION": [-73.083, -40.292], "RIO BUENO": [-72.952, -40.332], "PAILLACO": [-72.87, -40.068], "PUERTO VARAS": [-72.984, -41.319], "CASTRO": [-73.765, -42.482], "ANCUD": [-73.829, -41.867], "COYHAIQUE": [-72.066, -45.571], "PUNTA ARENAS": [-70.917, -53.162], "PUERTO NATALES": [-72.506, -51.723], "CHIMBARONGO": [-71.043, -34.713], "SAN FERNANDO": [-70.986, -34.586], "PEUMO": [-71.171, -34.393], "SAN VICENTE": [-71.079, -34.437], "PICHILEMU": [-72.013, -34.387], "PALMILLA": [-71.361, -34.594], "NANCAGUA": [-71.21, -34.667], "MACHALI": [-70.651, -34.181], "GRANEROS": [-70.728, -34.068], "CATEMU": [-70.96, -32.783], "PANQUEHUE": [-70.857, -32.813], "LLAY LLAY": [-70.96, -32.844], "NOGALES": [-71.208, -32.74], "OLMUE": [-71.188, -32.999], "VILLA ALEMANA": [-71.373, -33.042], "QUILPUE": [-71.442, -33.047], "CONCON": [-71.526, -32.926], "VINA DEL MAR": [-71.552, -33.024], "CASABLANCA": [-71.409, -33.321], "ALGARROBO": [-71.669, -33.367], "CARTAGENA": [-71.606, -33.546], "EL QUISCO": [-71.69, -33.4], "SAN ANTONIO CENTRO": [-71.613, -33.593]};
 
 
 /* ── COORDENADAS REALES ──────────────────────────────────────────────────
@@ -207,8 +207,60 @@ var ALIAS_COORD = {
   'TEBA GRAN AVENIDA':   'TEBA GRAN AVENIDA AV. JOSE MIGUEL CARERRA 13365',
   'TEBA JJ PEREZ':       'TEBA JJ PEREZ AV. J.J PEREZ #6142 CERRO NAVIA',
   'MOLINERA HEREDIA LTDA.': 'MOL HEREDIA MAIPU PLANTA',
-  'P G':                 'PROCTER AND GAMBLE'
+  'P G':                 'PROCTER AND GAMBLE',
+
+  /* Talca: el RDTOut y la geocerca del GPS nombran distinto la misma planta.
+     Verificado contra las 230 operaciones REDTEC de la zona (16-09-2026). */
+  'PF TALCA PLANTA 1':       'PRODUCTOS FERNANDEZ P1',
+  'PF TALCA PLANTA 2':       'PRODUCTOS FERNANDEZ P2',
+  'PF TALCA PLANTA PIZZAS':  'PRODUCTOS FERNANDEZ PZ',
+  'EMBO. METROPOLITANA COLBUN': 'EMBOTELLADORA EMSA COLBUN',
+  'M3169 M10 LINARES BRASIL 646': 'M3169 MAYORISTA 10 LINARES'
 };
+
+/* Recintos que no estaban en el catálogo de Santiago y que aparecen al sumar
+   Talca y la 4ª Región. Coordenadas del complejo industrial de Talca y de los
+   puntos de Coquimbo/Atacama; las plantas PF comparten predio, así que van
+   separadas por pocos metros a propósito. */
+var COORD_EXTRA = {
+  'PF TALCA PLANTA 4':             [-71.6472, -35.4281],
+  'PF TALCA PLANTA ELABORADOS':    [-71.6441, -35.4269],
+  'PF PATIO COMPLEJO INDUS. TALCA':[-71.6459, -35.4258],
+  'PF FRIGORIFICO MATERIA PRIMA':  [-71.6420, -35.4239],
+  'DIMAK TALCA':                   [-71.6612, -35.4340],
+  'TAK CURICO SAN RAFAEL':         [-71.5130, -35.0170],
+  'AGROINDUSTRIAL ITATA COCHARCAS':[-72.0430, -36.5310],
+  'PAN DE AZUCAR COQUIMBO':        [-71.3090, -29.9660],
+  'ZUN08 CD UNIMARC PAN DE AZUCAR':[-71.3120, -29.9690],
+  'CENCOCAL COPIAPO':              [-70.3320, -27.3660],
+  'PUNTO AZUL TIL-TIL':            [-70.9310, -33.0870]
+};
+
+/* Bodegas "virtuales": existen en el RDTOut como nodo contable, no como lugar
+   físico donde un camión se detenga. No deben contarse como punto de espera.
+   REDTEC COQUIMBO VIRTUAL concentra 24 operaciones sin patente asignada. */
+/* Comuna de cada punto agregado a mano, para que la tabla por comuna no los
+   deje en blanco. */
+var COMUNA_EXTRA = {
+  'PF TALCA PLANTA 4':'TALCA', 'PF TALCA PLANTA ELABORADOS':'TALCA',
+  'PF PATIO COMPLEJO INDUS. TALCA':'TALCA', 'PF FRIGORIFICO MATERIA PRIMA':'TALCA',
+  'DIMAK TALCA':'TALCA', 'TAK CURICO SAN RAFAEL':'SAN RAFAEL',
+  'AGROINDUSTRIAL ITATA COCHARCAS':'COCHARCAS',
+  'PAN DE AZUCAR COQUIMBO':'COQUIMBO', 'ZUN08 CD UNIMARC PAN DE AZUCAR':'COQUIMBO',
+  'CENCOCAL COPIAPO':'COPIAPO', 'PUNTO AZUL TIL-TIL':'TIL TIL'
+};
+
+/* Geocercas del GPS en Talca cuya comuna no viene en el nombre. */
+var COMUNA_GEOCERCA = {
+  'PRODUCTOS FERNANDEZ P1':'TALCA', 'PRODUCTOS FERNANDEZ P2':'TALCA',
+  'PRODUCTOS FERNANDEZ PZ':'TALCA', 'EMBOTELLADORA EMSA COLBUN':'COLBUN',
+  'THE PROTEIN COMPANY':'PAINE', 'AGROINDUSTRIAL ITATA LTDA':'COCHARCAS'
+};
+
+var BODEGA_VIRTUAL = {'REDTEC COQUIMBO VIRTUAL':1, 'REDTEC TALCA VIRTUAL':1};
+function esVirtual(nombre){
+  return !!BODEGA_VIRTUAL[catNorm(catDesenvolver(nombre))] || /\bVIRTUAL\b/i.test(String(nombre||''));
+}
 
 /* Quita el envoltorio de borde del proveedor: "B X  B" → "X" */
 function catDesenvolver(loc){
@@ -236,7 +288,12 @@ function resolverCoords(puntoOriginal){
   var baseKey = Object.keys(REDTEC_COORD).filter(function(k){ return catNorm(k) === n; })[0];
   if(!baseKey && /^REDTEC\b/.test(n)) baseKey = 'REDTEC';
   if(baseKey){
-    res = {coords: REDTEC_COORD[baseKey].slice(), comuna:'PUDAHUEL', zona:null, fuente:'base'};
+    /* Cada base en su comuna: antes todas heredaban PUDAHUEL, así que la base
+       de Talca aparecía rotulada como si estuviera en Santiago. */
+    var comBase = /TALCA/.test(baseKey) ? 'TALCA'
+                : /COQUIMBO/.test(baseKey) ? 'COQUIMBO'
+                : 'PUDAHUEL';
+    res = {coords: REDTEC_COORD[baseKey].slice(), comuna:comBase, zona:null, fuente:'base'};
   }
 
   // 2. Mapa de clientes de REDTEC: la mejor fuente que tenemos
@@ -244,6 +301,7 @@ function resolverCoords(puntoOriginal){
     res = {coords: COORD_GPS[n].slice(), comuna:null, zona:null, fuente:'cliente'};
     var rr = RECINTO_IDX[n];
     if(rr){ res.comuna = catNorm(rr.c); res.zona = rr.z || null; }
+    if(!res.comuna && COMUNA_GEOCERCA[n]) res.comuna = COMUNA_GEOCERCA[n];
   }
 
   // 3. Recinto del catálogo → dirección geocodificada, o centroide + jitter
@@ -266,12 +324,51 @@ function resolverCoords(puntoOriginal){
     }
   }
 
-  // 3. Dirección suelta → comuna escrita en el propio texto
+  // 3b. Recintos agregados a mano (Talca, 4ª y 3ª Región)
+  if(!res && COORD_EXTRA[n]){
+    res = {coords: COORD_EXTRA[n].slice(), comuna:COMUNA_EXTRA[n]||null, zona:null, fuente:'extra'};
+  }
+
+  // 4. Dirección suelta → comuna escrita en el propio texto
   if(!res){
     var com = comunaDeDireccion(punto);
     if(com && COMUNA_CENT[com]){
       var c2 = COMUNA_CENT[com], j2 = catJitter(n);
       res = {coords:[c2[0]+j2[0], c2[1]+j2[1]], comuna:com, zona:null, fuente:'comuna'};
+    }
+  }
+
+  // 5. Último recurso: la comuna va escrita en el propio NOMBRE de la bodega
+  //    ("DIMAK LOS ANGELES", "RABIE PUERTO MONTT", "00094 HIPER VALDIVIA
+  //    BUERAS"). Sin esto, 60 de las 136 bodegas de RDTOut caían en "sin
+  //    ubicar" y quedaban fuera del mapa y de todo promedio por zona.
+  //    Se toma la coincidencia MÁS LARGA para que "SAN PEDRO DE LA PAZ" gane
+  //    sobre "SAN PEDRO", y se exige borde de palabra para no confundir
+  //    "MAIPU" dentro de otra palabra. La precisión es de comuna, nunca de
+  //    dirección: por eso la fuente se marca aparte y el informe la distingue.
+  if(!res){
+    /* Abreviaturas que usa el RDTOut en el nombre de la sucursal. Se expanden
+       sólo acá, en el último escalón, para no ensuciar el match exacto. */
+    var nAb = n
+      .replace(/(^| )PTE ALTO( |$)/, '$1PUENTE ALTO$2')
+      .replace(/(^| )STA CRUZ( |$)/, '$1SANTA CRUZ$2')
+      .replace(/(^| )STA AMALIA( |$)/, '$1LA FLORIDA$2')
+      .replace(/(^| )BELLOTO( |$)/,   '$1QUILPUE$2')
+      .replace(/(^| )BODENOR FLEXCENTER( |$)/, '$1PUDAHUEL$2')
+      .replace(/(^| )PPE GALES( |$)/, '$1LA REINA$2')
+      .replace(/(^| )STO DGO( |$)/,   '$1SAN FELIPE$2')
+      .replace(/(^| )STA TERE( |$)/,  '$1LOS ANDES$2');
+    if(nAb !== n) n = nAb;
+    var mejor = null;
+    for(var cm in COMUNA_CENT){
+      if(cm.length < 4) continue;
+      if(new RegExp('(^| )' + cm.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '( |$)').test(n)){
+        if(!mejor || cm.length > mejor.length) mejor = cm;
+      }
+    }
+    if(mejor){
+      var c3 = COMUNA_CENT[mejor], j3 = catJitter(n);
+      res = {coords:[c3[0]+j3[0], c3[1]+j3[1]], comuna:mejor, zona:null, fuente:'comuna_nombre'};
     }
   }
 

@@ -3,11 +3,19 @@ const https = require('https');
 const API_HOST = 'web1ws.shareservice.co';
 const API_PATH = '/WsReports.asmx/GetStopsDataRangeByPlate';
 
-// Credenciales: mover a Application Settings en el portal (GPS_LOGIN / GPS_PASSWORD).
-// El fallback existe sólo para no romper el despliegue actual; la contraseña
-// estuvo expuesta en el HTML del cliente, así que hay que ROTARLA en el proveedor.
-const LOGIN    = process.env.GPS_LOGIN    || 'redtec chile';
-const PASSWORD = process.env.GPS_PASSWORD || 'redtec2023';
+// Credenciales: viven SÓLO en Application Settings del portal (GPS_LOGIN /
+// GPS_PASSWORD). Ya no hay valor de respaldo escrito acá: un fallback silencioso
+// haría que el proxy siguiera funcionando con una clave del código y nadie se
+// enteraría de que la configuración se perdió. Si faltan, la función responde
+// 500 diciendo exactamente qué falta.
+const LOGIN    = process.env.GPS_LOGIN    || '';
+const PASSWORD = process.env.GPS_PASSWORD || '';
+function faltanCredenciales(){
+  var faltan = [];
+  if (!LOGIN)    faltan.push('GPS_LOGIN');
+  if (!PASSWORD) faltan.push('GPS_PASSWORD');
+  return faltan;
+}
 
 // Flota real. XC9869 e YG5106 NO son vehículos: el API responde a esas dos
 // patentes con las paradas de TODA la cuenta (2.945 paradas en agosto 2026,
@@ -70,6 +78,39 @@ module.exports = async function (context, req) {
   var q = req.query || {};
   var verCuenta = q.cuenta === '1' || q.cuenta === 'true';
   var debug     = q.debug  === '1' || q.debug  === 'true';
+
+  // Chequeo de configuración. Con ?diag=1 se puede confirmar desde el navegador
+  // que las credenciales están cargadas SIN exponer sus valores.
+  var faltan = faltanCredenciales();
+  if (q.diag === '1' || q.diag === 'true') {
+    context.res = {
+      status: faltan.length ? 500 : 200,
+      headers: {'Content-Type':'application/json; charset=utf-8','Access-Control-Allow-Origin':'*','Cache-Control':'no-cache'},
+      body: JSON.stringify({
+        ok: faltan.length === 0,
+        credenciales: faltan.length ? 'FALTAN' : 'cargadas desde Application Settings',
+        faltan: faltan,
+        login_largo: LOGIN.length,          // sólo el largo, nunca el valor
+        password_largo: PASSWORD.length,
+        gap_proveedor_ms: PROVIDER_GAP_MS,
+        flota: FLEET
+      })
+    };
+    return;
+  }
+  if (faltan.length) {
+    context.res = {
+      status: 500,
+      headers: {'Content-Type':'application/json; charset=utf-8','Access-Control-Allow-Origin':'*'},
+      body: JSON.stringify({
+        ok:false,
+        error:'Faltan credenciales del GPS en la configuración del sitio: ' + faltan.join(' y ') + '.',
+        comoArreglar:'Portal de Azure → Static Web App → Configuración → Application settings. ' +
+                     'Agregar GPS_LOGIN y GPS_PASSWORD y guardar. No se vuelve a escribir la clave en el código.'
+      })
+    };
+    return;
+  }
 
   var plates;
   if (q.plate)       plates = [q.plate.trim()];

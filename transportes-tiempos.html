@@ -515,6 +515,8 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
           <option value="RW5303">RW5303 — Gonzalo Campos</option>
           <option value="SP3393">SP3393 — César Anabálón</option>
           <option value="VG1943">VG1943 — Víctor Vega</option>
+          <option value="CKWR19">CKWR19 — Cristián Guzmán (Talca)</option>
+          <option value="GXVL57">GXVL57 — Talca</option>
           <!-- XC9869 e YG5106 quitadas: no son vehículos, devuelven la cuenta completa (ver FLOTA_NOMBRES) -->
         </select>
       </div>
@@ -549,7 +551,7 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
           <div class="lr-ring"></div><div class="lr-ghost"></div>
           <div class="lr-mask"><div class="lr-liquid b"></div><div class="lr-liquid"></div><div class="lr-brillo"></div></div>
         </div>
-        <div class="lr-txt" id="gps-loader-txt">Consultando el GPS…<b>9 placas · puede tardar unos segundos</b></div>
+        <div class="lr-txt" id="gps-loader-txt">Consultando el GPS…<b>11 placas · puede tardar unos segundos</b></div>
       </div>
     </div>
 
@@ -719,6 +721,10 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
             <div class="a11y-grp" style="padding:2px 3px">
               <button class="a11y-btn sm" id="mg-punto" onclick="mapaAgrup('punto')">Por punto</button>
               <button class="a11y-btn sm" id="mg-comuna" onclick="mapaAgrup('comuna')">Por comuna</button>
+            </div>
+            <div class="a11y-grp" style="padding:2px 3px">
+              <button class="a11y-btn sm" id="mv-stgo" onclick="mapaAmbito(true)">Santiago</button>
+              <button class="a11y-btn sm" id="mv-chile" onclick="mapaAmbito(false)" title="Incluye Talca y el resto del país">Todo Chile</button>
             </div>
             <button class="a11y-btn sm" id="mz-zonas" onclick="mapaZonas()" title="Pintar las zonas tarifarias P1–P31 del mapa de clientes" style="background:var(--s3);border-color:var(--border)">Zonas</button>
             <select class="sinput" id="mapa-placa" style="width:180px" onchange="renderMapa()">
@@ -939,6 +945,27 @@ let DB_PLACAS = {}; // caché por placa: {placa: [rows]}
    como "sin actividad", o sea un camión que sí trabajó aparecía detenido.
    Una placa SIN RESPUESTA no se puede promediar ni concluir: se reintenta. */
 let DB_ESTADO = {}; // {placa: {estado, intentos, ts}}
+
+/* El proveedor del GPS rechaza consultas separadas por menos de 20 segundos
+   (código 109, verificado el 16-09-2026) y ese rechazo llega como HTTP 200 con
+   el cuerpo vacío. Durante meses eso se leyó como "el camión no se movió": con
+   2,5 s entre placas sólo la primera del lote traía datos reales. Por eso acá
+   se espera la ventana completa. La carga fría de la flota demora ~4 minutos;
+   a cambio, el dato es el que hay. Repetir la misma consulta (misma placa y
+   mismo rango) el proveedor la responde de su caché al instante, así que la
+   segunda pasada no vuelve a pagar la espera. */
+const GPS_GAP_MS = 21000;
+function esperaGps(ms, etiqueta){
+  return new Promise(function(r){
+    var fin = Date.now() + ms;
+    (function tic(){
+      var q = Math.max(0, Math.round((fin - Date.now())/1000));
+      if(etiqueta) setInfo(etiqueta + ' · siguiente consulta en ' + q + 's (el GPS exige 20s entre placas)','amber');
+      if(q <= 0) return r();
+      setTimeout(tic, 1000);
+    })();
+  });
+}
 let PLACAS_ACTIVAS = new Set(); // placas cuyos datos están en DB
 let DB_FILTERED = [];
 let PAG_PAGE = 1;
@@ -1036,7 +1063,17 @@ const FLOTA_NOMBRES = {
   'NC8771': 'JULIO BULNES',
   'RW5303': 'GONZALO CAMPOS',
   'SP3393': 'CESAR ANABALON',
-  'VG1943': 'VICTOR VEGA'
+  'VG1943': 'VICTOR VEGA',
+  /* Talca: identificadas por sus operaciones en RDTOut (Productos Fernández
+     Talca, Dimak Talca, TAK Curicó). CKWR19 tiene GPS y reporta normal. */
+  'CKWR19': 'CRISTIAN GUZMAN',
+  'GXVL57': ''
+};
+/* Plaza de cada camión, para poder mirar la operación por separado */
+const FLOTA_PLAZA = {
+  'BJCL13':'Santiago','CCRC36':'Santiago','CPVW43':'Santiago','FV2792':'Santiago',
+  'LS3119':'Santiago','NC8771':'Santiago','RW5303':'Santiago','SP3393':'Santiago',
+  'VG1943':'Santiago','CKWR19':'Talca','GXVL57':'Talca'
 };
 
 // Charts
@@ -2393,6 +2430,8 @@ async function detalleChofer(placa){
     const k = kmRecorridos(visitasBal.filter(v => v.fecha === f));
     kmTot += k.km; kmSin += k.sinCoord;
   });
+  const sueltasP = opsSinParada(placa, dias, bal.ops);
+  sueltasP.forEach(op => { if(sentidoOp(op)==='sale') bal.saleP += palletsOp(op); else bal.entraP += palletsOp(op); });
   const porFam = {};
   bal.ops.forEach(({o:op, att, sale, pallets}) => {
     if(att === 'compartida') return;
@@ -2454,7 +2493,7 @@ async function detalleChofer(placa){
       <div class="chofer-av">${ini}</div>
       <div>
         <div style="font-size:14px;font-weight:600;color:var(--t1)">${escTT(chofer)}</div>
-        <div style="font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t2)">${placa} · ${dias.size} día(s) con actividad</div>
+        <div style="font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t2)">${placa}${FLOTA_PLAZA[placa]?' · '+FLOTA_PLAZA[placa]:''} · ${dias.size} día(s) con actividad</div>
       </div>
       <button onclick="document.getElementById('modal-chofer').remove()" style="margin-left:auto;background:none;border:none;color:var(--t2);font-size:20px;cursor:pointer;padding:2px 8px">×</button>
     </div>
@@ -2471,6 +2510,9 @@ async function detalleChofer(placa){
       ${kpi(fmtPallets(bal.saleP + bal.entraP), 'Pallets movidos')}
       ${kpi(kmTot ? kmTot+' km' : '—', 'Recorrido estimado', 'var(--purple)')}
     </div>
+
+    ${bloqueSinParada(sueltasP)}
+    ${avisoChofer(placa, bal.ops.concat(sueltasP.map(o=>({o}))), chofer)}
 
     ${Object.keys(porFam).length ? `<div style="padding:0 20px 14px">
       <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Qué movió</div>
@@ -2505,7 +2547,7 @@ async function detalleChofer(placa){
                  style="color:var(--blue);font-family:'DM Mono',monospace;font-size:11px;text-decoration:none;border-bottom:1px dotted currentColor">#${op.nroPedido}</a></td>
             <td style="padding:5px 10px;font-size:11.5px;color:${f.c};font-weight:600">${sale?'↑':'↓'} ${escTT(f.f)}</td>
             <td style="padding:5px 10px;font-size:11.5px;color:var(--t1)">${escTT(visita.punto)}</td>
-            <td style="padding:5px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t1)">${fmtPallets(+op.cantidadConfirmada||0)}</td>
+            <td style="padding:5px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:11.5px;color:var(--t1)">${fmtPallets(palletsOp(op))}</td>
             <td style="padding:5px 10px;font-family:'DM Mono',monospace;font-size:11px;color:var(--t3)">${escTT(visita.fecha)}${att==='inferida'?' <span style="color:var(--t3)">·inf</span>':''}</td>
           </tr>`;
         }).join('')}</tbody>
@@ -3038,6 +3080,9 @@ async function renderRecorrido(){
    ══════════════════════════════════════════════════════════════════════ */
 let mapaL = null, capaMapa = null, capaBase = null;
 let mapaModo = 'volumen';        // 'volumen' | 'demora'
+/* Con Talca en la flota el encuadre de Santiago ya no alcanza: se puede
+   soltar para ver todo el país. */
+let mapaSoloStgo = true;
 let mapaAgrupActual = 'punto';   // 'punto' | 'comuna'
 let MAPA_PUNTOS = [], MAPA_SIN_UBICAR = [], MAPA_FUERA = {n:0, min:0};
 
@@ -3070,6 +3115,7 @@ function cargarLeaflet(){
 
 function mapaModoSet(m){ mapaModo = m; renderMapa(); }
 function mapaAgrup(a){ mapaAgrupActual = a; renderMapa(); }
+function mapaAmbito(solo){ mapaSoloStgo = solo; renderMapa(); }
 
 function construirPuntos(){
   const placa = (document.getElementById('mapa-placa')||{}).value || 'all';
@@ -3101,7 +3147,7 @@ function construirPuntos(){
   });
   MAPA_SIN_UBICAR = Object.entries(sinU).sort((a,b)=>b[1]-a[1]);
   const todos = Object.values(acc).map(p => Object.assign(p, {prom: Math.round(p.min/p.vis)}));
-  MAPA_PUNTOS = todos.filter(p => esSantiago(p.coords));
+  MAPA_PUNTOS = mapaSoloStgo ? todos.filter(p => esSantiago(p.coords)) : todos;
   /* Lo que queda fuera del encuadre NO desaparece en silencio: si no, el
      total del mapa deja de cuadrar con el del informe. */
   const fuera = todos.filter(p => MAPA_PUNTOS.indexOf(p) === -1);
@@ -3165,7 +3211,7 @@ function pintarMapa(){
       '<b>'+escTT(p.nombre)+'</b><br>'
       + '<span style="color:#555">'+escTT(p.comuna||'')+(p.zona?' · zona '+p.zona:'')+'</span><br>'
       + fmtMins(p.min)+' en '+p.vis+' visita(s) · promedio <b>'+fmtMins(p.prom)+'</b>'
-      + (p.fuente==='comuna' ? '<br><span style="color:#8a6d1f">ubicación aproximada (centro de comuna)</span>' : ''),
+      + ((p.fuente==='comuna'||p.fuente==='comuna_nombre') ? '<br><span style="color:#8a6d1f">ubicación aproximada (centro de comuna)</span>' : ''),
       {direction:'top', offset:[0,-4], opacity:.96}
     );
     m.on('click', () => detallePuntoMapa(p));
@@ -3404,6 +3450,18 @@ function camionesEnRecintoDia(punto, fecha){
 
 const placaOp = o => String(o.patente||'').trim().toUpperCase();
 
+/* PALLETS DE UNA OPERACIÓN
+   Una emisión recién despachada tiene cantidadConfirmada = 0 hasta que se
+   cierra: el pedido 4114996 del 16-09 salió con 252 despachados, etapa
+   "Confirmar", y confirmada en 0. Sumar sólo la confirmada dejaba el día en
+   curso en cero. Se usa la confirmada cuando existe y la despachada mientras
+   la operación siga abierta, marcándola como EN CURSO para no mezclarlas. */
+function palletsOp(o){
+  const c = +o.cantidadConfirmada || 0;
+  return c > 0 ? c : (+o.cantidadDespachada || 0);
+}
+const enCursoOp = o => (+o.cantidadConfirmada || 0) === 0 && (+o.cantidadDespachada || 0) > 0;
+
 /* ── ATRIBUCIÓN DE UNA OPERACIÓN A UN CAMIÓN ────────────────────────────
    RDTOut SÍ trae la patente en las operaciones de la flota: medido sobre la
    ventana del API, 349 de 428 emisiones (82%), 310 de 432 retiros (72%) y
@@ -3426,6 +3484,66 @@ function atribuirOp(o, placa, nCamiones){
 }
 
 function fmtPallets(n){ return (n||0).toLocaleString('es-CL'); }
+
+/* ── OPERACIONES SIN PARADA TODAVÍA ─────────────────────────────────────
+   El informe cuelga cada operación de una VISITA del GPS. Pero el GPS sólo
+   reporta paradas TERMINADAS y de al menos iTime minutos, así que un camión
+   que va en ruta —o que recién llegó— tiene la operación en RDTOut y ninguna
+   parada donde colgarla.
+
+   Caso real del 16-09: SP3393 salió de REDTEC a las 08:47 con una emisión a
+   INTERCOS COLINA, pasó el túnel a las 09:07, y en el informe no aparecía
+   nada. No era un error del cruce: la parada en el cliente todavía no
+   existía. Ahora esas operaciones se muestran aparte, en vez de perderse. */
+function opsSinParada(placa, fechas, opsYaVistas){
+  if(OPS_ESTADO !== 'ok') return [];
+  const vistos = new Set(opsYaVistas.map(x => String(x.o.nroPedido)));
+  const P = String(placa).toUpperCase();
+  return OPS_RDT.filter(o => {
+    if(placaOp(o) !== P) return false;
+    if(vistos.has(String(o.nroPedido))) return false;
+    return diasDeOp(o).some(d => fechas.has(d));
+  });
+}
+
+function bloqueSinParada(ops){
+  if(!ops.length) return '';
+  const tot = ops.reduce((a,o)=>a+palletsOp(o),0);
+  return `<div style="margin:0 20px 12px;padding:10px 13px;background:var(--blue-d);border:1px solid rgba(75,141,248,.3);border-radius:8px">
+    <div style="font-size:11.5px;color:var(--t1);font-weight:600;margin-bottom:6px">
+      ${ops.length} operación(es) · ${fmtPallets(tot)} pallets sin parada del GPS todavía</div>
+    <div style="font-size:10.5px;color:var(--t2);margin-bottom:8px">
+      RDTOut ya las tiene, pero el GPS sólo reporta paradas terminadas: el camión puede ir en ruta o llevar
+      menos del mínimo detenido en el destino. No entran en los tiempos, sí en los pallets.</div>
+    ${ops.slice(0,6).map(o => {
+      const f = familiaOp(o.operacion), sale = sentidoOp(o)==='sale';
+      const cp = /REDTEC/i.test(o.bodegaDestinoStr||'') ? o.bodegaOrigenStr : o.bodegaDestinoStr;
+      return `<div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;font-size:11.5px;padding:2px 0">
+        <span style="color:${f.c};font-weight:600">${sale?'↑':'↓'} ${escTT(f.f)}</span>
+        <span style="color:var(--t1)">${escTT(cp||'')}</span>
+        <span style="color:var(--t2)">${fmtPallets(palletsOp(o))} pallets</span>
+        <a href="#" onclick="event.preventDefault();historialPedido('${o.nroPedido}')"
+           style="color:var(--blue);font-family:'DM Mono',monospace;font-size:10px;text-decoration:none;border-bottom:1px dotted currentColor">#${o.nroPedido}</a>
+        <span style="color:var(--t3);font-size:10px">${escTT(o.etapaOperacion||'')}</span>
+        ${enCursoOp(o) ? '<span style="color:var(--amber);font-size:10px">en curso</span>' : ''}
+        ${escTT(o.chofer||'') ? `<span style="color:var(--t3);font-size:10px">${escTT(o.chofer)}</span>` : ''}
+      </div>`;
+    }).join('')}
+    ${ops.length>6 ? `<div style="color:var(--t3);font-size:10px;margin-top:4px">y ${ops.length-6} más</div>` : ''}
+  </div>`;
+}
+
+/* El chofer que va manejando lo sabe RDTOut, no el GPS: el nombre del GPS es
+   el que tiene cargado el proveedor y puede estar desactualizado. */
+function avisoChofer(placa, ops, choferGPS){
+  const nombres = [...new Set(ops.map(x => String((x.o||x).chofer||'').trim()).filter(Boolean))];
+  const distinto = nombres.filter(n => catNorm(n) !== catNorm(choferGPS||''));
+  if(!distinto.length) return '';
+  return `<div style="margin:0 20px 12px;padding:9px 12px;background:var(--amber-d);border:1px solid rgba(244,168,54,.3);border-radius:8px;font-size:11.5px;color:var(--t2)">
+    <b style="color:var(--amber)">El GPS dice ${escTT(choferGPS||'—')} y RDTOut dice ${distinto.map(escTT).join(', ')}.</b>
+    El nombre del GPS lo mantiene el proveedor y puede estar viejo; el de RDTOut es el que quedó asignado al pedido.
+  </div>`;
+}
 
 /* ── KILÓMETROS: una ESTIMACIÓN, no el odómetro ─────────────────────────
    El API del GPS que consumimos (GetStopsDataRangeByPlate) entrega PARADAS,
@@ -3525,7 +3643,7 @@ async function historialPedido(nro){
    atribuir a un camión de lo que quedó compartido con otro. */
 function balanceDeVisitas(visitas){
   const b = {saleP:0, entraP:0, saleN:0, entraN:0, ambiguasN:0, ambiguasP:0,
-             exactasN:0, inferidasN:0, ops:[], sinOp:0};
+             exactasN:0, inferidasN:0, enCursoN:0, enCursoP:0, ops:[], sinOp:0};
   visitas.forEach(v => {
     const x = opsDeVisita(v.punto, v.fecha);
     const n = camionesEnRecintoDia(v.punto, v.fecha).size;
@@ -3533,9 +3651,10 @@ function balanceDeVisitas(visitas){
     if(!propias.length){ b.sinOp++; return; }
     propias.forEach(o => {
       const att = atribuirOp(o, v.placa, n);
-      const p = +o.cantidadConfirmada || 0;
+      const p = palletsOp(o);
       const sale = sentidoOp(o) === 'sale';
-      b.ops.push({o, visita:v, att, sale, pallets:p});
+      if(enCursoOp(o)){ b.enCursoN++; b.enCursoP += p; }
+      b.ops.push({o, visita:v, att, sale, pallets:p, enCurso:enCursoOp(o)});
       if(att === 'compartida'){ b.ambiguasN++; b.ambiguasP += p; return; }
       if(att === 'exacta') b.exactasN++; else b.inferidasN++;
       if(sale){ b.saleP += p; b.saleN++; } else { b.entraP += p; b.entraN++; }
@@ -3612,7 +3731,7 @@ function detallePuntoMapa(d, destino){
           const att = atribuirOp(o, v.placa, nCam);
           const sale = sentidoOp(o)==='sale';
           return `<div><span style="color:${f.c};font-weight:600">${sale?'↑':'↓'} ${escTT(f.f)}</span>
-            <span style="color:var(--t2)">${fmtPallets(+o.cantidadConfirmada||0)} pallets</span>
+            <span style="color:var(--t2)">${fmtPallets(palletsOp(o))} pallets</span>
             <a href="#" onclick="event.preventDefault();historialPedido('${o.nroPedido}')"
                style="color:var(--blue);font-family:'DM Mono',monospace;font-size:10px;text-decoration:none;border-bottom:1px dotted currentColor">#${o.nroPedido}</a>
             ${att==='exacta' ? '<span style="color:var(--green);font-size:9.5px" title="RDTOut trae esta patente en la operación">✓ patente</span>'
@@ -3667,6 +3786,8 @@ function detallePuntoMapa(d, destino){
         ${d.fuente==='base' ? 'Ubicación real de la base.'
           : d.fuente==='cliente' ? 'Ubicación real: del mapa de clientes de REDTEC.'
           : d.fuente==='direccion' ? 'Ubicación real: dirección del recinto geocodificada.'
+          : d.fuente==='extra' ? 'Ubicación real: punto agregado a mano (Talca / 4ª Región).'
+          : d.fuente==='comuna_nombre' ? 'Ubicación APROXIMADA: la comuna se dedujo del nombre de la bodega, no de una dirección.'
           : 'Ubicación APROXIMADA: centro de la comuna.'}
         ${bal.ambiguasN ? ' · '+bal.ambiguasN+' operación(es) quedaron sin asignar porque más de un camión estuvo en el recinto ese día.' : ''}
         Clic en la patente para ver el día completo de ese camión.
@@ -3697,6 +3818,10 @@ function detalleCamionDia(placa, fecha){
   const bal = balanceDeVisitas(visitas);
 
   const km = kmRecorridos(visitas);
+  /* Los pallets del día suman también lo que RDTOut ya registró aunque el GPS
+     todavía no tenga la parada: si no, un camión en ruta aparece con cero. */
+  const sueltas = opsSinParada(placa, new Set([fecha]), bal.ops);
+  sueltas.forEach(o => { if(sentidoOp(o)==='sale') bal.saleP += palletsOp(o); else bal.entraP += palletsOp(o); });
   const enBase = visitas.filter(v=>v.tipo==='REDTEC').reduce((s,v)=>s+v.min,0);
   const enRuta = visitas.filter(v=>v.tipo!=='REDTEC').reduce((s,v)=>s+v.min,0);
   const hhmm = t => (String(t).split(' ')[1]||'').slice(0,5);
@@ -3727,7 +3852,7 @@ function detalleCamionDia(placa, fecha){
           const att = atribuirOp(o, v.placa, nCam);
           return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             <span style="color:${f.c};font-weight:600">${sale?'↑':'↓'} ${escTT(f.f)}</span>
-            <span style="color:var(--t2)">${fmtPallets(+o.cantidadConfirmada||0)} pallets</span>
+            <span style="color:var(--t2)">${fmtPallets(palletsOp(o))} pallets</span>
             <a href="#" onclick="event.preventDefault();historialPedido('${o.nroPedido}')" title="Ver el historial de este pedido"
                style="color:var(--blue);font-family:'DM Mono',monospace;font-size:10px;text-decoration:none;border-bottom:1px dotted currentColor">#${o.nroPedido}</a>
             ${att==='exacta' ? '<span style="color:var(--green);font-size:9.5px">✓ patente</span>'
@@ -3770,8 +3895,11 @@ function detalleCamionDia(placa, fecha){
       Los km son una ESTIMACIÓN: el GPS entrega paradas, no recorrido. Se mide la distancia entre paradas
       consecutivas y se corrige por ${FACTOR_RUTA} para aproximar calles${km.sinCoord?`; ${km.sinCoord} tramo(s) sin coordenadas quedaron fuera`:''}.
       No sirve para liquidar combustible.</div>` : ''}
+    ${bloqueSinParada(opsSinParada(placa, new Set([fecha]), bal.ops))}
+    ${avisoChofer(placa, bal.ops.concat(sueltas.map(o=>({o}))), chofer)}
     <div style="margin:0 20px 12px;font-size:11px;color:var(--t3)">
       ${bal.exactasN ? `<b style="color:var(--green)">${bal.exactasN}</b> operación(es) confirmadas por patente en RDTOut` : ''}
+      ${bal.enCursoN ? ` · <span style="color:var(--amber)">${bal.enCursoN} en curso (despachada, aún sin confirmar)</span>` : ''}
       ${bal.inferidasN ? ` · ${bal.inferidasN} inferida(s) (la operación no trae patente y fue el único camión en el recinto)` : ''}
     </div>
     ${bal.ambiguasN ? `<div style="margin:0 20px 12px;padding:9px 12px;background:var(--amber-d);border:1px solid rgba(244,168,54,.3);border-radius:8px;font-size:11.5px;color:var(--t2)">
@@ -3817,6 +3945,7 @@ async function renderMapa(){
   });
   marcar([['volumen','mm-vol'],['demora','mm-dem']], mapaModo);
   marcar([['punto','mg-punto'],['comuna','mg-comuna']], mapaAgrupActual);
+  marcar([[true,'mv-stgo'],[false,'mv-chile']], mapaSoloStgo);
 
   if(OPS_ESTADO === 'sin_cargar') await cargarOps();   // el balance emitido/retirado lo necesita
 
@@ -3850,15 +3979,15 @@ async function renderMapa(){
   /* Desglose de lo que la flota movió en los puntos del mapa */
   const balTot = balanceDeVisitas([].concat(...MAPA_PUNTOS.map(p=>p.visitas||[])));
   chips.innerHTML = [
-    chip(`<b style="color:var(--t1)">${MAPA_PUNTOS.length}</b> ${mapaAgrupActual==='comuna'?'comunas':'puntos'} en Santiago`),
+    chip(`<b style="color:var(--t1)">${MAPA_PUNTOS.length}</b> ${mapaAgrupActual==='comuna'?'comunas':'puntos'}${mapaSoloStgo?' en Santiago':' en todo Chile'}`),
     chip(`<b style="color:var(--t1)">${fmtMins(minUbic)}</b> de flota detenida`),
-    (() => { const ap = MAPA_PUNTOS.filter(p=>p.fuente==='comuna').length;
+    (() => { const ap = MAPA_PUNTOS.filter(p=>p.fuente==='comuna'||p.fuente==='comuna_nombre').length;
              return ap ? chip(`${ap} con ubicación aproximada`) : ''; })(),
     lento ? chip(`más lento: <b style="color:var(--amber)">${escTT(lento.nombre)}</b> · ${fmtMins(lento.prom)} por visita`, 'var(--amber-d)') : '',
     chip(`<b style="color:var(--blue)">${fmtPallets(balTot.saleP)}</b> pallets emitidos · <b style="color:var(--green)">${fmtPallets(balTot.entraP)}</b> retirados`),
     balTot.sinOp ? chip(`${balTot.sinOp} visita(s) sin operación en RDTOut`) : '',
     MAPA_SIN_UBICAR.length ? chip(`<b style="color:var(--amber)">${MAPA_SIN_UBICAR.length}</b> sin ubicar · ${fmtMins(minSin)}`, 'var(--amber-d)') : '',
-    MAPA_FUERA.n ? chip(`${MAPA_FUERA.n} fuera de Santiago · ${fmtMins(MAPA_FUERA.min)}`) : ''
+    MAPA_FUERA.n ? `<span onclick="mapaAmbito(false)" style="cursor:pointer;background:var(--s3);border:1px solid var(--border);border-radius:20px;padding:4px 11px;font-size:11px;color:var(--t2)" title="Mostrarlos en el mapa">${MAPA_FUERA.n} fuera de Santiago · ${fmtMins(MAPA_FUERA.min)} →</span>` : ''
   ].filter(Boolean).join('');
 
   const cz = document.getElementById('mapa-zonas');
@@ -4098,7 +4227,7 @@ function mostrarResumenPlacas(){
      el API no entregó el dato. Antes caía en "sin actividad" y se leía como
      un camión detenido — así fue como SP3393 apareció con 4 registros en
      agosto cuando en realidad había hecho 219 paradas. */
-  const noRespondio = p => DB_ESTADO[p] && (DB_ESTADO[p].estado === 'sin_respuesta' || DB_ESTADO[p].estado === 'error');
+  const noRespondio = p => DB_ESTADO[p] && (DB_ESTADO[p].estado === 'sin_respuesta' || DB_ESTADO[p].estado === 'error' || DB_ESTADO[p].estado === 'limite_proveedor');
   const conData      = TODAS.filter(p => DB_PLACAS[p] && DB_PLACAS[p].length > 0);
   const sinActividad = TODAS.filter(p => DB_PLACAS[p] && DB_PLACAS[p].length === 0 && !noRespondio(p));
   const sinRespuesta = TODAS.filter(p => noRespondio(p));
@@ -4197,9 +4326,10 @@ async function cargarPlacaExtra(placa, silencioso){
        consultada para poder reintentarla, en vez de congelar un cero falso. */
     const infoPlaca = (data.placas || []).find(p => p.plate === placa) || null;
     const estado    = infoPlaca ? infoPlaca.estado : (data.total > 0 ? 'con_datos' : 'sin_respuesta');
-    DB_ESTADO[placa] = {estado: estado, intentos: infoPlaca ? infoPlaca.intentos : null, ts: Date.now()};
+    DB_ESTADO[placa] = {estado: estado, intentos: infoPlaca ? infoPlaca.intentos : null,
+                        motivo: infoPlaca ? infoPlaca.motivo : null, ts: Date.now()};
 
-    if(estado === 'sin_respuesta' || estado === 'error' || estado === 'bloqueada'){
+    if(estado === 'sin_respuesta' || estado === 'error' || estado === 'bloqueada' || estado === 'limite_proveedor'){
       delete DB_PLACAS[placa];      // que quede "no consultada", no "sin actividad"
       PLACAS_ACTIVAS.delete(placa);
       reconstruirDB();
@@ -4244,26 +4374,34 @@ async function cargarPlacaExtra(placa, silencioso){
    promedio de flota calculado sobre 6 de 9 camiones se lee como si fueran 9. */
 function avisarDatoIncompleto(){
   const faltan = Object.keys(FLOTA_NOMBRES).filter(p =>
-    DB_ESTADO[p] && (DB_ESTADO[p].estado === 'sin_respuesta' || DB_ESTADO[p].estado === 'error'));
+    DB_ESTADO[p] && (DB_ESTADO[p].estado === 'sin_respuesta' || DB_ESTADO[p].estado === 'error'
+                  || DB_ESTADO[p].estado === 'limite_proveedor'));
   const el = document.getElementById('aviso-incompleto');
   if(!el) return;
   if(!faltan.length){ el.style.display = 'none'; return; }
   el.style.display = 'flex';
+  const porLimite = faltan.filter(p => DB_ESTADO[p] && DB_ESTADO[p].estado === 'limite_proveedor');
   el.innerHTML = '<span style="font-weight:600">⚠ Dato incompleto</span>'
     + '<span>El API no respondió por ' + faltan.length + ' placa(s): <b>' + faltan.join(', ') + '</b>. '
     + 'No están detenidas — no llegó su dato. Los totales y promedios de flota de esta pantalla '
-    + 'están calculados sin ellas.</span>'
+    + 'están calculados sin ellas.'
+    + (porLimite.length
+        ? ' <b>' + porLimite.length + '</b> de ellas fueron rechazadas por el límite del proveedor '
+          + '(exige más de 20 segundos entre consultas), no por falta de actividad.'
+        : '')
+    + '</span>'
     + '<button class="btn-go" style="font-size:11px;padding:4px 10px;margin-left:auto" onclick="reintentarSinRespuesta()">↻ Reintentar</button>';
 }
 
 async function reintentarSinRespuesta(){
   const faltan = Object.keys(FLOTA_NOMBRES).filter(p =>
-    DB_ESTADO[p] && (DB_ESTADO[p].estado === 'sin_respuesta' || DB_ESTADO[p].estado === 'error'));
+    DB_ESTADO[p] && (DB_ESTADO[p].estado === 'sin_respuesta' || DB_ESTADO[p].estado === 'error'
+                  || DB_ESTADO[p].estado === 'limite_proveedor'));
   if(!faltan.length) return;
   setInfo('Reintentando ' + faltan.length + ' placa(s) sin respuesta…','amber');
   for(const p of faltan){
     await cargarPlacaExtra(p, true);
-    await new Promise(r => setTimeout(r, 900));   // el API tiene rate-limit
+    if(p !== faltan[faltan.length-1]) await esperaGps(GPS_GAP_MS, 'Reintentando placas');
   }
   renderAll();
   avisarDatoIncompleto();
@@ -4292,8 +4430,9 @@ async function cargarTodasPlacas(){
     // Actualizar botones y KPIs después de cada placa exitosa
     renderBotonesPlaca();
     renderKPIs();
-    // Pausa para que el usuario vea el resultado antes del siguiente
-    await new Promise(function(r){ setTimeout(r, 2500); });
+    if(i < pendientes.length-1){
+      await esperaGps(GPS_GAP_MS, 'Cargando flota · ' + (i+1) + ' de ' + pendientes.length);
+    }
   }
   // Render completo final
   renderAll();

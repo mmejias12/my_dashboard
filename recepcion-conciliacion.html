@@ -245,7 +245,8 @@ svg{display:block;width:100%;overflow:visible}
     <b>Prototipo.</b> Los conteos vienen de un dataset simulado con el mismo contrato que la API de SPOTVISION;
     las guías simulan el lado RDTOut. Al apuntar <code>FUENTE</code> a <code>/api/spotvision-conciliacion</code>
     la vista funciona igual con datos reales. Regla clave: una carga sólo se concilia cuando lleva
-    <b id="nota-cierre">25</b> minutos sin recibir bultos nuevos — antes de eso sigue descargando y compararla daría faltantes falsos.
+    <b id="nota-cierre">20</b> segundos sin recibir bultos nuevos — antes de eso el camión todavía está pasando
+    y compararla daría faltantes falsos.
   </div>
 
   <!-- ============ filtros: una sola fila, alcanza a todo lo de abajo ============ -->
@@ -462,6 +463,16 @@ const EST = {
   en_curso:    {t:'En curso',   c:'var(--series-1)', g:'◷'},
 };
 const ORDEN = ['ok','faltante','sobrante','sin_guia','sin_patente','en_curso'];
+
+/* La ventana de cierre pasó de minutos a segundos (la pasada por el túnel dura
+   6-9 s, no minutos). Se lee de la respuesta, con respaldo al campo viejo para
+   que la vista no se rompa contra un API que todavía no se actualizó. */
+const segCierre = () => (D && D.parametros && D.parametros.cierre_s != null)
+  ? D.parametros.cierre_s
+  : Math.round(((D && D.parametros && D.parametros.cierre_min) || 0) * 60);
+const segSinBultos = (c) => (c.segundos_sin_bultos != null)
+  ? c.segundos_sin_bultos
+  : Math.round((c.minutos_sin_bultos || 0) * 60);
 
 /* Tipo de movimiento. Las emisiones generan DTE (serie 72xxx) y son las que
    salen con carga; retiros y devoluciones son entradas. Sin esta distinción,
@@ -1018,8 +1029,8 @@ function abrirDrawer(c){
     ${c.est==='sin_guia' ? `<div class="note" style="color:var(--text-2)">
       <b>? Camión sin guía asociada.</b> Pasó por el túnel y descargó, pero no hay documento emitido que lo respalde en el rango horario.</div>` : ''}
     ${c.est==='en_curso' ? `<div class="note" style="color:var(--text-2)">
-      <b>◷ Descarga en curso.</b> Último bulto hace ${n1(c.minutos_sin_bultos)} min. La conciliación espera
-      ${D.parametros.cierre_min} min sin bultos nuevos: comparar ahora daría un faltante falso.</div>` : ''}
+      <b>◷ Paso en curso.</b> Último bulto hace ${n1(segSinBultos(c))} s. La conciliación espera
+      ${segCierre()} s sin bultos nuevos: comparar ahora daría un faltante falso.</div>` : ''}
 
     <dl class="meta">
       <dt>${docsDe(c).length>1?'Guías (DTE)':'Guía (DTE)'}</dt><dd>${docsDe(c).length
@@ -1378,7 +1389,7 @@ function initFiltros(){
     return;
   }
   $('#gen').textContent = 'Generado ' + D.generado.slice(0,16).replace('T',' ');
-  $('#nota-cierre').textContent = D.parametros.cierre_min;
+  $('#nota-cierre').textContent = segCierre();
   const om = (D.omitidas?.cargas||0) + (D.omitidas?.guias||0);
   if(om){
     $('#omitidas').classList.remove('hide');

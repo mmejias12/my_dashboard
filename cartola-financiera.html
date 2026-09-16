@@ -530,20 +530,24 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
 :root[data-theme="light"] .tipo-card.is-info { opacity:.85; }
 
 /* ═══════════ CONTROLES DE VISTA (topbar) ═══════════ */
-.view-ctrls { display:flex;align-items:center;gap:4px;padding:3px 5px;
-  border:1px solid var(--border-md);border-radius:20px;background:var(--bg-input); }
+.view-ctrls { display:flex;align-items:center;gap:2px;padding:3px 6px;margin-left:auto;
+  align-self:center;border:1px solid var(--border-md);border-radius:22px;background:var(--bg-input); }
 .vc-btn { border:none;background:transparent;color:var(--text-sec);cursor:pointer;
-  font-family:inherit;line-height:1;padding:4px 7px;border-radius:12px;transition:all .13s;
-  display:flex;align-items:center;justify-content:center; }
+  font-family:inherit;line-height:1;padding:7px 10px;border-radius:14px;transition:all .13s;
+  display:flex;align-items:center;justify-content:center;min-width:30px; }
 .vc-btn:hover { background:var(--bg-hover);color:var(--text-pri); }
-.vc-btn:disabled { opacity:.35;cursor:not-allowed; }
-.vc-btn.a-min { font-size:10.5px;font-weight:600; }
-.vc-btn.a-max { font-size:14px;font-weight:700; }
-.vc-btn i { font-size:15px; }
-.vc-zoom { font-size:10px;color:var(--text-muted);min-width:30px;text-align:center;
-  font-family:'JetBrains Mono',monospace;cursor:pointer;user-select:none; }
-.vc-sep { width:1px;height:16px;background:var(--border-md); }
-#ico-tema { color:#fbbf24; }
+.vc-btn:active { transform:scale(.94); }
+.vc-btn:disabled { opacity:.3;cursor:not-allowed; }
+.vc-btn.a-min { font-size:12px;font-weight:700; }
+.vc-btn.a-max { font-size:18px;font-weight:700; }
+.vc-btn i { font-size:18px; }
+.vc-tema { color:var(--text-pri); }
+.vc-zoom { font-size:11px;color:var(--text-sec);min-width:40px;text-align:center;font-weight:600;
+  font-family:'JetBrains Mono',monospace;cursor:pointer;user-select:none;padding:2px 0;border-radius:8px; }
+.vc-zoom:hover { background:var(--bg-hover);color:var(--text-pri); }
+.vc-sep { width:1px;height:20px;background:var(--border-md);margin:0 3px; }
+@media(max-width:880px){ .view-ctrls { margin-left:0; } }
+#ico-tema { color:#fbbf24;font-size:19px; }
 :root[data-theme="light"] #ico-tema { color:#6135c9; }
 
 /* ═══════════ MODAL DETALLE CLIENTE ═══════════ */
@@ -623,13 +627,6 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
   <div class="topbar-title"><div class="live-dot"></div>Cartola Financiera</div>
   <div class="topbar-right">
     <span class="last-upd" id="last-upd"></span>
-    <div class="view-ctrls">
-      <button class="vc-btn a-min" id="btn-zoom-menos" onclick="ajustarZoom(-1)" title="Reducir tamaño (Ctrl+Alt+-)">A</button>
-      <span class="vc-zoom" id="lbl-zoom" onclick="ajustarZoom(0)" title="Volver al 100%">100%</span>
-      <button class="vc-btn a-max" id="btn-zoom-mas" onclick="ajustarZoom(1)" title="Aumentar tamaño (Ctrl+Alt++)">A</button>
-      <span class="vc-sep"></span>
-      <button class="vc-btn" onclick="alternarTema()" title="Cambiar tema claro / oscuro"><i class="ti ti-moon" id="ico-tema"></i></button>
-    </div>
     <a href="m3link_dashboard_dark.html" class="back-btn">← Dashboard</a>
     <div id="ct-avatar" style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#E31E24,#c0181e);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:12px;cursor:pointer;" title="Cargando...">?</div>
     <span id="ct-user" style="font-size:11px;color:var(--text-sec);">Cargando...</span>
@@ -761,6 +758,16 @@ html,body { min-height:100%; font-family:'Inter',sans-serif; font-size:13px;
       </label>
       <div class="period-badge" id="period-badge" style="display:none">
         <span id="period-text">—</span>
+      </div>
+      <div class="view-ctrls" role="group" aria-label="Tamaño de letra y tema">
+        <button class="vc-btn a-min" id="btn-zoom-menos" onclick="ajustarZoom(-1)"
+                title="Reducir tamaño (Ctrl+Alt+−)" aria-label="Reducir tamaño de letra">A</button>
+        <span class="vc-zoom" id="lbl-zoom" onclick="ajustarZoom(0)" title="Volver al 100%">100%</span>
+        <button class="vc-btn a-max" id="btn-zoom-mas" onclick="ajustarZoom(1)"
+                title="Aumentar tamaño (Ctrl+Alt++)" aria-label="Aumentar tamaño de letra">A</button>
+        <span class="vc-sep"></span>
+        <button class="vc-btn vc-tema" onclick="alternarTema()"
+                title="Cambiar tema claro / oscuro" aria-label="Cambiar tema"><i class="ti ti-moon" id="ico-tema"></i></button>
       </div>
     </div>
 

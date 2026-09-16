@@ -363,7 +363,7 @@ const REGLAS = {
                 acc:'Confirmar si el camión sigue en planta', sonido:'aviso', correo:false},
   ok:          {nivel:'ok',      gh:'✓', tit:'Carga conciliada', acc:'', sonido:null, correo:false},
   // EL CAMIÓN TODAVÍA ESTÁ PASANDO. El motor devuelve 'en_curso' mientras la
-  // carga siga recibiendo bultos (menos de CIERRE_MIN sin novedad). Faltaba
+  // carga siga recibiendo bultos (menos de CIERRE_SEGUNDOS sin novedad). Faltaba
   // acá, y era la causa de que la pantalla se congelara: buscar ese estado en
   // esta tabla daba undefined, leer .nivel lanzaba TypeError dentro de
   // registrarPaso y de render(), el ciclo entero moría y el feed dejaba de
@@ -472,6 +472,7 @@ const S = {
   demoOn: true,
   detallePorBulto: false,   // el campo que le pedimos a SPOTVISION
   cerradas: new Set(),      // cargas ya evaluadas en firme
+  firmas: new Map(),        // carga_id -> conteo con el que se evaluó (ver registrarPaso)
   atendidas: new Set(),     // marcadas por el operador (sobreviven a la recarga)
   retenidos: new Set(),
   registro: {},             // bitácora del servidor: carga_id -> estado vigente
@@ -799,6 +800,9 @@ function evaluar(carga){
   //    muestra el paso en curso y se espera a que cierre; el poll la vuelve a
   //    evaluar. Sin esta guarda un camión que aún no terminaba de pasar caía
   //    en "sin guía" y se quedaba así.
+  //    La ventana la decide el servidor (app setting CIERRE_SEGUNDOS, 20 s por
+  //    defecto), no esta pantalla: así las dos vistas que consumen la
+  //    conciliación cierran con el mismo criterio.
   if(carga.cerrada === false){
     return {...carga, guia:carga.guia ?? null, estado:'en_curso',
             diferencia:null, filaAfectada:null};
@@ -870,8 +874,6 @@ function evaluar(carga){
 
 function registrarPaso(carga){
   if(!enAlcance(carga.patente)) return;           // Talca / patente de pruebas
-  if(S.cerradas.has(carga.carga_id)) return;      // ya evaluada en firme
-
   // UNA CARGA ABIERTA SE VUELVE A EVALUAR. Antes bastaba con haberla visto una
   // vez para no mirarla nunca más, así que el camión que pasaba con el monitor
   // abierto quedaba congelado "en curso": cuando cerraba y aparecía la
@@ -879,9 +881,35 @@ function registrarPaso(carga){
   const idx = S.eventos.findIndex(e => e.carga_id === carga.carga_id);
   const previo = idx >= 0 ? S.eventos[idx] : null;
 
+  /* CUÁNDO SE DEJA DE MIRAR UNA CARGA.
+     Con la ventana de 3 minutos, una carga cerrada ya no cambiaba nunca y
+     bastaba con S.cerradas. Con 20 s eso es falso por dos motivos distintos:
+
+       · el CONTEO puede crecer — el carro de arrastre entra después de que
+         cerramos, y el faltante que ya salió deja de ser cierto;
+       · la ALERTA puede estar todavía esperando confirmación (ver más abajo:
+         no se suena en el primer cierre).
+
+     Por eso se deja de mirar sólo cuando las dos cosas están firmes: el conteo
+     es el mismo con el que evaluamos, y el evento ya quedó resuelto — sin
+     alerta, atendido, clasificado, o la alerta ya salió. Si esta guarda mirara
+     únicamente el conteo, un faltante real no sonaría jamás, porque la carga
+     se saldría por acá antes de alcanzar su segundo ciclo. */
+  const firma = carga.total_bultos + '/' + carga.total_pallets;
+  // Una clasificación que llegó del servidor y todavía no está en pantalla
+  // también es motivo para volver a mirar (la confirmó otro computador).
+  const registroPendiente = !!S.registro[carga.carga_id] && !(previo && previo.reloc);
+  const resuelto = !!previo && !registroPendiente
+                   && (previo.alertada || previo.atendida || regla(previo.estado).nivel === 'ok');
+  if(S.cerradas.has(carga.carga_id) && S.firmas.get(carga.carga_id) === firma && resuelto) return;
+  S.firmas.set(carga.carga_id, firma);
+
   const v = evaluar(carga);
   if(previo){
     v.atendida = previo.atendida; v.retenido = previo.retenido; v.historico = previo.historico;
+    // Si el estado cambió, vuelve a ser alertable: un faltante que pasa a
+    // sobrante es una novedad distinta y merece su propio aviso.
+    v.alertada = previo.estado === v.estado ? previo.alertada : false;
     S.eventos[idx] = v;
   }else{
     S.eventos.unshift(v);
@@ -901,14 +929,24 @@ function registrarPaso(carga){
   // bultos da faltantes falsos. Y en la primera sincronización entra el
   // histórico del día, que se muestra pero no dispara pop-up ni sonido: el
   // operador recibiría una avalancha por camiones que se fueron hace horas.
-  const nuevaAlerta = r.nivel !== 'ok' && v.cerrada && !v.atendida
-                      && (!previo || previo.estado !== v.estado);
+  /* SE EXIGE QUE EL ESTADO AGUANTE DOS CICLOS ANTES DE SONAR.
+     Nuestra ventana de cierre (20 s) quedó al ras de la que aplica SPOTVISION
+     de su lado, así que el primer cálculo puede pillar una carga a medio
+     publicar. Confirmar cuesta un poll — 15 s — y a cambio el andén deja de
+     recibir correos por faltantes que se corrigen solos cuando entra el carro.
+     Sobre un total que pasó de 3 minutos a ~35 s, esos 15 s están bien pagados.
+     La alerta se ve igual en el listado desde el primer ciclo: lo que espera es
+     el ruido, no la información. */
+  const estable = !!previo && previo.estado === v.estado;
+  const nuevaAlerta = r.nivel !== 'ok' && v.cerrada && !v.atendida && estable && !v.alertada;
   if(nuevaAlerta && !S.arranque){
+    v.alertada = true;
     sonar(r.sonido);
     notificar(v);
     if(r.correo) enviarCorreo(v);
     encolarAlerta(v);
   }else if(nuevaAlerta){
+    v.alertada = true;
     v.historico = true;      // queda pendiente y visible, pero sin ruido
   }
   guardarEstado();

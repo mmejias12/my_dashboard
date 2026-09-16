@@ -46,6 +46,19 @@ const CATCH_ALL = ['XC9869','YG5106'];
 // así que la segunda pasada del día es rápida y el costo de 21 s por placa se
 // paga sólo en la carga fría.
 const PROVIDER_GAP_MS = 21000;
+
+// ── Presupuesto de la función ─────────────────────────────────────────────
+// Las funciones administradas de Static Web Apps se cortan a los 45 segundos
+// y devuelven 500 "Backend call failure". Con 21 s entre placas, pedir la
+// flota completa en una sola llamada (11 × 21 s ≈ 4 min) SIEMPRE muere.
+// VERIFICADO EL 16-09-2026: 1 placa responde en 0,6 s; sin ?plate la llamada
+// falló a los 45,1 s.
+// Por eso el proxy atiende sólo las placas que le caben en el presupuesto y
+// devuelve el resto en 'pendientes', para que el cliente siga pidiéndolas.
+const FUNCTION_BUDGET_MS = 36000;
+var _t0 = 0;
+function msRestantes(){ return FUNCTION_BUDGET_MS - (Date.now() - _t0); }
+function alcanzaPara(ms){ return msRestantes() > ms; }
 const MAX_CONCURRENT = 1;      // serializado a la fuerza: el límite es por cuenta
 const DELAY_MS       = PROVIDER_GAP_MS;
 const RETRY_MAX      = 2;
@@ -134,10 +147,13 @@ module.exports = async function (context, req) {
   var iTime = q.time || '15';
 
   var startMs = Date.now();
-  var results = await runWithThrottle(plates, function(plate){
+  _t0 = startMs;
+  var throttled = await runWithThrottle(plates, function(plate){
     return queryPlateUntilData(plate, sStartDate1, sStartDate2, iTime);
   });
-  var elapsedMs = Date.now() - startMs;
+  var results    = throttled.results;
+  var pendientes = throttled.pendientes;
+  var elapsedMs  = Date.now() - startMs;
 
   var allItems  = [];
   var errors    = [];
@@ -191,7 +207,8 @@ module.exports = async function (context, req) {
       'X-Debug-Plates-NoData':String(sinRespuesta),
       'X-Debug-Plates-RateLimited':String(limitadas),
       'X-Debug-Plates-Error':String(errors.length),
-      'X-Debug-Elapsed-Ms':String(elapsedMs)
+      'X-Debug-Elapsed-Ms':String(elapsedMs),
+      'X-Debug-Plates-Pending':String(pendientes.length)
     },
     body: JSON.stringify({
       ok:true, desde:sStartDate1, hasta:sStartDate2,
@@ -200,8 +217,13 @@ module.exports = async function (context, req) {
       // Nuevo: estado por placa. 'sin_respuesta' NO significa que el camión
       // estuvo detenido; significa que el dato no llegó y no se puede concluir.
       placas: estados,
+      // Placas que no alcanzaron a consultarse en esta llamada. El cliente
+      // debe volver a pedirlas; no son placas sin actividad.
+      pendientes: pendientes,
       resumen: {
         consultadas: results.length,
+        pendientes: pendientes.length,
+        budget_ms: FUNCTION_BUDGET_MS,
         con_datos: okCount,
         sin_respuesta: sinRespuesta,
         limite_proveedor: limitadas,
@@ -209,7 +231,7 @@ module.exports = async function (context, req) {
         bloqueadas: bloqueadas.length,
         duplicados_descartados: duplicados,
         gap_proveedor_ms: PROVIDER_GAP_MS,
-        confiable: sinRespuesta === 0 && limitadas === 0 && errors.length === 0
+        confiable: sinRespuesta === 0 && limitadas === 0 && errors.length === 0 && pendientes.length === 0
       }
     })
   };
@@ -261,7 +283,8 @@ function extractTag(text, tag) {
 
 async function runWithThrottle(items, asyncFn) {
   var results = [];
-  for (var i = 0; i < items.length; i += MAX_CONCURRENT) {
+  var i = 0;
+  for (; i < items.length; i += MAX_CONCURRENT) {
     var batch = items.slice(i, i+MAX_CONCURRENT);
     var batchResult = await Promise.all(batch.map(function(item){
       return asyncFn(item)
@@ -270,9 +293,14 @@ async function runWithThrottle(items, asyncFn) {
         .catch(function(err){return{plate:item,ok:false,error:err.message,intentos:err.intentos||0};});
     }));
     results = results.concat(batchResult);
-    if (i+MAX_CONCURRENT < items.length) await sleep(DELAY_MS);
+    if (i+MAX_CONCURRENT >= items.length) { i += MAX_CONCURRENT; break; }
+    // ¿Alcanza para esperar la ventana del proveedor y atender otra placa?
+    // Si no, se corta acá y las que faltan se informan como pendientes: es
+    // preferible una respuesta parcial y honesta a un 500 a los 45 segundos.
+    if (!alcanzaPara(DELAY_MS + 4000)) { i += MAX_CONCURRENT; break; }
+    await sleep(DELAY_MS);
   }
-  return results;
+  return {results: results, pendientes: items.slice(i)};
 }
 
 // Reintenta mientras la respuesta venga vacía. Devuelve el último XML recibido
@@ -291,11 +319,18 @@ async function queryPlateUntilData(plate, s1, s2, iTime) {
     var cod = codigoProveedor(xml);
     if (cod === '109') {
       // Rechazo por frecuencia, no ausencia de datos. Esperar la ventana
-      // completa del proveedor antes de volver a preguntar.
+      // completa del proveedor antes de volver a preguntar, pero sólo si el
+      // presupuesto de la función lo permite: si no, se informa el límite y
+      // se devuelve lo que haya, en vez de morir en un 500.
       limitado = true; msgProv = mensajeProveedor(xml);
-      if (intento < EMPTY_RETRY_MAX) { await sleep(PROVIDER_GAP_MS); continue; }
-    } else if (intento < EMPTY_RETRY_MAX) {
+      if (intento < EMPTY_RETRY_MAX && alcanzaPara(PROVIDER_GAP_MS + 4000)) {
+        await sleep(PROVIDER_GAP_MS); continue;
+      }
+      break;
+    } else if (intento < EMPTY_RETRY_MAX && alcanzaPara(EMPTY_RETRY_DELAY + 4000)) {
       await sleep(EMPTY_RETRY_DELAY);
+    } else {
+      break;
     }
   }
   return {xml:xml, intentos:EMPTY_RETRY_MAX, ms:ms, limitado:limitado, msgProveedor:msgProv};

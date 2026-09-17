@@ -11,7 +11,8 @@
  *     patente + dia. Como un camion tiene VARIOS movimientos en el mismo dia,
  *     el cruce se resuelve como una asignacion, no paso por paso (ver abajo).
  *  3. ESTADO. ok | faltante | sobrante | sin_guia | sin_patente | en_curso
- *     | fuera_alcance (documento que el tablero no compara, ver soloEmisiones).
+ *     | fuera_alcance (documento que el tablero no compara, ver soloEmisiones)
+ *     | comercializacion (pallet que no es de arriendo, ver COLOR mas abajo).
  *
  * ATENCION: `campoConteo` decide si se compara total_pallets o total_bultos.
  * La guia de integracion no explica la diferencia entre ambos (en su ejemplo
@@ -47,6 +48,56 @@ const VENTANA_H = 12;       // horas maximas entre emision de guia y llegada
 const TOLERANCIA = 0;       // pallets de diferencia que aun se consideran OK
 
 const { revisarCapacidad } = require('./flota');
+
+/**
+ * EL COLOR DEL PALLET DEFINE EL ALCANCE DEL CRUCE.
+ *
+ * REDTEC corre DOS negocios sobre los mismos camiones y el mismo tunel:
+ *   · ARRIENDO de pallets — el pallet ROJO. Se documenta en RDTOut (Redlink) y
+ *     es lo que este motor sabe verificar.
+ *   · COMERCIALIZACION — compra y venta de pallet blanco. Se documenta en SAP,
+ *     no pasa por Redlink, y por lo tanto NUNCA va a tener guia de este lado.
+ *
+ * MEDIDO DEL 04 AL 17-09-2026, 118 cargas:
+ *   · 107 rojas  -> 68 ok, 16 faltante, 9 sobrante, 14 sin guia.
+ *   ·  11 blancas -> 10 caian en "sin guia": alerta CRITICA, con sonido y con
+ *     correo a operaciones, por un movimiento que esta perfectamente
+ *     documentado, solo que en otro sistema.
+ *   · Y la blanca numero 11 (BJCL13, 11-09) es el caso que obliga a poner el
+ *     filtro ACA y no al final: se cruzo contra una guia y quedo en "ok". El
+ *     tablero dio por cuadrado un despacho de arriendo usando el conteo de un
+ *     camion de comercializacion. Una alerta de mas molesta; un "ok" inventado
+ *     no lo revisa nadie.
+ *
+ * EL DATO SALE DE LA PROPIA CAMARA. Desde el 05-09 SPOTVISION entrega el color
+ * de cada pallet en `detalles`, y spotvision-fetch lo agrega en `colores`. En
+ * las 118 cargas medidas no hubo ninguna sin ese dato; aun asi, si faltara, la
+ * carga se cruza como siempre: el silencio no se asume.
+ *
+ * El umbral es holgado a proposito. En lo medido las rojas vienen 100% rojas y
+ * las blancas traen 0% o 0,2% de rojo, asi que exigir la mitad deja muchisimo
+ * margen antes de clasificar mal una carga mixta. Se puede mover sin desplegar
+ * con la app setting UMBRAL_ROJO.
+ */
+const UMBRAL_ROJO = Number(process.env.UMBRAL_ROJO) || 0.5;
+
+function perfilColor(c) {
+  const col = c && c.colores;
+  if (!col) return { conocido: false, es_arriendo: true };
+  const total = Object.keys(col).reduce((s, k) => s + (Number(col[k]) || 0), 0);
+  if (!total) return { conocido: false, es_arriendo: true };
+  const rojo = Number(col.rojo) || 0;
+  const dominante = Object.keys(col).sort((a, b) => col[b] - col[a])[0];
+  return {
+    conocido: true,
+    total,
+    rojo,
+    dominante,
+    pct_rojo: +(rojo / total).toFixed(3),
+    // Sin dato de color se asume arriendo: es el comportamiento de siempre.
+    es_arriendo: (rojo / total) >= UMBRAL_ROJO,
+  };
+}
 
 const ts = (s) => new Date(s).getTime();
 
@@ -139,6 +190,10 @@ function asignar(cargas, guias, campoConteo, soloEmisiones) {
   const pares = [];
   cargas.forEach((c, ci) => {
     if (!c.patente) return;
+    // Una carga que no es de arriendo no se empareja con NINGUNA guia: su
+    // documento vive en SAP. Sin esto, el motor le encontraba una guia roja
+    // cualquiera del dia y devolvia un "ok" que nadie iba a revisar.
+    if (!perfilColor(c).es_arriendo) return;
     const candidatas = guiasPorLlave.get(llave(c.patente, c.fecha_hora_carga)) || [];
     for (const gi of candidatas) {
       const g = guias[gi];
@@ -218,6 +273,7 @@ function consolidar(cargas, guias, opts) {
 
   cargas.forEach((c, ci) => {
     if (!c.patente) return;
+    if (!perfilColor(c).es_arriendo) return;   // ver asignar(): tampoco se consolida
     const contados = c[campoConteo] ?? 0;
     if (!contados) return;
 
@@ -344,8 +400,13 @@ function conciliar(cargas, guias, opts = {}) {
 
     // --- estado ---
     const detectados = c[campoConteo];
+    const perfil = perfilColor(c);
     let estado, diferencia = null;
     if (!cerrada) estado = 'en_curso';
+    // Va antes que sin_patente y que sin_guia: si el pallet no es de arriendo,
+    // que la camara haya leido o no la patente da lo mismo — no hay con que
+    // cruzarlo de este lado.
+    else if (!perfil.es_arriendo) estado = 'comercializacion';
     else if (!c.patente) estado = 'sin_patente';
     else if (!guia) estado = 'sin_guia';
     else {
@@ -374,6 +435,8 @@ function conciliar(cargas, guias, opts = {}) {
       // Como llegaron los bultos en el tiempo, y si el corte + el exceso de
       // capacidad apuntan a que aca hay mas de un camion sumado.
       deteccion,
+      // Que vio la camara en cuanto a color, y si eso cae dentro del arriendo.
+      perfil_color: perfil,
       guias_alternativas: alternativas,
       // Cuando el camion sale con varios documentos, aca van todos y el total
       // contra el que se comparo. `correlativas` corrobora el caso tipico: dos
@@ -401,6 +464,7 @@ function conciliar(cargas, guias, opts = {}) {
     parametros_consolidacion: { max_documentos: MAX_DOCS },
     parametros: {
       cierre_s: cierre, cierre_min: +(cierre / 60).toFixed(2),
+      umbral_rojo: UMBRAL_ROJO,
       ventana_h: ventanaH, tolerancia_pallets: tolerancia,
       campo_conteo: campoConteo, solo_emisiones: soloEmisiones,
     },
@@ -409,5 +473,6 @@ function conciliar(cargas, guias, opts = {}) {
 
 module.exports = {
   conciliar, asignar, analizarDeteccion, consolidar, sonCorrelativas,
+  perfilColor, UMBRAL_ROJO,
   CIERRE_S, CIERRE_MIN, VENTANA_H, TOLERANCIA, CORTE_S, CORTE_LARGO_S,
 };

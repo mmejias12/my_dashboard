@@ -385,14 +385,49 @@ function camposConPatente(obj, prefijo, salida, profundidad) {
 }
 
 async function sondear(context, fecha) {
-  const login = process.env.SAP_LOGIN_URL || '';
-  // La raiz del Service Layer sale de la URL de login: .../b1s/v2/Login -> .../b1s/v1
-  const raiz = login.replace(/\/b1s\/v\d\/Login\/?$/i, '/b1s/v1');
-  if (raiz === login) {
-    return { ok: false, error: 'No se pudo deducir la raiz del Service Layer desde SAP_LOGIN_URL' };
+  // PRIMERO LO OBVIO: que SAP este configurado en ESTA Function App.
+  // La primera version de la sonda respondia "no se pudo deducir la raiz del
+  // Service Layer", que era cierto pero desorientaba: la raiz no se podia
+  // deducir porque la URL venia vacia. Un diagnostico que no distingue "no esta
+  // configurado" de "esta mal configurado" hace perder una vuelta entera.
+  const faltan = ['SAP_LOGIN_URL', 'SAP_USER', 'SAP_PASS', 'SAP_DB'].filter(k => !process.env[k]);
+  if (faltan.length) {
+    return {
+      ok: false, configurado: false, faltan,
+      error: 'SAP no esta configurado en esta Function App. Faltan: ' + faltan.join(', '),
+      como_arreglarlo: 'Azure Portal -> la Function App del m3link -> Configuration -> '
+        + 'Application settings. Los valores estan documentados en api/sap-stock-proxy/README.md '
+        + '(ese README apunta a la Function App func-redtec-sap, que es OTRA: por eso aca no estan).',
+    };
   }
 
-  let session = await getSession(context);
+  const login = process.env.SAP_LOGIN_URL;
+  // La raiz del Service Layer sale de la URL de login: .../b1s/v2/Login -> .../b1s/v1
+  let raiz = login.replace(/\/b1s\/v\d+\/Login\/?$/i, '/b1s/v1');
+  if (raiz === login) {
+    // Respaldo: cortar en /b1s/, que es lo unico que el Service Layer garantiza.
+    const i = login.toLowerCase().indexOf('/b1s/');
+    if (i < 0) {
+      return { ok: false, configurado: true,
+               error: 'SAP_LOGIN_URL no parece una URL del Service Layer: ' + login };
+    }
+    raiz = login.slice(0, i) + '/b1s/v1';
+  }
+
+  let session;
+  try {
+    session = await getSession(context);
+  } catch (e) {
+    // Configurado pero incomunicado. Es un problema distinto y se resuelve en
+    // otra parte, asi que conviene decirlo con todas sus letras.
+    return {
+      ok: false, configurado: true, alcanzable: false, raiz,
+      error: 'SAP esta configurado pero no se pudo conectar: ' + (e.message || e),
+      pista: 'Un ENOTFOUND, ECONNREFUSED o timeout apunta a la red, no a las credenciales: '
+        + 'el puerto 50000 del SAP tiene que estar abierto a las IPs de salida de Azure, '
+        + 'o la Function App necesita integracion con la VNet que resuelve ese DNS.',
+    };
+  }
   const cookie = () => 'B1SESSION=' + session.id + (session.routeId ? '; ROUTEID=' + session.routeId : '');
 
   const resultado = { raiz, fecha, entidades: [] };
@@ -465,6 +500,8 @@ async function sondear(context, fecha) {
         : 'Hay documentos CON patente en: ' + conPatente.map(e => e.entidad).join(', ')
           + '. La pasada es viable.';
   resultado.ok = true;
+  resultado.configurado = true;
+  resultado.alcanzable = true;
   return resultado;
 }
 

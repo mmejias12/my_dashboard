@@ -16,6 +16,8 @@
   /* El morado de las relocalizaciones es el mismo del panel principal y
      del top 10, para que la operación se reconozca entre pantallas. */
   --reloc:#8b5cf6; --reloc-cl:#b99cf7;
+  /* El pallet de comercialización es blanco: el color lo dice literal. */
+  --blanco:#cfd6e4;
   --brand:#E02B20;
   --r:12px;
   --sans: system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
@@ -113,6 +115,9 @@ h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
 .ev.sin_guia,.ev.sin_patente,.ev.fuera_alcance{border-left-color:var(--muted)}
 .ev.fusion{border-left-color:var(--warning)}
 .ev.relocalizacion_interna{border-left-color:var(--reloc)}
+.ev.comercializacion{border-left-color:var(--blanco)}
+.col-chip{font-size:9px;letter-spacing:.06em;font-weight:600;border:1px solid;border-radius:4px;
+          padding:1px 5px;margin-left:7px;vertical-align:2px;font-variant-numeric:tabular-nums}
 .reloc-por{color:var(--reloc-cl);font-size:11px}
 
 /* ---------- relocalización interna ---------- */
@@ -169,6 +174,8 @@ h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
    como un problema pendiente justo después de que el supervisor lo cerró. */
 .modal.reloc{border-color:rgba(139,92,246,.5)}
 .reloc .mhead .ico{background:rgba(139,92,246,.18);color:var(--reloc-cl)}
+.modal.comer{border-color:rgba(207,214,228,.4)}
+.comer .mhead .ico{background:rgba(207,214,228,.14);color:var(--blanco)}
 .mhead{padding:16px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
 .mhead .ico{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;font-size:19px;flex:none}
 .critica .mhead .ico{background:rgba(208,59,59,.18);color:#f08a8a}
@@ -397,6 +404,23 @@ const REGLAS = {
      planta, ese movimiento es otro Evento de Control y se cruza como siempre. */
   relocalizacion_interna:{nivel:'ok', gh:'⇄', tit:'Relocalización interna · movimiento entre dependencias',
                 acc:'', sonido:null, correo:false},
+  /* PALLET DE COMERCIALIZACIÓN. REDTEC mueve dos negocios por el mismo túnel:
+     el arriendo, que es el pallet rojo y se documenta en RDTOut, y la compra y
+     venta de pallet blanco, que se documenta en SAP y no pasa por Redlink.
+     Este monitor sólo sabe verificar el primero.
+
+     Medido del 04 al 17-09: de 11 cargas que la cámara vio mayoritariamente
+     blancas, 10 salían como "camión sin guía" — crítico, con sonido y con
+     correo — por un movimiento que está documentado, sólo que en otro sistema.
+     No es una falta: está fuera del alcance de este cruce. Se muestra igual,
+     porque el andén necesita saber que el camión pasó, y se cuenta aparte para
+     que no ensucie el conteo de despachos.
+
+     Mientras la pasada de SAP no esté conectada, estas cargas NO las verifica
+     nadie. Por eso tienen su propio KPI en vez de quedar escondidas: es un
+     hueco de cobertura conocido, no un problema resuelto. */
+  comercializacion:{nivel:'ok', gh:'◇', tit:'Pallet de comercialización · no pasa por Redlink',
+                acc:'', sonido:null, correo:false},
 };
 
 /* Tipo de operación. Sirve para que quien mire la pantalla distinga de un
@@ -419,6 +443,21 @@ const REGLA_DESCONOCIDA = {nivel:'aviso', gh:'•', tit:'Paso registrado',
   acc:'Estado no reconocido: revisar manualmente', sonido:null, correo:false};
 const regla = (e) => REGLAS[e] || REGLA_DESCONOCIDA;
 const tag = t => t ? `<span class="tag" style="color:${tipoDe(t).c};border-color:${tipoDe(t).c}66">${tipoDe(t).et}</span>` : '';
+
+/* QUÉ COLOR VIO LA CÁMARA. Es el dato que decide si la carga entra o no al
+   cruce, así que tiene que estar a la vista: si alguien discute la
+   clasificación, la respuesta está en la misma fila y no hay que ir a buscarla
+   al API. */
+const COLOR_HEX = {rojo:'#d03b3b', blanco:'#cfd6e4', azul:'#4b8df8', verde:'#0ca30c'};
+function chipColor(v){
+  const p = v.perfil_color;
+  if(!p || !p.conocido) return '';
+  const col = v.colores || {};
+  const txt = Object.keys(col).sort((a,b)=>col[b]-col[a])
+                .map(k => n0(col[k]) + ' ' + k).join(' · ');
+  const c = COLOR_HEX[p.dominante] || 'var(--muted)';
+  return `<span class="col-chip" style="color:${c};border-color:${c}66" title="Color de los pallets según la cámara">${esc(txt)}</span>`;
+}
 
 /* CADA NÚMERO CON SU NOMBRE. En una emisión, `numero` es el DTE — la guía de
    despacho, serie 72xxx — y `nro_pedido` es el pedido interno de RDTOut. Se
@@ -807,6 +846,17 @@ function evaluar(carga){
   if(carga.cerrada === false){
     return {...carga, guia:carga.guia ?? null, estado:'en_curso',
             diferencia:null, filaAfectada:null};
+  }
+
+  // 0-bis. PALLET QUE NO ES DE ARRIENDO.
+  //    El servidor ya lo resolvió con el color que entrega la cámara, y acá sólo
+  //    se respeta. Sin esta guarda el estado se perdía: como la carga no trae
+  //    guía (a propósito: no se le asigna ninguna), caía hasta el cruce local
+  //    contra S.esperando y volvía a salir "sin guía" — justo lo que veníamos a
+  //    arreglar. Lo pilló la prueba visual, no la lectura del código.
+  const pc = carga.perfil_color;
+  if((pc && pc.conocido && !pc.es_arriendo) || carga.estado === 'comercializacion'){
+    return {...carga, guia:null, estado:'comercializacion', diferencia:null, filaAfectada:null};
   }
 
   // 1. Si la API de conciliación YA cruzó la carga, esa guía manda.
@@ -1244,6 +1294,7 @@ function abrirModal(v){
   const dec = v.pallets_declarados_total ?? v.guia?.pallets_declarados;
   const docs = v.guias || (v.guia ? [v.guia] : []);
   const col = v.estado==='relocalizacion_interna' ? 'var(--reloc-cl)'
+            : v.estado==='comercializacion' ? 'var(--blanco)'
             : r.nivel==='critica' ? 'var(--critical)' : 'var(--warning)';
 
   $('#mcont').innerHTML = `
@@ -1262,11 +1313,13 @@ function abrirModal(v){
           : v.guia ? `${refDoc(v.guia)} · ${esc(v.guia.chofer||'sin chofer')} · ${esc(v.guia.cliente||'—')}`
                    : v.estado==='relocalizacion_interna'
                      ? 'Movimiento interno · no lleva guía de despacho'
+                     : v.estado==='comercializacion'
+                     ? 'Compra o venta de pallet blanco · se documenta en SAP'
                      : 'Sin guía asociada en RDTOut'}
       </div>
 
       <div class="gran">
-        <div><div class="lab">${v.estado==='fuera_alcance'||v.estado==='relocalizacion_interna'?'No se compara':v.guia?.tipo==='retiro'?'RDTOut confirma':'Guía declara'}</div><div class="v">${dec!=null?n0(dec):'—'}</div></div>
+        <div><div class="lab">${v.estado==='fuera_alcance'||v.estado==='relocalizacion_interna'||v.estado==='comercializacion'?'No se compara':v.guia?.tipo==='retiro'?'RDTOut confirma':'Guía declara'}</div><div class="v">${dec!=null?n0(dec):'—'}</div></div>
         <div><div class="lab">Cámara cuenta</div><div class="v">${n0(v.total_pallets)}</div></div>
         <div><div class="lab">Diferencia</div>
           <div class="v" style="color:${v.diferencia?col:'var(--text)'}">${v.diferencia==null?'—':(v.diferencia>0?'+':'')+n0(v.diferencia)}</div></div>
@@ -1297,6 +1350,15 @@ function abrirModal(v){
         ${refDoc(v.otroDoc)} por ${n0(v.otroDoc.pallets_declarados)} pallets.
         Este monitor vigila despachos, así que <b>no lo compara</b>: la revisión del retiro va contra la
         inspección, en el informe de conciliación.</div>` : ''}
+
+      ${v.estado==='comercializacion' ? `<div class="aviso-fila" style="border-left-color:var(--blanco)">
+        <b style="color:var(--blanco)">PALLET DE COMERCIALIZACIÓN</b> — la cámara contó
+        ${chipColor(v)}, y el arriendo es pallet <b>rojo</b>.
+        <br>La compra y venta de pallet blanco se documenta en <b>SAP</b>, no en Redlink, así que
+        este paso <b>no tiene guía contra la cual cruzarse</b> y el monitor no lo compara. No es
+        una falta: está fuera del alcance de este cruce.
+        <br><span style="color:var(--warning)">Mientras la pasada de SAP no esté conectada, este
+        movimiento no lo verifica nadie.</span></div>` : ''}
 
       ${blocReloc(v)}
       ${panelReloc(v)}
@@ -1335,6 +1397,7 @@ function abrirModal(v){
   S.enPantalla = v.carga_id;
   const modal = $('#modal');
   modal.className = 'modal on ' + (v.estado==='relocalizacion_interna' ? 'reloc'
+                                 : v.estado==='comercializacion' ? 'comer'
                                  : r.nivel==='critica' ? 'critica' : 'aviso');
   modal.setAttribute('aria-hidden','false');
   $('#scrim').classList.add('on');
@@ -1437,7 +1500,9 @@ function render(){
   // entraran, "9 pasos / 5 conciliados / 1 desviación" no cerraría nunca.
   // Una relocalización interna tampoco es un despacho: el camión no sale.
   const relocs = S.eventos.filter(e=>e.estado==='relocalizacion_interna').length;
-  const fuera = S.eventos.filter(e=>e.estado==='fuera_alcance').length + relocs;
+  // Y la comercialización es otro negocio: su documento vive en SAP.
+  const comer  = S.eventos.filter(e=>e.estado==='comercializacion').length;
+  const fuera = S.eventos.filter(e=>e.estado==='fuera_alcance').length + relocs + comer;
   const pasados = S.eventos.length - fuera;
   const ok = S.eventos.filter(e=>e.estado==='ok').length;
   const falt = S.eventos.filter(e=>e.estado==='faltante');
@@ -1456,7 +1521,8 @@ function render(){
     const clic = (i===5 && v>0) ? ' click" id="kpi-pendientes' : '';
     return `<div class="kpi ${c}${clic}"><div class="lab">${l}</div><div class="val">${n0(v)}</div>
       ${i===5&&v>0?'<div style="font-size:10px;color:var(--muted);margin-top:2px">clic para revisarlas</div>':''}
-      ${i===1&&fuera?`<div style="font-size:10px;color:var(--muted);margin-top:2px">+${fuera} paso${fuera>1?'s':''} que no ${fuera>1?'son':'es'} despacho${relocs?` · ${relocs} relocalizaci${relocs>1?'ones':'ón'} interna${relocs>1?'s':''}`:''}</div>`:''}
+      ${i===1&&fuera?`<div style="font-size:10px;color:var(--muted);margin-top:2px">+${fuera} paso${fuera>1?'s':''} que no ${fuera>1?'son':'es'} despacho${relocs?` · ${relocs} relocalizaci${relocs>1?'ones':'ón'} interna${relocs>1?'s':''}`:''}${comer?` · ${comer} de comercialización`:''}</div>`:''}
+      ${i===2&&comer?`<div style="font-size:10px;color:var(--blanco);margin-top:2px" title="Pallet blanco: el documento vive en SAP, que todavía no está conectado a este cruce. Nadie los está verificando.">${comer} carga${comer>1?'s':''} de comercialización sin verificar</div>`:''}
       ${i===0&&sinCamara.length?`<div style="font-size:10px;color:var(--muted);margin-top:2px">+${sinCamara.length} sin registro de cámara</div>`:''}</div>`;
   }).join('');
   const kp = $('#kpi-pendientes');
@@ -1514,6 +1580,7 @@ function render(){
   $('#eventos').innerHTML = S.eventos.length ? S.eventos.map(v=>{
     const r = regla(v.estado);
     const col = v.estado==='relocalizacion_interna' ? 'var(--reloc-cl)'
+              : v.estado==='comercializacion' ? 'var(--blanco)'
               : v.estado==='fuera_alcance' ? 'var(--muted)'
               : r.nivel==='critica'?'var(--critical)':r.nivel==='aviso'?'var(--warning)':'var(--good)';
     const pendiente = r.nivel!=='ok' && !v.atendida;
@@ -1522,7 +1589,7 @@ function render(){
       <span class="gh" style="color:${col}">${r.gh}</span>
       <div style="min-width:0">
         <div class="pat">${esc(v.patente||'sin patente')}${v.retenido?' <span class="pend">RETENIDO</span>':pendiente?' <span class="pend">SIN ATENDER</span>':v.reloc?` · <span class="reloc-por">relocalización confirmada por ${esc(String(v.reloc.usuario||'—').split('@')[0])}${v.reloc.local?' · sin sincronizar':''}</span>`:v.relocAuto?' · <span class="reloc-por">relocalización declarada en RDTOut</span>':v.historico?' · <span style="color:var(--muted);font-size:11px">previo a la sesión</span>':v.atendida?' · <span style="color:var(--muted);font-size:11px">atendida</span>':''}</div>
-        <div class="det">${v.reloc&&!v.otroDoc?tag('relocalizacion')+' ':''}${v.guia?tag(v.guia.tipo)+' ':''}${v.otroDoc?tag(v.otroDoc.tipo)+' ':''}${v.guia?(v.guia.tipo==='emision'?'guía ':'doc ')+esc(v.guia.numero)+(v.consolidada?` <span class="pend" style="color:var(--good);border-color:rgba(12,163,12,.5)">+${(v.guias||[]).length-1} GUÍA${(v.guias||[]).length>2?'S':''}</span>`:'')+' · ':''}${n0(v.total_pallets)} pallets en ${v.total_bultos} filas</div>
+        <div class="det">${v.reloc&&!v.otroDoc?tag('relocalizacion')+' ':''}${v.guia?tag(v.guia.tipo)+' ':''}${v.otroDoc?tag(v.otroDoc.tipo)+' ':''}${v.guia?(v.guia.tipo==='emision'?'guía ':'doc ')+esc(v.guia.numero)+(v.consolidada?` <span class="pend" style="color:var(--good);border-color:rgba(12,163,12,.5)">+${(v.guias||[]).length-1} GUÍA${(v.guias||[]).length>2?'S':''}</span>`:'')+' · ':''}${n0(v.total_pallets)} pallets en ${v.total_bultos} filas${v.estado==='comercializacion'?chipColor(v):''}</div>
       </div>
       ${v.diferencia ? `<div class="dif" style="color:${col}">${v.diferencia>0?'+':''}${n0(v.diferencia)}</div>` : ''}
       <div class="hora">${hhmm(new Date(v.fecha_hora_carga))}</div>

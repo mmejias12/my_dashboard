@@ -79,6 +79,13 @@ jobs:
       - name: 3c) Rollup diario (resumen/diario.json)
         run: node scripts/rollup-diario.js ${{ steps.f.outputs.ayer }}
 
+      # Índice de transferencias: despachado vs confirmado, etapas y el par
+      # cliente origen → retail destino. Lee RDTOut DIRECTO y no los blobs
+      # diarios: ésos se congelan a los 45 días y pierden las confirmaciones
+      # tardías (medido: 3.374 pallets sólo en Walmart a 12 meses).
+      - name: 3d) Rollup de transferencias (resumen/transferencias.json)
+        run: node scripts/rollup-transferencias.js
+
       - name: 4) Refrescar snapshot (semana en curso / flota / asistencia / stock)
         env:
           INGESTA_URL: ${{ secrets.INGESTA_URL }}

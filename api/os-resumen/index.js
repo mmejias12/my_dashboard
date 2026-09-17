@@ -158,7 +158,9 @@ module.exports = async function (context, req) {
             '?top=transferencias&meses=12', '?listar=clientes&q=wal'] }) };
   } catch (e) {
     context.log.error('os-resumen', e);
-    const falta = /BlobNotFound|not found/i.test(e.message || '');
+    // Azure dice "The specified blob does not exist", no "BlobNotFound".
+    const falta = e.statusCode === 404 || e.code === 'BlobNotFound' ||
+                  /BlobNotFound|does not exist|not found/i.test(e.message || '');
     context.res = { status: e.status || (falta ? 404 : 502), headers: CORS,
       body: JSON.stringify({ error: e.message,
         pista: falta ? 'Todavía no se ha corrido scripts/rollup-contrapartes.js' : undefined }) };

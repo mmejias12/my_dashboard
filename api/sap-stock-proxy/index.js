@@ -556,6 +556,66 @@ async function sondear(context, fecha) {
   return resultado;
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────
+// EXPLORADOR (solo lectura)
+//
+// La sonda responde tres preguntas fijas, y cada pregunta nueva costaba un
+// despliegue entero. Eso se nota: la primera corrida dejo claro que U_Patente
+// EXISTE en el modelo, pero los documentos que tomo la muestra resultaron ser
+// facturas semanales consolidadas ("FACTURACION SEMANA 37", 6916 unidades),
+// que obviamente no llevan patente porque no son la salida de un camion.
+// Saber si alguna vez se llena exige preguntar otra cosa, y despues otra.
+//
+// Por eso esto: consultas acotadas sobre las MISMAS entidades de la sonda.
+//
+//   GET /api/sap-stock-proxy?explorar=1&entidad=DeliveryNotes
+//       &filtro=U_Patente ne null&top=5&campos=DocNum,DocDate,U_Patente,CardName
+//
+// LIMITES, a proposito:
+//   · solo GET — nunca escribe en SAP;
+//   · solo las entidades de ENTIDADES_SONDA, no cualquier cosa del Service Layer;
+//   · $top tope 20;
+//   · la ruta ya esta cerrada a usuarios autenticados en staticwebapp.config.json.
+// ─────────────────────────────────────────────────────────────────────────
+async function explorar(context, params) {
+  const faltan = ['SAP_LOGIN_URL', 'SAP_USER', 'SAP_PASS', 'SAP_DB'].filter(k => !process.env[k]);
+  if (faltan.length) return { ok: false, configurado: false, faltan };
+
+  const entidad = String(params.entidad || '');
+  if (!ENTIDADES_SONDA.some(e => e.nombre === entidad)) {
+    return { ok: false, error: 'Entidad no permitida: ' + entidad,
+             permitidas: ENTIDADES_SONDA.map(e => e.nombre) };
+  }
+
+  const login = process.env.SAP_LOGIN_URL;
+  let raiz = login.replace(/\/b1s\/v\d+\/Login\/?$/i, '/b1s/v1');
+  if (raiz === login) {
+    const i = login.toLowerCase().indexOf('/b1s/');
+    if (i < 0) return { ok: false, error: 'SAP_LOGIN_URL no es del Service Layer' };
+    raiz = login.slice(0, i) + '/b1s/v1';
+  }
+
+  const top = Math.min(Math.max(parseInt(params.top, 10) || 5, 1), 20);
+  const partes = ['$top=' + top, '$orderby=' + (params.orden || 'DocEntry desc')];
+  if (params.filtro) partes.push('$filter=' + encodeURIComponent(String(params.filtro).slice(0, 300)));
+  if (params.campos) partes.push('$select=' + encodeURIComponent(String(params.campos).slice(0, 300)));
+  const url = raiz + '/' + entidad + '?' + partes.join('&');
+
+  let session = await getSession(context);
+  const cookie = () => 'B1SESSION=' + session.id + (session.routeId ? '; ROUTEID=' + session.routeId : '');
+  let res = await sapRequest('GET', url, { Cookie: cookie(), Accept: 'application/json' });
+  if (res.status === 401) {
+    session = await getSession(context, true);
+    res = await sapRequest('GET', url, { Cookie: cookie(), Accept: 'application/json' });
+  }
+
+  if (res.status !== 200) {
+    return { ok: false, entidad, url, status: res.status, detalle: (res.body || '').slice(0, 400) };
+  }
+  const filas = (res.json && res.json.value) || [];
+  return { ok: true, entidad, url, filas: filas.length, datos: filas };
+}
 // ─────────────────────────────────────────────────────────────────────────
 module.exports = async function (context, req) {
   if (req.method === 'OPTIONS') {
@@ -587,6 +647,14 @@ module.exports = async function (context, req) {
           }
         }
       };
+      return;
+    }
+
+    // Modo EXPLORADOR: consultas acotadas de solo lectura, para no gastar un
+    // despliegue por cada pregunta nueva.
+    if (params.explorar === '1') {
+      const r = await explorar(context, params);
+      context.res = { status: 200, headers: corsHeaders(), body: { ...r, tomo_ms: Date.now() - t0 } };
       return;
     }
 

@@ -323,12 +323,17 @@ function rotuloLargo(k,g){
   const d=deIso(k);
   return (g==='semana'?'semana del ':'')+d.getDate()+' '+MESES[d.getMonth()]+' '+d.getFullYear();
 }
-/** Último día natural del tramo: para saber si quedó cortado por el borde. */
+/** Días naturales del tramo: para saber si quedó cortado por algún borde. */
 function finBucket(k,g){
   if(g==='dia')    return k;
   if(g==='semana') return sumaDias(k,6);
   if(g==='mes'){ const d=deIso(k+'-01'); d.setMonth(d.getMonth()+1); d.setDate(0); return iso(d); }
   return k+'-12-31';
+}
+function inicioBucket(k,g){
+  if(g==='mes')  return k+'-01';
+  if(g==='anio') return k+'-01-01';
+  return k;                       // día y semana ya vienen con la fecha de inicio
 }
 /** Suma el rango en buckets. Devuelve [{k, rot, emisiones, ...}] ordenado. */
 function agregar(desde,hasta,g){
@@ -563,16 +568,25 @@ function render(){
   $('#granul').classList.toggle('off', !!S.cliente);   // por cliente sólo hay mes
   $('#t-serie').textContent = S.cliente ? ('Operaciones · '+S.cliente) : 'Operaciones en el período';
   const gEfectiva = S.cliente ? 'mes' : g;
-  // Si el último tramo quedó cortado por el borde del período, se avisa: la
-  // caída del final es del calendario, no del negocio.
-  const ultimoTramo = datos.length ? datos[datos.length-1] : null;
-  const cortado = !!ultimoTramo && gEfectiva!=='dia' &&
-                  finBucket(ultimoTramo.k, gEfectiva) > S.hasta;
+  // Los tramos de los DOS bordes pueden quedar cortados por el período, y se
+  // desploman en el gráfico sin que haya pasado nada: es calendario, no
+  // negocio. El primero engaña igual que el último — la semana que arranca en
+  // diciembre aporta cuatro días de enero y se lee como un derrumbe.
+  const parciales = [];
+  if(datos.length && gEfectiva!=='dia'){
+    const pri = datos[0], ult = datos[datos.length-1];
+    if(inicioBucket(pri.k, gEfectiva) < S.desde) parciales.push(pri.rot);
+    if(ult !== pri && finBucket(ult.k, gEfectiva) > S.hasta) parciales.push(ult.rot);
+    else if(ult === pri && finBucket(ult.k, gEfectiva) > S.hasta && !parciales.length) parciales.push(ult.rot);
+  }
   $('#e-serie').textContent = (S.cliente
     ? 'Por mes completo. El cruce por cliente se guarda mensual: el diario por cliente serían 145 clientes por 1.266 días y no cabe.'
     : ({dia:'Un punto por día.',semana:'Un punto por semana (lunes).',
         mes:'Un punto por mes.',anio:'Un punto por año.'}[g]))
-    + (cortado ? ' El último tramo ('+ultimoTramo.rot+') está incompleto: llega hasta el '+S.hasta+'.' : '');
+    + (parciales.length
+        ? ' Ojo con '+(parciales.length>1?'los tramos de los extremos ':'el tramo ')
+          + '('+parciales.join(' y ')+'): el período los corta por la mitad, así que caen por calendario.'
+        : '');
   $('#leg-serie').innerHTML = CONCEPTOS.map(c=>
     '<span><i style="background:'+COLOR(c.k)+'"></i>'+c.et+'</span>').join('');
   lineas($('#g-serie'), datos, CONCEPTOS.map(c=>c.k),

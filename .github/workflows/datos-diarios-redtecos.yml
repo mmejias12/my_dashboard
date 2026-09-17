@@ -71,6 +71,14 @@ jobs:
       - name: 3b) Rollup por contraparte (resumen/contrapartes.json)
         run: node scripts/rollup-contrapartes.js ${{ steps.f.outputs.ayer }}
 
+      # La serie DIARIA que consume el tablero OPERACIONES REDTEC. Son seis
+      # números por día (0,29 KB medidos), así que el navegador se la baja UNA
+      # vez y arma cualquier período — día, semana, mes, año — sin volver a
+      # preguntar. Ésa es la diferencia con la consulta que se caía: pedirle 12
+      # meses de crudo a RDTOut devuelve 400, y a 90 días ya responde 502.
+      - name: 3c) Rollup diario (resumen/diario.json)
+        run: node scripts/rollup-diario.js ${{ steps.f.outputs.ayer }}
+
       - name: 4) Refrescar snapshot (semana en curso / flota / asistencia / stock)
         env:
           INGESTA_URL: ${{ secrets.INGESTA_URL }}

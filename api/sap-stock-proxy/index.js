@@ -327,6 +327,147 @@ function calcularStockXFecha(rows, granularidad, stockTipo) {
 
 // ─────────────────────────────────────────────────────────────────────────
 // HANDLER PRINCIPAL
+
+// ─────────────────────────────────────────────────────────────────────────
+// SONDA DEL SERVICE LAYER
+//
+// El monitor de anden no puede verificar las cargas de pallet blanco: su
+// documento vive en SAP, no en Redlink. Antes de construir esa pasada hay que
+// saber si SAP nos la puede dar, y eso no se averigua leyendo codigo.
+//
+// Tres preguntas, una sola llamada:
+//   1. A que entidades llegamos con las credenciales de hoy. El proxy usa la
+//      vista semantica sml.svc/STOCKHISTCLIENTE; las entidades estandar viven
+//      en otra rama (b1s/v1/DeliveryNotes, /Invoices...) y el permiso puede ser
+//      distinto.
+//   2. Cuantos documentos hay en la fecha que se pida.
+//   3. LA QUE DECIDE TODO: si esos documentos traen la PATENTE. Sin patente no
+//      hay con que cruzar contra el conteo de la camara, y entonces el hueco no
+//      se cierra leyendo SAP por muchos documentos que haya: alguien tiene que
+//      registrar la patente en el documento.
+//
+// La sonda es de SOLO LECTURA: un $top acotado por entidad y nada mas.
+// ─────────────────────────────────────────────────────────────────────────
+
+// Documentos que podrian contener el movimiento de pallet blanco.
+const ENTIDADES_SONDA = [
+  { nombre: 'DeliveryNotes',         que: 'entregas de venta (guia de despacho)' },
+  { nombre: 'Invoices',              que: 'facturas de venta' },
+  { nombre: 'PurchaseDeliveryNotes', que: 'recepciones de compra' },
+  { nombre: 'PurchaseInvoices',      que: 'facturas de compra' },
+  { nombre: 'Orders',                que: 'pedidos de venta' },
+  { nombre: 'InventoryGenExits',     que: 'salidas de inventario' },
+  { nombre: 'InventoryGenEntries',   que: 'entradas de inventario' },
+];
+
+// Patente chilena: 4 letras + 2 digitos (nuevo) o 2 letras + 4 digitos (antiguo).
+const RE_PATENTE = /\b([A-Z]{4}\d{2}|[A-Z]{2}\d{4})\b/;
+
+/** Recorre un objeto y devuelve los campos cuyo valor parece una patente. */
+function camposConPatente(obj, prefijo, salida, profundidad) {
+  salida = salida || [];
+  profundidad = profundidad || 0;
+  if (!obj || typeof obj !== 'object' || profundidad > 3) return salida;
+  for (const k of Object.keys(obj)) {
+    const v = obj[k];
+    if (v == null) continue;
+    if (typeof v === 'string') {
+      const m = RE_PATENTE.exec(v.toUpperCase());
+      if (m) salida.push({ campo: (prefijo ? prefijo + '.' : '') + k, valor: v.slice(0, 40), patente: m[1] });
+    } else if (Array.isArray(v)) {
+      v.slice(0, 3).forEach((x, i) =>
+        camposConPatente(x, (prefijo ? prefijo + '.' : '') + k + '[' + i + ']', salida, profundidad + 1));
+    } else if (typeof v === 'object') {
+      camposConPatente(v, (prefijo ? prefijo + '.' : '') + k, salida, profundidad + 1);
+    }
+  }
+  return salida;
+}
+
+async function sondear(context, fecha) {
+  const login = process.env.SAP_LOGIN_URL || '';
+  // La raiz del Service Layer sale de la URL de login: .../b1s/v2/Login -> .../b1s/v1
+  const raiz = login.replace(/\/b1s\/v\d\/Login\/?$/i, '/b1s/v1');
+  if (raiz === login) {
+    return { ok: false, error: 'No se pudo deducir la raiz del Service Layer desde SAP_LOGIN_URL' };
+  }
+
+  let session = await getSession(context);
+  const cookie = () => 'B1SESSION=' + session.id + (session.routeId ? '; ROUTEID=' + session.routeId : '');
+
+  const resultado = { raiz, fecha, entidades: [] };
+
+  for (const ent of ENTIDADES_SONDA) {
+    // $top=5 y filtro por fecha: alcanza para responder las tres preguntas sin
+    // traerse medio SAP a una Function.
+    const url = raiz + '/' + ent.nombre
+      + "?$filter=DocDate eq '" + fecha + "'"
+      + '&$top=5&$orderby=DocEntry desc';
+
+    let res;
+    try {
+      res = await sapRequest('GET', url, { Cookie: cookie(), Accept: 'application/json' });
+      if (res.status === 401) {                       // sesion vencida: un reintento
+        session = await getSession(context, true);
+        res = await sapRequest('GET', url, { Cookie: cookie(), Accept: 'application/json' });
+      }
+    } catch (e) {
+      resultado.entidades.push({ entidad: ent.nombre, que: ent.que, error: String(e.message || e) });
+      continue;
+    }
+
+    const fila = { entidad: ent.nombre, que: ent.que, status: res.status };
+    if (res.status !== 200) {
+      // El mensaje de SAP distingue "no existe" de "no tienes permiso", y esa
+      // diferencia decide si el camino esta cerrado o solo falta autorizacion.
+      fila.detalle = (res.body || '').slice(0, 200);
+      resultado.entidades.push(fila);
+      continue;
+    }
+
+    const filas = (res.json && res.json.value) || [];
+    fila.documentos = filas.length;
+    if (filas.length) {
+      const d = filas[0];
+      fila.ejemplo = {
+        DocEntry: d.DocEntry, DocNum: d.DocNum, DocDate: d.DocDate,
+        CardCode: d.CardCode, CardName: d.CardName,
+        Comments: d.Comments ? String(d.Comments).slice(0, 80) : null,
+        lineas: Array.isArray(d.DocumentLines) ? d.DocumentLines.length : null,
+        cantidad_total: Array.isArray(d.DocumentLines)
+          ? d.DocumentLines.reduce((s, l) => s + (Number(l.Quantity) || 0), 0) : null,
+      };
+      // Campos definidos por el usuario: es donde suele terminar la patente.
+      fila.campos_udf = Object.keys(d).filter(k => k.indexOf('U_') === 0);
+      // LA PREGUNTA QUE DECIDE: hay algo que parezca una patente, en cualquier campo?
+      const hallazgos = [];
+      filas.forEach((doc, i) => camposConPatente(doc, 'doc[' + i + ']', hallazgos));
+      fila.patente_detectada = hallazgos.length > 0;
+      fila.donde_aparece = hallazgos.slice(0, 6);
+      // Campos de transporte estandar, por si vienen vacios pero existen
+      fila.campos_transporte = ['TrackingNumber', 'TransportationCode', 'ShipToCode', 'U_Patente']
+        .filter(k => k in d)
+        .map(k => k + '=' + (d[k] == null ? 'null' : String(d[k]).slice(0, 30)));
+    }
+    resultado.entidades.push(fila);
+  }
+
+  // Lectura en una linea, para no tener que interpretar el JSON a mano.
+  const conDocs = resultado.entidades.filter(e => e.documentos > 0);
+  const conPatente = resultado.entidades.filter(e => e.patente_detectada);
+  resultado.conclusion =
+    conDocs.length === 0
+      ? 'No se alcanzo ninguna entidad con documentos en ' + fecha
+        + '. Revisar permisos del usuario SAP o probar otra fecha.'
+      : conPatente.length === 0
+        ? 'Hay documentos (' + conDocs.map(e => e.entidad).join(', ') + ') pero NINGUNO trae patente. '
+          + 'El cruce con la camara no se puede cerrar leyendo SAP: hay que registrar la patente en el documento.'
+        : 'Hay documentos CON patente en: ' + conPatente.map(e => e.entidad).join(', ')
+          + '. La pasada es viable.';
+  resultado.ok = true;
+  return resultado;
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 module.exports = async function (context, req) {
   if (req.method === 'OPTIONS') {
@@ -358,6 +499,17 @@ module.exports = async function (context, req) {
           }
         }
       };
+      return;
+    }
+
+    // Modo SONDA: que nos puede dar SAP para el cruce del anden.
+    //   GET /api/sap-stock-proxy?sondeo=1&fecha=YYYY-MM-DD
+    if (params.sondeo === '1') {
+      const fecha = /^\d{4}-\d{2}-\d{2}$/.test(params.fecha || '')
+        ? params.fecha
+        : new Date().toISOString().substring(0, 10);
+      const r = await sondear(context, fecha);
+      context.res = { status: 200, headers: corsHeaders(), body: { ...r, tomo_ms: Date.now() - t0 } };
       return;
     }
 

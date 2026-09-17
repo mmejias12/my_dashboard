@@ -74,10 +74,18 @@ module.exports = async function (context, req) {
       dias_con_datos: Object.keys(dias).length, dias }) };
   } catch (e) {
     context.log.error('os-diario', e);
-    const falta = /BlobNotFound|not found/i.test(e.message || '');
+    // Azure dice "The specified blob does not exist", no "BlobNotFound": buscar
+    // sólo ese texto dejaba pasar el caso más común — el índice todavía no
+    // existe — y el tablero mostraba el error crudo en vez de qué hacer.
+    const falta = e.statusCode === 404 || e.code === 'BlobNotFound' ||
+                  /BlobNotFound|does not exist|not found/i.test(e.message || '');
     context.res = { status: e.status || (falta ? 404 : 502),
       headers: { ...CORS, 'Cache-Control': 'no-store' },
       body: JSON.stringify({ error: e.message,
-        pista: falta ? 'Todavía no se ha corrido scripts/rollup-diario.js' : undefined }) };
+        pista: falta
+          ? 'El índice diario (' + BLOB + ') todavía no existe. Se genera corriendo '
+            + 'scripts/rollup-diario.js — en GitHub, pestaña Actions → "Datos diarios '
+            + 'REDTEC OS" → Run workflow (el paso 3c lo crea).'
+          : undefined }) };
   }
 };

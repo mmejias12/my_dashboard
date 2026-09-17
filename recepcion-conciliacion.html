@@ -462,8 +462,15 @@ const EST = {
   sin_guia:    {t:'Sin guía',   c:'var(--muted)',    g:'?'},
   sin_patente: {t:'Sin patente',c:'var(--muted)',    g:'⊘'},
   en_curso:    {t:'En curso',   c:'var(--series-1)', g:'◷'},
+  /* Pallet que no es de arriendo: su documento vive en SAP, no en Redlink, así
+     que no hay guía contra la cual cruzarlo. No es una falta, es otro negocio. */
+  comercializacion: {t:'Comercialización', c:'#cfd6e4', g:'◇'},
 };
-const ORDEN = ['ok','faltante','sobrante','sin_guia','sin_patente','en_curso'];
+/* EST[c.est] se lee directo en varios lugares de la vista: un estado que el
+   backend agregue y esta tabla no conozca dejaba la fila entera en blanco. */
+const EST_DESCONOCIDO = {t:'—', c:'var(--muted)', g:'•'};
+const estDe = k => EST[k] || EST_DESCONOCIDO;
+const ORDEN = ['ok','faltante','sobrante','sin_guia','sin_patente','comercializacion','en_curso'];
 
 /* La ventana de cierre pasó de minutos a segundos (la pasada por el túnel dura
    6-9 s, no minutos). Se lee de la respuesta, con respaldo al campo viejo para
@@ -912,7 +919,7 @@ const COLS = [
     }, c=>c.diferencia??0, 1],
   ['bul','Bultos',     c=>n0(c.total_bultos), c=>c.total_bultos, 1],
   ['dur','Descarga',   c=>n1(c.duracion_min)+' min', c=>c.duracion_min, 1],
-  ['est','Estado',     c=>{const e=EST[c.est];return `<span class="est" style="color:${e.c}"><span class="dot" style="background:${e.c}"></span><span class="gh">${e.g}</span>${e.t}</span>`;}, c=>ORDEN.indexOf(c.est)],
+  ['est','Estado',     c=>{const e=estDe(c.est);return `<span class="est" style="color:${e.c}"><span class="dot" style="background:${e.c}"></span><span class="gh">${e.g}</span>${e.t}</span>`;}, c=>ORDEN.indexOf(c.est)],
 ];
 
 function pintarTabla(f){
@@ -990,7 +997,7 @@ function urlEv(u){
 
 function abrirDrawer(c){
   GALERIA = [];            // se rearma con las miniaturas de esta carga
-  const e = EST[c.est];
+  const e = estDe(c.est);
   const dec = decDe(c);
   const dif = c.diferencia;
   const colDif = c.est==='faltante'?'var(--critical)':c.est==='sobrante'?'var(--warning)':'var(--text)';
@@ -1139,7 +1146,7 @@ function abrirLista(titulo, subtitulo, lista, nota){
     ? `<div class="tabla-wrap" style="max-height:52vh">${tablaSimple(
         ['Fecha','Patente','Tipo','Guía','Declarado','Detectado','Δ','Estado'],
         lista.map(c=>{
-          const e=EST[c.est], tp=c.guia?.tipo||c.tipo;
+          const e=estDe(c.est), tp=c.guia?.tipo||c.tipo;
           return [`<span data-carga="${esc(c.carga_id)}" style="cursor:pointer;color:var(--series-1)">${fecha(c.fecha_hora_carga)} ${hhmm(c.fecha_hora_carga)}</span>`,
             esc(c.patente||'sin OCR'),
             tp?`<span class="tag t-${tipoDe(tp).k}">${tipoDe(tp).et}</span>`:'—',
@@ -1197,7 +1204,7 @@ function abrirCamion(pat){
     ${f.length ? `<div class="tabla-wrap" style="max-height:40vh">${tablaSimple(
         ['Fecha','Tipo','Guía','Declarado','Detectado','Δ','Filas','Estado'],
         [...f].sort((x,y)=>y.fecha_hora_carga.localeCompare(x.fecha_hora_carga)).map(c=>{
-          const e=EST[c.est], tp=c.guia?.tipo||c.tipo;
+          const e=estDe(c.est), tp=c.guia?.tipo||c.tipo;
           return [`<span data-carga="${esc(c.carga_id)}" style="cursor:pointer;color:var(--series-1)">${fecha(c.fecha_hora_carga)} ${hhmm(c.fecha_hora_carga)}</span>`,
             tp?`<span class="tag t-${tipoDe(tp).k}">${tipoDe(tp).et}</span>`:'—',
             c.guia?esc(c.guia.numero)+marcaDocs(c):'—', decDe(c)!=null?n0(decDe(c)):'—', n0(c.total_pallets),
@@ -1334,7 +1341,7 @@ function initFiltros(){
   $('#f-cli').innerHTML='<option value="">Todos</option>'+cli.map(t=>`<option>${esc(t)}</option>`).join('');
 
   $('#f-est').innerHTML = ORDEN.map(k=>{
-    const e=EST[k];
+    const e=estDe(k);
     return `<button class="chip" data-e="${k}" aria-pressed="false">
       <span class="dot" style="background:${e.c}"></span><span class="gh">${e.g}</span>${e.t}</button>`;
   }).join('');

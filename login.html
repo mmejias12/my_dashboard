@@ -342,6 +342,18 @@ body::before {
 }
 .footer .dot { width: 6px; height: 6px; background: #4ade80; border-radius: 50%; animation: pulse 2s infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* Por qué el usuario terminó acá. Sin esto, alguien que estaba trabajando y se
+   encontró de golpe con la bienvenida no sabe si se cayó el sistema, si lo
+   echaron, o si hizo algo mal. */
+.motivo-cierre{
+  display:flex; align-items:flex-start; gap:9px; text-align:left;
+  background:rgba(250,178,25,.10); border:1px solid rgba(250,178,25,.32);
+  border-radius:10px; padding:11px 13px; margin-bottom:18px;
+  font-size:13px; line-height:1.5; color:#f0d9a3;
+}
+.motivo-cierre b{color:#f5c95f; font-weight:600}
+.motivo-cierre .ico{flex:none; font-size:14px; line-height:1.35}
 </style>
 </head>
 <body>
@@ -380,6 +392,7 @@ body::before {
         <svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2z"/></svg>
         Conexión segura · Microsoft Entra ID
       </div>
+      <div class="motivo-cierre" id="motivo-cierre" hidden></div>
       <div class="login-title">Iniciar sesión</div>
       <p class="login-desc">
         Usa tu cuenta corporativa <strong style="color: white;">@redtecsa.com</strong>
@@ -517,6 +530,24 @@ body::before {
 </div>
 
 <script>
+/* De dónde viene el usuario. sesion.js deja el motivo en sessionStorage antes
+   de redirigir; el parámetro ?motivo= es el respaldo, porque el rebote por
+   Entra al cerrar sesión puede abrir una pestaña donde ese storage está vacío. */
+(function(){
+  var MOTIVOS = {
+    inactividad: ['⏱', '<b>Cerramos tu sesión por inactividad.</b> No se perdió nada de lo que estabas viendo: vuelve a entrar y sigue donde ibas.'],
+    expirada:    ['🔒', '<b>Tu sesión expiró.</b> Pasa cada cierto tiempo por seguridad. Vuelve a entrar con tu cuenta y listo.']
+  };
+  var m = null;
+  try{ m = sessionStorage.getItem('m3link.motivo'); sessionStorage.removeItem('m3link.motivo'); }catch(e){}
+  if(!m){ try{ m = new URLSearchParams(location.search).get('motivo'); }catch(e){} }
+  var t = MOTIVOS[m];
+  if(!t) return;
+  var el = document.getElementById('motivo-cierre');
+  if(!el) return;
+  el.innerHTML = '<span class="ico">'+t[0]+'</span><span>'+t[1]+'</span>';
+  el.hidden = false;
+})();
 function toggleFaq(el) {
   var item = el.closest('.faq-item');
   item.classList.toggle('open');

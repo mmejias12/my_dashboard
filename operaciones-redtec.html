@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<script src="/sesion.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Operaciones REDTEC · Gerencia</title>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   OPERACIONES REDTEC · tablero operacional de gerencia
+
+   Reemplaza al semáforo gerencial. Responde sin preguntar: abre con el año en
+   curso contra el anterior, y desde ahí se arma cualquier período.
+
+   PALETA — validada con el script de la guía de visualización, no a ojo.
+     Conceptos (categórico, ORDEN FIJO, nunca rotado):
+       emisiones #3987e5 · transferencias #d95926 · retiros #199e70 · devoluciones #c98500
+       PASS en oscuro y en claro: banda de luminosidad, croma, separación para
+       daltonismo (peor par ΔE 8,4 protan) y contraste contra el fondo.
+     Años (dato ORDENADO, así que rampa secuencial de un solo tono):
+       #256abf → #5598e7 → #9ec5f4, luminancia monótona y las tres sobre 3:1.
+   Un solo eje por gráfico, siempre. Leyenda presente y etiquetas directas.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root{
+  color-scheme: dark;
+  --plane:#0A0C11; --surface:#12151C; --surface-2:#171B24; --surface-3:#1E2431;
+  --line:rgba(255,255,255,.09); --line-2:rgba(255,255,255,.05);
+  --text:#FFFFFF; --text-2:#AEB6C4; --muted:#79818F;
+  --brand:#E02B20;
+  --good:#0ca30c; --warning:#fab219; --critical:#d03b3b;
+  /* conceptos */
+  --c-emi:#3987e5; --c-tra:#d95926; --c-ret:#199e70; --c-dev:#c98500;
+  /* años, del más antiguo al más reciente */
+  --a1:#256abf; --a2:#5598e7; --a3:#9ec5f4;
+  --r:12px;
+  --sans: system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono: ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+:root[data-theme="light"]{
+  color-scheme: light;
+  --plane:#f4f6fa; --surface:#ffffff; --surface-2:#ffffff; --surface-3:#eef1f6;
+  --line:rgba(15,23,42,.10); --line-2:rgba(15,23,42,.05);
+  --text:#101828; --text-2:#475467; --muted:#7a8396;
+  --c-emi:#2a78d6; --c-tra:#eb6834; --c-ret:#1baf7a; --c-dev:#eda100;
+  --a1:#184f95; --a2:#2a78d6; --a3:#6da7ec;
+  --good:#15803d; --warning:#b45309; --critical:#b91c1c;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--plane);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+h1,h2{margin:0;font-weight:600;letter-spacing:-.01em}
+
+/* ---------- topbar ---------- */
+.top{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--surface)}
+.top h1{font-size:15px}
+.top .sub{font-size:11px;color:var(--muted)}
+.sp{flex:1}
+.logo{width:30px;height:30px;display:flex;align-items:center;justify-content:center;text-decoration:none;flex-shrink:0;border-radius:8px}
+.logo svg{width:26px;height:26px}
+
+/* ---------- barra de contenido ----------
+   REGLA: los controles van ACÁ, nunca en .top — el panel de pestañas le
+   inyecta display:none al topbar y desaparecerían. */
+.cbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 20px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.cbar-end{display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap}
+.btn{background:var(--surface-3);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 12px;font:inherit;font-size:12px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.on{background:rgba(57,135,229,.16);border-color:rgba(57,135,229,.55);color:var(--c-emi)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{background:var(--surface-3);border:0;border-right:1px solid var(--line);color:var(--text-2);font:inherit;font-size:12px;padding:6px 11px;cursor:pointer}
+.seg button:last-child{border-right:0}
+.seg button.on{background:rgba(57,135,229,.18);color:var(--c-emi);font-weight:600}
+.lab{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
+.sel{background:var(--surface-3);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 10px;font:inherit;font-size:12px;width:230px}
+.sel::placeholder{color:var(--muted)}
+.seg.off{opacity:.42;pointer-events:none}
+
+/* selector de período */
+.rg{position:relative}
+.rg-pill{display:inline-flex;align-items:center;gap:8px;background:var(--surface-3);border:1px solid var(--line);border-radius:8px;padding:5px 6px}
+.rg-pill button{background:transparent;border:0;color:var(--text-2);cursor:pointer;font:inherit;font-size:13px;padding:2px 7px;border-radius:6px}
+.rg-pill button:hover{background:var(--surface);color:var(--text)}
+.rg-txt{font-size:12.5px;font-variant-numeric:tabular-nums;min-width:190px;text-align:center;cursor:pointer;padding:2px 6px;border-radius:6px}
+.rg-txt:hover{background:var(--surface)}
+.rg-pop{position:absolute;top:calc(100% + 7px);left:0;z-index:60;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;box-shadow:0 20px 55px rgba(0,0,0,.45);display:none;min-width:290px}
+.rg-pop.on{display:block}
+.rg-pop .ata{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}
+.rg-pop .ata button{background:var(--surface-3);border:1px solid var(--line);color:var(--text-2);border-radius:7px;padding:6px 8px;font:inherit;font-size:11.5px;cursor:pointer;text-align:left}
+.rg-pop .ata button:hover{border-color:var(--c-emi);color:var(--text)}
+.rg-pop .campos{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.rg-pop label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:3px}
+.rg-pop input[type=date]{width:100%;background:var(--surface-3);border:1px solid var(--line);color:var(--text);border-radius:7px;padding:6px 8px;font:inherit;font-size:12px}
+
+/* ---------- cuerpo ---------- */
+.wrap{padding:16px 20px 40px;max-width:1500px;margin:0 auto}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;position:relative;overflow:hidden}
+.kpi .barra{position:absolute;left:0;top:0;bottom:0;width:3px}
+.kpi .n{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;display:flex;align-items:center;gap:7px}
+.kpi .n i{width:9px;height:9px;border-radius:2px;display:inline-block;flex:none}
+.kpi .v{font-size:27px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1;margin-top:5px}
+.kpi .d{font-size:11.5px;margin-top:3px;font-variant-numeric:tabular-nums}
+.up{color:var(--good)} .down{color:var(--critical)} .flat{color:var(--muted)}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;margin-bottom:16px}
+.card h2{font-size:14px;margin-bottom:2px}
+.card .exp{font-size:11.5px;color:var(--muted);margin-bottom:12px}
+.chead{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:10px}
+.leg{display:flex;gap:14px;flex-wrap:wrap;margin-left:auto}
+.leg span{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-2)}
+.leg i{width:10px;height:10px;border-radius:2px;flex:none}
+svg.g{width:100%;display:block;overflow:visible}
+.gx text,.gy text{font-size:10px;fill:var(--muted);font-family:var(--mono)}
+.gy line{stroke:var(--line-2)}
+.cero{stroke:var(--line)}
+.tip{position:fixed;z-index:80;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:12px;box-shadow:0 14px 40px rgba(0,0,0,.5);pointer-events:none;display:none;min-width:180px}
+.tip .t{font-size:11px;color:var(--muted);margin-bottom:5px;font-variant-numeric:tabular-nums}
+.tip .f{display:flex;align-items:center;gap:7px;justify-content:space-between;font-variant-numeric:tabular-nums}
+.tip .f i{width:9px;height:9px;border-radius:2px;flex:none}
+.tip .f b{margin-left:auto;font-weight:600}
+
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--line-2);font-variant-numeric:tabular-nums}
+th{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;text-align:right;position:sticky;top:0;background:var(--surface)}
+th:first-child,td:first-child{text-align:left;font-variant-numeric:normal}
+tbody tr:hover{background:var(--surface-2)}
+.tabla-wrap{max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.nota{font-size:11.5px;color:var(--muted);margin-top:9px;line-height:1.5}
+.aviso{background:var(--surface-2);border:1px solid var(--line);border-left:2px solid var(--warning);border-radius:9px;padding:10px 13px;font-size:12px;color:var(--text-2);margin-bottom:14px}
+.aviso b{color:var(--text)}
+.vacio{padding:40px;text-align:center;color:var(--muted);font-size:13px}
+.hide{display:none!important}
+
+/* cargando */
+.carga{position:fixed;inset:0;background:var(--plane);display:grid;place-items:center;z-index:120}
+.carga .caja{text-align:center}
+.carga .r{width:54px;height:54px;margin:0 auto 14px;position:relative}
+.carga .r svg{width:54px;height:54px}
+.carga .r .fill{transform-origin:center;animation:sube 1.6s ease-in-out infinite}
+@keyframes sube{0%,100%{opacity:.25}50%{opacity:1}}
+.carga .t{font-size:13px;color:var(--text-2)}
+@media (max-width:900px){ .cbar{gap:8px} .rg-txt{min-width:150px} }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <a href="m3link_dashboard_dark.html" class="logo" title="Volver al panel M3LINK">
+    <svg viewBox="0 0 24 24" fill="none"><path d="M4 3h9a5.5 5.5 0 0 1 1.6 10.8L20 21h-4.3l-4.8-6.6H8V21H4V3Zm4 3.4v5h4.6a2.5 2.5 0 0 0 0-5H8Z" fill="#E02B20"/></svg>
+  </a>
+  <div>
+    <h1>Operaciones REDTEC</h1>
+    <div class="sub">Gerencia · emisiones, transferencias, retiros y devoluciones — día a día desde 2023</div>
+  </div>
+  <div class="sp"></div>
+  <div class="sub" id="frescura">—</div>
+</div>
+
+<div class="cbar">
+  <span class="lab">Período</span>
+  <div class="rg" id="rg">
+    <div class="rg-pill">
+      <button id="rg-prev" title="Período anterior">&#8249;</button>
+      <div class="rg-txt" id="rg-txt">—</div>
+      <button id="rg-next" title="Período siguiente">&#8250;</button>
+    </div>
+    <div class="rg-pop" id="rg-pop">
+      <div class="ata" id="rg-atajos"></div>
+      <div class="campos">
+        <div><label>Desde</label><input type="date" id="rg-d"></div>
+        <div><label>Hasta</label><input type="date" id="rg-h"></div>
+      </div>
+    </div>
+  </div>
+
+  <span class="lab">Ver por</span>
+  <div class="seg" id="granul">
+    <button data-g="auto" class="on">Auto</button>
+    <button data-g="dia">Día</button>
+    <button data-g="semana">Semana</button>
+    <button data-g="mes">Mes</button>
+    <button data-g="anio">Año</button>
+  </div>
+
+  <span class="lab">Cliente / retail</span>
+  <input class="sel" id="cliente" list="lista-clientes" placeholder="Todos — escriba: walmart, cenco…" autocomplete="off">
+  <datalist id="lista-clientes"></datalist>
+  <button class="btn" id="btn-limpiar" title="Volver a todos los clientes">Todos</button>
+
+  <div class="cbar-end">
+    <button class="btn" id="btn-csv">Exportar CSV</button>
+    <button class="btn" id="btn-tema" title="Tema claro / oscuro">Tema</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="aviso hide" id="aviso"></div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="card">
+    <div class="chead">
+      <div>
+        <h2 id="t-serie">Operaciones en el período</h2>
+        <div class="exp" id="e-serie">&nbsp;</div>
+      </div>
+      <div class="leg" id="leg-serie"></div>
+    </div>
+    <div id="g-serie"></div>
+  </div>
+
+  <div class="card">
+    <div class="chead">
+      <div>
+        <h2>Comparación entre años</h2>
+        <div class="exp" id="e-anios">Mismo mes, años distintos — para ver si el año viene arriba o abajo.</div>
+      </div>
+      <div class="seg" id="conc-anios"></div>
+      <div class="leg" id="leg-anios"></div>
+    </div>
+    <div id="g-anios"></div>
+  </div>
+
+  <div class="card">
+    <div class="chead"><div><h2>Detalle</h2><div class="exp" id="e-tabla">&nbsp;</div></div></div>
+    <div class="tabla-wrap"><table id="tabla"></table></div>
+    <div class="nota" id="nota-tabla"></div>
+  </div>
+</div>
+
+<div class="tip" id="tip"></div>
+
+<div class="carga" id="carga">
+  <div class="caja">
+    <div class="r"><svg viewBox="0 0 24 24"><path class="fill" d="M4 3h9a5.5 5.5 0 0 1 1.6 10.8L20 21h-4.3l-4.8-6.6H8V21H4V3Zm4 3.4v5h4.6a2.5 2.5 0 0 0 0-5H8Z" fill="#E02B20"/></svg></div>
+    <div class="t" id="carga-t">Cargando operaciones…</div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* =====================================================================
+   DATOS
+   La serie diaria completa son seis números por día: medido, 0,29 KB por
+   día, o sea bajo 400 KB por tres años y medio. Se baja UNA vez y todos
+   los cortes se arman acá,
+   sin volver a preguntar. Pedirle el crudo a RDTOut no es opción y está
+   medido: 30 días son 12,8 MB y a los 90 responde 502 por timeout.
+   ===================================================================== */
+const API_DIARIO = '/api/os-diario';
+const API_CLIENTE = '/api/os-resumen';
+
+const CONCEPTOS = [
+  {k:'emisiones',      et:'Emisiones',      v:'--c-emi'},
+  {k:'transferencias', et:'Transferencias', v:'--c-tra'},
+  {k:'retiros',        et:'Retiros',        v:'--c-ret'},
+  {k:'devoluciones',   et:'Devoluciones',   v:'--c-dev'},
+];
+const COLOR = k => getComputedStyle(document.documentElement)
+  .getPropertyValue((CONCEPTOS.find(c=>c.k===k)||{}).v || '--muted').trim() || '#79818F';
+const COLOR_ANIO = i => getComputedStyle(document.documentElement)
+  .getPropertyValue(['--a1','--a2','--a3'][i] || '--a3').trim();
+
+const S = {
+  dias:{}, fechas:[], generado:null,
+  porMes:{},                 // 'YYYY-MM' -> {concepto: total}  (precalculado una vez)
+  desde:null, hasta:null, granul:'auto',
+  cliente:'', serieCliente:null,
+  conceptoAnios:'emisiones',
+};
+
+const $ = s => document.querySelector(s);
+const n0 = v => (v==null||isNaN(v)) ? '—' : Math.round(v).toLocaleString('es-CL');
+const pct = v => (v==null||!isFinite(v)) ? '—' : (v>0?'+':'') + v.toFixed(1) + '%';
+const esc = s => String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+
+/* Fechas SIEMPRE en local, nunca con toISOString: convierte a UTC y pasadas
+   las 21:00 en Chile devuelve el día siguiente. */
+const iso = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const deIso = s => new Date(s+'T12:00:00');
+const hoyIso = () => new Intl.DateTimeFormat('en-CA',{timeZone:'America/Santiago',
+  year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+function sumaDias(s,n){ const d=deIso(s); d.setDate(d.getDate()+n); return iso(d); }
+
+/* Semana ISO de verdad: el lunes de la semana. Con aritmética de días locales
+   y no con getDay() a secas, que en domingo salta de semana. */
+function lunesDe(s){
+  const d = deIso(s);
+  const dow = (d.getDay()+6)%7;      // 0 = lunes
+  d.setDate(d.getDate()-dow);
+  return iso(d);
+}
+
+/* =====================================================================
+   AGREGACIÓN
+   ===================================================================== */
+function granularidadAuto(desde,hasta){
+  const dias = Math.round((deIso(hasta)-deIso(desde))/86400000)+1;
+  if(dias <= 92)  return 'dia';
+  if(dias <= 800) return 'semana';
+  return 'mes';
+}
+function claveBucket(f,g){
+  if(g==='dia')    return f;
+  if(g==='semana') return lunesDe(f);
+  if(g==='mes')    return f.slice(0,7);
+  return f.slice(0,4);
+}
+function rotuloBucket(k,g){
+  if(g==='dia')    return deIso(k).getDate()+' '+MESES[+k.slice(5,7)-1];
+  if(g==='semana') return deIso(k).getDate()+' '+MESES[+k.slice(5,7)-1];
+  if(g==='mes')    return MESES[+k.slice(5,7)-1]+' '+k.slice(2,4);
+  return k;
+}
+/* El rótulo del eje va corto; el del tooltip va completo. Con 12 meses a la
+   vista, "9 mar" a secas no dice de qué año es. */
+function rotuloLargo(k,g){
+  if(g==='mes')  return MESES[+k.slice(5,7)-1]+' '+k.slice(0,4);
+  if(g==='anio') return k;
+  const d=deIso(k);
+  return (g==='semana'?'semana del ':'')+d.getDate()+' '+MESES[d.getMonth()]+' '+d.getFullYear();
+}
+/** Último día natural del tramo: para saber si quedó cortado por el borde. */
+function finBucket(k,g){
+  if(g==='dia')    return k;
+  if(g==='semana') return sumaDias(k,6);
+  if(g==='mes'){ const d=deIso(k+'-01'); d.setMonth(d.getMonth()+1); d.setDate(0); return iso(d); }
+  return k+'-12-31';
+}
+/** Suma el rango en buckets. Devuelve [{k, rot, emisiones, ...}] ordenado. */
+function agregar(desde,hasta,g){
+  const buckets = {};
+  for(const f of S.fechas){
+    if(f<desde || f>hasta) continue;
+    const k = claveBucket(f,g);
+    let b = buckets[k];
+    if(!b){ b = buckets[k] = {k, rot:rotuloBucket(k,g), dias:0};
+            CONCEPTOS.forEach(c=>b[c.k]=0); }
+    const d = S.dias[f];
+    b.dias++;
+    CONCEPTOS.forEach(c => b[c.k] += (d[c.k]||0));
+  }
+  return Object.keys(buckets).sort().map(k=>buckets[k]);
+}
+function totales(desde,hasta){
+  const t = {dias:0}; CONCEPTOS.forEach(c=>t[c.k]=0);
+  for(const f of S.fechas){
+    if(f<desde||f>hasta) continue;
+    t.dias++;
+    const d=S.dias[f]; CONCEPTOS.forEach(c=>t[c.k]+=(d[c.k]||0));
+  }
+  return t;
+}
+/** Totales por mes, una sola vez al cargar. La comparación entre años los
+    relee cada vez que se cambia de concepto, y recorrer 1.266 días x 12 meses
+    x 3 años en cada clic es trabajo repetido por nada. */
+function indexarMeses(){
+  const m = {};
+  for(const f of S.fechas){
+    const k = f.slice(0,7);
+    const b = m[k] || (m[k] = {});
+    const d = S.dias[f];
+    CONCEPTOS.forEach(c => b[c.k] = (b[c.k]||0) + (d[c.k]||0));
+  }
+  S.porMes = m;
+}
+/** El mismo período, un año antes. Es la comparación que pide gerencia. */
+function periodoAnterior(desde,hasta){
+  const d=deIso(desde), h=deIso(hasta);
+  d.setFullYear(d.getFullYear()-1); h.setFullYear(h.getFullYear()-1);
+  return [iso(d), iso(h)];
+}
+
+/* =====================================================================
+   GRÁFICOS · SVG inline, sin librería externa
+   Un CDN caído no puede dejar a gerencia sin tablero, y ya nos pasó con
+   Chart.js en otras vistas. Un eje por gráfico, siempre.
+   ===================================================================== */
+const NS='http://www.w3.org/2000/svg';
+function el(t,a){ const e=document.createElementNS(NS,t); for(const k in (a||{})) e.setAttribute(k,a[k]); return e; }
+
+function ticksY(max){
+  if(max<=0) return [0];
+  const paso = Math.pow(10, Math.floor(Math.log10(max)));
+  const n = max/paso;
+  const p = n<=1.5?paso/5 : n<=3?paso/2 : n<=7?paso : paso*2;
+  const out=[]; for(let v=0; v<=max*1.02; v+=p) out.push(v);
+  if(out[out.length-1] < max) out.push(out[out.length-1]+p);
+  return out;
+}
+/* 1.500 tiene que decir "1,5k" y no "2k": el eje no puede redondear el tick a
+   un número que no es el que marca la línea. */
+const fmtEje = v => v>=1e6 ? (v/1e6).toFixed(v%1e6?1:0)+'M'
+                  : v>=1000 ? (v/1000).toFixed(v%1000?1:0).replace('.',',')+'k'
+                  : String(Math.round(v));
+
+/** Serie temporal multi-línea con cruceta y tooltip. */
+function lineas(cont, datos, claves, opt){
+  cont.innerHTML='';
+  if(!datos.length){ cont.innerHTML='<div class="vacio">Sin operaciones en el período elegido</div>'; return; }
+  const W=cont.clientWidth||900, H=opt.alto||300, M={t:14,r:16,b:26,l:46};
+  const iw=W-M.l-M.r, ih=H-M.t-M.b;
+  let max=0; datos.forEach(d=>claves.forEach(k=>{ if(d[k]>max) max=d[k]; }));
+  const ty=ticksY(max), top=ty[ty.length-1]||1;
+  const x=i=> datos.length===1 ? M.l+iw/2 : M.l + i*iw/(datos.length-1);
+  const y=v=> M.t + ih - (v/top)*ih;
+
+  const svg=el('svg',{class:'g',viewBox:'0 0 '+W+' '+H,height:H});
+  const gy=el('g',{class:'gy'});
+  ty.forEach(v=>{ gy.appendChild(el('line',{x1:M.l,x2:W-M.r,y1:y(v),y2:y(v)}));
+    const t=el('text',{x:M.l-8,y:y(v)+3,'text-anchor':'end'}); t.textContent=fmtEje(v); gy.appendChild(t); });
+  svg.appendChild(gy);
+  svg.appendChild(el('line',{class:'cero',x1:M.l,x2:W-M.r,y1:y(0),y2:y(0)}));
+
+  // Etiquetas del eje X: se saltan las que no caben, nunca se apilan. La última
+  // se dibuja sólo si hay aire: forzarla la encimaba con la anterior y quedaba
+  // "7 sep14 sep", que no se lee ni es un dato.
+  const cada=Math.max(1,Math.ceil(datos.length/Math.max(1,Math.floor(iw/62))));
+  const gx=el('g',{class:'gx'});
+  let ultimoX=-1e9;
+  datos.forEach((d,i)=>{
+    const forzada = (i===datos.length-1);
+    if(i%cada && !forzada) return;
+    if(x(i)-ultimoX < 52) return;
+    ultimoX = x(i);
+    const t=el('text',{x:x(i),y:H-8,'text-anchor':'middle'}); t.textContent=d.rot; gx.appendChild(t); });
+  svg.appendChild(gx);
+
+  claves.forEach(k=>{
+    const col=COLOR(k);
+    let dd=''; datos.forEach((d,i)=> dd += (i?'L':'M')+x(i).toFixed(1)+' '+y(d[k]).toFixed(1));
+    svg.appendChild(el('path',{d:dd,fill:'none',stroke:col,'stroke-width':2,
+      'stroke-linejoin':'round','stroke-linecap':'round'}));
+    // Puntos sólo cuando hay pocos: con 300 días serían una mancha.
+    if(datos.length<=40) datos.forEach((d,i)=>
+      svg.appendChild(el('circle',{cx:x(i),cy:y(d[k]),r:3.2,fill:col,stroke:'var(--surface)','stroke-width':2})));
+  });
+
+  // Cruceta + tooltip
+  const cru=el('line',{x1:0,x2:0,y1:M.t,y2:M.t+ih,stroke:'var(--muted)','stroke-width':1,
+                       'stroke-dasharray':'3 3',opacity:0});
+  svg.appendChild(cru);
+  const cap=el('rect',{x:M.l,y:M.t,width:iw,height:ih,fill:'transparent'});
+  svg.appendChild(cap);
+  const tip=$('#tip');
+  cap.addEventListener('mousemove', ev=>{
+    const r=svg.getBoundingClientRect();
+    const px=(ev.clientX-r.left)*(W/r.width);
+    let i=Math.round((px-M.l)/(iw/Math.max(1,datos.length-1)));
+    i=Math.max(0,Math.min(datos.length-1,i));
+    const d=datos[i];
+    cru.setAttribute('x1',x(i)); cru.setAttribute('x2',x(i)); cru.setAttribute('opacity',1);
+    tip.innerHTML='<div class="t">'+esc(opt.tituloTip? opt.tituloTip(d) : d.rot)+'</div>'+
+      claves.map(k=>'<div class="f"><i style="background:'+COLOR(k)+'"></i>'+
+        esc((CONCEPTOS.find(c=>c.k===k)||{}).et||k)+'<b>'+n0(d[k])+'</b></div>').join('');
+    tip.style.display='block';
+    const tw=tip.offsetWidth;
+    tip.style.left=Math.min(window.innerWidth-tw-12, ev.clientX+14)+'px';
+    tip.style.top=Math.max(8, ev.clientY-10)+'px';
+  });
+  cap.addEventListener('mouseleave', ()=>{ cru.setAttribute('opacity',0); tip.style.display='none'; });
+  cont.appendChild(svg);
+}
+
+/** Barras agrupadas: un grupo por mes, una barra por año. */
+function barras(cont, grupos, series, opt){
+  cont.innerHTML='';
+  if(!grupos.length){ cont.innerHTML='<div class="vacio">Sin datos para comparar</div>'; return; }
+  const W=cont.clientWidth||900, H=opt.alto||280, M={t:14,r:16,b:26,l:46};
+  const iw=W-M.l-M.r, ih=H-M.t-M.b;
+  let max=0; grupos.forEach(g=>series.forEach(s=>{ const v=g.v[s.k]||0; if(v>max) max=v; }));
+  const ty=ticksY(max), top=ty[ty.length-1]||1;
+  const y=v=> M.t+ih-(v/top)*ih;
+  const bw=iw/grupos.length;
+  // 2px de aire entre barras vecinas: la guía lo pide para que no se fundan.
+  const anchoB=Math.max(3,(bw*0.72)/series.length - 2);
+
+  const svg=el('svg',{class:'g',viewBox:'0 0 '+W+' '+H,height:H});
+
+  // Trama para el mes que todavía no termina. La guía de visualización la pide
+  // como codificación secundaria; acá además evita la lectura equivocada más
+  // cara del tablero: un septiembre a medio correr se ve como un derrumbe.
+  const defs=el('defs');
+  series.forEach((s,j)=>{
+    const p=el('pattern',{id:'tr'+j,width:6,height:6,patternUnits:'userSpaceOnUse',
+                          patternTransform:'rotate(45)'});
+    p.appendChild(el('rect',{width:6,height:6,fill:s.color,opacity:.28}));
+    p.appendChild(el('line',{x1:0,y1:0,x2:0,y2:6,stroke:s.color,'stroke-width':3}));
+    defs.appendChild(p);
+  });
+  svg.appendChild(defs);
+
+  const gy=el('g',{class:'gy'});
+  ty.forEach(v=>{ gy.appendChild(el('line',{x1:M.l,x2:W-M.r,y1:y(v),y2:y(v)}));
+    const t=el('text',{x:M.l-8,y:y(v)+3,'text-anchor':'end'}); t.textContent=fmtEje(v); gy.appendChild(t); });
+  svg.appendChild(gy);
+  svg.appendChild(el('line',{class:'cero',x1:M.l,x2:W-M.r,y1:y(0),y2:y(0)}));
+
+  const parcial = opt.parcial || {};
+  const tip=$('#tip');
+  grupos.forEach((g,i)=>{
+    const x0=M.l+i*bw+(bw-(anchoB+2)*series.length)/2;
+    series.forEach((s,j)=>{
+      const v=g.v[s.k]||0; if(!v) return;
+      const esParcial = parcial[s.k+'|'+i];
+      const x=x0+j*(anchoB+2), alto=Math.max(1,ih-(y(v)-M.t));
+      const rect=el('rect',{x:x,y:y(v),width:anchoB,height:alto,
+        fill: esParcial ? 'url(#tr'+j+')' : s.color, rx:Math.min(4,anchoB/2)});
+      if(esParcial){ rect.setAttribute('stroke',s.color); rect.setAttribute('stroke-width','1'); }
+      rect.addEventListener('mousemove',ev=>{
+        tip.innerHTML='<div class="t">'+esc(g.rot)+'</div>'+
+          series.map(ss=>'<div class="f"><i style="background:'+ss.color+'"></i>'+esc(ss.et)+
+            (parcial[ss.k+'|'+i]?' <span style="color:var(--warning)">·&nbsp;parcial</span>':'')+
+            '<b>'+n0(g.v[ss.k])+'</b></div>').join('');
+        tip.style.display='block';
+        tip.style.left=Math.min(window.innerWidth-tip.offsetWidth-12, ev.clientX+14)+'px';
+        tip.style.top=Math.max(8, ev.clientY-10)+'px';
+      });
+      rect.addEventListener('mouseleave',()=>tip.style.display='none');
+      svg.appendChild(rect);
+    });
+    const t=el('text',{x:M.l+i*bw+bw/2,y:H-8,'text-anchor':'middle',class:'gx'});
+    t.setAttribute('font-size','10'); t.setAttribute('fill','var(--muted)');
+    t.textContent=g.rot; svg.appendChild(t);
+  });
+  cont.appendChild(svg);
+}
+
+/* =====================================================================
+   RENDER
+   ===================================================================== */
+function render(){
+  if(!S.desde||!S.hasta) return;
+  // El tooltip vive fuera del SVG, así que al repintar sobrevive al gráfico que
+  // lo abrió y se queda mostrando el dato del corte anterior.
+  $('#tip').style.display='none';
+  const g = S.granul==='auto' ? granularidadAuto(S.desde,S.hasta) : S.granul;
+  $('#rg-txt').textContent = rotuloPeriodo();
+
+  // ── KPIs: total del período y variación contra el mismo período del año
+  //    anterior, que es la pregunta que se hace gerencia.
+  const t = S.cliente ? totalesCliente() : totales(S.desde,S.hasta);
+  const [pd,ph] = periodoAnterior(S.desde,S.hasta);
+  const ta = S.cliente ? totalesCliente(pd,ph) : totales(pd,ph);
+  const hayAnterior = ta.dias>0;
+
+  $('#kpis').innerHTML = CONCEPTOS.map(c=>{
+    const v=t[c.k]||0, a=ta[c.k]||0;
+    const d = (hayAnterior && a) ? ((v-a)/a*100) : null;
+    const cls = d==null ? 'flat' : d>0.5 ? 'up' : d<-0.5 ? 'down' : 'flat';
+    return '<div class="kpi"><div class="barra" style="background:'+COLOR(c.k)+'"></div>'+
+      '<div class="n"><i style="background:'+COLOR(c.k)+'"></i>'+c.et+'</div>'+
+      '<div class="v">'+n0(v)+'</div>'+
+      '<div class="d '+cls+'">'+(d==null?'<span class="flat">sin período comparable</span>'
+        :(pct(d)+' vs '+etiquetaAnioAnterior()))+'</div></div>';
+  }).join('');
+
+  // ── Serie temporal
+  const datos = S.cliente ? serieClienteBuckets() : agregar(S.desde,S.hasta,g);
+  $('#granul').classList.toggle('off', !!S.cliente);   // por cliente sólo hay mes
+  $('#t-serie').textContent = S.cliente ? ('Operaciones · '+S.cliente) : 'Operaciones en el período';
+  const gEfectiva = S.cliente ? 'mes' : g;
+  // Si el último tramo quedó cortado por el borde del período, se avisa: la
+  // caída del final es del calendario, no del negocio.
+  const ultimoTramo = datos.length ? datos[datos.length-1] : null;
+  const cortado = !!ultimoTramo && gEfectiva!=='dia' &&
+                  finBucket(ultimoTramo.k, gEfectiva) > S.hasta;
+  $('#e-serie').textContent = (S.cliente
+    ? 'Por mes completo. El cruce por cliente se guarda mensual: el diario por cliente serían 145 clientes por 1.266 días y no cabe.'
+    : ({dia:'Un punto por día.',semana:'Un punto por semana (lunes).',
+        mes:'Un punto por mes.',anio:'Un punto por año.'}[g]))
+    + (cortado ? ' El último tramo ('+ultimoTramo.rot+') está incompleto: llega hasta el '+S.hasta+'.' : '');
+  $('#leg-serie').innerHTML = CONCEPTOS.map(c=>
+    '<span><i style="background:'+COLOR(c.k)+'"></i>'+c.et+'</span>').join('');
+  lineas($('#g-serie'), datos, CONCEPTOS.map(c=>c.k),
+    {alto:300, tituloTip: d => rotuloLargo(d.k, gEfectiva)});
+
+  // ── Comparación entre años
+  renderAnios();
+
+  // ── Tabla
+  const cols = CONCEPTOS.map(c=>c.k);
+  $('#e-tabla').textContent = S.cliente ? ('Mensual · '+S.cliente) : ('Agrupado por '+({dia:'día',semana:'semana',mes:'mes',anio:'año'}[g]));
+  $('#tabla').innerHTML =
+    '<thead><tr><th>'+(S.cliente?'Mes':({dia:'Día',semana:'Semana',mes:'Mes',anio:'Año'}[g]))+'</th>'+
+      CONCEPTOS.map(c=>'<th>'+c.et+'</th>').join('')+'<th>Total</th></tr></thead><tbody>'+
+    datos.map(d=>'<tr><td>'+esc(d.rot)+'</td>'+
+      cols.map(k=>'<td>'+n0(d[k])+'</td>').join('')+
+      '<td><b>'+n0(cols.reduce((s,k)=>s+(d[k]||0),0))+'</b></td></tr>').join('')+
+    '</tbody><tfoot><tr><th>Total</th>'+
+      cols.map(k=>'<th>'+n0(datos.reduce((s,d)=>s+(d[k]||0),0))+'</th>').join('')+
+      '<th>'+n0(datos.reduce((s,d)=>s+cols.reduce((x,k)=>x+(d[k]||0),0),0))+'</th></tr></tfoot>';
+  $('#nota-tabla').textContent = S.cliente
+    ? (t.dias + ' meses con movimiento de ' + S.cliente + ' dentro del período.')
+    : (t.dias + ' días con operación en el período.');
+  S.exportable = datos;
+}
+
+/* El período comparado es el mismo corrido un año, no "el año 2024". Si va de
+   sep a sep, decir "vs 2024" es falso: el que lo lee cree que compara contra el
+   año calendario completo. */
+function etiquetaAnioAnterior(){
+  const [pd,ph] = periodoAnterior(S.desde,S.hasta);
+  return pd.slice(0,4)===ph.slice(0,4) ? pd.slice(0,4) : 'igual período anterior';
+}
+function rotuloPeriodo(){
+  const d=deIso(S.desde), h=deIso(S.hasta);
+  const f=x=>x.getDate()+' '+MESES[x.getMonth()]+' '+x.getFullYear();
+  return f(d)+'  →  '+f(h);
+}
+
+/** Barras: un grupo por mes, una barra por año. El modelo mental del Excel.
+    Respeta el filtro de cliente: si arriba dice Walmart, acá también, porque un
+    gráfico que se queda mostrando la empresa entera mientras el resto filtra es
+    una lectura equivocada esperando a ocurrir. */
+function renderAnios(){
+  const fuente = S.cliente ? (S.serieCliente||{}) : S.porMes;
+  const meses  = Object.keys(fuente);
+  const anios  = [...new Set(meses.map(m=>m.slice(0,4)))].sort();
+  const ult    = anios.slice(-3);
+  const series = ult.map((a,i)=>({k:a, et:a, color:COLOR_ANIO(i)}));
+  const grupos = MESES.map((_,i)=>{
+    const mm = String(i+1).padStart(2,'0');
+    const v = {};
+    ult.forEach(a => v[a] = ((fuente[a+'-'+mm]||{})[S.conceptoAnios]) || 0);
+    return {rot:MESES[i], v};
+  });
+  $('#conc-anios').innerHTML = CONCEPTOS.map(c=>
+    '<button data-c="'+c.k+'"'+(c.k===S.conceptoAnios?' class="on"':'')+'>'+c.et+'</button>').join('');
+  $('#conc-anios').querySelectorAll('button').forEach(b=> b.onclick=()=>{
+    S.conceptoAnios=b.dataset.c; renderAnios(); });
+  $('#leg-anios').innerHTML = series.map(s=>
+    '<span><i style="background:'+s.color+'"></i>'+s.et+'</span>').join('');
+  // El mes en curso va rayado: todavía no termina y compararlo contra un mes
+  // completo del año pasado hace ver una caída que no existe.
+  const ultimo = S.fechas[S.fechas.length-1];
+  const mesEnCurso = ultimo.slice(0,7);
+  const parcial = {};
+  if(ultimo !== finBucket(mesEnCurso,'mes')){
+    const iMes = +mesEnCurso.slice(5,7)-1, anio = mesEnCurso.slice(0,4);
+    if(ult.indexOf(anio)>=0) parcial[anio+'|'+iMes] = true;
+  }
+
+  const et = ((CONCEPTOS.find(c=>c.k===S.conceptoAnios)||{}).et || '').toLowerCase();
+  $('#e-anios').textContent = 'Mismo mes, años distintos · ' + et +
+    (S.cliente ? ' · '+S.cliente : '') +
+    '. Todo el histórico, sin importar el período de arriba.' +
+    (Object.keys(parcial).length
+      ? ' La barra rayada es el mes en curso: va hasta el '+ultimo+', todavía no termina.' : '');
+  barras($('#g-anios'), grupos, series, {alto:280, parcial});
+}
+
+/* ── Cliente: la serie mensual viene del índice por contraparte ─────────── */
+function serieClienteBuckets(){
+  const s = S.serieCliente || {};
+  const meses = Object.keys(s).sort().filter(m=> m>=S.desde.slice(0,7) && m<=S.hasta.slice(0,7));
+  return meses.map(m=>{
+    const b={k:m, rot:MESES[+m.slice(5,7)-1]+' '+m.slice(2,4), dias:0};
+    CONCEPTOS.forEach(c=> b[c.k]=(s[m]||{})[c.k]||0);
+    return b;
+  });
+}
+function totalesCliente(desde,hasta){
+  desde=desde||S.desde; hasta=hasta||S.hasta;
+  const s=S.serieCliente||{}; const t={dias:0}; CONCEPTOS.forEach(c=>t[c.k]=0);
+  for(const m in s){
+    if(m < desde.slice(0,7) || m > hasta.slice(0,7)) continue;
+    t.dias++; CONCEPTOS.forEach(c=> t[c.k]+=(s[m][c.k]||0));
+  }
+  return t;
+}
+
+/* =====================================================================
+   PERÍODO
+   ===================================================================== */
+const ATAJOS = [
+  ['Este mes',        ()=>{ const h=hoyIso(); return [h.slice(0,8)+'01', h]; }],
+  ['Mes pasado',      ()=>{ const d=deIso(hoyIso()); d.setDate(1); d.setMonth(d.getMonth()-1);
+                            const a=iso(d); d.setMonth(d.getMonth()+1); d.setDate(0); return [a, iso(d)]; }],
+  ['Últimos 90 días', ()=>{ const h=hoyIso(); return [sumaDias(h,-89), h]; }],
+  ['Este año',        ()=>{ const h=hoyIso(); return [h.slice(0,4)+'-01-01', h]; }],
+  ['Últimos 12 meses',()=>{ const h=hoyIso(); const d=deIso(h); d.setFullYear(d.getFullYear()-1);
+                            return [iso(d), h]; }],
+  ['Todo el histórico',()=>[S.fechas[0], S.fechas[S.fechas.length-1]]],
+];
+function fijarPeriodo(d,h){
+  S.desde = d < S.fechas[0] ? S.fechas[0] : d;
+  S.hasta = h > S.fechas[S.fechas.length-1] ? S.fechas[S.fechas.length-1] : h;
+  if(S.hasta < S.desde) S.hasta = S.desde;
+  $('#rg-d').value=S.desde; $('#rg-h').value=S.hasta;
+  $('#rg-prev').disabled = S.desde <= S.fechas[0];
+  $('#rg-next').disabled = S.hasta >= S.fechas[S.fechas.length-1];
+  render();
+}
+/** Mueve la ventana completa, no cada extremo por su lado: si se recorta sólo
+    uno, a fuerza de clics el período se achica solo y el gerente ve caer los
+    números sin haber cambiado nada. */
+function desplazar(signo){
+  const dias = Math.round((deIso(S.hasta)-deIso(S.desde))/86400000)+1;
+  let d = sumaDias(S.desde, signo*dias), h = sumaDias(S.hasta, signo*dias);
+  const min=S.fechas[0], max=S.fechas[S.fechas.length-1];
+  if(d < min){ d = min; h = sumaDias(min, dias-1); }
+  if(h > max){ h = max; d = sumaDias(max, -(dias-1)); }
+  fijarPeriodo(d,h);
+}
+
+/* =====================================================================
+   ARRANQUE
+   ===================================================================== */
+function tema(t){
+  document.documentElement.setAttribute('data-theme',t);
+  try{ localStorage.setItem('opredtec_tema',t); }catch(e){}
+  if(S.fechas.length) render();
+}
+$('#btn-tema').onclick = ()=> tema(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark');
+try{ const t=localStorage.getItem('opredtec_tema'); if(t==='light'||t==='dark') tema(t); }catch(e){}
+
+$('#rg-txt').onclick = ()=> $('#rg-pop').classList.toggle('on');
+$('#rg-prev').onclick = ()=> desplazar(-1);
+$('#rg-next').onclick = ()=> desplazar(1);
+$('#rg-d').onchange = ()=>{ if($('#rg-d').value) fijarPeriodo($('#rg-d').value, S.hasta); };
+$('#rg-h').onchange = ()=>{ if($('#rg-h').value) fijarPeriodo(S.desde, $('#rg-h').value); };
+/* Cerrar al hacer clic afuera va en fase de CAPTURA: el popover convive con
+   handlers que repintan, y en burbuja el clic se pierde. */
+document.addEventListener('click', e=>{
+  if(!e.target.closest('#rg')) $('#rg-pop').classList.remove('on');
+}, true);
+
+$('#granul').querySelectorAll('button').forEach(b=> b.onclick=()=>{
+  $('#granul').querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); S.granul=b.dataset.g; render();
+});
+
+$('#btn-csv').onclick = ()=>{
+  const filas = S.exportable||[];
+  const cab = ['periodo'].concat(CONCEPTOS.map(c=>c.et));
+  const txt = [cab.join(';')].concat(filas.map(d=>
+    [d.rot].concat(CONCEPTOS.map(c=>d[c.k]||0)).join(';'))).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob(['﻿'+txt],{type:'text/csv;charset=utf-8'}));
+  a.download='operaciones-redtec-'+S.desde+'_'+S.hasta+'.csv'; a.click();
+};
+
+/* Cada consulta lleva número. Si el gerente aprieta "Todos" mientras vuelve la
+   respuesta de la consulta anterior — o escribe otro nombre encima — la que
+   llega tarde se descarta. Sin esto el tablero se queda mostrando el cliente
+   que el usuario ya descartó, y no hay forma de que se dé cuenta. */
+let seqCliente = 0;
+
+function limpiarCliente(){
+  seqCliente++;
+  $('#cliente').value=''; S.cliente=''; S.serieCliente=null;
+  $('#aviso').classList.add('hide');
+  render();
+}
+$('#btn-limpiar').onclick = limpiarCliente;
+
+async function aplicarCliente(){
+  const q = $('#cliente').value.trim();
+  if(!q){ limpiarCliente(); return; }
+  const mio = ++seqCliente;
+  // Sin velo de pantalla completa: la consulta por cliente es chica, y un velo
+  // encima se come el clic en "Todos" justo cuando el gerente se arrepiente.
+  $('#aviso').classList.remove('hide');
+  $('#aviso').textContent = 'Consultando '+q+'…';
+  try{
+    const d = await fetch(API_CLIENTE+'?contraparte='+encodeURIComponent(q)).then(r=>r.json());
+    if(mio !== seqCliente) return;
+    if(!d.encontrado){
+      // Se dice que no calzó, en vez de mostrar un tablero en cero que se lee
+      // igual que "este cliente no movió nada".
+      S.cliente=''; S.serieCliente=null;
+      $('#aviso').classList.remove('hide');
+      $('#aviso').innerHTML='Ninguna contraparte calza con <b>'+esc(q)+'</b>. '+
+        'Se muestra el total de la empresa. Pruebe con parte del nombre: walmart, cenco, tottus…';
+    } else {
+      const s={};
+      (d.resultados||[]).forEach(r=>{
+        // Se toma el lado que corresponde al concepto: la emisión va al cliente
+        // de destino, el retiro sale del de origen. Sumar los dos lados contaría
+        // el mismo movimiento dos veces.
+        const lado = (r.concepto==='retiros'||r.concepto==='devoluciones') ? 'origen' : 'destino';
+        if(r.lado!==lado) return;
+        for(const m in r.por_mes){ (s[m]||(s[m]={}))[r.concepto]=r.por_mes[m]; }
+      });
+      S.cliente = (d.nombres_sumados||[q]).join(' + ');
+      S.serieCliente = s;
+      $('#aviso').classList.remove('hide');
+      $('#aviso').innerHTML='<b>'+esc(S.cliente)+'</b> · '+
+        ((d.nombres_sumados||[]).length>1
+          ? 'son '+d.nombres_sumados.length+' razones sociales y se suman las dos. ' : '')+
+        'El cruce por cliente está guardado por mes, así que esta vista va mensual: '+
+        'los totales de arriba, el gráfico y la tabla toman meses completos.';
+    }
+  }catch(e){
+    if(mio !== seqCliente) return;
+    S.cliente=''; S.serieCliente=null;
+    $('#aviso').classList.remove('hide');
+    $('#aviso').textContent='No se pudo consultar el índice por cliente: '+e.message;
+  }
+  render();
+}
+$('#cliente').onchange = aplicarCliente;
+$('#cliente').addEventListener('keydown', e=>{ if(e.key==='Enter') aplicarCliente(); });
+
+(async function arrancar(){
+  try{
+    const r = await fetch(API_DIARIO, {headers:{'Accept':'application/json'}});
+    const ct = (r.headers.get('content-type')||'');
+    if(!ct.includes('json')) throw new Error('respuesta inesperada');
+    const d = await r.json();
+    if(d.error) throw new Error(d.pista || d.error);
+    S.dias = d.dias||{};
+    S.fechas = Object.keys(S.dias).sort();
+    S.generado = d.generado;
+    if(!S.fechas.length) throw new Error('el índice diario está vacío');
+    indexarMeses();
+
+    $('#frescura').textContent = 'datos al '+S.fechas[S.fechas.length-1]+
+      ' · '+S.fechas.length.toLocaleString('es-CL')+' días';
+
+    $('#rg-atajos').innerHTML = ATAJOS.map((a,i)=>'<button data-i="'+i+'">'+a[0]+'</button>').join('');
+    $('#rg-atajos').querySelectorAll('button').forEach(b=> b.onclick=()=>{
+      const [d2,h2]=ATAJOS[+b.dataset.i][1](); fijarPeriodo(d2,h2);
+      $('#rg-pop').classList.remove('on'); });
+    $('#rg-d').min=S.fechas[0]; $('#rg-h').min=S.fechas[0];
+    $('#rg-d').max=S.fechas[S.fechas.length-1]; $('#rg-h').max=S.fechas[S.fechas.length-1];
+
+    // Abre solo, sin preguntar: el año en curso.
+    const h=S.fechas[S.fechas.length-1];
+    fijarPeriodo(h.slice(0,4)+'-01-01', h);
+
+    // Lista de clientes, en segundo plano: el tablero ya es usable sin ella,
+    // y si el índice por contraparte falla no se cae el tablero entero.
+    fetch(API_CLIENTE+'?listar=clientes').then(r=>r.json()).then(l=>{
+      const dl=$('#lista-clientes');
+      (l.nombres||[]).sort().forEach(n=>{
+        const o=document.createElement('option'); o.value=n; dl.appendChild(o);
+      });
+    }).catch(()=>{});
+
+    $('#carga').style.display='none';
+  }catch(e){
+    $('#carga-t').innerHTML='<b style="color:var(--critical)">No se pudo cargar</b><br>'+
+      '<span style="font-size:12px">'+esc(e.message)+'</span>';
+  }
+})();
+
+let tRe; addEventListener('resize', ()=>{ clearTimeout(tRe); tRe=setTimeout(()=>{ if(S.fechas.length) render(); }, 200); });
+</script>
+</body>
+</html>

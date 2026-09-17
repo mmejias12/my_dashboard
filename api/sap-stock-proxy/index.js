@@ -432,20 +432,37 @@ async function sondear(context, fecha) {
 
   const resultado = { raiz, fecha, entidades: [] };
 
+  // Una consulta con reintento por sesion vencida.
+  async function pedir(url) {
+    let res = await sapRequest('GET', url, { Cookie: cookie(), Accept: 'application/json' });
+    if (res.status === 401) {
+      session = await getSession(context, true);
+      res = await sapRequest('GET', url, { Cookie: cookie(), Accept: 'application/json' });
+    }
+    return res;
+  }
+
   for (const ent of ENTIDADES_SONDA) {
-    // $top=5 y filtro por fecha: alcanza para responder las tres preguntas sin
-    // traerse medio SAP a una Function.
-    const url = raiz + '/' + ent.nombre
-      + "?$filter=DocDate eq '" + fecha + "'"
+    // DOS CONSULTAS POR ENTIDAD, Y LA PRIMERA NO LLEVA FILTRO DE FECHA.
+    //
+    // La primera version filtraba por DocDate y punto. Contra produccion el
+    // 17-09 las siete entidades respondieron 200 con CERO documentos, y ahi
+    // "cero" no dice nada: puede ser que ese dia no haya movimiento, que la
+    // empresa no use ese tipo de documento, o que el formato de fecha no calce.
+    // Son tres conclusiones muy distintas y hay que poder separarlas.
+    //
+    //   ultimos/  sin filtro, los 3 mas recientes. Responde si la entidad se
+    //             usa, y muestra como viene DocDate de verdad.
+    //   del_dia/  con filtro, y con ge+le en vez de eq: si DocDate es un
+    //             datetime, un eq contra una fecha pelada no calza nunca.
+    const urlUltimos = raiz + '/' + ent.nombre + '?$top=3&$orderby=DocEntry desc';
+    const urlDia = raiz + '/' + ent.nombre
+      + "?$filter=DocDate ge '" + fecha + "' and DocDate le '" + fecha + "'"
       + '&$top=5&$orderby=DocEntry desc';
 
     let res;
     try {
-      res = await sapRequest('GET', url, { Cookie: cookie(), Accept: 'application/json' });
-      if (res.status === 401) {                       // sesion vencida: un reintento
-        session = await getSession(context, true);
-        res = await sapRequest('GET', url, { Cookie: cookie(), Accept: 'application/json' });
-      }
+      res = await pedir(urlUltimos);
     } catch (e) {
       resultado.entidades.push({ entidad: ent.nombre, que: ent.que, error: String(e.message || e) });
       continue;
@@ -461,7 +478,26 @@ async function sondear(context, fecha) {
     }
 
     const filas = (res.json && res.json.value) || [];
-    fila.documentos = filas.length;
+    fila.usa_esta_entidad = filas.length > 0;
+    fila.ultimos = filas.map(d => ({
+      DocEntry: d.DocEntry, DocNum: d.DocNum, DocDate: d.DocDate,
+      CardCode: d.CardCode, CardName: d.CardName,
+    }));
+
+    // Ahora si, el dia pedido.
+    try {
+      const rd = await pedir(urlDia);
+      fila.status_dia = rd.status;
+      if (rd.status === 200) fila.documentos = ((rd.json && rd.json.value) || []).length;
+      else fila.detalle_dia = (rd.body || '').slice(0, 200);
+      // Si el filtro sirvio, se mira ESE lote; si no, se mira el ultimo
+      // documento, que igual sirve para saber si la patente existe en el modelo.
+      if (rd.status === 200 && ((rd.json && rd.json.value) || []).length) {
+        filas.length = 0;
+        filas.push(...rd.json.value);
+      }
+    } catch (e) { fila.error_dia = String(e.message || e); }
+
     if (filas.length) {
       const d = filas[0];
       fila.ejemplo = {
@@ -488,17 +524,32 @@ async function sondear(context, fecha) {
   }
 
   // Lectura en una linea, para no tener que interpretar el JSON a mano.
-  const conDocs = resultado.entidades.filter(e => e.documentos > 0);
+  const seUsan     = resultado.entidades.filter(e => e.usa_esta_entidad);
+  const conDocsDia = resultado.entidades.filter(e => e.documentos > 0);
   const conPatente = resultado.entidades.filter(e => e.patente_detectada);
-  resultado.conclusion =
-    conDocs.length === 0
-      ? 'No se alcanzo ninguna entidad con documentos en ' + fecha
-        + '. Revisar permisos del usuario SAP o probar otra fecha.'
-      : conPatente.length === 0
-        ? 'Hay documentos (' + conDocs.map(e => e.entidad).join(', ') + ') pero NINGUNO trae patente. '
-          + 'El cruce con la camara no se puede cerrar leyendo SAP: hay que registrar la patente en el documento.'
-        : 'Hay documentos CON patente en: ' + conPatente.map(e => e.entidad).join(', ')
-          + '. La pasada es viable.';
+
+  // Tres preguntas, tres respuestas distintas. Mezclarlas fue el error de la
+  // primera version: "cero documentos" puede significar cosas muy diferentes.
+  if (!seUsan.length) {
+    resultado.conclusion = 'Ninguna de estas entidades tiene documentos en SAP. O la empresa '
+      + 'no usa estos tipos de documento para el pallet blanco, o el usuario no ve esos datos.';
+  } else if (!conDocsDia.length) {
+    resultado.conclusion = 'SAP sí usa ' + seUsan.map(e => e.entidad).join(', ')
+      + ', pero ninguno tiene documentos con fecha ' + fecha + '. Mirar el campo DocDate de `ultimos` '
+      + 'para ver el formato real y hasta que dia llega el dato.';
+  } else if (!conPatente.length) {
+    resultado.conclusion = 'Hay documentos el ' + fecha + ' en ' + conDocsDia.map(e => e.entidad).join(', ')
+      + ' pero NINGUNO trae patente. El cruce con la camara no se cierra leyendo SAP: '
+      + 'hay que registrar la patente en el documento, y eso es un cambio de proceso.';
+  } else {
+    resultado.conclusion = 'Hay documentos CON patente en: ' + conPatente.map(e => e.entidad).join(', ')
+      + '. La pasada es viable.';
+  }
+  resultado.resumen = {
+    entidades_en_uso: seUsan.map(e => e.entidad),
+    con_documentos_el_dia: conDocsDia.map(e => e.entidad),
+    con_patente: conPatente.map(e => e.entidad),
+  };
   resultado.ok = true;
   resultado.configurado = true;
   resultado.alcanzable = true;

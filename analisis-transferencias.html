@@ -286,6 +286,16 @@
   .kpi-val.tra { color:var(--c-tra); }
   .kpi-val.dif { color:var(--c-dif); }
   .kpi-val.pal { color:var(--c-pal); }
+  /* Botonera dentro del KPI de pallets: el mismo patrón de OPERACIONES
+     REDTEC. Solicitado y confirmado son dos números distintos y los dos se
+     usan; tenerlos a un clic evita el viaje a la tabla de abajo. */
+  .kpi-modos{display:flex;gap:4px;margin-top:8px}
+  .kpi-modos button{flex:1;background:var(--bg-input);border:1px solid var(--border);
+    color:var(--text-secondary);border-radius:6px;padding:4px 2px;font:inherit;
+    font-size:10.5px;cursor:pointer;white-space:nowrap}
+  .kpi-modos button:hover{border-color:var(--c-pal);color:var(--text-primary)}
+  .kpi-modos button.on{background:rgba(196,181,253,.16);border-color:rgba(196,181,253,.55);
+    color:var(--c-pal);font-weight:600}
   .kpi-sub { font-size:10.5px;color:var(--text-muted);margin-top:3px; }
 
   /* CHART CARD */
@@ -471,7 +481,12 @@
     <div class="kpi"><div class="kpi-lbl">Tra. confirmadas</div><div class="kpi-val tra" id="k-tra">—</div><div class="kpi-sub">Lo realmente cumplido</div></div>
     <div class="kpi"><div class="kpi-lbl">Diferencia (Emi − Tra conf.)</div><div class="kpi-val dif" id="k-dif">—</div><div class="kpi-sub" id="k-dif-sub">—</div></div>
     <div class="kpi"><div class="kpi-lbl">% Diferencia</div><div class="kpi-val dif" id="k-pct">—</div><div class="kpi-sub">Diferencia / Emisiones</div></div>
-    <div class="kpi"><div class="kpi-lbl">Pallets transferidos</div><div class="kpi-val pal" id="k-pal">—</div><div class="kpi-sub">Cantidad confirmada</div></div>
+    <div class="kpi"><div class="kpi-lbl">Pallets transferidos</div><div class="kpi-val pal" id="k-pal">—</div><div class="kpi-sub" id="k-pal-sub">Cantidad confirmada</div>
+      <div class="kpi-modos" id="k-pal-modos">
+        <button data-k="conf" class="on" title="Lo que el retail reconoció recibir">Confirmados</button>
+        <button data-k="sol" title="Lo que se pidió despachar">Solicitados</button>
+      </div>
+    </div>
   </div>
 
   <!-- Nota explicativa de la lógica -->
@@ -767,16 +782,22 @@ function agruparDatos() {
 // los KPIs miden ejecución, por eso usan "confirmada".
 function calcularKPIs() {
   var datos = filtrarRaw();
-  var totalEmi = 0, totalTraConf = 0;
+  var totalEmi = 0, totalTraConf = 0, totalTraSol = 0;
   datos.forEach(function(r) {
     var op = normOp(r.operacion);
     var conf = r.cantidadConfirmada || 0;
     if (op.indexOf('emision') >= 0) totalEmi += conf;
-    if (op.indexOf('transfer') >= 0 || op.indexOf('trans diferenciada') >= 0) totalTraConf += conf;
+    if (op.indexOf('transfer') >= 0 || op.indexOf('trans diferenciada') >= 0) {
+      totalTraConf += conf;
+      totalTraSol  += r.cantidadSolicitada || 0;
+    }
   });
   var dif = totalEmi - totalTraConf;
   var pct = totalEmi > 0 ? dif / totalEmi : 0;
-  return { totalEmi: totalEmi, totalTra: totalTraConf, dif: dif, pct: pct };
+  // La diferencia y el % siguen midiéndose contra lo CONFIRMADO: son los KPI
+  // de ejecución. Lo solicitado se publica aparte, para el botón.
+  return { totalEmi: totalEmi, totalTra: totalTraConf, totalTraSol: totalTraSol,
+           dif: dif, pct: pct };
 }
 
 
@@ -1104,7 +1125,24 @@ function actualizarKPIs() {
   $('k-dif').textContent = fmtNum(k.dif);
   $('k-dif-sub').textContent = (k.dif > 0 ? 'Excedente emisiones' : (k.dif < 0 ? 'Excedente transferencias' : 'Equilibrado'));
   $('k-pct').textContent = fmtPct(k.pct);
-  $('k-pal').textContent = fmtNum(k.totalTra);  // Pallets transferidos = total confirmado
+  pintarPalletsKPI(k);
+}
+
+/* El KPI de pallets muestra confirmado o solicitado según el botón. Son dos
+   números distintos y los dos se usan en la operación: el solicitado es lo que
+   se pidió despachar y el confirmado lo que el retail reconoció. Tenerlos a un
+   clic evita bajar a la tabla — y evita que alguien cite el que tenía a mano. */
+var palModo = 'conf';
+function pintarPalletsKPI(k) {
+  k = k || calcularKPIs();
+  var esSol = (palModo === 'sol');
+  $('k-pal').textContent = fmtNum(esSol ? k.totalTraSol : k.totalTra);
+  $('k-pal-sub').textContent = esSol
+    ? ('Cantidad solicitada · confirmado ' + fmtNum(k.totalTra))
+    : ('Cantidad confirmada · solicitado ' + fmtNum(k.totalTraSol));
+  document.querySelectorAll('#k-pal-modos button').forEach(function(b) {
+    b.classList.toggle('on', b.getAttribute('data-k') === palModo);
+  });
 }
 
 // Dibuja el gráfico según métrica activa.
@@ -1490,6 +1528,14 @@ window.addEventListener('DOMContentLoaded', function() {
       b.classList.add('on');
       metricaActiva = b.getAttribute('data-m');
       redibujar();
+    });
+  });
+
+  // Confirmados / Solicitados en el KPI de pallets
+  document.querySelectorAll('#k-pal-modos button').forEach(function(b) {
+    b.addEventListener('click', function() {
+      palModo = b.getAttribute('data-k');
+      pintarPalletsKPI();
     });
   });
 

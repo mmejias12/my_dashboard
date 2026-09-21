@@ -74,11 +74,26 @@ module.exports = async function (context, req) {
   const fHasta = String(d2).slice(0, 10);
   const rangoValido = /^\d{4}-\d{2}-\d{2}$/.test(fDesde) && /^\d{4}-\d{2}-\d{2}$/.test(fHasta) && fDesde <= fHasta;
 
-  let vivas = [], errorApi = null;
+  // ── Cómo se comporta RDTOut, MEDIDO EN PRODUCCIÓN el 21-09-2026 ─────────
+  //   · Respeta 'desde': pedirle junio trae desde junio.
+  //   · IGNORA 'hasta': devuelve todo desde 'desde' hasta hoy.
+  //   · Rechaza rangos de más de 180 días con RANGE_TOO_LARGE.
+  // Por eso acá se trocea el rango y se filtra la respuesta: si no, pedir un
+  // año devuelve 400 y pedir un mes devuelve cuatro.
+  const MAX_DIAS_API = 170;   // margen bajo el tope de 180 del proveedor
+
+  let vivas = [], errorApi = null, tramos = 0;
   try {
-    const cuerpo = await fetchData(API_HOST, API_PATH + '?desde=' + encodeURIComponent(d1) + '&hasta=' + encodeURIComponent(d2));
-    const j = JSON.parse(cuerpo);
-    vivas = Array.isArray(j) ? j : (j && Array.isArray(j.data) ? j.data : (j ? [j] : []));
+    const trozos = trocear(fDesde, fHasta, rangoValido, MAX_DIAS_API);
+    for (const [ta, tb] of trozos) {
+      if (tramos && !alcanzaTiempo()) break;
+      const cuerpo = await fetchData(API_HOST, API_PATH + '?desde=' + encodeURIComponent(ta) + '&hasta=' + encodeURIComponent(tb));
+      const j = JSON.parse(cuerpo);
+      const filas = Array.isArray(j) ? j : (j && Array.isArray(j.data) ? j.data : (j ? [j] : []));
+      vivas = vivas.concat(filas);
+      tramos++;
+    }
+    vivas = cacheOps.dedup(vivas);
   } catch (err) {
     errorApi = err.message;
   }
@@ -138,7 +153,17 @@ module.exports = async function (context, req) {
     } catch (e) { /* el caché nunca rompe la respuesta */ }
   }
 
-  const todas = cacheOps.dedup(delCache.concat(vivas));
+  let todas = cacheOps.dedup(delCache.concat(vivas));
+
+  // El API ignora 'hasta', así que el recorte al rango pedido se hace acá.
+  // Una operación entra si CUALQUIERA de sus fechas cae dentro: es el mismo
+  // criterio con que el informe la cruza contra una parada.
+  let recortadas = 0;
+  if (rangoValido) {
+    const antes = todas.length;
+    todas = todas.filter(o => cacheOps.diasDeOp(o).some(f => f >= fDesde && f <= fHasta));
+    recortadas = antes - todas.length;
+  }
 
   if (errorApi && !todas.length) {
     context.res = { status: 502, headers: Object.assign({'Content-Type':'application/json'}, CORS),
@@ -154,6 +179,8 @@ module.exports = async function (context, req) {
     ok: true,
     total: todas.length,
     cobertura,
+    tramos_api: tramos,
+    filas_fuera_de_rango_descartadas: recortadas,
     historico: {
       dias_desde_cache: diasCache,
       filas_desde_cache: delCache.length,
@@ -178,6 +205,25 @@ module.exports = async function (context, req) {
     body: JSON.stringify(quiereMeta ? Object.assign({ data: todas }, meta) : todas)
   };
 };
+
+/* Parte un rango en tramos que el proveedor acepte. Sin rango válido, un solo
+   tramo con lo que venga (el API aplicará su ventana por omisión). */
+function trocear(desde, hasta, valido, maxDias) {
+  if (!valido) return [[desde, hasta]];
+  const out = [];
+  let ini = desde;
+  while (ini <= hasta) {
+    const d = new Date(ini + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + maxDias - 1);
+    let fin = d.toISOString().slice(0, 10);
+    if (fin > hasta) fin = hasta;
+    out.push([ini, fin]);
+    const sig = new Date(fin + 'T00:00:00Z');
+    sig.setUTCDate(sig.getUTCDate() + 1);
+    ini = sig.toISOString().slice(0, 10);
+  }
+  return out;
+}
 
 function restarDia(f) {
   const d = new Date(f + 'T00:00:00Z');

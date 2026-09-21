@@ -50,15 +50,22 @@ function formato(roll) {
     .filter(m => parseInt(m.slice(0, 4), 10) >= desdeAnio).sort();
   const emiMes = meses.map(m => `${m} ${milesCL(roll.mensual[m].emisiones.total)}`).join(' · ');
   const retMes = meses.map(m => `${m} ${milesCL(roll.mensual[m].retiros.total)}`).join(' · ');
+  const trfAnual = anios.map(a => `${a}: ${milesCL(roll.anual[a].transferencias)}`).join(' · ');
+  const devAnual = anios.map(a => `${a}: ${milesCL(roll.anual[a].devoluciones)}`).join(' · ');
+  const trfMes = meses.map(m => `${m} ${milesCL(roll.mensual[m].transferencias)}`).join(' · ');
 
   return `[HISTÓRICO OPERACIONES · resumen precargado (${roll.desde}→${roll.hasta}; el año/mes en curso es parcial)]\n` +
     `Emisiones por año (pallets): ${emiAnual}.\n` +
     `Retiros por año: ${retAnual}.\n` +
+    `Transferencias por año: ${trfAnual}.\n` +
+    `Devoluciones por año: ${devAnual}.\n` +
     `${plantaLinea}\n` +
     `Emisiones por mes ${desdeAnio}–${anioAct}: ${emiMes}.\n` +
     `Retiros por mes ${desdeAnio}–${anioAct}: ${retMes}.\n` +
-    `Usa estos totales para comparaciones anuales/mensuales y análisis de tendencia SIN llamar herramientas. ` +
-    `Recurre a consultar_operacion solo para rangos puntuales que no estén aquí o para el detalle por cliente/bodega.`;
+    `Transferencias por mes ${desdeAnio}–${anioAct}: ${trfMes}.\n` +
+    `Usa estos TOTALES para comparaciones anuales/mensuales y tendencia SIN llamar herramientas. ` +
+    `Para el desglose de un concepto POR CLIENTE en un período (ej. "transferencias a Walmart mes a mes"), usa la herramienta consultar_movimiento_cliente (es instantánea). ` +
+    `Recurre a consultar_operacion solo para rangos puntuales que no estén aquí.`;
 }
 
 // Cache por instancia (incluye el caso "sin rollup" para no releer el blob).
@@ -76,4 +83,101 @@ async function bloqueContexto(context) {
   }
 }
 
-module.exports = { bloqueContexto, cargarRollup, formato };
+// Cache del rollup COMPLETO (objeto), para la herramienta por cliente (TTL 60 min).
+let _roll = { data: undefined, ts: 0 };
+async function rollupCache() {
+  if (_roll.data !== undefined && (Date.now() - _roll.ts) < 60 * 60 * 1000) return _roll.data;
+  const data = await cargarRollup();
+  _roll = { data: data || null, ts: Date.now() };
+  return _roll.data;
+}
+
+// ── Herramienta: movimiento de un concepto POR CLIENTE (instantánea) ─────────
+const reISO = /^\d{4}-\d{2}-\d{2}$/;
+const hoyIso = () => new Date().toISOString().slice(0, 10);
+const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase();
+
+function normConcepto(s) {
+  const x = String(s || '').toLowerCase();
+  if (x.includes('emis')) return 'emisiones';
+  if (x.includes('retir')) return 'retiros';
+  if (x.includes('transf')) return 'transferencias';
+  if (x.includes('devol')) return 'devoluciones';
+  return null;
+}
+// Lista de meses 'YYYY-MM' entre dos fechas ISO, inclusive.
+function mesesEntre(desde, hasta) {
+  const out = [];
+  let y = +desde.slice(0, 4), m = +desde.slice(5, 7);
+  const fy = +hasta.slice(0, 4), fm = +hasta.slice(5, 7);
+  while (y < fy || (y === fy && m <= fm)) { out.push(`${y}-${String(m).padStart(2, '0')}`); m++; if (m > 12) { m = 1; y++; } }
+  return out;
+}
+
+async function consultarClienteConcepto({ concepto, entidad, desde, hasta }, context) {
+  const c = normConcepto(concepto);
+  if (!c) throw new Error('concepto inválido: usa emisiones, retiros, transferencias o devoluciones');
+  if (!entidad || !String(entidad).trim()) throw new Error('falta el cliente (entidad)');
+  const hoy = hoyIso();
+  hasta = reISO.test(hasta || '') ? (hasta > hoy ? hoy : hasta) : hoy;
+  desde = reISO.test(desde || '') ? desde : (hasta.slice(0, 4) - 1) + hasta.slice(4) ; // ~12 meses por defecto
+  if (desde > hasta) throw new Error('desde > hasta');
+
+  const roll = await rollupCache();
+  if (!roll || !roll.mensual_cliente) {
+    return { concepto: c, entidad, desde, hasta, disponible: false,
+      nota: 'El resumen por cliente aún no está generado (corre el rollup). Mientras tanto usa consultar_operacion.' };
+  }
+
+  const term = norm(entidad);
+  const meses = mesesEntre(desde, hasta);
+  const porMes = [];
+  const nombres = new Set();
+  let total = 0;
+  for (const mes of meses) {
+    const mapa = (roll.mensual_cliente[mes] && roll.mensual_cliente[mes][c]) || {};
+    let sub = 0;
+    for (const nombre in mapa) {
+      if (norm(nombre).includes(term)) { sub += mapa[nombre]; nombres.add(nombre); }
+    }
+    porMes.push({ mes, cantidad: sub });
+    total += sub;
+  }
+
+  if (context && context.log) context.log(`mov_cliente ${c} "${entidad}" ${desde}..${hasta}: total ${total}`);
+
+  return {
+    concepto: c, entidad, desde, hasta,
+    total,
+    por_mes: porMes,
+    clientes_incluidos: Array.from(nombres),
+    hasta_datos: roll.hasta,
+    nota: hasta > roll.hasta ? `Los datos llegan hasta ${roll.hasta}; los días posteriores no están en el resumen aún.` : undefined
+  };
+}
+
+const TOOL_SCHEMA = {
+  name: 'consultar_movimiento_cliente',
+  description:
+    'Devuelve, AL INSTANTE (desde el resumen precalculado), el movimiento de un ' +
+    'concepto para UN CLIENTE, mes a mes y total, en un período — incluso 12 ' +
+    'meses o varios años. Conceptos: emisiones, retiros, transferencias, ' +
+    'devoluciones. "a/para el cliente" usa el destino (emisiones, transferencias); ' +
+    '"del cliente" usa el origen (retiros, devoluciones). Úsala SIEMPRE para ' +
+    'preguntas del tipo "transferencias a Walmart mes a mes / últimos 12 meses", ' +
+    '"cuántas emisiones le hicimos a <cliente> este año", "retiros de <retail> por ' +
+    'mes". NO leas el histórico día por día para esto: esta herramienta ya lo tiene ' +
+    'agregado. Pasa el cliente/retail en `entidad` (basta una parte del nombre).',
+  input_schema: {
+    type: 'object',
+    properties: {
+      concepto: { type: 'string', description: 'emisiones | retiros | transferencias | devoluciones' },
+      entidad:  { type: 'string', description: 'Cliente o retail (o parte del nombre), ej. "Walmart"' },
+      desde:    { type: 'string', description: 'Inicio del período, YYYY-MM-DD' },
+      hasta:    { type: 'string', description: 'Fin del período, YYYY-MM-DD' }
+    },
+    required: ['concepto', 'entidad', 'desde', 'hasta']
+  }
+};
+
+module.exports = { bloqueContexto, cargarRollup, formato, consultarClienteConcepto, TOOL_SCHEMA };

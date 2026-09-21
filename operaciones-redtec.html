@@ -346,6 +346,7 @@ const S = {
   transfDia:null,            // 'YYYY-MM-DD' -> [despachado, confirmado]
   transfModo:'con',
   transfTasa:null,
+  transfClienteMes:null,   // 'YYYY-MM' -> [desp, conf] del retail filtrado
   sumarRetDev:false,
 };
 
@@ -748,7 +749,7 @@ function renderAnios(){
   const grupos = MESES.map((_,i)=>{
     const mm = String(i+1).padStart(2,'0');
     const v = {};
-    ult.forEach(a => v[a] = ((fuente[a+'-'+mm]||{})[S.conceptoAnios]) || 0);
+    ult.forEach(a => v[a] = valorMes(fuente, a+'-'+mm, S.conceptoAnios));
     return {rot:MESES[i], v};
   });
   $('#conc-anios').innerHTML = CONC().map(c=>
@@ -776,13 +777,39 @@ function renderAnios(){
   barras($('#g-anios'), grupos, series, {alto:280, parcial});
 }
 
-/* ── Cliente: la serie mensual viene del índice por contraparte ─────────── */
+/* ── Cliente: la serie mensual viene del índice por contraparte ───────────
+   Las transferencias son la excepción: el índice por contraparte sólo guarda
+   lo confirmado, así que si se leyeran de ahí la botonera quedaría de adorno
+   al filtrar por un retail — mostraba el mismo número en los tres modos. Para
+   ese concepto se usa el índice de transferencias, que trae los dos lados. */
+function vTransfCliMes(m){
+  // Si el índice de transferencias cargó, manda ÉL y solo él. Rellenar los
+  // meses que le falten con el número del índice por contraparte mezclaría dos
+  // fuentes dentro de la misma serie: "por confirmar" dejaría de ser despachado
+  // menos confirmado en esos meses, y nadie lo notaría hasta que alguien los
+  // reste a mano en una reunión.
+  if(!S.transfClienteMes) return ((S.serieCliente||{})[m]||{}).transferencias || 0;
+  const t = S.transfClienteMes[m];
+  if(!t) return 0;
+  if(S.transfModo==='des')  return t[0];
+  if(S.transfModo==='pend') return t[0]-t[1];
+  return t[1];
+}
+/** El valor de un concepto para un mes, venga de donde venga la fuente. */
+function valorMes(fuente, mk, concepto){
+  const b = fuente[mk] || {};
+  if(concepto==='retdev') return (b.retiros||0) + (b.devoluciones||0);
+  if(concepto==='transferencias' && S.cliente) return vTransfCliMes(mk);
+  return b[concepto] || 0;
+}
+
 function serieClienteBuckets(){
   const s = S.serieCliente || {};
   const meses = Object.keys(s).sort().filter(m=> m>=S.desde.slice(0,7) && m<=S.hasta.slice(0,7));
   return meses.map(m=>{
     const b={k:m, rot:MESES[+m.slice(5,7)-1]+' '+m.slice(2,4), dias:0};
     CONCEPTOS.forEach(c=> b[c.k]=(s[m]||{})[c.k]||0);
+    b.transferencias = vTransfCliMes(m);
     b.retdev = b.retiros + b.devoluciones;
     return b;
   });
@@ -792,7 +819,8 @@ function totalesCliente(desde,hasta){
   const s=S.serieCliente||{}; const t={dias:0}; CONCEPTOS.forEach(c=>t[c.k]=0);
   for(const m in s){
     if(m < desde.slice(0,7) || m > hasta.slice(0,7)) continue;
-    t.dias++; CONCEPTOS.forEach(c=> t[c.k]+=(s[m][c.k]||0));
+    t.dias++;
+    CONCEPTOS.forEach(c=> t[c.k] += (c.k==='transferencias' ? vTransfCliMes(m) : (s[m][c.k]||0)));
   }
   t.retdev = t.retiros + t.devoluciones;
   return t;
@@ -988,7 +1016,7 @@ let seqCliente = 0;
 
 function limpiarCliente(){
   seqCliente++;
-  $('#cliente').value=''; S.cliente=''; S.serieCliente=null;
+  $('#cliente').value=''; S.cliente=''; S.serieCliente=null; S.transfClienteMes=null;
   $('#aviso').classList.add('hide');
   render();
 }
@@ -1003,8 +1031,16 @@ async function aplicarCliente(){
   $('#aviso').classList.remove('hide');
   $('#aviso').textContent = 'Consultando '+q+'…';
   try{
-    const d = await fetch(API_CLIENTE+'?contraparte='+encodeURIComponent(q)).then(r=>r.json());
+    // Las dos consultas van juntas: la del índice por contraparte trae los
+    // otros conceptos, y la de transferencias trae despachado y confirmado.
+    const [d, tr] = await Promise.all([
+      fetch(API_CLIENTE+'?contraparte='+encodeURIComponent(q)).then(r=>r.json()),
+      fetch(API_TRANSF+'?destino='+encodeURIComponent(q)).then(r=>r.json()).catch(()=>null),
+    ]);
     if(mio !== seqCliente) return;
+    S.transfClienteMes = (tr && tr.encontrado && Array.isArray(tr.por_mes))
+      ? tr.por_mes.reduce((a,x)=>{ a[x.mes]=[x.despachado, x.confirmado]; return a; }, {})
+      : null;
     if(!d.encontrado){
       // Se dice que no calzó, en vez de mostrar un tablero en cero que se lee
       // igual que "este cliente no movió nada".
@@ -1029,7 +1065,9 @@ async function aplicarCliente(){
         ((d.nombres_sumados||[]).length>1
           ? 'son '+d.nombres_sumados.length+' razones sociales y se suman las dos. ' : '')+
         'El cruce por cliente está guardado por mes, así que esta vista va mensual: '+
-        'los totales de arriba, el gráfico y la tabla toman meses completos.';
+        'los totales de arriba, el gráfico y la tabla toman meses completos.'+
+        (S.transfClienteMes ? ' La botonera de transferencias también aplica a este retail.'
+                            : ' Sin datos de despacho para este nombre: las transferencias van sólo confirmadas.');
     }
   }catch(e){
     if(mio !== seqCliente) return;

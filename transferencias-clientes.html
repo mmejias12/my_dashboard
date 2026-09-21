@@ -396,7 +396,7 @@
     <div class="alert-card ndesp">
       <div class="alert-lbl">🟣 SIN DESPACHO</div>
       <div class="alert-val ndesp" id="a-ndesp">—</div>
-      <div class="alert-sub">requeridas no despachadas</div>
+      <div class="alert-sub">requeridas sin registro</div>
       <div class="alert-detail" id="a-ndesp-det">— pallets · — clientes</div>
     </div>
   </div>
@@ -413,7 +413,7 @@
           <tr>
             <th>Cliente</th>
             <th class="num">Solicitada</th>
-            <th class="num">Despachada</th>
+            <th class="num">Registrada</th>
             <th class="num">Confirmada</th>
             <th class="num">⚪ Pend.</th>
             <th class="num">🟠 Riesgo</th>
@@ -792,7 +792,7 @@ function abrirModalCliente(cli) {
     '<div class="modal-kpi"><div class="modal-kpi-lbl">🔴 En reversa</div><div class="modal-kpi-val rev">' + c.opsRev + '</div></div>' +
     '<div class="modal-kpi"><div class="modal-kpi-lbl">🟠 En riesgo</div><div class="modal-kpi-val rgo">' + c.opsRgo + '</div></div>' +
     '<div class="modal-kpi"><div class="modal-kpi-lbl">⚪ Pendientes</div><div class="modal-kpi-val">' + c.opsPend + '</div></div>' +
-    '<div class="modal-kpi"><div class="modal-kpi-lbl">🟣 Sin despacho</div><div class="modal-kpi-val">' + c.opsNdesp + '</div></div>' +
+    '<div class="modal-kpi"><div class="modal-kpi-lbl">🟣 Sin registro</div><div class="modal-kpi-val">' + c.opsNdesp + '</div></div>' +
     '<div class="modal-kpi"><div class="modal-kpi-lbl">✓ Confirmadas</div><div class="modal-kpi-val">' + (c.totalOps - pendientes.length) + '</div></div>' +
   '</div>';
 
@@ -1023,7 +1023,7 @@ function exportarExcel() {
       'Cliente':         c.cliente,
       'Total ops':       c.totalOps,
       'Solicitada':      c.sol,
-      'Despachada':      c.desp,
+      'Registrada':      c.desp,
       'Confirmada':      c.conf,
       'Pend. ops':       c.opsPend,
       'Pend. pallets':   c.pend,
@@ -1051,7 +1051,7 @@ function exportarExcel() {
         'F. Confirmación': fmtFecha(r.fechaConfirmacion),
         'Días sin conf.': dias != null ? dias : '',
         'Solicitada':    r.cantidadSolicitada || 0,
-        'Despachada':    r.cantidadDespachada || 0,
+        'Registrada':    r.cantidadDespachada || 0,
         'Confirmada':    r.cantidadConfirmada || 0,
         'Destino':       r.clienteDestinoStr || '',
         'Operación':     r.operacion || '',

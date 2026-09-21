@@ -2,7 +2,6 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<script src="/sesion.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Transportes · Tiempos en Puntos · REDTEC</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -558,6 +557,11 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
 
     <!-- Aviso de dato incompleto: se enciende solo cuando alguna placa no respondió -->
     <div id="aviso-incompleto" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding:10px 14px;background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.35);border-radius:10px;font-size:12px;color:var(--t1);line-height:1.5"></div>
+
+    <!-- Qué quedó fuera del cruce y por qué. Sin esto, tanto los movimientos
+         internos como los puntos que no se pudieron identificar desaparecen
+         en silencio, que es justo lo que hacía difícil pillar el problema. -->
+    <div id="aviso-cruce" style="display:none;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding:10px 14px;background:var(--s3);border:1px solid var(--border);border-radius:10px;font-size:11.5px;color:var(--t2);line-height:1.6"></div>
 
     <!-- KPIs -->
     <div class="kpi-row" id="kpi-row">
@@ -1957,6 +1961,7 @@ function renderAll(){
   renderChartDona();
   renderTop15();
   renderPuntos();
+  try{ avisarCruce(); }catch(e){}
   renderChoferes();
   poblarFiltrosDetalle();
   renderDetalle();
@@ -2817,6 +2822,19 @@ let OPS_ESTADO = 'sin_cargar';
    que toda la operación de Talca aparecía como "sin operación registrada" en
    el punto, mientras las mismas operaciones salían en "sin parada del GPS" en
    la ficha del camión. Las dos mitades estaban, pero no se juntaban. */
+/* Bodegas que están DENTRO del recinto de REDTEC, aunque su nombre no
+   empiece con "REDTEC". Un movimiento entre dos de estas no lo hace un
+   camión de la flota.
+   PINTURA lo confirmó Mauro (21-09-2026): es la zona de pintura de pallets en
+   la base. REPARACION se agrega por simetría —mismo patrón de nombre, misma
+   naturaleza de proceso interno—; si resultara ser un tercero, se saca de
+   esta lista y vuelve a contarse. */
+const INTERNAS_REDTEC = [
+  'SANTIAGO PINTURA', 'TALCA PINTURA',
+  'SANTIAGO REPARACION', 'TALCA REPARACION'
+];
+let OPS_INTERNAS = [];
+
 const ALIAS_RECINTO = {
   'PRODUCTOS FERNANDEZ P1':    'PF TALCA PLANTA 1',
   'PRODUCTOS FERNANDEZ P2':    'PF TALCA PLANTA 2',
@@ -2882,9 +2900,28 @@ async function cargarOps(){
           2 visitas mostraba "Transferencia · 38 operaciones", que no tenían
           nada que ver con el camión que paró ahí. */
     const esDeLaFlota = o => /REDTEC/i.test(o.bodegaOrigenStr||'') || /REDTEC/i.test(o.bodegaDestinoStr||'');
+
+    /* TERCER FILTRO, agregado el 21-09-2026.
+       Los dos filtros anteriores dejaban pasar los movimientos INTERNOS de
+       REDTEC: la zona de pintura y la de reparación son bodegas propias
+       dentro del recinto, así que una relocalización SANTIAGO PINTURA →
+       REDTEC SANTIAGO cumplía "REDTEC de un lado" y entraba como si fuera
+       trabajo de un camión. No lo es: ese pallet cruza el patio en grúa, no
+       en camión, y son miles de pallets por movimiento.
+       Cuando AMBOS lados son bodegas de REDTEC, la operación no explica
+       ninguna parada y queda fuera. */
+    const esBodegaPropia = b => {
+      const n = normRec(b);
+      return /^REDTEC\b/.test(n) || INTERNAS_REDTEC.some(x => n === normRec(x));
+    };
+    const esMovimientoInterno = o =>
+      esBodegaPropia(o.bodegaOrigenStr||'') && esBodegaPropia(o.bodegaDestinoStr||'');
+
     const vivas = arr.filter(o => !/anulad/i.test(o.etapaOperacion || ''));
-    OPS_RDT = vivas.filter(esDeLaFlota);
-    OPS_DESCARTADAS = vivas.length - OPS_RDT.length;
+    const deFlota = vivas.filter(esDeLaFlota);
+    OPS_INTERNAS = deFlota.filter(esMovimientoInterno);
+    OPS_RDT = deFlota.filter(o => !esMovimientoInterno(o));
+    OPS_DESCARTADAS = vivas.length - deFlota.length;
     IDX_OPS = new Map();
     OPS_RDT.forEach(o => {
       const k = normRec(contraparteOp(o));
@@ -2895,14 +2932,21 @@ async function cargarOps(){
     CLAVES_OPS = [...IDX_OPS.keys()].map(k => ({k, t: toksRec(k)}));
     OPS_ESTADO = 'ok';
     _cacheMatch.clear();
+    MATCH_DEBIL.clear(); MATCH_AMBIGUO.clear();
     /* Las tablas por punto se pintan antes de que llegue el cruce, así que
        sin esto los pallets quedaban en cero hasta cambiar de pestaña. */
     if(DB.length){ try{ renderPuntos(); }catch(e){} }
+    try{ avisarCruce(); }catch(e){}
   }catch(e){
     console.warn('[cruce] no se pudo cargar RDTOut:', e.message);
     OPS_ESTADO = 'error';
   }
 }
+
+/* Puntos cuyo cruce se rechazó a propósito, para poder revisarlos y agregar
+   el alias que corresponda en vez de dejar que el difuso adivine. */
+const MATCH_AMBIGUO = new Set();   // más de una bodega empatada
+const MATCH_DEBIL   = new Set();   // ninguna bodega lo suficientemente parecida
 
 /* Devuelve las operaciones de RDTOut que explican una visita */
 const _cacheMatch = new Map();
@@ -2917,9 +2961,39 @@ function opsDeVisita(punto, dia){
     if(IDX_OPS.has(directa)) clave = directa;
     else if(alias && IDX_OPS.has(normRec(alias))) clave = normRec(alias);
     else {
-      const tp = toksRec(alias || punto); let best = null, bs = 0;
-      CLAVES_OPS.forEach(c => { const s = jaccard(tp, c.t); if(s > bs){ bs = s; best = c.k; } });
-      clave = (bs >= 0.5) ? best : null;
+      /* MATCH DIFUSO — endurecido el 21-09-2026.
+         Antes bastaba Jaccard >= 0.5, y eso alcanzaba para que un punto de UN
+         SOLO token enganchara cualquier bodega de dos tokens que lo
+         contuviera: |{x}| / |{x,y}| = 0.5 exacto. Medido sobre las 136
+         bodegas reales, 60 tokens sueltos producían match espurio —
+         "santiago" solo calzaba con SEIS bodegas distintas (REDTEC SANTIAGO,
+         SANTIAGO PINTURA, DEMARIA CD SANTIAGO, PF SANTIAGO PLANTA, RABIE
+         SANTIAGO, SANTIAGO REPARACION) y el bucle se quedaba con la primera
+         que encontrara. Así fue como una parada genérica en Santiago terminó
+         mostrando las relocalizaciones de la zona de pintura.
+
+         Ahora se exigen tres cosas a la vez:
+           1. el punto debe aportar al menos 2 tokens con contenido,
+           2. deben compartir al menos 2 tokens (uno solo nunca identifica),
+           3. el ganador debe ser ÚNICO: un empate es ambigüedad, no match.
+         Cuando no alcanza, la visita queda como recinto desconocido. Es
+         preferible "no sé qué hizo acá" a colgarle la operación de otro. */
+      const tp = toksRec(alias || punto);
+      if(tp.length < 2){
+        clave = null;
+      } else {
+        let best = null, bs = 0, empate = false;
+        CLAVES_OPS.forEach(c => {
+          const comunes = tp.filter(t => c.t.indexOf(t) !== -1).length;
+          if(comunes < 2) return;
+          const sc = jaccard(tp, c.t);
+          if(sc > bs){ bs = sc; best = c.k; empate = false; }
+          else if(sc === bs && bs > 0 && c.k !== best){ empate = true; }
+        });
+        clave = (bs >= 0.5 && !empate) ? best : null;
+        if(bs >= 0.5 && empate) MATCH_AMBIGUO.add(punto);
+        else if(!clave && tp.length >= 2) MATCH_DEBIL.add(punto);
+      }
     }
     _cacheMatch.set(punto, clave);
   }
@@ -4486,6 +4560,35 @@ async function cargarPlacaExtra(placa, silencioso){
     avisarDatoIncompleto();
     return false;
   }
+}
+
+/* Deja a la vista lo que el cruce decidió NO usar: los movimientos internos
+   de REDTEC y los puntos que no se pudieron identificar contra una bodega.
+   Son decisiones correctas, pero tienen que ser auditables. */
+function avisarCruce(){
+  const el = document.getElementById('aviso-cruce');
+  if(!el) return;
+  if(OPS_ESTADO !== 'ok'){ el.style.display='none'; return; }
+  const partes = [];
+  if(OPS_INTERNAS.length){
+    const pal = OPS_INTERNAS.reduce((t,o)=>t+palletsOp(o),0);
+    partes.push(`<span><b style="color:var(--t1)">${OPS_INTERNAS.length}</b> movimiento(s) internos de REDTEC `
+      + `(<b>${fmtPallets(pal)}</b> pallets entre pintura, reparación y bodega) quedaron fuera: `
+      + `cruzan el patio, no los mueve un camión.</span>`);
+  }
+  const debiles = [...MATCH_DEBIL], amb = [...MATCH_AMBIGUO];
+  if(debiles.length){
+    partes.push(`<span><b style="color:var(--amber)">${debiles.length}</b> punto(s) sin bodega equivalente en RDTOut: `
+      + debiles.slice(0,6).map(escTT).join(', ') + (debiles.length>6?' y '+(debiles.length-6)+' más':'')
+      + `. Sus visitas salen sin operación en vez de colgarles la de otro recinto.</span>`);
+  }
+  if(amb.length){
+    partes.push(`<span><b style="color:var(--amber)">${amb.length}</b> punto(s) ambiguos (empatan con más de una bodega): `
+      + amb.slice(0,6).map(escTT).join(', ') + `. Necesitan un alias explícito.</span>`);
+  }
+  if(!partes.length){ el.style.display='none'; return; }
+  el.style.display = 'flex';
+  el.innerHTML = partes.join(' ');
 }
 
 /* Aviso visible cuando el período mostrado NO está completo. Sin esto, un

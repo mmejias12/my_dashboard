@@ -79,6 +79,7 @@
   .avatar{width:27px;height:27px;border-radius:50%;background:#1a2a1f;color:var(--accent);font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;border:1px solid var(--border-accent);}
   .user-email{font-size:11.5px;color:var(--text-secondary);}
   .logout-btn{color:var(--danger);text-decoration:none;font-size:12px;font-weight:600;padding:4px 10px;border-radius:6px;background:var(--danger-bg);border:1px solid var(--danger-bg);}
+  .ctrl-sep{width:1px;height:20px;background:var(--border-md);margin:0 4px}
   .back-btn{font-size:11.5px;color:var(--text-secondary);text-decoration:none;padding:5px 11px;border:1px solid var(--border-md);border-radius:6px;transition:all .15s;display:flex;align-items:center;gap:5px;}
   .back-btn:hover{color:var(--text-primary);background:var(--bg-hover);}
   .wrap{max-width:1200px;margin:0 auto;padding:0 1.5rem 3rem;}
@@ -217,7 +218,6 @@
   <div class="logo-sep"></div>
   <div class="topbar-title"><span class="live-dot"></span>m3link · Calendario de stock</div>
   <div class="topbar-right">
-    <a href="stocks-unificado.html" class="back-btn"><i class="ti ti-chart-area-line"></i> Vista resumen</a>
     <div class="avatar" id="at-avatar" title="Cargando...">?</div>
     <span class="user-email" id="at-user-email">Cargando...</span>
     <a href="/logout" class="logout-btn">Cerrar sesión</a>
@@ -290,6 +290,13 @@
   <div class="breadcrumb">Operaciones › Stock SAP › Detalle día por día · clic en un día para ver su desglose</div>
 
   <div class="controls">
+    <!-- REGLA: este botón va ACÁ y no en .topbar. El workspace de pestañas le
+         inyecta .topbar{display:none!important} a las vistas embebidas, y
+         mientras estuvo arriba no había forma de volver a Stock & Flujos sin
+         salirse del panel. -->
+    <a href="stocks-unificado.html" class="back-btn" id="btn-volver"
+       title="Volver a Stock &amp; Flujos de pallets"><i class="ti ti-arrow-left"></i> Stock &amp; Flujos</a>
+    <span class="ctrl-sep"></span>
     <span class="ctrl-label">Universo</span>
     <div class="seg" id="seg-universo">
       <button class="on" data-u="clientes" onclick="setUniverso('clientes')">Clientes</button>

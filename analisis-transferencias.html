@@ -45,6 +45,72 @@
   .acc .ab{min-width:30px;height:30px;padding:0 7px;border:1px solid var(--border-md);background:var(--bg-input);color:var(--text-secondary);border-radius:7px;cursor:pointer;font-family:inherit;font-size:12px;display:inline-flex;align-items:center;justify-content:center}
   .acc .ab:hover{background:var(--bg-hover);color:var(--text-primary)}
   .acc .ab.big{font-size:16px;font-weight:700}
+
+  /* ═══ CALENDARIO ═══════════════════════════════════════════════════════
+     El mismo diseño de calendario-retiro-pallets: grilla de 6 columnas
+     (Lun..Sáb, domingo no se opera), celda cuadrada, número del día arriba
+     y el dato abajo a la derecha. Se reusan los tokens que ya tiene esta
+     vista, así que los colores son los mismos del resto de la página. */
+  .cal-card{background:var(--bg-card);border:1px solid var(--border);
+    border-radius:var(--radius-md);padding:16px;margin-bottom:18px}
+  .cal-header{display:flex;justify-content:space-between;align-items:center;
+    gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .cal-nav{display:flex;gap:6px;align-items:center}
+  .cal-nav button{background:var(--bg-input);border:1px solid var(--border-md);
+    color:var(--text-primary);padding:6px 12px;border-radius:var(--radius-sm);
+    cursor:pointer;font-size:13px;font-family:inherit}
+  .cal-nav button:hover:not(:disabled){background:var(--bg-hover)}
+  .cal-nav button:disabled{opacity:.35;cursor:not-allowed}
+  .cal-nav .month{font-size:15px;font-weight:600;min-width:170px;
+    text-align:center;text-transform:capitalize}
+  .cal-tot{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .ct-box{display:flex;flex-direction:column;align-items:center;
+    padding:4px 12px;border-radius:6px;min-width:96px;
+    background:var(--bg-input);border:1px solid var(--border)}
+  .ct-lbl{font-size:9.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px}
+  .ct-val{font-size:15px;font-weight:700;font-family:'JetBrains Mono',monospace}
+  .cal-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:3px}
+  .dow{text-align:center;font-size:10px;font-weight:600;color:var(--text-muted);
+    padding:6px 0;text-transform:uppercase;letter-spacing:.5px}
+  /* Alto fijo y no cuadrado: con 6 columnas al ancho completo, aspect-ratio:1
+     daba celdas de 200px y un mes no entraba en pantalla. */
+  .day{height:82px;background:var(--bg-input);border:1px solid var(--border);
+    border-radius:var(--radius-sm);padding:6px;cursor:pointer;
+    display:flex;flex-direction:column;position:relative;
+    transition:border-color .15s}
+  .day:hover:not(.empty):not(.nodata){border-color:var(--text-secondary)}
+  .day.empty{background:transparent;border:none;cursor:default}
+  .day.nodata{cursor:default;opacity:.45}
+  .day-num{font-size:12px;font-weight:600;color:var(--text-primary)}
+  .day.empty .day-num{color:var(--text-muted)}
+  .day-data{margin-top:auto;text-align:right;line-height:1.15}
+  .day-big{font-size:14px;font-weight:700;font-family:'JetBrains Mono',monospace}
+  .day-sub{font-size:10px;color:var(--text-secondary);margin-top:2px;
+    font-family:'JetBrains Mono',monospace}
+  .day-sub .se{color:var(--c-emi)} .day-sub .st{color:var(--c-tra)}
+  .day-hoy{position:absolute;top:5px;right:6px;width:6px;height:6px;
+    border-radius:50%;background:var(--c-dif)}
+  /* Mapa de calor. Secuencial = un tono; divergente = dos tonos con el
+     neutro al medio. Los tonos son los de las series, así que el color
+     sigue al concepto y no al ranking. */
+  .h-t1{background:rgba(74,222,128,.10);border-color:rgba(74,222,128,.25)}
+  .h-t2{background:rgba(74,222,128,.22);border-color:rgba(74,222,128,.40)}
+  .h-t3{background:rgba(74,222,128,.38);border-color:rgba(74,222,128,.60)}
+  .h-t4{background:rgba(74,222,128,.58);border-color:rgba(74,222,128,.85)}
+  .h-e1{background:rgba(96,165,250,.10);border-color:rgba(96,165,250,.25)}
+  .h-e2{background:rgba(96,165,250,.22);border-color:rgba(96,165,250,.40)}
+  .h-e3{background:rgba(96,165,250,.38);border-color:rgba(96,165,250,.60)}
+  .h-e4{background:rgba(96,165,250,.58);border-color:rgba(96,165,250,.85)}
+  .h-t3 .day-big,.h-t4 .day-big,.h-e3 .day-big,.h-e4 .day-big,
+  .h-t3 .day-num,.h-t4 .day-num,.h-e3 .day-num,.h-e4 .day-num{color:#fff}
+  .h-t3 .day-sub,.h-t4 .day-sub,.h-e3 .day-sub,.h-e4 .day-sub{color:rgba(255,255,255,.85)}
+  .h-t3 .day-sub .se,.h-t4 .day-sub .se,.h-e3 .day-sub .se,.h-e4 .day-sub .se,
+  .h-t3 .day-sub .st,.h-t4 .day-sub .st,.h-e3 .day-sub .st,.h-e4 .day-sub .st{color:#fff}
+  .cal-ley{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;
+    font-size:11px;color:var(--text-secondary)}
+  .cal-ley span{display:inline-flex;align-items:center;gap:6px}
+  .cal-ley i{width:10px;height:10px;border-radius:2px;flex:none}
+  .cal-nota{font-size:11px;color:var(--text-muted);margin-top:8px;line-height:1.5}
   /* Clickeables, chips y modales */
   #tbody tr.clickable{cursor:pointer}
   #tbody tr.clickable:hover td{background:var(--bg-hover)}
@@ -342,6 +408,12 @@
         <button class="seg-btn" data-a="sem">Semana</button>
         <button class="seg-btn on" data-a="mes">Mes</button>
       </div>
+
+      <span class="filter-lbl" style="margin-left:14px">Vista:</span>
+      <div class="seg" id="seg-vista">
+        <button class="seg-btn on" data-v="grafico">&#128202; Gráfico</button>
+        <button class="seg-btn" data-v="calendario">&#128197; Calendario</button>
+      </div>
     </div>
   </div>
 
@@ -375,6 +447,21 @@
       </div>
     </div>
     <div class="chart-wrap"><canvas id="canvas"></canvas></div>
+  </div>
+
+  <!-- CALENDARIO -->
+  <div class="cal-card" id="cal-card" style="display:none">
+    <div class="cal-header">
+      <div class="cal-nav">
+        <button id="cal-prev" title="Mes anterior">&#8249;</button>
+        <div class="month" id="cal-mes">&mdash;</div>
+        <button id="cal-next" title="Mes siguiente">&#8250;</button>
+      </div>
+      <div class="cal-tot" id="cal-tot"></div>
+    </div>
+    <div class="cal-grid" id="cal-grid"></div>
+    <div class="cal-ley" id="cal-leyenda"></div>
+    <div class="cal-nota" id="cal-nota"></div>
   </div>
 
   <!-- TABLA RESUMEN -->
@@ -517,8 +604,9 @@ async function cargarDatos() {
 
     $('kpis').style.display = 'grid';
     $('info-logica').style.display = 'block';
-    $('chart-card').style.display = 'block';
     $('tabla-card').style.display = 'block';
+    calAnio = null;              // período nuevo: el calendario se reubica solo
+    aplicarVista();
   } catch (e) {
     console.error('[m3link]', e);
     setStatus('err', 'Error: ' + e.message);
@@ -559,6 +647,16 @@ function filtrarRaw() {
     return r.clienteOrigenStr === clienteFiltro || r.clienteDestinoStr === clienteFiltro;
   });
 }
+
+// Normaliza el texto de la operación para compararlo: minúsculas y SIN tildes.
+// Hoy RDTOut manda "Emision" sin tilde y por eso los indexOf('emision') de
+// abajo funcionan. El día que alguien arregle la ortografía en el origen,
+// "Emisión" dejaría de calzar y las emisiones caerían a cero sin mostrar un
+// solo error — el peor tipo de falla. Esto lo hace indiferente.
+function normOp(op) {
+  return String(op || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
 // Devuelve las operaciones que caen en un mismo período (mes/semana/día)
 function filasDeClave(clave){
   return filtrarRaw().filter(function(r){
@@ -589,7 +687,7 @@ function agruparDatos() {
   var mapa = {};
 
   datos.forEach(function(r) {
-    var op = (r.operacion || '').toLowerCase();
+    var op = normOp(r.operacion);
 
     // Fecha base = requerida (cuando se programó originalmente la operación).
     // La API entrega: fechaRequerida (siempre), fechaDespacho (nullable),
@@ -625,7 +723,7 @@ function calcularKPIs() {
   var datos = filtrarRaw();
   var totalEmi = 0, totalTraConf = 0;
   datos.forEach(function(r) {
-    var op = (r.operacion || '').toLowerCase();
+    var op = normOp(r.operacion);
     var conf = r.cantidadConfirmada || 0;
     if (op.indexOf('emision') >= 0) totalEmi += conf;
     if (op.indexOf('transfer') >= 0 || op.indexOf('trans diferenciada') >= 0) totalTraConf += conf;
@@ -633,6 +731,214 @@ function calcularKPIs() {
   var dif = totalEmi - totalTraConf;
   var pct = totalEmi > 0 ? dif / totalEmi : 0;
   return { totalEmi: totalEmi, totalTra: totalTraConf, dif: dif, pct: pct };
+}
+
+
+// ═════════════════════════════════════════════════════════════════════════
+//  CALENDARIO  ·  el mismo diseño de calendario-retiro-pallets, con este dato
+//
+//  No reimplanta NADA del criterio: para armar el día llama a agruparDatos()
+//  con el agrupador forzado en 'dia', y el clic en una celda abre el mismo
+//  abrirDrill() del gráfico. Si mañana cambia la definición de transferencia,
+//  cambia en un solo lugar y el calendario la sigue sin que nadie se acuerde
+//  de venir a tocarlo.
+// ═════════════════════════════════════════════════════════════════════════
+var CAL_MESES = ['enero','febrero','marzo','abril','mayo','junio','julio',
+                 'agosto','septiembre','octubre','noviembre','diciembre'];
+var CAL_DOW   = ['Lun','Mar','Mié','Jue','Vie','Sáb'];
+var vistaActiva = 'grafico';
+var calAnio = null, calMes = null;   // mes que se está mirando
+
+/** Corre fn() con otro agrupador y lo deja como estaba, pase lo que pase. */
+function conAgrupador(a, fn) {
+  var previo = agrupadorActivo;
+  agrupadorActivo = a;
+  try { return fn(); } finally { agrupadorActivo = previo; }
+}
+function calPorDia() { return conAgrupador('dia', agruparDatos); }
+
+function calISO(y, m, d) {
+  return y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+}
+
+/** El valor que muestra la celda, según la métrica activa de la vista. */
+function calValor(v) {
+  if (!v) return null;
+  if (metricaActiva === 'pallets')    return { big: v.traConf, tipo: 'tra' };
+  if (metricaActiva === 'diferencia') return { big: v.emi - v.traSol, tipo: 'dif' };
+  if (metricaActiva === 'porcentual') {
+    return { big: v.emi > 0 ? (v.emi - v.traSol) / v.emi : 0, tipo: 'pct' };
+  }
+  return { big: v.emi + v.traSol, tipo: 'ambos' };   // emi-vs-tra
+}
+
+/** Nivel de calor 1..4 dentro del RANGO del mes.
+    Escalar contra 0..max no sirve acá: los días se parecen entre sí, así que
+    todos caían en el nivel 4 y el mapa quedaba de un solo color. Con el rango
+    min..max la variación del mes se ve, que es para lo que está. */
+function calNivel(x, min, max) {
+  if (x == null) return 0;
+  var a = Math.abs(x), lo = Math.abs(min), hi = Math.abs(max);
+  if (hi <= 0) return 0;
+  if (hi - lo < hi * 0.02) return 2;          // mes plano: un tono intermedio
+  var r = (a - lo) / (hi - lo);
+  return r > 0.75 ? 4 : r > 0.5 ? 3 : r > 0.25 ? 2 : 1;
+}
+
+function calMesesConDato(mapa) {
+  var ms = {};
+  for (var k in mapa) ms[k.substring(0, 7)] = true;
+  return Object.keys(ms).sort();
+}
+
+function renderCalendario() {
+  var mapa = calPorDia();
+  var meses = calMesesConDato(mapa);
+  var grid = $('cal-grid');
+
+  if (!meses.length) {
+    $('cal-mes').textContent = '—';
+    grid.innerHTML = '';
+    $('cal-tot').innerHTML = '';
+    $('cal-nota').textContent = 'Sin operaciones en el período cargado.';
+    return;
+  }
+  // Si nunca se eligió mes, o el elegido quedó fuera del período cargado,
+  // se abre en el último con datos: es el que la gente quiere ver primero.
+  var actual = (calAnio == null) ? null : calISO(calAnio, calMes, 1).substring(0, 7);
+  if (!actual || meses.indexOf(actual) < 0) {
+    actual = meses[meses.length - 1];
+    calAnio = parseInt(actual.substring(0, 4), 10);
+    calMes  = parseInt(actual.substring(5, 7), 10) - 1;
+  }
+  var idx = meses.indexOf(actual);
+  $('cal-prev').disabled = (idx <= 0);
+  $('cal-next').disabled = (idx >= meses.length - 1);
+  $('cal-mes').textContent = CAL_MESES[calMes] + ' ' + calAnio;
+
+  var diasMes = new Date(calAnio, calMes + 1, 0).getDate();
+
+  // Máximo del mes para escalar el calor, y totales del encabezado.
+  var max = 0, min = Infinity, totEmi = 0, totTra = 0, totPal = 0, conDato = 0;
+  for (var d = 1; d <= diasMes; d++) {
+    var v = mapa[calISO(calAnio, calMes, d)];
+    if (!v) continue;
+    conDato++;
+    totEmi += v.emi; totTra += v.traSol; totPal += v.traConf;
+    var c = calValor(v);
+    if (!c) continue;
+    var a = Math.abs(c.big);
+    if (a > max) max = a;
+    if (a < min) min = a;
+  }
+  if (min === Infinity) min = 0;
+
+  var etMes = CAL_MESES[calMes].substring(0, 3) + ' ' + String(calAnio).substring(2);
+  $('cal-tot').innerHTML =
+    '<div class="ct-box"><span class="ct-lbl">Emisiones ' + etMes + '</span>' +
+      '<span class="ct-val" style="color:var(--c-emi)">' + fmtNum(totEmi) + '</span></div>' +
+    '<div class="ct-box"><span class="ct-lbl">Transferencias ' + etMes + '</span>' +
+      '<span class="ct-val" style="color:var(--c-tra)">' + fmtNum(totTra) + '</span></div>' +
+    '<div class="ct-box"><span class="ct-lbl">Diferencia ' + etMes + '</span>' +
+      '<span class="ct-val" style="color:var(--c-dif)">' + fmtNum(totEmi - totTra) + '</span></div>';
+
+  grid.innerHTML = '';
+  for (var i = 0; i < CAL_DOW.length; i++) {
+    var h = document.createElement('div');
+    h.className = 'dow'; h.textContent = CAL_DOW[i];
+    grid.appendChild(h);
+  }
+
+  // Grilla de 6 columnas: el domingo no se dibuja porque no se opera. Si el
+  // mes parte domingo, la primera celda es el lunes siguiente.
+  var primerDia = new Date(calAnio, calMes, 1).getDay();   // 0=Dom
+  var hueco = (primerDia === 0) ? 0 : primerDia - 1;
+  for (var i = 0; i < hueco; i++) {
+    var e = document.createElement('div'); e.className = 'day empty';
+    grid.appendChild(e);
+  }
+
+  var hoy = new Date();
+  var hoyISO = calISO(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+
+  for (var d = 1; d <= diasMes; d++) {
+    var dt = new Date(calAnio, calMes, d);
+    if (dt.getDay() === 0) continue;               // domingo fuera
+    var iso = calISO(calAnio, calMes, d);
+    var v = mapa[iso];
+    var cel = document.createElement('div');
+    cel.className = 'day' + (v ? '' : ' nodata');
+
+    var html = '<div class="day-num">' + d + '</div>';
+    if (iso === hoyISO) html += '<div class="day-hoy" title="Hoy"></div>';
+
+    if (v) {
+      var c = calValor(v);
+      var nivel = calNivel(c.big, min, max);
+      if (nivel) {
+        // Divergente sólo donde el signo significa algo: en diferencia y en
+        // porcentaje. Azul = mandan las emisiones, verde = las transferencias.
+        if (c.tipo === 'dif' || c.tipo === 'pct')
+          cel.className += ' h-' + (c.big >= 0 ? 'e' : 't') + nivel;
+        else
+          cel.className += ' h-t' + nivel;
+      }
+      var big = (c.tipo === 'pct') ? fmtPct(c.big) : fmtNum(c.big);
+      var color = c.tipo === 'tra' ? 'var(--c-tra)'
+                : (c.tipo === 'dif' || c.tipo === 'pct') ? 'var(--c-dif)'
+                : 'var(--text-primary)';
+      html += '<div class="day-data"><div class="day-big" style="color:' + color + '">' +
+              big + '</div>' +
+              '<div class="day-sub"><span class="se">' + fmtNum(v.emi) + '</span>' +
+              ' / <span class="st">' + fmtNum(v.traSol) + '</span></div></div>';
+      cel.title = iso + ' · emisiones ' + fmtNum(v.emi) +
+                  ' · transferencias ' + fmtNum(v.traSol) + ' — clic para el detalle';
+      (function (k) {
+        // El detalle es el MISMO modal del gráfico, con el agrupador en día.
+        cel.addEventListener('click', function () {
+          conAgrupador('dia', function () { abrirDrill(k); });
+        });
+      })(iso);
+    } else {
+      html += '<div class="day-data"><div class="day-sub">sin operación</div></div>';
+    }
+    cel.innerHTML = html;
+    grid.appendChild(cel);
+  }
+
+  $('cal-leyenda').innerHTML =
+    '<span><i style="background:var(--c-emi)"></i>Emisiones</span>' +
+    '<span><i style="background:var(--c-tra)"></i>Transferencias</span>' +
+    (metricaActiva === 'diferencia' || metricaActiva === 'porcentual'
+      ? '<span><i style="background:rgba(96,165,250,.58)"></i>Manda emisiones</span>' +
+        '<span><i style="background:rgba(74,222,128,.58)"></i>Mandan transferencias</span>'
+      : '<span><i style="background:rgba(74,222,128,.38)"></i>Más volumen, fondo más fuerte</span>');
+
+  var etiqueta = { 'emi-vs-tra':'emisiones + transferencias', 'diferencia':'la diferencia',
+                   'porcentual':'el % de diferencia', 'pallets':'los pallets transferidos' }[metricaActiva];
+  $('cal-nota').textContent = 'Los totales de la derecha son del mes que se está viendo, ' +
+    'no del período completo de arriba. El número grande de cada día es ' + etiqueta +
+    '; abajo van emisiones / transferencias del día. ' + conDato + ' días con operación en ' +
+    CAL_MESES[calMes] + '. El domingo no se muestra porque no se opera. ' +
+    'Clic en un día para ver el detalle.';
+}
+
+function calCambiarMes(paso) {
+  var meses = calMesesConDato(calPorDia());
+  var actual = calISO(calAnio, calMes, 1).substring(0, 7);
+  var i = meses.indexOf(actual) + paso;
+  if (i < 0 || i >= meses.length) return;
+  calAnio = parseInt(meses[i].substring(0, 4), 10);
+  calMes  = parseInt(meses[i].substring(5, 7), 10) - 1;
+  renderCalendario();
+}
+
+function aplicarVista() {
+  var hayDatos = !!(raw && raw.length);
+  var esCal = (vistaActiva === 'calendario');
+  $('chart-card').style.display = (hayDatos && !esCal) ? 'block' : 'none';
+  $('cal-card').style.display   = (hayDatos &&  esCal) ? 'block' : 'none';
+  if (hayDatos && esCal) renderCalendario();
 }
 
 function actualizarKPIs() {
@@ -847,6 +1153,7 @@ function redibujar() {
   if (!raw.length) return;
   actualizarKPIs();
   dibujarChart();
+  aplicarVista();
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -1029,6 +1336,18 @@ window.addEventListener('DOMContentLoaded', function() {
       redibujar();
     });
   });
+
+  // Selector de vista: gráfico o calendario
+  document.querySelectorAll('#seg-vista .seg-btn').forEach(function(b) {
+    b.addEventListener('click', function() {
+      document.querySelectorAll('#seg-vista .seg-btn').forEach(function(x) { x.classList.remove('on'); });
+      b.classList.add('on');
+      vistaActiva = b.getAttribute('data-v');
+      aplicarVista();
+    });
+  });
+  $('cal-prev').addEventListener('click', function() { calCambiarMes(-1); });
+  $('cal-next').addEventListener('click', function() { calCambiarMes(1); });
 
   // Botones de agrupador
   document.querySelectorAll('#seg-agrupar .seg-btn').forEach(function(b) {

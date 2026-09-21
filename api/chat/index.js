@@ -136,7 +136,7 @@ const TOOLS = [{
     },
     required: ['desde', 'hasta']
   }
-}, STOCK_TOOL, CLIENTE_TOOL];
+}, STOCK_TOOL, CLIENTE_TOOL, resumenOps.TOOL_SCHEMA];
 
 // Caché de prompts: añade una marca de caché a la ÚLTIMA herramienta. Anthropic
 // cachea todo el bloque de definiciones de tools (que no cambia entre mensajes),
@@ -263,6 +263,11 @@ module.exports = async function (context, req) {
             out = await consultarOperacion(bloque.input, context);
             context.log(`tool consultar_operacion ${bloque.input.desde}..${bloque.input.hasta} ` +
                         `(${Date.now() - t0}ms, cache:${out._origen.cache_dias}d vivo:${out._origen.vivo_dias}d)`);
+          } else if (bloque.name === 'consultar_movimiento_cliente') {
+            const t0 = Date.now();
+            out = await resumenOps.consultarClienteConcepto(bloque.input, context);
+            context.log(`tool consultar_movimiento_cliente ${bloque.input.concepto} "${bloque.input.entidad}" ` +
+                        `${bloque.input.desde}..${bloque.input.hasta} (${Date.now() - t0}ms)`);
           } else if (bloque.name === 'consultar_stock') {
             const t0 = Date.now();
             out = await consultarStock(bloque.input);

@@ -82,21 +82,25 @@ module.exports = async function (context, req) {
   // año devuelve 400 y pedir un mes devuelve cuatro.
   const MAX_DIAS_API = 170;   // margen bajo el tope de 180 del proveedor
 
-  let vivas = [], errorApi = null, tramos = 0;
-  try {
-    const trozos = trocear(fDesde, fHasta, rangoValido, MAX_DIAS_API);
-    for (const [ta, tb] of trozos) {
-      if (tramos && !alcanzaTiempo()) break;
+  let vivas = [], errorApi = null, tramos = 0, tramosFallidos = 0;
+  const trozos = trocear(fDesde, fHasta, rangoValido, MAX_DIAS_API);
+  for (const [ta, tb] of trozos) {
+    if (tramos && !alcanzaTiempo()) { tramosFallidos += 1; break; }
+    // El try va DENTRO del bucle: un tramo que falle no puede tirar abajo los
+    // que ya se trajeron. Un rango largo devuelve lo que alcanzó y lo dice,
+    // en vez de responder 502 y dejar al informe sin nada.
+    try {
       const cuerpo = await fetchData(API_HOST, API_PATH + '?desde=' + encodeURIComponent(ta) + '&hasta=' + encodeURIComponent(tb));
       const j = JSON.parse(cuerpo);
       const filas = Array.isArray(j) ? j : (j && Array.isArray(j.data) ? j.data : (j ? [j] : []));
       vivas = vivas.concat(filas);
       tramos++;
+    } catch (err) {
+      tramosFallidos++;
+      if (!errorApi) errorApi = err.message;
     }
-    vivas = cacheOps.dedup(vivas);
-  } catch (err) {
-    errorApi = err.message;
   }
+  vivas = cacheOps.dedup(vivas);
 
   // ── Qué cubrió realmente el API ──────────────────────────────────────────
   // No damos por hecho que respetó el rango: se mira qué fechas volvieron.
@@ -165,6 +169,8 @@ module.exports = async function (context, req) {
     recortadas = antes - todas.length;
   }
 
+  // Con datos parciales se responde 200 y se informa el problema: media
+  // respuesta útil vale más que un error total.
   if (errorApi && !todas.length) {
     context.res = { status: 502, headers: Object.assign({'Content-Type':'application/json'}, CORS),
       body: JSON.stringify({ ok:false, error:'Proxy error', detail: errorApi }) };
@@ -180,6 +186,8 @@ module.exports = async function (context, req) {
     total: todas.length,
     cobertura,
     tramos_api: tramos,
+    tramos_fallidos: tramosFallidos,
+    tramos_pedidos: trozos.length,
     filas_fuera_de_rango_descartadas: recortadas,
     historico: {
       dias_desde_cache: diasCache,

@@ -23,6 +23,7 @@ const finanzas = require('../shared/consulta-finanzas.js');
 const transporte = require('../shared/consulta-transporte.js');
 const resumenOps = require('../shared/resumen-operaciones.js');
 const analytics = require('../shared/analytics.js');
+const contraparte = require('../shared/consulta-contraparte.js');
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
@@ -136,7 +137,7 @@ const TOOLS = [{
     },
     required: ['desde', 'hasta']
   }
-}, STOCK_TOOL, CLIENTE_TOOL, resumenOps.TOOL_SCHEMA];
+}, STOCK_TOOL, CLIENTE_TOOL, contraparte.TOOL_SCHEMA];
 
 // Caché de prompts: añade una marca de caché a la ÚLTIMA herramienta. Anthropic
 // cachea todo el bloque de definiciones de tools (que no cambia entre mensajes),
@@ -263,11 +264,10 @@ module.exports = async function (context, req) {
             out = await consultarOperacion(bloque.input, context);
             context.log(`tool consultar_operacion ${bloque.input.desde}..${bloque.input.hasta} ` +
                         `(${Date.now() - t0}ms, cache:${out._origen.cache_dias}d vivo:${out._origen.vivo_dias}d)`);
-          } else if (bloque.name === 'consultar_movimiento_cliente') {
+          } else if (bloque.name === 'consultar_contraparte') {
             const t0 = Date.now();
-            out = await resumenOps.consultarClienteConcepto(bloque.input, context);
-            context.log(`tool consultar_movimiento_cliente ${bloque.input.concepto} "${bloque.input.entidad}" ` +
-                        `${bloque.input.desde}..${bloque.input.hasta} (${Date.now() - t0}ms)`);
+            out = await contraparte.consultarContraparte(bloque.input, context);
+            context.log(`tool consultar_contraparte ${bloque.input.concepto} "${bloque.input.entidad}" (${Date.now() - t0}ms)`);
           } else if (bloque.name === 'consultar_stock') {
             const t0 = Date.now();
             out = await consultarStock(bloque.input);

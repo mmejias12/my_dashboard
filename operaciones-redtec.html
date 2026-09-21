@@ -304,7 +304,12 @@ const API_TRANSF  = '/api/os-transferencias';
 
 /* MODOS DE TRANSFERENCIA
    Una transferencia tiene dos números y hasta ahora el tablero mostraba uno:
-     despachado · lo que el cliente sacó hacia el retail
+     registrado  · lo que quedó registrado en el sistema al ingresar la
+                   operación. NO es una constatación de que el camión salió:
+                   medido, cantidadSolicitada y cantidadDespachada son el
+                   mismo número en las 14.574 filas revisadas. Por eso el
+                   rótulo dice "Registrado" y no "Despachado" (lo pidió
+                   gerencia, y el dato le da la razón).
      confirmado · lo que el retail reconoció recibir
    La diferencia no es un error de nadie, es el período de confirmación. El
    17-09-2026 esa ambigüedad llegó a gerencia: logística mostró 405.315 y el
@@ -313,8 +318,8 @@ const API_TRANSF  = '/api/os-transferencias';
    Con la botonera los dos salen del mismo lugar y no hay que estimar nada. */
 const T_MODOS = [
   {k:'con',  et:'Confirmado',    exp:'lo que el retail reconoció recibir'},
-  {k:'des',  et:'Despachado',    exp:'lo que salió hacia el retail'},
-  {k:'pend', et:'Por confirmar', exp:'despachado menos confirmado'},
+  {k:'des',  et:'Registrado',    exp:'registrado por sistema al ingresar la operación'},
+  {k:'pend', et:'Por confirmar', exp:'registrado menos confirmado'},
 ];
 
 const CONCEPTOS = [
@@ -846,7 +851,7 @@ function filaQ(nombre, r, max, alHacerClic){
     '<td style="width:120px"><div class="barrita"><i style="width:'+
       (max? Math.max(1, r.despachado/max*100):0)+'%"></i></div></td></tr>';
 }
-const CAB_Q = '<thead><tr><th>Cliente</th><th>Despachado</th><th>Confirmado</th>'+
+const CAB_Q = '<thead><tr><th>Cliente</th><th>Registrado</th><th>Confirmado</th>'+
   '<th>Por confirmar</th><th>Tasa</th><th></th></tr></thead>';
 
 async function abrirQuienes(retail){
@@ -882,7 +887,7 @@ async function abrirQuienes(retail){
     const max = cl.length ? cl[0].despachado : 0;
     const T = d.totales || {};
     $('#q-tit').textContent = 'Quién le transfirió a '+(d.nombres_sumados||[destino]).join(' + ');
-    $('#q-exp').innerHTML = S.desde+' → '+S.hasta+' · despachado <b>'+n0(T.despachado)+
+    $('#q-exp').innerHTML = S.desde+' → '+S.hasta+' · registrado <b>'+n0(T.despachado)+
       '</b>, confirmado <b>'+n0(T.confirmado)+'</b>, por confirmar <b>'+n0(T.por_confirmar)+
       '</b> (tasa '+(T.tasa!=null ? (T.tasa*100).toFixed(2).replace('.',',')+'%' : '—')+')';
     $('#q-cuerpo').innerHTML = cl.length
@@ -1067,7 +1072,7 @@ async function aplicarCliente(){
         'El cruce por cliente está guardado por mes, así que esta vista va mensual: '+
         'los totales de arriba, el gráfico y la tabla toman meses completos.'+
         (S.transfClienteMes ? ' La botonera de transferencias también aplica a este retail.'
-                            : ' Sin datos de despacho para este nombre: las transferencias van sólo confirmadas.');
+                            : ' Sin datos de registro para este nombre: las transferencias van sólo confirmadas.');
     }
   }catch(e){
     if(mio !== seqCliente) return;

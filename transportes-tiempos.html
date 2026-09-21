@@ -2884,7 +2884,16 @@ const ALIAS_RECINTO = {
   'CASTANO CD QULICURA':       'CASTANO QUILICURA',
   'EMBOTELLADORA METROPOLITANA':'EMBOTELLADORA METROPOLITANA S.A.',
   'EMBOTELLADORA EMSA COLBUN': 'EMBO. METROPOLITANA Colbun',
-  'MOLINERA HEREDIA LTDA.':    'HEREDIA MOLINOS SA'           // PROPUESTO
+  /* CORREGIDO EL 21-09-2026, detectado por el propio diagnóstico de cruces
+     débiles: apuntaba a 'HEREDIA MOLINOS SA', un nombre que RDTOut no usa.
+     La bodega real es 'MOL HEREDIA MAIPU PLANTA'. */
+  'MOLINERA HEREDIA LTDA.':    'MOL HEREDIA MAIPU PLANTA'
+  /* PENDIENTE: la geocerca 'EMBOTELLADORA METROPOLITANA' apuntaba a
+     'EMBOTELLADORA METROPOLITANA S.A.', que tampoco existe en RDTOut. La única
+     bodega de ese cliente es 'EMBO. METROPOLITANA Colbun', pero Colbún está en
+     el Maule y la geocerca podría ser la planta de Santiago: mapearlas sería
+     inventar. Se deja sin alias —sus visitas salen "sin operación"— hasta
+     confirmar con Transportes de qué planta se trata. */
 };
 
 const normRec = s => String(s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
@@ -3038,8 +3047,12 @@ function opsDeVisita(punto, dia){
           else if(sc === bs && bs > 0 && c.k !== best){ empate = true; }
         });
         clave = (bs >= 0.5 && !empate) ? best : null;
+        /* Las bases de REDTEC nunca aparecen como contraparte —el índice se
+           arma con el lado que NO es REDTEC—, así que no encontrarlas es lo
+           correcto y no tiene por qué ensuciar el diagnóstico. */
+        const esBasePropia = /^REDTEC\b/.test(catNorm(punto));
         if(bs >= 0.5 && empate) MATCH_AMBIGUO.add(punto);
-        else if(!clave && tp.length >= 2) MATCH_DEBIL.add(punto);
+        else if(!clave && tp.length >= 2 && !esBasePropia) MATCH_DEBIL.add(punto);
       }
     }
     _cacheMatch.set(punto, clave);

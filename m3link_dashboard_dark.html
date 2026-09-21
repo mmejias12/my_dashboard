@@ -904,7 +904,7 @@
     <div class="s-hdr" onclick="tog('g-gerencia',this)" data-cat="cat" data-tip="Gerencia"><i class="ti ti-briefcase s-leading"></i> Gerencia <i class="ti ti-chevron-right s-chevron"></i></div>
     <div class="s-sub" id="g-gerencia" style="max-height:0">
       <a href="cartola-financiera.html" class="s-item"><i class="ti ti-file-invoice"></i> Cartola financiera</a>
-      <a href="operaciones-redtec.html" class="s-item"><i class="ti ti-chart-bar"></i> Operaciones REDTEC</a>
+      <a href="semaforo-gerencial.html" class="s-item"><i class="ti ti-traffic-lights"></i> Semáforo gerencial</a>
       <a href="gerencia-grilla2026.html" class="s-item"><i class="ti ti-dashboard"></i> Dashboard ejecutivo</a>
     </div>
 
@@ -1064,7 +1064,7 @@
         <div class="ret-bodegas" id="s1-bodegas"></div>
         <!-- TOOLTIP CIUDAD SOL/DESP -->
         <div class="em-tooltip" id="em-tooltip">
-          <div class="em-tt-title">📦 Solicitado vs Despachado</div>
+          <div class="em-tt-title">📦 Solicitado vs Registrado</div>
           <div id="em-tt-body">—</div>
           <div class="em-tt-hint">
             <span><span class="dot" style="background:var(--c-uf)"></span>Sol.</span>
@@ -2173,7 +2173,7 @@ function render() {
       + '<td data-label="Operación">' + opBadge(r.operacion) + '</td>'
       + '<td data-label="Etapa" class="' + etapaCls(r.etapaOperacion) + '">'                + (r.etapaOperacion||'&mdash;') + '</td>'
       + '<td data-label="Solicitada" style="text-align:right">' + (r.cantidadSolicitada  != null ? r.cantidadSolicitada  : '&mdash;') + '</td>'
-      + '<td data-label="Despachada" style="text-align:right">' + (r.cantidadDespachada  != null ? r.cantidadDespachada  : '&mdash;') + '</td>'
+      + '<td data-label="Registrada" style="text-align:right">' + (r.cantidadDespachada  != null ? r.cantidadDespachada  : '&mdash;') + '</td>'
       + '<td data-label="Confirmada" style="text-align:right">' + (r.cantidadConfirmada  != null ? r.cantidadConfirmada  : '&mdash;') + '</td>'
       + '<td data-label="Hora ingreso" class="mono" style="color:var(--text-secondary);font-size:10.5px">' + fmtDate(r.horaIngreso) + '</td>'
       + '<td data-label="Usuario" style="color:var(--text-muted);font-size:11px">' + (r.usuario||'&mdash;') + '</td>'
@@ -2445,7 +2445,7 @@ function detectarCambios(prev, curr) {
   if ((curr.cantidadDespachada||0) !== (prev.cantidadDespachada||0)) {
     var deltaD = (curr.cantidadDespachada||0) - (prev.cantidadDespachada||0);
     var signoD = deltaD > 0 ? '+' : '';
-    chips.push({icon:'📦', txt:'Despacho '+signoD+deltaD.toLocaleString('es-CL')+' (total '+ (curr.cantidadDespachada||0).toLocaleString('es-CL') +')', cls:'amber'});
+    chips.push({icon:'📦', txt:'Registrado '+signoD+deltaD.toLocaleString('es-CL')+' (total '+ (curr.cantidadDespachada||0).toLocaleString('es-CL') +')', cls:'amber'});
   }
 
   // Cantidad confirmada
@@ -2569,7 +2569,7 @@ function exportXLSX() {
     { key: 'bodegaDestinoStr',   label: 'Bodega Destino' },
     { key: 'direccion',          label: 'Direccion' },
     { key: 'cantidadSolicitada', label: 'Cant. Solicitada' },
-    { key: 'cantidadDespachada', label: 'Cant. Despachada' },
+    { key: 'cantidadDespachada', label: 'Cant. Registrada' },
     { key: 'cantidadConfirmada', label: 'Cant. Confirmada' },
     { key: 'cantidadPendiente',  label: 'Cant. Pendiente' },
     { key: 'fechaRequerida',     label: 'Fecha Requerida' },
@@ -2619,9 +2619,9 @@ function exportXLSX() {
   padding:.75rem;font-size:11px;color:var(--text-secondary);line-height:1.65;z-index:9999;
   box-shadow:0 10px 30px rgba(0,0,0,.6);pointer-events:none;">
   <div style="font-size:11.5px;font-weight:600;color:var(--e-red);margin-bottom:6px">⚠ ¿Por qué hay pendiente?</div>
-  <strong style="color:var(--text-primary)">Pendiente = Despachado − Confirmado</strong><br><br>
+  <strong style="color:var(--text-primary)">Pendiente = Registrado − Confirmado</strong><br><br>
   Puede indicar:<br>
-  • Pallets despachados aún no confirmados por el cliente<br>
+  • Pallets registrados aún no confirmados por el cliente<br>
   • Diferencias en recepción (daño, merma o rechazo)<br>
   • Operación aún en curso (no cerrada)<br>
   • Error de registro o ajuste pendiente

@@ -2909,11 +2909,26 @@ function diasDeOp(o){
     .map(f => String(f||'').slice(0,10)).filter(Boolean);
 }
 
+/* Rango que ya está cargado en OPS_RDT. Ahora que el período pedido importa,
+   un cambio de fechas tiene que volver a consultar: antes daba igual porque
+   siempre llegaba la misma ventana del proveedor. */
+let OPS_RANGO = null;
 async function cargarOps(){
-  if(OPS_ESTADO === 'ok' || OPS_ESTADO === 'cargando') return;
+  const _fi = fmtMenosDias(document.getElementById('fi').value || fmt(new Date()), 3);
+  const _ff = document.getElementById('ff').value || fmt(new Date());
+  const cubre = OPS_RANGO && OPS_RANGO.fi <= _fi && OPS_RANGO.ff >= _ff;
+  if(OPS_ESTADO === 'cargando') return;
+  if(OPS_ESTADO === 'ok' && cubre) return;
   OPS_ESTADO = 'cargando';
   try{
-    const r = await fetch('/api/ops?desde=2026-01-01&hasta=2026-12-31', {signal: AbortSignal.timeout(60000)});
+    /* Se pide SÓLO el período en pantalla, con 3 días de margen hacia atrás
+       para las operaciones que se confirman al día siguiente.
+       Antes se pedía el año completo (2026-01-01..2026-12-31). Eso funcionaba
+       por accidente: los parámetros iban con otro nombre y el API nunca los
+       recibía. Al corregir los nombres, el año entero pasó a chocar con el
+       tope de 180 días del proveedor (RANGE_TOO_LARGE) y el cruce se caía
+       entero. Medido en producción el 21-09-2026. */
+    const r = await fetch('/api/ops?desde=' + _fi + '&hasta=' + _ff, {signal: AbortSignal.timeout(60000)});
     const j = await r.json();
     const arr = Array.isArray(j) ? j : (j.data || j.items || j.result || []);
     /* DOS FILTROS, y el segundo es el que hace que los números cierren:
@@ -2962,6 +2977,7 @@ async function cargarOps(){
     });
     CLAVES_OPS = [...IDX_OPS.keys()].map(k => ({k, t: toksRec(k)}));
     OPS_ESTADO = 'ok';
+    OPS_RANGO = {fi:_fi, ff:_ff};
     _cacheMatch.clear();
     MATCH_DEBIL.clear(); MATCH_AMBIGUO.clear();
     /* Las tablas por punto se pintan antes de que llegue el cruce, así que

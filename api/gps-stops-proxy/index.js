@@ -1,4 +1,5 @@
 const https = require('https');
+const cacheGps = require('../shared/cache-gps.js');
 
 const API_HOST = 'web1ws.shareservice.co';
 const API_PATH = '/WsReports.asmx/GetStopsDataRangeByPlate';
@@ -148,8 +149,58 @@ module.exports = async function (context, req) {
 
   var startMs = Date.now();
   _t0 = startMs;
-  var throttled = await runWithThrottle(plates, function(plate){
-    return queryPlateUntilData(plate, sStartDate1, sStartDate2, iTime);
+
+  // ── CACHÉ ────────────────────────────────────────────────────────────────
+  // Un día cerrado ya no cambia, así que se sirve del blob y no se le vuelve a
+  // preguntar al proveedor. Sólo los días de la ventana viva se consultan en
+  // vivo. Con ?fresco=1 se salta el caché (para comprobar contra la fuente).
+  var soloFresco = q.fresco === '1' || q.fresco === 'true';
+  var dDesde = String(sStartDate1).slice(0,10).replace(/\//g,'-');
+  var dHasta = String(sStartDate2).slice(0,10).replace(/\//g,'-');
+
+  var cacheItems = [], cacheInfo = {usado:false};
+  var placasEnVivo = plates;
+
+  if (!soloFresco && !verCuenta && cacheGps.hayStorage()) {
+    try {
+      var cont = cacheGps.getContainer();
+      var lect = await cacheGps.leerRango(cont, plates, dDesde, dHasta);
+      cacheItems = lect.items;
+      // Una patente se consulta en vivo sólo si le falta algún día cerrado o
+      // tiene días dentro de la ventana viva. Si su historia está completa en
+      // el caché, no se toca al proveedor: ahí está el ahorro de los 21 s.
+      var necesita = {};
+      lect.faltantes.forEach(function(x){ necesita[x.placa] = 1; });
+      lect.vivos.forEach(function(x){ necesita[x.placa] = 1; });
+      placasEnVivo = plates.filter(function(p){ return necesita[p]; });
+      cacheInfo = {
+        usado: true,
+        faltan_cerrados: lect.faltantes.length,
+        dias_desde_cache: lect.dias_cache,
+        paradas_desde_cache: cacheItems.length,
+        placas_resueltas_sin_consultar: plates.length - placasEnVivo.length,
+        dias_vivos: cacheGps.DIAS_VIVOS,
+        primer_dia_vivo: cacheGps.desdeVivo()
+      };
+    } catch (e) {
+      // El caché NUNCA puede romper la consulta: si falla, se sigue en vivo.
+      cacheInfo = {usado:false, faltan_cerrados:-1, error:e.message};
+      cacheItems = []; placasEnVivo = plates;
+    }
+  }
+
+  // Si la parte cerrada del rango ya está completa en el caché, al proveedor
+  // sólo se le pide la ventana viva: respuesta más chica y menos carga sobre
+  // un API que ya nos limita. Si falta algún día cerrado, se pide el rango
+  // entero para poder sembrarlo.
+  var vivoDesde = sStartDate1, vivoHasta = sStartDate2;
+  if (cacheInfo.usado && cacheInfo.faltan_cerrados === 0 && dHasta >= cacheGps.desdeVivo()) {
+    var ini = dDesde > cacheGps.desdeVivo() ? dDesde : cacheGps.desdeVivo();
+    vivoDesde = ini.replace(/-/g,'/') + ' 00:00:00';
+  }
+
+  var throttled = await runWithThrottle(placasEnVivo, function(plate){
+    return queryPlateUntilData(plate, vivoDesde, vivoHasta, iTime);
   });
   var results    = throttled.results;
   var pendientes = throttled.pendientes;
@@ -161,6 +212,14 @@ module.exports = async function (context, req) {
   var okCount   = 0;
   var vistos    = {};   // dedup por placa|location|start
   var duplicados = 0;
+
+  // Lo que vino del caché entra primero y participa del dedup, para que una
+  // parada que esté en ambos lados no se cuente dos veces.
+  cacheItems.forEach(function(it){
+    var k = it.plate+'|'+it.location+'|'+it.start;
+    if (vistos[k]) { duplicados++; return; }
+    vistos[k] = 1; allItems.push(it);
+  });
 
   results.forEach(function(r) {
     if (!r.ok) {
@@ -189,9 +248,54 @@ module.exports = async function (context, req) {
     }
   });
 
+  // Patentes que ni se consultaron porque el caché ya las tenía completas.
+  var resueltasCache = plates.filter(function(p){ return placasEnVivo.indexOf(p) === -1; });
+  resueltasCache.forEach(function(p){
+    var n = cacheItems.filter(function(i){ return i.plate === p; }).length;
+    var cho = (cacheItems.find(function(i){ return i.plate === p && i.name; })||{}).name || null;
+    estados.push({plate:p, estado:'con_datos', origen:'cache', intentos:0, paradas:n, chofer:cho});
+    if (n > 0) okCount++;
+  });
+
   bloqueadas.forEach(function(p){
     estados.push({plate:p, estado:'bloqueada', motivo:'identificador comodín: devuelve la cuenta completa, no un vehículo. Usar ?cuenta=1 si se quiere a propósito.'});
   });
+
+  // ── SEMBRAR EL CACHÉ ─────────────────────────────────────────────────────
+  // Sólo se guardan los días CERRADOS, y sólo de las patentes que respondieron
+  // bien: guardar un día de una patente que falló congelaría un cero falso.
+  var guardados = 0;
+  if (!soloFresco && !verCuenta && cacheGps.hayStorage()) {
+    try {
+      var cont2 = cacheGps.getContainer();
+      var buenas = {};
+      estados.forEach(function(e){ if (e.estado === 'con_datos' && e.origen !== 'cache') buenas[e.plate] = 1; });
+      var vivosItems = allItems.filter(function(i){ return buenas[i.plate]; });
+      var grupos = cacheGps.agruparPorDia(vivosItems).filter(function(g){ return cacheGps.diaCerrado(g.fecha); });
+
+      // Un día cerrado SIN paradas también hay que guardarlo, si no se vuelve a
+      // preguntar por él para siempre. Se completan los días vacíos del rango.
+      var conDatos = {};
+      grupos.forEach(function(g){ conDatos[g.placa+'|'+g.fecha] = 1; });
+      cacheGps.rangoDias(dDesde, dHasta).forEach(function(f){
+        if (!cacheGps.diaCerrado(f)) return;
+        Object.keys(buenas).forEach(function(p){
+          if (!conDatos[p+'|'+f]) grupos.push({placa:p, fecha:f, chofer:null, paradas:[]});
+        });
+      });
+
+      var LOTE = 16;
+      for (var i = 0; i < grupos.length; i += LOTE) {
+        if (!alcanzaPara(3000)) break;   // nunca pasarse del presupuesto por guardar
+        var lote = grupos.slice(i, i+LOTE);
+        await Promise.all(lote.map(function(g){
+          return cacheGps.guardarDia(cont2, g.placa, g.fecha, g.paradas, g.chofer).catch(function(){ return null; });
+        }));
+        guardados += lote.length;
+      }
+    } catch (e) { /* guardar es best-effort: nunca rompe la respuesta */ }
+  }
+  cacheInfo.dias_guardados = guardados;
 
   var sinRespuesta = estados.filter(function(e){return e.estado==='sin_respuesta';}).length;
   var limitadas    = estados.filter(function(e){return e.estado==='limite_proveedor';}).length;
@@ -214,6 +318,7 @@ module.exports = async function (context, req) {
       ok:true, desde:sStartDate1, hasta:sStartDate2,
       time:iTime, elapsedMs:elapsedMs,
       total:allItems.length, items:allItems, errors:errors,
+      cache: cacheInfo,
       // Nuevo: estado por placa. 'sin_respuesta' NO significa que el camión
       // estuvo detenido; significa que el dato no llegó y no se puede concluir.
       placas: estados,

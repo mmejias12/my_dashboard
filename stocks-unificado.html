@@ -69,6 +69,37 @@
   th.col-cuadre, td.col-cuadre { text-align:center !important; }
   .warn-note { font-size:11px; color:var(--warn); margin-top:8px; display:none; }
 
+  /* ═══ SELECTOR DE PERÍODO ══════════════════════════════════════════════
+     El mismo constructor de OPERACIONES REDTEC y de Emisiones vs
+     Transferencias. #f-desde y #f-hasta siguen siendo los mismos inputs que
+     lee rangoActual(); sólo cambia el envoltorio. */
+  .rg{position:relative;display:inline-block}
+  .rg-pill{display:inline-flex;align-items:center;gap:6px;background:var(--bg-input);
+    border:1px solid var(--border-md);border-radius:var(--radius-sm);padding:3px 4px}
+  .rg-pill button{background:transparent;border:0;color:var(--text-secondary);cursor:pointer;
+    font:inherit;font-size:14px;padding:2px 7px;border-radius:5px;line-height:1}
+  .rg-pill button:hover:not(:disabled){background:var(--bg-hover);color:var(--text-primary)}
+  .rg-pill button:disabled{opacity:.3;cursor:not-allowed}
+  .rg-txt{font-size:12.5px;min-width:200px;text-align:center;cursor:pointer;
+    padding:3px 8px;border-radius:5px;color:var(--text-primary);font-variant-numeric:tabular-nums}
+  .rg-txt:hover{background:var(--bg-hover)}
+  .rg-pop{position:absolute;top:calc(100% + 7px);left:0;z-index:80;background:var(--bg-card);
+    border:1px solid var(--border-md);border-radius:11px;padding:12px;
+    box-shadow:0 20px 55px rgba(0,0,0,.45);display:none;min-width:320px}
+  .rg-pop.on{display:block}
+  .rg-ata{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}
+  .rg-ata button{background:var(--bg-input);border:1px solid var(--border);
+    color:var(--text-secondary);border-radius:7px;padding:7px 9px;font:inherit;
+    font-size:11.5px;cursor:pointer;text-align:left}
+  .rg-ata button:hover{border-color:var(--accent);color:var(--text-primary)}
+  .rg-ata button.on{background:var(--accent-dim);border-color:var(--border-accent);
+    color:var(--accent);font-weight:600}
+  .rg-campos{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .rg-campos label{font-size:9.5px;color:var(--text-muted);text-transform:uppercase;
+    letter-spacing:.5px;display:block;margin-bottom:3px}
+  .rg-campos input{width:100%}
+
+
   * { box-sizing:border-box; margin:0; padding:0; }
   html,body { height:100%; font-family:'Inter',-apple-system,sans-serif; font-size:13px; background:var(--bg-page); color:var(--text-primary); -webkit-font-smoothing:antialiased; }
 
@@ -215,18 +246,20 @@
     </div>
 
     <span class="ctrl-label" style="margin-left:8px">Período</span>
-    <div class="seg" id="seg-periodo">
-      <button data-p="mtd" onclick="setPeriodo('mtd')">Mes actual</button>
-      <button class="on" data-p="ytd" onclick="setPeriodo('ytd')">Año a la fecha</button>
-      <button data-p="180" onclick="setPeriodo('180')">Últimos 180d</button>
-      <button data-p="custom" onclick="setPeriodo('custom')">Personalizado</button>
+    <div class="rg" id="rg">
+      <div class="rg-pill">
+        <button id="rg-prev" title="Período anterior">&#8249;</button>
+        <div class="rg-txt" id="rg-txt">&mdash;</div>
+        <button id="rg-next" title="Período siguiente">&#8250;</button>
+      </div>
+      <div class="rg-pop" id="rg-pop">
+        <div class="rg-ata" id="rg-atajos"></div>
+        <div class="rg-campos">
+          <div><label>Desde</label><input type="date" id="f-desde"></div>
+          <div><label>Hasta</label><input type="date" id="f-hasta"></div>
+        </div>
+      </div>
     </div>
-
-    <span id="custom-range" style="display:none;align-items:center;gap:8px">
-      <input type="date" id="f-desde">
-      <span style="color:var(--text-muted)">→</span>
-      <input type="date" id="f-hasta">
-    </span>
 
     <span class="ctrl-label" id="lbl-detalle" style="margin-left:8px;display:none">Detalle</span>
     <div class="seg" id="seg-detalle" style="display:none">
@@ -440,11 +473,131 @@ function setDetalle(d){
   document.querySelectorAll('#seg-detalle button').forEach(function(b){ b.classList.toggle('on', b.dataset.d===d); });
   if(hayDatos()) render();
 }
+
+/* ═════════════════════════════════════════════════════════════════════════
+   SELECTOR DE PERÍODO · el mismo constructor del resto de la plataforma
+
+   Antes: cuatro botones fijos y un rango "Personalizado" escondido detrás de
+   uno de ellos. Ahora el período siempre está a la vista, escrito en claro, y
+   las flechas corren la ventana completa.
+
+   Los atajos NO reimplantan las fechas: llaman a los mismos ayer(),
+   primerDiaMes(), primerDiaAnio() y menosDias() que ya usaba rangoActual(),
+   así que "Mes actual" sigue significando exactamente lo mismo que antes —
+   incluido el caso del día 1, que cae al mes anterior en vez de dar un rango
+   invertido. Y como todo queda resuelto en #f-desde/#f-hasta, rangoActual()
+   sigue funcionando sin tocarle una línea.
+   ═════════════════════════════════════════════════════════════════════════ */
+var RG_MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+
+var RG_ATAJOS = [
+  ['Mes actual', function(){
+      var ini = primerDiaMes(), h = ayer();
+      // Mismo cuidado que tenía rangoActual(): el día 1 no tiene días cerrados.
+      if (h < ini) ini = new Date(ini.getFullYear(), ini.getMonth()-1, 1, 12);
+      return [ini, h]; }],
+  ['Mes pasado', function(){
+      var d = hoy();
+      return [new Date(d.getFullYear(), d.getMonth()-1, 1, 12),
+              new Date(d.getFullYear(), d.getMonth(), 0, 12)]; }],
+  ['Últimos 90 días',  function(){ return [menosDias(90), ayer()]; }],
+  ['Últimos 180 días', function(){ return [menosDias(180), ayer()]; }],
+  ['Año a la fecha',   function(){ return [primerDiaAnio(), ayer()]; }],
+  ['Año pasado',       function(){ var a = hoy().getFullYear() - 1;
+      return [new Date(a,0,1,12), new Date(a,11,31,12)]; }],
+];
+
+function rgDe(v){ return new Date(v + 'T12:00:00'); }
+function rgRotulo(a, b){
+  if (!a || !b) return '—';
+  var d = rgDe(a), h = rgDe(b);
+  var f = function(x){ return x.getDate() + ' ' + RG_MESES[x.getMonth()] + ' ' + x.getFullYear(); };
+  return f(d) + '  →  ' + f(h);
+}
+/** Marca el atajo que calza exactamente con el rango puesto, si hay alguno. */
+function rgMarcarAtajo(){
+  var a = document.getElementById('f-desde').value,
+      b = document.getElementById('f-hasta').value;
+  document.querySelectorAll('#rg-atajos button').forEach(function(btn){
+    var r = RG_ATAJOS[+btn.dataset.i][1]();
+    btn.classList.toggle('on', iso(r[0]) === a && iso(r[1]) === b);
+  });
+}
+function rgPintar(){
+  var a = document.getElementById('f-desde').value,
+      b = document.getElementById('f-hasta').value;
+  document.getElementById('rg-txt').textContent = rgRotulo(a, b);
+  var ok = !!(a && b && a <= b);
+  document.getElementById('rg-prev').disabled = !ok;
+  document.getElementById('rg-next').disabled = !ok;
+  rgMarcarAtajo();
+}
+function rgFijar(desde, hasta, cargarYa){
+  document.getElementById('f-desde').value = (typeof desde === 'string') ? desde : iso(desde);
+  document.getElementById('f-hasta').value = (typeof hasta === 'string') ? hasta : iso(hasta);
+  // Todo pasa por la rama 'custom', que es la que resuelve un rango explícito.
+  periodo = 'custom';
+  rgPintar();
+  if (cargarYa !== false) cargar();
+}
+/** Mueve la ventana entera; recortar un extremo la iría achicando sola. */
+function rgDesplazar(signo){
+  var a = document.getElementById('f-desde').value,
+      b = document.getElementById('f-hasta').value;
+  if (!a || !b) return;
+  var n = Math.round((rgDe(b) - rgDe(a)) / 86400000) + 1;
+  var d1 = rgDe(a), d2 = rgDe(b);
+  d1.setDate(d1.getDate() + signo*n);
+  d2.setDate(d2.getDate() + signo*n);
+  // Nunca hacia el futuro: los días sin cerrar no existen en el stock.
+  var tope = ayer();
+  if (d2 > tope) { var dif = Math.round((d2 - tope)/86400000);
+    d1.setDate(d1.getDate() - dif); d2 = tope; }
+  rgFijar(d1, d2);
+}
+
+function rgIniciar(){
+  var cont = document.getElementById('rg-atajos');
+  cont.innerHTML = RG_ATAJOS.map(function(x, i){
+    return '<button data-i="' + i + '">' + x[0] + '</button>';
+  }).join('');
+  cont.querySelectorAll('button').forEach(function(b){
+    b.addEventListener('click', function(){
+      var r = RG_ATAJOS[+b.dataset.i][1]();
+      rgFijar(r[0], r[1]);
+      document.getElementById('rg-pop').classList.remove('on');
+    });
+  });
+  document.getElementById('rg-txt').addEventListener('click', function(){
+    document.getElementById('rg-pop').classList.toggle('on');
+  });
+  document.getElementById('rg-prev').addEventListener('click', function(){ rgDesplazar(-1); });
+  document.getElementById('rg-next').addEventListener('click', function(){ rgDesplazar(1); });
+  // Captura: en burbuja el clic de afuera se pierde entre los repintados.
+  document.addEventListener('click', function(e){
+    if (!e.target.closest || !e.target.closest('#rg'))
+      document.getElementById('rg-pop').classList.remove('on');
+  }, true);
+  ['f-desde','f-hasta'].forEach(function(id){
+    document.getElementById(id).addEventListener('change', function(){
+      periodo = 'custom'; rgPintar(); cargar();
+    });
+  });
+  // Arranca en el mismo período que traía por defecto: año a la fecha.
+  var r = RG_ATAJOS[4][1]();
+  rgFijar(r[0], r[1], false);
+}
+
+/* Queda por compatibilidad: ya no hay botones de período ni rango escondido,
+   pero algo más del archivo (o un enlace viejo) puede seguir llamándola. */
 function setPeriodo(p){
-  periodo=p;
-  document.querySelectorAll('#seg-periodo button').forEach(function(b){ b.classList.toggle('on', b.dataset.p===p); });
-  document.getElementById('custom-range').style.display = (p==='custom')?'inline-flex':'none';
-  if(p!=='custom') cargar();
+  periodo = p;
+  if (p !== 'custom') {
+    var i = {mtd:0, ytd:4, '180':3}[p];
+    if (i != null) { var r = RG_ATAJOS[i][1](); rgFijar(r[0], r[1]); return; }
+    cargar();
+  }
+  if (typeof rgPintar === 'function') rgPintar();
 }
 
 /* Resuelve rango [desde,hasta] Date según período elegido */
@@ -927,6 +1080,10 @@ function toggleTheme(){ applyTheme(temaActual==='dark'?'light':'dark'); }
    La vista abre mostrando el año a la fecha sin que nadie apriete "Cargar".
    Los meses se piden en paralelo y quedan en sessionStorage, así que volver
    a entrar en la misma sesión es instantáneo. */
+/* El selector se arma ANTES de la precarga: deja el rango por defecto escrito
+   en #f-desde/#f-hasta, que es de donde cargar() lo va a leer. */
+rgIniciar();
+
 (function precargar(){
   autoCarga=true;
   cargar().catch(function(e){ console.error('[Stock unificado] precarga falló', e); })

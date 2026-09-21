@@ -46,6 +46,39 @@
   .acc .ab:hover{background:var(--bg-hover);color:var(--text-primary)}
   .acc .ab.big{font-size:16px;font-weight:700}
 
+
+  /* ═══ SELECTOR DE PERÍODO ══════════════════════════════════════════════
+     El mismo constructor de OPERACIONES REDTEC, en vez de los dos
+     datepicker del navegador. Los inputs #d1/#d2 siguen existiendo dentro
+     del popover: todo el resto del archivo los lee, así que cambiar el
+     envoltorio no toca la lógica de carga. */
+  .rg{position:relative;display:inline-block}
+  .rg-pill{display:inline-flex;align-items:center;gap:6px;background:var(--bg-input);
+    border:1px solid var(--border-md);border-radius:var(--radius-sm);padding:3px 4px}
+  .rg-pill button{background:transparent;border:0;color:var(--text-secondary);cursor:pointer;
+    font:inherit;font-size:14px;padding:2px 7px;border-radius:5px;line-height:1}
+  .rg-pill button:hover:not(:disabled){background:var(--bg-hover);color:var(--text-primary)}
+  .rg-pill button:disabled{opacity:.3;cursor:not-allowed}
+  .rg-txt{font-size:13px;font-family:'JetBrains Mono',monospace;min-width:205px;
+    text-align:center;cursor:pointer;padding:3px 8px;border-radius:5px;color:var(--text-primary)}
+  .rg-txt:hover{background:var(--bg-hover)}
+  .rg-pop{position:absolute;top:calc(100% + 7px);left:0;z-index:80;background:var(--bg-card);
+    border:1px solid var(--border-md);border-radius:11px;padding:12px;
+    box-shadow:0 20px 55px rgba(0,0,0,.55);display:none;min-width:320px}
+  .rg-pop.on{display:block}
+  .rg-ata{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}
+  .rg-ata button{background:var(--bg-input);border:1px solid var(--border);
+    color:var(--text-secondary);border-radius:7px;padding:7px 9px;font:inherit;
+    font-size:11.5px;cursor:pointer;text-align:left;position:relative}
+  .rg-ata button:hover{border-color:var(--accent);color:var(--text-primary)}
+  .rg-ata button .pesado{color:var(--c-dif);font-size:13px;line-height:1}
+  .rg-campos{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .rg-campos label{font-size:9.5px;color:var(--text-muted);text-transform:uppercase;
+    letter-spacing:.5px;display:block;margin-bottom:3px}
+  .rg-aviso{margin-top:10px;font-size:11px;line-height:1.45;color:var(--text-secondary);
+    background:var(--bg-input);border:1px solid var(--border);
+    border-left:2px solid var(--c-dif);border-radius:7px;padding:8px 10px;display:none}
+  .rg-aviso.on{display:block}
   /* ═══ CALENDARIO ═══════════════════════════════════════════════════════
      El mismo diseño de calendario-retiro-pallets: grilla de 6 columnas
      (Lun..Sáb, domingo no se opera), celda cuadrada, número del día arriba
@@ -376,8 +409,21 @@
   <div class="filters-card">
     <div class="filters-row">
       <span class="filter-lbl">Período:</span>
-      <input type="date" id="d1" class="ctrl-date">
-      <input type="date" id="d2" class="ctrl-date">
+      <div class="rg" id="rg">
+        <div class="rg-pill">
+          <button id="rg-prev" title="Período anterior">&#8249;</button>
+          <div class="rg-txt" id="rg-txt">&mdash;</div>
+          <button id="rg-next" title="Período siguiente">&#8250;</button>
+        </div>
+        <div class="rg-pop" id="rg-pop">
+          <div class="rg-ata" id="rg-atajos"></div>
+          <div class="rg-campos">
+            <div><label>Desde</label><input type="date" id="d1" class="ctrl-date" style="width:100%"></div>
+            <div><label>Hasta</label><input type="date" id="d2" class="ctrl-date" style="width:100%"></div>
+          </div>
+          <div class="rg-aviso" id="rg-aviso"></div>
+        </div>
+      </div>
 
       <span class="filter-lbl" style="margin-left:14px">Cliente:</span>
       <select id="cliente-filter" class="ctrl-sel">
@@ -941,6 +987,116 @@ function aplicarVista() {
   if (hayDatos && esCal) renderCalendario();
 }
 
+
+// ═════════════════════════════════════════════════════════════════════════
+//  SELECTOR DE PERÍODO  ·  el mismo constructor de OPERACIONES REDTEC
+//
+//  Reemplaza a los dos datepicker del navegador. #d1 y #d2 siguen siendo los
+//  mismos inputs, ahora dentro del popover: el resto del archivo los lee en
+//  cinco lugares y los escucha con 'change', así que nada de eso cambia.
+//
+//  UNA DIFERENCIA CON EL TABLERO DE GERENCIA. Allá el período es gratis —
+//  todo el histórico está bajado. Acá cada cambio vuelve a pedirle el CRUDO a
+//  RDTOut, y eso tiene techo: medido, 30 días son ~13 MB y a los 90 responde
+//  502 por timeout. Por eso los atajos largos avisan antes en vez de dejar
+//  que la vista se caiga sin explicación, que es lo que pasó en la reunión.
+// ═════════════════════════════════════════════════════════════════════════
+var RG_MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+var RG_DIAS_AVISO = 60;   // sobre esto la vista empieza a ser riesgosa
+
+function rgIso(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') +
+         '-' + String(d.getDate()).padStart(2,'0');
+}
+function rgDe(s) { return new Date(s + 'T12:00:00'); }
+function rgHoy() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone:'America/Santiago',
+    year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date());
+}
+function rgSumar(s, n) { var d = rgDe(s); d.setDate(d.getDate()+n); return rgIso(d); }
+function rgDias(a, b) { return Math.round((rgDe(b) - rgDe(a)) / 86400000) + 1; }
+
+var RG_ATAJOS = [
+  ['Este mes',          function(){ var h=rgHoy(); return [h.substring(0,8)+'01', h]; }],
+  ['Mes pasado',        function(){ var d=rgDe(rgHoy()); d.setDate(1); d.setMonth(d.getMonth()-1);
+                                    var a=rgIso(d); d.setMonth(d.getMonth()+1); d.setDate(0);
+                                    return [a, rgIso(d)]; }],
+  ['Últimos 30 días',   function(){ var h=rgHoy(); return [rgSumar(h,-29), h]; }],
+  ['Últimos 60 días',   function(){ var h=rgHoy(); return [rgSumar(h,-59), h]; }],
+  ['Este trimestre',    function(){ var d=rgDe(rgHoy()); var q=Math.floor(d.getMonth()/3)*3;
+                                    return [rgIso(new Date(d.getFullYear(), q, 1)), rgHoy()]; }],
+  ['Este año',          function(){ var h=rgHoy(); return [h.substring(0,4)+'-01-01', h]; }],
+];
+
+function rgRotulo(a, b) {
+  if (!a || !b) return '—';
+  var d = rgDe(a), h = rgDe(b);
+  var f = function(x){ return x.getDate() + ' ' + RG_MESES[x.getMonth()] + ' ' + x.getFullYear(); };
+  return f(d) + '  →  ' + f(h);
+}
+
+/** Refresca el rótulo, las flechas y el aviso de rango largo. */
+function rgPintar() {
+  var a = $('d1').value, b = $('d2').value;
+  $('rg-txt').textContent = rgRotulo(a, b);
+  var ok = !!(a && b && a <= b);
+  $('rg-prev').disabled = !ok;
+  $('rg-next').disabled = !ok;
+  var av = $('rg-aviso');
+  if (ok && rgDias(a, b) > RG_DIAS_AVISO) {
+    av.classList.add('on');
+    av.innerHTML = '<b>' + rgDias(a,b) + ' días.</b> Esta vista baja el detalle crudo de ' +
+      'RDTOut, y sobre los 90 días la consulta suele cortarse por timeout. ' +
+      'Si no carga, achica el rango.';
+  } else {
+    av.classList.remove('on');
+  }
+}
+
+/** Fija el período y dispara la carga, como si se hubieran editado las fechas. */
+function rgFijar(a, b, cargar) {
+  $('d1').value = a;
+  $('d2').value = b;
+  rgPintar();
+  if (cargar !== false && typeof cargarDatos === 'function') cargarDatos();
+}
+
+/** Corre la ventana completa, no un extremo: si no, el período se achica solo. */
+function rgDesplazar(signo) {
+  var a = $('d1').value, b = $('d2').value;
+  if (!a || !b) return;
+  var n = rgDias(a, b);
+  rgFijar(rgSumar(a, signo*n), rgSumar(b, signo*n));
+}
+
+function rgIniciar() {
+  $('rg-atajos').innerHTML = RG_ATAJOS.map(function(x, i) {
+    var r = x[1](), largo = rgDias(r[0], r[1]) > RG_DIAS_AVISO;
+    return '<button data-i="' + i + '"' + (largo ? ' title="Rango largo: puede cortarse"' : '') +
+      '>' + x[0] + (largo ? ' <span class="pesado">&#9888;</span>' : '') + '</button>';
+  }).join('');
+  Array.prototype.forEach.call($('rg-atajos').querySelectorAll('button'), function(b) {
+    b.addEventListener('click', function() {
+      var r = RG_ATAJOS[+b.getAttribute('data-i')][1]();
+      rgFijar(r[0], r[1]);
+      $('rg-pop').classList.remove('on');
+    });
+  });
+  $('rg-txt').addEventListener('click', function(){ $('rg-pop').classList.toggle('on'); });
+  $('rg-prev').addEventListener('click', function(){ rgDesplazar(-1); });
+  $('rg-next').addEventListener('click', function(){ rgDesplazar(1); });
+  // En fase de captura: el popover convive con handlers que repintan y en
+  // burbuja el clic de afuera se pierde.
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest || !e.target.closest('#rg')) $('rg-pop').classList.remove('on');
+  }, true);
+  // Las fechas a mano ya disparan cargarDatos() por su propio listener; acá
+  // sólo se refresca lo que se ve.
+  $('d1').addEventListener('change', rgPintar);
+  $('d2').addEventListener('change', rgPintar);
+  rgPintar();
+}
+
 function actualizarKPIs() {
   var k = calcularKPIs();
   $('k-emi').textContent = fmtNum(k.totalEmi);
@@ -1369,6 +1525,7 @@ window.addEventListener('DOMContentLoaded', function() {
   $('chk-anul').addEventListener('change', function(){ fIncAnul = this.checked; if (raw.length) redibujar(); });
   $('d1').addEventListener('change', cargarDatos);
   $('d2').addEventListener('change', cargarDatos);
+  rgIniciar();
   $('fs-down').addEventListener('click', function(){ fsIdx=Math.max(0,fsIdx-1); applyFS(); });
   $('fs-up').addEventListener('click', function(){ fsIdx=Math.min(FSLEVELS.length-1,fsIdx+1); applyFS(); });
   $('theme-tg').addEventListener('click', function(){ applyTheme(document.documentElement.getAttribute('data-theme')==='light'?'dark':'light'); });

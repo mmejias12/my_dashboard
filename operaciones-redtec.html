@@ -127,6 +127,39 @@ h1,h2{margin:0;font-weight:600;letter-spacing:-.01em}
   font-size:11px;cursor:pointer;padding:2px;text-align:left}
 .verq:hover{color:var(--c-tra)}
 
+
+/* Esquina del KPI de transferencias: el % de confirmación esperado y el
+   informativo. Lo pidió logística — vienen usando 94% de memoria y quieren
+   tenerlo a mano; la (i) muestra la tasa REAL medida para que el número que
+   escriban no salga de la costumbre. */
+.kpi-esq{position:absolute;top:10px;right:11px;display:flex;align-items:center;gap:5px}
+.kpi-pct{display:inline-flex;align-items:center;gap:1px;background:var(--surface-3);
+  border:1px solid var(--line);border-radius:6px;padding:2px 5px}
+.kpi-pct input{width:30px;background:transparent;border:0;color:var(--c-tra);
+  font:inherit;font-size:11.5px;font-weight:600;text-align:right;padding:0;
+  font-variant-numeric:tabular-nums;-moz-appearance:textfield}
+.kpi-pct input::-webkit-outer-spin-button,.kpi-pct input::-webkit-inner-spin-button{
+  -webkit-appearance:none;margin:0}
+.kpi-pct input:focus{outline:none}
+.kpi-pct span{font-size:11.5px;color:var(--c-tra);font-weight:600}
+.kpi-i{width:18px;height:18px;border-radius:50%;border:1px solid var(--line);
+  background:var(--surface-3);color:var(--muted);font-size:11px;font-weight:700;
+  cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;
+  font-family:Georgia,serif;font-style:italic}
+.kpi-i:hover{border-color:var(--c-tra);color:var(--c-tra)}
+.pot{margin-top:7px;padding-top:7px;border-top:1px dashed var(--line);
+  font-size:11.5px;color:var(--text-2);font-variant-numeric:tabular-nums}
+.pot b{color:var(--c-tra);font-size:14px}
+.pot i{font-style:normal;color:var(--muted)}
+/* tabla del informativo */
+.tasas td:first-child,.tasas th:first-child{text-align:left}
+.tasas .usar{background:var(--surface-3);border:1px solid var(--line);color:var(--text-2);
+  border-radius:6px;padding:2px 9px;font:inherit;font-size:11px;cursor:pointer}
+.tasas .usar:hover{border-color:var(--c-tra);color:var(--c-tra)}
+.dest{background:var(--surface-2);border:1px solid var(--line);border-left:2px solid var(--c-tra);
+  border-radius:9px;padding:11px 13px;margin-bottom:12px;font-size:12.5px;color:var(--text-2)}
+.dest b{color:var(--text);font-size:18px;font-variant-numeric:tabular-nums}
+
 /* modal "quién transfirió" */
 .velo{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:90;display:none;
   align-items:flex-start;justify-content:center;padding:48px 16px;overflow:auto}
@@ -352,6 +385,8 @@ const S = {
   transfModo:'con',
   transfTasa:null,
   transfClienteMes:null,   // 'YYYY-MM' -> [desp, conf] del retail filtrado
+  potPct: 94,              // el % que viene usando logística, editable
+  tasasPeriodo: null,      // tasas reales del período, para el informativo
   sumarRetDev:false,
 };
 
@@ -666,9 +701,16 @@ function render(){
       '<div class="v">'+n0(v)+'</div>'+
       '<div class="d '+cls+'">'+(d==null?'<span class="flat">sin período comparable</span>'
         :(pct(d)+' vs '+etiquetaAnioAnterior()))+'</div>'+
-      (esTr ? '<div class="modos" id="modos">'+ T_MODOS.map(m=>
+      (esTr ? '<div class="kpi-esq">'+
+          '<div class="kpi-pct" title="Porcentaje de confirmación esperado">'+
+            '<input id="pot-pct" type="number" min="1" max="100" step="0.1" value="'+S.potPct+'">'+
+            '<span>%</span></div>'+
+          '<button class="kpi-i" id="pot-i" title="Ver las tasas reales medidas">i</button>'+
+        '</div>'+
+        '<div class="modos" id="modos">'+ T_MODOS.map(m=>
           '<button data-m="'+m.k+'"'+(m.k===S.transfModo?' class="on"':'')+
           ' title="'+esc(m.exp)+'">'+m.et+'</button>').join('') +'</div>'+
+        lineaPotencial() +
         '<button class="verq" id="ver-quienes">Quién transfirió →</button>' : '')+
       '</div>';
   }).join('');
@@ -676,6 +718,15 @@ function render(){
     $('#modos').querySelectorAll('button').forEach(b=> b.onclick=()=>{
       S.transfModo=b.dataset.m; indexarMeses(); render(); });
     $('#ver-quienes').onclick = abrirQuienes;
+    $('#pot-i').onclick = abrirTasas;
+    // Se repinta sólo la línea del potencial: un render() completo le sacaría
+    // el foco al campo en mitad de lo que el usuario está escribiendo.
+    $('#pot-pct').oninput = ()=>{
+      const v = parseFloat($('#pot-pct').value);
+      S.potPct = (isFinite(v) && v > 0 && v <= 100) ? v : S.potPct;
+      const cont = $('#pot-linea');
+      if(cont) cont.outerHTML = lineaPotencial();
+    };
   }
 
   // ── Serie temporal
@@ -829,6 +880,127 @@ function totalesCliente(desde,hasta){
   }
   t.retdev = t.retiros + t.devoluciones;
   return t;
+}
+
+
+/* =====================================================================
+   TRANSFERENCIAS POTENCIALES  ·  el % que pide logística, y la tasa real
+
+   Logística viene aplicando 94% a lo registrado para estimar cuánto se va
+   a confirmar. El campo de la esquina deja escribir el número que quieran.
+   La (i) muestra lo que de verdad pasó, medido sobre el período que está
+   en pantalla — para que el número salga de un dato y no de la costumbre.
+
+   Por qué importa: el 17-09 ese mismo 94% produjo 405.315 contra 398.116
+   reales. La tasa de Walmart en esos 12 meses fue 92,33%, y entre retails
+   va de 92% a 99%. Un factor único se equivoca en los dos sentidos.
+   ===================================================================== */
+
+/** Suma despachado/confirmado del período desde la serie diaria. */
+function totalesTransfPeriodo(){
+  let d = 0, c = 0;
+  if(S.cliente && S.transfClienteMes){
+    for(const m in S.transfClienteMes){
+      if(m < S.desde.slice(0,7) || m > S.hasta.slice(0,7)) continue;
+      d += S.transfClienteMes[m][0]; c += S.transfClienteMes[m][1];
+    }
+  } else if(S.transfDia){
+    for(const f of S.fechas){
+      if(f < S.desde || f > S.hasta) continue;
+      const t = S.transfDia[f]; if(!t) continue;
+      d += t[0]; c += t[1];
+    }
+  }
+  return { registrado: d, confirmado: c, tasa: d ? c/d : null };
+}
+
+/** La línea de potencial bajo la botonera. */
+function lineaPotencial(){
+  const t = totalesTransfPeriodo();
+  if(!t.registrado) return '<div class="pot" id="pot-linea">—</div>';
+  const pot = Math.round(t.registrado * S.potPct / 100);
+  const real = t.tasa != null ? (t.tasa*100) : null;
+  // Se dice al lado cuánto da la tasa real: el usuario ve de inmediato si su
+  // supuesto va por encima o por debajo de lo que efectivamente pasó.
+  const cmp = real == null ? '' :
+    ' <i>· real ' + real.toFixed(2).replace('.',',') + '% = ' + n0(t.confirmado) +
+    ' (' + (pot > t.confirmado ? '+' : '') + n0(pot - t.confirmado) + ')</i>';
+  return '<div class="pot" id="pot-linea">Potencial <b>' + n0(pot) + '</b> ' +
+         '<i>= ' + S.potPct + '% de ' + n0(t.registrado) + ' registrados</i>' + cmp + '</div>';
+}
+
+/** Informativo: las tasas reales, medidas sobre el período en pantalla. */
+async function abrirTasas(){
+  $('#velo').classList.add('on');
+  $('#q-tit').textContent = 'Tasa de confirmación real';
+  $('#q-exp').textContent = 'Medida sobre ' + S.desde + ' → ' + S.hasta +
+    '. Es lo que efectivamente confirmaron, no una estimación.';
+  $('#q-cuerpo').innerHTML = '<div class="vacio">Midiendo…</div>';
+
+  const t = totalesTransfPeriodo();
+  let retails = [], totMes = null, desdeMes = null, hastaMes = null;
+  try{
+    const d = await fetch(API_TRANSF+'?desde='+S.desde+'&hasta='+S.hasta).then(r=>r.json());
+    retails = (d && d.retails) || [];
+    totMes  = d && d.totales;      // el mismo corte que la tabla: meses completos
+    desdeMes = d && d.desde; hastaMes = d && d.hasta;
+  }catch(e){ /* se muestra igual el global, que sale del dato ya bajado */ }
+
+  const global = t.tasa != null ? (t.tasa*100) : null;
+  let html = '<div class="dest">Tasa global del período: <b>' +
+    (global==null ? '—' : global.toFixed(2).replace('.',',')+'%') + '</b><br>' +
+    'De ' + n0(t.registrado) + ' registrados se confirmaron ' + n0(t.confirmado) + '.' +
+    (global==null ? '' :
+      ' Con ' + S.potPct + '% la estimación daría ' + n0(Math.round(t.registrado*S.potPct/100)) +
+      ', o sea ' + (Math.round(t.registrado*S.potPct/100) > t.confirmado ? 'de más' : 'de menos') +
+      ' por ' + n0(Math.abs(Math.round(t.registrado*S.potPct/100) - t.confirmado)) + ' pallets.') +
+    '</div>';
+
+  if(retails.length){
+    // El desglose por retail está guardado por MES, así que cuando el período
+    // no calza con meses completos suma más que la caja de arriba. Se dice, y
+    // la tabla lleva su propio total para que cierre consigo misma — un
+    // desglose que no cuadra con su encabezado es el bug que ya arreglamos una
+    // vez en el pop-up de "quién transfirió".
+    const mesesCompletos = totMes && (desdeMes !== S.desde.slice(0,7) ||
+                                      hastaMes !== S.hasta.slice(0,7) ||
+                                      S.desde.slice(8) !== '01' || totMes.despachado !== t.registrado);
+    const tp = totMes ? (totMes.tasa != null ? totMes.tasa*100 : null) : null;
+    html += (mesesCompletos
+      ? '<div class="nota" style="margin:0 0 9px">El desglose por retail está guardado '+
+        'por mes, así que esta tabla cubre <b>meses completos</b> ('+desdeMes+' → '+hastaMes+
+        ') y por eso no suma exactamente igual que la caja de arriba, que va al día.</div>'
+      : '') +
+      '<table class="tasas"><thead><tr><th>Retail</th><th>Registrado</th>' +
+      '<th>Confirmado</th><th>Tasa real</th><th></th></tr></thead><tbody>' +
+      retails.map(r=>{
+        const p = r.tasa != null ? (r.tasa*100) : null;
+        return '<tr><td>'+esc(r.retail)+'</td><td>'+n0(r.despachado)+'</td>'+
+          '<td>'+n0(r.confirmado)+'</td>'+
+          '<td>'+(p==null?'—':p.toFixed(2).replace('.',',')+'%')+'</td>'+
+          '<td style="width:70px">'+(p==null?'':
+            '<button class="usar" data-p="'+p.toFixed(1)+'">usar</button>')+'</td></tr>';
+      }).join('') + '</tbody>' +
+      (totMes ? '<tfoot><tr><th>Total de la tabla</th><th>'+n0(totMes.despachado)+'</th>'+
+        '<th>'+n0(totMes.confirmado)+'</th>'+
+        '<th>'+(tp==null?'—':tp.toFixed(2).replace('.',',')+'%')+'</th>'+
+        '<th>'+(tp==null?'':'<button class="usar" data-p="'+tp.toFixed(1)+'">usar</button>')+
+        '</th></tr></tfoot>' : '') +
+      '</table>' +
+      '<div class="nota">La tasa varía harto entre retails, así que un factor único ' +
+      'se queda corto con unos y largo con otros. «usar» copia esa tasa al campo de la esquina.</div>';
+    // dejar el botón listo antes de engancharlo
+    $('#q-cuerpo').innerHTML = html;
+    $('#q-cuerpo').querySelectorAll('.usar').forEach(b=> b.onclick = ()=>{
+      S.potPct = parseFloat(b.dataset.p);
+      cerrarQuienes();
+      render();
+    });
+    return;
+  }
+  html += '<div class="nota">No se pudo traer el desglose por retail; el global de arriba ' +
+          'sale de la serie que el tablero ya tiene bajada.</div>';
+  $('#q-cuerpo').innerHTML = html;
 }
 
 /* =====================================================================

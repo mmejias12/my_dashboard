@@ -22,16 +22,69 @@ const OPS_PATH = process.env.OS_TRANSP_PATH || '/api/RDTOut/OpsXRangoFechas';
 const RDT_KEY  = process.env.REDTEC_API_KEY || 'm2s_live_ORA0CGEE3oowJ7gc2xYNqTOWmbYS8kMdD-l7hlAxvmE';
 const IVA      = 0.19;
 
-// Trae los viajes crudos del rango (mismo contrato que /api/m3link-viajes-proxy).
-async function traerViajes(desde, hasta) {
-  const url = `${OPS_HOST}${OPS_PATH}?fechaInicial=${encodeURIComponent(desde)}&fechaFinal=${encodeURIComponent(hasta)}`;
-  const r = await fetch(url, { headers: { Accept: 'application/json', 'X-Api-Key': RDT_KEY } });
-  if (!r.ok) {
-    const cuerpo = await r.text().catch(() => '');
-    throw new Error(`RDTOut ${r.status} (${desde}..${hasta}) ${cuerpo.slice(0, 120)}`);
+// Rangos largos (ej. 12 meses) en UNA sola llamada a RDTOut se cuelgan: la
+// respuesta es enorme y la petición nunca vuelve. Por eso partimos el rango en
+// trozos mensuales, los traemos en paralelo (acotado) y con timeout por trozo.
+const FETCH_TIMEOUT_MS = 30000;   // corta un trozo que no responde, en vez de colgarse
+const MAX_CHUNK_DIAS   = 31;      // tamaño de cada trozo
+const CONCURRENCIA     = 4;       // trozos simultáneos (gentil con RDTOut)
+
+const addDias = (iso, n) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+
+// Parte [desde,hasta] en trozos contiguos de <= MAX_CHUNK_DIAS días.
+function trozos(desde, hasta) {
+  const out = [];
+  let ini = desde;
+  while (ini <= hasta) {
+    let fin = addDias(ini, MAX_CHUNK_DIAS - 1);
+    if (fin > hasta) fin = hasta;
+    out.push({ desde: ini, hasta: fin });
+    ini = addDias(fin, 1);
   }
-  const data = await r.json();
-  return Array.isArray(data) ? data : (data.items || data.data || [data]);
+  return out;
+}
+
+// Una llamada a RDTOut con timeout (aborta si no responde).
+async function fetchViajes(desde, hasta) {
+  const url = `${OPS_HOST}${OPS_PATH}?fechaInicial=${encodeURIComponent(desde)}&fechaFinal=${encodeURIComponent(hasta)}`;
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const r = await fetch(url, { headers: { Accept: 'application/json', 'X-Api-Key': RDT_KEY }, signal: ctrl.signal });
+    if (!r.ok) {
+      const cuerpo = await r.text().catch(() => '');
+      throw new Error(`RDTOut ${r.status} (${desde}..${hasta}) ${cuerpo.slice(0, 120)}`);
+    }
+    const data = await r.json();
+    return Array.isArray(data) ? data : (data.items || data.data || [data]);
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error(`RDTOut timeout (${desde}..${hasta})`);
+    throw e;
+  } finally { clearTimeout(to); }
+}
+
+// Trae los viajes crudos del rango. Corto = una llamada; largo = trozos
+// mensuales en paralelo. En multi-trozo se filtra cada trozo por su propia
+// ventana (fechaConfirmacion) para no duplicar viajes en los bordes.
+async function traerViajes(desde, hasta) {
+  const ts = trozos(desde, hasta);
+  if (ts.length <= 1) return fetchViajes(desde, hasta);
+
+  const out = [];
+  for (let i = 0; i < ts.length; i += CONCURRENCIA) {
+    const lote = ts.slice(i, i + CONCURRENCIA);
+    const res = await Promise.all(lote.map(t => fetchViajes(t.desde, t.hasta).then(rows => ({ t, rows }))));
+    for (const { t, rows } of res) {
+      const t0 = Date.parse(t.desde + 'T00:00:00Z');
+      const t1 = Date.parse(t.hasta + 'T23:59:59Z');
+      for (const raw of rows) {
+        const f = raw.fechaConfirmacion || raw.fechaDespacho || raw.horaIngreso;
+        const ft = f ? Date.parse(f) : NaN;
+        if (!isNaN(ft) && ft >= t0 && ft <= t1) out.push(raw);   // cada viaje en un solo trozo
+      }
+    }
+  }
+  return out;
 }
 
 const CAMIONES = {

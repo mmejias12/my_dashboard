@@ -886,6 +886,37 @@ tbody td.mono{font-family:'DM Mono',monospace;font-size:11.5px}
 
     <!-- ===== TAB: CONFIG ===== -->
     <div id="view-config" style="display:none">
+
+      <!-- ── Precarga del histórico ──────────────────────────────────────
+           El proveedor del GPS exige 20 s entre consultas, así que mirar una
+           semana vencida en vivo son minutos de espera cada vez. Pero un día
+           ya cerrado no vuelve a cambiar: se guarda una vez y de ahí en
+           adelante se lee del almacenamiento, al instante.
+           Esta precarga recorre la flota una sola vez pidiendo un rango
+           amplio; el proxy va guardando cada día cerrado a medida que llega. -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-hdr">
+          <div class="card-title"><span class="card-title-dot" style="background:var(--green)"></span>Precargar historial</div>
+        </div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:12px;max-width:640px">
+          <div style="font-size:12px;color:var(--t2);line-height:1.7">
+            Un día cerrado del GPS no cambia nunca, así que se puede guardar una vez y no volver a consultarlo.
+            Esta precarga recorre la flota pidiendo el rango completo y deja guardado todo lo que ya está cerrado.
+            <b style="color:var(--t1)">Se hace una sola vez</b>: después las semanas vencidas abren al instante.
+            <br><span style="color:var(--t3)">Demora unos 20 segundos por camión, porque es el mínimo que exige el proveedor entre consultas.</span>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+            <label style="font-size:11px;color:var(--t3)">Desde<br>
+              <input type="date" id="pre-desde" value="2026-01-01" style="margin-top:4px"></label>
+            <label style="font-size:11px;color:var(--t3)">Hasta<br>
+              <input type="date" id="pre-hasta" style="margin-top:4px"></label>
+            <button class="btn-go" id="pre-btn" onclick="precargarHistorico()">⤓ Precargar</button>
+            <button class="a11y-btn sm" onclick="estadoCache()">Ver estado</button>
+          </div>
+          <div id="pre-estado" style="font-size:11.5px;color:var(--t2);line-height:1.7"></div>
+        </div>
+      </div>
+
       <div class="card">
         <div class="card-hdr">
           <div class="card-title"><span class="card-title-dot" style="background:var(--blue)"></span>Configuración de conexión GPS Condor</div>
@@ -4612,6 +4643,83 @@ function avisarDatoIncompleto(){
         : '')
     + '</span>'
     + '<button class="btn-go" style="font-size:11px;padding:4px 10px;margin-left:auto" onclick="reintentarSinRespuesta()">↻ Reintentar</button>';
+}
+
+/* ── PRECARGA DEL HISTÓRICO ────────────────────────────────────────────────
+   Recorre la flota pidiendo un rango amplio. No hay endpoint nuevo: el propio
+   proxy guarda cada día cerrado que le llega, así que basta con darle una
+   vuelta a las patentes. Se respeta la ventana de 21 s del proveedor y se
+   informa el avance, porque son varios minutos y en silencio parece colgado. */
+let _preCancelar = false;
+async function precargarHistorico(){
+  const el = document.getElementById('pre-estado');
+  const btn = document.getElementById('pre-btn');
+  const desde = (document.getElementById('pre-desde')||{}).value;
+  let   hasta = (document.getElementById('pre-hasta')||{}).value;
+  if(!hasta){ hasta = new Date().toISOString().slice(0,10); }
+  if(!desde || desde > hasta){ el.innerHTML = '<span style="color:var(--amber)">Revisa las fechas: el inicio tiene que ser anterior al término.</span>'; return; }
+
+  if(btn.dataset.corriendo === '1'){ _preCancelar = true; return; }
+  btn.dataset.corriendo = '1'; btn.textContent = '■ Detener'; _preCancelar = false;
+
+  const placas = Object.keys(FLOTA_NOMBRES);
+  const lineas = [];
+  let guardadosTot = 0, conError = 0;
+
+  for(let i = 0; i < placas.length; i++){
+    if(_preCancelar){ lineas.push('<span style="color:var(--amber)">Detenido por el usuario.</span>'); break; }
+    const p = placas[i];
+    el.innerHTML = `<b>Precargando ${i+1} de ${placas.length}</b> — ${p} (${escTT(FLOTA_NOMBRES[p]||'')})…<br>` + lineas.join('<br>');
+    try{
+      const url = CFG.proxyBase + '?plate=' + encodeURIComponent(p)
+        + '&desde=' + encodeURIComponent(desde.replace(/-/g,'/') + ' 00:00:00')
+        + '&hasta=' + encodeURIComponent(hasta.replace(/-/g,'/') + ' 23:59:59')
+        + '&time=' + ((document.getElementById('min-tiempo')||{}).value || 15);
+      const r = await fetch(url, {signal: AbortSignal.timeout(60000)});
+      const d = await r.json();
+      const c = d.cache || {};
+      const g = c.dias_guardados || 0;
+      guardadosTot += g;
+      lineas.push(`${p} — ${d.total || 0} paradas · <b style="color:var(--green)">${g}</b> día(s) guardados`);
+    }catch(e){
+      conError++;
+      lineas.push(`<span style="color:var(--amber)">${p} — no se pudo: ${escTT(e.message)}</span>`);
+    }
+    if(i < placas.length - 1 && !_preCancelar){
+      for(let s = Math.round(GPS_GAP_MS/1000); s > 0 && !_preCancelar; s--){
+        el.innerHTML = `<b>Precargando ${i+1} de ${placas.length}</b> — siguiente camión en ${s}s `
+          + `<span style="color:var(--t3)">(el GPS exige 20s entre consultas)</span><br>` + lineas.join('<br>');
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
+  }
+
+  btn.dataset.corriendo = '0'; btn.textContent = '⤓ Precargar';
+  el.innerHTML = `<b style="color:var(--green)">Listo.</b> ${guardadosTot} día(s) de camión quedaron guardados`
+    + (conError ? ` · ${conError} patente(s) con error` : '')
+    + `.<br><span style="color:var(--t3)">De ahora en adelante ese período abre sin consultar al proveedor.</span>`
+    + '<br>' + lineas.join('<br>');
+}
+
+/* Muestra si el almacenamiento está configurado y cuánto se está sirviendo
+   desde ahí. Sin esto no hay forma de saber si la precarga sirvió de algo. */
+async function estadoCache(){
+  const el = document.getElementById('pre-estado');
+  el.textContent = 'Consultando…';
+  try{
+    const hoy = new Date().toISOString().slice(0,10);
+    const r = await fetch(CFG.proxyBase + '?plate=' + encodeURIComponent(Object.keys(FLOTA_NOMBRES)[0])
+      + '&desde=' + encodeURIComponent(hoy.replace(/-/g,'/') + ' 00:00:00')
+      + '&hasta=' + encodeURIComponent(hoy.replace(/-/g,'/') + ' 23:59:59') + '&time=15');
+    const d = await r.json();
+    const c = d.cache || {};
+    el.innerHTML = c.usado
+      ? `<b style="color:var(--green)">Almacenamiento conectado.</b> Ventana en vivo: ${c.dias_vivos} día(s), `
+        + `desde el ${c.primer_dia_vivo}. Todo lo anterior se sirve desde el historial guardado.`
+      : `<b style="color:var(--amber)">El historial no está activo.</b> `
+        + (c.error ? escTT(c.error) : 'Falta cargar <code>OS_STORAGE_CONN</code> en Application Settings del sitio.')
+        + ` Mientras tanto el informe funciona igual, pero consultando al proveedor cada vez.`;
+  }catch(e){ el.innerHTML = '<span style="color:var(--amber)">No se pudo consultar: ' + escTT(e.message) + '</span>'; }
 }
 
 async function reintentarSinRespuesta(){

@@ -190,7 +190,7 @@
 
   </div>
 
-  <div class="note">Cantidades por tipo desde <b>opsxrangofechas</b> (despachado). El <b>valorizado cuadra con la cartola</b> (ella manda): la tarifa base se back-calcula por cliente para que, aplicando <b>+20% en 24 horas</b> y <b>+40% en Express</b> (LD y Retiro Cliente a tarifa base), el total coincida con lo facturado. Total cartola: <b id="cart-ref">–</b>.</div>
+  <div class="note">Cantidades por tipo desde <b>opsxrangofechas</b> (registrado por sistema). El <b>valorizado cuadra con la cartola</b> (ella manda): la tarifa base se back-calcula por cliente para que, aplicando <b>+20% en 24 horas</b> y <b>+40% en Express</b> (LD y Retiro Cliente a tarifa base), el total coincida con lo facturado. Total cartola: <b id="cart-ref">–</b>.</div>
 
   <div class="band-label">Resumen <span class="live-pill">en vivo</span></div>
   <div class="stats" id="kpis-main"></div>
@@ -330,7 +330,7 @@ function renderKPIs(ag){
   var dserie={}; ag.ops.forEach(function(r){dserie[dOf(r)]=(dserie[dOf(r)]||0)+num(r.cantidadDespachada);});
   var spk=ag.days.map(function(d){return dserie[d]||0;});
   var main=[
-    {l:'Emisiones despachadas',s:'total (u)',v:fmt(tot),c:'--green',spk:1,spkD:spk,spkC:'--green'},
+    {l:'Emisiones registradas',s:'total (u)',v:fmt(tot),c:'--green',spk:1,spkD:spk,spkC:'--green'},
     {l:'Valorizado',s:'cuadra con cartola',v:money(valCLP),c:'--green'},
     {l:'Valorizado UF',s:'según cartola',v:uf(valUFt),c:'--s4'},
     {l:'Tarifa base prom.',s:'UF/pallet (back-calc)',v:(ag.tmap.__avg?ag.tmap.__avg.toFixed(5):'–'),c:'--s5'},
@@ -504,7 +504,7 @@ function pedTip(ev,nro){var r=(window._f&&window._f.ops||[]).filter(function(x){
   var t=r?tipoEmision(r.operacion):'';var o=r&&r.observacion?(''+r.observacion).trim():'';
   var qs=r&&r.cantidadSolicitada!=null?num(r.cantidadSolicitada):null,qd=r&&r.cantidadDespachada!=null?num(r.cantidadDespachada):null;
   var h='<div class="tt-title">Pedido '+esc(nro)+(t?' · '+esc(t):'')+'</div>';
-  if(qs!=null&&qd!=null&&qs!==qd)h+='<div class="tt-obs" style="color:#fcd34d">Solicitado '+fmt(qs)+' → despachado '+fmt(qd)+'</div>';
+  if(qs!=null&&qd!=null&&qs!==qd)h+='<div class="tt-obs" style="color:#fcd34d">Solicitado '+fmt(qs)+' → registrado '+fmt(qd)+'</div>';
   h+='<div class="tt-obs">'+(o?('<b>Observación:</b> '+esc(o)):'<span style="color:var(--text-muted)">Sin observación registrada</span>')+'</div>';
   h+='<div class="tt-obs" style="color:var(--accent)">clic para ver el historial →</div>';
   showTip(h,ev.clientX,ev.clientY);}
@@ -572,7 +572,7 @@ function detectarCambiosH(prev,curr){
   if((curr.patente||'')===(prev.patente||'')&&(curr.chofer||'')!==(prev.chofer||'')){if(!prev.chofer&&curr.chofer)c.push({icon:'👤',txt:'Asignó chofer '+curr.chofer,cls:'purple'});}
   if((curr.dteNro||0)!==(prev.dteNro||0)&&(curr.dteNro||0)!==0)c.push({icon:'📄',txt:'Generó DTE #'+curr.dteNro,cls:'green'});
   if((curr.etapaOperacion||'')!==(prev.etapaOperacion||''))c.push({icon:'→',txt:(prev.etapaOperacion||'—')+' → '+curr.etapaOperacion,cls:''});
-  if((curr.cantidadDespachada||0)!==(prev.cantidadDespachada||0)){var dD=(curr.cantidadDespachada||0)-(prev.cantidadDespachada||0);c.push({icon:'📦',txt:'Despacho '+(dD>0?'+':'')+dD.toLocaleString('es-CL')+' (total '+(curr.cantidadDespachada||0).toLocaleString('es-CL')+')',cls:'amber'});}
+  if((curr.cantidadDespachada||0)!==(prev.cantidadDespachada||0)){var dD=(curr.cantidadDespachada||0)-(prev.cantidadDespachada||0);c.push({icon:'📦',txt:'Registrado '+(dD>0?'+':'')+dD.toLocaleString('es-CL')+' (total '+(curr.cantidadDespachada||0).toLocaleString('es-CL')+')',cls:'amber'});}
   if((curr.cantidadConfirmada||0)!==(prev.cantidadConfirmada||0)){var dC=(curr.cantidadConfirmada||0)-(prev.cantidadConfirmada||0);c.push({icon:'✓',txt:'Confirmó '+(dC>0?'+':'')+dC.toLocaleString('es-CL'),cls:'green'});}
   if((curr.cantidadSolicitada||0)!==(prev.cantidadSolicitada||0))c.push({icon:'✎',txt:'Modificó solicitada '+(prev.cantidadSolicitada||0)+' → '+(curr.cantidadSolicitada||0),cls:'amber'});
   if(!prev.fechaDespacho&&curr.fechaDespacho)c.push({icon:'📅',txt:'Programó despacho '+fmtDateH(curr.fechaDespacho),cls:''});

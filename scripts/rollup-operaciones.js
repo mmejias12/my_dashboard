@@ -41,35 +41,6 @@ function sumaDia(b, d) {
   b.dias           += 1;
 }
 
-// ── Desglose por CLIENTE (para preguntas anuales por cliente, instantáneas) ──
-// Cada concepto se agrega por el lado relevante: "a/para el cliente" = destino
-// (emisiones, transferencias); "del cliente" = origen (retiros, devoluciones).
-const LADO_CLIENTE = { emisiones: 'clienteDestino', retiros: 'clienteOrigen', devoluciones: 'clienteOrigen', transferencias: 'clienteDestino' };
-const CONCEPTOS_CLIENTE = Object.keys(LADO_CLIENTE);
-const TOPE_CLIENTE = 200;   // guarda los 200 clientes con más volumen por concepto/período
-
-function nuevoBucketCliente() { const o = {}; for (const c of CONCEPTOS_CLIENTE) o[c] = {}; return o; }
-function sumaClienteDia(bucket, d) {
-  if (!d || !d.detalle) return;
-  for (const c of CONCEPTOS_CLIENTE) {
-    const lado = LADO_CLIENTE[c];
-    const mapa = d.detalle[c] && d.detalle[c][lado];
-    if (!mapa) continue;
-    const dst = bucket[c];
-    for (const nombre in mapa) dst[nombre] = (dst[nombre] || 0) + mapa[nombre];
-  }
-}
-function recortarCliente(cont) {
-  for (const k in cont) {
-    for (const c of CONCEPTOS_CLIENTE) {
-      const mapa = cont[k][c] || {};
-      const top = Object.keys(mapa).sort((a, b) => mapa[b] - mapa[a]).slice(0, TOPE_CLIENTE);
-      const nuevo = {}; for (const n of top) nuevo[n] = mapa[n];
-      cont[k][c] = nuevo;
-    }
-  }
-}
-
 (async () => {
   if (!CONN) { console.error('Falta OS_STORAGE_CONN'); process.exit(1); }
   const hasta = process.argv[2] || ayerIso();
@@ -78,7 +49,6 @@ function recortarCliente(cont) {
   console.log(`Rollup operaciones ${INICIO} → ${hasta}  (${fechas.length} días)`);
 
   const anual = {}, mensual = {};
-  const anualCliente = {}, mensualCliente = {};
   let leidos = 0;
   for (let i = 0; i < fechas.length; i += LOTE) {
     const grupo = fechas.slice(i, i + LOTE);
@@ -90,19 +60,14 @@ function recortarCliente(cont) {
       const y = f.slice(0, 4), m = f.slice(0, 7);
       if (!anual[y]) anual[y] = nuevoBucket();  sumaDia(anual[y], d);
       if (!mensual[m]) mensual[m] = nuevoBucket();  sumaDia(mensual[m], d);
-      if (!anualCliente[y]) anualCliente[y] = nuevoBucketCliente();  sumaClienteDia(anualCliente[y], d);
-      if (!mensualCliente[m]) mensualCliente[m] = nuevoBucketCliente();  sumaClienteDia(mensualCliente[m], d);
     }
     process.stdout.write(`  ${Math.min(i + LOTE, fechas.length)}/${fechas.length}\r`);
   }
-  recortarCliente(anualCliente);
-  recortarCliente(mensualCliente);
 
   const roll = {
     generado: new Date().toISOString(),
     desde: INICIO, hasta: fechas[fechas.length - 1],
-    dias_leidos: leidos, anual, mensual,
-    anual_cliente: anualCliente, mensual_cliente: mensualCliente
+    dias_leidos: leidos, anual, mensual
   };
   const body = JSON.stringify(roll);
   const c = BlobServiceClient.fromConnectionString(CONN).getContainerClient(CONTAINER);

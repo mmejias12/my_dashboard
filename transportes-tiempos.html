@@ -2881,8 +2881,15 @@ const ALIAS_RECINTO = {
   'M3041 MAYORISTA 10 SAN FELIPE':'M3041 M10 SAN FELIPE STO DGO',
   'M3069 MAYORISTA 10 SANTA CRUZ':'M3069 M10 SANTA CRUZ S FURGO',
   'AGROINDUSTRIAL ITATA LTDA.':'AGROINDUSTRIAL ITATA COCHARCAS',
+  /* COLGATE: la geocerca CALYCO empata 0,50 con DOS bodegas —INOCUO y IMO—,
+     así que el cruce se declaraba ambiguo y la emisión no se enganchaba a
+     ninguna. Se resolvió MIDIENDO contra las coordenadas del catálogo:
+     CALYCO está a 0,88 km de COLGATE INOCUO CBP (Pudahuel, Camino El
+     Noviciado) y a 6,13 km de COLGATE - IMO CBP (Lampa, Chorrillos Uno).
+     Siete veces más cerca: es el mismo recinto que INOCUO. */
+  'COLGATE-CALYCO CBP':        'COLGATE INOCUO CBP',
+  'COLGATE CALYCO CBP':        'COLGATE INOCUO CBP',
   'CASTANO CD QULICURA':       'CASTANO QUILICURA',
-  'EMBOTELLADORA METROPOLITANA':'EMBOTELLADORA METROPOLITANA S.A.',
   'EMBOTELLADORA EMSA COLBUN': 'EMBO. METROPOLITANA Colbun',
   /* CORREGIDO EL 21-09-2026, detectado por el propio diagnóstico de cruces
      débiles: apuntaba a 'HEREDIA MOLINOS SA', un nombre que RDTOut no usa.

@@ -384,6 +384,15 @@ const REGLAS = {
   fusion:      {nivel:'aviso',   gh:'⧉', tit:'Dos pasadas contadas como una',
                 acc:'El conteo suma más de un camión: identificar el segundo y contarlo aparte',
                 sonido:'aviso', correo:false},
+  /* CARGA SEPARADA Y CUADRADA. La cámara había sumado una pasada ajena —un
+     yale arrastrando pallets, otro camión—, pero se pudo separar: el total no
+     cabía arriba del camión y un tramo calza con lo declarado. Contra la parte
+     que sí es del camión, la guía cuadra. No es una alerta, pero tampoco un
+     "ok" liso: queda en verde con la marca de que hubo que separar, para que
+     nadie crea que el conteo salió limpio de la cámara. */
+  ok_segmentado:{nivel:'ok',     gh:'⧈', tit:'Cuadra · se separó una pasada ajena',
+                acc:'Revisar la cola excluida antes de dar el paso por cerrado',
+                sonido:null, correo:false},
   // El camión pasó, pero el documento del día para esa patente es un retiro o
   // una devolución. No es un despacho: no se compara y no se alerta. Se deja
   // visible igual, porque el operador necesita saber que el camión pasó.
@@ -821,16 +830,41 @@ function calcularFila(carga, guia, dif){
    leída, lo de después es el que se sumó. Los pallets de cada tramo se estiman
    con las 18 por fila, porque la API no dice cuántos trae cada bulto. */
 const CORTE_LARGO_S = 6;
+/* Parte una carga que mezcló dos pasadas.
+   CORREGIDO EL 22-09-2026. Antes estimaba los pallets como bultos × 18, dando
+   por hecho que toda fila lleva 18. No es así: la propia cámara reporta filas
+   de 1 a 20 (602 de 687 traen 18, el resto no). En la carga C1254 la cola real
+   eran 138 pallets en filas de 13, 14 y 15, y el cálculo × 18 daba 180.
+   Ahora se usan los pallets REALES de cada grupo, y si el servidor ya resolvió
+   el corte (campo `segmento`) se respeta ese, que además usa la guía y la
+   capacidad del camión para elegir dónde cortar. */
 function partirFusion(carga){
+  const seg = carga.segmento;
   const g = carga.deteccion?.grupos || [];
+
+  // El servidor ya decidió: es la fuente autorizada.
+  if(seg && seg.aplicada){
+    const uno = g.slice(0, seg.grupos_camion), dos = g.slice(seg.grupos_camion);
+    const sb = a => a.reduce((s,x)=>s+(x.bultos||0),0);
+    return {
+      corte_s: seg.hueco_del_corte_s,
+      motivo: seg.motivo,
+      uno: {bultos: sb(uno), pallets: seg.pallets_camion, hasta: uno[uno.length-1]?.hasta},
+      dos: {bultos: sb(dos), pallets: seg.pallets_excluidos, desde: dos[0]?.desde},
+    };
+  }
+
+  // Sin decisión del servidor: corte en el primer hueco largo, con pallets reales.
   const i = g.findIndex(x => (x.hueco_s || 0) >= CORTE_LARGO_S);
   if(i < 0) return null;
-  const suma = (a) => a.reduce((s,x)=>s+x.bultos, 0);
+  const sb = a => a.reduce((s,x)=>s+(x.bultos||0),0);
+  const sp = a => a.reduce((s,x)=>s+(x.pallets||0),0);
   const uno = g.slice(0, i+1), dos = g.slice(i+1);
   return {
     corte_s: g[i].hueco_s,
-    uno: {bultos: suma(uno), pallets: suma(uno)*18, hasta: g[i].hasta},
-    dos: {bultos: suma(dos), pallets: suma(dos)*18, desde: dos[0]?.desde},
+    motivo: null,
+    uno: {bultos: sb(uno), pallets: sp(uno), hasta: g[i].hasta},
+    dos: {bultos: sb(dos), pallets: sp(dos), desde: dos[0]?.desde},
   };
 }
 
@@ -882,6 +916,18 @@ function evaluar(carga){
   // 1a. DOS CAMIONES EN UNA CARGA. Comparar esto contra cualquier guía no tiene
   //     sentido: el total no es de un camión. Se marca como problema de conteo.
   if(carga.deteccion?.posible_fusion){
+    /* Si el servidor logró separar la carga —porque el total no cabía arriba y
+       un tramo calza con lo declarado—, la comparación SÍ tiene sentido: se
+       hace contra lo que le corresponde al camión, no contra el total mezclado.
+       El número en crudo se sigue mostrando al lado. */
+    const seg = carga.segmento;
+    if(seg && seg.aplicada && carga.guia){
+      const dif = seg.pallets_camion - carga.guia.pallets_declarados;
+      return {...carga, guia:carga.guia, estado: Math.abs(dif) <= TOLERANCIA ? 'ok_segmentado'
+                : dif < 0 ? 'faltante' : 'sobrante',
+              diferencia:dif, filaAfectada:calcularFila(carga, carga.guia, dif),
+              fusion:partirFusion(carga), segmentada:true};
+    }
     return {...carga, guia:carga.guia ?? null, estado:'fusion',
             diferencia:null, filaAfectada:null, fusion:partirFusion(carga)};
   }

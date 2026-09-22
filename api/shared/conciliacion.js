@@ -128,20 +128,29 @@ const CORTE_S = 2;        // separacion minima para considerar que hubo un corte
 const CORTE_LARGO_S = 6;  // por sobre esto ya no parece el carro de la misma unidad
 
 function analizarDeteccion(bultos, capacidad, contados) {
-  const t = (bultos || []).map((b) => ts(b.fecha_hora_deteccion)).sort((a, b) => a - b);
+  // Se ordenan los bultos ENTEROS, no solo sus tiempos: para poder cortar hace
+  // falta saber cuantos pallets trae cada grupo, no solo cuantas filas.
+  const ord = (bultos || []).slice()
+    .sort((x, y) => ts(x.fecha_hora_deteccion) - ts(y.fecha_hora_deteccion));
+  const t = ord.map((b) => ts(b.fecha_hora_deteccion));
   if (t.length < 2) return { grupos: [], corte_max_s: 0, posible_fusion: false };
+
+  const pal = (a, b) => ord.slice(a, b).reduce((s, x) => s + (Number(x.pallets_bulto) || 0), 0);
+  const filas = (a, b) => ord.slice(a, b).map((x) => Number(x.pallets_bulto) || 0);
 
   const grupos = [];
   let ini = 0;
   for (let i = 1; i < t.length; i++) {
     if (t[i] - t[i - 1] >= CORTE_S * 1000) {
-      grupos.push({ bultos: i - ini, desde: new Date(t[ini]).toISOString(),
+      grupos.push({ bultos: i - ini, pallets: pal(ini, i), filas: filas(ini, i),
+                    desde: new Date(t[ini]).toISOString(),
                     hasta: new Date(t[i - 1]).toISOString(),
                     hueco_s: +((t[i] - t[i - 1]) / 1000).toFixed(1) });
       ini = i;
     }
   }
-  grupos.push({ bultos: t.length - ini, desde: new Date(t[ini]).toISOString(),
+  grupos.push({ bultos: t.length - ini, pallets: pal(ini, t.length), filas: filas(ini, t.length),
+                desde: new Date(t[ini]).toISOString(),
                 hasta: new Date(t[t.length - 1]).toISOString(), hueco_s: null });
 
   const corteMax = Math.max(0, ...grupos.map((g) => g.hueco_s || 0));
@@ -152,6 +161,102 @@ function analizarDeteccion(bultos, capacidad, contados) {
     corte_max_s: corteMax,
     // Se afirma solo con las dos senales juntas.
     posible_fusion: excede && corteMax >= CORTE_LARGO_S && grupos.length > 1,
+  };
+}
+
+/**
+ * SEGMENTACION DE UNA CARGA FUSIONADA.
+ *
+ * El problema, medido el 22-09-2026 en la carga C1254 (SP3393, guia 72462):
+ *   G1   4 bultos    72 pallets
+ *   G2  10 bultos   180 pallets   -> acumulado 252
+ *   (hueco de 12,6 s)
+ *   G3  10 bultos   138 pallets   -> acumulado 390
+ * La camara conto 390 y la guia declaraba 252. Un yale paso arrastrando pallets
+ * dentro de la ventana de cierre y su carga quedo sumada a la del camion.
+ *
+ * POR QUE SE PUEDE CORTAR SIN INVENTAR:
+ * la decision NO se toma porque asi cuadra con la guia. Se toma porque los
+ * 390 pallets NO CABEN: SP3393 es camion simple, tope 320. Un total que no
+ * cabe fisicamente arriba no es una diferencia con el documento, es un conteo
+ * que mezclo dos cosas. Recien ahi, sabiendo que sobra, la guia sirve para
+ * ubicar DONDE cortar.
+ *
+ * Ese orden importa: si se cortara cada vez que el corte hace cuadrar el
+ * numero, el monitor perderia justamente lo que lo hace util — la capacidad de
+ * detectar un camion realmente sobrecargado. Por eso el exceso de capacidad es
+ * condicion de entrada, no una comprobacion posterior.
+ *
+ * Nunca se descarta en silencio: la cola excluida se devuelve entera, con sus
+ * filas y su horario, para que quien mire pueda darla por buena o rechazarla.
+ */
+function segmentarCarga(deteccion, capacidad, declarado) {
+  const g = (deteccion && deteccion.grupos) || [];
+  const vacio = { aplicada: false, motivo: null, grupos_camion: null,
+                  pallets_camion: null, pallets_excluidos: null, cola: null };
+
+  // Condicion de entrada: tiene que haber mas de un grupo, un corte largo y un
+  // total que no quepa arriba del camion. Sin las tres, no se toca nada.
+  if (!deteccion || !deteccion.posible_fusion || g.length < 2) return vacio;
+  if (!capacidad) return { ...vacio, motivo: 'sin_capacidad_conocida' };
+
+  const total = g.reduce((s, x) => s + (x.pallets || 0), 0);
+  if (total <= capacidad) return { ...vacio, motivo: 'cabe_en_el_camion' };
+
+  // Prefijos acumulados: G1, G1+G2, G1+G2+G3...
+  const acum = [];
+  let a = 0;
+  for (const x of g) { a += x.pallets || 0; acum.push(a); }
+
+  // Solo son candidatos los prefijos que caben fisicamente.
+  const caben = acum.map((v, i) => ({ i, v })).filter((x) => x.v <= capacidad);
+  if (!caben.length) return { ...vacio, motivo: 'ningun_prefijo_cabe' };
+
+  let elegido = null, motivo = null;
+  if (declarado > 0) {
+    // 1. El prefijo que calza EXACTO con lo declarado. Es el caso limpio.
+    const exacto = caben.find((x) => x.v === declarado);
+    if (exacto) { elegido = exacto; motivo = 'prefijo_calza_exacto_con_la_guia'; }
+    else {
+      // 2. Si ninguno calza exacto, el mas cercano a lo declarado, siempre que
+      //    quede razonablemente cerca. Si ni eso, no se corta: se prefiere
+      //    dejar la diferencia a la vista antes que fabricar un numero.
+      const cerca = caben.slice().sort((x, y) =>
+        Math.abs(x.v - declarado) - Math.abs(y.v - declarado))[0];
+      const margen = Math.max(18, Math.round(declarado * 0.05));
+      if (cerca && Math.abs(cerca.v - declarado) <= margen) {
+        elegido = cerca; motivo = 'prefijo_mas_cercano_a_la_guia';
+      }
+    }
+  }
+  // 3. Sin guia con que comparar, se corta por lo ultimo que cabe arriba.
+  if (!elegido) {
+    elegido = caben[caben.length - 1];
+    motivo = declarado > 0 ? 'ningun_prefijo_se_acerca_a_la_guia' : 'ultimo_prefijo_que_cabe';
+  }
+  if (motivo === 'ningun_prefijo_se_acerca_a_la_guia') {
+    // No se corta: que la diferencia quede visible.
+    return { ...vacio, motivo };
+  }
+
+  const corte = elegido.i;                       // ultimo grupo que es del camion
+  const cola = g.slice(corte + 1);
+  if (!cola.length) return { ...vacio, motivo: 'no_sobra_ningun_grupo' };
+
+  return {
+    aplicada: true,
+    motivo,
+    grupos_camion: corte + 1,
+    grupos_totales: g.length,
+    pallets_camion: elegido.v,
+    pallets_excluidos: total - elegido.v,
+    capacidad,
+    total_camara: total,
+    hueco_del_corte_s: g[corte].hueco_s,
+    cola: cola.map((x) => ({
+      bultos: x.bultos, pallets: x.pallets, filas: x.filas,
+      desde: x.desde, hasta: x.hasta,
+    })),
   };
 }
 
@@ -399,7 +504,12 @@ function conciliar(cargas, guias, opts = {}) {
       });
 
     // --- estado ---
-    const detectados = c[campoConteo];
+    // Si la carga mezclo dos pasadas, el estado se calcula sobre lo que SI es
+    // del camion. El total en crudo se sigue publicando aparte: nadie deberia
+    // tener que confiar a ciegas en que el corte estuvo bien hecho.
+    const segmento = segmentarCarga(deteccion, cap?.capacidad_total, declaradoTotal);
+    const detectadosCrudo = c[campoConteo];
+    const detectados = segmento.aplicada ? segmento.pallets_camion : detectadosCrudo;
     const perfil = perfilColor(c);
     let estado, diferencia = null;
     if (!cerrada) estado = 'en_curso';
@@ -435,6 +545,13 @@ function conciliar(cargas, guias, opts = {}) {
       // Como llegaron los bultos en el tiempo, y si el corte + el exceso de
       // capacidad apuntan a que aca hay mas de un camion sumado.
       deteccion,
+      // Cuando la carga venia fusionada: que parte se le atribuyo al camion,
+      // que quedo fuera, y por que. Con aplicada:false no se toco nada.
+      segmento,
+      // El conteo SIN segmentar, siempre. Si el corte estuvo mal, este numero
+      // es el que permite darse cuenta.
+      pallets_camara_crudo: detectadosCrudo,
+      pallets_camara: detectados,
       // Que vio la camara en cuanto a color, y si eso cae dentro del arriendo.
       perfil_color: perfil,
       guias_alternativas: alternativas,
@@ -472,7 +589,7 @@ function conciliar(cargas, guias, opts = {}) {
 }
 
 module.exports = {
-  conciliar, asignar, analizarDeteccion, consolidar, sonCorrelativas,
+  conciliar, asignar, analizarDeteccion, segmentarCarga, consolidar, sonCorrelativas,
   perfilColor, UMBRAL_ROJO,
   CIERRE_S, CIERRE_MIN, VENTANA_H, TOLERANCIA, CORTE_S, CORTE_LARGO_S,
 };

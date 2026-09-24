@@ -135,6 +135,10 @@
   .s-hdr.open .s-chevron { transform:rotate(90deg); }
   .s-sub { overflow:hidden;transition:max-height .25s ease; }
   .s-item { display:flex !important;align-items:center;gap:8px;padding:.35rem .875rem .35rem 2.375rem;margin:1px .5rem;font-size:11.5px;color:var(--text-secondary);cursor:pointer;border-radius:5px;transition:all .12s;text-decoration:none; }
+  /* El buscador esconde ítem por ítem. Hacía falta una clase porque .s-item
+     trae display:flex !important y el style.display="none" en línea nunca le
+     ganó: la búsqueda abría el grupo entero en vez de dejar la coincidencia. */
+  .s-item.s-oculto, .s-label.s-oculto { display:none !important; }
   .s-item i { font-size:13px;opacity:.7; }
   .s-item:hover { background:var(--bg-hover);color:var(--text-primary); }
   .s-item.active { color:var(--accent);background:var(--bg-active);font-weight:500; }
@@ -947,7 +951,9 @@
     <div class="page-header">
       <div>
         <div class="page-title">Operaciones x rango de fechas</div>
-        <div class="breadcrumb">Comercial › Reportes operacionales › Ops x rango fechas — datos en tiempo real</div>
+        <!-- Sin el área adelante: esta vista la comparten Comercial y Logística
+             inversa, y decir "Comercial" le mentía a la mitad de quienes entran. -->
+        <div class="breadcrumb">Reportes operacionales › Ops x rango fechas — datos en tiempo real</div>
       </div>
       <div class="last-upd" id="last-upd"></div>
     </div>
@@ -1275,6 +1281,35 @@ function act(el) {
   el.classList.add('active');
 }
 
+/* ── Grupos escondidos por rol ────────────────────────────────────────────
+   El candado por rol (más abajo, donde se lee /.auth/me) esconde los grupos
+   que no son del área del usuario. El buscador REPINTA todas las cabeceras,
+   así que sin esta lista bastaba escribir algo y borrarlo —o apretar Escape—
+   para que el menú completo volviera a aparecer. */
+function grupoOculto(id) {
+  var o = window.GRUPOS_OCULTOS || [];
+  return !!id && o.indexOf(id) >= 0;
+}
+/* El id del grupo se saca del DOM, no del texto del onclick: el header y su
+   .s-sub son hermanos y eso no se rompe al renombrar nada. */
+function grupoIdDeHdr(hdr) {
+  var s = hdr && hdr.nextElementSibling;
+  return (s && s.classList.contains('s-sub')) ? s.id : '';
+}
+/* Deja abierto el primer grupo que el usuario SÍ puede ver, para que quien
+   tiene un área sola entre directo a lo suyo. Devuelve su id. */
+function abrirPrimerGrupoVisible() {
+  var subs = document.querySelectorAll('.s-sub');
+  for (var i = 0; i < subs.length; i++) {
+    if (grupoOculto(subs[i].id)) continue;
+    subs[i].style.maxHeight = '500px';
+    var hdr = subs[i].previousElementSibling;
+    if (hdr && hdr.classList.contains('s-hdr')) hdr.classList.add('open');
+    return subs[i].id;
+  }
+  return null;
+}
+
 /* v11: Buscador del sidebar y shortcut Ctrl+K */
 function filterSidebar(q) {
   q = (q || '').toLowerCase().trim();
@@ -1282,36 +1317,49 @@ function filterSidebar(q) {
   var subs = document.querySelectorAll('.s-sub');
 
   if (!q) {
-    /* sin filtro: restaurar estado por defecto (Comercial abierto) */
+    /* Sin filtro: estado por defecto. Queda abierto Comercial para quien lo
+       ve, y el primer grupo visible para quien está acotado por rol. */
+    var abierto = null;
+    for (var p = 0; p < subs.length; p++) {
+      if (grupoOculto(subs[p].id)) continue;
+      if (abierto === null) abierto = subs[p].id;
+      if (subs[p].id === 'g-comercial') { abierto = 'g-comercial'; break; }
+    }
     for (var s = 0; s < subs.length; s++) {
-      var isComercial = subs[s].id === 'g-comercial';
-      subs[s].style.maxHeight = isComercial ? '500px' : '0';
+      subs[s].style.maxHeight = (subs[s].id === abierto) ? '500px' : '0';
       var allItems = subs[s].querySelectorAll('.s-item');
-      for (var ai = 0; ai < allItems.length; ai++) allItems[ai].style.display = '';
+      for (var ai = 0; ai < allItems.length; ai++) allItems[ai].classList.remove('s-oculto');
     }
     for (var g = 0; g < groups.length; g++) {
-      groups[g].style.display = '';
-      if (groups[g].getAttribute('onclick') && groups[g].getAttribute('onclick').indexOf('g-comercial') >= 0) {
-        groups[g].classList.add('open');
-      } else {
+      var gid = grupoIdDeHdr(groups[g]);
+      if (grupoOculto(gid)) {          // sigue fuera del menú, se buscara lo que se busque
+        groups[g].style.display = 'none';
         groups[g].classList.remove('open');
+        continue;
       }
+      groups[g].style.display = '';
+      if (gid === abierto) groups[g].classList.add('open');
+      else groups[g].classList.remove('open');
     }
     return;
   }
 
   /* con filtro: expandir todos, mostrar solo coincidencias */
   for (var si = 0; si < subs.length; si++) {
+    /* Un grupo que no es del área del usuario no se busca ni aparece, aunque
+       el texto calce: si no, buscar "cartola" le mostraba Gerencia. */
+    if (grupoOculto(subs[si].id)) {
+      subs[si].style.maxHeight = '0';
+      var hOc = subs[si].previousElementSibling;
+      if (hOc && hOc.classList.contains('s-hdr')) hOc.style.display = 'none';
+      continue;
+    }
     var items = subs[si].querySelectorAll('.s-item');
     var anyVisible = false;
     for (var i = 0; i < items.length; i++) {
-      var txt = items[i].textContent.toLowerCase();
-      if (txt.indexOf(q) >= 0) {
-        items[i].style.display = '';
-        anyVisible = true;
-      } else {
-        items[i].style.display = 'none';
-      }
+      var calza = items[i].textContent.toLowerCase().indexOf(q) >= 0;
+      items[i].classList.toggle('s-oculto', !calza);
+      if (calza) anyVisible = true;
     }
     subs[si].style.maxHeight = anyVisible ? '500px' : '0';
     /* Mostrar/ocultar el header del grupo según si hay resultados */
@@ -2724,7 +2772,28 @@ function exportXLSX() {
          admin / interno ven todo. Usuarios sin rol de área (legado) ven todo, como hasta ahora.
          Nota: esto es visual; la protección real por servidor se hace con allowedRoles en staticwebapp.config.json. */
       try {
-        var roles = user.userRoles || [];
+        /* Los roles llegan tal como se escribieron en la invitación del portal,
+           y un nombre mal escrito NO restringe menos: deja de calzar con SCOPED,
+           el usuario pasa por "sin rol de área" y termina viendo TODO, en
+           silencio. Medido: "Stock", "stocks", "stock sap" y "transporte" abrían
+           el menú completo. Por eso se normaliza (minúsculas, sin espacios ni
+           signos) y se aceptan las variantes que uno escribe sin pensar. */
+        function normRol(r){ return String(r||'').toLowerCase().trim().replace(/[\s._\-]+/g,''); }
+        var ALIAS_ROL = {
+          stocks:'stock', stocksap:'stock', sap:'stock',
+          transporte:'transportes', transportista:'transportes', transportes:'transportes',
+          loginversa:'logistica', logisticainversa:'logistica', inversa:'logistica',
+          logistico:'logistica', logisticos:'logistica',
+          comercia:'comercial', comerciales:'comercial',
+          gerencial:'gerencia', gerente:'gerencia',
+          finanza:'finanzas', finanzs:'finanzas',
+          operacion:'operaciones', operacional:'operaciones',
+          recursoshumanos:'rrhh', rrh:'rrhh', personas:'rrhh'
+        };
+        var roles = (user.userRoles || []).map(function(r){
+          var n = normRol(r);
+          return ALIAS_ROL[n] || n;
+        });
         function hasRole(r){ return roles.indexOf(r) >= 0; }
         var GROUP_ROLES = {
           'g-comercial':   ['comercial'],
@@ -2732,16 +2801,20 @@ function exportXLSX() {
           'g-operaciones': ['operaciones'],
           'g-gerencia':    ['gerencia'],
           'g-finanzas':    ['finanzas'],
-          'g-stocks':      ['stock'],
+          // Logística inversa también entra a Stock SAP: miden el flujo de
+          // retiros, y sin el saldo de pallets ese flujo no se interpreta.
+          'g-stocks':      ['stock','logistica'],
           'g-trans':       ['transportes'],
           'g-rrhh':        ['rrhh']
         };
         var SCOPED = ['comercial','logistica','operaciones','gerencia','finanzas','stock','transportes','rrhh'];
         var isScoped = SCOPED.some(hasRole) && !hasRole('admin') && !hasRole('interno');
         if (isScoped) {
+          var ocultos = [];
           Object.keys(GROUP_ROLES).forEach(function(gid){
             var canSee = GROUP_ROLES[gid].some(hasRole);
             if (!canSee) {
+              ocultos.push(gid);
               var sub = document.getElementById(gid);
               if (sub) {
                 sub.style.display = 'none';
@@ -2750,7 +2823,41 @@ function exportXLSX() {
               }
             }
           });
+          /* El buscador del sidebar repinta todas las cabeceras. Sin esta
+             lista, escribir algo y borrarlo devolvía el menú completo. */
+          window.GRUPOS_OCULTOS = ocultos;
+
+          /* Los FAVORITOS de arriba son atajos fijos a módulos de distintas
+             áreas: esconder el grupo y dejar el atajo era dejar la puerta
+             abierta al lado del cartel. Se esconde el favorito sólo si su
+             destino no aparece en NINGÚN grupo que el usuario sí ve — "Ops x
+             rango fechas" está en Comercial y en Logística inversa a la vez. */
+          var visibles = {};
+          document.querySelectorAll('.s-sub').forEach(function(sub){
+            if (ocultos.indexOf(sub.id) >= 0) return;
+            sub.querySelectorAll('a.s-item').forEach(function(a){
+              visibles[a.getAttribute('href')] = true;
+            });
+          });
+          document.querySelectorAll('.sidebar > a.s-item').forEach(function(fav){
+            if (!visibles[fav.getAttribute('href')]) fav.classList.add('s-oculto');
+          });
+          /* Los dos favoritos son de Comercial y de Logística inversa, así que
+             a un usuario de Transportes, RR.HH., Gerencia o Finanzas se le
+             escondían los dos y quedaba el rótulo "Favoritos" solo, encabezando
+             una lista vacía. Se esconde el rótulo que se quedó sin nada debajo. */
+          document.querySelectorAll('.sidebar > .s-label').forEach(function(lbl){
+            var n = lbl.nextElementSibling, algo = false;
+            while (n && !n.classList.contains('s-label')) {
+              if (n.matches('a.s-item, .s-hdr') && !n.classList.contains('s-oculto')
+                  && n.style.display !== 'none') { algo = true; break; }
+              n = n.nextElementSibling;
+            }
+            if (!algo) lbl.classList.add('s-oculto');
+          });
           document.body.setAttribute('data-role-scoped','1');
+          // Que entre directo a lo suyo en vez de a un menú todo cerrado.
+          if (typeof abrirPrimerGrupoVisible === 'function') abrirPrimerGrupoVisible();
         }
       } catch(err) { console.warn('rol menú:', err); }
     }

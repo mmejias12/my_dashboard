@@ -1110,7 +1110,7 @@
           <thead><tr>
             <th onclick="sortBy('nroPedido')">Nro pedido ↕</th>
             <th onclick="sortBy('clienteOrigenStr')">Cliente origen ↕</th>
-            <th onclick="sortBy('clienteDestinoStr')">Cliente destino ↕</th>
+            <th id="th-c3" onclick="sortBy(colDestino().key)">Cliente destino ↕</th>
             <th onclick="sortBy('operacion')">Operación ↕</th>
             <th onclick="sortBy('etapaOperacion')">Etapa ↕</th>
             <th onclick="sortBy('cantidadSolicitada')">Sol. ↕</th>
@@ -2062,6 +2062,7 @@ function applyFilters() {
     var mT = activeTags.length === 0 || activeTags.indexOf(r.operacion) >= 0;
     if (mQ && mS && mT) filtered.push(r);
   }
+  pintarCabDestino();     // la 3ª columna depende del filtro de operación
   cp = 1; render();
   // Chip de resumen al buscar por texto
   var chipRow = document.getElementById('filter-chip-row');
@@ -2152,6 +2153,41 @@ function fmtDate(s) {
   } catch(e) { return s; }
 }
 
+/* ── Tercera columna: cliente destino, o bodega de origen ─────────────────
+   En retiros y devoluciones el cliente destino es SIEMPRE REDTEC, así que la
+   columna no aporta nada. Medido sobre el 1 ago → 23 sep 2026: 715 retiros y
+   128 devoluciones, el 100% con destino REDTEC y el 100% con bodegaOrigenStr
+   cargada. Logística inversa necesita justamente eso: de qué bodega salieron
+   los pallets (ej. "ZCS01 CD CENCOSUD NOVICIADO").
+   Sólo cambia lo que se ve en pantalla — el Excel sigue exportando las dos
+   columnas — y el destino queda igual en el title, por si alguna vez aparece
+   un retiro que no venga a REDTEC. */
+function colDestino() {
+  var el  = document.getElementById('op-filter');
+  var sel = (el ? el.value : '').toLowerCase();
+  if (sel === 'retiro' || sel === 'devoluci') {
+    return { key: 'bodegaOrigenStr', label: 'Bodega origen' };
+  }
+  return { key: 'clienteDestinoStr', label: 'Cliente destino' };
+}
+
+function pintarCabDestino() {
+  var th = document.getElementById('th-c3');
+  if (!th) return;
+  var c = colDestino();
+  th.textContent = c.label + ' ↕';
+  // Si se venía ordenando por la columna que acaba de salir, el orden quedaría
+  // aplicado sobre un campo que ya no se ve. Se reordena por el que entra.
+  if ((sc === 'clienteDestinoStr' || sc === 'bodegaOrigenStr') && sc !== c.key) {
+    sc = c.key;
+    filtered.sort(function(a,b) {
+      var va = a[sc] != null ? a[sc] : '';
+      var vb = b[sc] != null ? b[sc] : '';
+      return String(va).localeCompare(String(vb),'es') * sd;
+    });
+  }
+}
+
 /* RENDER */
 function render() {
   var tbody = document.getElementById('tbody');
@@ -2163,14 +2199,20 @@ function render() {
     return;
   }
   var rows = '';
+  var c3 = colDestino();
   for (var i=0;i<slice.length;i++) {
     var r = slice[i];
     var pedidoId = r.nroPedido || '';
     var rowIdx = start + i;
+    var v3  = r[c3.key] || '';
+    // Con la bodega a la vista, el destino no se pierde: viaja en el title.
+    var t3  = (c3.key === 'bodegaOrigenStr')
+      ? (v3 || '—') + '  →  ' + (r.clienteDestinoStr || '—')
+      : v3;
     rows += '<tr>'
       + '<td data-label="Nº pedido" class="mono" style="font-weight:500;color:var(--accent);cursor:pointer;text-decoration:underline;text-decoration-color:var(--accent)" onclick="openModal(' + rowIdx + ')">'  + (pedidoId || '&mdash;') + '</td>'
       + '<td data-label="Cliente origen" title="' + (r.clienteOrigenStr||'') + '">'                  + (r.clienteOrigenStr||'&mdash;') + '</td>'
-      + '<td data-label="Cliente destino" title="' + (r.clienteDestinoStr||'') + '">'                 + (r.clienteDestinoStr||'&mdash;') + '</td>'
+      + '<td data-label="' + c3.label + '" title="' + escapeHtml(t3) + '">'                           + (v3 ? escapeHtml(v3) : '&mdash;') + '</td>'
       + '<td data-label="Operación">' + opBadge(r.operacion) + '</td>'
       + '<td data-label="Etapa" class="' + etapaCls(r.etapaOperacion) + '">'                + (r.etapaOperacion||'&mdash;') + '</td>'
       + '<td data-label="Solicitada" style="text-align:right">' + (r.cantidadSolicitada  != null ? r.cantidadSolicitada  : '&mdash;') + '</td>'

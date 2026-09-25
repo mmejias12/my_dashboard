@@ -3303,7 +3303,7 @@ document.addEventListener('click', function(e){
     box-shadow:0 0 0 1px rgba(0,0,0,.25) inset,0 1px 8px rgba(232,128,31,.12); }
   #hw-aviso .hw-txt{ font-size:12px;font-weight:600;letter-spacing:.055em;
     color:#FFE4C4;text-transform:uppercase; }
-  #hw-aviso .hw-ico{ width:13px;height:13px;flex:none;fill:#E8801F; }
+  #hw-aviso .hw-ico{ width:15px;height:15px;flex:none; }
   #hw-aviso::after{ content:"";position:absolute;top:0;bottom:0;width:44px;left:-60px;
     background:linear-gradient(100deg,transparent,rgba(255,255,255,.26),transparent);
     animation:hw-brillo 7s ease-in-out infinite; }
@@ -3349,11 +3349,11 @@ document.addEventListener('click', function(e){
     fuerteDesde:'10-27', fuerteHasta:'11-02',  // saludo y murciélagos
     telaras:true,                        // telaraña de esquina + arañas colgando
     aviso:true,                          // píldora central (sólo en la ventana fuerte)
-    rotar:true,                          // alternar los dos mensajes
+    rotar:false,                         // alternar los dos mensajes (msg2 queda de repuesto)
     sombrero:true,                       // sombrero de bruja sobre la R
     franja:true,                         // franja morado/naranja bajo la barra
     vuelo:true,                          // murciélagos al ingresar (1 vez al día)
-    msg1:'¡Feliz Halloween!',
+    msg1:'REDTEC en modo Halloween',
     msg2:'REDTEC · Noche de Brujas'
   };
 
@@ -3369,6 +3369,17 @@ document.addEventListener('click', function(e){
   var NS='http://www.w3.org/2000/svg';
   var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   /* Silueta de murciélago, dibujada una vez y reusada en SVG y en canvas. */
+  /* Calabaza de la píldora. A 15px no cabe el detalle: se dibuja como tres
+     gajos y una cara recortada en el color del fondo, que es lo que se lee. */
+  var CALABAZA =
+    '<path d="M0,-5.4 C.4,-7 1.4,-8 3,-8.3" fill="none" stroke="#5C8C36" stroke-width="1.8" stroke-linecap="round"/>'+
+    '<ellipse cx="-3.3" cy=".7" rx="3.5" ry="5.6" fill="#C2640E"/>'+
+    '<ellipse cx="3.3"  cy=".7" rx="3.5" ry="5.6" fill="#C2640E"/>'+
+    '<ellipse cx="0"    cy=".7" rx="5"   ry="6"   fill="#E8801F"/>'+
+    '<path d="M-3.1,-2 L-1,-2 L-2.05,.1 Z" fill="#241018"/>'+
+    '<path d="M3.1,-2 L1,-2 L2.05,.1 Z" fill="#241018"/>'+
+    '<path d="M-3.3,1.9 L3.3,1.9 L2,3.9 L1,2.7 L0,3.9 L-1,2.7 L-2,3.9 Z" fill="#241018"/>';
+
   var BAT='M0,-1.6 C1.1,-3.4 2.2,-2.6 2.4,-1.4 C3.4,-3.2 5.6,-3.6 7,-2.6 '+
           'C6.2,-1.6 6.1,-0.2 6.6,1 C5,0.4 3.2,1 2.2,2.4 C1.4,3.4 0.6,3.4 0,2.6 '+
           'C-0.6,3.4 -1.4,3.4 -2.2,2.4 C-3.2,1 -5,0.4 -6.6,1 C-6.1,-0.2 -6.2,-1.6 -7,-2.6 '+
@@ -3397,7 +3408,7 @@ document.addEventListener('click', function(e){
     if (HW.aviso && FUERTE){
       var a = document.createElement('div');
       a.id='hw-aviso'; a.setAttribute('aria-hidden','true');
-      var ico = '<svg class="hw-ico" viewBox="-8 -4 16 8"><path d="'+BAT+'"/></svg>';
+      var ico = '<svg class="hw-ico" viewBox="-9 -9.5 18 18">'+CALABAZA+'</svg>';
       a.innerHTML =
         '<span class="hw-msg hw-base">'+ico+'<span class="hw-txt">'+HW.msg1+'</span></span>'+
         (HW.rotar ? '<span class="hw-msg hw-alt">'+ico+'<span class="hw-txt">'+HW.msg2+'</span></span>' : '');
@@ -3483,6 +3494,9 @@ document.addEventListener('click', function(e){
     for (var j=0;j<n;j++){
       var cx = (j+.5)*w/n + (j%2 ? 30 : -30);
       if (cx < R+20 || cx > w-20) continue;
+      /* El centro es de la píldora: su fondo es translúcido y una araña
+         detrás se transparenta como una mancha. Se deja libre esa franja. */
+      if (Math.abs(cx - w/2) < 165) continue;
       var largo = 11 + (j%3)*7;
       var grp = document.createElementNS(NS,'g');
       grp.setAttribute('class','ar');

@@ -37,7 +37,15 @@
 //     que llegara en el JSON. Acá hay lista blanca de campos, rangos de fecha
 //     y de cantidad, y enums de horario/planta: el navegador no es el lugar
 //     donde se valida.
-//  5. RESPONDE DE VERDAD. La app de Google hacía POST con mode:'no-cors', así
+//  5. MIGRACIÓN. 'usuario' lo estampa SIEMPRE el servidor con el principal de
+//     Entra y no se puede falsear: esa es la garantía de que nadie se atribuye
+//     un registro ajeno. Para traer el historial de la app de Google, donde el
+//     autor es un ejecutivo que puede ni tener cuenta todavía, hay dos campos
+//     aparte: 'usuario_origen' (quién lo registró en el sistema viejo) y
+//     'origen' (de dónde vino). Son de SOLO OFICINA: un ejecutivo que los mande
+//     recibe un 403, así que la excepción no abre el agujero que 'usuario'
+//     cierra. 'usuario' sigue diciendo quién hizo la importación.
+//  6. RESPONDE DE VERDAD. La app de Google hacía POST con mode:'no-cors', así
 //     que no podía leer la respuesta y SIEMPRE decía "✓ Retiro guardado",
 //     incluso cuando el guardado fallaba. Este endpoint es del mismo origen y
 //     devuelve el registro guardado; la vista muestra el error si lo hay.
@@ -70,6 +78,7 @@ const HORARIOS = ['AM', 'PM'];
 // vienen, para que nadie se atribuya un registro ajeno.
 const CAMPOS_CLIENTE = [
   'ref',                                   // llave de idempotencia del cliente
+  'usuario_origen', 'origen',              // solo migración; ver MIGRACION más abajo
   'clave', 'recinto', 'cadena', 'retail_legal',
   'fecha_retiro', 'horario', 'cantidad', 'dispersos', 'planta', 'observaciones',
   'direccion', 'comuna', 'region', 'zona',
@@ -80,7 +89,7 @@ const CAMPOS_CLIENTE = [
 const CAMPOS_EDITABLES = ['fecha_retiro', 'horario', 'cantidad', 'dispersos', 'planta', 'observaciones'];
 
 const LARGOS = {
-  ref: 40,
+  ref: 40, usuario_origen: 80, origen: 40,
   clave: 80, recinto: 160, cadena: 120, retail_legal: 120,
   observaciones: 500, direccion: 200, comuna: 80, region: 60, zona: 60,
 };
@@ -435,6 +444,13 @@ module.exports = async function (context, req) {
       }
       const v = validar(cuerpo.registro || {}, false);
       if (!v.ok) return responder(400, { error: v.error });
+
+      // Los campos de migración solo los puede poner oficina. Si los manda un
+      // ejecutivo se rechaza en vez de ignorarlos en silencio: mandarlos es
+      // señal de que algo está intentando atribuir un registro a otra persona.
+      if ((v.campos.usuario_origen || v.campos.origen) && !esOficina(p)) {
+        return responder(403, { error: 'solo oficina puede importar registros a nombre de otra persona' });
+      }
 
       const rec = Object.assign({}, v.campos, {
         id: nuevoId(),

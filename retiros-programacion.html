@@ -145,6 +145,20 @@ tbody td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:t
 tbody tr:last-child td{border-bottom:none}
 tbody tr:hover{background:var(--bg-hover)}
 td.num,th.num{text-align:right;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+/* Tabla alta: la cabecera queda fija y el cuerpo se desplaza por dentro.
+   OJO: sin max-height el .tbl-wrap ya era contenedor de scroll (overflow-x:auto
+   hace que overflow-y compute a auto), asi que el thead sticky se anclaba al
+   tope del PROPIO marco, que se iba con la pagina. Por eso los titulos se
+   perdian al bajar aunque el CSS dijera sticky. Con alto propio, la cabecera
+   se queda y lo que corre es el cuerpo. */
+.tbl-wrap.alto{max-height:calc(100vh - 250px);min-height:240px;overflow-y:auto}
+.tbl-wrap.alto tfoot td{position:sticky;bottom:0;z-index:2;
+  background:var(--bg-surface);border-top:2px solid var(--border-accent);font-weight:700}
+.tbl-wrap.alto.sticky1 tfoot td:first-child{z-index:3}
+@media (max-width:640px){ .tbl-wrap.alto{max-height:calc(100vh - 210px)} }
+@media print{ .tbl-wrap.alto{max-height:none;overflow:visible}
+  .tbl-wrap.alto tfoot td{position:static} }
+
 /* 1a columna fija: el equipo pidio no perder la referencia al desplazar */
 .tbl-wrap.sticky1 td:first-child,.tbl-wrap.sticky1 th:first-child{
   position:sticky;left:0;background:var(--bg-card);z-index:1}
@@ -217,6 +231,66 @@ tr.gtot td{background:var(--bg-surface);font-weight:700;border-top:2px solid var
   .lr-mask,.lr-liquid,.lr-brillo,.lr-ring{animation:none}
   .lr-liquid{top:-25%;border-radius:0} .lr-ring{display:none} .lr-mask{opacity:1}
 }
+
+/* panel "cuánto deberías retirar" del calendario */
+.esp{margin-top:.7rem;border-radius:10px;padding:.8rem .9rem;
+     background:var(--info-bg);border:1px solid rgba(96,165,250,.32)}
+.esp.nada{background:var(--bg-input);border-color:var(--border-md)}
+.esp.cargando{background:var(--bg-input);border-color:var(--border-md);color:var(--text-muted)}
+.esp-top{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+.esp-n{font-family:'JetBrains Mono',monospace;font-size:2rem;font-weight:600;
+       letter-spacing:-1px;color:var(--info);line-height:1}
+.esp-lab{font-size:12.5px;color:var(--text-sec)}
+.esp-sub{font-size:11.5px;color:var(--text-muted);margin-top:.35rem;line-height:1.5}
+.esp-cerca{display:flex;gap:6px;flex-wrap:wrap;margin-top:.5rem}
+.esp-dia{font-size:11px;padding:3px 8px;border-radius:6px;background:var(--bg-input);
+  border:1px solid var(--border-md);color:var(--text-sec);cursor:pointer;white-space:nowrap}
+.esp-dia:hover{color:var(--info);border-color:rgba(96,165,250,.4)}
+.esp-ver{font-size:11.5px;color:var(--info);cursor:pointer;margin-top:.45rem;display:inline-block}
+.esp-det{margin-top:.5rem;max-height:200px;overflow:auto}
+.esp-det table{min-width:0}
+.esp-det td:first-child,.esp-det th:first-child{max-width:118px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.esp-det td:last-child{font-size:10.5px;color:var(--text-muted)}
+
+/* chips de Nº de pedido y recintos clickeables */
+.lnk{color:var(--accent);cursor:pointer;border-bottom:1px dotted var(--border-accent)}
+.lnk:hover{filter:brightness(1.18)}
+.chips-ped{display:flex;gap:4px;flex-wrap:wrap}
+.chip-ped{font-family:'JetBrains Mono',monospace;font-size:10.5px;padding:2px 7px;border-radius:5px;
+  background:var(--bg-input);border:1px solid var(--border-md);color:var(--text-sec);cursor:pointer;
+  white-space:nowrap;transition:all .12s}
+.chip-ped:hover{color:var(--accent);border-color:var(--border-accent);background:var(--bg-hover)}
+.chip-ped.anul{color:var(--danger);border-color:rgba(248,113,113,.3);text-decoration:line-through}
+.chip-ped.mas{font-family:inherit;color:var(--text-muted)}
+
+/* línea de tiempo del pedido (mismo lenguaje visual que Emisiones_Detalle) */
+.tl{position:relative;padding-left:20px}
+.tl::before{content:'';position:absolute;left:5px;top:5px;bottom:5px;width:2px;background:var(--border-md)}
+.tl-item{position:relative;padding:0 0 15px}
+.tl-dot{position:absolute;left:-19px;top:4px;width:10px;height:10px;border-radius:50%;
+  background:var(--bg-card);border:2px solid var(--text-muted)}
+.tl-dot.done{border-color:var(--accent);background:var(--accent)}
+.tl-dot.active{border-color:var(--info);background:var(--info)}
+.tl-dot.warn{border-color:var(--danger);background:var(--danger)}
+.tl-head{display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap}
+.tl-stage{font-size:12.5px;font-weight:600}
+.tl-date{font-size:10.5px;color:var(--text-muted);font-family:'JetBrains Mono',monospace}
+.tl-kvs{display:flex;gap:10px;flex-wrap:wrap;margin-top:3px}
+.tl-kv{font-size:11px;color:var(--text-muted)}
+.tl-kv b{font-family:'JetBrains Mono',monospace;font-weight:600;margin-left:3px}
+.tl-kv b.blue{color:var(--info)} .tl-kv b.amber{color:var(--warn)} .tl-kv b.green{color:var(--ok)}
+.tl-chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:5px}
+.tl-chip{font-size:10.5px;padding:2px 7px;border-radius:5px;background:var(--bg-input);
+  border:1px solid var(--border);color:var(--text-sec)}
+.tl-chip.green{color:var(--ok);border-color:rgba(74,222,128,.3)}
+.tl-chip.amber{color:var(--warn);border-color:rgba(251,191,36,.3)}
+.tl-chip.red{color:var(--danger);border-color:rgba(248,113,113,.3)}
+.mini-tabla{width:100%;border-collapse:collapse;font-size:11.5px;min-width:0;margin-top:.4rem}
+.mini-tabla th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px;
+  color:var(--text-muted);padding:5px 6px;border-bottom:1px solid var(--border);position:static}
+.mini-tabla td{padding:5px 6px;border-bottom:1px solid var(--border)}
+.modal.ancho{max-width:660px}
 
 /* modal */
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.66);display:none;align-items:center;
@@ -326,6 +400,7 @@ tr.gtot td{background:var(--bg-surface);font-weight:700;border-top:2px solid var
         <div id="sel-aviso"></div>
       </div>
 
+
       <div class="row2">
         <div>
           <label class="req" for="f_fecha">Fecha de retiro</label>
@@ -337,6 +412,11 @@ tr.gtot td{background:var(--bg-surface);font-weight:700;border-top:2px solid var
           <select id="f_horario"><option value="AM">AM</option><option value="PM">PM</option></select>
         </div>
       </div>
+
+      <!-- Lo que el calendario de retiro proyecta para ese recinto ese día.
+           Va justo encima de la cantidad: es el número contra el que el
+           ejecutivo compara lo que el retail le entrega. -->
+      <div id="esperado" style="display:none"></div>
 
       <div class="row2">
         <div>
@@ -507,6 +587,20 @@ tr.gtot td{background:var(--bg-surface);font-weight:700;border-top:2px solid var
   </div>
 </div>
 
+<!-- ===== MODAL: historial de un pedido / resumen de un recinto ===== -->
+<div class="modal-bg" id="modal-info">
+  <div class="modal ancho">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
+      <div>
+        <h3 id="mi-titulo">—</h3>
+        <div class="sub" id="mi-sub"></div>
+      </div>
+      <button class="btn ghost" style="padding:5px 9px" onclick="cerrarInfo()"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="mi-cuerpo"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 <script>
 /* ============================================================================
@@ -627,6 +721,7 @@ function switchTab(v){
   VISTA=v;
   [].forEach.call(document.querySelectorAll('.tab'),function(t){ t.classList.toggle('on',t.dataset.v===v); });
   [].forEach.call(document.querySelectorAll('.view'),function(x){ x.classList.toggle('on',x.id==='v-'+v); });
+  if(v==='registrar')    cargarCalendario();
   if(v==='mios')         cargar();
   if(v==='programacion') cargarDia();
   if(v==='consolidado')  cargar();
@@ -728,6 +823,7 @@ function elegir(i){
   var meta=[v.cadena]; if(v.comuna) meta.push(v.comuna);
   if(v.region) meta.push(v.region); if(v.zona) meta.push('zona '+v.zona);
   $('sel-meta').textContent=meta.join(' · ')+(v.direccion?' — '+v.direccion:'');
+  pintarEsperado();
   $('sel-aviso').innerHTML = v.sin_direccion
     ? '<div class="aviso w" style="margin:.6rem 0 0"><i class="ti ti-alert-triangle"></i><span>'+
       'Este recinto todavía no tiene <b>dirección, comuna ni zona logística</b> en el maestro. '+
@@ -736,6 +832,7 @@ function elegir(i){
 }
 function limpiarRecinto(){
   SEL=null;
+  var e=$('esperado'); if(e) e.style.display='none';
   $('sel-recinto').style.display='none';
   $('combo').style.display='block'; $('h-recinto').style.display='block';
   $('f_busca').value=''; $('f_busca').focus();
@@ -856,6 +953,186 @@ function limpiarForm(){
 function pintarHintFecha(){
   var f=$('f_fecha').value;
   $('h-fecha').textContent = f ? fmtFecha(f)+' · '+relativo(f) : '';
+  pintarEsperado();
+}
+
+/* ============================================================================
+   CALENDARIO DE RETIRO — "cuántos pallets deberías retirar aquí ese día"
+   ----------------------------------------------------------------------------
+   Se reusa /api/calendario-pallets-proxy, el mismo que alimenta el Calendario
+   de retiro de pallets. Su lógica: por cada TRANSFERENCIA despachada al
+   retail, proyecta el retiro para (fecha de despacho + días de retención del
+   par cliente–retail) y estima cantidadDespachada × 0,94 (factor de retorno
+   que el área calibra contra inventario físico).
+
+   Ese proxy agrupa por día y por retail, pero el detalle de cada transferencia
+   trae la bodega de destino, que es justamente el recinto donde va a quedar el
+   pallet. Agrupando ese detalle por recinto sale el dato que el ejecutivo
+   necesita en terreno, sin Function nueva.
+
+   La ventana pedida arranca 95 días atrás porque la retención llega a ~83
+   días: un pallet que se retira mañana pudo despacharse hace casi tres meses.
+============================================================================ */
+var CAL=null, CAL_ESTADO='vacio';
+var CAL_LS='retpro_cal', CAL_TTL=30*60*1000;
+var CAL_ATRAS=95, CAL_ADELANTE=20;
+
+function indexarCalendario(resp){
+  var porDia={}, retirado={};
+  Object.keys(resp.calendario||{}).forEach(function(f){
+    (resp.calendario[f].retails||[]).forEach(function(rt){
+      (rt.clientes||[]).forEach(function(cl){
+        (cl.detalle||[]).forEach(function(d){
+          var k=claveDe(d.bodegaDestino).toUpperCase();
+          if(!k) return;
+          porDia[f]=porDia[f]||{};
+          porDia[f][k]=porDia[f][k]||{pallets:0,trf:0,detalle:[]};
+          porDia[f][k].pallets+=Number(d.pallets||0);
+          porDia[f][k].trf++;
+          porDia[f][k].detalle.push({cliente:cl.cliente, dias:cl.dias, retail:rt.retail,
+            pallets:Number(d.pallets||0), nroPedido:d.nroPedido,
+            fechaDespacho:d.fechaDespacho||d.fechaConfirmacion});
+        });
+      });
+    });
+  });
+  Object.keys(resp.retirosReales||{}).forEach(function(f){
+    (resp.retirosReales[f].retails||[]).forEach(function(rt){
+      (rt.items||[]).forEach(function(it){
+        var k=claveDe(it.bodegaDestino).toUpperCase();
+        if(!k) return;
+        retirado[f]=retirado[f]||{};
+        retirado[f][k]=(retirado[f][k]||0)+Number(it.cantidadConfirmada||0);
+      });
+    });
+  });
+  return {porDia:porDia, retirado:retirado, ts:Date.now(),
+          ventana:{d1:sumaDias(hoyISO(),-CAL_ATRAS), d2:sumaDias(hoyISO(),CAL_ADELANTE)},
+          factor:(resp.metadata&&resp.metadata.factorRetorno)||0.94};
+}
+async function cargarCalendario(forzar){
+  if(CAL_ESTADO==='cargando') return;
+  if(!forzar){
+    if(CAL && Date.now()-CAL.ts<CAL_TTL) return;
+    try{
+      var g=JSON.parse(sessionStorage.getItem(CAL_LS)||'null');
+      if(g && Date.now()-g.ts<CAL_TTL && g.ventana.d2>=hoyISO()){
+        CAL=g; CAL_ESTADO='listo'; pintarEsperado(); return;
+      }
+    }catch(e){}
+  }
+  CAL_ESTADO='cargando'; pintarEsperado();
+  var d1=sumaDias(hoyISO(),-CAL_ATRAS), d2=sumaDias(hoyISO(),CAL_ADELANTE);
+  try{
+    var r=await fetch('/api/calendario-pallets-proxy?fechaInicio='+d1+'&fechaFin='+d2,
+      {headers:{Accept:'application/json'}});
+    var ct=r.headers.get('content-type')||'';
+    if(!r.ok || ct.indexOf('json')<0) throw new Error('el calendario no respondió (HTTP '+r.status+')');
+    var j=await r.json();
+    if(!j.ok) throw new Error(j.error||'respuesta inválida del calendario');
+    CAL=indexarCalendario(j); CAL_ESTADO='listo';
+    try{ sessionStorage.setItem(CAL_LS,JSON.stringify(CAL)); }catch(e){}
+  }catch(e){
+    CAL=null; CAL_ESTADO='error'; CAL_ERROR=e.message;
+  }
+  pintarEsperado();
+}
+var CAL_ERROR='';
+
+function esperadoDe(clave,fecha){
+  if(!CAL||!clave||!fecha) return null;
+  var d=(CAL.porDia[fecha]||{})[clave];
+  return d||null;
+}
+/* Días cercanos con proyección: el retiro casi nunca cae justo el día
+   calculado, así que ver los vecinos evita concluir "no hay nada" cuando en
+   realidad hay carga a dos días. */
+function cercanos(clave,fecha,rango){
+  var out=[];
+  for(var i=-rango;i<=rango;i++){
+    if(i===0) continue;
+    var f=sumaDias(fecha,i);
+    var d=(CAL.porDia[f]||{})[clave];
+    if(d&&d.pallets) out.push({fecha:f, pallets:d.pallets, dias:i});
+  }
+  return out.sort(function(a,b){ return Math.abs(a.dias)-Math.abs(b.dias); }).slice(0,4);
+}
+
+function pintarEsperado(){
+  var box=$('esperado');
+  if(!box) return;
+  if(!SEL){ box.style.display='none'; return; }
+  var fecha=$('f_fecha').value;
+  if(!fecha){ box.style.display='none'; return; }
+  box.style.display='';
+
+  if(CAL_ESTADO==='cargando'){
+    box.className='esp cargando';
+    box.innerHTML='<div class="esp-sub" style="margin:0"><i class="ti ti-loader-2"></i> '+
+      'Consultando el calendario de retiro…</div>';
+    return;
+  }
+  if(CAL_ESTADO==='error'){
+    box.className='esp nada';
+    box.innerHTML='<div class="esp-sub" style="margin:0">No se pudo consultar el calendario de retiro ('+
+      esc(CAL_ERROR)+'). <span class="esp-ver" id="esp-reint">Reintentar</span></div>';
+    var b=$('esp-reint'); if(b) b.onclick=function(){ cargarCalendario(true); };
+    return;
+  }
+  if(CAL_ESTADO!=='listo'){ box.style.display='none'; return; }
+
+  var k=String(SEL.clave).toUpperCase();
+  var d=esperadoDe(k,fecha);
+  var cerca=cercanos(k,fecha,7);
+
+  if(!d||!d.pallets){
+    box.className='esp nada';
+    var h='<div class="esp-sub" style="margin:0"><b>El calendario no proyecta retiros de '+
+      esc(SEL.recinto)+' para el '+esc(fmtFecha(fecha))+'.</b></div>';
+    if(cerca.length) h+='<div class="esp-sub">Sí hay proyección en días cercanos — clic para cambiar la fecha:</div>'+
+      '<div class="esp-cerca">'+cerca.map(function(c){
+        return '<span class="esp-dia" data-fecha="'+c.fecha+'">'+esc(fmtCorta(c.fecha))+' · '+
+               num(c.pallets)+' pallets</span>'; }).join('')+'</div>';
+    else h+='<div class="esp-sub">Tampoco en los 7 días anteriores ni posteriores. '+
+      'Puede ser un retiro fuera de programa, y se registra igual.</div>';
+    box.innerHTML=h;
+    return;
+  }
+
+  box.className='esp';
+  var hh='<div class="esp-top"><span class="esp-n">'+num(d.pallets)+'</span>'+
+    '<span class="esp-lab">pallets debería tener este recinto el '+esc(fmtFecha(fecha))+
+    '<br><span style="font-size:11px;color:var(--text-muted)">según el calendario de retiro · '+
+    d.trf+' transferencia'+(d.trf>1?'s':'')+'</span></span></div>';
+  hh+='<div class="esp-sub">Si en terreno te entregan menos, la diferencia es lo que el retail '+
+      'no está devolviendo: queda registrada al guardar la cantidad real.</div>';
+  if(cerca.length) hh+='<div class="esp-cerca">'+cerca.map(function(c){
+    return '<span class="esp-dia" data-fecha="'+c.fecha+'">'+(c.dias<0?'antes ':'después ')+
+      esc(fmtCorta(c.fecha))+' · '+num(c.pallets)+'</span>'; }).join('')+'</div>';
+  hh+='<span class="esp-ver" id="esp-ver">Ver de dónde sale ▾</span>'+
+      '<div class="esp-det" id="esp-det" style="display:none"></div>';
+  box.innerHTML=hh;
+
+  $('esp-ver').onclick=function(){
+    var det=$('esp-det');
+    if(det.style.display!=='none'){ det.style.display='none'; $('esp-ver').textContent='Ver de dónde sale ▾'; return; }
+    det.style.display='';
+    $('esp-ver').textContent='Ocultar el detalle ▴';
+    var t='<table class="mini-tabla"><thead><tr><th>Cliente</th>'+
+      '<th style="text-align:right">Pallets</th><th>Despacho</th>'+
+      '<th>Retención</th><th>Pedido</th></tr></thead><tbody>';
+    d.detalle.slice().sort(function(a,b){ return b.pallets-a.pallets; }).forEach(function(x){
+      t+='<tr><td title="'+esc(x.cliente||'')+'">'+esc(x.cliente||'—')+'</td>'+
+         '<td class="num" style="font-weight:600">'+num(x.pallets)+'</td>'+
+         '<td>'+esc(x.fechaDespacho?fmtCorta(x.fechaDespacho):'—')+'</td>'+
+         '<td>'+esc(x.dias!=null?x.dias+' días':'—')+'</td>'+
+         '<td class="mono" style="font-size:10.5px">'+esc(x.nroPedido||'—')+'</td></tr>';
+    });
+    t+='</tbody></table><div class="hint">Estimado = cantidad despachada × '+
+       String(CAL.factor).replace('.',',')+' (factor de retorno), puesto en el día '+
+       'de despacho más los días de retención del retail.</div>';
+    det.innerHTML=t;
+  };
 }
 
 /* ------------------------------------------------------- traer registros */
@@ -1241,6 +1518,25 @@ function pintarRol(){
    no matchean se muestran aparte y se cuentan, porque un cruce que esconde
    lo que no pudo cruzar es peor que no tener cruce.
 ============================================================================ */
+var FILAS_CRUCE = {};
+
+/* RDTOut manda la fecha en varios formatos: ISO, "DD-MM-YYYY" y
+   "DD-MM-YYYY, HH:MM:SS a. m.". Mismo criterio que parseFechaM3 del
+   calendario-pallets-proxy. El eje es fechaRequerida, que es la que el
+   ejecutivo programa; si falta, se cae a la de confirmación. */
+function aISO(v){
+  if(!v) return '';
+  var t=String(v).split(',')[0].trim();
+  var m=t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m) return m[1]+'-'+m[2]+'-'+m[3];
+  m=t.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
+  if(m) return m[3]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[1]).padStart(2,'0');
+  return '';
+}
+function fechaDeOp(o){
+  return aISO(o.fechaRequerida) || aISO(o.fechaConfirmacion) || aISO(o.fechaDespacho) || '';
+}
+
 function esRedtec(s){ return normaliza(s).indexOf('REDTEC')>=0; }
 function contraparteBodega(op){
   var o=op.bodegaOrigenStr||op.bodegaOrigen||'';
@@ -1250,7 +1546,17 @@ function contraparteBodega(op){
   return o||d||'';
 }
 function esAnulada(op){ return normaliza(op.etapaOperacion||op.etapa||'').indexOf('ANULAD')>=0; }
+/* Prefijo, no igualdad: si se compara operacion==='Retiro' se pierden
+   'Retiro LD' y compañía. Y prefijo, no "contiene": 'Emision Retiro Cliente'
+   contiene 'retiro' pero es una emisión, no un retiro. */
 function esRetiro(op){ return normaliza(op.operacion||'').indexOf('RETIRO')===0; }
+/* Retiro interno entre bodegas REDTEC: no es un retiro a retail y no tiene
+   contraparte, así que no debe sumar al confirmado ni ensuciar el aviso de
+   bodegas sin calce. Mismo criterio que usa calendario-pallets-proxy. */
+function esInterno(op){
+  var c=String(op.clienteOrigenStr||op.clienteDestinoStr||'').trim().toUpperCase();
+  return c==='REDTEC S.A.' || c==='REDTEC SA';
+}
 
 function calzar(nombre){
   if(!nombre) return null;
@@ -1285,8 +1591,10 @@ async function correrCruce(){
 function pintarCruce(){
   if(!CRUCE) return;
   var incAnul=$('x_anuladas').checked;
-  var ops=CRUCE.ops.filter(function(o){ return incAnul || !esAnulada(o); });
-  var anuladas=CRUCE.ops.length-CRUCE.ops.filter(function(o){ return !esAnulada(o); }).length;
+  var internos=CRUCE.ops.filter(esInterno).length;
+  var base=CRUCE.ops.filter(function(o){ return !esInterno(o); });
+  var ops=base.filter(function(o){ return incAnul || !esAnulada(o); });
+  var anuladas=base.length-base.filter(function(o){ return !esAnulada(o); }).length;
 
   // confirmado por clave de recinto + fecha
   var conf={}, sinCalce={}, totConf=0;
@@ -1297,16 +1605,27 @@ function pintarCruce(){
     totConf+=cant;
     if(!cal){ sinCalce[nom]=(sinCalce[nom]||0)+cant; return; }
     var k=String(cal.clave).toUpperCase();
-    conf[k]=conf[k]||{recinto:cal.recinto,cadena:cal.cadena,zona:cal.zona,conf:0,ops:0};
+    conf[k]=conf[k]||{recinto:cal.recinto,cadena:cal.cadena,zona:cal.zona,conf:0,ops:0,
+                      pedidos:[],porDia:{}};
     conf[k].conf+=cant; conf[k].ops++;
+    var fo=fechaDeOp(o);
+    if(fo) conf[k].porDia[fo]=(conf[k].porDia[fo]||0)+cant;
+    if(o.nroPedido!=null && String(o.nroPedido)!=='') conf[k].pedidos.push({
+      nro:String(o.nroPedido), conf:cant,
+      sol:Number(o.cantidadSolicitada||0), desp:Number(o.cantidadDespachada||0),
+      etapa:o.etapaOperacion||'', operacion:o.operacion||'', fecha:fo,
+      anulada:esAnulada(o), chofer:o.chofer||'', patente:o.patente||'' });
   });
 
   // programado por clave
   var prog={}, totProg=0;
   CRUCE.prog.forEach(function(r){
     var k=String(r.clave).toUpperCase();
-    prog[k]=prog[k]||{recinto:r.recinto,cadena:r.cadena,zona:r.zona,prog:0,n:0};
+    prog[k]=prog[k]||{recinto:r.recinto,cadena:r.cadena,zona:r.zona,prog:0,n:0,
+                      porDia:{},registros:[]};
     prog[k].prog+=Number(r.cantidad||0); prog[k].n++;
+    prog[k].porDia[r.fecha_retiro]=(prog[k].porDia[r.fecha_retiro]||0)+Number(r.cantidad||0);
+    prog[k].registros.push(r);
     totProg+=Number(r.cantidad||0);
   });
 
@@ -1316,8 +1635,11 @@ function pintarCruce(){
     var p=P.prog||0, c=C.conf||0;
     return { clave:k, recinto:P.recinto||C.recinto||k, cadena:P.cadena||C.cadena||'',
              zona:P.zona||C.zona||'', prog:p, conf:c, dif:c-p,
-             pct: p? (c/p-1) : null, soloConf: !prog[k], soloProg: !conf[k] };
+             pct: p? (c/p-1) : null, soloConf: !prog[k], soloProg: !conf[k],
+             pedidos:(C.pedidos||[]), progPorDia:(P.porDia||{}), confPorDia:(C.porDia||{}),
+             registros:(P.registros||[]) };
   }).sort(function(a,b){ return Math.abs(b.dif)-Math.abs(a.dif); });
+  FILAS_CRUCE = {}; filas.forEach(function(f){ FILAS_CRUCE[f.clave]=f; });
 
   var nSinCalce=Object.keys(sinCalce).length;
   var palSinCalce=Object.keys(sinCalce).reduce(function(s,k){ return s+sinCalce[k]; },0);
@@ -1339,7 +1661,9 @@ function pintarCruce(){
     '<b>Cómo se calcula:</b> programado = lo que registró el ejecutivo en esta app; '+
     'confirmado = suma de <i>cantidadConfirmada</i> de las operaciones de RDTOut cuyo tipo empieza con «Retiro», '+
     'calzadas por el código del recinto. '+(incAnul?'<b>Incluyendo</b>':'Excluyendo')+' las anuladas'+
-    (anuladas?' ('+anuladas+' en el período)':'')+'.</span></div>';
+    (anuladas?' ('+anuladas+' en el período)':'')+
+    (internos?' Se dejaron fuera '+internos+' retiro'+(internos>1?'s':'')+' interno'+(internos>1?'s':'')+
+      ' entre bodegas REDTEC, que no son retiros a retail.':'')+'.</span></div>';
   if(nSinCalce) av+='<div class="aviso w"><i class="ti ti-unlink"></i><span><b>'+nSinCalce+
     ' bodega'+(nSinCalce>1?'s':'')+' de RDTOut ('+num(palSinCalce)+' pallets) no calzó con ningún recinto del catálogo</b> '+
     'y no entró en la comparación por recinto — sí está en el total confirmado. '+
@@ -1351,16 +1675,18 @@ function pintarCruce(){
   if(!filas.length){ $('x-area').innerHTML=vacio('No hay ni programación ni retiros de RDTOut en el rango.','mood-empty'); return; }
 
   var tope=Math.max.apply(null,filas.map(function(f){ return Math.max(f.prog,f.conf); }).concat([1]));
-  var h='<div class="tbl-wrap sticky1"><table><thead><tr>'+
+  var h='<div class="tbl-wrap sticky1 alto"><table><thead><tr>'+
     '<th>Recinto</th><th>Retail</th><th>Zona</th><th class="num">Programado</th>'+
     '<th class="num">Confirmado</th><th class="num">Dif.</th>'+
+    '<th>Pedido</th>'+
     '<th style="min-width:160px">Comparación'+
       '<div style="font-weight:400;text-transform:none;letter-spacing:0;font-size:9.5px;'+
       'color:var(--text-muted);margin-top:2px">banda = programado · trazo = confirmado</div></th>'+
     '</tr></thead><tbody>';
   filas.forEach(function(f){
     var col = f.dif===0 ? 'var(--text-sec)' : (f.dif>0 ? 'var(--ok)' : 'var(--danger)');
-    h+='<tr><td>'+esc(f.recinto)+
+    h+='<tr><td><span class="lnk" data-recinto="'+esc(f.clave)+'" '+
+        'title="Ver el comportamiento de este recinto">'+esc(f.recinto)+'</span>'+
       (f.soloConf?' <span class="tag-sd">sin programar</span>':'')+
       (f.soloProg?' <span class="tag-sd">sin confirmar</span>':'')+'</td>'+
       '<td style="font-size:11.5px">'+esc(f.cadena)+'</td>'+
@@ -1370,12 +1696,28 @@ function pintarCruce(){
       '<td class="num" style="color:'+col+';font-weight:600">'+(f.dif>0?'+':'')+num(f.dif)+
         (f.pct!==null?'<div style="font-size:10px;font-weight:400;opacity:.8">'+
           (f.pct>0?'+':'')+(Math.round(f.pct*1000)/10).toString().replace('.',',')+'%</div>':'')+'</td>'+
+      '<td>'+chipsPedido(f)+'</td>'+
       '<td>'+barras(f.prog,f.conf,tope)+'</td></tr>';
   });
-  h+='<tr class="gtot"><td colspan="3">Total</td><td class="num">'+num(totProg)+'</td>'+
+  h+='</tbody><tfoot><tr><td colspan="3">Total</td><td class="num">'+num(totProg)+'</td>'+
      '<td class="num">'+num(totConf)+'</td><td class="num">'+(totConf-totProg>=0?'+':'')+
-     num(totConf-totProg)+'</td><td></td></tr>';
-  $('x-area').innerHTML=h+'</tbody></table></div>';
+     num(totConf-totProg)+'</td><td></td><td></td></tr></tfoot>';
+  $('x-area').innerHTML=h+'</table></div>';
+}
+
+/* Chips con el Nº de pedido. Un recinto puede tener varios en el período, así
+   que se muestran los dos primeros y el resto se abre desde el resumen del
+   recinto. Cada chip abre el historial del pedido. */
+function chipsPedido(f){
+  var ps=f.pedidos||[];
+  if(!ps.length) return '<span style="color:var(--text-muted);font-size:11px">—</span>';
+  var vis=ps.slice(0,2).map(function(p){
+    return '<span class="chip-ped'+(p.anulada?' anul':'')+'" data-pedido="'+esc(p.nro)+'" '+
+      'title="'+esc(p.etapa||p.operacion)+' · confirmado '+num(p.conf)+' — clic para ver el historial">'+
+      esc(p.nro)+'</span>'; }).join('');
+  if(ps.length>2) vis+='<span class="chip-ped mas" data-recinto="'+esc(f.clave)+'" '+
+    'title="Ver los '+ps.length+' pedidos de este recinto">+'+(ps.length-2)+'</span>';
+  return '<div class="chips-ped">'+vis+'</div>';
 }
 
 /* Barra tipo bullet: el programado es la banda tenue (la meta) y el
@@ -1404,6 +1746,159 @@ function barras(p,c,tope){
 }
 
 /* ============================================================================
+   MODALES: historial de un pedido y resumen de un recinto
+============================================================================ */
+function abrirInfo(titulo, sub, cuerpo){
+  $('mi-titulo').textContent=titulo; $('mi-sub').textContent=sub||'';
+  $('mi-cuerpo').innerHTML=cuerpo;
+  $('modal-info').className='modal-bg on';
+}
+function cerrarInfo(){ $('modal-info').className='modal-bg'; }
+
+/* ---- historial del pedido (RDTOut · historialxnropedido) ---- */
+async function abrirHistorial(nro, volverA){
+  var atras = volverA ? '<div class="lnk" style="font-size:12px;margin-bottom:.6rem" '+
+      'data-recinto="'+esc(volverA)+'">← Volver al recinto</div>' : '';
+  abrirInfo('Pedido '+nro, 'Historial en RDTOut',
+    atras+'<div class="state-msg" style="padding:1.6rem"><div class="lr-txt">Cargando el historial…</div></div>');
+  try{
+    var ctl=new AbortController(); var to=setTimeout(function(){ ctl.abort(); },25000);
+    var r=await fetch('/api/historial-proxy?nroPedido='+encodeURIComponent(nro),
+      {headers:{Accept:'application/json'},signal:ctl.signal});
+    clearTimeout(to);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    var ev=await r.json();
+    $('mi-cuerpo').innerHTML = atras + lineaTiempo(Array.isArray(ev)?ev:[]);
+  }catch(e){
+    $('mi-cuerpo').innerHTML = atras+'<div class="aviso e"><i class="ti ti-alert-circle"></i><span>'+
+      'No se pudo cargar el historial: '+esc(e.name==='AbortError'?'la consulta tardó demasiado':e.message)+'</span></div>';
+  }
+}
+function fechaHora(v){
+  if(!v) return '—';
+  var d=new Date(v);
+  if(isNaN(d)) return String(v);
+  return d.toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+function lineaTiempo(ev){
+  if(!ev.length) return '<div class="empty"><i class="ti ti-history-off"></i>Sin eventos registrados para este pedido.</div>';
+  ev.sort(function(a,b){ return new Date(a.fechaCreacionHistorial)-new Date(b.fechaCreacionHistorial); });
+  var ult=(ev[ev.length-1].etapaOperacion||'').toLowerCase();
+  var anul=ult.indexOf('anulad')>=0, cerr=ult.indexOf('cerrad')>=0||ult.indexOf('confirmad')>=0;
+  var h='<div class="tl">';
+  ev.forEach(function(e,i){
+    var prev=i>0?ev[i-1]:null, fin=(i===ev.length-1);
+    var dot=fin?(anul?'warn':(cerr?'done':'active')):'done';
+    var tit=(e.glosaHistorial||'Evento')+(e.etapaOperacion?' — '+e.etapaOperacion:'');
+    h+='<div class="tl-item"><div class="tl-dot '+dot+'"></div>'+
+       '<div class="tl-head"><span class="tl-stage">'+esc(tit)+'</span>'+
+       '<span class="tl-date">'+esc(fechaHora(e.fechaCreacionHistorial))+'</span></div>';
+    var kv=[];
+    if(e.usuario) kv.push(['Usuario',esc(e.usuario),'']);
+    if(e.cantidadSolicitada) kv.push(['Sol.',num(e.cantidadSolicitada),'blue']);
+    if(e.cantidadDespachada) kv.push(['Desp.',num(e.cantidadDespachada),'amber']);
+    if(e.cantidadConfirmada) kv.push(['Conf.',num(e.cantidadConfirmada),'green']);
+    if(e.dteNro) kv.push(['DTE',esc(e.dteNro),'blue']);
+    if(kv.length){ h+='<div class="tl-kvs">'+kv.map(function(k){
+      return '<span class="tl-kv">'+k[0]+'<b class="'+k[2]+'">'+k[1]+'</b></span>'; }).join('')+'</div>'; }
+    var ch=cambios(prev,e);
+    if(ch.length) h+='<div class="tl-chips">'+ch.map(function(c){
+      return '<span class="tl-chip '+(c.cls||'')+'">'+esc(c.txt)+'</span>'; }).join('')+'</div>';
+    h+='</div>';
+  });
+  return h+'</div><div class="hint" style="margin-top:.5rem">'+ev.length+' evento'+
+    (ev.length!==1?'s':'')+' · fuente HistorialXNroPedido</div>';
+}
+function cambios(a,b){
+  var c=[];
+  if(!a){ if(b.patente) c.push({txt:'🚛 '+b.patente+(b.chofer?' · '+b.chofer:''),cls:''}); return c; }
+  if((b.etapaOperacion||'')!==(a.etapaOperacion||'')) c.push({txt:(a.etapaOperacion||'—')+' → '+(b.etapaOperacion||'—'),cls:''});
+  var dC=(b.cantidadConfirmada||0)-(a.cantidadConfirmada||0);
+  if(dC) c.push({txt:'✓ Confirmó '+(dC>0?'+':'')+num(dC),cls:'green'});
+  var dD=(b.cantidadDespachada||0)-(a.cantidadDespachada||0);
+  if(dD) c.push({txt:'📦 Despachó '+(dD>0?'+':'')+num(dD),cls:'amber'});
+  var dS=(b.cantidadSolicitada||0)-(a.cantidadSolicitada||0);
+  if(dS) c.push({txt:'✎ Solicitada '+num(a.cantidadSolicitada||0)+' → '+num(b.cantidadSolicitada||0),cls:'amber'});
+  if((b.patente||'')!==(a.patente||'') && b.patente) c.push({txt:'🚛 '+b.patente+(b.chofer?' · '+b.chofer:''),cls:''});
+  if((b.dteNro||0)!==(a.dteNro||0) && b.dteNro) c.push({txt:'📄 DTE '+b.dteNro,cls:'green'});
+  return c;
+}
+
+/* ---- resumen del comportamiento de un recinto ---- */
+function abrirRecinto(clave){
+  var f=FILAS_CRUCE[clave];
+  if(!f){ toast('No hay datos de ese recinto en el período',true); return; }
+  var dias=[...new Set(Object.keys(f.progPorDia).concat(Object.keys(f.confPorDia)))].sort();
+  var tope=Math.max.apply(null,dias.map(function(d){
+    return Math.max(f.progPorDia[d]||0,f.confPorDia[d]||0); }).concat([1]));
+
+  var cum = f.prog ? Math.round(f.conf/f.prog*1000)/10 : null;
+  var h='<div class="kpis" style="margin:.6rem 0 1rem">'+
+    kpi(num(f.prog),'Programado','r')+kpi(num(f.conf),'Confirmado','a')+
+    kpi((f.dif>=0?'+':'')+num(f.dif),'Diferencia',f.dif<0?'w':'a')+
+    kpi(cum!==null?String(cum).replace('.',',')+'%':'—','Cumplimiento',cum===null?'':(cum>=100?'a':'w'))+
+    '</div>';
+
+  if(f.soloProg) h+='<div class="aviso w"><i class="ti ti-alert-triangle"></i><span>'+
+    'En el período no llegó <b>ningún retiro confirmado</b> de este recinto desde RDTOut. '+
+    'Puede ser que no se haya hecho, o que en RDTOut la bodega se llame distinto: '+
+    'revisa el aviso de bodegas sin calce arriba.</span></div>';
+
+  h+='<div style="font-size:12px;color:var(--text-sec);font-weight:600;margin:.2rem 0 .3rem">Día por día</div>';
+  if(!dias.length) h+='<div class="hint">Sin movimiento en el período.</div>';
+  else{
+    h+='<table class="mini-tabla"><thead><tr><th>Fecha</th><th style="text-align:right">Prog.</th>'+
+       '<th style="text-align:right">Conf.</th><th style="text-align:right">Dif.</th>'+
+       '<th style="min-width:120px">Comparación</th></tr></thead><tbody>';
+    dias.forEach(function(d){
+      var p=f.progPorDia[d]||0, c=f.confPorDia[d]||0, di=c-p;
+      var col=di===0?'var(--text-sec)':(di>0?'var(--ok)':'var(--danger)');
+      h+='<tr><td>'+esc(fmtFecha(d))+'</td>'+
+        '<td class="num">'+num(p)+'</td><td class="num" style="font-weight:600">'+num(c)+'</td>'+
+        '<td class="num" style="color:'+col+'">'+(di>0?'+':'')+num(di)+'</td>'+
+        '<td>'+barras(p,c,tope)+'</td></tr>';
+    });
+    h+='</tbody></table>';
+  }
+
+  if(f.pedidos.length){
+    h+='<div style="font-size:12px;color:var(--text-sec);font-weight:600;margin:1rem 0 .3rem">'+
+       'Pedidos en RDTOut ('+f.pedidos.length+')</div>';
+    h+='<table class="mini-tabla"><thead><tr><th>Pedido</th><th>Fecha</th><th>Etapa</th>'+
+       '<th style="text-align:right">Sol.</th><th style="text-align:right">Desp.</th>'+
+       '<th style="text-align:right">Conf.</th></tr></thead><tbody>';
+    f.pedidos.slice().sort(function(a,b){ return (a.fecha||'').localeCompare(b.fecha||''); })
+      .forEach(function(pp){
+      h+='<tr><td><span class="chip-ped'+(pp.anulada?' anul':'')+'" data-pedido="'+esc(pp.nro)+'" '+
+          'data-volver="'+esc(clave)+'">'+esc(pp.nro)+'</span></td>'+
+        '<td>'+esc(pp.fecha?fmtCorta(pp.fecha):'—')+'</td>'+
+        '<td style="font-size:11px">'+esc(pp.etapa||pp.operacion||'—')+'</td>'+
+        '<td class="num">'+num(pp.sol)+'</td><td class="num">'+num(pp.desp)+'</td>'+
+        '<td class="num" style="font-weight:600">'+num(pp.conf)+'</td></tr>';
+    });
+    h+='</tbody></table>';
+  }
+
+  if(f.registros.length){
+    h+='<div style="font-size:12px;color:var(--text-sec);font-weight:600;margin:1rem 0 .3rem">'+
+       'Lo que se programó ('+f.registros.length+')</div>';
+    h+='<table class="mini-tabla"><thead><tr><th>Fecha</th><th>Hor.</th><th>Ejecutivo</th>'+
+       '<th style="text-align:right">Pallets</th><th>Observación</th></tr></thead><tbody>';
+    f.registros.slice().sort(function(a,b){ return (a.fecha_retiro||'').localeCompare(b.fecha_retiro||''); })
+      .forEach(function(r){
+      h+='<tr><td>'+esc(fmtCorta(r.fecha_retiro))+'</td>'+
+        '<td><span class="badge '+(r.horario||'').toLowerCase()+'">'+esc(r.horario||'')+'</span></td>'+
+        '<td>'+esc(ejecutivoDe(r))+'</td>'+
+        '<td class="num" style="font-weight:600">'+num(r.cantidad)+'</td>'+
+        '<td style="font-size:11px;color:var(--text-muted)">'+esc(r.observaciones||'')+'</td></tr>';
+    });
+    h+='</tbody></table>';
+  }
+
+  abrirInfo(f.recinto, [f.cadena, f.zona||'sin zona', CRUCE.d1+' → '+CRUCE.d2].filter(Boolean).join(' · '), h);
+}
+
+/* ============================================================================
    ARRANQUE
 ============================================================================ */
 document.addEventListener('DOMContentLoaded', async function(){
@@ -1429,6 +1924,12 @@ document.addEventListener('DOMContentLoaded', async function(){
     if(t && t.dataset.v){ switchTab(t.dataset.v); return; }
     var ed=e.target.closest ? e.target.closest('[data-ed]') : null;
     if(ed){ abrirEd(ed.dataset.ed); return; }
+    var ped=e.target.closest ? e.target.closest('[data-pedido]') : null;
+    if(ped){ abrirHistorial(ped.dataset.pedido, ped.dataset.volver||''); return; }
+    var rec=e.target.closest ? e.target.closest('[data-recinto]') : null;
+    if(rec){ abrirRecinto(rec.dataset.recinto); return; }
+    var dia=e.target.closest ? e.target.closest('.esp-dia[data-fecha]') : null;
+    if(dia){ $('f_fecha').value=dia.dataset.fecha; pintarHintFecha(); return; }
     if(!(e.target.closest && e.target.closest('#combo'))){
       var L=$('combo-list'); if(L){ L.className='combo-list'; }
     }
@@ -1458,7 +1959,7 @@ document.addEventListener('DOMContentLoaded', async function(){
     $('h-planta').textContent = v ? 'Se mantiene para el próximo registro.' : '';
   });
   document.addEventListener('keydown', function(e){
-    if(e.key==='Escape'){ cerrarEd(); cerrarDup(); }
+    if(e.key==='Escape'){ cerrarEd(); cerrarDup(); cerrarInfo(); }
     if(VISTA==='programacion' && !e.target.matches('input,select,textarea')){
       if(e.key==='ArrowLeft')  moverDia(-1);
       if(e.key==='ArrowRight') moverDia(1);
@@ -1488,6 +1989,7 @@ document.addEventListener('DOMContentLoaded', async function(){
     // el ejecutivo entra al formulario, que es el suyo.
     if(YO.oficina) switchTab('programacion');
     else { switchTab('registrar'); $('f_busca').focus(); }
+    cargarCalendario();   // en segundo plano: el panel se pinta cuando llega
   }catch(e){
     pintarRol();
     estado('sin conexión','err','cloud-off');

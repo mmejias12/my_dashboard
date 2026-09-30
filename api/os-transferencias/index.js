@@ -7,6 +7,14 @@
 //    GET /api/os-transferencias?destino=walmart&desde=2025-09&hasta=2026-08
 //        → ese retail: serie mensual + LOS CLIENTES QUE LE TRANSFIRIERON
 //
+//    GET /api/os-transferencias?origen=ald&desde=2025-09&hasta=2026-08
+//        → ese cliente: serie mensual + LOS RETAILS A LOS QUE TRANSFIRIÓ
+//
+//  El lado origen es el espejo del anterior y sale del MISMO índice: el rollup
+//  guarda el par origen→destino anidado bajo cada retail, así que para
+//  responder por cliente se recorren los destinos y se junta lo suyo. No hace
+//  falta un blob nuevo ni volver a leer RDTOut.
+//
 //  POR QUÉ EXISTE. El resto de la plataforma cuenta lo confirmado. Eso deja dos
 //  preguntas sin responder que sí se hacen en las reuniones: cuánto salió, y
 //  cuánto falta por confirmar. El 17-09-2026 esa ambigüedad llegó a gerencia:
@@ -134,6 +142,56 @@ module.exports = async function (context, req) {
         totales: sumar(mesTot, desde, hasta),
         por_mes: serie(mesTot, desde, hasta),
         clientes }) };
+      return;
+    }
+
+    // ── Un cliente: la serie y A QUIÉN le transfirió ────────────────────────
+    // Espejo exacto del bloque de arriba. El índice está armado al revés (los
+    // orígenes cuelgan del destino), así que acá se recorre y se da vuelta.
+    if (p.origen) {
+      const q = normalizar(p.origen);
+      const nombres = new Set();
+      // Primero se resuelve el nombre contra los orígenes que existen, igual
+      // que con los retails: "ald" tiene que encontrar la razón social entera.
+      for (const dst in (d.destinos || {})) {
+        for (const o in d.destinos[dst].origenes) {
+          if (normalizar(o).indexOf(q) >= 0) nombres.add(o);
+        }
+      }
+      if (!nombres.size) {
+        context.res = { status: 200, headers: CORS, body: JSON.stringify({
+          ...base, origen: p.origen, encontrado: false,
+          mensaje: 'Ningún cliente calza con "' + p.origen + '".' }) };
+        return;
+      }
+
+      const mesTot = {}, porRetail = {};
+      for (const dst in d.destinos) {
+        const acc = {};
+        for (const o of nombres) {
+          const mm = d.destinos[dst].origenes[o];
+          if (!mm) continue;
+          for (const m in mm) {
+            const t = acc[m] || (acc[m] = [0, 0, 0]);
+            t[0] += mm[m][0]; t[1] += mm[m][1]; t[2] += mm[m][2];
+            const g = mesTot[m] || (mesTot[m] = [0, 0, 0]);
+            g[0] += mm[m][0]; g[1] += mm[m][1]; g[2] += mm[m][2];
+          }
+        }
+        if (Object.keys(acc).length) porRetail[dst] = acc;
+      }
+
+      const retails = Object.keys(porRetail)
+        .map(r => ({ retail: r, ...sumar(porRetail[r], desde, hasta) }))
+        .filter(x => x.movimientos > 0)
+        .sort((a, b) => b.despachado - a.despachado);
+
+      context.res = { status: 200, headers: CORS, body: JSON.stringify({
+        ...base, origen: p.origen, encontrado: true,
+        nombres_sumados: [...nombres].sort(),
+        totales: sumar(mesTot, desde, hasta),
+        por_mes: serie(mesTot, desde, hasta),
+        retails }) };
       return;
     }
 

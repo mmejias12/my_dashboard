@@ -232,6 +232,65 @@ tr.gtot td{background:var(--bg-surface);font-weight:700;border-top:2px solid var
   .lr-liquid{top:-25%;border-radius:0} .lr-ring{display:none} .lr-mask{opacity:1}
 }
 
+/* selector de período (mismo componente que Ops y la cartola) */
+.rg{position:relative;display:inline-block}
+.rg-nav{display:inline-flex;align-items:center;gap:3px;background:var(--bg-input);
+  border:1px solid var(--border-md);border-radius:9px;padding:3px}
+.rg-fl{background:transparent;border:none;color:var(--text-sec);width:28px;height:30px;border-radius:7px;
+  cursor:pointer;font-size:16px;line-height:1;display:inline-flex;align-items:center;justify-content:center}
+.rg-fl:hover:not(:disabled){background:var(--bg-hover);color:var(--accent)}
+.rg-fl.sm{width:24px;height:24px;font-size:14px}
+.rg-pill{background:transparent;border:none;color:var(--text-pri);cursor:pointer;font-family:inherit;
+  padding:1px 10px;text-align:center;min-width:186px;line-height:1.25}
+.rg-pill span{display:block;font-size:12.5px;font-weight:600;white-space:nowrap}
+.rg-pill small{display:block;font-size:10px;color:var(--text-muted);white-space:nowrap}
+.rg-pill:hover span{color:var(--accent)}
+.rg-pop{position:absolute;z-index:120;top:calc(100% + 6px);left:0;background:var(--bg-surface);
+  border:1px solid var(--border-md);border-radius:12px;box-shadow:0 18px 46px rgba(0,0,0,.5);
+  padding:.75rem;width:max-content;max-width:min(94vw,640px);
+  max-height:min(78vh,560px);overflow-y:auto}
+.rg-pop-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:.55rem}
+.rg-pop-head b{font-size:12.5px;font-weight:600}
+.rg-x{background:transparent;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;padding:2px 5px}
+.rg-x:hover{color:var(--danger)}
+.rg-cols{display:flex;gap:.85rem;align-items:flex-start}
+.rg-atajos{display:flex;flex-direction:column;gap:.5rem;min-width:118px}
+.rg-grp-t{font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:3px}
+.rg-at{display:block;width:100%;text-align:left;background:transparent;border:1px solid transparent;
+  color:var(--text-sec);font-family:inherit;font-size:11.5px;padding:4px 7px;border-radius:6px;cursor:pointer}
+.rg-at:hover{background:var(--bg-hover);color:var(--accent);border-color:var(--border-accent)}
+.rg-mesnav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:.4rem}
+.rg-mesnav span{font-size:11.5px;color:var(--text-sec);font-weight:600}
+.rg-dos{display:flex;gap:.8rem}
+.rg-cal-t{font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);
+  text-align:center;margin-bottom:4px}
+.rg-grid{display:grid;grid-template-columns:22px repeat(7,26px);gap:2px}
+.rg-sem-h,.rg-dow{font-size:9px;color:var(--text-muted);text-align:center;padding:2px 0}
+.rg-sem{font-size:9.5px;color:var(--text-muted);background:var(--bg-input);border:1px solid transparent;
+  border-radius:4px;cursor:pointer;font-family:'JetBrains Mono',monospace;padding:0}
+.rg-sem:hover{color:var(--accent);border-color:var(--border-accent)}
+.rg-d{height:26px;border:1px solid transparent;border-radius:6px;background:transparent;cursor:pointer;
+  color:var(--text-pri);font-family:inherit;font-size:11.5px;padding:0}
+.rg-d:hover:not(:disabled){background:var(--bg-hover);border-color:var(--border-accent)}
+.rg-d.vacio{cursor:default}
+.rg-d.hoy{font-weight:700;color:var(--accent)}
+.rg-d.prog{border-bottom:1px dotted var(--info);color:var(--text-sec)}
+.rg-d.dentro{background:var(--bg-active)}
+.rg-d.extremo{background:var(--red-logo);color:#fff;font-weight:700;border-color:var(--red-logo)}
+.rg-d.off{opacity:.25;cursor:not-allowed}
+.rg-pie{font-size:10px;color:var(--text-muted);margin-top:.5rem;line-height:1.45;max-width:400px}
+@media (max-width:640px){
+  .rg-pop{position:fixed;inset:0;top:0;left:0;width:100vw;max-width:100vw;height:100vh;
+    border-radius:0;overflow-y:auto;padding:1rem}
+  .rg-cols{flex-direction:column}
+  .rg-atajos{flex-direction:row;flex-wrap:wrap;min-width:0}
+  .rg-grp{flex:1 1 44%}
+  .rg-dos{flex-direction:column;align-items:center}
+  .rg-pill{min-width:150px}
+  .rg-grid{grid-template-columns:24px repeat(7,32px)}
+  .rg-d{height:32px}
+}
+
 /* panel "cuánto deberías retirar" del calendario */
 .esp{margin-top:.7rem;border-radius:10px;padding:.8rem .9rem;
      background:var(--info-bg);border:1px solid rgba(96,165,250,.32)}
@@ -449,10 +508,9 @@ tr.gtot td{background:var(--bg-surface);font-weight:700;border-top:2px solid var
   <!-- ===================== MIS REGISTROS ===================== -->
   <div class="view" id="v-mios">
     <div class="card" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <div class="rango-in">
-        <span>Desde</span><input type="date" id="m_desde">
-        <span>Hasta</span><input type="date" id="m_hasta">
-      </div>
+      <!-- los input date siguen siendo la fuente de verdad; quedan ocultos -->
+      <input type="date" id="m_desde" hidden><input type="date" id="m_hasta" hidden>
+      <div class="rg" id="rg-mios"></div>
       <button class="btn" onclick="cargar(true)"><i class="ti ti-refresh"></i> Actualizar</button>
     </div>
     <div class="kpis" id="m-kpis"></div>
@@ -483,13 +541,8 @@ tr.gtot td{background:var(--bg-surface);font-weight:700;border-top:2px solid var
   <div class="view" id="v-consolidado">
     <div class="card">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <div class="rango-in">
-          <span>Desde</span><input type="date" id="c_desde" onchange="cargar(true)">
-          <span>Hasta</span><input type="date" id="c_hasta" onchange="cargar(true)">
-        </div>
-        <button class="btn ghost" onclick="rangoRapido('mes')">Mes en curso</button>
-        <button class="btn ghost" onclick="rangoRapido('semana')">Esta semana</button>
-        <button class="btn ghost" onclick="rangoRapido('prog')">Próximos 30 días</button>
+        <input type="date" id="c_desde" hidden><input type="date" id="c_hasta" hidden>
+        <div class="rg" id="rg-cons"></div>
         <button class="btn" onclick="cargar(true)"><i class="ti ti-refresh"></i> Actualizar</button>
       </div>
       <div class="row2" style="margin-top:.7rem">
@@ -525,10 +578,8 @@ tr.gtot td{background:var(--bg-surface);font-weight:700;border-top:2px solid var
   <!-- ===================== CRUCE ===================== -->
   <div class="view" id="v-cruce">
     <div class="card" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <div class="rango-in">
-        <span>Desde</span><input type="date" id="x_desde">
-        <span>Hasta</span><input type="date" id="x_hasta">
-      </div>
+      <input type="date" id="x_desde" hidden><input type="date" id="x_hasta" hidden>
+      <div class="rg" id="rg-cruce"></div>
       <button class="btn pri" id="btn-cruce" onclick="correrCruce()"><i class="ti ti-arrows-left-right"></i> Comparar con RDTOut</button>
       <div class="cbar-end">
         <label class="chk"><input type="checkbox" id="x_anuladas" onchange="pintarCruce()"> Incluir anuladas</label>
@@ -1423,17 +1474,6 @@ function pintarConsolidado(){
   });
   $('c-area').innerHTML=h+'</tbody></table></div>';
 }
-function rangoRapido(q){
-  var hoy=hoyISO();
-  if(q==='mes'){ $('c_desde').value=hoy.slice(0,8)+'01'; $('c_hasta').value=hoy; }
-  if(q==='semana'){
-    var p=hoy.split('-'), d=new Date(Date.UTC(+p[0],+p[1]-1,+p[2]));
-    var lun=sumaDias(hoy,-((d.getUTCDay()+6)%7));
-    $('c_desde').value=lun; $('c_hasta').value=hoy;
-  }
-  if(q==='prog'){ $('c_desde').value=hoy; $('c_hasta').value=sumaDias(hoy,30); }
-  cargar(true);
-}
 
 /* --------------------------------------------------------- editar / eliminar */
 function abrirEd(id){
@@ -1494,6 +1534,250 @@ function pintarRol(){
       'ni para ver el consolidado. Pídele el rol al administrador del portal.</span></div>' : '';
 }
 /* ============================================================================
+   SELECTOR DE PERÍODO — el mismo componente que usan Ops, la cartola y
+   Transportes en el m3link, adaptado a esta vista.
+   ----------------------------------------------------------------------------
+   Reemplaza los dos <input type="date"> sueltos por una píldora con el rango
+   y su duración, flechas ‹ › que corren la ventana completa, y un popover con
+   atajos de un clic, calendario de dos meses y el Nº de semana ISO al costado.
+
+   DECISIÓN CLAVE, igual que en Ops: los <input type="date"> siguen existiendo
+   OCULTOS y siguen siendo la única fuente de verdad. Todo el resto del código
+   (cargar, filtrar, el cruce) los lee igual que antes; el componente sólo los
+   escribe y dispara su evento 'change'.
+
+   Logística inversa programa retiros con anticipación, así que acá el futuro
+   SÍ se puede elegir, hasta RG_FUTURO días. Los días por venir se marcan
+   distinto para que se note que son solicitudes, no retiros hechos.
+
+   TRAMPA YA CONOCIDA: el listener que cierra el popover al hacer clic afuera
+   va en fase de CAPTURA. En burbujeo corre después del handler que repinta el
+   calendario, y para cuando pregunta si el clic fue adentro, el botón del día
+   ya fue reemplazado por innerHTML y "no está" en el DOM: el popover se
+   cerraba al elegir el primer día.
+============================================================================ */
+var RG_FUTURO = 90, RG_ATRAS = 730;
+var RG_MESES = ['enero','febrero','marzo','abril','mayo','junio','julio',
+                'agosto','septiembre','octubre','noviembre','diciembre'];
+var RG_DOW = ['L','M','X','J','V','S','D'];
+
+function rgHoy(){ return hoyISO(); }
+function rgTope(){ return sumaDias(rgHoy(), RG_FUTURO); }
+function rgPiso(){ return sumaDias(rgHoy(), -RG_ATRAS); }
+function rgClamp(f){ return f<rgPiso()?rgPiso():(f>rgTope()?rgTope():f); }
+
+/* Semana ISO de verdad (la del jueves), la misma convención que la cartola y
+   el resto del m3link. Una fórmula inventada ya había desalineado las semanas
+   en transportes-tiempos. */
+function rgSemanaISO(iso){
+  var p=iso.split('-'), d=new Date(Date.UTC(+p[0],+p[1]-1,+p[2]));
+  var dow=(d.getUTCDay()+6)%7;                  // lunes = 0
+  d.setUTCDate(d.getUTCDate()-dow+3);           // jueves de esa semana
+  var jueves=d.getTime();
+  d.setUTCMonth(0,1);                           // 1 de enero
+  if(d.getUTCDay()!==4) d.setUTCMonth(0, 1+((4-d.getUTCDay())+7)%7);
+  return 1+Math.ceil((jueves-d.getTime())/604800000);
+}
+function rgLunes(iso){ var p=iso.split('-'), d=new Date(Date.UTC(+p[0],+p[1]-1,+p[2]));
+  return sumaDias(iso, -((d.getUTCDay()+6)%7)); }
+function rgPrimeroMes(iso){ return iso.slice(0,8)+'01'; }
+function rgUltimoMes(iso){
+  var y=+iso.slice(0,4), m=+iso.slice(5,7);
+  var d=new Date(Date.UTC(y, m, 0));
+  return y+'-'+String(m).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
+}
+function rgSumaMes(iso,n){
+  var y=+iso.slice(0,4), m=+iso.slice(5,7)+n;
+  while(m<1){ m+=12; y--; } while(m>12){ m-=12; y++; }
+  return y+'-'+String(m).padStart(2,'0')+'-01';
+}
+
+var RG = {};   // id del contenedor -> {desde,hasta,onCambio,mesIzq,abierto,eligiendo,tmp}
+
+function rangoInit(cont, idDesde, idHasta, onCambio){
+  RG[cont]={ desde:idDesde, hasta:idHasta, onCambio:onCambio,
+             mesIzq:rgPrimeroMes($(idDesde).value||rgHoy()), abierto:false, tmp:null };
+  rangoPinta(cont);
+}
+function rgVal(cont){
+  var c=RG[cont];
+  return { d1:$(c.desde).value, d2:$(c.hasta).value };
+}
+function rgSet(cont,d1,d2,cerrar){
+  var c=RG[cont];
+  d1=rgClamp(d1); d2=rgClamp(d2);
+  if(d2<d1){ var t=d1; d1=d2; d2=t; }
+  $(c.desde).value=d1; $(c.hasta).value=d2;
+  c.tmp=null;
+  rangoPinta(cont);
+  if(cerrar!==false) rgCerrar(cont);
+  if(c.onCambio) c.onCambio(d1,d2);
+}
+
+/* Rótulo: si el rango calza justo con semanas ISO lo dice como semana, que es
+   como habla el equipo ("la semana 39"), y si no, con las fechas. */
+function rgRotulo(d1,d2){
+  if(!d1||!d2) return 'Elegir período';
+  var dias=difDias(d1,d2)+1;
+  if(d1===d2) return fmtFecha(d1);
+  var esLunes = d1===rgLunes(d1);
+  if(esLunes && dias%7===0){
+    var s1=rgSemanaISO(d1), s2=rgSemanaISO(d2);
+    var et = s1===s2 ? 'Sem '+s1 : 'Sem '+s1+'–'+s2;
+    return et+' · '+fmtCorta(d1)+' – '+fmtCorta(d2);
+  }
+  if(d1===rgPrimeroMes(d1) && d2===rgUltimoMes(d2) && d1.slice(0,7)===d2.slice(0,7))
+    return RG_MESES[+d1.slice(5,7)-1]+' '+d1.slice(0,4);
+  return fmtCorta(d1)+' – '+fmtCorta(d2);
+}
+function rangoPinta(cont){
+  var c=RG[cont], v=rgVal(cont), el=$(cont);
+  if(!el) return;
+  var dias=(v.d1&&v.d2)?difDias(v.d1,v.d2)+1:0;
+  var futuro=v.d2>rgHoy();
+  el.innerHTML=
+    '<div class="rg-nav">'+
+      '<button type="button" class="rg-fl" data-rg="'+cont+'" data-mov="-1" '+
+        'title="Período anterior (con Shift, un día)">‹</button>'+
+      '<button type="button" class="rg-pill" data-rg="'+cont+'" data-abrir="1">'+
+        '<span>'+esc(rgRotulo(v.d1,v.d2))+'</span>'+
+        '<small>'+(dias?dias+(dias===1?' día':' días'):'')+
+          (futuro?' · incluye días por venir':'')+'</small>'+
+      '</button>'+
+      '<button type="button" class="rg-fl" data-rg="'+cont+'" data-mov="1" '+
+        'title="Período siguiente (con Shift, un día)">›</button>'+
+    '</div>'+
+    (c.abierto?rgPopover(cont):'');
+}
+
+function rgPopover(cont){
+  var c=RG[cont], v=rgVal(cont);
+  var sel1 = c.tmp || v.d1, sel2 = c.tmp ? null : v.d2;
+  var h='<div class="rg-pop" data-pop="'+cont+'">'+
+    '<div class="rg-pop-head">'+
+      '<b>'+(c.tmp?'Ahora elige el término':'Elige el período')+'</b>'+
+      '<button type="button" class="rg-x" data-rg="'+cont+'" data-cerrar="1">✕</button>'+
+    '</div>'+
+    '<div class="rg-cols">'+
+      '<div class="rg-atajos">'+rgAtajos(cont)+'</div>'+
+      '<div class="rg-cals">'+
+        '<div class="rg-mesnav">'+
+          '<button type="button" class="rg-fl sm" data-rg="'+cont+'" data-mes="-1">‹</button>'+
+          '<span>'+RG_MESES[+c.mesIzq.slice(5,7)-1]+' '+c.mesIzq.slice(0,4)+
+            ' — '+RG_MESES[+rgSumaMes(c.mesIzq,1).slice(5,7)-1]+' '+rgSumaMes(c.mesIzq,1).slice(0,4)+'</span>'+
+          '<button type="button" class="rg-fl sm" data-rg="'+cont+'" data-mes="1">›</button>'+
+        '</div>'+
+        '<div class="rg-dos">'+rgMes(cont,c.mesIzq,sel1,sel2)+rgMes(cont,rgSumaMes(c.mesIzq,1),sel1,sel2)+'</div>'+
+        '<div class="rg-pie">Los días con línea punteada son futuros: son solicitudes programadas, '+
+          'no retiros hechos. Clic en el Nº de semana para tomarla completa.</div>'+
+      '</div>'+
+    '</div></div>';
+  return h;
+}
+function rgAtajos(cont){
+  var hoy=rgHoy();
+  var g=[
+    ['Días', [['Hoy',hoy,hoy],['Ayer',sumaDias(hoy,-1),sumaDias(hoy,-1)],
+              ['Últimos 7',sumaDias(hoy,-6),hoy],['Últimos 14',sumaDias(hoy,-13),hoy],
+              ['Últimos 30',sumaDias(hoy,-29),hoy]]],
+    ['Semanas', [['Esta semana',rgLunes(hoy),hoy],
+                 ['Semana pasada',sumaDias(rgLunes(hoy),-7),sumaDias(rgLunes(hoy),-1)],
+                 ['Últimas 4',sumaDias(rgLunes(hoy),-21),hoy]]],
+    ['Meses', [['Mes en curso',rgPrimeroMes(hoy),hoy],
+               ['Mes pasado',rgPrimeroMes(rgSumaMes(hoy,-1)),rgUltimoMes(rgSumaMes(hoy,-1))],
+               ['Últimos 90',sumaDias(hoy,-89),hoy]]],
+    ['Programado', [['Próximos 7',hoy,sumaDias(hoy,7)],
+                    ['Próximos 30',hoy,sumaDias(hoy,30)],
+                    ['Mes completo',rgPrimeroMes(hoy),rgUltimoMes(hoy)]]]
+  ];
+  return g.map(function(gr){
+    return '<div class="rg-grp"><div class="rg-grp-t">'+gr[0]+'</div>'+
+      gr[1].map(function(a){
+        return '<button type="button" class="rg-at" data-rg="'+cont+'" '+
+          'data-d1="'+a[1]+'" data-d2="'+a[2]+'">'+esc(a[0])+'</button>'; }).join('')+
+      '</div>';
+  }).join('');
+}
+function rgMes(cont,primero,sel1,sel2){
+  var y=+primero.slice(0,4), m=+primero.slice(5,7);
+  var ini=new Date(Date.UTC(y,m-1,1));
+  var largo=new Date(Date.UTC(y,m,0)).getUTCDate();
+  var desfase=(ini.getUTCDay()+6)%7;
+  var hoy=rgHoy(), tope=rgTope(), piso=rgPiso();
+  var h='<div class="rg-cal"><div class="rg-cal-t">'+RG_MESES[m-1]+' '+y+'</div>'+
+        '<div class="rg-grid"><div class="rg-sem-h">SEM</div>'+
+        RG_DOW.map(function(d){ return '<div class="rg-dow">'+d+'</div>'; }).join('');
+  var celda=0, total=desfase+largo;
+  for(var i=0;i<total;i++){
+    if(i%7===0){
+      var refDia=Math.max(1, i-desfase+1);
+      var iso0=y+'-'+String(m).padStart(2,'0')+'-'+String(Math.min(refDia,largo)).padStart(2,'0');
+      h+='<button type="button" class="rg-sem" data-rg="'+cont+'" data-sem="'+rgLunes(iso0)+'">'+
+         rgSemanaISO(iso0)+'</button>';
+    }
+    if(i<desfase){ h+='<div class="rg-d vacio"></div>'; continue; }
+    var dd=i-desfase+1;
+    var iso=y+'-'+String(m).padStart(2,'0')+'-'+String(dd).padStart(2,'0');
+    var cls='rg-d';
+    if(iso===hoy) cls+=' hoy';
+    if(iso>hoy) cls+=' prog';
+    if(iso>tope||iso<piso) cls+=' off';
+    if(sel2){ if(iso===sel1||iso===sel2) cls+=' extremo';
+              else if(iso>sel1&&iso<sel2) cls+=' dentro'; }
+    else if(iso===sel1) cls+=' extremo';
+    h+='<button type="button" class="'+cls+'" data-rg="'+cont+'" data-dia="'+iso+'"'+
+       ((iso>tope||iso<piso)?' disabled':'')+'>'+dd+'</button>';
+  }
+  return h+'</div></div>';
+}
+function rgAbrir(cont){
+  Object.keys(RG).forEach(function(k){ if(k!==cont) RG[k].abierto=false; });
+  var c=RG[cont];
+  c.abierto=true; c.tmp=null;
+  c.mesIzq=rgPrimeroMes(rgVal(cont).d1||rgHoy());
+  // en pantalla chica el popover va a pantalla completa y conviene partir en
+  // el mes más reciente, que es el que se usa
+  if(window.innerWidth<=640) c.mesIzq=rgSumaMes(rgPrimeroMes(rgVal(cont).d2||rgHoy()),-1);
+  Object.keys(RG).forEach(rangoPinta);
+}
+function rgCerrar(cont){
+  if(RG[cont]){ RG[cont].abierto=false; RG[cont].tmp=null; rangoPinta(cont); }
+}
+function rgCerrarTodos(){ Object.keys(RG).forEach(rgCerrar); }
+
+function rgMover(cont,signo,unDia){
+  var v=rgVal(cont);
+  if(!v.d1||!v.d2) return;
+  var paso = unDia ? 1 : (difDias(v.d1,v.d2)+1);
+  rgSet(cont, sumaDias(v.d1,signo*paso), sumaDias(v.d2,signo*paso), false);
+}
+
+/* Toda la interacción por delegación, en CAPTURA (ver la nota de arriba). */
+document.addEventListener('click', function(e){
+  var t=e.target.closest ? e.target.closest('[data-rg]') : null;
+  if(t){
+    var cont=t.dataset.rg, c=RG[cont];
+    if(!c) return;
+    if(t.dataset.abrir){ e.preventDefault(); c.abierto?rgCerrar(cont):rgAbrir(cont); return; }
+    if(t.dataset.cerrar){ e.preventDefault(); rgCerrar(cont); return; }
+    if(t.dataset.mov){ e.preventDefault(); rgMover(cont, +t.dataset.mov, e.shiftKey); return; }
+    if(t.dataset.mes){ e.preventDefault(); c.mesIzq=rgSumaMes(c.mesIzq, +t.dataset.mes); rangoPinta(cont); return; }
+    if(t.dataset.d1){ e.preventDefault(); rgSet(cont, t.dataset.d1, t.dataset.d2); return; }
+    if(t.dataset.sem){ e.preventDefault();
+      var l=t.dataset.sem; rgSet(cont, l, sumaDias(l,6)); return; }
+    if(t.dataset.dia){
+      e.preventDefault();
+      if(!c.tmp){ c.tmp=t.dataset.dia; rangoPinta(cont); }
+      else { rgSet(cont, c.tmp, t.dataset.dia); }
+      return;
+    }
+    return;
+  }
+  // clic afuera: cerrar
+  if(!(e.target.closest && e.target.closest('.rg-pop'))) rgCerrarTodos();
+}, true);
+document.addEventListener('keydown', function(e){ if(e.key==='Escape') rgCerrarTodos(); });
+/* ============================================================================
    CRUCE: programado (esta app) vs confirmado (RDTOut)
    ----------------------------------------------------------------------------
    Es lo que antes NO se podía hacer: el retiro se pedía en una planilla de
@@ -1522,8 +1806,7 @@ var FILAS_CRUCE = {};
 
 /* RDTOut manda la fecha en varios formatos: ISO, "DD-MM-YYYY" y
    "DD-MM-YYYY, HH:MM:SS a. m.". Mismo criterio que parseFechaM3 del
-   calendario-pallets-proxy. El eje es fechaRequerida, que es la que el
-   ejecutivo programa; si falta, se cae a la de confirmación. */
+   calendario-pallets-proxy. */
 function aISO(v){
   if(!v) return '';
   var t=String(v).split(',')[0].trim();
@@ -1533,9 +1816,18 @@ function aISO(v){
   if(m) return m[3]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[1]).padStart(2,'0');
   return '';
 }
+/* EL EJE ES LA FECHA DE CONFIRMACIÓN, no la requerida.
+   El ejecutivo programa "voy a retirar el 25". En RDTOut ese mismo retiro
+   puede tener fechaRequerida el 24 y confirmarse el 25: la requerida es la
+   que puso quien creó el pedido, la de confirmación es cuando el camión
+   efectivamente retiró. Comparar contra la requerida hacía aparecer como
+   "sin confirmar" retiros que sí se hicieron (caso CENCOCAL COPIAPO, 25-09).
+   Un retiro todavía sin confirmar no tiene esa fecha: ahí vale la requerida. */
 function fechaDeOp(o){
-  return aISO(o.fechaRequerida) || aISO(o.fechaConfirmacion) || aISO(o.fechaDespacho) || '';
+  return aISO(o.fechaConfirmacion) || aISO(o.fechaRequerida) || aISO(o.fechaDespacho) || '';
 }
+
+var BUFFER_CRUCE = 15;   // días de margen a cada lado al pedirle a RDTOut
 
 function esRedtec(s){ return normaliza(s).indexOf('REDTEC')>=0; }
 function contraparteBodega(op){
@@ -1576,11 +1868,28 @@ async function correrCruce(){
   $('x-avisos').innerHTML='';
   try{
     var prog = (await pedir(d1,d2,true)).registros;
-    var r=await fetch(API_OPS+'?fechaInicio='+d1+'&fechaFin='+d2,{headers:{Accept:'application/json'}});
+    // VENTANA AMPLIADA. /proxy/ops filtra por fechaRequerida, pero acá se
+    // compara por fecha de confirmación: un retiro requerido el 24 y
+    // confirmado el 25 no venía si se pedía justo el rango. Se pide con
+    // margen a ambos lados y se recorta localmente por la fecha que importa.
+    // Mismo patrón que RETIRO_BUFFER_DIAS en transportes-pagos.
+    var a1=sumaDias(d1,-BUFFER_CRUCE), a2=sumaDias(d2,BUFFER_CRUCE);
+    var r=await fetch(API_OPS+'?fechaInicio='+a1+'&fechaFin='+a2,{headers:{Accept:'application/json'}});
     if(!r.ok) throw new Error('RDTOut respondió HTTP '+r.status);
     var raw=await r.json();
-    var ops=Array.isArray(raw)?raw:(raw.data||raw.result||raw.operaciones||[]);
-    CRUCE={ d1:d1, d2:d2, prog:prog, ops:ops.filter(esRetiro) };
+    var ops=(Array.isArray(raw)?raw:(raw.data||raw.result||raw.operaciones||[])).filter(esRetiro);
+    var dentro=[], recuperados=0, fuera=0;
+    ops.forEach(function(o){
+      var f=fechaDeOp(o);
+      if(!f){ return; }
+      if(f<d1||f>d2){ fuera++; return; }
+      // vino gracias al margen: su fechaRequerida caía fuera del rango pedido
+      var req=aISO(o.fechaRequerida);
+      if(req && (req<d1||req>d2)) recuperados++;
+      dentro.push(o);
+    });
+    CRUCE={ d1:d1, d2:d2, prog:prog, ops:dentro,
+            ventana:{a1:a1,a2:a2}, recuperados:recuperados, fuera:fuera, crudas:ops.length };
     pintarCruce();
   }catch(e){
     $('x-area').innerHTML='<div class="aviso e"><i class="ti ti-alert-circle"></i><span>'+
@@ -1660,10 +1969,15 @@ function pintarCruce(){
   var av='<div class="aviso i"><i class="ti ti-info-circle"></i><span>'+
     '<b>Cómo se calcula:</b> programado = lo que registró el ejecutivo en esta app; '+
     'confirmado = suma de <i>cantidadConfirmada</i> de las operaciones de RDTOut cuyo tipo empieza con «Retiro», '+
-    'calzadas por el código del recinto. '+(incAnul?'<b>Incluyendo</b>':'Excluyendo')+' las anuladas'+
+    'calzadas por el código del recinto y fechadas por su <b>fecha de confirmación</b>, que es cuando el camión '+
+    'efectivamente retiró. '+(incAnul?'<b>Incluyendo</b>':'Excluyendo')+' las anuladas'+
     (anuladas?' ('+anuladas+' en el período)':'')+
-    (internos?' Se dejaron fuera '+internos+' retiro'+(internos>1?'s':'')+' interno'+(internos>1?'s':'')+
-      ' entre bodegas REDTEC, que no son retiros a retail.':'')+'.</span></div>';
+    (internos?'. Se dejaron fuera '+internos+' retiro'+(internos>1?'s':'')+' interno'+(internos>1?'s':'')+
+      ' entre bodegas REDTEC, que no son retiros a retail':'')+'.</span></div>';
+  if(CRUCE.recuperados) av+='<div class="aviso i"><i class="ti ti-arrow-back-up"></i><span>'+
+    '<b>'+CRUCE.recuperados+' retiro'+(CRUCE.recuperados>1?'s':'')+' entró gracias al margen de ±'+
+    BUFFER_CRUCE+' días.</b> RDTOut los devuelve por fecha requerida, pero se confirmaron dentro del período: '+
+    'pedir justo el rango los dejaba fuera y el recinto aparecía como «sin confirmar».</span></div>';
   if(nSinCalce) av+='<div class="aviso w"><i class="ti ti-unlink"></i><span><b>'+nSinCalce+
     ' bodega'+(nSinCalce>1?'s':'')+' de RDTOut ('+num(palSinCalce)+' pallets) no calzó con ningún recinto del catálogo</b> '+
     'y no entró en la comparación por recinto — sí está en el total confirmado. '+
@@ -1911,6 +2225,11 @@ document.addEventListener('DOMContentLoaded', async function(){
   $('m_desde').value=sumaDias(hoy,-7);  $('m_hasta').value=sumaDias(hoy,30);
   $('c_desde').value=hoy.slice(0,8)+'01'; $('c_hasta').value=sumaDias(hoy,30);
   $('x_desde').value=hoy.slice(0,8)+'01'; $('x_hasta').value=hoy;
+
+  // los selectores de período, sobre los input date que ya quedaron con valor
+  rangoInit('rg-mios','m_desde','m_hasta', function(){ if(VISTA==='mios') cargar(true); });
+  rangoInit('rg-cons','c_desde','c_hasta', function(){ if(VISTA==='consolidado') cargar(true); });
+  rangoInit('rg-cruce','x_desde','x_hasta', null);
 
   // delegación de eventos. Va en CAPTURA para el cierre del combo: si el
   // listener de "clic afuera" corre en burbujeo, el innerHTML ya reemplazó al

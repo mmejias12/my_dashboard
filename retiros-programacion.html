@@ -232,6 +232,32 @@ tr.gtot td{background:var(--bg-surface);font-weight:700;border-top:2px solid var
   .lr-liquid{top:-25%;border-radius:0} .lr-ring{display:none} .lr-mask{opacity:1}
 }
 
+/* semáforo del día por planta */
+.sem-fila{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:10px;margin-bottom:1rem}
+.sem{border-radius:11px;padding:.8rem .9rem;border:1px solid var(--border-md);background:var(--bg-card);
+  display:flex;gap:11px;align-items:flex-start}
+.sem-luz{width:13px;height:13px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.sem.rojo{border-color:rgba(248,113,113,.4);background:var(--danger-bg)}
+.sem.rojo .sem-luz{background:var(--danger);box-shadow:0 0 0 4px rgba(248,113,113,.16)}
+.sem.verde{border-color:var(--border-accent);background:var(--ok-bg)}
+.sem.verde .sem-luz{background:var(--ok);box-shadow:0 0 0 4px rgba(74,222,128,.16)}
+.sem.ambar{border-color:rgba(251,191,36,.42);background:var(--warn-bg)}
+.sem.ambar .sem-luz{background:var(--warn);box-shadow:0 0 0 4px rgba(251,191,36,.18)}
+.sem-cuerpo{flex:1;min-width:0}
+.sem-tit{font-size:13px;font-weight:700;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.sem-est{font-size:10px;text-transform:uppercase;letter-spacing:.6px;padding:2px 7px;border-radius:5px;
+  background:rgba(255,255,255,.07)}
+.sem.rojo .sem-est{color:var(--danger)} .sem.verde .sem-est{color:var(--ok)} .sem.ambar .sem-est{color:var(--warn)}
+.sem-num{font-family:'JetBrains Mono',monospace;font-size:1.5rem;font-weight:600;letter-spacing:-.5px;
+  line-height:1.15;margin-top:.15rem}
+.sem-sub{font-size:11.5px;color:var(--text-sec);margin-top:.15rem;line-height:1.45}
+.sem-acc{display:flex;gap:7px;flex-wrap:wrap;margin-top:.55rem}
+.sem-cambios{margin-top:.5rem;border-top:1px solid var(--border);padding-top:.45rem}
+.sem-cambio{font-size:11.5px;display:flex;justify-content:space-between;gap:10px;padding:2px 0}
+.sem-cambio b{font-family:'JetBrains Mono',monospace}
+.sem-cambio .sube{color:var(--ok)} .sem-cambio .baja{color:var(--danger)}
+.sem-cambio .nuevo{color:var(--info)} .sem-cambio .fuera{color:var(--text-muted)}
+
 /* selector de período (mismo componente que Ops y la cartola) */
 .rg{position:relative;display:inline-block}
 .rg-nav{display:inline-flex;align-items:center;gap:3px;background:var(--bg-input);
@@ -532,6 +558,7 @@ tr.gtot td{background:var(--bg-surface);font-weight:700;border-top:2px solid var
         <button class="btn" onclick="window.print()"><i class="ti ti-printer"></i> Imprimir</button>
       </div>
     </div>
+    <div class="sem-fila" id="p-semaforo"></div>
     <div class="kpis" id="p-kpis"></div>
     <div id="p-avisos"></div>
     <div id="p-area"></div>
@@ -1228,6 +1255,8 @@ function rangoActivo(){
   return { desde:DIA, hasta:DIA };
 }
 function recargarVista(){
+  // el estado se recalcula solo: si se editó algo confirmado, el servidor
+  // ya lo va a devolver como "cambiado"
   if(VISTA==='programacion') cargarDia(true);
   else if(VISTA==='mios'||VISTA==='consolidado') cargar(true);
 }
@@ -1257,6 +1286,7 @@ async function cargarDia(force){
     var res=await pedir(DIA,DIA,force);
     REG=res.registros; RANGO={desde:DIA,hasta:DIA};
     aplicarMeta(res.meta);
+    await cargarEstado(DIA);
     pintarFrescura(res);
     pintarProgramacion();
   }catch(e){
@@ -1270,6 +1300,7 @@ function aplicarMeta(meta){
   var eraOficina=YO.oficina;
   YO.usuario=meta.usuario||YO.usuario;
   YO.oficina=!!meta.oficina;
+  YO.transporte=!!meta.transporte;
   YO.puede_registrar=!!meta.puede_registrar;
   if(eraOficina!==YO.oficina) pintarRol();
   if(meta.meses_sin_respuesta && meta.meses_sin_respuesta.length){
@@ -1305,6 +1336,103 @@ function pintarMios(){
 }
 function kpi(n,l,c){ return '<div class="kpi'+(c?' '+c:'')+'"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>'; }
 
+/* ============================================================================
+   SEMÁFORO DEL DÍA — el estado que mira Transporte
+   ----------------------------------------------------------------------------
+   Transporte recibía el Excel por correo sin saber si era definitivo. Ahora
+   cada planta tiene su luz: roja mientras Logística carga, verde cuando da el
+   visto bueno, ámbar si algo se movió después de darlo.
+
+   El ámbar no lo marca nadie: el servidor compara la programación de ahora
+   contra la foto que tomó al confirmar. Si alguien edita y se olvida de
+   reconfirmar, el semáforo no se queda en verde por descuido.
+============================================================================ */
+var ESTADO=null;
+var SEM_TXT={ preliminar:'Preliminar', confirmado:'Confirmado', cambiado:'Cambió tras confirmar' };
+var SEM_CLS={ preliminar:'rojo', confirmado:'verde', cambiado:'ambar' };
+
+async function cargarEstado(fecha){
+  if(!YO.oficina && !YO.transporte){ ESTADO=null; return; }
+  try{
+    var r=await fetch(API+'?estado='+fecha,{headers:{Accept:'application/json'}});
+    var j=await r.json();
+    ESTADO = r.ok ? j : null;
+  }catch(e){ ESTADO=null; }
+}
+function fechaHoraCorta(v){
+  if(!v) return '';
+  var d=new Date(v);
+  if(isNaN(d)) return '';
+  return d.toLocaleString('es-CL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+/* soloLectura = la pantalla de Transporte: mismo semáforo, sin botones */
+function semaforoHTML(soloLectura){
+  if(!ESTADO || !ESTADO.plantas) return '';
+  return ESTADO.plantas.filter(function(pl){
+    // una planta sin nada programado y sin confirmar no aporta nada
+    return pl.total_actual>0 || pl.estado!=='preliminar';
+  }).map(function(pl){
+    var cls=SEM_CLS[pl.estado]||'rojo';
+    var h='<div class="sem '+cls+'"><div class="sem-luz"></div><div class="sem-cuerpo">'+
+      '<div class="sem-tit">'+esc(pl.planta)+
+        '<span class="sem-est">'+esc(SEM_TXT[pl.estado]||pl.estado)+'</span></div>'+
+      '<div class="sem-num">'+num(pl.total_actual)+' <span style="font-size:12px;font-weight:400;'+
+        'color:var(--text-muted)">pallets · '+pl.retiros_actual+' retiro'+(pl.retiros_actual===1?'':'s')+'</span></div>';
+
+    if(pl.estado==='preliminar') h+='<div class="sem-sub">Logística todavía no da el visto bueno. '+
+      (soloLectura?'Es un avance para ir dimensionando; los números pueden cambiar.'
+                  :'Transporte lo ve como avance, no como definitivo.')+'</div>';
+    if(pl.estado==='confirmado') h+='<div class="sem-sub">Confirmado por '+esc(corto(pl.confirmado_por))+
+      ' el '+esc(fechaHoraCorta(pl.confirmado_en))+'. Estos son los números.</div>';
+    if(pl.estado==='cambiado') h+='<div class="sem-sub"><b>Se movió algo después de confirmar.</b> '+
+      'Estaba confirmado en '+num(pl.total_confirmado)+' por '+esc(corto(pl.confirmado_por))+
+      ' el '+esc(fechaHoraCorta(pl.confirmado_en))+'.</div>';
+    if(pl.nota) h+='<div class="sem-sub">Nota: '+esc(pl.nota)+'</div>';
+
+    if(pl.cambios && pl.cambios.length){
+      h+='<div class="sem-cambios">';
+      pl.cambios.slice(0,8).forEach(function(c){
+        var k = c.tipo==='nuevo'?'nuevo':(c.tipo==='eliminado'?'fuera':(c.delta>0?'sube':'baja'));
+        var et = c.tipo==='nuevo'?'entró':(c.tipo==='eliminado'?'salió':(c.delta>0?'subió':'bajó'));
+        h+='<div class="sem-cambio"><span>'+esc(c.recinto)+'</span>'+
+           '<span class="'+k+'">'+et+' <b>'+(c.delta>0?'+':'')+num(c.delta)+'</b>'+
+           (c.tipo==='nuevo'||c.tipo==='eliminado'?'':' ('+num(c.antes)+' → '+num(c.ahora)+')')+'</span></div>';
+      });
+      if(pl.cambios.length>8) h+='<div class="sem-cambio"><span style="color:var(--text-muted)">y '+
+        (pl.cambios.length-8)+' cambio(s) más</span><span></span></div>';
+      h+='</div>';
+    }
+
+    if(!soloLectura && ESTADO.puede_confirmar){
+      h+='<div class="sem-acc">';
+      if(pl.estado==='preliminar') h+='<button class="btn pri" data-sem-conf="'+esc(pl.planta)+'">'+
+        '<i class="ti ti-circle-check"></i> Dar luz verde</button>';
+      if(pl.estado==='cambiado') h+='<button class="btn pri" data-sem-conf="'+esc(pl.planta)+'">'+
+        '<i class="ti ti-refresh"></i> Confirmar los cambios</button>';
+      if(pl.estado!=='preliminar') h+='<button class="btn ghost" data-sem-reab="'+esc(pl.planta)+'">'+
+        'Reabrir</button>';
+      h+='</div>';
+    }
+    return h+'</div></div>';
+  }).join('');
+}
+async function cambiarEstado(planta, accion){
+  var cuerpo={accion:accion, fecha:DIA, planta:planta};
+  if(accion==='reabrir'){
+    var m=prompt('¿Por qué se reabre la programación de '+planta+'?\n\nTransporte va a ver que volvió a preliminar.');
+    if(m===null) return;
+    cuerpo.motivo=m;
+  }
+  try{
+    var r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cuerpo)});
+    var j=await r.json();
+    if(!r.ok||!j.ok) throw new Error(j.error||('HTTP '+r.status));
+    ESTADO=Object.assign({},ESTADO,{plantas:j.plantas});
+    toast(accion==='confirmar'?'✓ '+planta+' confirmado para Transporte':'Programación reabierta');
+    $('p-semaforo').innerHTML=semaforoHTML(false);
+  }catch(e){ toast('No se pudo: '+e.message,true); }
+}
+
 /* ------------------------------------ PROGRAMACIÓN (lo que recibe Transportes)
    Réplica de la hoja "Programación" del Excel que se mandaba: jerarquía
    Planta → Región → Zona logística → Comuna → Recinto, con subtotales por
@@ -1312,6 +1440,7 @@ function kpi(n,l,c){ return '<div class="kpi'+(c?' '+c:'')+'"><div class="n">'+n
    el Excel no estaba y es carga que igual ocupa camión. */
 function pintarProgramacion(){
   var rows=REG.slice();
+  $('p-semaforo').innerHTML=semaforoHTML(false);
   var verDisp=$('p_dispersos').checked;
   var pal=rows.reduce(function(s,r){ return s+Number(r.cantidad||0); },0);
   var dis=rows.reduce(function(s,r){ return s+Number(r.dispersos||0); },0);
@@ -2247,6 +2376,10 @@ document.addEventListener('DOMContentLoaded', async function(){
     if(ped){ abrirHistorial(ped.dataset.pedido, ped.dataset.volver||''); return; }
     var rec=e.target.closest ? e.target.closest('[data-recinto]') : null;
     if(rec){ abrirRecinto(rec.dataset.recinto); return; }
+    var sc=e.target.closest ? e.target.closest('[data-sem-conf]') : null;
+    if(sc){ cambiarEstado(sc.dataset.semConf,'confirmar'); return; }
+    var sr=e.target.closest ? e.target.closest('[data-sem-reab]') : null;
+    if(sr){ cambiarEstado(sr.dataset.semReab,'reabrir'); return; }
     var dia=e.target.closest ? e.target.closest('.esp-dia[data-fecha]') : null;
     if(dia){ $('f_fecha').value=dia.dataset.fecha; pintarHintFecha(); return; }
     if(!(e.target.closest && e.target.closest('#combo'))){

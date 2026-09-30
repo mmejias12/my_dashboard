@@ -207,6 +207,13 @@ th:first-child,td:first-child{text-align:left;font-variant-numeric:normal}
 tbody tr:hover{background:var(--surface-2)}
 .tabla-wrap{max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:10px}
 .nota{font-size:11.5px;color:var(--muted);margin-top:9px;line-height:1.5}
+/* El segundo bloque del pop-up, cuando un nombre aparece como retail y como
+   cliente a la vez. Va separado para que no se lea como continuación del
+   primero: son movimientos distintos y no se suman. */
+.q-otro{margin-top:22px;padding-top:16px;border-top:1px solid var(--line)}
+.q-otro h4{margin:0 0 4px;font-size:13px;font-weight:600;color:var(--text)}
+.q-sub{font-size:11.5px;color:var(--muted);margin-bottom:10px;line-height:1.5}
+.q-sub b{color:var(--text-2)}
 .aviso{background:var(--surface-2);border:1px solid var(--line);border-left:2px solid var(--warning);border-radius:9px;padding:10px 13px;font-size:12px;color:var(--text-2);margin-bottom:14px}
 .aviso b{color:var(--text)}
 .vacio{padding:40px;text-align:center;color:var(--muted);font-size:13px}
@@ -393,7 +400,12 @@ const S = {
   transfDia:null,            // 'YYYY-MM-DD' -> [despachado, confirmado]
   transfModo:'con',
   transfTasa:null,
-  transfClienteMes:null,   // 'YYYY-MM' -> [desp, conf] del retail filtrado
+  transfClienteMes:null,   // 'YYYY-MM' -> [desp, conf] del nombre filtrado
+  // Por qué lado calzó el nombre escrito: 'destino' si es un retail (le
+  // transfirieron) u 'origen' si es un cliente (él transfirió). Decide el
+  // título del pop-up y de qué habla la botonera.
+  transfLado:null,
+  transfOtroLado:null,     // resumen del lado contrario, si el nombre calza en los dos
   potPct: 94,              // el % que viene usando logística, editable
   tasasPeriodo: null,      // tasas reales del período, para el informativo
   sumarRetDev:false,
@@ -720,7 +732,9 @@ function render(){
           '<button data-m="'+m.k+'"'+(m.k===S.transfModo?' class="on"':'')+
           ' title="'+esc(m.exp)+'">'+m.et+'</button>').join('') +'</div>'+
         lineaPotencial() +
-        '<button class="verq" id="ver-quienes">Quién transfirió →</button>' : '')+
+        '<button class="verq" id="ver-quienes">'+
+          (S.transfLado==='origen' ? 'A quién le transfirió →' : 'Quién transfirió →')+
+        '</button>' : '')+
       '</div>';
   }).join('');
   if(S.transfDia){
@@ -1032,14 +1046,53 @@ function filaQ(nombre, r, max, alHacerClic){
     '<td style="width:120px"><div class="barrita"><i style="width:'+
       (max? Math.max(1, r.despachado/max*100):0)+'%"></i></div></td></tr>';
 }
-const CAB_Q = '<thead><tr><th>Cliente</th><th>Registrado</th><th>Confirmado</th>'+
-  '<th>Por confirmar</th><th>Tasa</th><th></th></tr></thead>';
+function cabQ(primera){
+  return '<thead><tr><th>'+primera+'</th><th>Registrado</th><th>Confirmado</th>'+
+    '<th>Por confirmar</th><th>Tasa</th><th></th></tr></thead>';
+}
+const CAB_Q = cabQ('Cliente');
+
+/* Arma la tabla de un lado del cruce. Se usa dos veces cuando un nombre
+   aparece como retail Y como cliente. */
+function bloqueQ(d, lado){
+  const filas = lado==='origen' ? (d.retails||[]) : (d.clientes||[]);
+  const T = d.totales || {};
+  const nom = (d.nombres_sumados||[]).join(' + ');
+  const tit = lado==='origen'
+    ? 'A quién le transfirió '+nom
+    : 'Quién le transfirió a '+nom;
+  if(!filas.length){
+    return { tit, html:'<div class="vacio">Sin transferencias '+
+      (lado==='origen'?'desde':'hacia')+' este nombre en el período</div>', T };
+  }
+  const max = filas[0].despachado;
+  const html =
+    '<table>'+cabQ(lado==='origen'?'Retail':'Cliente')+'<tbody>'+
+      filas.map(r=>filaQ(lado==='origen'?r.retail:r.cliente, r, max, false)).join('')+
+    '</tbody><tfoot><tr><th>Total</th><th>'+n0(T.despachado)+'</th><th>'+n0(T.confirmado)+
+    '</th><th>'+n0(T.por_confirmar)+'</th><th></th><th></th></tr></tfoot></table>'+
+    // La nota depende del lado: el balde «(sin cliente origen)» sólo existe
+    // mirando desde el retail. Al revés no hace falta — medido el 30-09-2026:
+    // las 407.636 transferencias del índice traen cliente destino cargado, la
+    // suma de los 49 retails da exactamente el total global.
+    '<div class="nota">El desglose suma exactamente el total de arriba'+
+    (lado==='origen'
+      ? '.</div>'
+      : ': los movimientos sin cliente origen cargado aparecen como '+
+        '«(sin cliente origen)» en vez de quedar fuera.</div>');
+  return { tit, html, T };
+}
 
 async function abrirQuienes(retail){
   $('#velo').classList.add('on');
   $('#q-cuerpo').innerHTML = '<div class="vacio">Consultando…</div>';
-  const destino = typeof retail === 'string' ? retail : (S.cliente || '');
-  const qs = '?desde='+S.desde+'&hasta='+S.hasta + (destino? '&destino='+encodeURIComponent(destino):'');
+  // Un clic en una fila del ranking siempre pregunta por un RETAIL. Si no viene
+  // nombre, se usa el filtrado y el lado por el que calzó.
+  const forzado = typeof retail === 'string' ? retail : null;
+  const nombre = forzado || S.cliente || '';
+  const lado = forzado ? 'destino' : (S.transfLado || 'destino');
+  const par = lado==='origen' ? 'origen' : 'destino';
+  const qs = '?desde='+S.desde+'&hasta='+S.hasta + (nombre? '&'+par+'='+encodeURIComponent(nombre):'');
   try{
     const d = await fetch(API_TRANSF+qs).then(r=>r.json());
     if(d.error) throw new Error(d.pista || d.error);
@@ -1047,13 +1100,13 @@ async function abrirQuienes(retail){
     // Sin retail elegido se muestra el ranking de retails, y cada fila abre su
     // propio desglose. Es el mismo modal: elegir a quién mirar es el paso
     // natural cuando no se venía filtrando por nadie.
-    if(!destino || !d.encontrado){
+    if(!nombre || !d.encontrado){
       const filas = d.retails || [];
       const max = filas.length ? filas[0].despachado : 0;
       $('#q-tit').textContent = 'Transferencias por retail';
-      $('#q-exp').textContent = (!destino
+      $('#q-exp').textContent = (!nombre
         ? 'Clic en un retail para ver qué clientes le transfirieron.'
-        : 'No hay un retail que calce con "'+destino+'". Se muestran todos.')
+        : 'No hay un nombre que calce con "'+nombre+'". Se muestran todos.')
         + '  ·  '+S.desde+' → '+S.hasta;
       $('#q-cuerpo').innerHTML = filas.length
         ? '<table>'+CAB_Q.replace('<th>Cliente</th>','<th>Retail</th>')+'<tbody>'+
@@ -1064,20 +1117,27 @@ async function abrirQuienes(retail){
       return;
     }
 
-    const cl = d.clientes || [];
-    const max = cl.length ? cl[0].despachado : 0;
-    const T = d.totales || {};
-    $('#q-tit').textContent = 'Quién le transfirió a '+(d.nombres_sumados||[destino]).join(' + ');
+    const prin = bloqueQ(d, lado);
+    const T = prin.T;
+    $('#q-tit').textContent = prin.tit;
     $('#q-exp').innerHTML = S.desde+' → '+S.hasta+' · registrado <b>'+n0(T.despachado)+
       '</b>, confirmado <b>'+n0(T.confirmado)+'</b>, por confirmar <b>'+n0(T.por_confirmar)+
       '</b> (tasa '+(T.tasa!=null ? (T.tasa*100).toFixed(2).replace('.',',')+'%' : '—')+')';
-    $('#q-cuerpo').innerHTML = cl.length
-      ? '<table>'+CAB_Q+'<tbody>'+cl.map(c=>filaQ(c.cliente, c, max, false)).join('')+
-        '</tbody><tfoot><tr><th>Total</th><th>'+n0(T.despachado)+'</th><th>'+n0(T.confirmado)+
-        '</th><th>'+n0(T.por_confirmar)+'</th><th></th><th></th></tr></tfoot></table>'+
-        '<div class="nota">El desglose suma exactamente el total de arriba: los movimientos '+
-        'sin cliente origen cargado aparecen como «(sin cliente origen)» en vez de quedar fuera.</div>'
-      : '<div class="vacio">Sin transferencias hacia este retail en el período</div>';
+    let cuerpo = prin.html;
+
+    // El nombre calzaba por los dos lados: el segundo va debajo, con su propio
+    // encabezado y su propio total. Se muestra entero en vez de elegir por el
+    // usuario cuál de las dos mitades le interesaba.
+    if(!forzado && S.transfOtroLado){
+      const sec = bloqueQ(S.transfOtroLado.d, S.transfOtroLado.lado);
+      cuerpo += '<div class="q-otro"><h4>'+esc(sec.tit)+'</h4>'+
+        '<div class="q-sub">Lo que buscó calza también con estos nombres del otro lado, '+
+        'que son <b>empresas distintas</b>, no la misma vista al revés. '+
+        'Registrado <b>'+n0(sec.T.despachado)+'</b>, confirmado <b>'+n0(sec.T.confirmado)+'</b>. '+
+        'Los dos totales NO se suman.</div>'+
+        sec.html+'</div>';
+    }
+    $('#q-cuerpo').innerHTML = cuerpo;
   }catch(e){
     $('#q-cuerpo').innerHTML = '<div class="vacio">No se pudo consultar: '+esc(e.message)+'</div>';
   }
@@ -1203,6 +1263,7 @@ let seqCliente = 0;
 function limpiarCliente(){
   seqCliente++;
   $('#cliente').value=''; S.cliente=''; S.serieCliente=null; S.transfClienteMes=null;
+  S.transfLado=null; S.transfOtroLado=null;
   $('#aviso').classList.add('hide');
   render();
 }
@@ -1217,14 +1278,43 @@ async function aplicarCliente(){
   $('#aviso').classList.remove('hide');
   $('#aviso').textContent = 'Consultando '+q+'…';
   try{
-    // Las dos consultas van juntas: la del índice por contraparte trae los
-    // otros conceptos, y la de transferencias trae despachado y confirmado.
-    const [d, tr] = await Promise.all([
+    // Tres consultas juntas. La del índice por contraparte trae los otros
+    // conceptos; las de transferencias van por los DOS lados porque el nombre
+    // escrito puede ser un retail que RECIBE o un cliente que ENVÍA, y hasta
+    // ahora sólo se preguntaba por el primero: a un cliente como ALD LOGISTICA
+    // el tablero le mostraba sus emisiones y ninguna transferencia, aunque el
+    // dato estaba guardado.
+    const [d, trDest, trOrig] = await Promise.all([
       fetch(API_CLIENTE+'?contraparte='+encodeURIComponent(q)).then(r=>r.json()),
       fetch(API_TRANSF+'?destino='+encodeURIComponent(q)).then(r=>r.json()).catch(()=>null),
+      fetch(API_TRANSF+'?origen='+encodeURIComponent(q)).then(r=>r.json()).catch(()=>null),
     ]);
     if(mio !== seqCliente) return;
-    S.transfClienteMes = (tr && tr.encontrado && Array.isArray(tr.por_mes))
+
+    const vivo = x => (x && x.encontrado && x.totales && x.totales.despachado > 0) ? x : null;
+    const D = vivo(trDest), O = vivo(trOrig);
+    // Si la búsqueda calza por los dos lados manda el que más movió, y el otro
+    // NO se pierde: queda a la vista en el pop-up y se nombra en el aviso.
+    //
+    // OJO con qué significa esto. Medido el 30-09-2026 sobre los 49 retails y
+    // los 58 clientes del índice: NINGUNA empresa juega los dos roles. Lo que
+    // sí pasa —10 casos— es que una palabra suelta pesca empresas distintas a
+    // cada lado: "comercial" calza con 9 retails y 6 clientes, "logistica" con
+    // INTERCARRY (retail) y ALD (cliente). O sea el choque es de BÚSQUEDA, no
+    // de empresa, y el aviso tiene que decirlo así o el que mira va a creer
+    // que son dos caras del mismo nombre.
+    let tr = null;
+    if(D && O){
+      const mandaD = D.totales.despachado >= O.totales.despachado;
+      tr = mandaD ? D : O;
+      S.transfLado = mandaD ? 'destino' : 'origen';
+      S.transfOtroLado = { lado: mandaD ? 'origen' : 'destino', d: mandaD ? O : D };
+    } else {
+      tr = D || O;
+      S.transfLado = D ? 'destino' : (O ? 'origen' : null);
+      S.transfOtroLado = null;
+    }
+    S.transfClienteMes = (tr && Array.isArray(tr.por_mes))
       ? tr.por_mes.reduce((a,x)=>{ a[x.mes]=[x.despachado, x.confirmado]; return a; }, {})
       : null;
     if(!d.encontrado){
@@ -1252,8 +1342,21 @@ async function aplicarCliente(){
           ? 'son '+d.nombres_sumados.length+' razones sociales y se suman las dos. ' : '')+
         'El cruce por cliente está guardado por mes, así que esta vista va mensual: '+
         'los totales de arriba, el gráfico y la tabla toman meses completos.'+
-        (S.transfClienteMes ? ' La botonera de transferencias también aplica a este retail.'
-                            : ' Sin datos de registro para este nombre: las transferencias van sólo confirmadas.');
+        (S.transfClienteMes
+          ? (S.transfLado==='origen'
+              ? ' Las transferencias son las que <b>este cliente envió</b> a los retails; '+
+                'la botonera y «A quién le transfirió» trabajan sobre eso.'
+              : ' Las transferencias son las que <b>le transfirieron a este retail</b>; '+
+                'la botonera también aplica.')
+            + (S.transfOtroLado
+                ? ' <b>La búsqueda es ambigua:</b> «'+esc(q)+'» también calza con '+
+                  S.transfOtroLado.d.nombres_sumados.length+' '+
+                  (S.transfOtroLado.lado==='origen' ? 'cliente(s) que envía(n)' : 'retail(s) que recibe(n))')+
+                  ' —empresas distintas— con '+n0(S.transfOtroLado.d.totales.despachado)+
+                  ' registrados. Se muestra el lado que más movió; el otro está en el pop-up, aparte. '+
+                  'Escriba el nombre más completo para quedarse con uno solo.'
+                : '')
+          : ' Sin datos de registro para este nombre: las transferencias van sólo confirmadas.');
     }
   }catch(e){
     if(mio !== seqCliente) return;

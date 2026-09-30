@@ -231,6 +231,11 @@ function puedeRegistrar(p) {
 function esOficina(p) {
   return roles(p).some(r => lista('RETIROS_OFICINA_ROLES', 'admin,logistica').includes(r));
 }
+// Transporte lee toda la programación del día, pero no escribe nada.
+function esTransporte(p) {
+  return roles(p).some(r => lista('RETIROS_TRANSPORTE_ROLES', 'transporte').includes(r));
+}
+function puedeVerTodo(p) { return esOficina(p) || esTransporte(p); }
 function quien(p) { return (p && (p.userDetails || p.userId)) || 'anónimo'; }
 
 // ---------------------------------------------------------------------------
@@ -341,6 +346,130 @@ async function mutarMes(mes, fn, log, conRespaldo) {
   return { error: 'el almacén está recibiendo varios guardados a la vez; reintenta en unos segundos', status: 503 };
 }
 
+// ---------------------------------------------------------------------------
+//  ESTADO DEL DÍA (semáforo para Transporte)
+//  ---------------------------------------------------------------------------
+//  Transporte recibía por correo el Excel con la programación del día
+//  siguiente y no sabía si era definitiva. Ahora cada (fecha, planta) tiene un
+//  estado que Logística cambia a mano:
+//
+//    preliminar  Logística todavía está cargando. Es un avance.
+//    confirmado  Logística dio luz verde. Estos son los números.
+//    cambiado    se editó algo DESPUÉS de confirmar.
+//
+//  El estado 'cambiado' no se guarda: se deduce comparando la programación de
+//  ahora contra el snapshot que se tomó al confirmar. Así no hay forma de que
+//  alguien edite y el semáforo se quede en verde por olvido.
+//
+//  Va por planta y no por día completo: Santiago y Talca son operaciones
+//  distintas y una no tiene por qué esperar a la otra.
+// ---------------------------------------------------------------------------
+function blobEstado(mes) { return `${PREFIJO}/estado-${mes}.json`; }
+function claveEstado(fecha, planta) { return fecha + '|' + planta; }
+
+async function leerEstados(mes) {
+  try {
+    const blob = contenedor().getBlockBlobClient(blobEstado(mes));
+    const r = await blob.download();
+    const txt = await aTexto(r.readableStreamBody);
+    let o = {};
+    try { const p = JSON.parse(txt); if (p && typeof p === 'object' && !Array.isArray(p)) o = p; } catch {}
+    return { estados: o, etag: r.etag };
+  } catch (e) {
+    if (esNoExiste(e)) return { estados: {}, etag: null };
+    throw e;
+  }
+}
+async function escribirEstados(mes, estados, etag) {
+  const cont = contenedor();
+  await cont.createIfNotExists();
+  const body = JSON.stringify(estados, null, 2);
+  const opts = {
+    blobHTTPHeaders: { blobContentType: 'application/json; charset=utf-8' },
+    conditions: etag ? { ifMatch: etag } : { ifNoneMatch: '*' },
+  };
+  try {
+    await cont.getBlockBlobClient(blobEstado(mes)).upload(body, Buffer.byteLength(body), opts);
+    return true;
+  } catch (e) {
+    if (e && (e.statusCode === 412 || e.statusCode === 409)) return false;
+    throw e;
+  }
+}
+async function mutarEstados(mes, fn, log) {
+  for (let i = 1; i <= REINTENTOS; i++) {
+    const { estados, etag } = await leerEstados(mes);
+    const r = fn(Object.assign({}, estados));
+    if (r.error) return { error: r.error, status: r.status || 400 };
+    if (await escribirEstados(mes, r.estados, etag)) return { resultado: r.resultado };
+    log.warn(`retiros-store: conflicto de escritura en estados ${mes}, intento ${i}/${REINTENTOS}`);
+    await new Promise(s => setTimeout(s, 80 * i + Math.random() * 120));
+  }
+  return { error: 'el almacén está recibiendo varios guardados a la vez; reintenta en unos segundos', status: 503 };
+}
+
+// Foto de lo programado para una (fecha, planta): totales y cantidad por recinto.
+function fotografiar(registros, fecha, planta) {
+  const míos = registros.filter(r => r.fecha_retiro === fecha && r.planta === planta);
+  const porClave = {};
+  let total = 0, dispersos = 0;
+  míos.forEach(r => {
+    const k = String(r.clave).toUpperCase();
+    porClave[k] = porClave[k] || { recinto: r.recinto, cant: 0, disp: 0 };
+    porClave[k].cant += Number(r.cantidad || 0);
+    porClave[k].disp += Number(r.dispersos || 0);
+    total += Number(r.cantidad || 0);
+    dispersos += Number(r.dispersos || 0);
+  });
+  return { total, dispersos, n: míos.length, porClave };
+}
+
+// Qué se movió entre el snapshot y lo que hay ahora.
+function comparar(foto, ahora) {
+  const cambios = [];
+  const claves = new Set(Object.keys((foto && foto.porClave) || {}).concat(Object.keys(ahora.porClave)));
+  claves.forEach(k => {
+    const a = (foto && foto.porClave[k]) || null;
+    const b = ahora.porClave[k] || null;
+    const antes = a ? a.cant : 0, despues = b ? b.cant : 0;
+    if (antes === despues) return;
+    cambios.push({
+      clave: k, recinto: (b && b.recinto) || (a && a.recinto) || k,
+      antes, ahora: despues, delta: despues - antes,
+      tipo: !a ? 'nuevo' : (!b || despues === 0 ? 'eliminado' : (despues > antes ? 'subio' : 'bajo')),
+    });
+  });
+  cambios.sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta));
+  return cambios;
+}
+
+// Estado de cada planta para una fecha.
+async function estadoDelDia(fecha, log) {
+  const mes = mesDe(fecha);
+  const [{ registros }, { estados }] = await Promise.all([leerMes(mes), leerEstados(mes)]);
+  const plantas = (process.env.RETIROS_PLANTAS || PLANTAS.join(',')).split(',').map(s => s.trim());
+  // una planta que no está en la lista pero sí en los datos igual se muestra
+  registros.filter(r => r.fecha_retiro === fecha).forEach(r => {
+    if (r.planta && plantas.indexOf(r.planta) < 0) plantas.push(r.planta);
+  });
+  return plantas.map(planta => {
+    const ahora = fotografiar(registros, fecha, planta);
+    const g = estados[claveEstado(fecha, planta)] || null;
+    let estado = 'preliminar', cambios = [];
+    if (g && g.confirmado) {
+      cambios = comparar(g.snapshot, ahora);
+      estado = cambios.length ? 'cambiado' : 'confirmado';
+    }
+    return {
+      planta, estado,
+      total_actual: ahora.total, dispersos_actual: ahora.dispersos, retiros_actual: ahora.n,
+      total_confirmado: g && g.snapshot ? g.snapshot.total : null,
+      confirmado_por: g ? g.por : null, confirmado_en: g ? g.en : null, nota: g ? g.nota || '' : '',
+      cambios, historial: (g && g.historial) || [],
+    };
+  });
+}
+
 // Busca un registro por id. No se recibe el mes del cliente para eliminar o
 // editar: si el registro cambió de mes (se corrigió la fecha) el mes que
 // manda el cliente puede estar equivocado y el registro quedaría duplicado.
@@ -382,6 +511,18 @@ module.exports = async function (context, req) {
     if (req.method === 'GET') {
       const q = req.query || {};
 
+      // estado del día (semáforo) — lo puede ver cualquiera que vea la
+      // programación: oficina y transporte
+      if (q.estado) {
+        const f = String(q.estado);
+        if (!fechaValida(f)) return responder(400, { error: 'estado=YYYY-MM-DD' });
+        if (!puedeVerTodo(p)) return responder(403, { error: 'no tienes permiso para ver el estado del día' });
+        return responder(200, {
+          fecha: f, hoy: hoyCL(), plantas: await estadoDelDia(f, log),
+          puede_confirmar: esOficina(p), solo_lectura: !esOficina(p),
+        });
+      }
+
       if (q.respaldos) {
         if (!esOficina(p)) return responder(403, { error: 'solo oficina puede ver los respaldos' });
         const mes = String(q.respaldos);
@@ -410,8 +551,8 @@ module.exports = async function (context, req) {
       }
       registros = registros.filter(r => r && r.fecha_retiro >= desde && r.fecha_retiro <= hasta);
 
-      // Un ejecutivo ve solo lo suyo; oficina ve todo.
-      const todo = esOficina(p);
+      // Un ejecutivo ve solo lo suyo; oficina y transporte ven todo.
+      const todo = puedeVerTodo(p);
       if (!todo) {
         const yo = String(quien(p)).toLowerCase();
         registros = registros.filter(r => String(r.usuario || '').toLowerCase() === yo);
@@ -424,7 +565,8 @@ module.exports = async function (context, req) {
         meta: {
           desde, hasta, hoy, meses, total: registros.length,
           alcance: todo ? 'todos' : 'propios',
-          usuario: quien(p), oficina: todo, puede_registrar: puedeRegistrar(p),
+          usuario: quien(p), oficina: esOficina(p), transporte: esTransporte(p),
+          puede_registrar: puedeRegistrar(p),
           meses_sin_respuesta: fallidos,
         },
       });
@@ -591,6 +733,55 @@ module.exports = async function (context, req) {
       if (r.error) return responder(r.status, { error: r.error });
       log.info(`retiros-store: ${quien(p)} restauró ${mes} desde ${id} (${datos.length} registros)`);
       return responder(200, { ok: true, mes, restaurado: id, count: datos.length });
+    }
+
+    // -- confirmar / reabrir la programación de una planta ---------------
+    if (accion === 'confirmar' || accion === 'reabrir') {
+      if (!esOficina(p)) {
+        return responder(403, { error: 'solo Logística puede cambiar el estado de la programación' });
+      }
+      const fecha = String(cuerpo.fecha || '');
+      const planta = limpiaTexto(cuerpo.planta || '', 60);
+      if (!fechaValida(fecha)) return responder(400, { error: 'fecha inválida' });
+      if (!planta) return responder(400, { error: 'falta la planta' });
+
+      const mes = mesDe(fecha);
+      const { registros } = await leerMes(mes);
+      const ahora = fotografiar(registros, fecha, planta);
+
+      if (accion === 'confirmar' && ahora.n === 0) {
+        return responder(400, {
+          error: 'no hay retiros programados para ' + planta + ' ese día: no hay nada que confirmar',
+        });
+      }
+
+      const r = await mutarEstados(mes, (estados) => {
+        const k = claveEstado(fecha, planta);
+        if (accion === 'reabrir') {
+          const g = estados[k];
+          if (!g || !g.confirmado) return { error: 'esa programación no estaba confirmada', status: 400 };
+          const hist = (g.historial || []).concat([{
+            accion: 'reabrir', por: quien(p), en: new Date().toISOString(),
+            total: g.snapshot ? g.snapshot.total : null, motivo: limpiaTexto(cuerpo.motivo || '', 200),
+          }]).slice(-20);
+          estados[k] = { fecha, planta, confirmado: false, historial: hist };
+          return { estados, resultado: { estado: 'preliminar' } };
+        }
+        const previo = estados[k];
+        const hist = ((previo && previo.historial) || []).concat([{
+          accion: previo && previo.confirmado ? 'reconfirmar' : 'confirmar',
+          por: quien(p), en: new Date().toISOString(), total: ahora.total,
+        }]).slice(-20);
+        estados[k] = {
+          fecha, planta, confirmado: true, por: quien(p), en: new Date().toISOString(),
+          nota: limpiaTexto(cuerpo.nota || '', 300), snapshot: ahora, historial: hist,
+        };
+        return { estados, resultado: { estado: 'confirmado', total: ahora.total, retiros: ahora.n } };
+      }, log);
+
+      if (r.error) return responder(r.status, { error: r.error });
+      log.info(`retiros-store: ${quien(p)} ${accion} ${fecha} ${planta} (${ahora.total} pallets)`);
+      return responder(200, { ok: true, fecha, planta, plantas: await estadoDelDia(fecha, log), resultado: r.resultado });
     }
 
     return responder(400, { error: 'acción desconocida: ' + accion });

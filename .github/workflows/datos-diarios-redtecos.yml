@@ -60,6 +60,17 @@ jobs:
       - name: 2) Backfill stock / pool (últimos días → ayer)
         run: node backfill/backfill-stock.js ${{ steps.f.outputs.desde10 }}
 
+      # Operaciones del pool DIRECTO desde Redlink (API portal, Keycloak), en
+      # reemplazo de M2LINK. Ventana de 45 días para capturar confirmaciones
+      # tardías (idempotente: reescribe el blob del día, clave formHeaderiD).
+      # Escribe en su propio contenedor (redtec-os-operaciones); no toca lo demás.
+      - name: 2b) Operaciones del pool (Redlink → Blob)
+        env:
+          REDLINK_USER:          ${{ secrets.REDLINK_USER }}
+          REDLINK_PASS:          ${{ secrets.REDLINK_PASS }}
+          REDLINK_CLIENT_SECRET: ${{ secrets.REDLINK_CLIENT_SECRET }}
+        run: node backfill/backfill-operaciones.js ${{ steps.f.outputs.desde45 }} ${{ steps.f.outputs.ayer }}
+
       - name: 3) Rollup histórico (resumen/operaciones.json)
         run: node scripts/rollup-operaciones.js ${{ steps.f.outputs.ayer }}
 

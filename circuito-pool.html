@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Circuito del pool — REDTEC M3LINK</title>
+<style>
+/* ===========================================================================
+   CIRCUITO DEL POOL  ·  reemplaza a Dashboard_R3.html
+
+   QUÉ MUESTRA. Por dónde se mueven los pallets en un período: sale de planta
+   REDTEC hacia el cliente (emisión), el cliente lo transfiere al retail
+   (transferencia), y vuelve a planta (retiro / devolución). Más dos
+   movimientos que NO cambian de actor y por eso van en paneles aparte:
+   traspasos entre clientes y relocalización dentro de una misma empresa.
+
+   CLASIFICACIÓN. Se usa el mismo criterio de api/shared/movimientos.js
+   (subcadena, con el orden de prioridad que deja 'Emision Retiro Cliente'
+   en emisiones). Ese módulo NO conoce Relocalizacion ni Traspasos: los manda
+   a su balde de no mapeadas. Son el 35% de los movimientos y son justamente
+   la circulación que esta vista existe para mostrar, así que acá se agregan
+   DESPUÉS de correr la lista canónica, para que todo lo que el resto de la
+   plataforma ya clasifica se clasifique idéntico.
+
+   LOS LADOS NO SE SUPONEN, SE LEEN. Cada fila se ubica preguntándole al dato
+   si cada punta es REDTEC o no (/REDTEC/i sobre el nombre del cliente), igual
+   que contraparteDe() en el resto del repo. El panel de auditoría publica la
+   matriz operación × lado para que un cambio en el origen de los datos se vea
+   en pantalla en vez de deformar el dibujo en silencio.
+
+   COLOR. La paleta de chapas del m3link (--b-em-tx y compañía) no sirve para
+   cintas grandes: #93c5fd y #c4b5fd tienen ΔE 7,0 a vista normal y 0,5 en
+   deuteranopía — como chapitas con texto al lado funcionan, como superficies
+   contiguas se confunden. Acá el color codifica la NATURALEZA del flujo (sale
+   / circula / vuelve), que son tres, porque la etapa ya la dice la posición de
+   la columna. #2563eb/#d97706/#059669 pasan los cinco chequeos del validador
+   en claro y en oscuro; el único WARN (protan ΔE 7,9 entre ámbar y verde)
+   obliga a codificación secundaria, y de ahí vienen la etiqueta directa en
+   cada corriente, la separación entre cintas, la leyenda siempre visible y el
+   tramado opcional.
+
+   REGLA DE ORO DEL REPO: los controles van en la .cbar, nunca en una topbar —
+   el workspace de pestañas inyecta .topbar{display:none} en las vistas
+   embebidas. Esta página directamente no tiene topbar.
+   =========================================================================== */
+
+:root{
+  --bg-page:#0f1117; --bg-surface:#181b23; --bg-card:#1e222d; --bg-hover:#232834;
+  --border:rgba(255,255,255,.07); --border-md:rgba(255,255,255,.12);
+  --text-primary:#e8eaf0; --text-secondary:#9da3b4; --text-sec:#9da3b4; --text-muted:#5a6070;
+  --accent:#4ade80; --accent-dim:rgba(74,222,128,.15); --red-logo:#C0170C;
+  --warn:#fbbf24; --warn-dim:rgba(251,191,36,.12);
+  /* corrientes del circuito — validadas con dataviz/validate_palette.js */
+  --f-sal:#2563eb;  /* sale del pool   · REDTEC -> cliente */
+  --f-can:#d97706;  /* circula el canal· cliente -> retail */
+  --f-ret:#059669;  /* vuelve al pool  · -> REDTEC */
+  --f-int:#64748b;  /* movimiento interno · neutro a propósito: no es negocio del pool */
+  --radius-sm:6px; --radius-md:9px; --radius-lg:13px;
+  color-scheme:dark;
+}
+:root[data-theme="light"]{
+  --bg-page:#f2f4f8; --bg-surface:#fff; --bg-card:#fff; --bg-hover:#eef1f6;
+  --border:rgba(16,24,40,.10); --border-md:rgba(16,24,40,.18);
+  --text-primary:#101420; --text-secondary:#495261; --text-sec:#495261; --text-muted:#757e8c;
+  --accent:#15803d; --accent-dim:rgba(21,128,61,.12);
+  --warn:#b45309; --warn-dim:rgba(180,83,9,.10);
+  --f-sal:#2563eb; --f-can:#d97706; --f-ret:#059669; --f-int:#64748b;
+  color-scheme:light;
+}
+:root{ --logo-url:url("data:image/png;base64,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"); }
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;
+  background:var(--bg-page);color:var(--text-primary);-webkit-font-smoothing:antialiased;
+  padding:1.1rem 1.25rem 3rem}
+.wrap{max-width:1400px;margin:0 auto}
+
+/* El zoom aAA escala SOLO los bloques de esta vista (mismo patrón que la vista
+   Ops): nunca el sidebar ni la topbar del contenedor que la embebe. */
+body.circ-z .page-header,body.circ-z .cbar,body.circ-z .diag,
+body.circ-z .kpis,body.circ-z .card{font-size:calc(1em * var(--circ-z,1))}
+body.circ-z .card svg{zoom:var(--circ-z,1)}
+
+/* ---- cabecera ---- */
+.page-header{margin-bottom:.85rem}
+.page-header h1{font-size:19px;font-weight:600;letter-spacing:-.2px;display:flex;align-items:center;gap:9px}
+.page-header h1 .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex:none}
+.page-header p{color:var(--text-secondary);font-size:12.5px;margin-top:4px;max-width:92ch;line-height:1.5}
+
+/* ---- barra de controles (REGLA DE ORO: todo acá, nunca en una topbar) ---- */
+.cbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--bg-card);
+  border:1px solid var(--border);border-radius:var(--radius-md);padding:9px 11px;margin-bottom:.7rem}
+.cbar-end{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.btn{background:var(--bg-surface);border:1px solid var(--border-md);color:var(--text-primary);
+  border-radius:var(--radius-sm);padding:6px 11px;font-size:12px;cursor:pointer;font-family:inherit;
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{background:var(--bg-hover);border-color:var(--accent)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn[disabled]{opacity:.4;cursor:default}
+.btn.on{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
+.seg{display:inline-flex;border:1px solid var(--border-md);border-radius:var(--radius-sm);overflow:hidden}
+.seg button{background:var(--bg-surface);border:0;border-right:1px solid var(--border-md);
+  color:var(--text-secondary);padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent-dim);color:var(--accent);font-weight:600}
+.chk{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);cursor:pointer;
+  white-space:nowrap}
+.chk input{accent-color:var(--accent);cursor:pointer}
+.sep{width:1px;height:20px;background:var(--border-md)}
+
+/* ---- selector de período ---- */
+/* Contrato igual al del resto del repo: los <input type=date> ocultos d1/d2 son
+   la ÚNICA fuente de verdad; la píldora y el popover sólo los escriben. */
+.rg{position:relative;display:inline-flex;align-items:center;gap:4px}
+.rg-arrow{background:var(--bg-surface);border:1px solid var(--border-md);color:var(--text-secondary);
+  border-radius:var(--radius-sm);width:26px;height:28px;cursor:pointer;font-size:13px;line-height:1;font-family:inherit}
+.rg-arrow:hover:not([disabled]){background:var(--bg-hover);color:var(--accent);border-color:var(--accent)}
+.rg-arrow[disabled]{opacity:.3;cursor:default}
+.rg-pill{background:var(--bg-surface);border:1px solid var(--border-md);border-radius:var(--radius-sm);
+  padding:6px 12px;font-size:12px;cursor:pointer;color:var(--text-primary);font-family:inherit;
+  display:inline-flex;align-items:center;gap:8px;min-width:210px;justify-content:center}
+.rg-pill:hover{border-color:var(--accent)}
+.rg-pill .dur{color:var(--text-muted);font-size:11px}
+.rg-pop{position:absolute;top:calc(100% + 6px);left:0;z-index:60;background:var(--bg-card);
+  border:1px solid var(--border-md);border-radius:var(--radius-md);padding:11px;min-width:290px;
+  box-shadow:0 14px 40px rgba(0,0,0,.45);display:none}
+.rg-pop.open{display:block}
+.rg-pop h4{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);
+  font-weight:600;margin:0 0 6px}
+.rg-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:11px}
+.rg-grid button{background:var(--bg-surface);border:1px solid var(--border);color:var(--text-secondary);
+  border-radius:var(--radius-sm);padding:6px 8px;font-size:11.5px;cursor:pointer;text-align:left;font-family:inherit}
+.rg-grid button:hover{background:var(--accent-dim);color:var(--accent);border-color:var(--accent)}
+.rg-man{display:flex;align-items:center;gap:6px;border-top:1px solid var(--border);padding-top:9px}
+.rg-man input[type=date]{background:var(--bg-surface);border:1px solid var(--border-md);color:var(--text-primary);
+  border-radius:var(--radius-sm);padding:5px 7px;font-size:11.5px;font-family:inherit;flex:1;min-width:0}
+.rg-foot{margin-top:8px;font-size:10.5px;color:var(--text-muted);line-height:1.45}
+
+/* ---- chips de diagnóstico ---- */
+.diag{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:.7rem}
+.chip{background:var(--bg-card);border:1px solid var(--border);border-radius:999px;padding:3.5px 10px;
+  font-size:11px;color:var(--text-secondary);display:inline-flex;align-items:center;gap:5px}
+.chip b{color:var(--text-primary);font-weight:600;font-variant-numeric:tabular-nums}
+.chip.warn{background:var(--warn-dim);border-color:var(--warn);color:var(--warn)}
+.chip.warn b{color:var(--warn)}
+.chip.click{cursor:pointer}
+.chip.click:hover{border-color:var(--accent)}
+
+/* ---- KPIs ---- */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:9px;margin-bottom:.85rem}
+.kpi{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:11px 13px;
+  position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--kc,var(--border-md))}
+.kpi .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);font-weight:600}
+.kpi .n{font-size:21px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:5px;letter-spacing:-.4px;
+  min-height:27px}
+.kpi .sub{font-size:10.5px;color:var(--text-secondary);margin-top:2px}
+
+/* ---- tarjetas ---- */
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);
+  padding:14px 16px 16px;margin-bottom:.85rem}
+.card-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+.card-title{font-size:13.5px;font-weight:600}
+.card-note{font-size:11.5px;color:var(--text-muted);line-height:1.5;margin-bottom:11px;max-width:100ch}
+.card-head .right{margin-left:auto;display:flex;gap:7px;align-items:center}
+
+/* ---- leyenda (siempre presente: la identidad nunca queda sólo en el color) ---- */
+.leg{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:9px}
+.leg span{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-secondary)}
+.leg i{width:13px;height:9px;border-radius:2px;flex:none;display:inline-block}
+
+/* ---- Sankey ---- */
+.sankey-box{width:100%;overflow-x:auto}
+svg.sankey{display:block;width:100%;height:auto;min-width:860px}
+.nd rect{stroke:var(--bg-card);stroke-width:1}
+.lk{cursor:pointer}
+.lk path{transition:opacity .12s}
+svg.sankey.dim .lk path{opacity:.09}
+svg.sankey.dim .lk.hi path{opacity:1}
+/* Las etiquetas de las columnas del medio caen encima de las cintas, así que
+   llevan el mismo contorno del color de la superficie que las cifras: se dibuja
+   el trazo por debajo del relleno y el texto se lee sobre cualquier fondo. */
+.nlbl{font-size:10.5px;fill:var(--text-primary);font-variant-numeric:tabular-nums;
+  paint-order:stroke;stroke:var(--bg-card);stroke-width:3.4px;stroke-linejoin:round}
+.nlbl .v{fill:var(--text-secondary)}
+.colhdr{font-size:10px;fill:var(--text-muted);text-transform:uppercase;letter-spacing:.7px;font-weight:600}
+.flbl{font-size:10px;fill:var(--text-primary);paint-order:stroke;stroke:var(--bg-card);stroke-width:3px;
+  stroke-linejoin:round;font-variant-numeric:tabular-nums;pointer-events:none}
+
+/* ---- tablas ---- */
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{padding:6px 9px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+th{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600;
+  position:sticky;top:0;background:var(--bg-card)}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+tbody tr:hover{background:var(--bg-hover)}
+.tbl-box{max-height:420px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius-sm)}
+.pend{color:var(--warn);font-weight:600}
+.bar{display:inline-block;height:7px;border-radius:3px;background:var(--f-ret);vertical-align:middle}
+.bar.b{background:var(--border-md)}
+details{margin-top:10px}
+summary{cursor:pointer;font-size:11.5px;color:var(--text-secondary);padding:4px 0}
+summary:hover{color:var(--accent)}
+
+/* ---- tooltip ---- */
+#tip{position:fixed;z-index:200;pointer-events:none;opacity:0;transition:opacity .1s;
+  background:var(--bg-surface);border:1px solid var(--border-md);border-radius:var(--radius-sm);
+  padding:8px 11px;font-size:11.5px;box-shadow:0 10px 30px rgba(0,0,0,.45);max-width:320px;line-height:1.55}
+#tip.on{opacity:1}
+#tip .t{font-weight:600;margin-bottom:3px}
+#tip .r{display:flex;justify-content:space-between;gap:14px;color:var(--text-secondary)}
+#tip .r b{color:var(--text-primary);font-variant-numeric:tabular-nums}
+
+/* ---- overlay de carga ---- */
+.ov{position:fixed;inset:0;z-index:300;background:rgba(15,17,23,.88);backdrop-filter:blur(3px);
+  display:none;align-items:center;justify-content:center;flex-direction:column;gap:15px}
+:root[data-theme="light"] .ov{background:rgba(242,244,248,.90)}
+.ov.on{display:flex}
+.empty{padding:2.6rem 1rem;text-align:center;color:var(--text-muted);font-size:12.5px;line-height:1.6}
+.err{background:var(--warn-dim);border:1px solid var(--warn);color:var(--warn);border-radius:var(--radius-sm);
+  padding:9px 12px;font-size:12px;margin-bottom:.8rem;line-height:1.5}
+
+@media (max-width:720px){
+  body{padding:.8rem .7rem 2rem}
+  .cbar{gap:7px} .cbar-end{margin-left:0;width:100%}
+  .rg-pill{min-width:0;flex:1} .rg{flex:1}
+  .rg-pop{left:auto;right:0;min-width:270px}
+  .kpis{grid-template-columns:repeat(auto-fit,minmax(138px,1fr))}
+}
+@media print{.cbar,.rg-pop,#tip,.ov{display:none!important}}
+.loader-r{position:relative;width:78px;height:78px;flex-shrink:0;
+  filter:drop-shadow(0 8px 20px rgba(192,23,12,.30))}
+.lr-ghost{position:absolute;inset:0;background:var(--logo-url) center/contain no-repeat;opacity:.20}
+.lr-ring{position:absolute;inset:-9px;border-radius:50%;
+  border:1px solid rgba(192,23,12,.22);animation:lr-ring 2.9s ease-out infinite}
+.lr-mask{position:absolute;inset:0;overflow:hidden;
+  -webkit-mask:var(--logo-url) center/contain no-repeat;mask:var(--logo-url) center/contain no-repeat;
+  animation:lr-ciclo 2.9s linear infinite}
+.lr-liquid{position:absolute;left:-30%;width:160%;height:135%;top:100%;
+  background:linear-gradient(180deg,#ff6a5d 0%,#e8231a 38%,var(--red-logo) 66%,#8e1009 100%);
+  border-radius:44% 46% 0 0 / 15% 13% 0 0;
+  animation:lr-sube 2.9s cubic-bezier(.30,.22,.48,.92) infinite,
+            lr-ola  1.25s ease-in-out infinite alternate}
+.lr-liquid.b{opacity:.5;left:-36%;border-radius:47% 43% 0 0 / 12% 17% 0 0;
+  animation-duration:2.9s,.95s;animation-delay:0s,-.45s}
+.lr-brillo{position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.34) 50%,transparent 62%);
+  transform:translateX(-120%);animation:lr-brillo 2.9s ease-in-out infinite}
+@keyframes lr-sube {0%{top:102%} 70%{top:-25%} 100%{top:-25%}}
+@keyframes lr-ola  {from{transform:translateX(-6%) rotate(-1.4deg)} to{transform:translateX(6%) rotate(1.4deg)}}
+@keyframes lr-ciclo{0%{opacity:0} 8%{opacity:1} 88%{opacity:1} 100%{opacity:0}}
+@keyframes lr-brillo{0%,68%{transform:translateX(-125%)} 84%{transform:translateX(125%)} 100%{transform:translateX(125%)}}
+@keyframes lr-ring {0%,66%{transform:scale(.84);opacity:0} 78%{transform:scale(1);opacity:.9} 100%{transform:scale(1.24);opacity:0}}
+.lr-txt{font-size:12.5px;color:var(--text-sec);letter-spacing:.2px;text-align:center}
+.lr-txt b{display:block;font-size:11px;font-weight:500;color:var(--text-muted);margin-top:3px;letter-spacing:.3px}
+/* En claro la R "vacía" tiene que leerse como silueta gris, no como rosado */
+:root[data-theme="light"] .lr-ghost{opacity:.26;filter:grayscale(1) brightness(.55)}
+:root[data-theme="light"] .loader-r{filter:drop-shadow(0 6px 16px rgba(192,23,12,.16))}
+:root[data-theme="light"] .lr-ring{border-color:rgba(192,23,12,.30)}
+:root[data-theme="light"] .lr-brillo{background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.55) 50%,transparent 62%)}
+@media (prefers-reduced-motion:reduce){
+  .lr-mask,.lr-liquid,.lr-brillo,.lr-ring{animation:none}
+  .lr-liquid{top:-25%;border-radius:0} .lr-ring{display:none} .lr-mask{opacity:1}
+}
+
+.lr-txt{font-size:12.5px;color:var(--text-secondary);letter-spacing:.2px;text-align:center}
+.lr-txt b{display:block;font-size:11px;font-weight:500;color:var(--text-muted);margin-top:3px;letter-spacing:.3px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="page-header">
+    <h1><span class="dot"></span> Circuito del pool</h1>
+    <p>Por dónde pasan los pallets en el período: sale de planta hacia el cliente, el cliente lo transfiere
+       al retail, y vuelve a planta. Los movimientos que no cambian de actor — traspasos entre clientes y
+       relocalización dentro de una misma empresa — van en sus propios paneles, porque no hacen circular
+       el pool aunque sí consuman operación.</p>
+  </header>
+
+  <div class="cbar">
+    <div class="rg" id="rg">
+      <button class="rg-arrow" id="rg-prev" title="Período anterior" aria-label="Período anterior">&lsaquo;</button>
+      <button class="rg-pill" id="rg-pill" aria-haspopup="true" aria-expanded="false">
+        <span id="rg-txt">—</span><span class="dur" id="rg-dur"></span>
+      </button>
+      <button class="rg-arrow" id="rg-next" title="Período siguiente" aria-label="Período siguiente">&rsaquo;</button>
+      <div class="rg-pop" id="rg-pop" role="dialog" aria-label="Elegir período">
+        <h4>Atajos</h4>
+        <div class="rg-grid" id="rg-atajos"></div>
+        <h4>A mano</h4>
+        <div class="rg-man">
+          <input type="date" id="m1" aria-label="Desde"><span style="color:var(--text-muted)">→</span>
+          <input type="date" id="m2" aria-label="Hasta">
+          <button class="btn" id="rg-ok">Aplicar</button>
+        </div>
+        <div class="rg-foot" id="rg-foot"></div>
+      </div>
+      <input type="date" id="d1" hidden><input type="date" id="d2" hidden>
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="seg" role="group" aria-label="Métrica">
+      <button id="mt-conf" aria-pressed="true">Confirmado</button>
+      <button id="mt-desp" aria-pressed="false">Despachado</button>
+    </div>
+
+    <label class="chk"><input type="checkbox" id="anul"> incluir anuladas</label>
+    <label class="chk"><input type="checkbox" id="tram"> tramado</label>
+
+    <div class="cbar-end">
+      <button class="btn" id="z-menos" title="Letra más chica" aria-label="Letra más chica">A−</button>
+      <button class="btn" id="z-reset" title="Tamaño normal">%</button>
+      <button class="btn" id="z-mas" title="Letra más grande" aria-label="Letra más grande">A+</button>
+      <button class="btn" id="tema" title="Tema claro / oscuro" aria-label="Cambiar tema">☾</button>
+      <button class="btn" id="recargar">↻ Recargar</button>
+    </div>
+  </div>
+
+  <div id="error-box"></div>
+  <div class="diag" id="diag"></div>
+  <div class="kpis" id="kpis"></div>
+
+  <section class="card">
+    <div class="card-head">
+      <span class="card-title">El circuito</span>
+      <div class="right">
+        <span class="chip" id="chip-top"></span>
+      </div>
+    </div>
+    <div class="card-note" id="nota-circuito"></div>
+    <div class="leg">
+      <span><i style="background:var(--f-sal)"></i> Sale del pool · emisión</span>
+      <span><i style="background:var(--f-can)"></i> Circula el canal · transferencia</span>
+      <span><i style="background:var(--f-ret)"></i> Vuelve al pool · retiro y devolución</span>
+    </div>
+    <div class="sankey-box"><svg class="sankey" id="svg-circ" role="img"
+         aria-label="Diagrama de flujo del circuito del pool"></svg></div>
+    <details><summary>Ver el circuito como tabla</summary><div class="tbl-box" id="tbl-flujos"></div></details>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><span class="card-title">La línea de recuperación</span></div>
+    <div class="card-note" id="nota-recup"></div>
+    <div class="sankey-box"><svg class="sankey" id="svg-recup" role="img"
+         aria-label="Flujo interno de la línea de recuperación de REDTEC"></svg></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><span class="card-title">La cadena de confirmación</span></div>
+    <div class="card-note" id="nota-conf"></div>
+    <div class="tbl-box" id="tbl-conf"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><span class="card-title">Auditoría · de dónde sale cada corriente</span></div>
+    <div class="card-note">Cada fila del origen se ubica preguntándole al dato si cada punta es REDTEC,
+       no suponiendo qué hace cada operación. Esta matriz publica el resultado: si mañana una operación
+       empieza a llegar con otros lados, se ve acá en vez de deformar el dibujo en silencio.</div>
+    <div class="tbl-box" id="tbl-audit"></div>
+    <div id="audit-extra"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><span class="card-title">Movimientos que no hacen circular el pool</span></div>
+    <div class="card-note" id="nota-lateral"></div>
+    <div class="tbl-box" id="tbl-lateral"></div>
+  </section>
+
+</div>
+
+<div class="ov" id="ov">
+  <div class="loader-r" role="status" aria-label="Cargando">
+    <div class="lr-ring"></div><div class="lr-ghost"></div>
+    <div class="lr-mask"><div class="lr-liquid b"></div><div class="lr-liquid"></div><div class="lr-brillo"></div></div>
+  </div>
+  <div class="lr-txt" id="ov-txt">Consultando…<b id="ov-sub">RDTOut</b></div>
+</div>
+<div id="tip" role="tooltip"></div>
+<script>
+/* =========================================================================
+   DATOS Y CLASIFICACIÓN
+   ========================================================================= */
+'use strict';
+
+var API = '/proxy/ops';            // ruta de SWA -> api/ops (allowedRoles: authenticated)
+var CHUNK_DIAS   = 90;             // el API tope son 180 por consulta, pero 3 meses
+                                   // (~52k filas) es lo que se sabe que responde bien;
+                                   // 7 meses de una devuelve "Backend call failure".
+var MAX_DIAS     = 366;            // tope de la vista: 4 trozos
+var TOP_N        = 8;              // nodos por columna antes de agrupar en "Otros"
+var MEM_MIN      = 10;             // vigencia de la memoria de períodos, en minutos
+var MEM_MAX      = 8;
+
+var S = {
+  filas: [], metrica: 'conf', incluirAnuladas: false, tramado: false,
+  modelo: null, mem: [], cargando: false, deMemoria: false, consultadoA: null
+};
+
+var fmt  = function (n) { return Number(n || 0).toLocaleString('es-CL'); };
+var pct  = function (a, b) { return b ? (a / b * 100) : 0; };
+var fpct = function (a, b) { return b ? pct(a, b).toFixed(1).replace('.', ',') + '%' : '—'; };
+
+/* Fechas SIEMPRE en local. toISOString() convierte a UTC y en Chile pasadas las
+   ~21:00 "hoy" sale como mañana — el mismo defecto que ya se corrigió en
+   transportes-tiempos y transportes-pagos. */
+function iso(d) {
+  var m = String(d.getMonth() + 1).padStart(2, '0'), x = String(d.getDate()).padStart(2, '0');
+  return d.getFullYear() + '-' + m + '-' + x;
+}
+function parseIso(s) { var p = String(s).slice(0, 10).split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+function addDias(s, n) { var d = parseIso(s); d.setDate(d.getDate() + n); return iso(d); }
+function dias(a, b) { return Math.round((parseIso(b) - parseIso(a)) / 86400000) + 1; }
+function hoyIso() { return iso(new Date()); }
+
+var MES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+function fechaCorta(s) { var d = parseIso(s); return d.getDate() + ' ' + MES[d.getMonth()]; }
+function rangoTexto(a, b) {
+  if (a === b) return fechaCorta(a) + ' ' + parseIso(a).getFullYear();
+  var da = parseIso(a), db = parseIso(b);
+  if (da.getFullYear() !== db.getFullYear())
+    return fechaCorta(a) + ' ' + da.getFullYear() + ' – ' + fechaCorta(b) + ' ' + db.getFullYear();
+  return fechaCorta(a) + ' – ' + fechaCorta(b) + ' ' + db.getFullYear();
+}
+
+/* ---- clasificación: prestada de api/shared/movimientos.js, no reimplantada ---- */
+var norm = function (s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+};
+/* Lista CANÓNICA, en su orden de prioridad. Que 'emisiones' vaya antes que
+   'retiros' es lo que deja 'Emision Retiro Cliente' en emisiones, igual que el
+   resto de la plataforma. No reordenar sin tocar también movimientos.js. */
+var CONCEPTOS = [
+  ['transferencias', ['transfer', 'trans diferenciada']],
+  ['devoluciones',   ['devolucion']],
+  ['recogida',       ['recogida', 'recoleccion']],
+  ['emisiones',      ['emision']],
+  ['reparacion',     ['reparacion']],
+  ['retiros',        ['retiro']]
+];
+/* AÑADIDO SÓLO EN ESTA VISTA. movimientos.js deja Relocalizacion y Traspasos sin
+   mapear a propósito (no son movimiento de negocio del pool rojo), pero son el
+   35% de los movimientos y esta vista existe para mostrar la circulación. Se
+   evalúan DESPUÉS de la lista canónica para que nada de lo que la plataforma ya
+   clasifica cambie de concepto acá. Ninguna de las dos palabras es subcadena de
+   las claves canónicas, así que el agregado no puede robarle filas a nadie. */
+var CONCEPTOS_EXTRA = [
+  ['relocalizacion', ['relocaliz']],
+  ['traspasos',      ['traspaso']]
+];
+function conceptoDe(op) {
+  var o = norm(op); if (!o) return null;
+  var i, j;
+  for (i = 0; i < CONCEPTOS.length; i++)
+    for (j = 0; j < CONCEPTOS[i][1].length; j++)
+      if (o.indexOf(CONCEPTOS[i][1][j]) >= 0) return CONCEPTOS[i][0];
+  for (i = 0; i < CONCEPTOS_EXTRA.length; i++)
+    for (j = 0; j < CONCEPTOS_EXTRA[i][1].length; j++)
+      if (o.indexOf(CONCEPTOS_EXTRA[i][1][j]) >= 0) return CONCEPTOS_EXTRA[i][0];
+  return null;
+}
+var PLANTAS = ['Santiago', 'Talca', 'Coquimbo', 'Temuco'];
+function plantaDeTexto(t) {
+  var b = String(t || '').toUpperCase();
+  if (b.indexOf('TEMUCO')   !== -1) return 'Temuco';
+  if (b.indexOf('COQUIMBO') !== -1) return 'Coquimbo';
+  if (b.indexOf('TALCA')    !== -1) return 'Talca';
+  return 'Santiago';                 // default histórico de la operación
+}
+var esRedtec  = function (s) { return /REDTEC/i.test(String(s || '')); };
+var esAnulada = function (f) { return /anulad/i.test(String(f.etapaOperacion || '')); };
+function fechaDe(f) { return String(f.fechaRequerida || f.fechaConfirmacion || '').slice(0, 10); }
+var txt = function (s) { return String(s || '').trim(); };
+
+/* ---- consulta ---- */
+function partir(d1, d2) {
+  var t = [], cur = d1;
+  while (parseIso(cur) <= parseIso(d2)) {
+    var tope = addDias(cur, CHUNK_DIAS - 1);
+    if (parseIso(tope) > parseIso(d2)) tope = d2;
+    t.push({ desde: cur, hasta: tope });
+    cur = addDias(tope, 1);
+  }
+  return t;
+}
+function memBuscar(d1, d2) {
+  var ahora = Date.now();
+  for (var i = 0; i < S.mem.length; i++) {
+    var m = S.mem[i];
+    if (m.d1 === d1 && m.d2 === d2 && (ahora - m.ts) < MEM_MIN * 60000) return m;
+  }
+  return null;
+}
+function memGuardar(d1, d2, filas) {
+  S.mem.unshift({ d1: d1, d2: d2, filas: filas, ts: Date.now() });
+  if (S.mem.length > MEM_MAX) S.mem.pop();
+}
+
+async function traer(d1, d2, forzar) {
+  if (!forzar) {
+    var m = memBuscar(d1, d2);
+    if (m) { S.deMemoria = true; S.consultadoA = m.ts; return m.filas; }
+  }
+  S.deMemoria = false;
+  var trozos = partir(d1, d2), out = [], i;
+  for (i = 0; i < trozos.length; i++) {
+    var t = trozos[i];
+    ovTexto('Consultando ' + (trozos.length > 1 ? 'trozo ' + (i + 1) + ' de ' + trozos.length : 'el período'),
+            rangoTexto(t.desde, t.hasta));
+    var r = await fetch(API + '?fechaInicio=' + t.desde + '&fechaFin=' + t.hasta,
+                        { headers: { Accept: 'application/json' } });
+    if (!r.ok) throw new Error('El API respondió HTTP ' + r.status +
+      (trozos.length > 1 ? ' en el trozo ' + rangoTexto(t.desde, t.hasta) : ''));
+    var data = await r.json();
+    if (!Array.isArray(data)) throw new Error('El API no devolvió una lista de movimientos');
+    out = out.concat(data);
+  }
+  S.consultadoA = Date.now();
+  memGuardar(d1, d2, out);
+  return out;
+}
+
+/* =========================================================================
+   MODELO · de filas crudas al circuito
+   ========================================================================= */
+function construir(filas) {
+  var metrica = S.metrica;
+  var V = function (f) {
+    return Number(metrica === 'conf' ? f.cantidadConfirmada : f.cantidadDespachada) || 0;
+  };
+
+  var M = {
+    leidas: filas.length, usadas: 0, anuladas: 0, sinFecha: 0, sinValor: 0,
+    ops: {}, etapas: [], lados: {}, sinMapear: {}, conceptos: {},
+    retailSet: {}, clienteSet: {},
+    pendiente: 0, despTot: 0, confTot: 0,
+    retiroFueraDeRetail: 0, emisionAClienteRedtec: 0
+  };
+  var i, f, c, v, k;
+
+  /* ---- pasada 1 · inventario, lados y quién es retail / quién es cliente ----
+     El set de retail sale de los DESTINOS de transferencia y el de clientes de
+     los ORÍGENES de transferencia más los destinos de emisión. Es decir, los
+     roles los define el dato, no una lista escrita a mano que envejece. */
+  var buenas = [];
+  for (i = 0; i < filas.length; i++) {
+    f = filas[i];
+    if (esAnulada(f)) { M.anuladas++; if (!S.incluirAnuladas) continue; }
+    if (!fechaDe(f)) { M.sinFecha++; continue; }
+
+    var op = txt(f.operacion) || '(sin operación)';
+    c = conceptoDe(op);
+
+    var a = M.ops[op] || (M.ops[op] = { movs: 0, conf: 0, desp: 0, concepto: c, etapas: {} });
+    var d = Number(f.cantidadDespachada) || 0, cf = Number(f.cantidadConfirmada) || 0;
+    a.movs++; a.desp += d; a.conf += cf;
+    M.despTot += d; M.confTot += cf;
+    if (d > cf) M.pendiente += (d - cf);
+
+    var et = txt(f.etapaOperacion) || '(sin etapa)';
+    var ae = a.etapas[et] || (a.etapas[et] = { movs: 0, conf: 0, desp: 0 });
+    ae.movs++; ae.desp += d; ae.conf += cf;
+
+    var lado = (esRedtec(f.clienteOrigenStr) ? 'R' : 'E') + '→' + (esRedtec(f.clienteDestinoStr) ? 'R' : 'E');
+    var L = M.lados[op] || (M.lados[op] = {});
+    L[lado] = (L[lado] || 0) + 1;
+
+    if (!c) { M.sinMapear[op] = (M.sinMapear[op] || 0) + 1; continue; }
+    M.conceptos[c] = (M.conceptos[c] || 0) + V(f);
+
+    if (c === 'transferencias') {
+      if (txt(f.clienteDestinoStr)) M.retailSet[txt(f.clienteDestinoStr)] = 1;
+      if (txt(f.clienteOrigenStr))  M.clienteSet[txt(f.clienteOrigenStr)] = 1;
+    } else if (c === 'emisiones') {
+      var dst = txt(f.clienteDestinoStr);
+      if (dst && !esRedtec(dst)) M.clienteSet[dst] = 1;
+      else if (dst) M.emisionAClienteRedtec++;
+    }
+    v = V(f);
+    if (!v) { M.sinValor++; }
+    M.usadas++;
+    buenas.push(f);
+  }
+
+  /* ---- pasada 2 · las corrientes del circuito ---- */
+  var cols = { A: {}, B: {}, C: {}, D: {} };   // id -> {in, out}
+  var crudos = {};                              // "tipo|colA|a|colB|b" -> valor
+  var recup = {}, traspasos = {}, reloc = {};
+
+  function nodo(col, id) {
+    var n = cols[col][id] || (cols[col][id] = { ent: 0, sal: 0 });
+    return n;
+  }
+  function enlace(tipo, ca, a, cb, b, v) {
+    if (!v || !a || !b) return;
+    var key = tipo + '|' + ca + '|' + a + '|' + cb + '|' + b;
+    crudos[key] = (crudos[key] || 0) + v;
+    nodo(ca, a).sal += v;
+    nodo(cb, b).ent += v;
+  }
+
+  for (i = 0; i < buenas.length; i++) {
+    f = buenas[i]; v = V(f);
+    c = conceptoDe(f.operacion);
+    var ori = txt(f.clienteOrigenStr), dst = txt(f.clienteDestinoStr);
+
+    if (c === 'emisiones') {
+      /* REDTEC -> cliente. La planta se lee de la bodega de ORIGEN, igual que
+         el Resumen de Operaciones. */
+      enlace('sal', 'A', plantaDeTexto(f.bodegaOrigenStr), 'B', dst || '(sin cliente destino)', v);
+
+    } else if (c === 'transferencias') {
+      /* cliente -> retail */
+      enlace('can', 'B', ori || '(sin cliente origen)', 'C', dst || '(sin retail destino)', v);
+
+    } else if (c === 'retiros' || c === 'devoluciones') {
+      /* vuelve a planta. La planta se lee de la bodega de DESTINO. Si el que
+         devuelve es un retail, la cinta arranca en la columna de retail; si es
+         un cliente que devuelve directo, arranca en la de clientes. */
+      var col = M.retailSet[ori] ? 'C' : 'B';
+      if (col === 'B' && c === 'retiros') M.retiroFueraDeRetail++;
+      enlace('ret', col, ori || '(sin origen)', 'D', plantaDeTexto(f.bodegaDestinoStr), v);
+
+    } else if (c === 'relocalizacion') {
+      /* Medido sobre jul–sep 2026: 14.305 de 14.305 filas traen la MISMA empresa
+         en las dos puntas, o sea es movimiento entre bodegas propias. No cambia
+         de actor, así que no es una cinta del circuito. Las de REDTEC son la
+         línea de recuperación (reparación -> pintura -> bodega) y van a su
+         propio panel; las de clientes se cuentan aparte. */
+      if (esRedtec(ori)) {
+        k = txt(f.bodegaOrigenStr) + '\u0001' + txt(f.bodegaDestinoStr);
+        var rr = recup[k] || (recup[k] = { de: txt(f.bodegaOrigenStr), a: txt(f.bodegaDestinoStr),
+                                           movs: 0, desp: 0, conf: 0 });
+        rr.movs++; rr.desp += Number(f.cantidadDespachada) || 0; rr.conf += Number(f.cantidadConfirmada) || 0;
+      } else {
+        var re = reloc[ori] || (reloc[ori] = { movs: 0, desp: 0, conf: 0 });
+        re.movs++; re.desp += Number(f.cantidadDespachada) || 0; re.conf += Number(f.cantidadConfirmada) || 0;
+      }
+
+    } else if (c === 'traspasos') {
+      /* cliente -> cliente: movimiento lateral en el canal. Medido: 4.474 de
+         4.474 entre empresas DISTINTAS y las dos externas. */
+      k = ori + '\u0001' + dst;
+      var tp = traspasos[k] || (traspasos[k] = { de: ori, a: dst, movs: 0, desp: 0, conf: 0 });
+      tp.movs++; tp.desp += Number(f.cantidadDespachada) || 0; tp.conf += Number(f.cantidadConfirmada) || 0;
+    }
+  }
+
+  /* ---- agrupar la cola de cada columna en "Otros" ---- */
+  var mapa = {};   // col -> { id -> idFinal }
+  ['A', 'B', 'C', 'D'].forEach(function (col) {
+    var ids = Object.keys(cols[col]);
+    var val = function (id) { return Math.max(cols[col][id].ent, cols[col][id].sal); };
+    ids.sort(function (x, y) { return val(y) - val(x); });
+    mapa[col] = {};
+    var limite = (col === 'A' || col === 'D') ? 99 : TOP_N;   // las plantas son 4, no se agrupan
+    ids.forEach(function (id, ix) {
+      mapa[col][id] = ix < limite ? id : 'Otros';
+    });
+    var sobran = ids.length - limite;
+    if (sobran > 0) mapa[col].__otros = sobran;
+  });
+
+  var links = [], nodos = { A: {}, B: {}, C: {}, D: {} };
+  Object.keys(crudos).forEach(function (key) {
+    var p = key.split('|'), tipo = p[0], ca = p[1], cb = p[3];
+    var a = mapa[ca][p[2]] || p[2], b = mapa[cb][p[4]] || p[4], v = crudos[key];
+    if (a === 'Otros') a = 'Otros (' + mapa[ca].__otros + ')';
+    if (b === 'Otros') b = 'Otros (' + mapa[cb].__otros + ')';
+    var kk = tipo + '|' + ca + '|' + a + '|' + cb + '|' + b;
+    var ex = links.find(function (l) { return l.key === kk; });
+    if (ex) { ex.v += v; return; }
+    links.push({ key: kk, tipo: tipo, ca: ca, a: a, cb: cb, b: b, v: v });
+  });
+  links.forEach(function (l) {
+    var na = nodos[l.ca][l.a] || (nodos[l.ca][l.a] = { id: l.a, ent: 0, sal: 0 });
+    var nb = nodos[l.cb][l.b] || (nodos[l.cb][l.b] = { id: l.b, ent: 0, sal: 0 });
+    na.sal += l.v; nb.ent += l.v;
+  });
+
+  var lista = function (o) { return Object.keys(o).map(function (k2) { return o[k2]; }); };
+  M.cols = {
+    A: lista(nodos.A).sort(ordenPlanta), B: lista(nodos.B).sort(porVal),
+    C: lista(nodos.C).sort(porVal),      D: lista(nodos.D).sort(ordenPlanta)
+  };
+  M.links = links;
+  M.recup = lista(recup).sort(function (a2, b2) { return b2.desp - a2.desp; });
+  M.traspasos = lista(traspasos).sort(function (a2, b2) { return b2.desp - a2.desp; });
+  M.reloc = Object.keys(reloc).map(function (k2) {
+    return { empresa: k2, movs: reloc[k2].movs, desp: reloc[k2].desp, conf: reloc[k2].conf };
+  }).sort(function (a2, b2) { return b2.desp - a2.desp; });
+
+  function porVal(x, y) { return Math.max(y.ent, y.sal) - Math.max(x.ent, x.sal); }
+  function ordenPlanta(x, y) { return PLANTAS.indexOf(x.id) - PLANTAS.indexOf(y.id); }
+
+  /* ---- KPIs ---- */
+  var salio  = M.conceptos.emisiones || 0;
+  var volvio = (M.conceptos.retiros || 0) + (M.conceptos.devoluciones || 0);
+  M.kpi = {
+    salio: salio, volvio: volvio, balance: volvio - salio,
+    canal: M.conceptos.transferencias || 0,
+    traspasos: M.conceptos.traspasos || 0,
+    relocCli: M.reloc.reduce(function (s2, r) { return s2 + (metrica === 'conf' ? r.conf : r.desp); }, 0),
+    recup: M.recup.reduce(function (s2, r) { return s2 + (metrica === 'conf' ? r.conf : r.desp); }, 0),
+    pendiente: M.pendiente
+  };
+  var totalMovs = 0, movsCirculacion = 0;
+  Object.keys(M.ops).forEach(function (op) {
+    var cc = M.ops[op].concepto, n = M.ops[op].movs;
+    totalMovs += n;
+    if (cc === 'transferencias' || cc === 'relocalizacion' || cc === 'traspasos') movsCirculacion += n;
+  });
+  M.kpi.movsTotal = totalMovs;
+  M.kpi.movsCirculacion = movsCirculacion;
+  return M;
+}
+
+/* =========================================================================
+   EL SANKEY · se dibuja a mano en SVG, sin librería.
+   En este repo ya se pagó dos veces el precio de depender de un CDN (Chart.js
+   dejando vistas en blanco, CARTO exigiendo llave, OSM bloqueando): acá no hay
+   nada que cargar de afuera.
+   ========================================================================= */
+var LAY = {
+  w: 1240, xs: { A: 126, B: 486, C: 846, D: 1101 }, nw: 13,
+  y0: 30, H: 520, GAP: 5, minH: 2.5
+};
+var COLHDR = { A: 'Planta REDTEC', B: 'Clientes', C: 'Retail', D: 'Vuelve a planta' };
+var COLOR  = { sal: 'var(--f-sal)', can: 'var(--f-can)', ret: 'var(--f-ret)', int: 'var(--f-int)' };
+var TIPONOM = { sal: 'Emisión', can: 'Transferencia', ret: 'Retiro / devolución', int: 'Interno' };
+
+var esc = function (s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;');
+};
+var corta = function (s, n) { s = String(s); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+
+function cinta(x0, ya, x1, yb, h) {
+  var m0 = x0 + (x1 - x0) * 0.42, m1 = x0 + (x1 - x0) * 0.58;
+  return 'M' + x0 + ',' + ya + ' C' + m0 + ',' + ya + ' ' + m1 + ',' + yb + ' ' + x1 + ',' + yb +
+         ' L' + x1 + ',' + (yb + h) + ' C' + m1 + ',' + (yb + h) + ' ' + m0 + ',' + (ya + h) +
+         ' ' + x0 + ',' + (ya + h) + ' Z';
+}
+
+function patrones() {
+  return ['sal', 'can', 'ret', 'int'].map(function (t, i) {
+    var ang = [45, 135, 45, 135][i];
+    return '<pattern id="pat-' + t + '" width="6" height="6" patternUnits="userSpaceOnUse" ' +
+      'patternTransform="rotate(' + ang + ')">' +
+      '<rect width="6" height="6" fill="' + COLOR[t] + '" opacity=".30"/>' +
+      '<line x1="0" y1="0" x2="0" y2="6" stroke="' + COLOR[t] + '" stroke-width="2.2" opacity=".85"/>' +
+      '</pattern>';
+  }).join('');
+}
+
+function dibujarCircuito(M) {
+  var svg = document.getElementById('svg-circ');
+  var ordenCols = ['A', 'B', 'C', 'D'];
+  var hay = M.links.length > 0;
+  if (!hay) {
+    svg.innerHTML = '';
+    svg.setAttribute('viewBox', '0 0 ' + LAY.w + ' 120');
+    svg.innerHTML = '<text x="' + (LAY.w / 2) + '" y="64" text-anchor="middle" class="colhdr">' +
+      'Sin movimientos de circuito en el período</text>';
+    return;
+  }
+
+  /* escala común a las cuatro columnas: una cinta tiene que medir lo mismo en
+     sus dos puntas, así que el factor no puede cambiar por columna */
+  var totales = {}, maxTot = 0;
+  ordenCols.forEach(function (c) {
+    totales[c] = M.cols[c].reduce(function (s, n) { return s + Math.max(n.ent, n.sal); }, 0);
+    if (totales[c] > maxTot) maxTot = totales[c];
+  });
+  if (!maxTot) maxTot = 1;
+  var k = LAY.H / maxTot;
+
+  /* posición vertical de cada nodo, columna centrada */
+  var altoCol = {};
+  ordenCols.forEach(function (c) {
+    var y = 0;
+    M.cols[c].forEach(function (n) {
+      n.h = Math.max(LAY.minH, Math.max(n.ent, n.sal) * k);
+      n.y = y; y += n.h + LAY.GAP;
+    });
+    altoCol[c] = Math.max(0, y - LAY.GAP);
+  });
+  var maxAlto = Math.max.apply(null, ordenCols.map(function (c) { return altoCol[c]; }));
+  ordenCols.forEach(function (c) {
+    var off = LAY.y0 + (maxAlto - altoCol[c]) / 2;
+    M.cols[c].forEach(function (n) { n.y += off; n.cur = { ent: n.y, sal: n.y }; });
+  });
+  var svgH = LAY.y0 + maxAlto + 26;
+
+  /* ordenar las cintas de cada nodo por la posición del otro extremo, para que
+     se crucen lo menos posible */
+  var nodoDe = function (c, id) {
+    return M.cols[c].find(function (n) { return n.id === id; });
+  };
+  M.links.forEach(function (l) { l.na = nodoDe(l.ca, l.a); l.nb = nodoDe(l.cb, l.b); });
+  var vivos = M.links.filter(function (l) { return l.na && l.nb; });
+  vivos.sort(function (p, q) { return (p.na.y - q.na.y) || (p.nb.y - q.nb.y); });
+
+  var piezas = [], etiquetas = [];
+  var grandes = vivos.slice().sort(function (p, q) { return q.v - p.v; }).slice(0, 4)
+                     .map(function (l) { return l.key; });
+
+  vivos.forEach(function (l) {
+    var h = Math.max(LAY.minH, l.v * k);
+    var x0 = LAY.xs[l.ca] + LAY.nw, x1 = LAY.xs[l.cb];
+    var ya = l.na.cur.sal, yb = l.nb.cur.ent;
+    l.na.cur.sal += h; l.nb.cur.ent += h;
+    var d = cinta(x0, ya, x1, yb, h);
+    var relleno = S.tramado ? 'url(#pat-' + l.tipo + ')' : COLOR[l.tipo];
+    /* Opacidad alta a propósito. El validador aprueba los tres colores como
+       rellenos SÓLIDOS; al 40% sobre el fondo oscuro la cinta deja de ser el
+       color que se validó y la emisión se volvía casi invisible. La separación
+       entre cintas superpuestas la da el anillo del color de la superficie,
+       no la transparencia. */
+    piezas.push('<g class="lk" data-k="' + esc(l.key) + '">' +
+      '<path d="' + d + '" fill="' + relleno + '" fill-opacity="' + (S.tramado ? 1 : .74) +
+      '" stroke="var(--bg-card)" stroke-width=".7" stroke-opacity=".55"/></g>');
+    if (grandes.indexOf(l.key) >= 0 && h >= 11) {
+      var mx = x0 + (x1 - x0) * 0.22, my = ya + h / 2 + (yb - ya) * 0.10;
+      etiquetas.push('<text class="flbl" x="' + mx.toFixed(1) + '" y="' + (my + 3).toFixed(1) +
+        '" text-anchor="middle">' + fmt(l.v) + '</text>');
+    }
+  });
+
+  ordenCols.forEach(function (c) {
+    var x = LAY.xs[c];
+    piezas.push('<text class="colhdr" x="' + x + '" y="16"' +
+      (c === 'D' ? ' text-anchor="end" x="' + (x + LAY.nw) + '"' : '') + '>' + COLHDR[c] + '</text>');
+    M.cols[c].forEach(function (n) {
+      var val = Math.max(n.ent, n.sal);
+      piezas.push('<g class="nd" data-c="' + c + '" data-n="' + esc(n.id) + '">' +
+        '<rect x="' + x + '" y="' + n.y.toFixed(1) + '" width="' + LAY.nw + '" height="' + n.h.toFixed(1) +
+        '" rx="2.5" fill="var(--text-muted)"/></g>');
+      var der = (c === 'B' || c === 'D');
+      var lx  = der ? x + LAY.nw + 7 : x - 7;
+      var anc = der ? 'start' : 'end';
+      var cy  = n.y + n.h / 2;
+      piezas.push('<text class="nlbl" x="' + lx + '" y="' + (cy + 3.5).toFixed(1) + '" text-anchor="' + anc +
+        '">' + esc(corta(n.id, 24)) + ' <tspan class="v">' + fmt(val) + '</tspan></text>');
+    });
+  });
+
+  svg.setAttribute('viewBox', '0 0 ' + LAY.w + ' ' + Math.round(svgH));
+  svg.innerHTML = '<defs>' + patrones() + '</defs>' + piezas.join('') + etiquetas.join('');
+  enganchar(svg, M);
+}
+
+/* ---- la línea de recuperación: una cadena corta, se dibuja como etapas ---- */
+function dibujarRecup(M) {
+  var svg = document.getElementById('svg-recup');
+  var filas = M.recup;
+  if (!filas.length) {
+    svg.setAttribute('viewBox', '0 0 1240 90');
+    svg.innerHTML = '<text x="620" y="50" text-anchor="middle" class="colhdr">' +
+      'Sin relocalización interna de REDTEC en el período</text>';
+    return;
+  }
+  var metrica = S.metrica;
+  var val = function (r) { return metrica === 'conf' ? r.conf : r.desp; };
+  var max = Math.max.apply(null, filas.map(function (r) { return Math.max(r.desp, 1); }));
+  var H = 34, G = 10, W = 1240, xL = 330, xR = 1130;
+  var piezas = [], y = 24;
+  piezas.push('<text class="colhdr" x="0" y="13">Bodega origen → destino</text>');
+  piezas.push('<text class="colhdr" x="' + xR + '" y="13" text-anchor="end">Despachado · confirmado</text>');
+  filas.slice(0, 10).forEach(function (r) {
+    var wDesp = (xR - xL) * (r.desp / max), wConf = (xR - xL) * (r.conf / max);
+    piezas.push('<text class="nlbl" x="' + (xL - 10) + '" y="' + (y + H / 2 + 4) + '" text-anchor="end">' +
+      esc(corta(r.de + '  →  ' + r.a, 46)) + '</text>');
+    piezas.push('<g class="nd" data-recup="' + esc(r.de + ' → ' + r.a) + '">' +
+      '<rect x="' + xL + '" y="' + y + '" width="' + Math.max(2, wDesp).toFixed(1) + '" height="' + H +
+      '" rx="4" fill="var(--f-int)" fill-opacity=".30"/>' +
+      '<rect x="' + xL + '" y="' + (y + 7) + '" width="' + Math.max(1, wConf).toFixed(1) + '" height="' + (H - 14) +
+      '" rx="3" fill="var(--f-ret)" fill-opacity=".85"/>' +
+      '<text class="flbl" x="' + (xL + Math.max(2, wDesp) + 9).toFixed(1) + '" y="' + (y + H / 2 + 4) +
+      '">' + fmt(r.desp) + (r.conf ? ' · ' + fmt(r.conf) : ' · 0 confirmados') + '</text></g>');
+    y += H + G;
+  });
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + (y + 6));
+  svg.innerHTML = piezas.join('');
+  enganchar(svg, M);
+}
+
+/* =========================================================================
+   INTERACCIÓN · el hover va por defecto, no es un extra
+   ========================================================================= */
+var TIP = null;
+function tip(html, ev) {
+  if (!TIP) TIP = document.getElementById('tip');
+  if (!html) { TIP.classList.remove('on'); return; }
+  TIP.innerHTML = html;
+  TIP.classList.add('on');
+  var r = TIP.getBoundingClientRect();
+  var x = ev.clientX + 14, y = ev.clientY + 14;
+  if (x + r.width  > innerWidth  - 10) x = ev.clientX - r.width  - 14;
+  if (y + r.height > innerHeight - 10) y = ev.clientY - r.height - 14;
+  TIP.style.left = Math.max(6, x) + 'px';
+  TIP.style.top  = Math.max(6, y) + 'px';
+}
+function fila(k, v) { return '<div class="r"><span>' + k + '</span><b>' + v + '</b></div>'; }
+
+function enganchar(svg, M) {
+  svg.addEventListener('mousemove', function (ev) {
+    var g = ev.target.closest ? ev.target.closest('.lk,.nd') : null;
+    if (!g) { svg.classList.remove('dim'); limpiarHi(svg); tip(null); return; }
+
+    if (g.classList.contains('lk')) {
+      var l = M.links.find(function (x) { return x.key === g.dataset.k; });
+      if (!l) return;
+      svg.classList.add('dim'); limpiarHi(svg); g.classList.add('hi');
+      var base = M.conceptos[l.tipo === 'sal' ? 'emisiones' : l.tipo === 'can' ? 'transferencias' : 'retiros'] || 0;
+      tip('<div class="t">' + esc(l.a) + ' → ' + esc(l.b) + '</div>' +
+          fila(TIPONOM[l.tipo], fmt(l.v) + ' pallets') +
+          (base ? fila('de su corriente', fpct(l.v, base)) : ''), ev);
+      return;
+    }
+    svg.classList.remove('dim'); limpiarHi(svg);
+    if (g.dataset.recup) {
+      var r = M.recup.find(function (x) { return (x.de + ' → ' + x.a) === g.dataset.recup; });
+      if (!r) return;
+      tip('<div class="t">' + esc(r.de) + ' → ' + esc(r.a) + '</div>' +
+          fila('Movimientos', fmt(r.movs)) + fila('Despachado', fmt(r.desp)) +
+          fila('Confirmado', fmt(r.conf)) +
+          fila('Sin confirmar', '<span class="pend">' + fmt(Math.max(0, r.desp - r.conf)) + '</span>'), ev);
+      return;
+    }
+    if (g.dataset.n) {
+      var c = g.dataset.c, id = g.dataset.n;
+      var n = M.cols[c].find(function (x) { return x.id === id; });
+      if (!n) return;
+      tip('<div class="t">' + esc(id) + '</div>' +
+          '<div class="r"><span style="color:var(--text-muted)">' + COLHDR[c] + '</span></div>' +
+          (n.ent ? fila('Recibe', fmt(n.ent) + ' pallets') : '') +
+          (n.sal ? fila('Entrega', fmt(n.sal) + ' pallets') : ''), ev);
+    }
+  });
+  svg.addEventListener('mouseleave', function () {
+    svg.classList.remove('dim'); limpiarHi(svg); tip(null);
+  });
+}
+function limpiarHi(svg) {
+  var hs = svg.querySelectorAll('.lk.hi'), i;
+  for (i = 0; i < hs.length; i++) hs[i].classList.remove('hi');
+}
+
+/* =========================================================================
+   PANELES
+   ========================================================================= */
+function pintarKpis(M) {
+  var K = M.kpi, metr = S.metrica === 'conf' ? 'confirmado' : 'despachado';
+  var bal = K.balance, signo = bal > 0 ? '+' : '';
+  var cajas = [
+    ['Salió del pool', fmt(K.salio), 'emisiones · ' + metr, 'var(--f-sal)'],
+    ['Volvió al pool', fmt(K.volvio), 'retiros y devoluciones', 'var(--f-ret)'],
+    ['Balance del período', signo + fmt(bal),
+      bal >= 0 ? 'volvió más de lo que salió' : 'salió más de lo que volvió',
+      bal >= 0 ? 'var(--f-ret)' : 'var(--warn)'],
+    ['Circuló el canal', fmt(K.canal), 'transferencias cliente → retail', 'var(--f-can)'],
+    ['Movimiento interno', fmt(K.relocCli + K.recup + K.traspasos),
+      'no cambia de actor', 'var(--f-int)'],
+    ['Despachado sin confirmar', fmt(K.pendiente), 'en todo el período', 'var(--warn)']
+  ];
+  document.getElementById('kpis').innerHTML = cajas.map(function (c) {
+    return '<div class="kpi" style="--kc:' + c[3] + '"><div class="lbl">' + c[0] + '</div>' +
+           '<div class="n">' + c[1] + '</div><div class="sub">' + c[2] + '</div></div>';
+  }).join('');
+}
+
+function pintarChips(M) {
+  var d1 = document.getElementById('d1').value, d2 = document.getElementById('d2').value;
+  var ch = [];
+  ch.push('<span class="chip">ventana <b>' + dias(d1, d2) + '</b> días</span>');
+  ch.push('<span class="chip">filas del API <b>' + fmt(M.leidas) + '</b></span>');
+  ch.push('<span class="chip">movimientos usados <b>' + fmt(M.usadas) + '</b></span>');
+  if (M.anuladas) {
+    ch.push('<span class="chip' + (S.incluirAnuladas ? ' warn' : '') + '">' +
+      (S.incluirAnuladas ? 'anuladas INCLUIDAS ' : 'anuladas excluidas ') + '<b>' + fmt(M.anuladas) + '</b></span>');
+  }
+  if (M.sinFecha) ch.push('<span class="chip warn">sin fecha <b>' + fmt(M.sinFecha) + '</b></span>');
+  var sm = Object.keys(M.sinMapear);
+  if (sm.length) {
+    var n = sm.reduce(function (s, k) { return s + M.sinMapear[k]; }, 0);
+    ch.push('<span class="chip warn">operaciones sin clasificar <b>' + fmt(n) + '</b></span>');
+  }
+  if (M.retiroFueraDeRetail)
+    ch.push('<span class="chip">retiros desde un cliente, no un retail <b>' +
+      fmt(M.retiroFueraDeRetail) + '</b></span>');
+  ch.push('<span class="chip">' + (S.deMemoria ? 'en memoria' : 'consultado') + ' <b>' +
+    new Date(S.consultadoA || Date.now()).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) +
+    '</b></span>');
+  document.getElementById('diag').innerHTML = ch.join('');
+}
+
+function pintarNotas(M) {
+  var K = M.kpi;
+  var pc = fpct(K.movsCirculacion, K.movsTotal);
+  document.getElementById('nota-circuito').innerHTML =
+    'Las cintas son pallets ' + (S.metrica === 'conf' ? 'confirmados' : 'despachados') +
+    '. El ancho de una corriente es el mismo en sus dos puntas, así que se pueden comparar entre columnas. ' +
+    'En el período, <b>' + pc + '</b> de los movimientos (' + fmt(K.movsCirculacion) + ' de ' +
+    fmt(K.movsTotal) + ') son circulación — transferencias, traspasos y relocalización — y no entrada ni ' +
+    'salida del pool.' +
+    (M.retiroFueraDeRetail ? ' Las cintas que arrancan en Clientes y llegan a planta sin pasar por Retail ' +
+      'son devoluciones directas del cliente.' : '');
+
+  var totD = M.recup.reduce(function (s, r) { return s + r.desp; }, 0);
+  var totC = M.recup.reduce(function (s, r) { return s + r.conf; }, 0);
+  document.getElementById('nota-recup').innerHTML = M.recup.length
+    ? 'Relocalización de REDTEC entre bodegas propias: la cadena de reacondicionamiento. ' +
+      'La barra clara es lo despachado y la sólida lo confirmado. En el período son <b>' + fmt(totD) +
+      '</b> pallets despachados contra <b>' + fmt(totC) + '</b> confirmados' +
+      (totD && totC / totD < 0.5 ? ' — o sea la confirmación de esta línea está esencialmente sin hacer.' : '.')
+    : 'No hubo relocalización interna de REDTEC en el período.';
+
+  document.getElementById('nota-conf').innerHTML =
+    'Esta tabla no depende del selector de métrica: compara siempre despachado contra confirmado, porque ' +
+    'la diferencia entre los dos ES el dato. Una etapa cuyo nombre pide confirmar y que trae cero ' +
+    'confirmados es trabajo pendiente, no un movimiento que no ocurrió.';
+
+  var nT = M.traspasos.length, nR = M.reloc.length;
+  document.getElementById('nota-lateral').innerHTML =
+    'Traspasos (cliente → cliente) y relocalización de clientes (entre bodegas de una misma empresa). ' +
+    'Ninguno de los dos hace circular el pool hacia el retail ni lo devuelve a REDTEC, por eso no son ' +
+    'cintas del circuito, pero sí consumen operación y aparecen en el movimiento total: <b>' + nT +
+    '</b> pares de traspaso y <b>' + nR + '</b> empresas con relocalización propia.';
+}
+
+function tabla(cols, filas, vacio) {
+  if (!filas.length) return '<div class="empty">' + (vacio || 'Sin datos en el período') + '</div>';
+  return '<table><thead><tr>' + cols.map(function (c) {
+    return '<th' + (c[1] ? ' class="n"' : '') + '>' + c[0] + '</th>';
+  }).join('') + '</tr></thead><tbody>' + filas.map(function (f) {
+    return '<tr>' + f.map(function (v, i) {
+      return '<td' + (cols[i] && cols[i][1] ? ' class="n"' : '') + '>' + v + '</td>';
+    }).join('') + '</tr>';
+  }).join('') + '</tbody></table>';
+}
+
+function pintarTablas(M) {
+  /* --- el circuito como tabla (la alternativa accesible al dibujo) --- */
+  document.getElementById('tbl-flujos').innerHTML = tabla(
+    [['Corriente'], ['Desde'], ['Hacia'], ['Pallets', 1]],
+    M.links.slice().sort(function (a, b) { return b.v - a.v; }).map(function (l) {
+      return ['<span class="bar" style="width:9px;background:' + COLOR[l.tipo] + '"></span> ' +
+              TIPONOM[l.tipo], esc(l.a), esc(l.b), fmt(l.v)];
+    }));
+
+  /* --- cadena de confirmación --- */
+  var filasC = [];
+  Object.keys(M.ops).forEach(function (op) {
+    var o = M.ops[op];
+    Object.keys(o.etapas).forEach(function (et) {
+      var e = o.etapas[et];
+      filasC.push({ op: op, et: et, movs: e.movs, desp: e.desp, conf: e.conf,
+                    pend: Math.max(0, e.desp - e.conf) });
+    });
+  });
+  filasC.sort(function (a, b) { return b.pend - a.pend; });
+  var maxPend = Math.max.apply(null, [1].concat(filasC.map(function (r) { return r.pend; })));
+  document.getElementById('tbl-conf').innerHTML = tabla(
+    [['Operación'], ['Etapa'], ['Movs', 1], ['Despachado', 1], ['Confirmado', 1], ['Tasa', 1], ['Sin confirmar', 1]],
+    filasC.map(function (r) {
+      var w = Math.round(r.pend / maxPend * 70);
+      return [esc(r.op), esc(r.et), fmt(r.movs), fmt(r.desp), fmt(r.conf),
+        r.desp ? fpct(r.conf, r.desp) : '—',
+        (r.pend ? '<span class="bar" style="width:' + w + 'px;background:var(--warn)"></span> ' +
+          '<span class="pend">' + fmt(r.pend) + '</span>' : '—')];
+    }));
+
+  /* --- auditoría operación × lado --- */
+  var lados = {};
+  Object.keys(M.lados).forEach(function (op) {
+    Object.keys(M.lados[op]).forEach(function (l) { lados[l] = 1; });
+  });
+  var ordenLados = ['R→E', 'E→R', 'E→E', 'R→R'].filter(function (l) { return lados[l]; })
+    .concat(Object.keys(lados).filter(function (l) { return ['R→E', 'E→R', 'E→E', 'R→R'].indexOf(l) < 0; }));
+  var LADONOM = { 'R→E': 'REDTEC → externo', 'E→R': 'externo → REDTEC',
+                  'E→E': 'externo → externo', 'R→R': 'REDTEC → REDTEC' };
+  document.getElementById('tbl-audit').innerHTML = tabla(
+    [['Operación'], ['Concepto'], ['Movs', 1]].concat(ordenLados.map(function (l) {
+      return [(LADONOM[l] || l), 1];
+    })),
+    Object.keys(M.ops).sort(function (a, b) { return M.ops[b].movs - M.ops[a].movs; }).map(function (op) {
+      var o = M.ops[op], L = M.lados[op] || {};
+      return [esc(op),
+        o.concepto ? esc(o.concepto) : '<span class="pend">sin clasificar</span>',
+        fmt(o.movs)].concat(ordenLados.map(function (l) { return L[l] ? fmt(L[l]) : '·'; }));
+    }));
+
+  var sm = Object.keys(M.sinMapear);
+  document.getElementById('audit-extra').innerHTML = sm.length
+    ? '<div class="err" style="margin-top:10px">Operaciones que el clasificador canónico de ' +
+      '<code>api/shared/movimientos.js</code> no reconoce: ' +
+      sm.map(function (k) { return esc(k) + ' (' + fmt(M.sinMapear[k]) + ')'; }).join(', ') +
+      '. Si acá aparece un nombre nuevo, hay que decidir a qué concepto pertenece antes de que se ' +
+      'cuele en los números de otra vista.</div>'
+    : '';
+
+  /* --- laterales --- */
+  var mv = function (r) { return S.metrica === 'conf' ? r.conf : r.desp; };
+  var fT = M.traspasos.slice(0, 12).map(function (r) {
+    return ['Traspaso', esc(r.de), esc(r.a), fmt(r.movs), fmt(mv(r))];
+  });
+  var fR = M.reloc.slice(0, 12).map(function (r) {
+    return ['Relocalización', esc(r.empresa), '<span style="color:var(--text-muted)">bodegas propias</span>',
+            fmt(r.movs), fmt(mv(r))];
+  });
+  document.getElementById('tbl-lateral').innerHTML = tabla(
+    [['Tipo'], ['Desde'], ['Hacia'], ['Movs', 1], ['Pallets', 1]], fT.concat(fR));
+
+  document.getElementById('chip-top').textContent =
+    'top ' + TOP_N + ' por columna, el resto agrupado';
+}
+
+/* =========================================================================
+   PERÍODO · los <input type=date> ocultos d1/d2 son la única fuente de verdad.
+   La píldora, las flechas y el popover sólo los escriben, igual que el
+   selector de la vista Ops y de la cartola.
+   ========================================================================= */
+function getRango() {
+  return { d1: document.getElementById('d1').value, d2: document.getElementById('d2').value };
+}
+function setRango(d1, d2) {
+  var hoy = hoyIso();
+  if (parseIso(d2) > parseIso(hoy)) d2 = hoy;                 // nunca futuro
+  if (parseIso(d1) > parseIso(d2)) d1 = d2;                   // nunca invertido
+  if (dias(d1, d2) > MAX_DIAS) d1 = addDias(d2, -(MAX_DIAS - 1));
+  document.getElementById('d1').value = d1;
+  document.getElementById('d2').value = d2;
+  document.getElementById('m1').value = d1;
+  document.getElementById('m2').value = d2;
+  pintarPildora();
+}
+function pintarPildora() {
+  var r = getRango(), n = dias(r.d1, r.d2);
+  document.getElementById('rg-txt').textContent = rangoTexto(r.d1, r.d2);
+  document.getElementById('rg-dur').textContent = n === 1 ? '1 día' : n + ' días';
+  var hoy = hoyIso();
+  document.getElementById('rg-next').disabled = parseIso(r.d2) >= parseIso(hoy);
+  var trozos = partir(r.d1, r.d2).length;
+  document.getElementById('rg-foot').innerHTML =
+    'Tope de la vista: ' + MAX_DIAS + ' días. Este rango se le pide al API en <b>' + trozos +
+    '</b> ' + (trozos === 1 ? 'consulta' : 'consultas') + ' de hasta ' + CHUNK_DIAS + ' días; ' +
+    'siete meses de una sola vez el API los rechaza.';
+}
+function correr(signo, unDia) {
+  var r = getRango(), n = unDia ? 1 : dias(r.d1, r.d2);
+  setRango(addDias(r.d1, signo * n), addDias(r.d2, signo * n));
+  cargar(false);
+}
+/* Primer día del mes: "mes en curso" sería un rango de un día y el circuito
+   quedaría en una astilla. Mismo caso que ya se corrigió en stocks-unificado
+   y stock-calendario, así que con menos de 7 días corridos se cae al mes
+   anterior completo. */
+function mesPorDefecto() {
+  var h = new Date();
+  if (h.getDate() < 7) {
+    var fin = new Date(h.getFullYear(), h.getMonth(), 0);
+    return { d1: iso(new Date(fin.getFullYear(), fin.getMonth(), 1)), d2: iso(fin) };
+  }
+  return { d1: iso(new Date(h.getFullYear(), h.getMonth(), 1)), d2: hoyIso() };
+}
+var ATAJOS = [
+  ['Mes en curso', function () { var h = new Date();
+    return { d1: iso(new Date(h.getFullYear(), h.getMonth(), 1)), d2: hoyIso() }; }],
+  ['Mes pasado', function () { var h = new Date();
+    var f = new Date(h.getFullYear(), h.getMonth(), 0);
+    return { d1: iso(new Date(f.getFullYear(), f.getMonth(), 1)), d2: iso(f) }; }],
+  ['Esta semana', function () { var h = new Date(); var dw = (h.getDay() + 6) % 7;
+    return { d1: addDias(hoyIso(), -dw), d2: hoyIso() }; }],
+  ['Trimestre en curso', function () { var h = new Date();
+    var q = Math.floor(h.getMonth() / 3) * 3;
+    return { d1: iso(new Date(h.getFullYear(), q, 1)), d2: hoyIso() }; }],
+  ['Últimos 30 días', function () { return { d1: addDias(hoyIso(), -29), d2: hoyIso() }; }],
+  ['Últimos 90 días', function () { return { d1: addDias(hoyIso(), -89), d2: hoyIso() }; }],
+  ['Últimos 180 días', function () { return { d1: addDias(hoyIso(), -179), d2: hoyIso() }; }],
+  ['Año a la fecha', function () { var h = new Date();
+    var ini = iso(new Date(h.getFullYear(), 0, 1));
+    if (dias(ini, hoyIso()) > MAX_DIAS) ini = addDias(hoyIso(), -(MAX_DIAS - 1));
+    return { d1: ini, d2: hoyIso() }; }]
+];
+
+/* =========================================================================
+   TEMA, ZOOM Y CARGA
+   ========================================================================= */
+var LS = {
+  get: function (k, d) { try { var v = localStorage.getItem(k); return v === null ? d : v; }
+                         catch (e) { return d; } },
+  set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+};
+var ZOOMS = [1, 1.15, 1.3, 1.5];
+function aplicarZoom(z) {
+  document.body.classList.toggle('circ-z', z !== 1);
+  document.body.style.setProperty('--circ-z', z);
+  LS.set('circ_fs', z);
+}
+function aplicarTema(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  document.getElementById('tema').textContent = t === 'dark' ? '☾' : '☀';
+  LS.set('circ_theme', t);
+  if (S.modelo) render();          // los SVG llevan los colores del tema
+}
+function ovTexto(t, sub) {
+  document.getElementById('ov-txt').firstChild.nodeValue = t + '…';
+  document.getElementById('ov-sub').textContent = sub || 'RDTOut';
+}
+function ov(on) { document.getElementById('ov').classList.toggle('on', on); }
+
+function render() {
+  if (!S.filas) return;
+  var M = construir(S.filas);
+  S.modelo = M;
+  pintarKpis(M); pintarChips(M); pintarNotas(M); pintarTablas(M);
+  dibujarCircuito(M); dibujarRecup(M);
+}
+
+async function cargar(forzar) {
+  if (S.cargando) return;
+  S.cargando = true;
+  document.getElementById('error-box').innerHTML = '';
+  var r = getRango();
+  ov(true); ovTexto('Consultando el período', rangoTexto(r.d1, r.d2));
+  try {
+    S.filas = await traer(r.d1, r.d2, forzar);
+    render();
+  } catch (e) {
+    document.getElementById('error-box').innerHTML =
+      '<div class="err"><b>No se pudo leer el período.</b> ' + esc(e.message) +
+      '<br>Si el rango es largo, probá con un trozo más corto: el API de RDTOut rechaza ' +
+      'ventanas grandes de una sola vez.</div>';
+  } finally {
+    ov(false); S.cargando = false;
+  }
+}
+
+/* =========================================================================
+   ARRANQUE
+   ========================================================================= */
+(function init() {
+  aplicarTema(LS.get('circ_theme', 'dark'));
+  aplicarZoom(parseFloat(LS.get('circ_fs', 1)) || 1);
+
+  document.getElementById('rg-atajos').innerHTML = ATAJOS.map(function (a, i) {
+    return '<button data-i="' + i + '">' + a[0] + '</button>';
+  }).join('');
+
+  var pop = document.getElementById('rg-pop'), pill = document.getElementById('rg-pill');
+  function abrir(on) {
+    pop.classList.toggle('open', on);
+    pill.setAttribute('aria-expanded', on ? 'true' : 'false');
+  }
+  pill.addEventListener('click', function () { abrir(!pop.classList.contains('open')); });
+  document.getElementById('rg-atajos').addEventListener('click', function (ev) {
+    var b = ev.target.closest('button'); if (!b) return;
+    var r = ATAJOS[+b.dataset.i][1]();
+    setRango(r.d1, r.d2); abrir(false); cargar(false);
+  });
+  document.getElementById('rg-ok').addEventListener('click', function () {
+    var a = document.getElementById('m1').value, b = document.getElementById('m2').value;
+    if (!a || !b) return;
+    setRango(a, b); abrir(false); cargar(false);
+  });
+  /* El cierre por clic afuera va en CAPTURA. En burbujeo corre DESPUÉS del
+     handler que repinta por delegación, y entonces pregunta por un nodo que ya
+     fue reemplazado, concluye "fue afuera" y cierra el popover solo. Costó
+     encontrarlo una vez en el selector de la vista Ops; no se repite. */
+  document.addEventListener('click', function (ev) {
+    if (!pop.classList.contains('open')) return;
+    if (!document.getElementById('rg').contains(ev.target)) abrir(false);
+  }, true);
+
+  document.getElementById('rg-prev').addEventListener('click', function (e) { correr(-1, e.shiftKey); });
+  document.getElementById('rg-next').addEventListener('click', function (e) { correr(1, e.shiftKey); });
+
+  document.getElementById('mt-conf').addEventListener('click', function () { metrica('conf'); });
+  document.getElementById('mt-desp').addEventListener('click', function () { metrica('desp'); });
+  function metrica(m) {
+    if (S.metrica === m) return;
+    S.metrica = m;
+    document.getElementById('mt-conf').setAttribute('aria-pressed', m === 'conf' ? 'true' : 'false');
+    document.getElementById('mt-desp').setAttribute('aria-pressed', m === 'desp' ? 'true' : 'false');
+    render();
+  }
+  document.getElementById('anul').addEventListener('change', function (e) {
+    S.incluirAnuladas = e.target.checked; render();
+  });
+  document.getElementById('tram').addEventListener('change', function (e) {
+    S.tramado = e.target.checked; render();
+  });
+
+  var zi = ZOOMS.indexOf(parseFloat(LS.get('circ_fs', 1))); if (zi < 0) zi = 0;
+  document.getElementById('z-mas').addEventListener('click', function () {
+    zi = Math.min(ZOOMS.length - 1, zi + 1); aplicarZoom(ZOOMS[zi]);
+  });
+  document.getElementById('z-menos').addEventListener('click', function () {
+    zi = Math.max(0, zi - 1); aplicarZoom(ZOOMS[zi]);
+  });
+  document.getElementById('z-reset').addEventListener('click', function () { zi = 0; aplicarZoom(1); });
+  document.getElementById('tema').addEventListener('click', function () {
+    aplicarTema(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  });
+  document.getElementById('recargar').addEventListener('click', function () { cargar(true); });
+
+  var def = mesPorDefecto();
+  setRango(def.d1, def.d2);
+  cargar(false);
+})();
+</script>
+</body>
+</html>

@@ -82,6 +82,23 @@ body.circ-z .page-header,body.circ-z .cbar,body.circ-z .diag,
 body.circ-z .kpis,body.circ-z .card{font-size:calc(1em * var(--circ-z,1))}
 body.circ-z .card svg{zoom:var(--circ-z,1)}
 
+/* ---- vuelta al menú ----
+   Sólo aparece cuando la vista se abre SOLA. Dentro del workspace de pestañas el
+   menú ya está a la izquierda y este enlace navegaría el iframe, dejando el panel
+   dentro de una pestaña del propio panel. La R sale de la misma --logo-url que
+   usa el loader, así que no hay un archivo de imagen nuevo que mantener. */
+.volver{display:inline-flex;align-items:center;gap:9px;text-decoration:none;color:var(--text-secondary);
+  font-size:11.5px;letter-spacing:.2px;margin-bottom:9px;padding:4px 11px 4px 5px;border-radius:999px;
+  border:1px solid transparent;width:max-content;transition:background .12s,border-color .12s,color .12s}
+.volver:hover,.volver:focus-visible{color:var(--text-primary);border-color:var(--border-md);
+  background:var(--bg-card)}
+.volver:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.volver .r{width:24px;height:24px;background:var(--logo-url) center/contain no-repeat;flex:none;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
+:root[data-theme="light"] .volver .r{filter:none}
+.volver .ch{opacity:.5;font-size:14px;line-height:1}
+.volver:hover .ch{opacity:1;color:var(--accent)}
+
 /* ---- cabecera ---- */
 .page-header{margin-bottom:.85rem}
 .page-header h1{font-size:19px;font-weight:600;letter-spacing:-.2px;display:flex;align-items:center;gap:9px}
@@ -272,6 +289,10 @@ summary:hover{color:var(--accent)}
 <div class="wrap">
 
   <header class="page-header">
+    <a class="volver" id="volver" href="m3link_dashboard_dark.html" title="Volver al menú principal">
+      <span class="r" aria-hidden="true"></span><span class="ch" aria-hidden="true">‹</span>
+      <span>Volver al menú</span>
+    </a>
     <h1><span class="dot"></span> Circuito del pool</h1>
     <p>Por dónde pasan los pallets en el período: sale de planta hacia el cliente, el cliente lo transfiere
        al retail, y vuelve a planta. Los movimientos que no cambian de actor — traspasos entre clientes y
@@ -304,7 +325,7 @@ summary:hover{color:var(--accent)}
 
     <div class="seg" role="group" aria-label="Métrica">
       <button id="mt-conf" aria-pressed="true">Confirmado</button>
-      <button id="mt-desp" aria-pressed="false">Despachado</button>
+      <button id="mt-desp" aria-pressed="false">Registrado</button>
     </div>
 
     <label class="chk"><input type="checkbox" id="anul"> incluir anuladas</label>
@@ -526,6 +547,11 @@ async function traer(d1, d2, forzar) {
    MODELO · de filas crudas al circuito
    ========================================================================= */
 function construir(filas) {
+  /* VOCABULARIO. En pantalla la métrica se llama "Registrado", que es la palabra
+     que ya usa Operaciones REDTEC para esta misma cantidad. El campo del API se
+     sigue llamando cantidadDespachada y la clave interna 'desp': se dejan con el
+     nombre del origen a propósito, para que al leer el código no haya que adivinar
+     de qué campo sale cada número. */
   var metrica = S.metrica;
   var V = function (f) {
     return Number(metrica === 'conf' ? f.cantidadConfirmada : f.cantidadDespachada) || 0;
@@ -868,7 +894,7 @@ function dibujarRecup(M) {
   var H = 34, G = 10, W = 1240, xL = 330, xR = 1130;
   var piezas = [], y = 24;
   piezas.push('<text class="colhdr" x="0" y="13">Bodega origen → destino</text>');
-  piezas.push('<text class="colhdr" x="' + xR + '" y="13" text-anchor="end">Despachado · confirmado</text>');
+  piezas.push('<text class="colhdr" x="' + xR + '" y="13" text-anchor="end">Registrado · confirmado</text>');
   filas.slice(0, 10).forEach(function (r) {
     var wDesp = (xR - xL) * (r.desp / max), wConf = (xR - xL) * (r.conf / max);
     piezas.push('<text class="nlbl" x="' + (xL - 10) + '" y="' + (y + H / 2 + 4) + '" text-anchor="end">' +
@@ -925,7 +951,7 @@ function enganchar(svg, M) {
       var r = M.recup.find(function (x) { return (x.de + ' → ' + x.a) === g.dataset.recup; });
       if (!r) return;
       tip('<div class="t">' + esc(r.de) + ' → ' + esc(r.a) + '</div>' +
-          fila('Movimientos', fmt(r.movs)) + fila('Despachado', fmt(r.desp)) +
+          fila('Movimientos', fmt(r.movs)) + fila('Registrado', fmt(r.desp)) +
           fila('Confirmado', fmt(r.conf)) +
           fila('Sin confirmar', '<span class="pend">' + fmt(Math.max(0, r.desp - r.conf)) + '</span>'), ev);
       return;
@@ -953,7 +979,7 @@ function limpiarHi(svg) {
    PANELES
    ========================================================================= */
 function pintarKpis(M) {
-  var K = M.kpi, metr = S.metrica === 'conf' ? 'confirmado' : 'despachado';
+  var K = M.kpi, metr = S.metrica === 'conf' ? 'confirmado' : 'registrado';
   var bal = K.balance, signo = bal > 0 ? '+' : '';
   var cajas = [
     ['Salió del pool', fmt(K.salio), 'emisiones · ' + metr, 'var(--f-sal)'],
@@ -964,7 +990,7 @@ function pintarKpis(M) {
     ['Circuló el canal', fmt(K.canal), 'transferencias cliente → retail', 'var(--f-can)'],
     ['Movimiento interno', fmt(K.relocCli + K.recup + K.traspasos),
       'no cambia de actor', 'var(--f-int)'],
-    ['Despachado sin confirmar', fmt(K.pendiente), 'en todo el período', 'var(--warn)']
+    ['Registrado sin confirmar', fmt(K.pendiente), 'en todo el período', 'var(--warn)']
   ];
   document.getElementById('kpis').innerHTML = cajas.map(function (c) {
     return '<div class="kpi" style="--kc:' + c[3] + '"><div class="lbl">' + c[0] + '</div>' +
@@ -1001,7 +1027,7 @@ function pintarNotas(M) {
   var K = M.kpi;
   var pc = fpct(K.movsCirculacion, K.movsTotal);
   document.getElementById('nota-circuito').innerHTML =
-    'Las cintas son pallets ' + (S.metrica === 'conf' ? 'confirmados' : 'despachados') +
+    'Las cintas son pallets ' + (S.metrica === 'conf' ? 'confirmados' : 'registrados') +
     '. El ancho de una corriente es el mismo en sus dos puntas, así que se pueden comparar entre columnas. ' +
     'En el período, <b>' + pc + '</b> de los movimientos (' + fmt(K.movsCirculacion) + ' de ' +
     fmt(K.movsTotal) + ') son circulación — transferencias, traspasos y relocalización — y no entrada ni ' +
@@ -1013,13 +1039,13 @@ function pintarNotas(M) {
   var totC = M.recup.reduce(function (s, r) { return s + r.conf; }, 0);
   document.getElementById('nota-recup').innerHTML = M.recup.length
     ? 'Relocalización de REDTEC entre bodegas propias: la cadena de reacondicionamiento. ' +
-      'La barra clara es lo despachado y la sólida lo confirmado. En el período son <b>' + fmt(totD) +
-      '</b> pallets despachados contra <b>' + fmt(totC) + '</b> confirmados' +
+      'La barra clara es lo registrado y la sólida lo confirmado. En el período son <b>' + fmt(totD) +
+      '</b> pallets registrados contra <b>' + fmt(totC) + '</b> confirmados' +
       (totD && totC / totD < 0.5 ? ' — o sea la confirmación de esta línea está esencialmente sin hacer.' : '.')
     : 'No hubo relocalización interna de REDTEC en el período.';
 
   document.getElementById('nota-conf').innerHTML =
-    'Esta tabla no depende del selector de métrica: compara siempre despachado contra confirmado, porque ' +
+    'Esta tabla no depende del selector de métrica: compara siempre registrado contra confirmado, porque ' +
     'la diferencia entre los dos ES el dato. Una etapa cuyo nombre pide confirmar y que trae cero ' +
     'confirmados es trabajo pendiente, no un movimiento que no ocurrió.';
 
@@ -1064,7 +1090,7 @@ function pintarTablas(M) {
   filasC.sort(function (a, b) { return b.pend - a.pend; });
   var maxPend = Math.max.apply(null, [1].concat(filasC.map(function (r) { return r.pend; })));
   document.getElementById('tbl-conf').innerHTML = tabla(
-    [['Operación'], ['Etapa'], ['Movs', 1], ['Despachado', 1], ['Confirmado', 1], ['Tasa', 1], ['Sin confirmar', 1]],
+    [['Operación'], ['Etapa'], ['Movs', 1], ['Registrado', 1], ['Confirmado', 1], ['Tasa', 1], ['Sin confirmar', 1]],
     filasC.map(function (r) {
       var w = Math.round(r.pend / maxPend * 70);
       return [esc(r.op), esc(r.et), fmt(r.movs), fmt(r.desp), fmt(r.conf),
@@ -1243,6 +1269,11 @@ async function cargar(forzar) {
    ARRANQUE
    ========================================================================= */
 (function init() {
+  /* Embebida en el workspace de pestañas no corresponde el enlace de vuelta. */
+  try {
+    if (window.self !== window.top) document.getElementById('volver').style.display = 'none';
+  } catch (e) {}
+
   aplicarTema(LS.get('circ_theme', 'dark'));
   aplicarZoom(parseFloat(LS.get('circ_fs', 1)) || 1);
 

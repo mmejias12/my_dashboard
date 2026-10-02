@@ -16,6 +16,22 @@
 
 const https = require('https');
 const cacheOps = require('../shared/cache-ops.js');
+const RL = require('../shared/redlink-fetch.js');
+
+// ── INTERRUPTOR DE ORIGEN ───────────────────────────────────────────────────
+// Las ocho vistas del m3link llaman a /proxy/ops y no saben de dónde sale el
+// dato. Esa frontera ya existía, así que el cambio de proveedor se hace acá y
+// no en las vistas. Application Setting:
+//     OPS_ORIGEN = rdt      (por omisión) el API del proveedor, apirdt1
+//     OPS_ORIGEN = redlink  la API directa del portal (Holux)
+// Volver atrás es cambiar esa variable en el portal: no hay que desplegar.
+// La respuesta SIEMPRE trae X-Ops-Origen, para que nadie tenga que adivinar
+// mirando los números de dónde vinieron.
+//
+// NO hay respaldo automático a propósito: si Redlink falla con el origen
+// conmutado, la vista falla y se ve. Caer en silencio a RDT escondería
+// justamente lo que hay que vigilar durante la migración.
+const ORIGEN_DEF = String(process.env.OPS_ORIGEN || 'rdt').toLowerCase() === 'redlink' ? 'redlink' : 'rdt';
 
 const API_HOST = 'apirdt1.azurewebsites.net';
 const API_PATH = '/api/RDTOut/opsxrangofechas';
@@ -49,11 +65,15 @@ module.exports = async function (context, req) {
 
   _t0 = Date.now();
   const q = req.query || {};
+  // ?origen= fuerza el origen de UNA consulta, para comparar los dos sin
+  // tocarle la configuración a nadie. Ninguna vista lo usa.
+  const pedido = String(q.origen || '').toLowerCase();
+  const origen = (pedido === 'redlink' || pedido === 'rdt') ? pedido : ORIGEN_DEF;
 
   // Diagnóstico: confirma de dónde sale la clave y si hay storage, sin exponer
   // ningún valor.
   if (q.diag === '1' || q.diag === 'true') {
-    context.res = { status: 200, headers: Object.assign({'Content-Type':'application/json'}, CORS),
+    context.res = { status: 200,
       body: JSON.stringify({
         ok: true,
         clave: CLAVE_DE_SETTINGS ? 'desde Application Settings' : 'RESPALDO ESCRITO EN EL CÓDIGO — cargar REDTEC_API_KEY y borrar el literal',
@@ -61,8 +81,13 @@ module.exports = async function (context, req) {
         storage_historico: cacheOps.hayStorage(),
         contenedor: cacheOps.CONTAINER,
         dias_vivos: cacheOps.DIAS_VIVOS,
-        primer_dia_vivo: cacheOps.desdeVivo()
-      }) };
+        primer_dia_vivo: cacheOps.desdeVivo(),
+        origen_por_defecto: ORIGEN_DEF,
+        redlink_configurado: RL.configurado(),
+        redlink_faltan: RL.faltantes(),
+        redlink_tramo_dias: RL.TRAMO,
+        redlink_bp: RL.BP_DEF
+      }), headers: Object.assign({'Content-Type':'application/json','X-Ops-Origen':origen}, CORS) };
     return;
   }
 
@@ -84,6 +109,35 @@ module.exports = async function (context, req) {
 
   let vivas = [], errorApi = null, tramos = 0, tramosFallidos = 0;
   const trozos = trocear(fDesde, fHasta, rangoValido, MAX_DIAS_API);
+
+  if (origen === 'redlink') {
+    // Redlink SÍ respeta el 'hasta', al revés que RDTOut, así que el troceo y
+    // el recorte posteriores no descartan nada: quedan igual por si se vuelve
+    // atrás. El snapshot histórico se sigue sembrando igual, porque las filas
+    // llegan ya traducidas al mismo contrato.
+    if (!rangoValido) {
+      context.res = { status: 400, headers: Object.assign({'Content-Type':'application/json','X-Ops-Origen':origen}, CORS),
+        body: JSON.stringify({ ok:false, origen:origen,
+          error:'Con el origen Redlink hay que mandar un rango válido (YYYY-MM-DD). ' +
+                'RDTOut tenía una ventana por omisión; esta API no.' }) };
+      return;
+    }
+    try {
+      // Se le deja margen al presupuesto para que alcance a sembrar el caché
+      // y a responder: el corte de Static Web Apps es a los 45 s.
+      const r = await RL.consultarRedlink(fDesde, fHasta, { presupuestoMs: BUDGET_MS - 6000 });
+      vivas = r.filas;
+      tramos = r.tramos.length;
+    } catch (e) {
+      if (e.noConfigurado) {
+        context.res = { status: 503, headers: Object.assign({'Content-Type':'application/json','X-Ops-Origen':origen}, CORS),
+          body: JSON.stringify({ ok:false, origen:origen, error:'Servicio no configurado', detail:e.message }) };
+        return;
+      }
+      errorApi = e.message;
+      tramosFallidos = 1;
+    }
+  } else {
   for (const [ta, tb] of trozos) {
     if (tramos && !alcanzaTiempo()) { tramosFallidos += 1; break; }
     // El try va DENTRO del bucle: un tramo que falle no puede tirar abajo los
@@ -99,6 +153,7 @@ module.exports = async function (context, req) {
       tramosFallidos++;
       if (!errorApi) errorApi = err.message;
     }
+  }
   }
   vivas = cacheOps.dedup(vivas);
 
@@ -172,8 +227,8 @@ module.exports = async function (context, req) {
   // Con datos parciales se responde 200 y se informa el problema: media
   // respuesta útil vale más que un error total.
   if (errorApi && !todas.length) {
-    context.res = { status: 502, headers: Object.assign({'Content-Type':'application/json'}, CORS),
-      body: JSON.stringify({ ok:false, error:'Proxy error', detail: errorApi }) };
+    context.res = { status: 502, headers: Object.assign({'Content-Type':'application/json','X-Ops-Origen':origen}, CORS),
+      body: JSON.stringify({ ok:false, origen:origen, error:'Proxy error', detail: errorApi }) };
     return;
   }
 
@@ -183,6 +238,7 @@ module.exports = async function (context, req) {
   // El detalle del histórico va en cabeceras, y con ?meta=1 en el cuerpo.
   const meta = {
     ok: true,
+    origen: origen,
     total: todas.length,
     cobertura,
     tramos_api: tramos,
@@ -208,7 +264,8 @@ module.exports = async function (context, req) {
       'X-Ops-Total': String(todas.length),
       'X-Ops-Desde-Cache': String(delCache.length),
       'X-Ops-Dias-Guardados': String(sembrado.guardados.length),
-      'X-Ops-Api-Cubrio-Rango': String(cobertura.cubrio_todo_el_rango)
+      'X-Ops-Api-Cubrio-Rango': String(cobertura.cubrio_todo_el_rango),
+      'X-Ops-Origen': origen
     }, CORS),
     body: JSON.stringify(quiereMeta ? Object.assign({ data: todas }, meta) : todas)
   };

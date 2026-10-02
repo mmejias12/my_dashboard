@@ -53,12 +53,17 @@ async function fetchJson(url, opts = {}) {
 // 'operacion' viene como texto legible ("retiro", "Emisión", ...), así que se
 // compara normalizado (sin tildes, minúsculas) en vez de por código: resiste
 // cambios de mayúsculas y acentos en el origen.
-// Llama DIRECTO a RDTOut, no al proxy /api/ops de la SWA: la ingesta corre en
+// Llama DIRECTO al origen, no al proxy /api/ops de la SWA: la ingesta corre en
 // el servidor y no tiene la sesión Entra ID del portal, así que /api/* le
-// respondería con el login. La API remota usa X-Api-Key y ?desde=&hasta=.
-const OPS_HOST = process.env.OS_OPS_HOST || 'https://apirdt1.azurewebsites.net';
-const OPS_PATH = process.env.OS_OPS_PATH || '/api/RDTOut/opsxrangofechas';
-const RDT_KEY  = process.env.REDTEC_API_KEY || 'm2s_live_ORA0CGEE3oowJ7gc2xYNqTOWmbYS8kMdD-l7hlAxvmE';
+// respondería con el login.
+//
+// Antes esta llamada tenía su PROPIO fetch a RDTOut con la clave escrita acá.
+// Eso significaba que conmutar OPS_ORIGEN movía las vistas y dejaba la ingesta
+// leyendo del proveedor viejo, sin que nadie lo notara hasta ver dos cifras
+// distintas para el mismo día. Ahora pasa por shared/ops-fetch.js, que es el
+// único lugar donde se decide el origen — y de paso desapareció de este
+// archivo la copia de la REDTEC_API_KEY.
+const { consultarOps } = require('./ops-fetch.js');
 
 const norm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
                                  .trim().toLowerCase();
@@ -162,11 +167,7 @@ async function refreshPool(prev, ctx) {
 
 async function refreshPallet(prev, ctx) {
   // OpsXRangoFechas se cuelga con rangos > 180 días: rangos.js trocea siempre.
-  const url = (d, h) => `${OPS_HOST}${OPS_PATH}?desde=${d}&hasta=${h}`;
-  const pedir = async (d, h) => {
-    const r = await fetchJson(url(d, h), { headers: { 'X-Api-Key': RDT_KEY } });
-    return agregarMovimientos(Array.isArray(r) ? r : [r]);
-  };
+  const pedir = async (d, h) => agregarMovimientos(await consultarOps(d, h));
 
   const hoy = new Date().toISOString().slice(0, 10);
   const { desde, hasta } = semanaEnCurso(hoy);

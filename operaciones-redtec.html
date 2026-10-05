@@ -560,6 +560,30 @@ const fmtEje = v => v>=1e6 ? (v/1e6).toFixed(v%1e6?1:0)+'M'
                   : v>=1000 ? (v/1000).toFixed(v%1000?1:0).replace('.',',')+'k'
                   : String(Math.round(v));
 
+/* Coloca el tooltip junto al cursor sin que se salga de la pantalla.
+   OJO CON EL ZOOM. Esta vista aplica document.documentElement.style.zoom para el
+   control aAA, y el nivel por omisión es 1,15 — o sea el problema aparece sin que
+   nadie toque nada. ev.clientX/clientY y window.innerWidth van en píxeles SIN
+   escalar, pero el `left` que escribimos se MULTIPLICA por el zoom al pintar.
+   Comparar los dos sin convertir corre el cuadro a la derecha de forma
+   proporcional: medido con zoom 1,15 sobre un viewport de 1.100 px, el tooltip
+   del penúltimo mes terminaba en 1.241 px, y con 1,3 se cortaban dos meses.
+   La escala se deduce del PROPIO elemento (rect medido / layout) en vez de leer
+   la propiedad zoom: así vale igual si algún día el escalado viene de un
+   transform en un ancestro. Y cuando no cabe a la derecha, el cuadro se pasa al
+   otro lado del cursor en vez de pegarse al borde tapando el punto. */
+function ponerTip(tip, ev){
+  const r = tip.getBoundingClientRect();
+  const z = (tip.offsetWidth && r.width) ? r.width / tip.offsetWidth : 1;
+  const w = r.width, h = r.height;
+  let L = ev.clientX + 14;
+  if (L + w > window.innerWidth - 12) L = ev.clientX - 14 - w;
+  L = Math.max(8, Math.min(L, window.innerWidth - w - 12));
+  const T = Math.max(8, Math.min(ev.clientY - 10, window.innerHeight - h - 10));
+  tip.style.left = (L / z) + 'px';
+  tip.style.top  = (T / z) + 'px';
+}
+
 /** Serie temporal multi-línea con cruceta y tooltip. */
 function lineas(cont, datos, claves, opt){
   cont.innerHTML='';
@@ -620,9 +644,7 @@ function lineas(cont, datos, claves, opt){
       claves.map(k=>'<div class="f"><i style="background:'+COLOR(k)+'"></i>'+
         esc((TODOS.find(c=>c.k===k)||{}).et||k)+'<b>'+n0(d[k])+'</b></div>').join('');
     tip.style.display='block';
-    const tw=tip.offsetWidth;
-    tip.style.left=Math.min(window.innerWidth-tw-12, ev.clientX+14)+'px';
-    tip.style.top=Math.max(8, ev.clientY-10)+'px';
+    ponerTip(tip, ev);
   });
   cap.addEventListener('mouseleave', ()=>{ cru.setAttribute('opacity',0); tip.style.display='none'; });
   cont.appendChild(svg);
@@ -679,8 +701,7 @@ function barras(cont, grupos, series, opt){
             (parcial[ss.k+'|'+i]?' <span style="color:var(--warning)">·&nbsp;parcial</span>':'')+
             '<b>'+n0(g.v[ss.k])+'</b></div>').join('');
         tip.style.display='block';
-        tip.style.left=Math.min(window.innerWidth-tip.offsetWidth-12, ev.clientX+14)+'px';
-        tip.style.top=Math.max(8, ev.clientY-10)+'px';
+        ponerTip(tip, ev);
       });
       rect.addEventListener('mouseleave',()=>tip.style.display='none');
       svg.appendChild(rect);

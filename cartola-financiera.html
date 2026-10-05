@@ -2368,16 +2368,15 @@ function rmFecha(r) {
 // Las semanas ISO empiezan en lunes y la semana 1 es la que contiene el primer jueves del año.
 function rmIsoWeek(fechaISO) {
   try {
-    var d = new Date(fechaISO + 'T12:00:00');
-    var target = new Date(d.valueOf());
-    var dayNr = (d.getDay() + 6) % 7;  // 0 = lunes
-    target.setDate(target.getDate() - dayNr + 3);
-    var firstThursday = target.valueOf();
-    target.setMonth(0, 1);
-    if (target.getDay() !== 4) {
-      target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
-    }
-    return 1 + Math.ceil((firstThursday - target) / 604800000);
+    // Semana ISO calculada en UTC (sin hora local). Antes se usaba hora local
+    // + Math.ceil, y el cambio de hora de Chile (DST, p.ej. inicio de abril)
+    // metía 1 hora extra que corría la semana +1 (abr salía S16 en vez de S15).
+    // Misma convención que rgSemISO del selector de período, para que coincidan.
+    var p = fechaISO.split('-');
+    var t = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2]));
+    t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7) + 3);
+    var p1 = new Date(Date.UTC(t.getUTCFullYear(), 0, 4));
+    return 1 + Math.round(((t - p1) / 86400000 - 3 + ((p1.getUTCDay() + 6) % 7)) / 7);
   } catch(e) { return 0; }
 }
 

@@ -467,6 +467,9 @@ var CONCEPTOS = [
    evalúan DESPUÉS de la lista canónica para que nada de lo que la plataforma ya
    clasifica cambie de concepto acá. Ninguna de las dos palabras es subcadena de
    las claves canónicas, así que el agregado no puede robarle filas a nadie. */
+/* Los cuatro conceptos que SÍ hacen circular el pool. Es la misma frontera que
+   usa el dibujo: lo que no está acá no es una cinta del circuito. */
+var CIRCUITO = { emisiones:1, transferencias:1, retiros:1, devoluciones:1 };
 var CONCEPTOS_EXTRA = [
   ['relocalizacion', ['relocaliz']],
   ['traspasos',      ['traspaso']]
@@ -561,7 +564,7 @@ function construir(filas) {
     leidas: filas.length, usadas: 0, anuladas: 0, sinFecha: 0, sinValor: 0,
     ops: {}, etapas: [], lados: {}, sinMapear: {}, conceptos: {},
     retailSet: {}, clienteSet: {},
-    pendiente: 0, despTot: 0, confTot: 0,
+    pendiente: 0, pendienteFuera: 0, despTot: 0, confTot: 0,
     retiroFueraDeRetail: 0, emisionAClienteRedtec: 0
   };
   var i, f, c, v, k;
@@ -583,7 +586,22 @@ function construir(filas) {
     var d = Number(f.cantidadDespachada) || 0, cf = Number(f.cantidadConfirmada) || 0;
     a.movs++; a.desp += d; a.conf += cf;
     M.despTot += d; M.confTot += cf;
-    if (d > cf) M.pendiente += (d - cf);
+    /* EL PENDIENTE SE PARTE EN DOS, Y NO ES UN DETALLE.
+       Antes era UN solo número que sumaba TODAS las operaciones, y quedó parado
+       en una fila de indicadores del circuito sumando justo lo que el circuito
+       excluye. Medido sobre 26 días reales: el 84,3% eran Relocalización y
+       Traspasos, o sea movimientos que NO cambian de actor.
+       Y hay algo peor que el alcance: la relocalización es movimiento entre
+       bodegas de UNA MISMA empresa, así que un pallet que se mueve tres veces
+       aporta tres veces. El número no cuenta pallets, suma diferencias de
+       movimientos, y puede superar varias veces el parque real — en esa misma
+       ventana la relocalización movió 199.250 pallets contra 49.748 de emisión.
+       Leído como "pallets sin confirmar" era absurdo, y el área lo cachó.
+       El KPI muestra ahora sólo el circuito. El atasco interno NO se esconde:
+       sigue desglosado por operación y etapa en la cadena de confirmación, y el
+       pie de ese panel dice cuánto es. */
+    var pend = (d > cf) ? (d - cf) : 0;
+    if (pend) { if (c && CIRCUITO[c]) M.pendiente += pend; else M.pendienteFuera += pend; }
 
     var et = txt(f.etapaOperacion) || '(sin etapa)';
     var ae = a.etapas[et] || (a.etapas[et] = { movs: 0, conf: 0, desp: 0 });
@@ -730,7 +748,7 @@ function construir(filas) {
     traspasos: M.conceptos.traspasos || 0,
     relocCli: M.reloc.reduce(function (s2, r) { return s2 + (metrica === 'conf' ? r.conf : r.desp); }, 0),
     recup: M.recup.reduce(function (s2, r) { return s2 + (metrica === 'conf' ? r.conf : r.desp); }, 0),
-    pendiente: M.pendiente
+    pendiente: M.pendiente, pendienteFuera: M.pendienteFuera
   };
   var totalMovs = 0, movsCirculacion = 0;
   Object.keys(M.ops).forEach(function (op) {
@@ -990,7 +1008,7 @@ function pintarKpis(M) {
     ['Circuló el canal', fmt(K.canal), 'transferencias cliente → retail', 'var(--f-can)'],
     ['Movimiento interno', fmt(K.relocCli + K.recup + K.traspasos),
       'no cambia de actor', 'var(--f-int)'],
-    ['Registrado sin confirmar', fmt(K.pendiente), 'en todo el período', 'var(--warn)']
+    ['Sin confirmar del circuito', fmt(K.pendiente), 'emisiones, transferencias y retornos', 'var(--warn)']
   ];
   document.getElementById('kpis').innerHTML = cajas.map(function (c) {
     return '<div class="kpi" style="--kc:' + c[3] + '"><div class="lbl">' + c[0] + '</div>' +
@@ -1047,7 +1065,13 @@ function pintarNotas(M) {
   document.getElementById('nota-conf').innerHTML =
     'Esta tabla no depende del selector de métrica: compara siempre registrado contra confirmado, porque ' +
     'la diferencia entre los dos ES el dato. Una etapa cuyo nombre pide confirmar y que trae cero ' +
-    'confirmados es trabajo pendiente, no un movimiento que no ocurrió.';
+    'confirmados es trabajo pendiente, no un movimiento que no ocurrió.' +
+    (M.kpi.pendienteFuera
+      ? ' El indicador de arriba cuenta sólo el circuito; acá además aparecen <b>' +
+        fmt(M.kpi.pendienteFuera) + '</b> pallets sin confirmar de movimientos que no cambian de actor ' +
+        '(relocalización entre bodegas de una misma empresa y traspasos entre clientes). Ese número no ' +
+        'cuenta pallets distintos: un pallet que se relocaliza varias veces aporta varias veces.'
+      : '');
 
   var nT = M.traspasos.length, nR = M.reloc.length;
   document.getElementById('nota-lateral').innerHTML =

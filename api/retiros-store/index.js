@@ -115,6 +115,12 @@ function fechaValida(s) {
   return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
 }
 function mesDe(iso) { return iso.slice(0, 7); }
+// Suma (o resta) días a una fecha ISO sin pasar por la zona horaria local.
+function sumaDiasISO(iso, n) {
+  const d = new Date(iso + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
 function mesesDelRango(desde, hasta) {
   const out = [];
   let [y, m] = desde.split('-').slice(0, 2).map(Number);
@@ -520,6 +526,60 @@ module.exports = async function (context, req) {
         return responder(200, {
           fecha: f, hoy: hoyCL(), plantas: await estadoDelDia(f, log),
           puede_confirmar: esOficina(p), solo_lectura: !esOficina(p),
+        });
+      }
+
+      // resumen por recinto: último retiro y ritmo semanal
+      // ---------------------------------------------------------------------
+      // Lo necesita la pantalla de Registrar para calcular cuántos pallets se
+      // acumularon desde la última vez que pasamos por el recinto.
+      //
+      // Va por un camino propio y NO por el listado normal a propósito. El
+      // listado le muestra al ejecutivo solo SUS registros, y eso acá daría un
+      // número malo: si el miércoles pasado fue Adolfo y hoy va Cristian,
+      // Cristian no vería el retiro de Adolfo y el acumulado se dispararía.
+      // El último retiro es un dato DEL RECINTO, no de quien lo registró, así
+      // que se responde completo para todos los roles que pueden registrar.
+      // Lo que sí se acota es el contenido: por recinto van la fecha y la
+      // cantidad del último retiro, el total y el día de la semana — nunca los
+      // registros en bruto de otra persona.
+      if (q.resumen === 'recintos') {
+        if (!puedeRegistrar(p) && !puedeVerTodo(p)) {
+          return responder(403, { error: 'no tienes permiso para ver el resumen de recintos' });
+        }
+        const hoyR  = hoyCL();
+        const atras = Math.min(400, Math.max(30, Number(q.dias || 120)));
+        const desdeR = sumaDiasISO(hoyR, -atras);
+        const mesesR = mesesDelRango(mesDe(desdeR), mesDe(hoyR));
+        const porClave = {};
+        const fallaR = [];
+        for (const mes of mesesR) {
+          let rs = [];
+          try { rs = (await leerMes(mes)).registros; }
+          catch (e) { fallaR.push(mes); continue; }
+          for (const r of rs) {
+            if (!r || !r.clave) continue;
+            const f = String(r.fecha_retiro || '').slice(0, 10);
+            if (f < desdeR || f > hoyR) continue;
+            const k = String(r.clave).toUpperCase();
+            const e = porClave[k] || (porClave[k] = { clave: r.clave, n: 0, dow: [0,0,0,0,0,0,0] });
+            e.n++;
+            e.dow[new Date(f + 'T12:00:00Z').getUTCDay()]++;
+            if (!e.fecha || f > e.fecha ||
+                (f === e.fecha && String(r.creado || '') > String(e.creado || ''))) {
+              e.fecha    = f;
+              e.cantidad = Number(r.cantidad) || 0;
+              e.usuario  = r.usuario_origen || r.usuario || '';
+              e.creado   = r.creado || '';
+            }
+          }
+        }
+        for (const k in porClave) delete porClave[k].creado;
+        return responder(200, {
+          recintos: porClave,
+          meta: { desde: desdeR, hasta: hoyR, dias: atras,
+                  total: Object.keys(porClave).length,
+                  meses_sin_respuesta: fallaR },
         });
       }
 

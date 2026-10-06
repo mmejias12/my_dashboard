@@ -332,6 +332,12 @@ tr.gtot td{background:var(--bg-surface);font-weight:700;border-top:2px solid var
   border:1px solid var(--border-md);color:var(--text-sec);cursor:pointer;white-space:nowrap}
 .esp-dia:hover{color:var(--info);border-color:rgba(96,165,250,.4)}
 .esp-ver{font-size:11.5px;color:var(--info);cursor:pointer;margin-top:.45rem;display:inline-block}
+.esp-fino{font-size:11px;color:var(--text-muted)}
+.esp-par{display:flex;align-items:baseline;gap:8px;margin-top:.55rem;padding-top:.55rem;
+         border-top:1px solid var(--border-sm);font-size:12px;color:var(--text-sec)}
+.esp-n2{font-family:'JetBrains Mono',monospace;font-size:1.15rem;font-weight:600;
+        color:var(--text-sec)}
+.esp-det tr.cero td{color:var(--text-muted)}
 .esp-det{margin-top:.5rem;max-height:200px;overflow:auto}
 .esp-det table{min-width:0}
 .esp-det td:first-child,.esp-det th:first-child{max-width:118px;overflow:hidden;
@@ -799,7 +805,7 @@ function switchTab(v){
   VISTA=v;
   [].forEach.call(document.querySelectorAll('.tab'),function(t){ t.classList.toggle('on',t.dataset.v===v); });
   [].forEach.call(document.querySelectorAll('.view'),function(x){ x.classList.toggle('on',x.id==='v-'+v); });
-  if(v==='registrar')    cargarCalendario();
+  if(v==='registrar'){  cargarCalendario(); cargarHistorial(); }
   if(v==='mios')         cargar();
   if(v==='programacion') cargarDia();
   if(v==='consolidado')  cargar();
@@ -1004,7 +1010,9 @@ async function guardar(confirmandoDup){
     if(!r.ok || !j.ok) throw new Error(j.error||('el servidor respondió HTTP '+r.status));
 
     toast('✓ Retiro guardado');
-    MEM=[]; limpiarForm(); estado('al día','ok','cloud-check');
+    // El acumulado se reinicia con este retiro: hay que releer el historial o
+    // el próximo recinto que se elija seguiría sumando desde el retiro viejo.
+    MEM=[]; cargarHistorial(true); limpiarForm(); estado('al día','ok','cloud-check');
   }catch(e){
     // Sin conexión: se guarda en el teléfono. Se DICE que quedó pendiente —
     // la app de Google decía "guardado" igual y así se perdían registros.
@@ -1136,6 +1144,119 @@ function cercanos(clave,fecha,rango){
   return out.sort(function(a,b){ return Math.abs(a.dias)-Math.abs(b.dias); }).slice(0,4);
 }
 
+/* ============================================================================
+   ACUMULADO DESDE EL ÚLTIMO RETIRO
+   ----------------------------------------------------------------------------
+   El número del día responde "cuánto llega ese día". Para un recinto que se
+   retira una vez por semana ésa no es la pregunta: lo que el ejecutivo tiene
+   que cobrarle al retail es TODO lo que se acumuló desde la última vez que
+   pasamos. Se suma la proyección diaria desde el día siguiente al último
+   retiro registrado hasta la fecha elegida.
+
+   Validado contra Distribuidora Lagos San Bdo (retira todos los miércoles):
+   seis ventanas cerradas dan 2.144 pallets proyectados contra 2.080 retirados
+   de verdad, 3% de diferencia. La columna del día sola explicaba un 12%.
+
+   Por qué el último retiro sale de NUESTRO registro y no de retirosReales del
+   calendario: retirosReales viene de RDTOut y hay recintos que no aparecen
+   ahí (Lagos: 0 de 77 días con dato). El almacén propio sí los tiene, porque
+   lo escribe el ejecutivo que fue.
+============================================================================ */
+var HIST=null, HIST_ESTADO='vacio', HIST_DIAS=120;
+
+async function cargarHistorial(forzar){
+  if(HIST_ESTADO==='cargando') return;
+  if(!forzar && HIST && Date.now()-HIST.ts<CAL_TTL) return;
+  HIST_ESTADO='cargando';
+  try{
+    // ?resumen=recintos y no el listado normal: al ejecutivo el listado le
+    // devuelve SOLO sus registros, y el último retiro del recinto puede
+    // haberlo hecho otro ejecutivo. Ver la nota en api/retiros-store.
+    var r=await fetch(API+'?resumen=recintos&dias='+HIST_DIAS,{headers:{Accept:'application/json'}});
+    var j=await r.json().catch(function(){ return {}; });
+    if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+    HIST={ por:j.recintos||{}, ts:Date.now(), desde:(j.meta||{}).desde };
+    HIST_ESTADO='listo';
+  }catch(e){ HIST=null; HIST_ESTADO='error'; }
+  pintarEsperado();
+}
+
+/* Último retiro del recinto ANTES de la fecha elegida. Estrictamente antes:
+   si el ejecutivo está registrando un segundo camión para el mismo día, el
+   acumulado no se puede reiniciar con el retiro que él mismo acaba de cargar. */
+function ultimoRetiro(clave,antesDe){
+  var e=HIST&&HIST.por[clave];
+  if(!e||!e.fecha||!(e.fecha<antesDe)) return null;
+  return { fecha:e.fecha, cantidad:e.cantidad, usuario:e.usuario };
+}
+
+function acumular(clave,desde,hasta){
+  var t=0, dias=[], f=desde, tope=0;
+  while(f<=hasta && tope++<400){
+    var p=((CAL.porDia[f]||{})[clave]||{}).pallets||0;
+    t+=p; dias.push({f:f,p:p});
+    f=sumaDias(f,1);
+  }
+  return { total:t, dias:dias };
+}
+
+/* Ritmo del recinto. Si casi todos los retiros caen el mismo día de la semana
+   vale la pena decirlo: es el argumento con el que el ejecutivo justifica el
+   acumulado frente al retail ("vengo cada miércoles, esto es lo de la semana"). */
+var DIAS_SEM=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+function ritmoDe(clave){
+  var e=HIST&&HIST.por[clave];
+  if(!e||!e.dow||e.n<4) return null;
+  var mejor=-1, n=0;
+  for(var d=0;d<7;d++){ if(e.dow[d]>n){ n=e.dow[d]; mejor=d; } }
+  if(!(n/e.n>=0.8)) return null;
+  return { dia:DIAS_SEM[mejor], n:n, total:e.n };
+}
+
+/* Devuelve el acumulado listo para pintar, o null si no se puede calcular. */
+function acumuladoDe(clave,fecha){
+  if(!CAL) return null;
+  var ult=ultimoRetiro(clave,fecha);
+  var ini = ult ? sumaDias(ult.fecha,1) : CAL.ventana.d1;
+  var parcial=false;
+  if(ini<CAL.ventana.d1){ ini=CAL.ventana.d1; parcial=true; }
+  if(ini>fecha) return null;
+  var a=acumular(clave,ini,fecha);
+  a.desde=ini; a.ult=ult; a.parcial=parcial;
+  a.dias_corridos=a.dias.length;
+  return a;
+}
+
+/* Bloque del acumulado: se pinta igual venga o no proyección para el día. */
+function htmlAcumulado(acc,ritmo,clave){
+  var u=acc.ult;
+  var h='<div class="esp-top"><span class="esp-n">'+num(acc.total)+'</span>'+
+    '<span class="esp-lab">pallets acumulados desde el último retiro'+
+    '<br><span class="esp-fino">'+esc(fmtCorta(u.fecha))+' · '+num(u.cantidad)+' pallets'+
+    (u.usuario?' · '+esc(u.usuario):'')+' · hace '+acc.dias_corridos+' día'+
+    (acc.dias_corridos>1?'s':'')+'</span></span></div>';
+  if(ritmo) h+='<div class="esp-sub"><i class="ti ti-repeat"></i> Este recinto retira '+
+    'los '+esc(ritmo.dia)+' — '+ritmo.n+' de '+ritmo.total+' retiros registrados.</div>';
+  if(acc.parcial) h+='<div class="esp-sub">No hay un retiro anterior registrado: se suma '+
+    'desde donde parte el calendario ('+esc(fmtCorta(acc.desde))+'), así que el acumulado '+
+    'puede quedar corto.</div>';
+  return h;
+}
+function htmlDetalleAcum(acc){
+  var t='<table class="mini-tabla"><thead><tr><th>Día</th>'+
+        '<th style="text-align:right">Proyectado</th><th style="text-align:right">Acumulado</th>'+
+        '</tr></thead><tbody>';
+  var run=0;
+  acc.dias.forEach(function(x){
+    run+=x.p;
+    t+='<tr'+(x.p?'':' class="cero"')+'><td>'+esc(fmtCorta(x.f))+'</td>'+
+       '<td class="num">'+(x.p?num(x.p):'—')+'</td>'+
+       '<td class="num" style="font-weight:600">'+num(run)+'</td></tr>';
+  });
+  t+='</tbody></table>';
+  return t;
+}
+
 function pintarEsperado(){
   var box=$('esperado');
   if(!box) return;
@@ -1162,8 +1283,29 @@ function pintarEsperado(){
   var k=String(SEL.clave).toUpperCase();
   var d=esperadoDe(k,fecha);
   var cerca=cercanos(k,fecha,7);
+  var acc=acumuladoDe(k,fecha);
+  var ritmo=ritmoDe(k);
+  var hayAcum = acc && acc.ult && acc.total>0 && acc.dias_corridos>1;
 
   if(!d||!d.pallets){
+    // Sin proyección ESE día pero con acumulado, el acumulado es la respuesta:
+    // un recinto semanal casi nunca tiene carga justo el día que se le visita.
+    if(hayAcum){
+      box.className='esp';
+      var ha=htmlAcumulado(acc,ritmo,k);
+      ha+='<div class="esp-sub">El calendario no proyecta llegadas nuevas para el '+
+          esc(fmtFecha(fecha))+': los '+num(acc.total)+' vienen de los días anteriores.</div>';
+      ha+='<span class="esp-ver" id="esp-ver-a">Ver día por día ▾</span>'+
+          '<div class="esp-det" id="esp-det-a" style="display:none"></div>';
+      box.innerHTML=ha;
+      $('esp-ver-a').onclick=function(){
+        var det=$('esp-det-a');
+        if(det.style.display!=='none'){ det.style.display='none'; this.textContent='Ver día por día ▾'; return; }
+        det.style.display=''; this.textContent='Ocultar el detalle ▴';
+        det.innerHTML=htmlDetalleAcum(acc);
+      };
+      return;
+    }
     box.className='esp nada';
     var h='<div class="esp-sub" style="margin:0"><b>El calendario no proyecta retiros de '+
       esc(SEL.recinto)+' para el '+esc(fmtFecha(fecha))+'.</b></div>';
@@ -1178,13 +1320,29 @@ function pintarEsperado(){
   }
 
   box.className='esp';
-  var hh='<div class="esp-top"><span class="esp-n">'+num(d.pallets)+'</span>'+
-    '<span class="esp-lab">pallets debería tener este recinto el '+esc(fmtFecha(fecha))+
-    '<br><span style="font-size:11px;color:var(--text-muted)">según el calendario de retiro · '+
-    d.trf+' transferencia'+(d.trf>1?'s':'')+'</span></span></div>';
+  var hh;
+  if(hayAcum){
+    // El acumulado va de primero: es el número con el que se negocia en terreno.
+    hh=htmlAcumulado(acc,ritmo,k);
+    hh+='<div class="esp-par"><span class="esp-n2">'+num(d.pallets)+'</span>'+
+        '<span>llegan el '+esc(fmtFecha(fecha))+' · '+d.trf+' transferencia'+
+        (d.trf>1?'s':'')+'</span></div>';
+  }else{
+    hh='<div class="esp-top"><span class="esp-n">'+num(d.pallets)+'</span>'+
+      '<span class="esp-lab">pallets debería tener este recinto el '+esc(fmtFecha(fecha))+
+      '<br><span class="esp-fino">según el calendario de retiro · '+
+      d.trf+' transferencia'+(d.trf>1?'s':'')+'</span></span></div>';
+    if(HIST_ESTADO==='listo' && !(acc&&acc.ult))
+      hh+='<div class="esp-sub">No hay retiros anteriores registrados de este recinto, '+
+          'así que todavía no se puede calcular el acumulado.</div>';
+  }
   hh+='<div class="esp-sub">Si en terreno te entregan menos, la diferencia es lo que el retail '+
       'no está devolviendo: queda registrada al guardar la cantidad real.</div>';
-  if(cerca.length) hh+='<div class="esp-cerca">'+cerca.map(function(c){
+  // Con acumulado, los días ANTERIORES ya están sumados dentro del número
+  // grande: ofrecerlos como atajo haría pensar que son carga aparte. Solo
+  // quedan los de adelante, que todavía no entran en la cuenta.
+  var chips = hayAcum ? cerca.filter(function(c){ return c.dias>0; }) : cerca;
+  if(chips.length) hh+='<div class="esp-cerca">'+chips.map(function(c){
     return '<span class="esp-dia" data-fecha="'+c.fecha+'">'+(c.dias<0?'antes ':'después ')+
       esc(fmtCorta(c.fecha))+' · '+num(c.pallets)+'</span>'; }).join('')+'</div>';
   hh+='<span class="esp-ver" id="esp-ver">Ver de dónde sale ▾</span>'+
@@ -1209,6 +1367,8 @@ function pintarEsperado(){
     t+='</tbody></table><div class="hint">Estimado = cantidad despachada × '+
        String(CAL.factor).replace('.',',')+' (factor de retorno), puesto en el día '+
        'de despacho más los días de retención del retail.</div>';
+    if(hayAcum) t+='<div class="esp-sub" style="margin-top:.6rem"><b>Acumulado día por día</b></div>'+
+                   htmlDetalleAcum(acc);
     det.innerHTML=t;
   };
 }

@@ -17,6 +17,7 @@
 const https = require('https');
 const cacheOps = require('../shared/cache-ops.js');
 const RL = require('../shared/redlink-fetch.js');
+const cold = require('../shared/cold-operaciones.js');
 
 // ── INTERRUPTOR DE ORIGEN ───────────────────────────────────────────────────
 // Las ocho vistas del m3link llaman a /proxy/ops y no saben de dónde sale el
@@ -32,6 +33,18 @@ const RL = require('../shared/redlink-fetch.js');
 // conmutado, la vista falla y se ve. Caer en silencio a RDT escondería
 // justamente lo que hay que vigilar durante la migración.
 const ORIGEN_DEF = String(process.env.OPS_ORIGEN || 'rdt').toLowerCase() === 'redlink' ? 'redlink' : 'rdt';
+
+// ── INTERRUPTOR HOT/COLD (histórico desde NUESTRO storage) ──────────────────
+// La API de Redlink es lenta (~8-19 s por tramo), así que pedir historia en
+// vivo desde una vista no escala. Con OPS_COLD prendido, los días CERRADOS
+// salen del blob redtec-os-operaciones (instantáneo) y sólo los últimos días se
+// piden en vivo a Redlink. Apagado (por omisión), el endpoint no entra al
+// camino cold y se comporta EXACTAMENTE como siempre.
+//     OPS_COLD = operaciones   prende el histórico desde el blob
+//     OPS_COLD_LIVE_DIAS = 2   (por omisión) días de cola viva (hoy + ayer)
+// Requisito para prenderlo: que el blob ya esté en contrato RDT (re-backfill).
+const COLD_ON = String(process.env.OPS_COLD || '').toLowerCase() === 'operaciones';
+const COLD_LIVE_DIAS = Math.max(1, parseInt(process.env.OPS_COLD_LIVE_DIAS || '2', 10) || 2);
 
 const API_HOST = 'apirdt1.azurewebsites.net';
 const API_PATH = '/api/RDTOut/opsxrangofechas';
@@ -86,7 +99,11 @@ module.exports = async function (context, req) {
         redlink_configurado: RL.configurado(),
         redlink_faltan: RL.faltantes(),
         redlink_tramo_dias: RL.TRAMO,
-        redlink_bp: RL.BP_DEF
+        redlink_bp: RL.BP_DEF,
+        ops_cold: COLD_ON,
+        cold_contenedor: cold.CONTAINER,
+        cold_storage: cold.hayStorage(),
+        cold_live_dias: COLD_LIVE_DIAS
       }), headers: Object.assign({'Content-Type':'application/json','X-Ops-Origen':origen}, CORS) };
     return;
   }
@@ -98,6 +115,59 @@ module.exports = async function (context, req) {
   const fDesde = String(d1).slice(0, 10);
   const fHasta = String(d2).slice(0, 10);
   const rangoValido = /^\d{4}-\d{2}-\d{2}$/.test(fDesde) && /^\d{4}-\d{2}-\d{2}$/.test(fHasta) && fDesde <= fHasta;
+
+  // ── HOT/COLD: histórico desde el blob + cola viva de hoy (gateado) ──────────
+  // Con OPS_COLD=operaciones: días cerrados desde redtec-os-operaciones (blob,
+  // instantáneo) + los últimos COLD_LIVE_DIAS en vivo desde Redlink (misma
+  // fuente que el blob). El solapamiento de la cola viva cubre el caso de que el
+  // blob de ayer aún no esté escrito. Si CUALQUIER cosa del camino cold falla,
+  // se cae al camino normal de abajo: nunca se devuelve una respuesta a medias.
+  if (COLD_ON && rangoValido && cold.hayStorage()) {
+    let coldResp = null;
+    try {
+      const hoy = hoyIsoCL();
+      let liveDesde = addDiasIso(hoy, -(COLD_LIVE_DIAS - 1));
+      if (liveDesde < fDesde) liveDesde = fDesde;
+      const liveHasta = fHasta < hoy ? fHasta : hoy;      // no pedir futuro
+      const coldHasta = addDiasIso(liveDesde, -1);
+
+      // 1) histórico (blob) para los días cerrados
+      let opsCold = [], diasCold = 0;
+      if (coldHasta >= fDesde) {
+        const rc = await cold.leerRango(cold.getContainer(), fDesde, coldHasta);
+        opsCold = rc.ops; diasCold = rc.dias;
+      }
+      // 2) cola viva desde Redlink (misma fuente que el blob)
+      let opsVivo = [];
+      if (liveHasta >= liveDesde) {
+        const r = await RL.consultarRedlink(liveDesde, liveHasta, { presupuestoMs: BUDGET_MS - 6000 });
+        opsVivo = r.filas;
+      }
+      // 3) merge + dedup + recorte al rango pedido
+      let todasC = cold.dedup(opsVivo.concat(opsCold));
+      todasC = todasC.filter(o => cold.diasDeOp(o).some(f => f >= fDesde && f <= fHasta));
+
+      const metaC = {
+        ok: true, origen: 'cold+redlink', total: todasC.length,
+        cold: { dias: diasCold, filas: opsCold.length, hasta: coldHasta, contenedor: cold.CONTAINER },
+        vivo: { desde: liveDesde, hasta: liveHasta, filas: opsVivo.length }
+      };
+      const quiereMetaC = q.meta === '1' || q.meta === 'true';
+      coldResp = {
+        status: 200,
+        headers: Object.assign({
+          'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache',
+          'X-Ops-Total': String(todasC.length), 'X-Ops-Origen': 'cold+redlink',
+          'X-Ops-Cold-Dias': String(diasCold), 'X-Ops-Vivo-Filas': String(opsVivo.length)
+        }, CORS),
+        body: JSON.stringify(quiereMetaC ? Object.assign({ data: todasC }, metaC) : todasC)
+      };
+    } catch (e) {
+      if (context.log) context.log('OPS_COLD cayó a origen normal: ' + e.message);
+      coldResp = null;
+    }
+    if (coldResp) { context.res = coldResp; return; }
+  }
 
   // ── Cómo se comporta RDTOut, MEDIDO EN PRODUCCIÓN el 21-09-2026 ─────────
   //   · Respeta 'desde': pedirle junio trae desde junio.
@@ -293,6 +363,18 @@ function trocear(desde, hasta, valido, maxDias) {
 function restarDia(f) {
   const d = new Date(f + 'T00:00:00Z');
   d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+// "Hoy" en zona Chile (los blobs se agrupan por fecha local, como la Action).
+function hoyIsoCL() {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Santiago' }))
+    .toISOString().slice(0, 10);
+}
+// Suma n días (puede ser negativo) a una fecha 'YYYY-MM-DD'.
+function addDiasIso(f, n) {
+  const d = new Date(f + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
 

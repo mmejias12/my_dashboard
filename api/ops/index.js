@@ -154,15 +154,28 @@ module.exports = async function (context, req) {
         opsVivo = r.filas;
         if (!quiereFullC) for (const o of opsVivo) { if (o && o._rl !== undefined) delete o._rl; }
       }
-      // 3) merge + dedup + recorte al rango pedido (ya vienen sin _rl salvo ?full=1)
-      let todasC = cold.dedup(opsVivo.concat(opsCold));
-      todasC = todasC.filter(o => cold.diasDeOp(o).some(f => f >= fDesde && f <= fHasta));
-      const salidaC = todasC;
+      // 3) merge + dedup + recorte en UNA sola pasada. Antes se hacía
+      // concat()+dedup()+filter(), o sea tres copias del arreglo completo; a 160k
+      // filas (un año) cada copia extra acercaba el OOM. Lo vivo va primero, así
+      // gana sobre el blob en el dedup (mismo criterio que cold.dedup: por nroPedido).
+      const opsColdLen = opsCold.length, opsVivoLen = opsVivo.length;
+      const vistosC = new Set();
+      const enRangoC = o => cold.diasDeOp(o).some(f => f >= fDesde && f <= fHasta);
+      const todasC = [];
+      for (const fuente of [opsVivo, opsCold]) {
+        for (const o of fuente) {
+          const k = (o && o.nroPedido != null) ? String(o.nroPedido) : JSON.stringify(o);
+          if (vistosC.has(k)) continue;
+          vistosC.add(k);
+          if (enRangoC(o)) todasC.push(o);
+        }
+      }
+      opsCold = null; opsVivo = null;   // liberar las fuentes antes de serializar (un año pesa)
 
       const metaC = {
         ok: true, origen: 'cold+redlink', total: todasC.length,
-        cold: { dias: diasCold, filas: opsCold.length, hasta: coldHasta, contenedor: cold.CONTAINER },
-        vivo: { desde: liveDesde, hasta: liveHasta, filas: opsVivo.length }
+        cold: { dias: diasCold, filas: opsColdLen, hasta: coldHasta, contenedor: cold.CONTAINER },
+        vivo: { desde: liveDesde, hasta: liveHasta, filas: opsVivoLen }
       };
       const quiereMetaC = q.meta === '1' || q.meta === 'true';
       coldResp = {
@@ -170,9 +183,9 @@ module.exports = async function (context, req) {
         headers: Object.assign({
           'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache',
           'X-Ops-Total': String(todasC.length), 'X-Ops-Origen': 'cold+redlink',
-          'X-Ops-Cold-Dias': String(diasCold), 'X-Ops-Vivo-Filas': String(opsVivo.length)
+          'X-Ops-Cold-Dias': String(diasCold), 'X-Ops-Vivo-Filas': String(opsVivoLen)
         }, CORS),
-        body: JSON.stringify(quiereMetaC ? Object.assign({ data: salidaC }, metaC) : salidaC)
+        body: JSON.stringify(quiereMetaC ? Object.assign({ data: todasC }, metaC) : todasC)
       };
     } catch (e) {
       if (context.log) context.log('OPS_COLD cayó a origen normal: ' + e.message);

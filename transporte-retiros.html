@@ -436,6 +436,12 @@ tr.gtot td{background:var(--bg-surface);font-weight:700;border-top:2px solid var
   .main,.toast,.modal-bg,.no-print{display:none !important}
   .hoja{display:block;font-family:Inter,Arial,sans-serif;color:#000}
 
+  /* Chrome trae apagado "Gráficos de fondo" en el diálogo de impresión, así
+     que sin esto las bandas de color y la cabecera roja salen en blanco y la
+     hoja pierde toda la jerarquía. print-color-adjust:exact le dice al
+     navegador que esos fondos son información, no decoración. */
+  .hoja,.hoja *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
+
   .hoja-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:5px}
   .hoja-top h1{font-size:12.5px;font-weight:800;letter-spacing:.6px;color:#C0170C;
                text-transform:uppercase;margin:0 0 4px}
@@ -455,9 +461,14 @@ tr.gtot td{background:var(--bg-surface);font-weight:700;border-top:2px solid var
   table.hoja-t td.n,table.hoja-t th.n{text-align:right;font-variant-numeric:tabular-nums}
   table.hoja-t td.rec{font-weight:600}
   table.hoja-t td.gr{font-weight:600;color:#333}           /* planta/región/zona/comuna */
-  table.hoja-t tr.z td{background:#ececec;font-weight:700}
-  table.hoja-t tr.p td{background:#f7dad7;font-weight:700}
-  table.hoja-t tr.g td{background:#dcdcdc;font-weight:800;border-top:1.2px solid #777}
+  /* Tres niveles de cierre, de más suave a más fuerte: zona, planta y total
+     general. El gris es para los cortes internos y el rojo de la marca marca
+     los dos que de verdad se firman. */
+  table.hoja-t tr.z td{background:#eef0f3;font-weight:700;color:#2b2f36}
+  table.hoja-t tr.p td{background:#f9ddda;font-weight:700;color:#7a1109;
+    border-top:.8px solid #d98b82;border-bottom:.8px solid #d98b82}
+  table.hoja-t tr.g td{background:#C0170C;color:#fff;font-weight:800;
+    border-top:1.2px solid #8d1008;border-bottom:1.2px solid #8d1008}
   table.hoja-t tr.sd td.rec{color:#9a3412}
   .hoja-pie{margin-top:6px;font-size:7.2px;color:#666;display:flex;justify-content:space-between}
 }

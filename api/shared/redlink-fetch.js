@@ -131,7 +131,28 @@ function traducir(reg) {
     citaFecha:          tr.citaFecha || null,
     linkGuia:           reg.linkGuia || null,
     abierto:            reg.abierto,
-    recepcionCruda:     (reg.recepcion === null || reg.recepcion === undefined) ? null : num(reg.recepcion)
+    recepcionCruda:     (reg.recepcion === null || reg.recepcion === undefined) ? null : num(reg.recepcion),
+
+    // ---- comerciales / SAP (promovidos arriba, fáciles de consultar) ------
+    // No los usa ninguna vista HOY, pero con ellos arriba un KPI futuro los lee
+    // directo (sin escarbar en _rl). Van crudos, igual que el aplanar viejo.
+    itemCode:           det.itemCode,
+    itemName:           det.itemName,
+    precio:             det.precio,
+    arriendo:           det.arriendo,
+    linkFactura:        reg.linkFactura || null,
+    sapObjType:         tr.sapObjType,
+    sapDocEntry:        tr.sapDocEntry,
+    sapDocNum:          tr.sapDocNum,
+    folioGuiaDte:       tr.folioGuiaDte,
+    enviadoSap:         tr.enviadoSap,
+
+    // ---- registro Redlink COMPLETO (nada se pierde) -----------------------
+    // Se guarda el reg crudo entero — incluye formDdetalles/formDtransportes
+    // completos (todos los ítems/transportes, no solo el [0]) — para armar
+    // cualquier KPI a futuro sobre "esta vista" sin tener que re-extraer de
+    // Redlink. Las vistas lo ignoran; sólo ocupa espacio en el blob.
+    _rl:                reg
   };
 }
 

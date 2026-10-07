@@ -220,6 +220,105 @@ details{margin-top:10px}
 summary{cursor:pointer;font-size:11.5px;color:var(--text-secondary);padding:4px 0}
 summary:hover{color:var(--accent)}
 
+
+/* ---- pop-up de detalle del pendiente ----
+   El KPI "Sin confirmar del circuito" es la puerta: el número es grande y el área
+   necesita saber QUÉ hay adentro antes de perseguirlo. Dos colores y nada más:
+   --warn para lo que todavía se puede confirmar (operación abierta) y --f-int,
+   el gris del movimiento interno, para la diferencia ya consolidada (operación
+   cerrada: no hay nada que apurar). La identidad nunca queda sólo en el color —
+   cada tabla trae las dos cifras en columnas con su rótulo. */
+.kpi-act{cursor:pointer;transition:background .12s,border-color .12s}
+.kpi-act:hover{background:var(--bg-hover);border-color:var(--border-md)}
+.kpi-act:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.kpi-ver{margin-left:7px;font-size:9px;letter-spacing:.4px;color:var(--accent);font-weight:700}
+.mdl{position:fixed;inset:0;z-index:400;background:rgba(15,17,23,.74);backdrop-filter:blur(3px);
+  display:none;align-items:flex-start;justify-content:center;padding:3vh 14px}
+:root[data-theme="light"] .mdl{background:rgba(242,244,248,.84)}
+.mdl.on{display:flex}
+.mdl-box{background:var(--bg-card);border:1px solid var(--border-md);border-radius:var(--radius-lg);
+  width:100%;max-width:1240px;max-height:94vh;display:flex;flex-direction:column;
+  box-shadow:0 28px 70px rgba(0,0,0,.45)}
+body.circ-z .mdl-box{font-size:calc(1em * var(--circ-z,1))}
+.mdl-head{display:flex;align-items:flex-start;gap:12px;padding:14px 16px 11px;
+  border-bottom:1px solid var(--border)}
+.mdl-head h2{font-size:14.5px;font-weight:600;margin:0;letter-spacing:-.1px}
+.mdl-head .big{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--warn);
+  letter-spacing:-.5px;margin-top:2px}
+.mdl-sub{font-size:11.5px;color:var(--text-muted);margin-top:3px;line-height:1.5}
+.mdl-x{margin-left:auto;background:var(--bg-surface);border:1px solid var(--border-md);
+  color:var(--text-secondary);border-radius:var(--radius-sm);width:29px;height:29px;font-size:13px;
+  cursor:pointer;flex:none;font-family:inherit;line-height:1}
+.mdl-x:hover{background:var(--bg-hover);color:var(--text-primary);border-color:var(--accent)}
+.mdl-x:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mdl-split{padding:12px 16px 2px}
+.split-bar{display:flex;height:11px;border-radius:3px;margin-bottom:9px;gap:2px;overflow:hidden}
+.split-bar i{display:block;height:100%;border-radius:2px}
+.split-leg{display:flex;gap:20px;flex-wrap:wrap;font-size:11.5px}
+.split-leg span{display:inline-flex;align-items:center;gap:7px;color:var(--text-secondary)}
+.split-leg i{width:11px;height:11px;border-radius:2px;flex:none}
+.split-leg b{color:var(--text-primary);font-variant-numeric:tabular-nums}
+.tabs{display:flex;gap:4px;padding:12px 16px 0;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.tab{background:none;border:1px solid transparent;color:var(--text-secondary);font-size:12px;
+  font-weight:600;padding:7px 12px;border-radius:var(--radius-sm) var(--radius-sm) 0 0;cursor:pointer;
+  margin-bottom:-1px;font-family:inherit}
+.tab:hover{color:var(--text-primary);background:var(--bg-hover)}
+.tab[aria-selected="true"]{color:var(--text-primary);background:var(--bg-surface);
+  border-color:var(--border);border-bottom-color:var(--bg-surface)}
+.tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mdl-body{padding:13px 16px 6px;overflow:auto;flex:1 1 auto}
+.mdl-body h4{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);
+  font-weight:600;margin:0 0 8px}
+.mdl-body h4+.tbl-box,.mdl-body h4+table{margin-top:0}
+.mdl-body h4:not(:first-child){margin-top:22px}
+/* La caja de tabla manda su propio alto para que el encabezado pegajoso siga
+   sirviendo; el cuerpo del pop-up scrollea sólo lo que sobra. */
+.mdl-body .tbl-box{margin-bottom:2px;max-height:58vh}
+/* Las razones sociales son largas y los td de este repo van con nowrap: sin un
+   tope la tabla se estira y las columnas de la derecha —justo las del pendiente—
+   quedan fuera de la vista. Se recortan con puntos suspensivos y el nombre
+   completo viaja en el title. */
+.mdl-body td.el{max-width:170px;overflow:hidden;text-overflow:ellipsis}
+.mdl-body td.el.op{max-width:120px}
+.mdl-body td.el.et{max-width:160px}
+.mdl-nota{font-size:11.5px;color:var(--text-muted);line-height:1.55;margin:10px 0 2px;max-width:104ch}
+.mdl-ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.inp{background:var(--bg-surface);border:1px solid var(--border-md);color:var(--text-primary);
+  border-radius:var(--radius-sm);padding:6px 9px;font-size:12px;font-family:inherit;min-width:160px;flex:1}
+.inp:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.mdl-foot{padding:10px 16px 13px;border-top:1px solid var(--border);font-size:11.5px;
+  color:var(--text-muted);line-height:1.55}
+.est{font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:2px 6px;
+  border-radius:3px;white-space:nowrap}
+.est.ab{background:var(--warn-dim);color:var(--warn)}
+.est.ce{background:rgba(100,116,139,.20);color:var(--f-int)}
+:root[data-theme="light"] .est.ce{background:rgba(100,116,139,.14)}
+.mdl-body th.so{cursor:pointer;user-select:none}
+.mdl-body th.so:hover{color:var(--text-primary)}
+.mdl-body th .fl{opacity:.6;font-size:9px;margin-left:2px}
+.bar.w{background:var(--warn)}
+.bar.i{background:var(--f-int)}
+.vacio{padding:2rem 1rem;text-align:center;color:var(--text-muted);font-size:12px}
+/* Entre 1024 y 1180 la tabla de detalle (11 columnas, dos de ellas razones
+   sociales) no entra: se aprieta la celda y se recortan antes los nombres en vez
+   de obligar a scrollear hacia el lado justo para llegar a la columna del
+   pendiente, que es la que se vino a mirar. Más abajo de 1024 sí scrollea, igual
+   que el resto de las tablas del repo. */
+@media (max-width:1180px){
+  .mdl{padding:2vh 6px}
+  .mdl-head,.mdl-split,.tabs,.mdl-body,.mdl-foot{padding-left:11px;padding-right:11px}
+  .mdl-body th,.mdl-body td{padding:5px 6px;font-size:11.5px}
+  .mdl-body td.el{max-width:108px}
+  .mdl-body td.el.op{max-width:86px}
+  .mdl-body td.el.et{max-width:110px}
+  .mdl-body td.el[style]{max-width:200px!important}
+}
+@media (max-width:720px){
+  .mdl{padding:0}
+  .mdl-box{max-height:100vh;border-radius:0;border:none}
+}
+@media print{.mdl{display:none!important}}
+
 /* ---- tooltip ---- */
 #tip{position:fixed;z-index:200;pointer-events:none;opacity:0;transition:opacity .1s;
   background:var(--bg-surface);border:1px solid var(--border-md);border-radius:var(--radius-sm);
@@ -399,6 +498,31 @@ summary:hover{color:var(--accent)}
   </div>
   <div class="lr-txt" id="ov-txt">Consultando…<b id="ov-sub">RDTOut</b></div>
 </div>
+<!-- Pop-up de detalle de "Sin confirmar del circuito". Vive fuera de .wrap para
+     que el velo cubra la página completa y no herede el ancho del contenedor. -->
+<div class="mdl" id="mdl" role="dialog" aria-modal="true" aria-labelledby="mdl-t">
+  <div class="mdl-box" id="mdl-box">
+    <div class="mdl-head">
+      <div>
+        <h2 id="mdl-t">Sin confirmar del circuito</h2>
+        <div class="big" id="mdl-n">—</div>
+        <div class="mdl-sub" id="mdl-sub"></div>
+      </div>
+      <button class="mdl-x" id="mdl-x" aria-label="Cerrar el detalle" title="Cerrar (Esc)">✕</button>
+    </div>
+    <div class="mdl-split" id="mdl-split"></div>
+    <div class="tabs" role="tablist" aria-label="Vistas del detalle">
+      <button class="tab" role="tab" id="tb-freno" data-t="freno" aria-selected="true"
+              aria-controls="mdl-body">Dónde está frenado</button>
+      <button class="tab" role="tab" id="tb-quien" data-t="quien" aria-selected="false"
+              aria-controls="mdl-body">Quién debe confirmar</button>
+      <button class="tab" role="tab" id="tb-det" data-t="det" aria-selected="false"
+              aria-controls="mdl-body">Detalle de pedidos</button>
+    </div>
+    <div class="mdl-body" id="mdl-body" role="tabpanel" tabindex="-1"></div>
+    <div class="mdl-foot" id="mdl-foot"></div>
+  </div>
+</div>
 <div id="tip" role="tooltip"></div>
 <script>
 /* =========================================================================
@@ -495,6 +619,19 @@ function plantaDeTexto(t) {
 }
 var esRedtec  = function (s) { return /REDTEC/i.test(String(s || '')); };
 var esAnulada = function (f) { return /anulad/i.test(String(f.etapaOperacion || '')); };
+/* ¿La operación sigue abierta? El origen trae `abierto` como booleano en el 100%
+   de las filas medidas (17.133 de 17.133 el 7-oct-2026) y es la única forma honesta
+   de separar un pendiente que TODAVÍA se puede confirmar de una diferencia que ya
+   quedó consolidada al cerrarse la operación. Si algún día el campo deja de venir
+   se cae al nombre de la etapa, que es peor: hay etapas cerradas que no dicen
+   "cerrada" ('Relocaliza Confirmado', 'Anulado'), así que el respaldo subestima lo
+   cerrado en vez de inventarlo. */
+var estaAbierta = function (f) {
+  var a = f.abierto;
+  if (a === true  || a === 1 || a === '1' || a === 'true')  return true;
+  if (a === false || a === 0 || a === '0' || a === 'false') return false;
+  return !/cerrad/i.test(String(f.etapaOperacion || ''));
+};
 function fechaDe(f) { return String(f.fechaRequerida || f.fechaConfirmacion || '').slice(0, 10); }
 var txt = function (s) { return String(s || '').trim(); };
 
@@ -564,10 +701,11 @@ function construir(filas) {
     leidas: filas.length, usadas: 0, anuladas: 0, sinFecha: 0, sinValor: 0,
     ops: {}, etapas: [], lados: {}, sinMapear: {}, conceptos: {},
     retailSet: {}, clienteSet: {},
-    pendiente: 0, pendienteFuera: 0, despTot: 0, confTot: 0,
+    pendiente: 0, pendienteFuera: 0, pendDet: [], despTot: 0, confTot: 0,
     retiroFueraDeRetail: 0, emisionAClienteRedtec: 0
   };
   var i, f, c, v, k;
+  var HOY = hoyIso();
 
   /* ---- pasada 1 · inventario, lados y quién es retail / quién es cliente ----
      El set de retail sale de los DESTINOS de transferencia y el de clientes de
@@ -600,10 +738,26 @@ function construir(filas) {
        El KPI muestra ahora sólo el circuito. El atasco interno NO se esconde:
        sigue desglosado por operación y etapa en la cadena de confirmación, y el
        pie de ese panel dice cuánto es. */
-    var pend = (d > cf) ? (d - cf) : 0;
-    if (pend) { if (c && CIRCUITO[c]) M.pendiente += pend; else M.pendienteFuera += pend; }
-
     var et = txt(f.etapaOperacion) || '(sin etapa)';
+    var pend = (d > cf) ? (d - cf) : 0;
+    if (pend) {
+      if (c && CIRCUITO[c]) {
+        M.pendiente += pend;
+        /* Y además se guarda el detalle plano del circuito, que es lo único que
+           alimenta el pop-up del KPI. Son ~3 mil filas en un mes y ~40 mil en un
+           año: el mismo orden de magnitud que S.filas, así que no mueve el techo
+           de memoria de la vista. Fuera del circuito NO se guarda nada: ahí el
+           número sirve de contexto, no para perseguir pedidos. */
+        var fe = fechaDe(f);
+        M.pendDet.push({
+          ped: txt(f.nroPedido), fe: fe, ant: dias(fe, HOY) - 1,
+          op: op, et: et, c: c,
+          de: txt(f.clienteOrigenStr), a: txt(f.clienteDestinoStr),
+          d: d, cf: cf, p: pend, ab: estaAbierta(f)
+        });
+      } else M.pendienteFuera += pend;
+    }
+
     var ae = a.etapas[et] || (a.etapas[et] = { movs: 0, conf: 0, desp: 0 });
     ae.movs++; ae.desp += d; ae.conf += cf;
 
@@ -1008,12 +1162,31 @@ function pintarKpis(M) {
     ['Circuló el canal', fmt(K.canal), 'transferencias cliente → retail', 'var(--f-can)'],
     ['Movimiento interno', fmt(K.relocCli + K.recup + K.traspasos),
       'no cambia de actor', 'var(--f-int)'],
-    ['Sin confirmar del circuito', fmt(K.pendiente), 'emisiones, transferencias y retornos', 'var(--warn)']
+    ['Sin confirmar del circuito', fmt(K.pendiente), 'emisiones, transferencias y retornos',
+      'var(--warn)', K.pendiente > 0]
   ];
+  /* El último KPI abre el pop-up con el detalle. Lleva role=button y tabindex para
+     llegar con teclado, y el rótulo "ver detalle" está porque un número que se
+     puede apretar y no lo dice no se aprieta. */
   document.getElementById('kpis').innerHTML = cajas.map(function (c) {
-    return '<div class="kpi" style="--kc:' + c[3] + '"><div class="lbl">' + c[0] + '</div>' +
+    var atr = c[4]
+      ? ' id="kpi-pend" class="kpi kpi-act" role="button" tabindex="0" aria-haspopup="dialog"' +
+        ' title="Ver el detalle de lo que está sin confirmar"'
+      : ' class="kpi"';
+    return '<div' + atr + ' style="--kc:' + c[3] + '"><div class="lbl">' + c[0] +
+           (c[4] ? '<span class="kpi-ver">ver detalle \u203a</span>' : '') + '</div>' +
            '<div class="n">' + c[1] + '</div><div class="sub">' + c[2] + '</div></div>';
   }).join('');
+  var kp = document.getElementById('kpi-pend');
+  if (kp) {
+    kp.addEventListener('click', detAbrir);
+    kp.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); detAbrir(); }
+    });
+  }
+  /* Si el pop-up quedó abierto y cambió el período, la métrica o el tema, se
+     repinta con el modelo nuevo en vez de seguir mostrando cifras de otro rango. */
+  if (detAbierto()) detPintar();
 }
 
 function pintarChips(M) {
@@ -1262,6 +1435,304 @@ function ovTexto(t, sub) {
 }
 function ov(on) { document.getElementById('ov').classList.toggle('on', on); }
 
+
+/* =========================================================================
+   EL DETALLE DE LO QUE ESTÁ SIN CONFIRMAR · el pop-up del KPI
+   ------------------------------------------------------------------------
+   POR QUÉ EXISTE. El KPI dice cuánto, pero a 30 días el número no es menor y
+   "sin confirmar" no es una sola cosa: hay transferencias esperando que el
+   retail adjunte el respaldo, emisiones que se cerraron sin registrar ninguna
+   confirmación, y retiros en inspección. Perseguir el total completo sin
+   separarlo manda al área a llamar por pedidos que ya no se pueden confirmar.
+   LA PARTICIÓN QUE MANDA. Cada movimiento trae del origen el campo `abierto`.
+   Si la operación está ABIERTA el pendiente todavía se puede confirmar; si está
+   CERRADA la diferencia ya quedó consolidada y no hay nada que apurar. Las dos
+   cifras van juntas en todas las tablas, nunca sumadas en silencio.
+   OJO con el color: sólo dos, y los dos ya están validados en esta vista —
+   --warn para lo abierto y --f-int (el gris del movimiento interno) para lo
+   cerrado. Ninguna tabla deja la identidad sólo en el color: las dos columnas
+   van rotuladas.
+   ========================================================================= */
+var MDL_TOPE = 400;                 /* filas que se pintan de una tanda */
+var D = { tab: 'freno', q: '', estado: 'todas', lado: 'a', ord: 'p', desc: true, tope: MDL_TOPE };
+var mdlFoco = null;                 /* a dónde devolver el foco al cerrar */
+
+function detFilas() { return (S.modelo && S.modelo.pendDet) || []; }
+
+/* Agrupa SIN perder la partición abierto/cerrado, que es la razón de ser del
+   pop-up. `ant` se queda con la antigüedad del movimiento más viejo del grupo. */
+function detAgrupar(filas, clave) {
+  var m = {}, out = [];
+  filas.forEach(function (r) {
+    var k = clave(r), a = m[k];
+    if (!a) { a = m[k] = { k: k, p: 0, movs: 0, ab: 0, abM: 0, ce: 0, ceM: 0, ant: -1 }; out.push(a); }
+    a.p += r.p; a.movs++;
+    if (r.ab) { a.ab += r.p; a.abM++; } else { a.ce += r.p; a.ceM++; }
+    if (r.ant > a.ant) a.ant = r.ant;
+  });
+  return out.sort(function (x, y) { return y.p - x.p; });
+}
+
+var ETIQ_CONC = {
+  emisiones: 'Emisiones', transferencias: 'Transferencias',
+  retiros: 'Retiros', devoluciones: 'Devoluciones'
+};
+/* Tramos de antigüedad. El primero es para los movimientos con fecha requerida
+   agendada a futuro, que el blob sí guarda: no están atrasados, están pendientes
+   de que llegue el día. */
+var TRAMOS = [
+  ['agendado a futuro', -1e9, -1],
+  ['0 a 3 días', 0, 3],
+  ['4 a 7 días', 4, 7],
+  ['8 a 15 días', 8, 15],
+  ['16 a 30 días', 16, 30],
+  ['más de 30 días', 31, 1e9]
+];
+function tramoDe(d) {
+  for (var i = 0; i < TRAMOS.length; i++) if (d >= TRAMOS[i][1] && d <= TRAMOS[i][2]) return TRAMOS[i][0];
+  return 'sin fecha';
+}
+
+/* Barra apilada de un grupo: abierto y cerrado con el separador de 2 px del
+   color de la superficie, igual que las cintas del Sankey. */
+function barraGrupo(g, max) {
+  var W = 86, esc1 = max ? W / max : 0;
+  var a = Math.max(g.ab ? 2 : 0, Math.round(g.ab * esc1));
+  var c = Math.max(g.ce ? 2 : 0, Math.round(g.ce * esc1));
+  return (a ? '<span class="bar w" style="width:' + a + 'px"></span>' : '') +
+         (c ? '<span class="bar i" style="width:' + c + 'px"' +
+              (a ? ' title="cerradas"' : '') + '></span>' : '') || '<span class="bar b" style="width:2px"></span>';
+}
+function celdasGrupo(g, max, tot) {
+  return '<td class="n pend">' + fmt(g.p) + '</td>' +
+         '<td class="n">' + fpct(g.p, tot) + '</td>' +
+         '<td class="n">' + fmt(g.movs) + '</td>' +
+         '<td class="n">' + (g.ab ? fmt(g.ab) + ' <span class="est ab">' + fmt(g.abM) + '</span>' : '—') + '</td>' +
+         '<td class="n">' + (g.ce ? fmt(g.ce) + ' <span class="est ce">' + fmt(g.ceM) + '</span>' : '—') + '</td>' +
+         '<td>' + barraGrupo(g, max) + '</td>';
+}
+function maxDe(gs) {
+  return gs.reduce(function (m, g) { return g.p > m ? g.p : m; }, 0);
+}
+var CAB_GRUPO = '<th class="n">Pendiente</th><th class="n">% del total</th><th class="n">Movs</th>' +
+  '<th class="n">Abiertas</th><th class="n">Cerradas</th><th>Reparto</th>';
+
+/* ---- pestaña 1 · dónde está frenado ---- */
+function detFreno(filas, tot) {
+  var porEt = detAgrupar(filas, function (r) { return r.c + '\u0001' + r.et; });
+  var mx = maxDe(porEt);
+  var t1 = '<div class="tbl-box"><table><thead><tr><th>Concepto</th><th>Etapa de la operación</th>' +
+    CAB_GRUPO + '</tr></thead><tbody>' +
+    porEt.map(function (g) {
+      var p = g.k.split('\u0001');
+      return '<tr><td>' + esc(ETIQ_CONC[p[0]] || p[0]) + '</td><td>' + esc(p[1]) + '</td>' +
+             celdasGrupo(g, mx, tot) + '</tr>';
+    }).join('') + '</tbody></table></div>';
+
+  var porAnt = detAgrupar(filas, function (r) { return tramoDe(r.ant); });
+  var ordenAnt = TRAMOS.map(function (t) { return t[0]; });
+  porAnt.sort(function (x, y) { return ordenAnt.indexOf(x.k) - ordenAnt.indexOf(y.k); });
+  var mx2 = maxDe(porAnt);
+  var t2 = '<div class="tbl-box"><table><thead><tr><th>Antigüedad</th>' + CAB_GRUPO +
+    '</tr></thead><tbody>' +
+    porAnt.map(function (g) {
+      return '<tr><td>' + esc(g.k) + '</td>' + celdasGrupo(g, mx2, tot) + '</tr>';
+    }).join('') + '</tbody></table></div>';
+
+  var top = porEt[0], pTop = top ? top.k.split('\u0001') : null;
+  return '<h4>Por concepto y etapa de la operación</h4>' + t1 +
+    '<p class="mdl-nota">La antigüedad se cuenta desde la fecha requerida de la operación hasta hoy.' +
+    (pTop ? ' La etapa que concentra el pendiente es <b>' + esc(pTop[1]) + '</b> en ' +
+      esc((ETIQ_CONC[pTop[0]] || pTop[0]).toLowerCase()) + ': <b>' + fmt(top.p) + '</b> pallets (' +
+      fpct(top.p, tot) + ' del total) en ' + fmt(top.movs) + ' movimientos.' : '') + '</p>' +
+    '<h4>Por antigüedad</h4>' + t2;
+}
+
+/* ---- pestaña 2 · quién debe confirmar ---- */
+function detQuien(filas, tot) {
+  var porDest = D.lado === 'a';
+  var gs = detAgrupar(filas, function (r) {
+    return (porDest ? r.a : r.de) || (porDest ? '(sin destino)' : '(sin origen)');
+  });
+  var mx = maxDe(gs);
+  return '<div class="mdl-ctl"><div class="seg" role="group" aria-label="Lado a mostrar">' +
+      '<button data-act="lado" data-v="a" aria-pressed="' + (porDest ? 'true' : 'false') +
+      '">Por quién recibe</button>' +
+      '<button data-act="lado" data-v="de" aria-pressed="' + (porDest ? 'false' : 'true') +
+      '">Por quién entrega</button>' +
+    '</div></div>' +
+    '<div class="tbl-box"><table><thead><tr><th>' + (porDest ? 'Recibe y debe confirmar' : 'Entrega') +
+      '</th>' + CAB_GRUPO + '<th class="n">Más antiguo</th></tr></thead><tbody>' +
+    gs.map(function (g) {
+      return '<tr><td class="el" style="max-width:300px" title="' + esc(g.k) + '">' + esc(g.k) +
+             '</td>' + celdasGrupo(g, mx, tot) +
+             '<td class="n">' + (g.ant >= 0 ? fmt(g.ant) + ' d' : 'agendado') + '</td></tr>';
+    }).join('') + '</tbody></table></div>' +
+    '<p class="mdl-nota">Confirma el que recibe. En emisiones y transferencias es el cliente o el retail ' +
+    'que recibe los pallets; en retiros y devoluciones el que recibe es REDTEC, así que esas filas ' +
+    'aparecen a nombre de REDTEC y la confirmación es interna. Las chapas chicas son la cantidad de ' +
+    'movimientos de cada lado de la partición.</p>';
+}
+
+/* ---- pestaña 3 · detalle de pedidos ---- */
+var COLS_DET = [
+  ['ped', 'Pedido', 0], ['fe', 'Fecha', 0], ['ant', 'Días', 1], ['op', 'Operación', 0],
+  ['et', 'Etapa', 0], ['de', 'Desde', 0], ['a', 'Hacia', 0],
+  ['d', 'Registrado', 1], ['cf', 'Confirmado', 1], ['p', 'Pendiente', 1]
+];
+function detFiltradas() {
+  var q = D.q.trim().toLowerCase(), est = D.estado;
+  var out = detFilas().filter(function (r) {
+    if (est === 'abiertas' && !r.ab) return false;
+    if (est === 'cerradas' && r.ab) return false;
+    if (!q) return true;
+    return (r.ped + ' ' + r.op + ' ' + r.et + ' ' + r.de + ' ' + r.a + ' ' + r.fe)
+      .toLowerCase().indexOf(q) >= 0;
+  });
+  var k = D.ord, sg = D.desc ? -1 : 1;
+  return out.sort(function (x, y) {
+    var a = x[k], b = y[k];
+    if (typeof a === 'number' && typeof b === 'number') return (a - b) * sg;
+    return String(a).localeCompare(String(b), 'es') * sg;
+  });
+}
+function detTablaHtml() {
+  var fs = detFiltradas(), ver = fs.slice(0, D.tope);
+  var cab = COLS_DET.map(function (c) {
+    var on = D.ord === c[0];
+    return '<th class="so' + (c[2] ? ' n' : '') + '" data-act="ord" data-v="' + c[0] + '"' +
+      (on ? ' aria-sort="' + (D.desc ? 'descending' : 'ascending') + '"' : '') + '>' + c[1] +
+      (on ? '<span class="fl">' + (D.desc ? '▼' : '▲') + '</span>' : '') + '</th>';
+  }).join('');
+  if (!fs.length) {
+    return '<div class="vacio">Ningún movimiento calza con el filtro.</div>';
+  }
+  var cuerpo = ver.map(function (r) {
+    return '<tr><td>' + esc(r.ped) + '</td><td>' + esc(r.fe) + '</td>' +
+      '<td class="n">' + (r.ant >= 0 ? r.ant : '—') + '</td>' +
+      '<td class="el op" title="' + esc(r.op) + '">' + esc(r.op) + '</td>' +
+      '<td class="el et" title="' + esc(r.et) + '">' + esc(r.et) + '</td>' +
+      '<td class="el" title="' + esc(r.de) + '">' + esc(r.de) + '</td>' +
+      '<td class="el" title="' + esc(r.a) + '">' + esc(r.a) + '</td>' +
+      '<td class="n">' + fmt(r.d) + '</td><td class="n">' + fmt(r.cf) + '</td>' +
+      '<td class="n pend">' + fmt(r.p) + '</td>' +
+      '<td><span class="est ' + (r.ab ? 'ab">Abierta' : 'ce">Cerrada') + '</span></td></tr>';
+  }).join('');
+  var sumaP = fs.reduce(function (s, r) { return s + r.p; }, 0);
+  return '<div class="tbl-box"><table><thead><tr>' + cab + '<th>Estado</th></tr></thead><tbody>' +
+    cuerpo + '</tbody></table></div>' +
+    '<p class="mdl-nota">Mostrando <b>' + fmt(ver.length) + '</b> de <b>' + fmt(fs.length) +
+    '</b> movimientos del filtro (<b>' + fmt(sumaP) + '</b> pallets). ' +
+    (fs.length > ver.length
+      ? '<button class="btn" data-act="mas" style="margin-left:4px">Mostrar ' +
+        fmt(Math.min(MDL_TOPE, fs.length - ver.length)) + ' más</button>'
+      : '') +
+    ' El CSV exporta las ' + fmt(fs.length) + ' filas del filtro, no sólo las visibles.</p>';
+}
+function detPedidos() {
+  return '<div class="mdl-ctl">' +
+      '<input class="inp" type="search" id="d-q" placeholder="Filtrar por pedido, operación, etapa o empresa…" ' +
+        'value="' + esc(D.q) + '" aria-label="Filtrar el detalle">' +
+      '<div class="seg" role="group" aria-label="Estado de la operación">' +
+        ['todas', 'abiertas', 'cerradas'].map(function (v) {
+          return '<button data-act="est" data-v="' + v + '" aria-pressed="' +
+            (D.estado === v ? 'true' : 'false') + '">' + v.charAt(0).toUpperCase() + v.slice(1) + '</button>';
+        }).join('') +
+      '</div>' +
+      '<button class="btn" data-act="csv">↓ Exportar CSV</button>' +
+    '</div><div id="d-tabla">' + detTablaHtml() + '</div>';
+}
+
+/* ---- armado del pop-up ---- */
+function detPintar() {
+  var M = S.modelo; if (!M) return;
+  var filas = detFilas(), tot = M.pendiente;
+  var ab = 0, abM = 0, ce = 0, ceM = 0;
+  filas.forEach(function (r) { if (r.ab) { ab += r.p; abM++; } else { ce += r.p; ceM++; } });
+  var r0 = getRango();
+
+  document.getElementById('mdl-n').textContent = fmt(tot);
+  document.getElementById('mdl-sub').innerHTML =
+    'pallets registrados y no confirmados en emisiones, transferencias, retiros y devoluciones · ' +
+    esc(rangoTexto(r0.d1, r0.d2)) + ' · ' + fmt(filas.length) + ' movimientos';
+
+  var pAb = tot ? Math.round(ab / tot * 100) : 0;
+  document.getElementById('mdl-split').innerHTML =
+    '<div class="split-bar">' +
+      (ab ? '<i style="width:' + pAb + '%;background:var(--warn)"></i>' : '') +
+      (ce ? '<i style="width:' + (100 - pAb) + '%;background:var(--f-int)"></i>' : '') +
+    '</div><div class="split-leg">' +
+      '<span><i style="background:var(--warn)"></i>Se puede recuperar <b>' + fmt(ab) + '</b> · ' +
+        fmt(abM) + ' operaciones abiertas</span>' +
+      '<span><i style="background:var(--f-int)"></i>Diferencia consolidada <b>' + fmt(ce) + '</b> · ' +
+        fmt(ceM) + ' operaciones cerradas</span>' +
+    '</div>';
+
+  Array.prototype.forEach.call(document.querySelectorAll('#mdl .tab'), function (b) {
+    b.setAttribute('aria-selected', b.getAttribute('data-t') === D.tab ? 'true' : 'false');
+  });
+  document.getElementById('mdl-body').innerHTML =
+    D.tab === 'quien' ? detQuien(filas, tot) :
+    D.tab === 'det'   ? detPedidos() : detFreno(filas, tot);
+
+  document.getElementById('mdl-foot').innerHTML =
+    'El pendiente es registrado menos confirmado y cuenta <b>movimientos</b>, no pallets distintos: un ' +
+    'mismo pallet puede pasar por más de una operación del circuito en el período. Quedan fuera de este ' +
+    'número la relocalización y los traspasos, que no cambian de actor' +
+    (M.pendienteFuera ? ' y suman otros <b>' + fmt(M.pendienteFuera) +
+      '</b> sin confirmar — están en el panel «La cadena de confirmación».' : '.');
+}
+
+function detAbrir() {
+  if (!S.modelo || !S.modelo.pendiente) return;
+  mdlFoco = document.activeElement;
+  D.tab = 'freno'; D.q = ''; D.estado = 'todas'; D.lado = 'a';
+  D.ord = 'p'; D.desc = true; D.tope = MDL_TOPE;
+  document.getElementById('mdl').classList.add('on');
+  detPintar();
+  document.getElementById('mdl-x').focus();
+}
+function detCerrar() {
+  document.getElementById('mdl').classList.remove('on');
+  /* El KPI se reconstruye con innerHTML en cada render, así que el nodo que tenía
+     el foco puede haber dejado de existir: por eso el isConnected. */
+  if (mdlFoco && mdlFoco.isConnected && mdlFoco.focus) mdlFoco.focus();
+  mdlFoco = null;
+}
+function detAbierto() { return document.getElementById('mdl').classList.contains('on'); }
+
+function detCsv() {
+  var fs = detFiltradas();
+  var lin = ['Pedido;Fecha;Dias;Operacion;Etapa;Desde;Hacia;Registrado;Confirmado;Pendiente;Estado'];
+  fs.forEach(function (r) {
+    lin.push([r.ped, r.fe, r.ant >= 0 ? r.ant : '', r.op, r.et, r.de, r.a, r.d, r.cf, r.p,
+              r.ab ? 'Abierta' : 'Cerrada'].map(function (v) {
+      var s = String(v === null || v === undefined ? '' : v);
+      return /[";\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }).join(';'));
+  });
+  var r0 = getRango();
+  /* BOM + punto y coma: así Excel en español lo abre en columnas sin preguntar
+     nada, y no hace falta una librería de CDN como en las otras vistas. */
+  var b = new Blob(['﻿' + lin.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+  var u = URL.createObjectURL(b), a = document.createElement('a');
+  a.href = u; a.download = 'pendiente-circuito_' + r0.d1 + '_' + r0.d2 + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function () { URL.revokeObjectURL(u); }, 2000);
+}
+
+/* Refresca SÓLO la tabla del detalle. Repintar la pestaña completa borraría el
+   <input> del filtro y con él el foco y el cursor, así que el texto que se está
+   escribiendo se perdería letra por letra. */
+function detTablaRefrescar() {
+  var box = document.getElementById('d-tabla');
+  if (!box) { detPintar(); return; }
+  box.innerHTML = detTablaHtml();
+  Array.prototype.forEach.call(document.querySelectorAll('#mdl-body [data-act="est"]'), function (b) {
+    b.setAttribute('aria-pressed', b.getAttribute('data-v') === D.estado ? 'true' : 'false');
+  });
+}
+
 function render() {
   if (!S.filas) return;
   var M = construir(S.filas);
@@ -1361,6 +1832,48 @@ async function cargar(forzar) {
     aplicarTema(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
   });
   document.getElementById('recargar').addEventListener('click', function () { cargar(true); });
+
+  /* ---- pop-up del detalle ----
+     Todo por delegación desde #mdl-body: el cuerpo se reconstruye con innerHTML en
+     cada repintado, así que un listener puesto sobre un botón de adentro se pierde
+     apenas se cambia de pestaña. Es la misma trampa que costó depurar el pop-up de
+     transferencias en Operaciones REDTEC. */
+  var mdl = document.getElementById('mdl');
+  document.getElementById('mdl-x').addEventListener('click', detCerrar);
+  mdl.addEventListener('click', function (ev) { if (ev.target === mdl) detCerrar(); });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape' && detAbierto()) detCerrar();
+  });
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('#mdl .tab'));
+  tabs.forEach(function (b, i) {
+    b.addEventListener('click', function () { D.tab = b.getAttribute('data-t'); detPintar(); });
+    b.addEventListener('keydown', function (ev) {
+      var paso = ev.key === 'ArrowRight' ? 1 : ev.key === 'ArrowLeft' ? -1 : 0;
+      if (!paso) return;
+      ev.preventDefault();
+      var n = tabs[(i + paso + tabs.length) % tabs.length];
+      D.tab = n.getAttribute('data-t'); detPintar(); n.focus();
+    });
+  });
+  var cuerpo = document.getElementById('mdl-body');
+  cuerpo.addEventListener('click', function (ev) {
+    var t = ev.target && ev.target.closest ? ev.target.closest('[data-act]') : null;
+    if (!t) return;
+    var act = t.getAttribute('data-act'), v = t.getAttribute('data-v');
+    if (act === 'lado') { D.lado = v; detPintar(); }
+    else if (act === 'est') { D.estado = v; D.tope = MDL_TOPE; detTablaRefrescar(); }
+    else if (act === 'ord') {
+      if (D.ord === v) D.desc = !D.desc; else { D.ord = v; D.desc = true; }
+      detTablaRefrescar();
+    }
+    else if (act === 'mas') { D.tope += MDL_TOPE; detTablaRefrescar(); }
+    else if (act === 'csv') detCsv();
+  });
+  cuerpo.addEventListener('input', function (ev) {
+    if (ev.target && ev.target.id === 'd-q') {
+      D.q = ev.target.value; D.tope = MDL_TOPE; detTablaRefrescar();
+    }
+  });
 
   var def = mesPorDefecto();
   setRango(def.d1, def.d2);

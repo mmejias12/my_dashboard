@@ -402,6 +402,15 @@ function agregar(items, rangoFin) {
       rb.items.push({
         nroPedido: ir.nroPedido || '—',
         bodegaDestino: ir.bodegaDestinoStr || ir.bodegaOrigenStr || '—',
+        // En un RETIRO el recinto del retail es la bodega de ORIGEN y la
+        // planta REDTEC es el destino. 'bodegaDestino' se deja tal cual para
+        // no romper a quien ya lo lee, pero quien necesite saber DE QUÉ
+        // RECINTO se retiró debe usar 'bodegaRecinto': agrupar los retiros
+        // reales por bodegaDestino los archiva a todos bajo la planta y el
+        // recinto desaparece (así quedaban recintos con 0 retiros reales
+        // aunque RDTOut sí los traía).
+        bodegaOrigen: ir.bodegaOrigenStr || '—',
+        bodegaRecinto: ir.bodegaOrigenStr || ir.bodegaDestinoStr || '—',
         fechaRequerida: fmtISO(fReq),
         fechaDespacho: ir.fechaDespacho ? fmtISO(parseFechaM3(ir.fechaDespacho)) : null,
         etapaOperacion: ir.etapaOperacion || '—',

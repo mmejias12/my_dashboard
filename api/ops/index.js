@@ -135,10 +135,16 @@ module.exports = async function (context, req) {
       // de blobs de más y reventaba el tiempo.
       const coldHasta = fHasta;
 
+      // _rl (registro Redlink crudo) vive en el blob para KPIs del lado servidor,
+      // pero NO viaja a la vista. CLAVE: se suelta POR DÍA al leer (sinRl), no al
+      // final — acumular el _rl de un año entero revienta la memoria de la Function
+      // (medido: ~9 meses caían con 500). Con ?full=1 se conserva (rango corto).
+      const quiereFullC = q.full === '1' || q.full === 'true';
+
       // 1) histórico (blob) para los días cerrados
       let opsCold = [], diasCold = 0;
       if (coldHasta >= fDesde) {
-        const rc = await cold.leerRango(cold.getContainer(), fDesde, coldHasta);
+        const rc = await cold.leerRango(cold.getContainer(), fDesde, coldHasta, { sinRl: !quiereFullC });
         opsCold = rc.ops; diasCold = rc.dias;
       }
       // 2) cola viva desde Redlink (misma fuente que el blob)
@@ -146,16 +152,12 @@ module.exports = async function (context, req) {
       if (liveHasta >= liveDesde) {
         const r = await RL.consultarRedlink(liveDesde, liveHasta, { presupuestoMs: BUDGET_MS - 6000 });
         opsVivo = r.filas;
+        if (!quiereFullC) for (const o of opsVivo) { if (o && o._rl !== undefined) delete o._rl; }
       }
-      // 3) merge + dedup + recorte al rango pedido
+      // 3) merge + dedup + recorte al rango pedido (ya vienen sin _rl salvo ?full=1)
       let todasC = cold.dedup(opsVivo.concat(opsCold));
       todasC = todasC.filter(o => cold.diasDeOp(o).some(f => f >= fDesde && f <= fHasta));
-
-      // _rl (registro Redlink crudo) vive en el blob para los KPIs del lado
-      // servidor, pero NO viaja a la vista: multiplica ~4x el peso y ninguna
-      // vista lo usa. Con ?full=1 se incluye, para un detalle crudo puntual.
-      const quiereFullC = q.full === '1' || q.full === 'true';
-      const salidaC = quiereFullC ? todasC : todasC.map(({ _rl, ...resto }) => resto);
+      const salidaC = todasC;
 
       const metaC = {
         ok: true, origen: 'cold+redlink', total: todasC.length,

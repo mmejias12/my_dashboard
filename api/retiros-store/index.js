@@ -563,14 +563,42 @@ module.exports = async function (context, req) {
             if (f < desdeR || f > hoyR) continue;
             const k = String(r.clave).toUpperCase();
             const e = porClave[k] || (porClave[k] = { clave: r.clave, n: 0, dow: [0,0,0,0,0,0,0] });
-            e.n++;
-            e.dow[new Date(f + 'T12:00:00Z').getUTCDay()]++;
-            if (!e.fecha || f > e.fecha ||
-                (f === e.fecha && String(r.creado || '') > String(e.creado || ''))) {
-              e.fecha    = f;
-              e.cantidad = Number(r.cantidad) || 0;
-              e.usuario  = r.usuario_origen || r.usuario || '';
-              e.creado   = r.creado || '';
+            const pal  = Number(r.cantidad) || 0;
+            const disp = Number(r.dispersos) || 0;
+
+            // SOLO un retiro con pallets cuenta como "último retiro".
+            // -----------------------------------------------------------------
+            // Hay dos cosas distintas en el mismo registro. El retiro de pallets
+            // de transferencia (el que proyecta el calendario) y el retiro de
+            // DISPERSOS, que son pallets sueltos y van en su propia columna.
+            // RABIE SANTIAGO retira 80 pallets los martes y además pasa algunos
+            // lunes a llevarse 16 o 40 dispersos. Si el lunes de dispersos
+            // reinicia la cuenta, el acumulado del martes sale casi en cero y el
+            // ejecutivo le pide al retail mucho menos de lo que corresponde.
+            // Por eso el movimiento de puros dispersos se informa aparte
+            // (ultimo_movimiento) pero NO corta la cuenta de pallets.
+            if (pal > 0) {
+              e.n++;
+              e.dow[new Date(f + 'T12:00:00Z').getUTCDay()]++;
+              if (!e.fecha || f > e.fecha ||
+                  (f === e.fecha && String(r.creado || '') > String(e.creado || ''))) {
+                e.fecha     = f;
+                e.cantidad  = pal;
+                e.dispersos = disp;
+                e.usuario   = r.usuario_origen || r.usuario || '';
+                e.creado    = r.creado || '';
+              }
+            } else if (disp > 0) {
+              const m = e.ultimo_movimiento;
+              if (!m || f > m.fecha) {
+                e.ultimo_movimiento = { fecha: f, cantidad: 0, dispersos: disp,
+                                        usuario: r.usuario_origen || r.usuario || '' };
+              }
+            } else {
+              // Ni pallets ni dispersos: un intento que quedó en nada. Se cuenta
+              // para poder decirlo en pantalla, pero no es un retiro.
+              e.intentos_vacios = (e.intentos_vacios || 0) + 1;
+              if (!e.ultimo_intento || f > e.ultimo_intento) e.ultimo_intento = f;
             }
           }
         }

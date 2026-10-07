@@ -56,12 +56,17 @@ function rangoDias(desde, hasta) {
 
 // Lee un día. Devuelve el arreglo de operaciones, o null si el blob no existe
 // (día sin movimiento: feriado / fin de semana sin ops, o fuera del histórico).
-async function leerDia(container, fecha) {
+async function leerDia(container, fecha, opts) {
   if (!container) return null;
   try {
     const dl = await container.getBlobClient(claveBlob(fecha)).download();
     const j = JSON.parse(await streamToString(dl.readableStreamBody));
-    return Array.isArray(j.operaciones) ? j.operaciones : [];
+    const arr = Array.isArray(j.operaciones) ? j.operaciones : [];
+    // sinRl: soltar el registro crudo (_rl) de cada fila APENAS se parsea el día.
+    // En un rango largo, arrastrar el _rl de todos los días hasta el final revienta
+    // la memoria de la Function; soltándolo por día el acumulado queda liviano.
+    if (opts && opts.sinRl) for (const o of arr) { if (o && o._rl !== undefined) delete o._rl; }
+    return arr;
   } catch (e) {
     if (/BlobNotFound|ContainerNotFound|AuthenticationFailed/.test(e.message)) return null;
     throw e;
@@ -76,7 +81,7 @@ async function leerDia(container, fecha) {
 //               los ignora, porque pedirlos en vivo devolvería 0 igual.
 //  - dias     : días con blob leídos.
 // Lectura EN PARALELO por lotes: un año no se lee día a día en serie.
-async function leerRango(container, desde, hasta) {
+async function leerRango(container, desde, hasta, opts) {
   const fechas = rangoDias(desde, hasta);
   const ops = [], faltantes = [];
   if (!container) return { ops, faltantes: fechas, dias: 0, sin_storage: true };
@@ -85,7 +90,7 @@ async function leerRango(container, desde, hasta) {
   for (let i = 0; i < fechas.length; i += LOTE) {
     const grupo = fechas.slice(i, i + LOTE);
     const res = await Promise.all(grupo.map(f =>
-      leerDia(container, f).then(d => ({ f, d })).catch(() => ({ f, d: null }))));
+      leerDia(container, f, opts).then(d => ({ f, d })).catch(() => ({ f, d: null }))));
     for (const { f, d } of res) {
       if (d) { ops.push(...d); dias++; } else faltantes.push(f);
     }

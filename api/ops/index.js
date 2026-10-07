@@ -42,9 +42,16 @@ const ORIGEN_DEF = String(process.env.OPS_ORIGEN || 'rdt').toLowerCase() === 're
 // camino cold y se comporta EXACTAMENTE como siempre.
 //     OPS_COLD = operaciones   prende el histórico desde el blob
 //     OPS_COLD_LIVE_DIAS = 2   (por omisión) días de cola viva (hoy + ayer)
+//     OPS_COLD_MAX_VIVO_DIAS = 120  (por omisión) span máximo de rango que pide
+//       cola viva. Más largo que eso se sirve SÓLO del blob: preguntarle hoy a
+//       Redlink cuesta ~16 s, y en medio año o más esos 2 días no mueven la aguja,
+//       mientras el tiempo ahorrado es justamente el margen contra el corte de 45 s.
+//       Cuando se omite, la respuesta lo DICE (X-Ops-Vivo-Omitido y meta.vivo.omitido),
+//       así nadie cree que vio el día de hoy cuando no lo vio.
 // Requisito para prenderlo: que el blob ya esté en contrato RDT (re-backfill).
 const COLD_ON = String(process.env.OPS_COLD || '').toLowerCase() === 'operaciones';
 const COLD_LIVE_DIAS = Math.max(1, parseInt(process.env.OPS_COLD_LIVE_DIAS || '2', 10) || 2);
+const COLD_MAX_VIVO_DIAS = Math.max(1, parseInt(process.env.OPS_COLD_MAX_VIVO_DIAS || '120', 10) || 120);
 
 const API_HOST = 'apirdt1.azurewebsites.net';
 const API_PATH = '/api/RDTOut/opsxrangofechas';
@@ -103,7 +110,8 @@ module.exports = async function (context, req) {
         ops_cold: COLD_ON,
         cold_contenedor: cold.CONTAINER,
         cold_storage: cold.hayStorage(),
-        cold_live_dias: COLD_LIVE_DIAS
+        cold_live_dias: COLD_LIVE_DIAS,
+        cold_max_vivo_dias: COLD_MAX_VIVO_DIAS
       }), headers: Object.assign({'Content-Type':'application/json','X-Ops-Origen':origen}, CORS) };
     return;
   }
@@ -129,6 +137,13 @@ module.exports = async function (context, req) {
       let liveDesde = addDiasIso(hoy, -(COLD_LIVE_DIAS - 1));
       if (liveDesde < fDesde) liveDesde = fDesde;
       const liveHasta = fHasta < hoy ? fHasta : hoy;      // no pedir futuro
+      // Span del rango pedido. Si es más largo que COLD_MAX_VIVO_DIAS, la cola viva
+      // se OMITE a propósito (el blob igual cubre hasta ayer) y queda declarado en
+      // la respuesta. Así un año no paga los ~16 s de Redlink por 2 días.
+      const spanDias = Math.round((Date.parse(fHasta + 'T00:00:00Z') - Date.parse(fDesde + 'T00:00:00Z')) / 86400000) + 1;
+      const hayVentanaViva = liveHasta >= liveDesde;
+      const pideVivo = hayVentanaViva && spanDias <= COLD_MAX_VIVO_DIAS;
+      const vivoOmitido = hayVentanaViva && !pideVivo;
       // El blob cubre TODO el rango pedido (incluso días futuros con fechaRequerida
       // agendada); sólo la cola viva se pide aparte y gana en el dedup. Se topa en
       // fHasta: antes leía hasta AYER siempre, así que un rango pasado leía ~2 años
@@ -149,7 +164,7 @@ module.exports = async function (context, req) {
       }
       // 2) cola viva desde Redlink (misma fuente que el blob)
       let opsVivo = [];
-      if (liveHasta >= liveDesde) {
+      if (pideVivo) {
         const r = await RL.consultarRedlink(liveDesde, liveHasta, { presupuestoMs: BUDGET_MS - 6000 });
         opsVivo = r.filas;
         if (!quiereFullC) for (const o of opsVivo) { if (o && o._rl !== undefined) delete o._rl; }
@@ -175,7 +190,8 @@ module.exports = async function (context, req) {
       const metaC = {
         ok: true, origen: 'cold+redlink', total: todasC.length,
         cold: { dias: diasCold, filas: opsColdLen, hasta: coldHasta, contenedor: cold.CONTAINER },
-        vivo: { desde: liveDesde, hasta: liveHasta, filas: opsVivoLen }
+        vivo: { desde: liveDesde, hasta: liveHasta, filas: opsVivoLen,
+                omitido: vivoOmitido, span_dias: spanDias, max_dias: COLD_MAX_VIVO_DIAS }
       };
       const quiereMetaC = q.meta === '1' || q.meta === 'true';
       coldResp = {
@@ -183,7 +199,8 @@ module.exports = async function (context, req) {
         headers: Object.assign({
           'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache',
           'X-Ops-Total': String(todasC.length), 'X-Ops-Origen': 'cold+redlink',
-          'X-Ops-Cold-Dias': String(diasCold), 'X-Ops-Vivo-Filas': String(opsVivoLen)
+          'X-Ops-Cold-Dias': String(diasCold), 'X-Ops-Vivo-Filas': String(opsVivoLen),
+          'X-Ops-Vivo-Omitido': String(vivoOmitido)
         }, CORS),
         body: JSON.stringify(quiereMetaC ? Object.assign({ data: todasC }, metaC) : todasC)
       };

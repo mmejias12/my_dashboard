@@ -129,7 +129,11 @@ module.exports = async function (context, req) {
       let liveDesde = addDiasIso(hoy, -(COLD_LIVE_DIAS - 1));
       if (liveDesde < fDesde) liveDesde = fDesde;
       const liveHasta = fHasta < hoy ? fHasta : hoy;      // no pedir futuro
-      const coldHasta = addDiasIso(liveDesde, -1);
+      // El blob cubre TODO el rango pedido (incluso días futuros con fechaRequerida
+      // agendada); sólo la cola viva se pide aparte y gana en el dedup. Se topa en
+      // fHasta: antes leía hasta AYER siempre, así que un rango pasado leía ~2 años
+      // de blobs de más y reventaba el tiempo.
+      const coldHasta = fHasta;
 
       // 1) histórico (blob) para los días cerrados
       let opsCold = [], diasCold = 0;
@@ -147,6 +151,12 @@ module.exports = async function (context, req) {
       let todasC = cold.dedup(opsVivo.concat(opsCold));
       todasC = todasC.filter(o => cold.diasDeOp(o).some(f => f >= fDesde && f <= fHasta));
 
+      // _rl (registro Redlink crudo) vive en el blob para los KPIs del lado
+      // servidor, pero NO viaja a la vista: multiplica ~4x el peso y ninguna
+      // vista lo usa. Con ?full=1 se incluye, para un detalle crudo puntual.
+      const quiereFullC = q.full === '1' || q.full === 'true';
+      const salidaC = quiereFullC ? todasC : todasC.map(({ _rl, ...resto }) => resto);
+
       const metaC = {
         ok: true, origen: 'cold+redlink', total: todasC.length,
         cold: { dias: diasCold, filas: opsCold.length, hasta: coldHasta, contenedor: cold.CONTAINER },
@@ -160,7 +170,7 @@ module.exports = async function (context, req) {
           'X-Ops-Total': String(todasC.length), 'X-Ops-Origen': 'cold+redlink',
           'X-Ops-Cold-Dias': String(diasCold), 'X-Ops-Vivo-Filas': String(opsVivo.length)
         }, CORS),
-        body: JSON.stringify(quiereMetaC ? Object.assign({ data: todasC }, metaC) : todasC)
+        body: JSON.stringify(quiereMetaC ? Object.assign({ data: salidaC }, metaC) : salidaC)
       };
     } catch (e) {
       if (context.log) context.log('OPS_COLD cayó a origen normal: ' + e.message);
@@ -325,6 +335,11 @@ module.exports = async function (context, req) {
     error_api: errorApi
   };
   const quiereMeta = q.meta === '1' || q.meta === 'true';
+  // Igual que en el camino cold: sólo el origen redlink trae _rl acá; RDTOut no.
+  // Se recorta salvo ?full=1, dejando el camino por defecto (rdt) idéntico.
+  const quiereFull = q.full === '1' || q.full === 'true';
+  const salida = (origen === 'redlink' && !quiereFull)
+    ? todas.map(({ _rl, ...resto }) => resto) : todas;
 
   context.res = {
     status: 200,
@@ -337,7 +352,7 @@ module.exports = async function (context, req) {
       'X-Ops-Api-Cubrio-Rango': String(cobertura.cubrio_todo_el_rango),
       'X-Ops-Origen': origen
     }, CORS),
-    body: JSON.stringify(quiereMeta ? Object.assign({ data: todas }, meta) : todas)
+    body: JSON.stringify(quiereMeta ? Object.assign({ data: salida }, meta) : salida)
   };
 };
 

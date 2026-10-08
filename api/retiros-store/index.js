@@ -57,6 +57,7 @@
 //    RETIROS_CONTAINER        (opc. 'redtec-store')
 //    RETIROS_EDIT_ROLES       (opc. 'admin,logistica,retiros')   registrar
 //    RETIROS_OFICINA_ROLES    (opc. 'admin,logistica')           ver todo / editar ajeno
+//    RETIROS_TRANSPORTE_ROLES (opc. 'transporte,transportes')    solo lectura del día
 //    RETIROS_MAX_RESPALDOS    (opc. 30) respaldos que se conservan por mes
 //    RETIROS_DIAS_ATRAS       (opc. 90) tope para fechas de retiro pasadas
 //    RETIROS_DIAS_ADELANTE    (opc. 180) tope para fechas programadas
@@ -239,7 +240,9 @@ function esOficina(p) {
 }
 // Transporte lee toda la programación del día, pero no escribe nada.
 function esTransporte(p) {
-  return roles(p).some(r => lista('RETIROS_TRANSPORTE_ROLES', 'transporte').includes(r));
+  // El rol en Entra está en plural ('transportes'); se aceptan los dos para
+  // que un cambio de nombre no deje al área sin su pantalla.
+  return roles(p).some(r => lista('RETIROS_TRANSPORTE_ROLES', 'transporte,transportes').includes(r));
 }
 function puedeVerTodo(p) { return esOficina(p) || esTransporte(p); }
 function quien(p) { return (p && (p.userDetails || p.userId)) || 'anónimo'; }

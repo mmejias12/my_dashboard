@@ -171,6 +171,8 @@ tr.gtot td{background:var(--bg-surface);font-weight:700;border-top:2px solid var
 .badge.pm{background:var(--warn-bg);color:var(--warn)}
 .tag-sd{font-size:9.5px;padding:1px 5px;border-radius:4px;background:var(--warn-bg);color:var(--warn);
         font-weight:600;white-space:nowrap}
+/* La glosa lleva explicación al pasar el mouse: el punteado avisa que hay algo que leer */
+.tag-sd.glosa{cursor:help;border-bottom:1px dotted currentColor}
 
 .empty{padding:2.4rem 1rem;text-align:center;color:var(--text-muted);font-size:13px}
 .empty i{font-size:30px;display:block;margin-bottom:.5rem;opacity:.5}
@@ -2380,7 +2382,13 @@ async function correrCruce(){
   $('x-area').innerHTML=loaderHTML('Comparando con RDTOut…',fmtCorta(d1)+' – '+fmtCorta(d2));
   $('x-avisos').innerHTML='';
   try{
-    var prog = (await pedir(d1,d2,true)).registros;
+    // Se pide la programación CON el mismo margen que las operaciones. Lo de
+    // adentro es lo que se compara; lo del margen no suma a ningún total, pero
+    // es lo que permite explicar un «sin programar»: casi siempre el retiro sí
+    // se registró, un día antes o un día después del rango consultado.
+    var progTodo = (await pedir(sumaDias(d1,-BUFFER_CRUCE),sumaDias(d2,BUFFER_CRUCE),true)).registros;
+    var prog = progTodo.filter(function(r){ return r.fecha_retiro>=d1 && r.fecha_retiro<=d2; });
+    var progFuera = progTodo.filter(function(r){ return r.fecha_retiro<d1 || r.fecha_retiro>d2; });
     // VENTANA AMPLIADA. /proxy/ops filtra por fechaRequerida, pero acá se
     // compara por fecha de confirmación: un retiro requerido el 24 y
     // confirmado el 25 no venía si se pedía justo el rango. Se pide con
@@ -2391,23 +2399,131 @@ async function correrCruce(){
     if(!r.ok) throw new Error('RDTOut respondió HTTP '+r.status);
     var raw=await r.json();
     var ops=(Array.isArray(raw)?raw:(raw.data||raw.result||raw.operaciones||[])).filter(esRetiro);
-    var dentro=[], recuperados=0, fuera=0;
+    var dentro=[], recuperados=0, fuera=0, fueraOps=[], sinFecha=0;
     ops.forEach(function(o){
       var f=fechaDeOp(o);
-      if(!f){ return; }
-      if(f<d1||f>d2){ fuera++; return; }
+      if(!f){ sinFecha++; return; }
+      if(f<d1||f>d2){ fuera++; o.__f=f; fueraOps.push(o); return; }
       // vino gracias al margen: su fechaRequerida caía fuera del rango pedido
       var req=aISO(o.fechaRequerida);
       if(req && (req<d1||req>d2)) recuperados++;
       dentro.push(o);
     });
-    CRUCE={ d1:d1, d2:d2, prog:prog, ops:dentro,
-            ventana:{a1:a1,a2:a2}, recuperados:recuperados, fuera:fuera, crudas:ops.length };
+    CRUCE={ d1:d1, d2:d2, prog:prog, ops:dentro, progFuera:progFuera, fueraOps:fueraOps,
+            ventana:{a1:a1,a2:a2}, recuperados:recuperados, fuera:fuera,
+            sinFecha:sinFecha, crudas:ops.length };
     pintarCruce();
   }catch(e){
     $('x-area').innerHTML='<div class="aviso e"><i class="ti ti-alert-circle"></i><span>'+
       'No se pudo hacer el cruce: '+esc(e.message)+'</span></div>';
   }finally{ b.disabled=false; }
+}
+
+/* ============================================================================
+   POR QUÉ QUEDÓ CON ESA GLOSA
+   ----------------------------------------------------------------------------
+   «Sin confirmar» y «sin programar» decían QUÉ pasó pero no POR QUÉ, y había
+   que ir a buscarlo a m3link recinto por recinto. Casi siempre la respuesta ya
+   está en los datos que el cruce descarta: el retiro existe pero se anuló, se
+   confirmó un día fuera del rango, es interno entre bodegas REDTEC, o el
+   ejecutivo lo registró el día de al lado.
+
+   Estas dos funciones arman esa explicación con la evidencia concreta —fechas,
+   pedidos, cantidades— y no con una frase genérica.
+============================================================================ */
+function fmtListaFechas(fs){
+  var u=fs.slice(0,4).map(fmtCorta).join(', ');
+  return fs.length>4 ? u+' y '+(fs.length-4)+' más' : u;
+}
+
+/* Operaciones de ESTE recinto que el cruce dejó fuera, agrupadas por motivo. */
+function descartesDe(clave, incAnul){
+  var out={ fuera:[], anuladas:[], internas:[] };
+  if(!CRUCE) return out;
+  function esDeEsteRecinto(o){
+    var cal=calzar(contraparteBodega(o));
+    return cal && String(cal.clave).toUpperCase()===clave;
+  }
+  (CRUCE.fueraOps||[]).forEach(function(o){
+    if(esDeEsteRecinto(o)) out.fuera.push(o);
+  });
+  (CRUCE.ops||[]).forEach(function(o){
+    if(!esDeEsteRecinto(o)) return;
+    if(esInterno(o)) out.internas.push(o);
+    else if(!incAnul && esAnulada(o)) out.anuladas.push(o);
+  });
+  return out;
+}
+
+function motivoSinConfirmar(f, incAnul){
+  var L=['SIN CONFIRMAR — se programó pero RDTOut no muestra el retiro.',''];
+  var d=descartesDe(f.clave, incAnul);
+  var dias=Object.keys(f.progPorDia||{}).sort();
+  var hoy=hoyISO();
+  var futuros=dias.filter(function(x){ return x>=hoy; });
+
+  if(d.anuladas.length){
+    L.push('· El retiro existe pero está ANULADO en RDTOut ('+d.anuladas.length+
+           (d.anuladas.length>1?' operaciones':' operación')+'). Marca «Incluir anuladas» para verlo sumado.');
+  }
+  if(d.fuera.length){
+    var fs=d.fuera.map(function(o){ return o.__f; }).sort();
+    L.push('· Hay '+d.fuera.length+' retiro'+(d.fuera.length>1?'s':'')+' de este recinto en RDTOut, '+
+           'pero con fecha de confirmación FUERA del rango consultado: '+fmtListaFechas(fs)+'. '+
+           'Amplía el rango y va a aparecer.');
+  }
+  if(d.internas.length){
+    L.push('· Las '+d.internas.length+' operaciones encontradas son traslados internos entre bodegas REDTEC, '+
+           'no retiros al retail, así que no cuentan.');
+  }
+  // Sin descartes no hay nada que explicar por el lado de RDTOut: lo que
+  // corresponde es decir que no existe la operación, no inventar una causa.
+  if(!d.fuera.length && !d.anuladas.length && !d.internas.length){
+    L.push('· RDTOut no tiene ninguna operación de retiro de este recinto entre el '+
+           fmtCorta(CRUCE.ventana.a1)+' y el '+fmtCorta(CRUCE.ventana.a2)+
+           ' (el rango más el margen de ±'+BUFFER_CRUCE+' días).');
+    L.push('  Puede ser que el camión no haya ido, que el retiro no se haya cerrado en RDTOut, '+
+           'o que allá figure bajo otra bodega.');
+  }
+  // El día importa, pero hay que distinguir. Un retiro de mañana todavía no
+  // puede estar confirmado; uno de HOY sí pudo pasar hace tres horas, así que
+  // decir "todavía no pasa" sería falso a media tarde.
+  if(dias.length && futuros.length===dias.length){
+    var soloHoy = dias.every(function(x){ return x===hoy; });
+    if(soloHoy) L.push('· Es de hoy: puede que el camión no haya pasado todavía, '+
+                       'o que el retiro aún no se cierre en RDTOut.');
+    else L.push('· Está programado para '+fmtListaFechas(dias)+
+                ', que todavía no llega: aún no puede estar confirmado.');
+  }
+  L.push('');
+  L.push('Programado: '+num(f.prog)+' pallets en '+dias.length+' día'+(dias.length>1?'s':'')+
+         ' ('+fmtListaFechas(dias)+').');
+  return L.join('\n');
+}
+
+function motivoSinProgramar(f){
+  var L=['SIN PROGRAMAR — RDTOut confirma el retiro pero no está en la programación.',''];
+  var mismos=(CRUCE.progFuera||[]).filter(function(r){
+    return String(r.clave).toUpperCase()===f.clave; });
+  if(mismos.length){
+    var fs=mismos.map(function(r){ return r.fecha_retiro; }).sort();
+    var pal=mismos.reduce(function(a,r){ return a+(Number(r.cantidad)||0); },0);
+    var quien=mismos[0].usuario_origen||mismos[0].usuario||'';
+    L.push('· SÍ está registrado, pero fuera del rango consultado: '+fmtListaFechas(fs)+
+           ' ('+num(pal)+' pallets'+(quien?', '+quien:'')+').');
+    L.push('  Suele ser desfase de un día entre lo que programó el ejecutivo y el día en que se confirmó.');
+  }else{
+    L.push('· No hay ningún registro de este recinto en la programación, ni dentro del rango '+
+           'ni en el margen de ±'+BUFFER_CRUCE+' días.');
+    L.push('  O el ejecutivo no lo registró, o lo registró con otro recinto.');
+  }
+  var dias=Object.keys(f.confPorDia||{}).sort();
+  L.push('');
+  L.push('Confirmado en RDTOut: '+num(f.conf)+' pallets el '+fmtListaFechas(dias)+'.');
+  if(f.pedidos&&f.pedidos.length)
+    L.push('Pedido'+(f.pedidos.length>1?'s':'')+': '+f.pedidos.slice(0,5).map(function(p){ return p.nro; }).join(', ')+
+           (f.pedidos.length>5?' y '+(f.pedidos.length-5)+' más':'')+'.');
+  return L.join('\n');
 }
 
 function pintarCruce(){
@@ -2514,8 +2630,8 @@ function pintarCruce(){
     var col = f.dif===0 ? 'var(--text-sec)' : (f.dif>0 ? 'var(--ok)' : 'var(--danger)');
     h+='<tr><td><span class="lnk" data-recinto="'+esc(f.clave)+'" '+
         'title="Ver el comportamiento de este recinto">'+esc(f.recinto)+'</span>'+
-      (f.soloConf?' <span class="tag-sd">sin programar</span>':'')+
-      (f.soloProg?' <span class="tag-sd">sin confirmar</span>':'')+'</td>'+
+      (f.soloConf?' <span class="tag-sd glosa" title="'+esc(motivoSinProgramar(f))+'">sin programar</span>':'')+
+      (f.soloProg?' <span class="tag-sd glosa" title="'+esc(motivoSinConfirmar(f,incAnul))+'">sin confirmar</span>':'')+'</td>'+
       '<td style="font-size:11.5px">'+esc(f.cadena)+'</td>'+
       '<td style="font-size:11.5px">'+esc(f.zona||'—')+'</td>'+
       '<td class="num">'+num(f.prog)+'</td>'+

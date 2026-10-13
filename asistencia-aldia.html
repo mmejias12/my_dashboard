@@ -3704,7 +3704,9 @@ function cerrarFotoGrande(){ var m=$('foto-grande'); if(m){ m.classList.remove('
 function calPersonRow(emp, detalle, fecha){
   var nombre=empNombreCompleto(emp);
   var suc=(emp.branchOfficeName||emp.branchOffice||'—');
-  var dep=(emp.departmentName||emp.department||'');
+  // Subárea (area2) en vez del centro de costo; cae a gerencia o al centro de
+  // costo si faltara. El nombre largo se trunca por CSS y el completo va en title.
+  var dep=(emp.area2||emp.area1||emp.departmentName||emp.department||'');
   var sub=suc+(dep?(' · '+dep):'');
   // Al hacer clic se abre la ficha del día de esa persona (el mismo popup del
   // calendario). La fecha la pasa quien arma la tarjeta: hoy en casi todas, el
@@ -3712,7 +3714,7 @@ function calPersonRow(emp, detalle, fecha){
   var click = fecha ? ' onclick="abrirCalModal(\''+emp.code+'\',\''+fecha+'\')" title="Ver el detalle del día"' : '';
   return '<div class="kperson'+(fecha?' kperson-click':'')+'"'+click+'>'+
     avatarEmp(emp)+
-    '<div class="kp-info"><div class="kp-name">'+nombre+'</div><div class="kp-sub">'+sub+'</div></div>'+
+    '<div class="kp-info"><div class="kp-name">'+nombre+'</div><div class="kp-sub" title="'+esc(sub)+'">'+sub+'</div></div>'+
     '<div class="kp-detail">'+(detalle||'')+'</div></div>';
 }
 function calFillCard(listId, countId, items){

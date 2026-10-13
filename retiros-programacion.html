@@ -173,6 +173,12 @@ tr.gtot td{background:var(--bg-surface);font-weight:700;border-top:2px solid var
         font-weight:600;white-space:nowrap}
 /* La glosa lleva explicación al pasar el mouse: el punteado avisa que hay algo que leer */
 .tag-sd.glosa{cursor:help;border-bottom:1px dotted currentColor}
+/* lista de los retiros que entraron por el margen del cruce */
+.rec-lista{display:flex;flex-wrap:wrap;gap:5px;margin-top:.5rem}
+.rec-lista .tag-rec{font-size:10.5px;padding:2px 7px;border-radius:5px;cursor:help;
+  background:var(--bg-input);border:1px solid var(--border-md);color:var(--text-sec);
+  font-family:'JetBrains Mono',monospace;white-space:nowrap}
+.rec-pie{font-size:10.5px;color:var(--text-muted);margin-top:.45rem}
 
 .empty{padding:2.4rem 1rem;text-align:center;color:var(--text-muted);font-size:13px}
 .empty i{font-size:30px;display:block;margin-bottom:.5rem;opacity:.5}
@@ -1598,17 +1604,26 @@ function pintarMios(){
   $('n-mios').textContent=rows.length;
   var pal=rows.reduce(function(s,r){ return s+Number(r.cantidad||0); },0);
   var dis=rows.reduce(function(s,r){ return s+Number(r.dispersos||0); },0);
+  // Oficina ve los registros de TODOS, no solo los propios: para ellos la
+  // columna del ejecutivo es la que da sentido a la lista. Para un ejecutivo
+  // sobra, porque todas las filas serían él.
+  var verEje = YO.oficina;
   $('m-kpis').innerHTML=
     kpi(rows.length,'Retiros')+kpi(num(pal),'Pallets retiro','r')+kpi(num(dis),'Dispersos','w')+
-    kpi(new Set(rows.map(function(r){return r.clave;})).size,'Recintos');
-  if(!rows.length){ $('m-area').innerHTML=vacio('Todavía no tienes retiros registrados en este rango.','clipboard'); return; }
+    kpi(new Set(rows.map(function(r){return r.clave;})).size,'Recintos')+
+    (verEje?kpi(new Set(rows.map(ejecutivoDe)).size,'Ejecutivos'):'');
+  if(!rows.length){ $('m-area').innerHTML=vacio(verEje
+      ? 'No hay retiros registrados en este rango.'
+      : 'Todavía no tienes retiros registrados en este rango.','clipboard'); return; }
   var h='<div class="tbl-wrap sticky1"><table><thead><tr>'+
-    '<th>Fecha</th><th>Hor.</th><th>Recinto</th><th class="num">Retiro</th><th class="num">Disp.</th>'+
+    '<th>Fecha</th><th>Hor.</th><th>Recinto</th>'+(verEje?'<th>Ejecutivo</th>':'')+
+    '<th class="num">Retiro</th><th class="num">Disp.</th>'+
     '<th>Planta</th><th>Zona</th><th>Obs.</th><th></th></tr></thead><tbody>';
   rows.forEach(function(r){
     h+='<tr><td class="mono">'+esc(fmtCorta(r.fecha_retiro))+'</td>'+
       '<td><span class="badge '+(r.horario||'').toLowerCase()+'">'+esc(r.horario||'')+'</span></td>'+
       '<td>'+esc(r.recinto)+(r.editado?' <span class="tag-sd">editado</span>':'')+marcaOrigen(r)+'</td>'+
+      (verEje?'<td style="font-size:11.5px">'+esc(ejecutivoDe(r))+'</td>':'')+
       '<td class="num" style="font-weight:600">'+num(r.cantidad)+'</td>'+
       '<td class="num">'+num(r.dispersos)+'</td>'+
       '<td style="font-size:11.5px">'+esc(r.planta||'')+'</td>'+
@@ -2399,17 +2414,17 @@ async function correrCruce(){
     if(!r.ok) throw new Error('RDTOut respondió HTTP '+r.status);
     var raw=await r.json();
     var ops=(Array.isArray(raw)?raw:(raw.data||raw.result||raw.operaciones||[])).filter(esRetiro);
-    var dentro=[], recuperados=0, fuera=0, fueraOps=[], sinFecha=0;
+    var dentro=[], recuperados=0, fuera=0, fueraOps=[], recOps=[], sinFecha=0;
     ops.forEach(function(o){
       var f=fechaDeOp(o);
       if(!f){ sinFecha++; return; }
       if(f<d1||f>d2){ fuera++; o.__f=f; fueraOps.push(o); return; }
       // vino gracias al margen: su fechaRequerida caía fuera del rango pedido
       var req=aISO(o.fechaRequerida);
-      if(req && (req<d1||req>d2)) recuperados++;
+      if(req && (req<d1||req>d2)){ recuperados++; o.__req=req; o.__conf=f; recOps.push(o); }
       dentro.push(o);
     });
-    CRUCE={ d1:d1, d2:d2, prog:prog, ops:dentro, progFuera:progFuera, fueraOps:fueraOps,
+    CRUCE={ d1:d1, d2:d2, prog:prog, ops:dentro, progFuera:progFuera, fueraOps:fueraOps, recOps:recOps,
             ventana:{a1:a1,a2:a2}, recuperados:recuperados, fuera:fuera,
             sinFecha:sinFecha, crudas:ops.length };
     pintarCruce();
@@ -2603,10 +2618,31 @@ function pintarCruce(){
     (anuladas?' ('+anuladas+' en el período)':'')+
     (internos?'. Se dejaron fuera '+internos+' retiro'+(internos>1?'s':'')+' interno'+(internos>1?'s':'')+
       ' entre bodegas REDTEC, que no son retiros a retail':'')+'.</span></div>';
-  if(CRUCE.recuperados) av+='<div class="aviso i"><i class="ti ti-arrow-back-up"></i><span>'+
-    '<b>'+CRUCE.recuperados+' retiro'+(CRUCE.recuperados>1?'s':'')+' entró gracias al margen de ±'+
-    BUFFER_CRUCE+' días.</b> RDTOut los devuelve por fecha requerida, pero se confirmaron dentro del período: '+
-    'pedir justo el rango los dejaba fuera y el recinto aparecía como «sin confirmar».</span></div>';
+  // No basta con decir cuántos: si alguien pregunta "¿cuáles?" hay que poder
+  // nombrarlos. Se listan recinto, pedido y las dos fechas que no coinciden,
+  // que es exactamente lo que se necesita para ir a buscarlos a RDTOut.
+  if(CRUCE.recuperados){
+    var rec=(CRUCE.recOps||[]).map(function(o){
+      var cal=calzar(contraparteBodega(o));
+      return { rec:(cal?cal.recinto:contraparteBodega(o))||'—', nro:(o.nroPedido!=null?String(o.nroPedido):'—'),
+               req:o.__req, conf:o.__conf, cant:Number(o.cantidadConfirmada||0) };
+    }).sort(function(a,b){ return a.conf<b.conf?-1:(a.conf>b.conf?1:0); });
+    var lista=rec.map(function(x){
+      return '<span class="tag-rec" title="Pedido '+esc(x.nro)+' · '+num(x.cant)+' pallets'+
+             '\nRequerida '+esc(fmtCorta(x.req))+' (fuera del rango)'+
+             '\nConfirmada '+esc(fmtCorta(x.conf))+' (dentro del rango)">'+
+             esc(x.rec)+' · pedido '+esc(x.nro)+' · '+esc(fmtCorta(x.req))+' → '+esc(fmtCorta(x.conf))+'</span>';
+    }).join('');
+    av+='<div class="aviso i"><i class="ti ti-arrow-back-up"></i><span>'+
+      '<b>'+CRUCE.recuperados+' retiro'+(CRUCE.recuperados>1?'s':'')+' entró gracias al margen de ±'+
+      BUFFER_CRUCE+' días.</b> RDTOut los devuelve por fecha requerida, pero se confirmaron dentro del período: '+
+      'pedir justo el rango los dejaba fuera y el recinto aparecía como «sin confirmar». '+
+      'Se cuentan igual porque el camión sí retiró dentro del período.'+
+      '<div class="rec-lista">'+lista+'</div>'+
+      '<div class="rec-pie">Cada uno muestra <b>fecha requerida → fecha de confirmación</b>. '+
+      'La primera es la que puso quien creó el pedido; la segunda, cuando el camión retiró.</div>'+
+      '</span></div>';
+  }
   if(nSinCalce) av+='<div class="aviso w"><i class="ti ti-unlink"></i><span><b>'+nSinCalce+
     ' bodega'+(nSinCalce>1?'s':'')+' de RDTOut ('+num(palSinCalce)+' pallets) no calzó con ningún recinto del catálogo</b> '+
     'y no entró en la comparación por recinto — sí está en el total confirmado. '+

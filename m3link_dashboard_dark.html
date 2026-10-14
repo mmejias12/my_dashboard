@@ -1205,7 +1205,16 @@ function _desplazarDias(fechaStr, dias){
 /* Decide si un registro pertenece al periodo [d1,d2] que se está mostrando. */
 function _perteneceAlPeriodo(r, d1, d2){
   var op = (r.operacion || '').trim().toLowerCase();
-  if (op === 'retiro') {
+  /* POR PREFIJO, no por ===. Las cajas de resumen y el Excel suman los retiros
+     con indexOf('retiro')===0, así que comparar acá con igualdad exacta dejaba
+     filtro y total midiendo cosas distintas: un "Retiro LD" o un "Retiro CD
+     Retail" se habría filtrado por fecha REQUERIDA y sumado como retiro, que
+     se cuentan por fecha de CONFIRMACIÓN. Hoy no cambia ningún número —
+     medido el 14-10-2026, la única operación con ese prefijo es "Retiro"—
+     pero es exactamente el defecto de === que ya costó un bug en el semáforo
+     gerencial. Filtro y suma tienen que usar el mismo criterio o no se puede
+     explicar una cifra. */
+  if (op.indexOf('retiro') === 0) {
     // Retiro confirmado: cuenta si la fecha de confirmación cae en el rango.
     if (r.fechaConfirmacion) return _enRango(r.fechaConfirmacion, d1, d2);
     // Retiro pendiente (sin confirmar): se sigue mostrando si fue requerido en el rango.

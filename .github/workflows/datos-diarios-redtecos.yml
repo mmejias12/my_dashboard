@@ -19,7 +19,26 @@ on:
     # Tres intentos por redundancia (Actions a veces atrasa o se salta un cron);
     # con que corra UNO antes de la reunión de la mañana, queda todo fresco.
     - cron: '20 8,10,12 * * *'
-  workflow_dispatch: {}   # permite ejecutarlo a mano desde la pestaña Actions
+  # A mano desde la pestaña Actions. Los tres campos van VACÍOS en una corrida
+  # normal; sirven para REPARAR un rango de operaciones sin tocar el resto, que
+  # es lo que hubo que hacer con los días que el backfill dejó incompletos antes
+  # de que existiera el margen de entrada (ver el encabezado de
+  # backfill/backfill-operaciones.js).
+  workflow_dispatch:
+    inputs:
+      ops_desde:
+        description: 'Operaciones · desde (AAAA-MM-DD). Vacío = ventana diaria de 45 días'
+        required: false
+        default: ''
+      ops_hasta:
+        description: 'Operaciones · hasta (AAAA-MM-DD). Vacío = ayer'
+        required: false
+        default: ''
+      solo_operaciones:
+        description: 'Correr SÓLO el paso de operaciones (reparación: no toca stock, pallet ni rollups)'
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: datos-diarios-redtecos
@@ -49,15 +68,34 @@ jobs:
 
       - name: Calcular fechas (zona Chile)
         id: f
+        # Las fechas que vienen del formulario entran por env y se validan antes
+        # de escribirlas: lo que llega de un input no se interpola suelto dentro
+        # de un run.
+        env:
+          IN_DESDE: ${{ inputs.ops_desde }}
+          IN_HASTA: ${{ inputs.ops_hasta }}
         run: |
-          echo "ayer=$(TZ=America/Santiago date -d 'yesterday' +%F)" >> "$GITHUB_OUTPUT"
-          echo "desde45=$(TZ=America/Santiago date -d '45 days ago' +%F)" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          iso='^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+          for v in "${IN_DESDE:-}" "${IN_HASTA:-}"; do
+            if [ -n "$v" ] && ! [[ $v =~ $iso ]]; then
+              echo "::error::fecha inválida '$v' — se espera AAAA-MM-DD"; exit 1
+            fi
+          done
+          AYER=$(TZ=America/Santiago date -d 'yesterday' +%F)
+          D45=$(TZ=America/Santiago date -d '45 days ago' +%F)
+          echo "ayer=$AYER" >> "$GITHUB_OUTPUT"
+          echo "desde45=$D45" >> "$GITHUB_OUTPUT"
           echo "desde10=$(TZ=America/Santiago date -d '10 days ago' +%F)" >> "$GITHUB_OUTPUT"
+          echo "opsDesde=${IN_DESDE:-$D45}" >> "$GITHUB_OUTPUT"
+          echo "opsHasta=${IN_HASTA:-$AYER}" >> "$GITHUB_OUTPUT"
 
       - name: 1) Backfill pallet (ventana 45 días → ayer)
+        if: ${{ inputs.solo_operaciones != true }}
         run: node backfill/backfill.js ${{ steps.f.outputs.desde45 }} ${{ steps.f.outputs.ayer }}
 
       - name: 2) Backfill stock / pool (últimos días → ayer)
+        if: ${{ inputs.solo_operaciones != true }}
         run: node backfill/backfill-stock.js ${{ steps.f.outputs.desde10 }}
 
       # Operaciones del pool DIRECTO desde Redlink (API portal, Keycloak), en
@@ -69,9 +107,10 @@ jobs:
           REDLINK_USER:          ${{ secrets.REDLINK_USER }}
           REDLINK_PASS:          ${{ secrets.REDLINK_PASS }}
           REDLINK_CLIENT_SECRET: ${{ secrets.REDLINK_CLIENT_SECRET }}
-        run: node backfill/backfill-operaciones.js ${{ steps.f.outputs.desde45 }} ${{ steps.f.outputs.ayer }}
+        run: node backfill/backfill-operaciones.js ${{ steps.f.outputs.opsDesde }} ${{ steps.f.outputs.opsHasta }}
 
       - name: 3) Rollup histórico (resumen/operaciones.json)
+        if: ${{ inputs.solo_operaciones != true }}
         run: node scripts/rollup-operaciones.js ${{ steps.f.outputs.ayer }}
 
       # El rollup de arriba resume por mes y planta, pero BOTA el desglose por
@@ -80,6 +119,7 @@ jobs:
       # cae a consultar en vivo y se pega: medido el 17-09, a 90 días RDTOut ya
       # responde 502 por timeout y a 365 devuelve 400.
       - name: 3b) Rollup por contraparte (resumen/contrapartes.json)
+        if: ${{ inputs.solo_operaciones != true }}
         run: node scripts/rollup-contrapartes.js ${{ steps.f.outputs.ayer }}
 
       # La serie DIARIA que consume el tablero OPERACIONES REDTEC. Son seis
@@ -88,6 +128,7 @@ jobs:
       # preguntar. Ésa es la diferencia con la consulta que se caía: pedirle 12
       # meses de crudo a RDTOut devuelve 400, y a 90 días ya responde 502.
       - name: 3c) Rollup diario (resumen/diario.json)
+        if: ${{ inputs.solo_operaciones != true }}
         run: node scripts/rollup-diario.js ${{ steps.f.outputs.ayer }}
 
       # Índice de transferencias: despachado vs confirmado, etapas y el par
@@ -95,9 +136,11 @@ jobs:
       # diarios: ésos se congelan a los 45 días y pierden las confirmaciones
       # tardías (medido: 3.374 pallets sólo en Walmart a 12 meses).
       - name: 3d) Rollup de transferencias (resumen/transferencias.json)
+        if: ${{ inputs.solo_operaciones != true }}
         run: node scripts/rollup-transferencias.js
 
       - name: 4) Refrescar snapshot (semana en curso / flota / asistencia / stock)
+        if: ${{ inputs.solo_operaciones != true }}
         env:
           INGESTA_URL: ${{ secrets.INGESTA_URL }}
           OS_INGESTA_KEY: ${{ secrets.OS_INGESTA_KEY }}

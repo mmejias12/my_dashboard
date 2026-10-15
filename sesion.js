@@ -14,8 +14,18 @@
  *
  *  QUÉ HACE
  *    1. Envuelve window.fetch y reconoce esa respuesta: HTML donde se pidió
- *       JSON, o un 401/403 directo. Cuando pasa, levanta el velo y lleva al
+ *       JSON, o un 401 directo. Cuando pasa, levanta el velo y lleva al
  *       usuario a la pantalla de bienvenida en vez de dejar el error crudo.
+ *
+ *  401 NO ES LO MISMO QUE 403, y tratarlos igual costaba caro. 401 es "esta
+ *  sesión no sirve". 403 es "la sesión está perfecta, pero tu rol no alcanza",
+ *  y lo devuelven nuestras propias Functions con un JSON {error:'...'}. Al
+ *  cerrar también con 403, a quien le faltaba un rol se le decía "tu sesión
+ *  expiró" y se le mandaba al login: perdía la pantalla y, peor, el motivo
+ *  real — nadie podía adivinar qué rol pedirle al administrador. Ahora un 403
+ *  con JSON deja pasar la respuesta (la vista muestra su propio mensaje) y
+ *  aparece un aviso al costado; sólo se cierra si el 403 llega como HTML, que
+ *  ahí sí es el login disfrazado.
  *    2. Cierra por inactividad, con aviso dos minutos antes. Cualquier
  *       movimiento lo cancela.
  *
@@ -134,6 +144,30 @@
     }, 2100);
   }
 
+  /* Falta de permiso: ni velo ni redirección. La vista sigue viva y el
+     usuario se entera de por qué le falta un pedazo. Uno por página. */
+  var avisoPermisoPuesto = false;
+
+  function avisoPermiso() {
+    if (avisoPermisoPuesto || cayendo) return;
+    avisoPermisoPuesto = true;
+    var d = document.createElement('div');
+    d.id = 'm3l-sin-permiso';
+    d.setAttribute('role', 'status');
+    d.style.cssText =
+      'position:fixed;right:18px;bottom:18px;z-index:2147483646;max-width:340px;' +
+      'background:#171B24;border:1px solid rgba(224,43,32,.45);border-left:3px solid #E02B20;' +
+      'border-radius:10px;padding:13px 16px;color:#fff;font-size:13px;line-height:1.5;' +
+      'font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;' +
+      'box-shadow:0 14px 40px rgba(0,0,0,.55)';
+    d.innerHTML =
+      '<b style="color:#ff8a80">Tu cuenta no tiene permiso para esta parte</b><br>' +
+      'Tu sesión está bien: es el rol el que no alcanza. ' +
+      '<span style="color:#AEB6C4">Pídele el rol al administrador del portal.</span>';
+    (document.body || document.documentElement).appendChild(d);
+    setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 12000);
+  }
+
   /* ---------------------------------------------------------------------- *
    *  1. La respuesta que en realidad era el login
    * ---------------------------------------------------------------------- */
@@ -145,14 +179,25 @@
     } catch (e) { return false; }
   }
 
+  function esHtml(r) {
+    var ct = (r.headers.get('content-type') || '').toLowerCase();
+    return ct.indexOf('text/html') >= 0;
+  }
+
   function sesionCaida(r, url) {
     if (!esNuestroApi(url)) return false;
-    if (r.status === 401 || r.status === 403) return true;
+    if (r.status === 401) return true;              // la sesión no sirve
     // Se exige text/html explícito. Un 204 sin cuerpo (uso-registro), una
     // imagen (spotvision-evidencia) o un JSON normal no entran acá: sólo el
     // HTML del login, que es justo lo que rompe el r.json() de las vistas.
-    var ct = (r.headers.get('content-type') || '').toLowerCase();
-    return ct.indexOf('text/html') >= 0;
+    // Un 403 cae acá igual que cualquier otro estado: sólo cierra si llegó
+    // disfrazado de página de login.
+    return esHtml(r);
+  }
+
+  /* 403 nuestro, con cuerpo JSON: el rol no alcanza. La sesión está viva. */
+  function permisoDenegado(r, url) {
+    return esNuestroApi(url) && r.status === 403 && !esHtml(r);
   }
 
   var fetchOriginal = window.fetch;
@@ -163,6 +208,7 @@
           var url = (typeof entrada === 'string') ? entrada
                   : (entrada && entrada.url) ? entrada.url : '';
           if (sesionCaida(r, url)) cerrar(MODO === 'reconectar' ? 'reconectar' : 'expirada');
+          else if (permisoDenegado(r, url)) avisoPermiso();
         } catch (e) { /* nunca romper el fetch de la vista */ }
         // Se devuelve la respuesta tal cual. La vista va a fallar igual al
         // parsearla, pero su mensaje de error queda detrás del velo: no se

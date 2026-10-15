@@ -1,0 +1,90 @@
+name: Operaciones intradía (Redlink → Blob)
+
+# POR QUÉ EXISTE
+#   La cola viva de api/ops le pide a Redlink los últimos COLD_LIVE_DIAS días,
+#   y Redlink filtra por horaIngreso: o sea sólo refresca operaciones INGRESADAS
+#   en esos días. Como el 92% de las emisiones se programa con anticipación (de
+#   3 a 30 días, medido el 14-10-2026 sobre 3.052 operaciones), la confirmación
+#   de una emisión programada NO la ve la cola viva: hay que esperar a que el
+#   backfill reescriba el blob del día.
+#
+#   Medido el 15-10-2026 sobre las 6 emisiones del 14-oct: las 3 ingresadas ese
+#   mismo día calzaban al pallet con Redlink; las 3 ingresadas el 2-oct salían
+#   "Por Confirmar" en 0 cuando Redlink ya las daba cerradas con 540, 540 y 252.
+#   El tablero mostraba 442 y correspondían 1.774.
+#
+#   Con el backfill nocturno solo, ese atraso dura hasta la madrugada siguiente.
+#   Esta corrida lo baja a unas pocas horas reescribiendo la última semana
+#   varias veces durante el día.
+#
+# QUÉ NO HACE
+#   Sólo toca el contenedor de operaciones. No corre el backfill de pallet ni el
+#   de stock, no regenera ningún rollup y no refresca el snapshot del asistente:
+#   de eso sigue encargándose "Datos diarios REDTEC OS" de madrugada.
+#
+# CONCURRENCIA
+#   Comparte el grupo con el workflow nocturno A PROPÓSITO. Los dos escriben los
+#   mismos blobs, así que si se cruzan tienen que hacer fila, no correr juntos.
+#
+# Secrets necesarios (ya existen en el repo):
+#   OS_STORAGE_CONN · REDLINK_USER · REDLINK_PASS · REDLINK_CLIENT_SECRET
+
+on:
+  schedule:
+    # Horas en UTC. Chile es UTC-3 en horario de verano, así que esto cae
+    # ~08:35 / 11:35 / 14:35 / 17:35 / 20:35 hora de Chile: la jornada cubierta
+    # cada tres horas. El minuto 35 es a propósito — a las en punto Actions se
+    # congestiona y atrasa las corridas.
+    - cron: '35 11,14,17,20,23 * * *'
+  workflow_dispatch:
+    inputs:
+      dias_atras:
+        description: 'Cuántos días hacia atrás reescribir (por omisión 7)'
+        required: false
+        default: ''
+
+concurrency:
+  group: datos-diarios-redtecos
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  operaciones:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Instalar dependencia de Azure Blob
+        run: npm install @azure/storage-blob@^12 --no-save
+
+      - name: Calcular ventana (zona Chile)
+        id: f
+        env:
+          IN_DIAS: ${{ inputs.dias_atras }}
+        run: |
+          set -euo pipefail
+          DIAS="${IN_DIAS:-7}"
+          if ! [[ $DIAS =~ ^[0-9]{1,3}$ ]] || [ "$DIAS" -lt 1 ]; then
+            echo "::error::dias_atras inválido '$DIAS' — se espera un entero de 1 a 999"; exit 1
+          fi
+          # HASTA es HOY, no ayer: el blob del día en curso también tiene que
+          # quedar escrito, si no lo único que lo sostiene es la cola viva.
+          echo "desde=$(TZ=America/Santiago date -d "$DIAS days ago" +%F)" >> "$GITHUB_OUTPUT"
+          echo "hasta=$(TZ=America/Santiago date +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: Operaciones del pool (Redlink → Blob)
+        env:
+          OS_STORAGE_CONN:       ${{ secrets.OS_STORAGE_CONN }}
+          REDLINK_USER:          ${{ secrets.REDLINK_USER }}
+          REDLINK_PASS:          ${{ secrets.REDLINK_PASS }}
+          REDLINK_CLIENT_SECRET: ${{ secrets.REDLINK_CLIENT_SECRET }}
+        run: node backfill/backfill-operaciones.js ${{ steps.f.outputs.desde }} ${{ steps.f.outputs.hasta }}

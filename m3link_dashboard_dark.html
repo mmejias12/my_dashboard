@@ -139,6 +139,10 @@
      trae display:flex !important y el style.display="none" en línea nunca le
      ganó: la búsqueda abría el grupo entero en vez de dejar la coincidencia. */
   .s-item.s-oculto, .s-label.s-oculto { display:none !important; }
+  /* Fuera del alcance del rol. Va en una clase APARTE de .s-oculto porque esa
+     la repinta el buscador en cada tecla: si compartieran clase, escribir algo
+     y borrarlo devolvia los items que el rol no debe ver. */
+  .s-item.rol-oculto { display:none !important; }
   .s-item i { font-size:13px;opacity:.7; }
   .s-item:hover { background:var(--bg-hover);color:var(--text-primary); }
   .s-item.active { color:var(--accent);background:var(--bg-active);font-weight:500; }
@@ -1396,6 +1400,9 @@ function filterSidebar(q) {
     var items = subs[si].querySelectorAll('.s-item');
     var anyVisible = false;
     for (var i = 0; i < items.length; i++) {
+      /* Un item fuera del alcance del rol no se busca ni cuenta: si no,
+         buscarlo por nombre abria el grupo con una lista vacia debajo. */
+      if (items[i].classList.contains('rol-oculto')) continue;
       var calza = items[i].textContent.toLowerCase().indexOf(q) >= 0;
       items[i].classList.toggle('s-oculto', !calza);
       if (calza) anyVisible = true;
@@ -2849,6 +2856,7 @@ function exportXLSX() {
           stocks:'stock', stocksap:'stock', sap:'stock',
           transporte:'transportes', transportista:'transportes', transportes:'transportes',
           loginversa:'logistica', logisticainversa:'logistica', inversa:'logistica',
+          retiro:'retiros', retirosretail:'retiros', programacionretiros:'retiros',
           logistico:'logistica', logisticos:'logistica',
           comercia:'comercial', comerciales:'comercial',
           gerencial:'gerencia', gerente:'gerencia',
@@ -2863,7 +2871,9 @@ function exportXLSX() {
         function hasRole(r){ return roles.indexOf(r) >= 0; }
         var GROUP_ROLES = {
           'g-comercial':   ['comercial'],
-          'g-logistica':   ['logistica'],
+          // "retiros" entra al grupo, pero solo a la pagina que le toca:
+          // el recorte fino lo hace ITEM_ROLES mas abajo.
+          'g-logistica':   ['logistica','retiros'],
           'g-operaciones': ['operaciones'],
           'g-gerencia':    ['gerencia'],
           'g-finanzas':    ['finanzas'],
@@ -2873,7 +2883,7 @@ function exportXLSX() {
           'g-trans':       ['transportes'],
           'g-rrhh':        ['rrhh']
         };
-        var SCOPED = ['comercial','logistica','operaciones','gerencia','finanzas','stock','transportes','rrhh'];
+        var SCOPED = ['comercial','logistica','operaciones','gerencia','finanzas','stock','transportes','rrhh','retiros'];
         var isScoped = SCOPED.some(hasRole) && !hasRole('admin') && !hasRole('interno');
         if (isScoped) {
           var ocultos = [];
@@ -2889,8 +2899,52 @@ function exportXLSX() {
               }
             }
           });
+          /* ===== Roles que ven SOLO ciertas paginas dentro de su grupo =====
+             "retiros" son los ejecutivos de terreno de logistica inversa:
+             entran a registrar su retiro y nada mas. Se les deja ademas el
+             favorito de Ops x rango fechas para consultar el movimiento.
+             Un rol de area completo (logistica) NO lleva lista y ve todo su
+             grupo; si alguien junta los dos roles, manda el de area. */
+          var ITEM_ROLES = { 'retiros': ['retiros-programacion.html', '?vista=ops'] };
+          function hrefNorm(h){ return String(h || '').replace(/^\//, ''); }
+          /* El recorte se decide GRUPO POR GRUPO, segun que rol le abrio la
+             puerta a ese grupo: si todos los roles que lo abren traen lista,
+             manda la union de esas listas; si alguno es rol de area completo,
+             el grupo va entero. Asi "retiros"+"stock" deja Logistica inversa
+             acotada a lo suyo y Stock SAP completo, en vez de abrir las dos. */
+          function itemsDelGrupo(gid) {
+            var abren = (GROUP_ROLES[gid] || []).filter(hasRole);
+            if (!abren.length) return null;
+            if (abren.some(function(r){ return !ITEM_ROLES[r]; })) return null;
+            return abren.reduce(function(a, r){ return a.concat(ITEM_ROLES[r]); }, []).map(hrefNorm);
+          }
+          {
+            document.querySelectorAll('.s-sub').forEach(function(sub){
+              if (ocultos.indexOf(sub.id) >= 0) return;
+              var permitidos = itemsDelGrupo(sub.id);
+              if (!permitidos) return;
+              var vivos = 0;
+              sub.querySelectorAll('.s-item').forEach(function(it){
+                var h = hrefNorm(it.getAttribute('href'));
+                /* sin href son los "proximamente": tampoco van */
+                if (!h || permitidos.indexOf(h) < 0) it.classList.add('rol-oculto');
+                else vivos++;
+              });
+              /* Un grupo al que no le quedo ningun item no tiene por que
+                 seguir encabezando una lista vacia. */
+              if (!vivos) {
+                ocultos.push(sub.id);
+                sub.style.display = 'none';
+                var hv = sub.previousElementSibling;
+                if (hv && hv.classList.contains('s-hdr')) hv.style.display = 'none';
+              }
+            });
+          }
+
           /* El buscador del sidebar repinta todas las cabeceras. Sin esta
-             lista, escribir algo y borrarlo devolvía el menú completo. */
+             lista, escribir algo y borrarlo devolvía el menú completo.
+             OJO: se asigna DESPUES del recorte por item, porque ese paso
+             puede dejar grupos sin nada y agregarlos a la lista. */
           window.GRUPOS_OCULTOS = ocultos;
 
           /* Los FAVORITOS de arriba son atajos fijos a módulos de distintas
@@ -2902,6 +2956,7 @@ function exportXLSX() {
           document.querySelectorAll('.s-sub').forEach(function(sub){
             if (ocultos.indexOf(sub.id) >= 0) return;
             sub.querySelectorAll('a.s-item').forEach(function(a){
+              if (a.classList.contains('rol-oculto')) return;
               visibles[a.getAttribute('href')] = true;
             });
           });

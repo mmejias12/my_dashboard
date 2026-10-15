@@ -1028,6 +1028,7 @@
           <option value="transfer">Transferencias</option>
           <option value="relocaliz">Relocalizaciones</option>
           <option value="devoluci">Devoluciones</option>
+          <option value="reparacion">Retiro reparación (fuera del pool)</option>
         </select>
         <input type="text" class="search-input" id="search" placeholder="Buscar cliente, pedido..." oninput="applyFilters()">
       </div>
@@ -1202,6 +1203,31 @@ function _desplazarDias(fechaStr, dias){
   var d = String(dt.getUTCDate()).padStart(2, '0');
   return y + '-' + m + '-' + d;
 }
+/* ═══ "Retiro - Reparacion" NO es retiro del pool rojo ═══
+   Era una línea de negocio de la época: el cliente traía SUS PROPIOS pallets
+   —tradicionales, sin pintar, ajenos al pool— y REDTEC se los reparaba. No
+   salió a cuenta y se discontinuó. No mueve la base de los rojos, así que no
+   entra en ninguna cifra del pool.
+   El nombre empieza con "retiro", así que el prefijo solo lo arrastraba. Medido
+   en junio 2024: Retiro 77.063 + Retiro - Reparacion 13.778 = los 90.841 que
+   esta vista mostraba, contra los 77.063 de SAP y de Operaciones REDTEC. En
+   2024 completo son 205.043 pallets de más. Aparece de ago-2023 a may-2025 y en
+   dic-2025; en 2026 ya no existe, y por eso el descuadre sólo se veía en los
+   años viejos.
+   api/shared/movimientos.js ya lo resuelve así (evalúa 'reparacion' ANTES que
+   'retiros'): por eso Operaciones REDTEC y el Circuito del pool siempre
+   estuvieron en el número de SAP y esta vista no. */
+function esReparacion(op) {
+  return String(op || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                         .toLowerCase().indexOf('reparacion') >= 0;
+}
+/* Retiro del pool: prefijo 'retiro' Y que no sea reparación. Se usa en TODOS
+   los lugares que cuentan, filtran o etiquetan retiros, para que no se vuelvan
+   a separar entre sí. */
+function esRetiroPool(op) {
+  return String(op || '').trim().toLowerCase().indexOf('retiro') === 0 && !esReparacion(op);
+}
+
 /* Decide si un registro pertenece al periodo [d1,d2] que se está mostrando. */
 function _perteneceAlPeriodo(r, d1, d2){
   var op = (r.operacion || '').trim().toLowerCase();
@@ -1214,7 +1240,7 @@ function _perteneceAlPeriodo(r, d1, d2){
      pero es exactamente el defecto de === que ya costó un bug en el semáforo
      gerencial. Filtro y suma tienen que usar el mismo criterio o no se puede
      explicar una cifra. */
-  if (op.indexOf('retiro') === 0) {
+  if (esRetiroPool(op)) {
     // Retiro confirmado: cuenta si la fecha de confirmación cae en el rango.
     if (r.fechaConfirmacion) return _enRango(r.fechaConfirmacion, d1, d2);
     // Retiro pendiente (sin confirmar): se sigue mostrando si fue requerido en el rango.
@@ -1885,7 +1911,7 @@ function _pintarPeriodo(datos, deMemoria, tsMemoria) {
     for(var _i=0;_i<raw.length;_i++){
       var _op=(raw[_i].operacion||'').toLowerCase();
       if(_op.indexOf('emision')===0) _em++;
-      if(_op.trim()==='retiro') _ret++;
+      if(esRetiroPool(_op)) _ret++;
     }
     window.agData(_em + ' em · ' + _ret + ' ret · ' + raw.length + ' reg.');
   }
@@ -1905,7 +1931,7 @@ function updateStats() {
     var op = (raw[i].operacion||'').trim().toLowerCase();
     var et = (raw[i].etapaOperacion||'').toLowerCase();
     if (op.indexOf('emision')===0)  em++;
-    if (op.indexOf('retiro')===0)   ret++;
+    if (esRetiroPool(op))           ret++;
     if (op.indexOf('transfer')===0 || op.indexOf('trans diferenciada')===0) tra++;
     if (op.indexOf('devolucion')===0) dev++;
     if (op.indexOf('relocaliz')===0)  rel++;
@@ -1913,7 +1939,7 @@ function updateStats() {
     // cant confirmada por tipo
     var conf_i = raw[i].cantidadConfirmada || 0;
     if (op.indexOf('emision')===0)    emConf  += conf_i;
-    if (op.indexOf('retiro')===0)     retConf += conf_i;
+    if (esRetiroPool(op))             retConf += conf_i;
     if (op.indexOf('transfer')===0 || op.indexOf('trans diferenciada')===0) traConf2 += conf_i;
     if (op.indexOf('devolucion')===0) devConf += conf_i;
     if (op.indexOf('relocaliz')===0)  relConf += conf_i;
@@ -1986,7 +2012,7 @@ function updateStats() {
   var d1val = document.getElementById('d1').value;
   var d2val = document.getElementById('d2').value;
   for (var i=0;i<raw.length;i++) {
-    if ((raw[i].operacion||'').trim().toLowerCase() === 'retiro') {
+    if (esRetiroPool(raw[i].operacion)) {
       var conf = (raw[i].cantidadConfirmada || 0);
       retCant += conf;
       // Desglose por bodega destino
@@ -2131,6 +2157,12 @@ function applyFilters() {
       mS = true;
     } else if (sel === 'transfer') {
       mS = opLow.indexOf('transfer') === 0 || opLow.indexOf('trans diferenciada') === 0;
+    } else if (sel === 'retiro') {
+      // Sin la reparación, igual que las cajas de arriba: filtro y total no se
+      // pueden separar o no hay forma de explicar una cifra.
+      mS = esRetiroPool(r.operacion);
+    } else if (sel === 'reparacion') {
+      mS = esReparacion(r.operacion);
     } else {
       mS = opLow.indexOf(sel) === 0;
     }
@@ -2205,6 +2237,9 @@ function opBadge(op) {
      'retiro' en la primera línea, "Emision Retiro Cliente" salía pintada con
      la chapa de RETIRO — 423 filas en seis meses etiquetadas al revés. */
   var l = op.trim().toLowerCase();
+  /* La reparación se pinta neutra: no es retiro del pool y no debe leerse como
+     tal en la grilla. */
+  if (esReparacion(op))           return '<span class="badge">'         + op + '</span>';
   if (l.indexOf('retiro')===0)    return '<span class="badge b-ret">'    + op + '</span>';
   if (l.indexOf('emision')===0)   return '<span class="badge b-em">'     + op + '</span>';
   if (l.indexOf('transfer')===0 || l.indexOf('trans diferenciada')===0)

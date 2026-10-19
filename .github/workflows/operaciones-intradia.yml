@@ -31,11 +31,21 @@ name: Operaciones intradía (Redlink → Blob)
 
 on:
   schedule:
-    # Horas en UTC. Chile es UTC-3 en horario de verano, así que esto cae
-    # ~08:35 / 11:35 / 14:35 / 17:35 / 20:35 hora de Chile: la jornada cubierta
-    # cada tres horas. El minuto 35 es a propósito — a las en punto Actions se
-    # congestiona y atrasa las corridas.
-    - cron: '35 11,14,17,20,23 * * *'
+    # MEDIDO el 19-10-2026 sobre el historial real: con '35 11,14,17,20,23' las
+    # cinco corridas sí llegaban, pero entre 45 min y 2h45 tarde — la de las
+    # 11:35 UTC (08:35 de Chile) aterrizaba a las 14:20 UTC, o sea 11:20 de
+    # Chile. El resultado era un hueco de ~13 h, de las 22:30 a las 11:30 de
+    # Chile, en que el tablero sólo tenía la cola viva; y la cola viva, por el
+    # filtro de horaIngreso de Redlink, no refresca las emisiones programadas
+    # con anticipación. O sea el atraso que este workflow vino a arreglar
+    # volvía cada mañana.
+    #
+    # Por eso: minuto :07 y CADA DOS HORAS en vez de cada tres. Más intentos
+    # hacen que un salto no abra hueco, y la primera (09:07 UTC = 06:07 de
+    # Chile) tiene margen para aterrizar antes de que parta la jornada aunque
+    # llegue dos horas tarde. Son 8 corridas de ~2 min: ~15 min de Actions al
+    # día.
+    - cron: '7 9,11,13,15,17,19,21,23 * * *'
   workflow_dispatch:
     inputs:
       dias_atras:

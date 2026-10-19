@@ -33,13 +33,25 @@
 //   }
 // ─────────────────────────────────────────────────────────────────────────
 
-var https = require('https');
 var retencion = require('./retencion.json');
 
-// Migrado al endpoint nuevo RDTOut (controlador anterior se da de baja).
-var API_HOST = 'apirdt1.azurewebsites.net';
-var API_PATH = '/api/RDTOut/opsxrangofechas';
-var API_KEY  = process.env.REDTEC_API_KEY || 'm2s_live_ORA0CGEE3oowJ7gc2xYNqTOWmbYS8kMdD-l7hlAxvmE';
+// ORIGEN DEL MOVIMIENTO
+// Antes esta Function tenia su PROPIA llamada a apirdt1, con la llave escrita
+// en duro, asi que el interruptor OPS_ORIGEN no la tocaba: /proxy/ops podia
+// estar leyendo Redlink y el calendario seguir colgado del proveedor que se da
+// de baja antes de diciembre. Ahora pasa por shared/ops-fetch.js, la misma
+// puerta que usan api/ops, la ingesta y los rollups, asi que el origen se
+// conmuta de una sola vez para todo:
+//
+//     OPS_ORIGEN = rdt       (por omision) el API del proveedor, apirdt1
+//     OPS_ORIGEN = redlink   la API directa del portal (Holux)
+//
+// SIN CAMBIO DE COMPORTAMIENTO HOY: ops-fetch consulta el MISMO endpoint
+// (/api/RDTOut/opsxrangofechas) con los MISMOS parametros (desde/hasta) que
+// esta Function armaba a mano, asi que con OPS_ORIGEN en rdt la peticion sale
+// igual que siempre. Y el contrato de las filas es el mismo venga de donde
+// venga -- lo traduce redlink-fetch --, asi que agregar() no se toca.
+var ops = require('../shared/ops-fetch.js');
 
 // Factor de retorno del estimado calendario: % de lo DESPACHADO que
 // históricamente vuelve como retiro. Calibrado mes a mes contra inventario
@@ -107,48 +119,9 @@ function addDays(d, days) {
 
 // ─── Llamada al API M3Link ───────────────────────────────────────────────
 function fetchM3(fechaInicio, fechaFin) {
-  return new Promise(function (resolve, reject) {
-    // API nuevo RDTOut usa parámetros desde/hasta (en lugar de fechaInicial/fechaFinal)
-    var qs = '?desde=' + encodeURIComponent(fechaInicio) +
-             '&hasta=' + encodeURIComponent(fechaFin);
-    var options = {
-      host:   API_HOST,
-      path:   API_PATH + qs,
-      method: 'GET',
-      headers: {
-        'Accept':    'application/json',
-        'X-Api-Key': API_KEY
-      }
-    };
-    var req = https.request(options, function (res) {
-      var chunks = [];
-      res.on('data', function (c) { chunks.push(c); });
-      res.on('end', function () {
-        var body = Buffer.concat(chunks).toString('utf8');
-        if (res.statusCode !== 200) {
-          // Capturar el body de error para devolver mensaje útil
-          var snippet = body.substring(0, 200).replace(/\s+/g, ' ').trim();
-          return reject(new Error('API M3Link respondió ' + res.statusCode +
-            (snippet ? ' (' + snippet + ')' : '')));
-        }
-        // Validar que la respuesta sea JSON antes de parsear
-        var trimmed = body.trim();
-        if (!trimmed || (trimmed[0] !== '[' && trimmed[0] !== '{')) {
-          var snip = trimmed.substring(0, 150).replace(/\s+/g, ' ');
-          return reject(new Error('API M3Link devolvió respuesta no-JSON: "' + snip + '". ' +
-            'Probablemente el servicio backend está caído.'));
-        }
-        try {
-          resolve(JSON.parse(body));
-        } catch (e) {
-          reject(new Error('JSON inválido del API M3Link: ' + e.message));
-        }
-      });
-    });
-    req.on('error', reject);
-    req.setTimeout(120000, function () { req.destroy(new Error('Timeout API M3Link (120s)')); });
-    req.end();
-  });
+  // Se conserva el nombre para no tocar el punto de llamada ni nada mas del
+  // archivo: lo unico que cambia es de donde salen las filas.
+  return ops.consultarOps(fechaInicio, fechaFin);
 }
 
 // ─── Agregación ──────────────────────────────────────────────────────────
@@ -505,8 +478,9 @@ module.exports = async function (context, req) {
       body: {
         ok: true,
         version: 'v10-RDTOut-migration-jun-2026',
-        features: ['estimado-despachada-x-94', 'todas-las-etapas', 'trans-diferenciada', 'retiros-reales', 'retiros-confirmados-cantSolicitada', 'reversa-cantPendiente-negativa', 'cola-pendiente-fuera-rango', 'fechaDespacho-fallback', 'descarta-redtec-interno', 'RDTOut-endpoint', 'X-Api-Key-auth'],
+        features: ['estimado-despachada-x-94', 'todas-las-etapas', 'trans-diferenciada', 'retiros-reales', 'retiros-confirmados-cantSolicitada', 'reversa-cantPendiente-negativa', 'cola-pendiente-fuera-rango', 'fechaDespacho-fallback', 'descarta-redtec-interno', 'origen-conmutable-OPS_ORIGEN'],
         factorRetorno: FACTOR_RETORNO,
+        origen: ops.origenActivo(),
         timestamp: new Date().toISOString()
       }
     };

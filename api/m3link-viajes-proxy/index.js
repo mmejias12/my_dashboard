@@ -4,13 +4,35 @@
 
 const https = require('https');
 
+// ORIGEN DEL MOVIMIENTO
+// Esta Function tenia su propio fetch a apirdt1, asi que el interruptor
+// OPS_ORIGEN no la tocaba y seguia colgada del proveedor que se da de baja
+// antes de diciembre. Ahora consulta el origen activo y enruta.
+//
+// OJO, Y ES A PROPOSITO: el camino rdt se dejo INTACTO, con sus parametros
+// fechaInicial/fechaFinal, en vez de delegar en ops-fetch. Motivo medido: con
+// desde/hasta RDTOut respeta el 'desde' e ignora el 'hasta', y con
+// fechaInicial/fechaFinal ignora el rango completo (ver el encabezado de
+// shared/guias-fetch.js: un solo dia devolvio 18.679 filas de dos meses). O
+// sea los dos juegos de parametros NO devuelven el mismo conjunto. Como de
+// aca cuelgan el semaforo gerencial y transportes-pagos -- que calcula lo que
+// se le paga a los transportistas -- cambiar el conjunto de filas sin que
+// nadie lo pida seria introducir una diferencia de plata por refactor. Con
+// OPS_ORIGEN en rdt este proxy responde EXACTAMENTE lo mismo que antes; el
+// camino de Redlink queda disponible para comparar y recien entonces conmutar.
+const ops = require('../shared/ops-fetch.js');
+const RL  = require('../shared/redlink-fetch.js');
+
 const API_HOST = 'apirdt1.azurewebsites.net';
 const API_PATH = '/api/RDTOut/OpsXRangoFechas';
 const TTL_MS = 5 * 60 * 1000; // 5 minutos
 const FETCH_TIMEOUT_MS = 25000;
 
 // Cache in-memory por instancia de Function (se recicla en cold start, está OK)
-const cache = new Map(); // key = "fechaInicial_fechaFinal" → { data, timestamp }
+// La clave incluye el ORIGEN: si no, al conmutar OPS_ORIGEN la instancia
+// seguiria sirviendo hasta 5 minutos de filas del origen anterior, que es
+// justo lo que uno esta tratando de comparar.
+const cache = new Map(); // key = "origen_fechaInicial_fechaFinal" → { data, timestamp }
 
 function fetchM3Link(fechaInicial, fechaFinal, apiKey) {
   return new Promise((resolve, reject) => {
@@ -50,6 +72,17 @@ function fetchM3Link(fechaInicial, fechaFinal, apiKey) {
   });
 }
 
+// Enruta segun el origen activo. El camino rdt es el de siempre, sin tocar.
+async function traerViajes(fechaInicial, fechaFinal, apiKey, origen) {
+  if (origen === 'redlink') {
+    // Redlink SI respeta desde/hasta, y traducir() devuelve el contrato de RDT,
+    // asi que el consumidor no nota el cambio de fuente.
+    const r = await RL.consultarRedlink(fechaInicial, fechaFinal, {});
+    return r.filas;
+  }
+  return fetchM3Link(fechaInicial, fechaFinal, apiKey);
+}
+
 module.exports = async function (context, req) {
   const fechaInicial = (req.query.fechaInicial || '').trim();
   const fechaFinal = (req.query.fechaFinal || '').trim();
@@ -73,8 +106,12 @@ module.exports = async function (context, req) {
     return;
   }
 
+  const origen = ops.origenActivo();
+
+  // La llave de RDT solo hace falta en el camino rdt. Con origen redlink las
+  // credenciales las resuelve redlink-fetch, que falla cerrado por su cuenta.
   const apiKey = process.env.REDTEC_API_KEY;
-  if (!apiKey) {
+  if (origen === 'rdt' && !apiKey) {
     context.res = {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
@@ -83,7 +120,7 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const cacheKey = `${fechaInicial}_${fechaFinal}`;
+  const cacheKey = `${origen}_${fechaInicial}_${fechaFinal}`;
   const cached = cache.get(cacheKey);
   const now = Date.now();
 
@@ -96,6 +133,7 @@ module.exports = async function (context, req) {
       headers: {
         'Content-Type': 'application/json',
         'X-Cache': 'HIT',
+        'X-Ops-Origen': origen,
         'X-Cache-Age': `${ageSec}s`,
         'X-Cache-Expires-In': `${Math.floor((TTL_MS - (now - cached.timestamp)) / 1000)}s`,
         'Access-Control-Allow-Origin': '*'
@@ -110,7 +148,7 @@ module.exports = async function (context, req) {
   const t0 = Date.now();
 
   try {
-    const data = await fetchM3Link(fechaInicial, fechaFinal, apiKey);
+    const data = await traerViajes(fechaInicial, fechaFinal, apiKey, origen);
     const arr = Array.isArray(data) ? data : (data.items || data.data || []);
     const dt = Date.now() - t0;
 
@@ -129,6 +167,7 @@ module.exports = async function (context, req) {
       headers: {
         'Content-Type': 'application/json',
         'X-Cache': 'MISS',
+        'X-Ops-Origen': origen,
         'X-Upstream-Time': `${dt}ms`,
         'Access-Control-Allow-Origin': '*'
       },
@@ -146,6 +185,7 @@ module.exports = async function (context, req) {
         headers: {
           'Content-Type': 'application/json',
           'X-Cache': 'STALE',
+        'X-Ops-Origen': origen,
           'X-Cache-Age': `${ageSec}s`,
           'X-Upstream-Error': err.message,
           'Access-Control-Allow-Origin': '*'

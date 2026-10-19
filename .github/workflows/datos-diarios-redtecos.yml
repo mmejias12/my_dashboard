@@ -15,15 +15,17 @@ name: Datos diarios REDTEC OS
 
 on:
   schedule:
-    # Horas en UTC. Chile es UTC-4/-3, así que esto es ~04:20 / 06:20 / 08:20.
-    # Tres intentos por redundancia (Actions a veces atrasa o se salta un cron);
-    # con que corra UNO antes de la reunión de la mañana, queda todo fresco.
-    - cron: '20 8,10,12 * * *'
-  # A mano desde la pestaña Actions. Los tres campos van VACÍOS en una corrida
-  # normal; sirven para REPARAR un rango de operaciones sin tocar el resto, que
-  # es lo que hubo que hacer con los días que el backfill dejó incompletos antes
-  # de que existiera el margen de entrada (ver el encabezado de
-  # backfill/backfill-operaciones.js).
+    # MEDIDO el 19-10-2026: de los tres intentos declarados antes
+    # ('20 8,10,12') llegaban uno o dos, y con 1 a 3 horas de atraso — las
+    # corridas aterrizaban entre las 12:13 y las 15:59 UTC, o sea entre las
+    # 09:13 y las 12:59 de Chile, pasada la reunión de la mañana. Actions no
+    # garantiza el horario: encola y descarta cuando está congestionado, y los
+    # minutos redondos son los peores.
+    #
+    # Por eso: minuto impar (:13) y los tres intentos ADELANTADOS, para que el
+    # atraso típico los deje igual dentro de la madrugada. Declarado
+    # 03:13 / 06:13 / 08:13 de Chile.
+    - cron: '13 6,9,11 * * *'
   workflow_dispatch:
     inputs:
       ops_desde:

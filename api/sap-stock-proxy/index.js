@@ -358,6 +358,19 @@ const ENTIDADES_SONDA = [
   { nombre: 'Orders',                que: 'pedidos de venta' },
   { nombre: 'InventoryGenExits',     que: 'salidas de inventario' },
   { nombre: 'InventoryGenEntries',   que: 'entradas de inventario' },
+  // Transferencias de stock (OWTR/WTR1). Agregada el 19-10-2026: es la tabla
+  // detras del informe de transferencias que Marcelo saca a Excel y procesa en
+  // Colab (Informe_Conf_TransferenciasV4). Sus columnas -- bodega origen y
+  // destino con valores RETAIL/CLIENTES, cantidad, tipo de transaccion, numero
+  // de documento y fecha de contabilizacion -- son las de este documento.
+  //
+  // LO QUE LA HACE IMPORTANTE: ese informe trae FOLIO PORTAL, y ese es el
+  // puente que hoy no existe. En Redlink todo el bloque SAP viene vacio
+  // (sapDocNum, sapDocEntry y enviadoSap al 0% sobre 11.351 operaciones
+  // medidas), asi que no hay forma de amarrar una operacion nuestra con su
+  // documento en SAP. Si esta entidad responde con documentos, el informe se
+  // reconstruye del lado servidor y el cruce pasa a ser por llave.
+  { nombre: 'StockTransfers',        que: 'transferencias de stock (OWTR/WTR1)' },
 ];
 
 // Patente chilena: 4 letras + 2 digitos (nuevo) o 2 letras + 4 digitos (antiguo).
@@ -571,6 +584,12 @@ async function sondear(context, fecha) {
 //
 //   GET /api/sap-stock-proxy?explorar=1&entidad=DeliveryNotes
 //       &filtro=U_Patente ne null&top=5&campos=DocNum,DocDate,U_Patente,CardName
+//
+// Para transferencias, la PRIMERA consulta va SIN campos a proposito: no
+// sabemos como se llama el campo del folio del portal (es un UDF, va con
+// prefijo U_) y con $select no aparece. Pedir el documento entero lo muestra:
+//
+//   GET /api/sap-stock-proxy?explorar=1&entidad=StockTransfers&top=3
 //
 // LIMITES, a proposito:
 //   · solo GET — nunca escribe en SAP;

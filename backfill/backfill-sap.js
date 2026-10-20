@@ -259,29 +259,63 @@ async function escribirJson(cc, nombre, obj) {
     { blobHTTPHeaders: { blobContentType: 'application/json; charset=utf-8' } });
 }
 
-// ── un mes, siguiendo @odata.nextLink ───────────────────────────────────────
+// ── un mes, paginando con $skip/$top explicito ─────────────────────
+//
+// LA PRIMERA VERSION SEGUIA @odata.nextLink Y TRUNCO EN SILENCIO.
+// Medido el 19-10-2026: septiembre devolvio 200 documentos en UNA pagina con
+// --pagina=200. Que el total calce exacto con el tamano de pagina no es
+// coincidencia: el Service Layer de B1 es OData v3, donde la clave de
+// continuacion es "odata.nextLink" SIN arroba, asi que leer
+// r.json['@odata.nextLink'] (que es la forma de OData v4) daba undefined y el
+// bucle se creia terminado. El mes quedaba cortado al primer lote y el blob se
+// escribia igual, sin un solo aviso. Es el mismo vicio que ya nos mordio en
+// cold-operaciones.js: confundir "no hay mas" con "no supe preguntar".
+//
+// El arreglo no es cambiar la clave: es no depender de ella. Se pagina con
+// $skip/$top sobre un orden ESTABLE y UNICO (DocEntry asc), que es
+// deterministico y no depende del dialecto.
+//
+// Y queda imposible truncar en silencio: cuando una pagina viene CORTA, eso
+// puede ser el final de verdad o un tope del servidor mas chico que el $top
+// pedido. Son cosas distintas y se distinguen preguntando: una sonda de una
+// fila con $skip detras de lo ya traido. Si vuelve vacia, era el final; si
+// vuelve con algo, el servidor topea ahi y se sigue con ese paso.
 async function traerMes(ses, raiz, mes) {
   const d = mes + '-01', h = finDeMes(mes);
   const filtro = CAMPO_FECHA + " ge '" + d + "' and " + CAMPO_FECHA + " le '" + h + "'";
-  let url = raiz + '/' + ENTIDAD + '?$filter=' + encodeURIComponent(filtro)
-          + '&$orderby=' + encodeURIComponent('DocEntry asc');
-  const docs = [];
-  let paginas = 0;
-  while (url) {
-    const r = await ses.get(url);
+  const base = raiz + '/' + ENTIDAD
+             + '?$filter=' + encodeURIComponent(filtro)
+             + '&$orderby=' + encodeURIComponent('DocEntry asc');
+
+  async function pagina(top, skip) {
+    const r = await ses.get(base + '&$top=' + top + '&$skip=' + skip);
     if (r.status !== 200) {
-      throw Object.assign(new Error('SAP ' + r.status + ' en ' + ENTIDAD + ' ' + mes + ' :: ' + String(r.body).slice(0, 200)),
+      throw Object.assign(new Error('SAP ' + r.status + ' en ' + ENTIDAD + ' ' + mes +
+        ' (skip ' + skip + ') :: ' + String(r.body).slice(0, 200)),
         { reintentable: r.status === 429 || r.status >= 500 });
     }
-    const val = (r.json && r.json.value) || [];
-    docs.push.apply(docs, val);
-    paginas++;
-    const sig = r.json && r.json['@odata.nextLink'];
-    // nextLink llega relativo a la raiz ("StockTransfers?$skip=200&...").
-    url = sig ? (/^https?:\/\//i.test(sig) ? sig : raiz + '/' + String(sig).replace(/^\/+/, '')) : null;
-    if (paginas > 2000) throw new Error('Mas de 2000 paginas en ' + mes + ': algo anda mal con nextLink');
+    return (r.json && r.json.value) || [];
   }
-  return { docs, paginas, desde: d, hasta: h };
+
+  const docs = [];
+  let paso = PAGINA, skip = 0, pedidos = 0;
+  for (;;) {
+    const val = await pagina(paso, skip);
+    pedidos++;
+    docs.push.apply(docs, val);
+    if (!val.length) break;
+
+    if (val.length < paso) {
+      // Pagina corta: final de verdad o tope del servidor. Se pregunta.
+      const sonda = await pagina(1, skip + val.length);
+      pedidos++;
+      if (!sonda.length) break;          // era el final
+      paso = val.length;                 // el servidor topea aca
+    }
+    skip += val.length;
+    if (pedidos > 5000) throw new Error('Mas de 5000 peticiones en ' + mes + ': revisar el orden o el filtro');
+  }
+  return { docs, pedidos, paso, desde: d, hasta: h };
 }
 async function conReintentos(fn) {
   let ultimo = null;
@@ -385,7 +419,7 @@ async function main() {
     const payload = {
       entidad: ENTIDAD, mes, desde: res.desde, hasta: res.hasta, campo_fecha: CAMPO_FECHA,
       filas,
-      _docs: res.docs.length, _filas: filas.length, _paginas: res.paginas,
+      _docs: res.docs.length, _filas: filas.length, _peticiones: res.pedidos, _paso: res.paso,
       _tipos: tipos, _cantidad: Math.round(cantidad),
       _guardado: new Date().toISOString(),
       _fuente: raiz + '/' + ENTIDAD,
@@ -394,9 +428,14 @@ async function main() {
 
     await escribirJson(cc, nombre, payload);
     hechos++; totDocs += res.docs.length; totFilas += filas.length;
+    // Se imprimen los TIPOS porque es la senal de cordura que de verdad sirve:
+    // dice de una si los conceptos que trae SAP son los mismos de la cartola.
+    const topTipos = Object.keys(tipos).sort((a, b) => tipos[b] - tipos[a]).slice(0, 4)
+      .map(k => k + ' ' + fmt(tipos[k])).join(' | ');
     console.log('  ' + mes + '  ' + String(res.docs.length).padStart(6) + ' docs  ' +
-      String(filas.length).padStart(7) + ' filas  ' + String(res.paginas).padStart(3) + ' pag  ' +
+      String(filas.length).padStart(7) + ' filas  ' + String(res.pedidos).padStart(3) + ' req  ' +
       'cant ' + fmt(Math.round(cantidad)) + '  ' + ((Date.now() - tm) / 1000).toFixed(1) + 's');
+    if (topTipos) console.log('          ' + topTipos);
   }
 
   console.log('\n✓ Listo · ' + ENTIDAD);

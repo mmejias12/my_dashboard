@@ -388,6 +388,9 @@ body{zoom:var(--escala,1)}
 .ay-pin{font-size:15px;width:26px;text-align:center;flex-shrink:0}
 .ay-nota{font-size:11.5px;color:var(--t3);background:var(--s1);border:1px solid var(--br);border-radius:8px;padding:10px 12px;line-height:1.55}
 @media(max-width:520px){.ay-leg{grid-template-columns:1fr}}
+/* Banda de perfil por jefatura */
+.jefe-banner{margin:8px 20px 0;padding:8px 14px;border-radius:8px;font-size:12px;line-height:1.5;color:var(--t1);background:color-mix(in srgb,var(--cyan) 11%,transparent);border:1px solid color-mix(in srgb,var(--cyan) 32%,transparent)}
+.jefe-banner.alerta{color:var(--amber);background:var(--amber-bg);border-color:color-mix(in srgb,var(--amber) 38%,transparent)}
 .mapa-personas{position:fixed;inset:0;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(5px);z-index:1250;display:none;align-items:center;justify-content:center;padding:24px}
 .mapa-personas.show{display:flex}
 .mp-card{background:var(--s2);border:1px solid var(--brm);border-radius:14px;width:100%;max-width:960px;overflow:hidden;box-shadow:0 24px 70px color-mix(in srgb,var(--sombra-c) 60%,transparent);display:flex;flex-direction:column;max-height:calc(100vh - 48px)}
@@ -534,6 +537,8 @@ body{zoom:var(--escala,1)}
   <select id="sucursal" class="ctrl-sel" onchange="renderCalendario();renderPanelDia()"><option value="">Todas</option></select>
   <span class="ctrl-lbl">Depto:</span>
   <select id="depto" class="ctrl-sel" onchange="renderCalendario();renderPanelDia()"><option value="">Todos</option></select>
+  <span class="ctrl-lbl" id="lbl-verjefe" style="display:none">Ver como:</span>
+  <select id="ver-jefe" class="ctrl-sel" style="display:none" title="Ver la asistencia del equipo de una jefatura" onchange="setVerJefe(this.value)"><option value="">Todos (vista completa)</option></select>
   <!-- La carga es automática: al abrir y al cambiar mes/sucursal/depto. -->
   <!-- controles ocultos que la maquinaria de datos sigue usando internamente -->
   <input type="date" id="d1" style="display:none">
@@ -545,6 +550,8 @@ body{zoom:var(--escala,1)}
   <div id="sdot" class="sdot"></div>
   <span id="status-txt">Cargando asistencia del mes…</span>
 </div>
+
+<div id="jefe-banner" class="jefe-banner" style="display:none"></div>
 
 <div class="main">
   <!-- RESUMEN DEL DÍA (hoy) -->
@@ -1600,12 +1607,107 @@ async function fetchTodasLasPaginas(endpoint, paramsBase, maxPages) {
 /* ═══════════════════════════════════════════════════════════════════════
    CARGA PRINCIPAL — orquesta todos los endpoints
    ═══════════════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════════════
+   PERFIL POR JEFATURA — cada jefe ve SOLO a su equipo directo
+   ────────────────────────────────────────────────────────────────────────────
+   En Talana los jefes NO tienen cargado su correo corporativo (77 de 95 personas
+   no traen correo), así que el cruce automático login→ficha NO sirve. Se usa esta
+   tabla: correo con que el jefe INICIA SESIÓN en el portal (en MINÚSCULAS) → su
+   nombre EXACTO como aparece en el campo "jefe" de Talana. RR.HH. la mantiene.
+   El filtro es sólo de VISTA (el jefe igual necesita el rol 'jefatura' para abrir
+   la página). Admin y RR.HH. ven todo y tienen el selector "Ver como…".
+
+   Nombres válidos del campo jefe (al 2026-10): ANTONIO SOLER · RICHARD ALBERTO
+   PINOCHET · EDGAR ADOLFO GONZALEZ · CLAUDIO JIMENEZ · EDUARDO ANDRES AVILES ·
+   JUAN CARLOS PEREZ · VICENTE ANTONIO CASTRO · MANUEL JESUS GONZALEZ · ELBA IRENE
+   ACEITON · JUAN AARON RAMIREZ · ALFREDO LEONARDO TIRAFERRI · CAMILA HAM ·
+   CLAUDIO ANDRÉS BAÑADOS
+   ════════════════════════════════════════════════════════════════════════════ */
+var MAPEO_JEFES = {
+  // 'correo.del.jefe@redtecsa.com': 'ANTONIO SOLER',
+  // 'otro.jefe@redtecsa.com':       'RICHARD ALBERTO PINOCHET',
+};
+
+var SESION = null;            // { email, roles }
+var ES_ADMIN_RRHH = false;
+var FILTRO_JEFE = '';         // nombre del jefe por el que se está filtrando la vista
+var SIN_JEFE = '\u0000__SIN_JEFE__';   // centinela: jefatura sin mapeo → vista vacía
+
+function normJefe(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim(); }
+
+async function cargarSesion(){
+  try{
+    var me = await fetch('/.auth/me',{credentials:'include'}).then(function(r){return r.json();});
+    var p = me && me.clientPrincipal;
+    SESION = p ? { email:(p.userDetails||'').toLowerCase(), roles:(p.userRoles||[]) } : { email:'', roles:[] };
+  }catch(e){ SESION = { email:'', roles:[] }; }
+}
+
+/* Decide qué ve el usuario según su rol. Se llama una vez cargados los empleados. */
+function resolverJefatura(){
+  var roles = (SESION && SESION.roles) || [];
+  ES_ADMIN_RRHH = roles.indexOf('admin')>=0 || roles.indexOf('rrhh')>=0;
+  var esJefatura = roles.indexOf('jefatura')>=0;
+
+  if(ES_ADMIN_RRHH){
+    // Admin / RR.HH.: vista completa + selector "Ver como jefatura…".
+    var jefes = conteoJefes();
+    var sel = $('ver-jefe'), lbl = $('lbl-verjefe');
+    if(sel){
+      sel.innerHTML = '<option value="">Todos (vista completa)</option>' +
+        Object.keys(jefes).sort(function(a,b){return jefes[b]-jefes[a];}).map(function(j){
+          return '<option value="'+esc(j)+'">'+esc(tituloNombre(j))+' ('+jefes[j]+')</option>';
+        }).join('');
+      sel.style.display=''; if(lbl) lbl.style.display='';
+    }
+    FILTRO_JEFE = '';
+  } else if(esJefatura){
+    // Jefatura: forzado a su equipo. Se ocultan los filtros que no aplican.
+    var nombre = MAPEO_JEFES[(SESION.email||'')] || '';
+    ['empresa','sucursal','depto'].forEach(function(id){
+      var el=$(id); if(!el) return; el.style.display='none';
+      var p=el.previousElementSibling; if(p && p.classList.contains('ctrl-lbl')) p.style.display='none';
+    });
+    FILTRO_JEFE = nombre ? nombre : SIN_JEFE;
+  }
+  actualizarBannerJefe();
+}
+
+function conteoJefes(){
+  var jefes={}; cacheEmpleados.forEach(function(e){ var j=(e.jefe||'').trim(); if(j && empActivo(e) && empEnEmpresa(e)) jefes[j]=(jefes[j]||0)+1; });
+  return jefes;
+}
+
+function actualizarBannerJefe(){
+  var b=$('jefe-banner'); if(!b) return;
+  if(!FILTRO_JEFE){ b.style.display='none'; b.className='jefe-banner'; return; }
+  if(FILTRO_JEFE===SIN_JEFE){
+    b.className='jefe-banner alerta';
+    b.innerHTML='No pudimos identificar tu jefatura'+(SESION&&SESION.email?(' ('+esc(SESION.email)+')'):'')+'. Pídele a RR.HH. que te asocie a tu equipo.';
+    b.style.display=''; return;
+  }
+  var n = cacheEmpleados.filter(function(e){ return empActivo(e)&&empEnEmpresa(e)&&normJefe(e.jefe)===normJefe(FILTRO_JEFE); }).length;
+  b.className='jefe-banner';
+  b.innerHTML = (ES_ADMIN_RRHH ? '👁️ Viendo el equipo de <b>'+esc(tituloNombre(FILTRO_JEFE))+'</b>'
+                               : '👤 Tu equipo: <b>'+esc(tituloNombre(FILTRO_JEFE))+'</b>')
+              + ' · '+n+' persona'+(n!==1?'s':'');
+  b.style.display='';
+}
+
+/* Selector "Ver como jefatura…" (sólo admin/RR.HH.). */
+function setVerJefe(v){
+  FILTRO_JEFE = v || '';
+  actualizarBannerJefe();
+  renderPanelDia();
+  renderCalendario();
+}
+
 async function cargar() {
   var _btn = $('btn-load'); if(_btn) _btn.disabled = true;
   huecosDias = []; huecosMeses = []; sinHorarioTeorico = false;
   try {
     setStatus('load', 'Cargando sucursales y departamentos...');
-    await Promise.all([cargarSucursales(), cargarDepartamentos()]);
+    await Promise.all([cargarSesion(), cargarSucursales(), cargarDepartamentos()]);
 
     setStatus('load', 'Cargando trabajadores...');
     await cargarTrabajadores();
@@ -1628,6 +1730,9 @@ async function cargar() {
               cacheHorarios.length + ' horarios · ' +
               cacheMarcacionesEnriquecimiento.length + ' marcas · ' +
               cachePermisos.length + ' permisos' + textoSnapshot() + textoHuecos());
+
+    // Perfil por jefatura: define qué ve este usuario (debe ir ANTES del render).
+    resolverJefatura();
 
     // Vista única: calendario del mes + panel del día
     poblarFiltrosArea();
@@ -3431,6 +3536,8 @@ function calEmpleadosActivos(){
   return cacheEmpleados.filter(function(e){
     if(!empActivo(e)) return false;
     if(!empEnEmpresa(e)) return false;
+    // Perfil por jefatura: sólo el equipo directo del jefe forzado/seleccionado.
+    if(FILTRO_JEFE && normJefe(e.jefe)!==normJefe(FILTRO_JEFE)) return false;
     // Jefaturas exentas (Artículo 22) fuera por defecto: no marcan.
     if(!mostrarExentos && empExento(e)) return false;
     if(suc && empSucursalAdmin(e) !== suc) return false;
@@ -3444,6 +3551,7 @@ function contarExentos(){
   var dep = ($('depto') && $('depto').value) || '';
   return cacheEmpleados.filter(function(e){
     return empActivo(e) && empEnEmpresa(e) && empExento(e)
+        && (!FILTRO_JEFE || normJefe(e.jefe)===normJefe(FILTRO_JEFE))
         && (!suc || empSucursalAdmin(e)===suc) && (!dep || empDepartamento(e)===dep);
   }).length;
 }

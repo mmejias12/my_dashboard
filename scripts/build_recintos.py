@@ -17,7 +17,7 @@
 #  A3074...), si no el nombre completo. Reproduce exactamente la columna
 #  "Clave (auxiliar)" del Excel en sus 1.057 filas.
 # ============================================================================
-import openpyxl, json, re, unicodedata, collections, sys, os
+import openpyxl, json, re, unicodedata, collections, sys, os, datetime
 
 SRC = sys.argv[1] if len(sys.argv) > 1 else '.'
 OUT = sys.argv[2] if len(sys.argv) > 2 else 'recintos-retiro.json'
@@ -142,7 +142,7 @@ for v in cat.values(): v['cadena'] = canon.get(v['cadena'], v['cadena'])
 filas = sorted(cat.values(), key=lambda v: (v['cadena'].upper(), v['recinto'].upper()))
 hab = [v for v in filas if v['habilitado']]
 meta = dict(
-    generado='2026-09-28',
+    generado=datetime.date.today().isoformat(),
     fuentes=['Reporte_Retiros.xlsx · Direcciones', 'Data registros APP.xlsx · Direcciones',
              'registro_pallets.html · RETAIL_LOCALES v2'],
     total=len(filas), habilitados=len(hab),

@@ -3549,8 +3549,10 @@ function calEmpleadosActivos(){
     if(!empEnEmpresa(e)) return false;
     // Perfil por jefatura: sólo el equipo directo del jefe forzado/seleccionado.
     if(FILTRO_JEFE && normJefe(e.jefe)!==normJefe(FILTRO_JEFE)) return false;
-    // Jefaturas exentas (Artículo 22) fuera por defecto: no marcan.
-    if(!mostrarExentos && empExento(e)) return false;
+    // Jefaturas exentas (Artículo 22) fuera por defecto SÓLO en la vista completa.
+    // Dentro del equipo de un jefe se muestran TODOS sus reportes: el gerente
+    // general, por ejemplo, tiene a puros gerentes exentos y si no vería vacío.
+    if(!mostrarExentos && !FILTRO_JEFE && empExento(e)) return false;
     if(suc && empSucursalAdmin(e) !== suc) return false;
     if(dep && empDepartamento(e) !== dep) return false;
     return true;
@@ -3731,7 +3733,10 @@ function renderCalendario(preservarScroll){
 
   // Etiqueta del chip de jefaturas exentas con el conteo actual.
   var chE = $('chip-exentos');
-  if(chE){ var nE = contarExentos(); chE.textContent = '👔 Jefaturas exentas ('+nE+')'; chE.style.display = nE? '' : 'none'; }
+  if(chE){
+    if(FILTRO_JEFE){ chE.style.display='none'; }   // en la vista de equipo se muestran todos, exentos incluidos
+    else { var nE = contarExentos(); chE.textContent = '👔 Jefaturas exentas ('+nE+')'; chE.style.display = nE? '' : 'none'; }
+  }
 
   var personas = calEmpleadosActivos().filter(function(e){
     if(!q) return true;

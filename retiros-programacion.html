@@ -1526,6 +1526,33 @@ function pintarFrescura(res){
                      {hour:'2-digit',minute:'2-digit'}),'info','database');
   else estado('al día','ok','cloud-check');
 }
+/* ============================================================================
+   DIRECCIÓN DESDE EL CATÁLOGO
+   ----------------------------------------------------------------------------
+   Cada retiro guarda su propia copia de dirección/comuna/zona, tomada del
+   catálogo en el momento de registrarlo. Eso está bien para no perder el dato
+   si el recinto cambia de local, pero tiene un costo: cuando Logística llena
+   una dirección que faltaba, los retiros YA registrados siguen en blanco y
+   Transportes los sigue viendo en «(sin zona)» aunque el dato ya exista.
+
+   Acá se rellena solo lo que viene vacío, nunca se pisa lo que el registro ya
+   trae. El catálogo es la fuente que se mantiene; la copia del registro es una
+   foto que puede haber quedado incompleta.
+============================================================================ */
+function enriquecer(regs){
+  if(!regs || !window.POR_CLAVE) return regs;
+  regs.forEach(function(r){
+    if(r.direccion && r.comuna && r.zona) return;
+    var v=POR_CLAVE[String(r.clave||'').toUpperCase()];
+    if(!v) return;
+    if(!r.direccion && v.direccion){ r.direccion=v.direccion; r.dir_catalogo=true; }
+    if(!r.comuna && v.comuna){ r.comuna=v.comuna; r.dir_catalogo=true; }
+    if(!r.region && v.region) r.region=v.region;
+    if(!r.zona && v.zona){ r.zona=v.zona; r.dir_catalogo=true; }
+  });
+  return regs;
+}
+
 async function pedir(desde,hasta,force){
   if(!force){
     var m=memGet(desde,hasta);
@@ -1534,6 +1561,7 @@ async function pedir(desde,hasta,force){
   var r=await fetch(API+'?desde='+desde+'&hasta='+hasta,{headers:{Accept:'application/json'}});
   var j=await r.json().catch(function(){ return {}; });
   if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+  enriquecer(j.registros);
   MEM.unshift({desde:desde,hasta:hasta,payload:j,ts:Date.now()});
   MEM=MEM.slice(0,6);
   return { registros:j.registros||[], meta:j.meta||{}, deMemoria:false, ts:Date.now() };
@@ -1849,10 +1877,20 @@ function pintarProgramacion(){
     kpi(new Set(rows.map(ejecutivoDe)).size,'Ejecutivos');
 
   var av='';
-  if(sinDir.length) av+='<div class="aviso w"><i class="ti ti-map-pin-off"></i><span><b>'+sinDir.length+
-    ' retiro'+(sinDir.length>1?'s':'')+' sin dirección o sin zona logística.</b> '+
-    'Salen agrupados en «(sin zona)» y Transportes no puede rutearlos así. '+
-    'Son recintos que están habilitados para registrar pero no están en el maestro de direcciones.</span></div>';
+  if(sinDir.length){
+    var faltantes=[...new Set(sinDir.map(function(r){ return r.recinto; }))];
+    av+='<div class="aviso w"><i class="ti ti-map-pin-off"></i><span><b>'+sinDir.length+
+      ' retiro'+(sinDir.length>1?'s':'')+' sin dirección o sin zona logística.</b> '+
+      'Salen agrupados en «(sin zona)» y Transportes no puede rutearlos así. '+
+      'Son recintos habilitados para registrar que no están en el maestro de direcciones: '+
+      faltantes.slice(0,5).map(esc).join(' · ')+(faltantes.length>5?' y '+(faltantes.length-5)+' más':'')+
+      '. Se arreglan agregándolos a la hoja «Direcciones» del Reporte_Retiros.</span></div>';
+  }
+  var delCat=rows.filter(function(r){ return r.dir_catalogo; });
+  if(delCat.length) av+='<div class="aviso i"><i class="ti ti-map-pin-check"></i><span>'+
+    '<b>'+delCat.length+' retiro'+(delCat.length>1?'s':'')+' tomó la dirección del catálogo.</b> '+
+    'Se registraron cuando el recinto todavía no tenía dirección en el maestro; ahora sí la tiene '+
+    'y se usa esa.</span></div>';
   if(difDias(hoyISO(),DIA)<0) av+='<div class="aviso i"><i class="ti ti-history"></i><span>'+
     'Estás viendo un día ya pasado: es solo consulta.</span></div>';
   $('p-avisos').innerHTML=av;

@@ -171,6 +171,14 @@ tr.gtot td{background:var(--bg-surface);font-weight:700;border-top:2px solid var
 .badge.pm{background:var(--warn-bg);color:var(--warn)}
 .tag-sd{font-size:9.5px;padding:1px 5px;border-radius:4px;background:var(--warn-bg);color:var(--warn);
         font-weight:600;white-space:nowrap}
+/* La glosa lleva explicación al pasar el mouse: el punteado avisa que hay algo que leer */
+.tag-sd.glosa{cursor:help;border-bottom:1px dotted currentColor}
+/* lista de los retiros que entraron por el margen del cruce */
+.rec-lista{display:flex;flex-wrap:wrap;gap:5px;margin-top:.5rem}
+.rec-lista .tag-rec{font-size:10.5px;padding:2px 7px;border-radius:5px;cursor:help;
+  background:var(--bg-input);border:1px solid var(--border-md);color:var(--text-sec);
+  font-family:'JetBrains Mono',monospace;white-space:nowrap}
+.rec-pie{font-size:10.5px;color:var(--text-muted);margin-top:.45rem}
 
 .empty{padding:2.4rem 1rem;text-align:center;color:var(--text-muted);font-size:13px}
 .empty i{font-size:30px;display:block;margin-bottom:.5rem;opacity:.5}
@@ -639,6 +647,41 @@ function moverDia(n){
 function setDia(v){ if(v){ DIA=v; cargar(); } }
 function irA(n){ DIA=sumaDias(hoyISO(),n); cargar(); }
 
+/* ============================================================================
+   DIRECCIÓN DESDE EL CATÁLOGO
+   ----------------------------------------------------------------------------
+   Mismo criterio que en la pantalla de Logística: el retiro guarda su copia de
+   dirección/comuna/zona al registrarse, así que cuando Logística completa una
+   dirección que faltaba, los retiros ya cargados siguen en blanco. Acá se
+   rellena solo lo vacío. El catálogo se carga aparte y si falla la pantalla
+   sigue funcionando igual, solo sin el relleno.
+============================================================================ */
+var POR_CLAVE=null;
+async function cargarCatalogo(){
+  if(POR_CLAVE) return;
+  try{
+    var r=await fetch('/data/recintos-retiro.json',{headers:{Accept:'application/json'}});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    var c=await r.json();
+    var idx={};
+    (c.recintos||[]).forEach(function(v){ idx[String(v.clave).toUpperCase()]=v; });
+    POR_CLAVE=idx;
+  }catch(e){ POR_CLAVE=null; }
+}
+function enriquecer(regs){
+  if(!regs || !POR_CLAVE) return regs;
+  regs.forEach(function(r){
+    if(r.direccion && r.comuna && r.zona) return;
+    var v=POR_CLAVE[String(r.clave||'').toUpperCase()];
+    if(!v) return;
+    if(!r.direccion && v.direccion){ r.direccion=v.direccion; r.dir_catalogo=true; }
+    if(!r.comuna && v.comuna){ r.comuna=v.comuna; r.dir_catalogo=true; }
+    if(!r.region && v.region) r.region=v.region;
+    if(!r.zona && v.zona){ r.zona=v.zona; r.dir_catalogo=true; }
+  });
+  return regs;
+}
+
 async function cargar(){
   pintarNavDia();
   $('p-area').innerHTML=loaderHTML('Cargando la programación…',fmtFecha(DIA));
@@ -647,7 +690,8 @@ async function cargar(){
     var rr=await fetch(API+'?desde='+DIA+'&hasta='+DIA,{headers:{Accept:'application/json'}});
     var jj=await rr.json().catch(function(){ return {}; });
     if(!rr.ok) throw new Error(jj.error||('HTTP '+rr.status));
-    REG=jj.registros||[]; YO=jj.meta||{};
+    await cargarCatalogo();
+    REG=enriquecer(jj.registros||[]); YO=jj.meta||{};
     var re=await fetch(API+'?estado='+DIA,{headers:{Accept:'application/json'}});
     ESTADO = re.ok ? await re.json() : null;
     estadoPill('al día','ok','cloud-check');
@@ -781,9 +825,14 @@ function pintar(){
   if(hayRojo && !hayVerde) av+='<div class="aviso w"><i class="ti ti-alert-triangle"></i><span>'+
     '<b>Ninguna planta tiene el visto bueno todavía.</b> Estos números pueden cambiar: '+
     'sirven para dimensionar, no para cerrar la planificación.</span></div>';
-  if(sinDir.length) av+='<div class="aviso w"><i class="ti ti-map-pin-off"></i><span><b>'+sinDir.length+
-    ' retiro'+(sinDir.length>1?'s':'')+' sin dirección o sin zona.</b> Salen agrupados en «(sin zona)»; '+
-    'hay que pedirle la dirección a Logística antes de rutear.</span></div>';
+  if(sinDir.length){
+    var faltantes=[...new Set(sinDir.map(function(r){ return r.recinto; }))];
+    av+='<div class="aviso w"><i class="ti ti-map-pin-off"></i><span><b>'+sinDir.length+
+      ' retiro'+(sinDir.length>1?'s':'')+' sin dirección o sin zona.</b> Salen agrupados en «(sin zona)»; '+
+      'hay que pedirle la dirección a Logística antes de rutear: '+
+      faltantes.slice(0,5).map(esc).join(' · ')+(faltantes.length>5?' y '+(faltantes.length-5)+' más':'')+
+      '.</span></div>';
+  }
   if(difDias(hoyISO(),DIA)<0) av+='<div class="aviso i"><i class="ti ti-history"></i><span>'+
     'Día ya pasado: es solo consulta.</span></div>';
   $('p-avisos').innerHTML=av;

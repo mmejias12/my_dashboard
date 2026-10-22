@@ -503,6 +503,7 @@ tr.gtot td{background:var(--bg-surface);font-weight:700;border-top:2px solid var
       <span class="pill" id="pill-estado"><i class="ti ti-circle-dashed"></i> cargando…</span>
       <label class="chk"><input type="checkbox" id="p_dispersos" onchange="pintar()"> Dispersos</label>
       <button class="btn" onclick="window.print()"><i class="ti ti-printer"></i> Imprimir</button>
+      <button class="btn" onclick="exportarExcel(this)" title="Descargar el día en Excel"><i class="ti ti-file-spreadsheet"></i> Excel</button>
       <span class="acc-grp">
         <button class="acc-btn" id="btn-fs" onclick="ciclarFs()" title="Tamaño de texto" aria-label="Cambiar tamaño de texto">
           <span class="aaa"><b>a</b><b>A</b><b>A</b></span>
@@ -664,7 +665,10 @@ async function cargarCatalogo(){
     if(!r.ok) throw new Error('HTTP '+r.status);
     var c=await r.json();
     var idx={};
-    (c.recintos||[]).forEach(function(v){ idx[String(v.clave).toUpperCase()]=v; });
+    (c.recintos||[]).forEach(function(v){
+      idx[String(v.clave).toUpperCase()]=v;
+      idx['@'+normDuro(v.recinto)]=v;                     // match laxo por nombre
+    });
     POR_CLAVE=idx;
   }catch(e){ POR_CLAVE=null; }
 }
@@ -672,7 +676,8 @@ function enriquecer(regs){
   if(!regs || !POR_CLAVE) return regs;
   regs.forEach(function(r){
     if(r.direccion && r.comuna && r.zona) return;
-    var v=POR_CLAVE[String(r.clave||'').toUpperCase()];
+    var v=POR_CLAVE[String(r.clave||'').toUpperCase()]
+         || POR_CLAVE['@'+normDuro(r.recinto||'')];     // si la clave no calza, por nombre
     if(!v) return;
     if(!r.direccion && v.direccion){ r.direccion=v.direccion; r.dir_catalogo=true; }
     if(!r.comuna && v.comuna){ r.comuna=v.comuna; r.dir_catalogo=true; }
@@ -942,3 +947,152 @@ document.addEventListener('DOMContentLoaded', async function(){
 </script>
 </body>
 </html>
+<script>
+/* ============================================================================
+   Descarga del día a Excel (.xlsx) · botón al lado de Imprimir
+   ----------------------------------------------------------------------------
+   La impresión sigue siendo la hoja horizontal con los tintes, igual que la
+   planilla que recibía Transportes. El Excel es la MISMA información pero como
+   tabla de trabajo: todas las columnas llenas en cada fila (la hoja impresa
+   deja en blanco planta/zona/comuna repetidas, y así no se puede ordenar ni
+   filtrar), con autofiltro y anchos de columna. Los subtotales por zona y por
+   planta van en una segunda hoja, porque intercalados rompen el filtro.
+   Los colores de la impresión no viajan: escribir formato de celda es de la
+   versión pro de SheetJS, así que el Excel sale sin tintes a propósito.
+
+   SheetJS se carga SOLO al apretar el botón. Es la misma librería y el mismo
+   CDN que ya usa el dashboard de operaciones del m3link, y así la pantalla que
+   el ejecutivo abre en terreno no paga su peso. Si el CDN no responde, cae a
+   CSV con separador ';' y BOM, que es como exporta el resto del portal.
+   ========================================================================== */
+
+var COLS_XLS = ['Fecha retiro','Planta destino','Región','Zona logística','Comuna',
+                'Recinto','Dirección','Usuario','Ejecutivo','Horario',
+                'Observaciones / Nota','Dispersos','Total'];
+var ANCHOS_XLS = [11,16,8,15,16,34,34,11,22,8,30,10,8];
+
+var _sheetjs = null;
+function cargarSheetJS(){
+  if (_sheetjs) return _sheetjs;
+  _sheetjs = new Promise(function(ok,err){
+    if (window.XLSX) return ok(window.XLSX);
+    var s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload=function(){ window.XLSX ? ok(window.XLSX) : err(new Error('XLSX no quedó disponible')); };
+    s.onerror=function(){ err(new Error('no se pudo cargar la librería')); };
+    document.head.appendChild(s);
+  });
+  _sheetjs.catch(function(){ _sheetjs=null; });     // si falló, el próximo clic reintenta
+  return _sheetjs;
+}
+
+/* Las mismas claves con que la hoja impresa agrupa, para que el Excel salga
+   en el mismo orden y los números calcen fila por fila. */
+function clavesHoja(r){
+  return { pl:r.planta||'(sin planta)', zn:r.zona||'(sin zona)', cm:r.comuna||'—' };
+}
+function ordenHoja(a,b){
+  var A=clavesHoja(a), B=clavesHoja(b);
+  if(A.pl!==B.pl) return A.pl<B.pl?-1:1;
+  if(A.zn!==B.zn) return A.zn<B.zn?-1:1;
+  if(A.cm!==B.cm) return A.cm<B.cm?-1:1;
+  return Number(b.cantidad||0)-Number(a.cantidad||0);
+}
+function ejecutivoXls(r){ return String(r.usuario_origen||r.usuario||''); }
+
+/* Devuelve { filas, totales, resumen } ya ordenado y totalizado. */
+function datosExcel(){
+  var rows=(window.REG||[]).slice().sort(ordenHoja);
+  var fecha=fmtDMY(window.DIA||hoyISO());
+  var filas=rows.map(function(r){
+    var k=clavesHoja(r);
+    return [ fecha, k.pl, r.region||'—', k.zn, k.cm,
+             r.recinto||'', r.direccion||'', usuarioHoja(r), ejecutivoXls(r),
+             r.horario||'', r.observaciones||'',
+             Number(r.dispersos||0), Number(r.cantidad||0) ];
+  });
+
+  var zonas={}, plantas={}, tp=0, td=0;
+  rows.forEach(function(r){
+    var k=clavesHoja(r), c=Number(r.cantidad||0), d=Number(r.dispersos||0);
+    var z=zonas[k.pl+'§'+k.zn]=zonas[k.pl+'§'+k.zn]||{pl:k.pl,zn:k.zn,n:0,c:0,d:0};
+    z.n++; z.c+=c; z.d+=d;
+    var p=plantas[k.pl]=plantas[k.pl]||{n:0,c:0,d:0};
+    p.n++; p.c+=c; p.d+=d;
+    tp+=c; td+=d;
+  });
+  var totales=[];
+  Object.keys(zonas).sort().forEach(function(k){
+    var z=zonas[k]; totales.push(['Zona',z.zn,z.pl,z.n,z.d,z.c]);
+  });
+  Object.keys(plantas).sort().forEach(function(k){
+    var p=plantas[k]; totales.push(['Planta',k,'',p.n,p.d,p.c]);
+  });
+  totales.push(['General','Total general','',rows.length,td,tp]);
+
+  return { filas:filas, totales:totales, n:rows.length, pallets:tp, dispersos:td, fecha:fecha };
+}
+
+function nombreArchivo(ext){
+  return 'programacion-retiros-'+(window.DIA||hoyISO())+'.'+ext;
+}
+
+function exportarExcel(btn){
+  var d=datosExcel();
+  if(!d.n){ toast('No hay retiros para descargar en este día.',true); return; }
+
+  var txt=btn?btn.innerHTML:null;
+  if(btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i> Generando…'; }
+  var restaurar=function(){ if(btn){ btn.disabled=false; btn.innerHTML=txt; } };
+
+  cargarSheetJS().then(function(XLSX){
+    var wb=XLSX.utils.book_new();
+
+    var ws=XLSX.utils.aoa_to_sheet([COLS_XLS].concat(d.filas));
+    ws['!cols']=ANCHOS_XLS.map(function(w){ return {wch:w}; });
+    var ultima=XLSX.utils.encode_col(COLS_XLS.length-1)+(d.filas.length+1);
+    ws['!autofilter']={ref:'A1:'+ultima};
+    // Sin panel fijo: la version comunitaria de SheetJS no escribe paneles
+    // congelados (solo rightToLeft en sheetViews), asi que poner '!views' aqui
+    // seria codigo muerto. Si alguien lo quiere, en Excel es Vista > Inmovilizar.
+    XLSX.utils.book_append_sheet(wb,ws,'Programación');
+
+    var res=[
+      ['Programación de retiros retail'],
+      ['Fecha retiro', d.fecha],
+      ['Retiros', d.n],
+      ['Pallets retiro', d.pallets],
+      ['Dispersos', d.dispersos],
+      [],
+      ['Nivel','Nombre','Planta','Retiros','Dispersos','Pallets']
+    ].concat(d.totales);
+    var ws2=XLSX.utils.aoa_to_sheet(res);
+    ws2['!cols']=[{wch:10},{wch:24},{wch:18},{wch:9},{wch:11},{wch:10}];
+    XLSX.utils.book_append_sheet(wb,ws2,'Totales');
+
+    XLSX.writeFile(wb,nombreArchivo('xlsx'));
+    restaurar();
+    toast(d.n+' retiro'+(d.n>1?'s':'')+' descargados en Excel.');
+  }).catch(function(e){
+    restaurar();
+    descargarCSV(d);
+    toast('No se pudo cargar la librería de Excel, se descargó en CSV.',true);
+  });
+}
+
+/* Respaldo sin dependencias: CSV con ';' y BOM, que es lo que abre bien el
+   Excel en español. Mismas columnas que la hoja Programación. */
+function descargarCSV(d){
+  var q=function(v){
+    var s=String(v==null?'':v);
+    return /[";\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+  };
+  var lineas=[COLS_XLS.join(';')];
+  d.filas.forEach(function(f){ lineas.push(f.map(q).join(';')); });
+  var blob=new Blob(['﻿'+lineas.join('\r\n')],{type:'text/csv;charset=utf-8;'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=nombreArchivo('csv');
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },0);
+}
+</script>

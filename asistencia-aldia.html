@@ -539,7 +539,7 @@ body{zoom:var(--escala,1)}
   <span class="ctrl-lbl">Sucursal:</span>
   <select id="sucursal" class="ctrl-sel" onchange="renderCalendario();renderPanelDia()"><option value="">Todas</option></select>
   <span class="ctrl-lbl">Área:</span>
-  <select id="depto" class="ctrl-sel" title="Filtrar por área (gerencia)" onchange="renderCalendario();renderPanelDia()"><option value="">Todas</option></select>
+  <select id="depto" class="ctrl-sel" title="Filtrar por subárea (lugar en la planta), agrupada por gerencia" onchange="renderCalendario();renderPanelDia()"><option value="">Todas</option></select>
   <span class="ctrl-lbl" id="lbl-verjefe" style="display:none">Ver como:</span>
   <select id="ver-jefe" class="ctrl-sel" style="display:none" title="Ver la asistencia del equipo de una jefatura" onchange="setVerJefe(this.value)"><option value="">Todos (vista completa)</option></select>
   <!-- La carga es automática: al abrir y al cambiar período/sucursal/área. Los campos Desde/Hasta (#d1/#d2) alimentan toda la carga por rango. -->
@@ -1099,6 +1099,12 @@ function empDepartamento(e) { return e.departmentName || e.department || '—'; 
    organizacionales. Debe coincidir EXACTAMENTE con el agrupador del calendario
    (a1De) para que el filtro "Área" y las bandas usen el mismo valor. */
 function empArea1(e) { return e.area1 || e.departmentName || '(Sin área)'; }
+/* Subárea (área2) = lugar físico del trabajador en la planta. Coincide con el
+   agrupador a2De del calendario. */
+function empArea2(e) { return e.area2 || e.area1 || e.departmentName || '(Sin subárea)'; }
+/* Clave compuesta gerencia||subárea para el filtro: los nombres de subárea se
+   repiten entre gerencias (p.ej. "Gerencia"), así que la subárea sola no basta. */
+function empAreaKey(e) { return empArea1(e) + '||' + empArea2(e); }
 
 /* ── Jefaturas exentas de marcación ──
    Gerentes y jefaturas de confianza no marcan asistencia: en Chile van con
@@ -2530,7 +2536,7 @@ function aplicarFiltrosYRender() {
   var lista = cacheEmpleados.slice();
 
   if (sucFiltro) lista = lista.filter(function(e) { return e.branchOfficeCode === sucFiltro; });
-  if (depFiltro) lista = lista.filter(function(e) { return empArea1(e) === depFiltro; });
+  if (depFiltro) lista = lista.filter(function(e) { return empAreaKey(e) === depFiltro; });
   if (estadoFiltro === 'ACTIVO') lista = lista.filter(empActivo);
   else if (estadoFiltro === 'INACTIVO') lista = lista.filter(function(e) { return !empActivo(e); });
   if (qBusca) {
@@ -3582,7 +3588,7 @@ function calEmpleadosActivos(){
     // general, por ejemplo, tiene a puros gerentes exentos y si no vería vacío.
     if(!mostrarExentos && !FILTRO_JEFE && empExento(e)) return false;
     if(suc && empSucursalAdmin(e) !== suc) return false;
-    if(dep && empArea1(e) !== dep) return false;
+    if(dep && empAreaKey(e) !== dep) return false;
     return true;
   });
 }
@@ -3593,7 +3599,7 @@ function contarExentos(){
   return cacheEmpleados.filter(function(e){
     return empActivo(e) && empEnEmpresa(e) && empExento(e)
         && (!FILTRO_JEFE || normJefe(e.jefe)===normJefe(FILTRO_JEFE))
-        && (!suc || empSucursalAdmin(e)===suc) && (!dep || empArea1(e)===dep);
+        && (!suc || empSucursalAdmin(e)===suc) && (!dep || empAreaKey(e)===dep);
   }).length;
 }
 /* Puebla los selects de sucursal y departamento con los valores presentes en los datos */
@@ -3619,11 +3625,30 @@ function empEnEmpresa(e){
 function poblarFiltrosArea(){
   poblarFiltroEmpresa();
   var activos = cacheEmpleados.filter(function(e){ return empActivo(e) && empEnEmpresa(e); });
-  var sucs = {}, deps = {};
-  activos.forEach(function(e){ var s=empSucursalAdmin(e); if(s&&s!=='—')sucs[s]=1; var d=empArea1(e); if(d&&d!=='—'&&d!=='(Sin área)')deps[d]=1; });
+  var sucs = {}, grupos = {};   // grupos: gerencia(área1) → { subárea(área2) → clave compuesta }
+  activos.forEach(function(e){
+    var s=empSucursalAdmin(e); if(s&&s!=='—')sucs[s]=1;
+    var a1=empArea1(e), a2=empArea2(e);
+    if(a1==='(Sin área)' && a2==='(Sin subárea)') return;
+    (grupos[a1] = grupos[a1] || {})[a2] = empAreaKey(e);
+  });
   var selS=$('sucursal'), selD=$('depto');
-  if(selS){ var v=selS.value; selS.innerHTML='<option value="">Todas</option>'+Object.keys(sucs).sort().map(function(x){return '<option>'+x+'</option>';}).join(''); selS.value=v; }
-  if(selD){ var v2=selD.value; selD.innerHTML='<option value="">Todos</option>'+Object.keys(deps).sort().map(function(x){return '<option>'+x+'</option>';}).join(''); selD.value=v2; }
+  if(selS){ var v=selS.value; selS.innerHTML='<option value="">Todas</option>'+Object.keys(sucs).sort().map(function(x){return '<option>'+esc(x)+'</option>';}).join(''); selS.value=v; }
+  if(selD){
+    // Subárea (área2) agrupada por gerencia (área1). El valor es la clave
+    // compuesta para que subáreas con el mismo nombre no se mezclen.
+    var v2=selD.value, html='<option value="">Todas</option>';
+    Object.keys(grupos).sort(function(a,b){return a.localeCompare(b,'es');}).forEach(function(a1){
+      var subs=grupos[a1];
+      html+='<optgroup label="'+esc(a1)+'">';
+      Object.keys(subs).sort(function(a,b){return a.localeCompare(b,'es');}).forEach(function(a2){
+        html+='<option value="'+esc(subs[a2])+'">'+esc(a2)+'</option>';
+      });
+      html+='</optgroup>';
+    });
+    selD.innerHTML=html;
+    selD.value=v2;   // conserva la selección si sigue existiendo
+  }
 }
 
 function pillTxt(edo){ return {p:'P',a:'A',pe:'P/E',ps:'P/S',lic:'Lic',vac:'Vac'}[edo]||'·'; }
@@ -3814,7 +3839,7 @@ function renderCalendario(preservarScroll){
   // romper la vista. El jefe de cada banda = la jefatura más frecuente entre sus
   // integrantes.
   function a1De(e){ return empArea1(e); }
-  function a2De(e){ return e.area2 || e.area1 || e.departmentName || '(Sin subárea)'; }
+  function a2De(e){ return empArea2(e); }
   var grupos = {};   // area1 → { subs:{ area2 → [emp] }, total }
   personas.forEach(function(e){
     var a1=a1De(e), a2=a2De(e);

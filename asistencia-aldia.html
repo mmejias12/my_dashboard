@@ -271,6 +271,7 @@ body{zoom:var(--escala,1)}
 .cal-navbtn:hover{background:var(--s4);color:var(--cyan)}
 .cal-mestitulo{font-size:13px;font-weight:600;min-width:130px;text-align:center;text-transform:capitalize}
 .cal-weekbar{display:flex;gap:5px;margin-left:8px;flex-wrap:wrap}
+.cal-dmes{display:block;font-size:8px;line-height:1;color:#15803d;font-weight:700;text-transform:uppercase;margin-top:1px}
 .cal-weekchip{font-size:10px;padding:3px 10px;border-radius:12px;background:var(--s3);border:1px solid var(--brm);color:var(--t2);cursor:pointer;transition:all .15s;white-space:nowrap}
 .cal-weekchip:hover{color:var(--t1);border-color:var(--brh)}
 .cal-weekchip.on{background:var(--cyan-bg);color:var(--cyan);border-color:color-mix(in srgb,var(--cyan) 35%,transparent);font-weight:600}
@@ -531,18 +532,17 @@ body{zoom:var(--escala,1)}
   <select id="empresa" class="ctrl-sel" onchange="poblarFiltrosArea();renderCalendario();renderPanelDia()">
     <option value="">Todas</option>
   </select>
-  <span class="ctrl-lbl">Mes:</span>
-  <select id="mes-sel" class="ctrl-sel" onchange="seleccionarMes()"></select>
+  <span class="ctrl-lbl">Desde:</span>
+  <input type="date" id="d1" class="ctrl-sel" style="min-width:140px" onchange="aplicarRango()" title="Fecha inicial del período">
+  <span class="ctrl-lbl">Hasta:</span>
+  <input type="date" id="d2" class="ctrl-sel" style="min-width:140px" onchange="aplicarRango()" title="Fecha final del período">
   <span class="ctrl-lbl">Sucursal:</span>
   <select id="sucursal" class="ctrl-sel" onchange="renderCalendario();renderPanelDia()"><option value="">Todas</option></select>
   <span class="ctrl-lbl">Área:</span>
   <select id="depto" class="ctrl-sel" title="Filtrar por área (gerencia)" onchange="renderCalendario();renderPanelDia()"><option value="">Todas</option></select>
   <span class="ctrl-lbl" id="lbl-verjefe" style="display:none">Ver como:</span>
   <select id="ver-jefe" class="ctrl-sel" style="display:none" title="Ver la asistencia del equipo de una jefatura" onchange="setVerJefe(this.value)"><option value="">Todos (vista completa)</option></select>
-  <!-- La carga es automática: al abrir y al cambiar mes/sucursal/depto. -->
-  <!-- controles ocultos que la maquinaria de datos sigue usando internamente -->
-  <input type="date" id="d1" style="display:none">
-  <input type="date" id="d2" style="display:none">
+  <!-- La carga es automática: al abrir y al cambiar período/sucursal/área. Los campos Desde/Hasta (#d1/#d2) alimentan toda la carga por rango. -->
   <input type="number" id="tolerancia" value="0" style="display:none">
 </div>
 
@@ -615,9 +615,9 @@ body{zoom:var(--escala,1)}
       </div>
 
       <div class="cal-monthbar">
-        <button class="cal-navbtn" onclick="cambiarMesCal(-1)" title="Mes anterior">‹</button>
+        <button class="cal-navbtn" onclick="desplazarRango(-1)" title="Período anterior">‹</button>
         <span class="cal-mestitulo" id="cal-mestitulo">—</span>
-        <button class="cal-navbtn" onclick="cambiarMesCal(1)" title="Mes siguiente">›</button>
+        <button class="cal-navbtn" onclick="desplazarRango(1)" title="Período siguiente">›</button>
         <div class="cal-weekbar" id="cal-weekbar"></div>
       </div>
 
@@ -1480,45 +1480,68 @@ window.addEventListener('DOMContentLoaded', function() {
   cacheCargarDeDisco();
   document.body.classList.add('tab-cal');
 
-  // Poblar selector de meses (últimos 12 meses hasta el actual) y seleccionar el mes en curso
-  poblarMeses();
-  seleccionarMes(true);   // fija d1/d2 al mes actual sin cargar aún
+  // Período por defecto: del 1° del mes en curso hasta hoy (sin cargar aún)
+  inicializarRango();
 
-  // Auto-cargar el mes en curso al iniciar
+  // Auto-cargar al iniciar
   setTimeout(cargar, 200);
 });
 
-/* Rellena el <select id="mes-sel"> con los últimos 12 meses (más reciente arriba) */
-function poblarMeses(){
-  var sel = $('mes-sel'); if(!sel) return;
-  var nombres = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-  var h = new Date(); var y = h.getFullYear(), m = h.getMonth();
-  var html = '';
-  for (var i=0; i<12; i++){
-    var yy = y, mm = m - i;
-    while (mm < 0){ mm += 12; yy--; }
-    var val = yy + '-' + pad(mm+1);
-    var label = nombres[mm].charAt(0).toUpperCase()+nombres[mm].slice(1) + ' ' + yy;
-    html += '<option value="'+val+'"'+(i===0?' selected':'')+'>'+label+'</option>';
-  }
-  sel.innerHTML = html;
+/* ── Período Desde/Hasta ──
+   El data layer (cargar) ya trabaja por rango #d1..#d2; estas funciones sólo
+   fijan ese rango y disparan la carga. calAnio/calMes se mantienen al mes de
+   inicio del rango para la ficha del trabajador y sus etiquetas. */
+var CAL_MAX_DIAS = 92;   // tope del período (~3 meses) para no cargar de más
+function sincronizarMesDesdeRango(){
+  var v = ($('d1') && $('d1').value) || hoy();
+  var p = v.split('-'); calAnio = parseInt(p[0]); calMes = parseInt(p[1]) - 1;
 }
-
-/* Cuando cambia el mes: fija el rango d1..d2 del mes (hasta hoy si es el mes actual)
-   y, salvo en el arranque, dispara la carga automáticamente. */
-function seleccionarMes(soloFijar){
-  var val = $('mes-sel').value;               // 'YYYY-MM'
-  var partes = val.split('-');
-  var yy = parseInt(partes[0]), mm = parseInt(partes[1]) - 1;
-  calAnio = yy; calMes = mm;                   // sincroniza el calendario
-  var primer = yy + '-' + pad(mm+1) + '-01';
-  var ultimoDia = new Date(yy, mm+1, 0).getDate();
-  var hoyStr = hoy();
-  var hoyD = new Date(); var esMesActual = (yy===hoyD.getFullYear() && mm===hoyD.getMonth());
-  var ultimo = esMesActual ? hoyStr : (yy + '-' + pad(mm+1) + '-' + pad(ultimoDia));
-  $('d1').value = primer;
-  $('d2').value = ultimo;
-  if (!soloFijar) cargar();                    // recarga datos del mes elegido
+function inicializarRango(){
+  var h = new Date();
+  $('d1').value = h.getFullYear() + '-' + pad(h.getMonth()+1) + '-01';
+  $('d2').value = hoy();
+  sincronizarMesDesdeRango();
+}
+/* Cambió Desde o Hasta: valida, corrige y recarga. */
+function aplicarRango(){
+  var d1 = $('d1').value, d2 = $('d2').value;
+  if(!d1 || !d2) return;                        // período incompleto: no dispara aún
+  if(d1 > d2){                                  // orden invertido → intercambia
+    var t = d1; d1 = d2; d2 = t;
+    $('d1').value = d1; $('d2').value = d2;
+  }
+  var fechas = diasEnRango(d1, d2);
+  if(fechas.length > CAL_MAX_DIAS){             // recorta a CAL_MAX_DIAS desde Desde
+    d2 = fechas[CAL_MAX_DIAS - 1];
+    $('d2').value = d2;
+    setStatus('load', 'El período se limitó a ' + CAL_MAX_DIAS + ' días (' + d1 + ' → ' + d2 + ').');
+  }
+  sincronizarMesDesdeRango();
+  cargar();
+}
+function isoSumarDias(iso, n){
+  var d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n);
+  return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+}
+/* Rótulo del período para el título del calendario. */
+function etiquetaRango(d1, d2){
+  var a = new Date(d1+'T12:00:00'), b = new Date(d2+'T12:00:00');
+  if(a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth()){
+    var ultMes = new Date(a.getFullYear(), a.getMonth()+1, 0).getDate();
+    var hd = new Date();
+    var esHastaHoy = (b.getFullYear()===hd.getFullYear() && b.getMonth()===hd.getMonth() && b.getDate()===hd.getDate());
+    if(a.getDate()===1 && (b.getDate()===ultMes || esHastaHoy))
+      return CAL_NMES[a.getMonth()].charAt(0).toUpperCase()+CAL_NMES[a.getMonth()].slice(1)+' '+a.getFullYear();
+    return a.getDate()+'–'+b.getDate()+' '+CAL_MES3[a.getMonth()]+' '+a.getFullYear();
+  }
+  var mismoAno = a.getFullYear()===b.getFullYear();
+  return a.getDate()+' '+CAL_MES3[a.getMonth()]+(mismoAno?'':' '+a.getFullYear())+' – '+b.getDate()+' '+CAL_MES3[b.getMonth()]+' '+b.getFullYear();
+}
+/* Rótulo corto de un tramo (chip de semana). */
+function etiquetaTramo(d1, d2){
+  var a = new Date(d1+'T12:00:00'), b = new Date(d2+'T12:00:00');
+  if(a.getMonth()===b.getMonth()) return a.getDate()+'–'+b.getDate()+' '+CAL_MES3[a.getMonth()];
+  return a.getDate()+' '+CAL_MES3[a.getMonth()]+'–'+b.getDate()+' '+CAL_MES3[b.getMonth()];
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -3358,6 +3381,7 @@ var calModalCtx = null;
 var calComentarios = {};           // 'code|fecha' -> comentario manual (sesión + localStorage)
 var CAL_COMENT_KEY = 'talana_cal_coment_v1';
 var CAL_NMES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+var CAL_MES3 = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 var CAL_DOW  = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 
 try { calComentarios = JSON.parse(localStorage.getItem(CAL_COMENT_KEY) || '{}'); } catch(e){ calComentarios = {}; }
@@ -3727,13 +3751,15 @@ function renderCalendario(preservarScroll){
     cont.innerHTML = '<div class="empty" style="padding:30px">Aún no hay datos. Presiona <b>Cargar</b> arriba para traer empleados y marcas.</div>';
     return;
   }
-  if (calAnio === undefined){ var h=new Date(); calAnio=h.getFullYear(); calMes=h.getMonth(); }
-
-  var ultimo = new Date(calAnio, calMes+1, 0).getDate();
+  // Período visible = rango Desde/Hasta. Si falta, cae al mes en curso.
+  var rd1 = ($('d1') && $('d1').value) || '', rd2 = ($('d2') && $('d2').value) || '';
+  if(!rd1 || !rd2){ inicializarRango(); rd1 = $('d1').value; rd2 = $('d2').value; }
+  if(rd1 > rd2){ var _t=rd1; rd1=rd2; rd2=_t; }
+  var fechas = diasEnRango(rd1, rd2);
   var hoyD = new Date(); hoyD.setHours(12,0,0,0);
   var q = ($('cal-busca').value||'').toLowerCase().trim();
 
-  $('cal-mestitulo').textContent = CAL_NMES[calMes] + ' ' + calAnio;
+  $('cal-mestitulo').textContent = etiquetaRango(rd1, rd2);
 
   // Etiqueta del chip de jefaturas exentas con el conteo actual.
   var chE = $('chip-exentos');
@@ -3747,14 +3773,16 @@ function renderCalendario(preservarScroll){
     return empNombreCompleto(e).toLowerCase().indexOf(q)>=0 || (e.identification||'').toLowerCase().indexOf(q)>=0;
   });
 
-  // encabezado días
+  // encabezado días (una columna por cada fecha del rango; puede cruzar meses)
   var head = '<div class="cal-hrow"><div class="cal-corner">Trabajador \\ Día</div>';
-  for (var dia=1; dia<=ultimo; dia++){
-    var f = new Date(calAnio, calMes, dia); var dow=f.getDay();
+  var _mesPrev=null;
+  fechas.forEach(function(fecha){
+    var f = new Date(fecha+'T12:00:00'); var dow=f.getDay(); var dia=f.getDate(); var mo=f.getMonth();
     var esHoy = (f.getFullYear()===hoyD.getFullYear()&&f.getMonth()===hoyD.getMonth()&&f.getDate()===hoyD.getDate());
+    var tag = (mo!==_mesPrev) ? '<span class="cal-dmes">'+CAL_MES3[mo]+'</span>' : ''; _mesPrev=mo;
     var cls='cal-daycol'+((dow===0||dow===6)?' finde':'')+(esHoy?' hoy':'');
-    head += '<div class="'+cls+'" id="daycol-'+dia+'"><span class="cal-dow">'+CAL_DOW[dow]+'</span><span class="cal-dnum">'+dia+'</span></div>';
-  }
+    head += '<div class="'+cls+'" id="daycol-'+fecha+'"><span class="cal-dow">'+CAL_DOW[dow]+'</span><span class="cal-dnum">'+dia+'</span>'+tag+'</div>';
+  });
   head += '</div>';
 
   // Una fila de celdas de días para una persona (se reutiliza en cada grupo).
@@ -3762,9 +3790,9 @@ function renderCalendario(preservarScroll){
     var code = e.code, nombre = empNombreCompleto(e), rut = e.identification||'—';
     var oc = oculta ? ' oculta' : '';
     var fila = '<div class="cal-prow'+oc+'" data-a1="'+esc(a1)+'" data-a2key="'+esc(a2key)+'"><div class="cal-pname cal-pname-click" title="Ver ficha completa de '+esc(nombre)+'" onclick="abrirModalEmpleado(\''+code+'\')">'+avatarEmp(e,'chico')+'<div class="cal-pname-txt"><span class="cal-pn">'+esc(nombre)+'</span><span class="cal-pr">'+esc(rut)+'</span></div></div>';
-    for (var dia=1; dia<=ultimo; dia++){
-      var fecha = calIso(calAnio, calMes, dia);
-      var f = new Date(calAnio, calMes, dia); var dow=f.getDay(); var finde=(dow===0||dow===6);
+    for (var _i=0; _i<fechas.length; _i++){
+      var fecha = fechas[_i];
+      var f = new Date(fecha+'T12:00:00'); var dow=f.getDay(); var finde=(dow===0||dow===6);
       if (f > hoyD){ fila += '<div class="cal-cell vacio'+(finde?' finde':'')+'"><span class="cal-mini empty">·</span></div>'; continue; }
       var st = calEstadoDia(code, fecha);
       if (!st){ fila += '<div class="cal-cell vacio'+(finde?' finde':'')+'"><span class="cal-mini empty">·</span></div>'; continue; }
@@ -3824,7 +3852,7 @@ function renderCalendario(preservarScroll){
   });
 
   cont.innerHTML = head + body;
-  renderWeekbarCal(ultimo);
+  renderWeekbarCal(fechas);
   if (preservarScroll){
     // repintado en background: mantener la posición de scroll del usuario
     var w=$('cal-wrap');
@@ -3836,47 +3864,59 @@ function renderCalendario(preservarScroll){
   }
 }
 
-function renderWeekbarCal(ultimo){
-  var bar=$('cal-weekbar'); var html=''; var sem=1;
-  for(var dia=1; dia<=ultimo; dia+=7){
-    var fin=Math.min(dia+6,ultimo);
-    html+='<span class="cal-weekchip" title="Ir a esta semana en el calendario (desplaza la tabla a esos días)" data-dia="'+dia+'" onclick="scrollADiaCal('+dia+',this)">Sem '+sem+' · '+dia+'-'+fin+'</span>';
+function renderWeekbarCal(fechas){
+  var bar=$('cal-weekbar'); if(!bar) return;
+  if(!fechas || !fechas.length){ bar.innerHTML=''; return; }
+  var html=''; var sem=1;
+  for(var i=0;i<fechas.length;i+=7){
+    var ini=fechas[i], fin=fechas[Math.min(i+6, fechas.length-1)];
+    html+='<span class="cal-weekchip" title="Ir a este tramo (desplaza la tabla a esos días)" data-iso="'+ini+'" onclick="scrollADiaCal(\''+ini+'\',this)">Sem '+sem+' · '+etiquetaTramo(ini,fin)+'</span>';
     sem++;
   }
   bar.innerHTML=html;
 }
-function scrollADiaCal(dia,chip){
-  var col=$('daycol-'+dia), wrap=$('cal-wrap');
+function scrollADiaCal(iso,chip){
+  var col=$('daycol-'+iso), wrap=$('cal-wrap');
   if(col) wrap.scrollTo({left:col.offsetLeft-200,behavior:'smooth'});
   document.querySelectorAll('.cal-weekchip').forEach(function(c){c.classList.remove('on');});
   if(chip) chip.classList.add('on');
 }
 function scrollSemanaActualCal(){
-  var h=new Date();
-  if(h.getFullYear()===calAnio && h.getMonth()===calMes){
-    var ini=h.getDate()-((h.getDay()+6)%7); if(ini<1)ini=1;
+  var hoyStr = hoy();
+  var rd1=($('d1')&&$('d1').value)||'', rd2=($('d2')&&$('d2').value)||'';
+  var chips=document.querySelectorAll('.cal-weekchip');
+  if(hoyStr>=rd1 && hoyStr<=rd2){
     var target=null;
-    document.querySelectorAll('.cal-weekchip').forEach(function(ch){ if(parseInt(ch.dataset.dia)<=h.getDate()) target=ch; });
-    scrollADiaCal(ini, target);
-  } else { scrollADiaCal(1, document.querySelector('.cal-weekchip')); }
-}
-function cambiarMesCal(delta){
-  if(calAnio===undefined){ var h=new Date(); calAnio=h.getFullYear(); calMes=h.getMonth(); }
-  calMes+=delta; if(calMes<0){calMes=11;calAnio--;} if(calMes>11){calMes=0;calAnio++;}
-  // reflejar en el selector de mes y recargar datos de ese mes
-  var sel=$('mes-sel');
-  if(sel){
-    var val=calAnio+'-'+calPad(calMes+1);
-    var existe=Array.prototype.some.call(sel.options,function(o){return o.value===val;});
-    if(existe){ sel.value=val; seleccionarMes(); return; }
+    chips.forEach(function(ch){ if(ch.dataset.iso && ch.dataset.iso<=hoyStr) target=ch; });
+    scrollADiaCal(hoyStr, target);
+  } else {
+    scrollADiaCal(rd1 || (chips[0]&&chips[0].dataset.iso), chips[0]);
   }
-  renderCalendario();
 }
-function calHoyMes(){
-  var h=new Date(); var val=h.getFullYear()+'-'+calPad(h.getMonth()+1);
-  var sel=$('mes-sel');
-  if(sel){ sel.value=val; seleccionarMes(); }
-  else { calAnio=h.getFullYear(); calMes=h.getMonth(); renderCalendario(); }
+/* Flechas ‹ ›: desplazan el período. Si es un mes completo, salta mes a mes;
+   si no, corre el rango por su propio largo (p.ej. una quincena → la anterior). */
+function desplazarRango(delta){
+  var rd1=$('d1').value, rd2=$('d2').value;
+  if(!rd1||!rd2){ inicializarRango(); rd1=$('d1').value; rd2=$('d2').value; }
+  var a=new Date(rd1+'T12:00:00'), b=new Date(rd2+'T12:00:00');
+  var ultA=new Date(a.getFullYear(),a.getMonth()+1,0).getDate();
+  var esMesCompleto=(a.getDate()===1 && b.getDate()===ultA && a.getMonth()===b.getMonth() && a.getFullYear()===b.getFullYear());
+  if(esMesCompleto){
+    var nm=a.getMonth()+delta, ny=a.getFullYear();
+    while(nm<0){nm+=12;ny--;} while(nm>11){nm-=12;ny++;}
+    var ult=new Date(ny,nm+1,0).getDate();
+    $('d1').value=ny+'-'+pad(nm+1)+'-01';
+    $('d2').value=ny+'-'+pad(nm+1)+'-'+pad(ult);
+  } else {
+    var n=diasEnRango(rd1,rd2).length;
+    $('d1').value=isoSumarDias(rd1,delta*n);
+    $('d2').value=isoSumarDias(rd2,delta*n);
+  }
+  aplicarRango();
+}
+function calHoyMes(){           // botón "Mes actual": vuelve al mes en curso (1° → hoy)
+  inicializarRango();
+  aplicarRango();
 }
 
 /* ── Panel KPI del día de HOY (datos reales) ── */

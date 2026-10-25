@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Stock y Flujos de Pallets</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Tablero operativo: una fila de cifras, luego las tres patas del pool, luego
+   el detalle por socio. Neutros calidos sobre el rojo del pallet. */
+:root{
+  --bg:#faf8f6; --panel:#ffffff; --linea:#e4ded8; --tinta:#1c1917; --tinta2:#57514b; --tinta3:#8a817a;
+  --marca:#b5342a; --cli:#1f6fb2; --ret:#c65a1e; --pla:#0e8f7a;
+  --ok:#0e8f7a; --alerta:#b06a00; --grave:#b5342a;
+  --f-tit:'Archivo',system-ui,sans-serif; --f-txt:'Source Sans 3',system-ui,sans-serif;
+  --f-cod:'IBM Plex Mono',ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#171513; --panel:#201d1b; --linea:#332e2a; --tinta:#f2eeea; --tinta2:#b5aca4; --tinta3:#857c74;
+  --marca:#e06054; --cli:#4792d2; --ret:#d4762c; --pla:#28a386;
+  --ok:#28a386; --alerta:#d99a2b; --grave:#e06054; color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#171513; --panel:#201d1b; --linea:#332e2a; --tinta:#f2eeea; --tinta2:#b5aca4; --tinta3:#857c74;
+  --marca:#e06054; --cli:#4792d2; --ret:#d4762c; --pla:#28a386;
+  --ok:#28a386; --alerta:#d99a2b; --grave:#e06054; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--tinta);font:16px/1.55 var(--f-txt);
+  font-variant-numeric:tabular-nums;-webkit-text-size-adjust:100%}
+.wrap{max-width:1120px;margin:0 auto;padding-block:28px 56px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1{font:600 30px/1.15 var(--f-tit);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h2{font:600 19px/1.25 var(--f-tit);margin:0 0 4px;text-wrap:balance}
+h3{font:600 14px/1.3 var(--f-tit);margin:0 0 10px;text-transform:uppercase;letter-spacing:.07em;color:var(--tinta2)}
+p{margin:0 0 10px;max-width:68ch}
+.sub{color:var(--tinta2);font-size:14px;margin-top:6px}
+.cabe{display:flex;flex-wrap:wrap;gap:14px;align-items:baseline;justify-content:space-between;
+  border-bottom:2px solid var(--marca);padding-bottom:14px}
+.sello{font:500 12px/1 var(--f-cod);color:var(--tinta2);border:1px solid var(--linea);
+  border-radius:3px;padding:6px 9px;white-space:nowrap}
+section{margin-top:34px}
+.panel{background:var(--panel);border:1px solid var(--linea);border-radius:8px;padding:18px}
+.rejilla{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin-top:14px}
+.tile .et{font:600 11px/1 var(--f-tit);text-transform:uppercase;letter-spacing:.09em;color:var(--tinta2)}
+.tile .big{font:700 clamp(28px,5vw,40px)/1 var(--f-tit);margin:9px 0 2px;letter-spacing:-.02em}
+.tile .pie{font-size:13px;color:var(--tinta2);min-width:0}
+.tile{border-left:3px solid var(--linea)}
+.t-cli{border-left-color:var(--cli)} .t-ret{border-left-color:var(--ret)} .t-pla{border-left-color:var(--pla)}
+.flota{display:block;width:100%;height:34px;margin:4px 0 10px}
+.s-cli{fill:var(--cli)} .s-ret{fill:var(--ret)} .s-pla{fill:var(--pla)}
+.leyenda{display:flex;flex-wrap:wrap;gap:16px;font-size:13.5px;color:var(--tinta2);margin-top:2px}
+.leyenda b{color:var(--tinta);font-weight:600}
+.pt{width:10px;height:10px;border-radius:2px;display:inline-block;margin-right:6px;vertical-align:-1px}
+.p-cli{background:var(--cli)} .p-ret{background:var(--ret)} .p-pla{background:var(--pla)}
+svg{display:block;width:100%;height:auto;max-width:100%}
+.b-ret{fill:var(--ret)} .b-cli{fill:var(--cli)}
+.grid{stroke:var(--linea);stroke-width:1}
+.ax{fill:var(--tinta3);font:500 11px var(--f-cod)}
+/* Sin min-width:0 un hijo de grid se estira al ancho de su tabla y el
+   overflow-x del contenedor no recorta nada: la pagina entera se va de lado. */
+.panel,.dos>*,.rejilla>*,.scroll{min-width:0}
+.scroll{overflow-x:auto;margin:0 -4px;padding:0 4px;max-width:100%}
+table{width:100%;border-collapse:collapse;font-size:14px;min-width:460px}
+th{text-align:left;font:600 11px/1 var(--f-tit);text-transform:uppercase;letter-spacing:.07em;
+  color:var(--tinta2);padding:0 10px 8px 0;border-bottom:1px solid var(--linea);white-space:nowrap}
+td{padding:6px 10px 6px 0;border-bottom:1px solid var(--linea);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+.cod{font:400 12px var(--f-cod);color:var(--tinta3);white-space:nowrap}
+/* .cod lleva nowrap porque es para RUT y codigos de bodega en tablas. Un
+   nombre de campo largo necesita poder cortarse o se lleva la pagina de lado. */
+.campo{font:400 12px var(--f-cod);color:var(--tinta2);overflow-wrap:anywhere}
+.nom{min-width:0}
+.num{text-align:right;white-space:nowrap;font-weight:600}
+th.num{text-align:right}
+.bar{width:28%;min-width:70px}
+.bar span{display:block;height:8px;border-radius:0 3px 3px 0;background:var(--tinta3);opacity:.55}
+.t-r .bar span{background:var(--ret);opacity:1}
+.t-c .bar span{background:var(--cli);opacity:1}
+.t-g .bar span{background:var(--ret);opacity:1}
+.d-pos{color:var(--ok)} .d-neg{color:var(--grave)} .d-nul{color:var(--tinta3)}
+.chip{font:500 10px/1 var(--f-tit);text-transform:uppercase;letter-spacing:.06em;
+  border:1px solid var(--linea);border-radius:999px;padding:3px 7px;color:var(--tinta3);white-space:nowrap}
+.aviso{border-left:3px solid var(--alerta);background:var(--panel);border-radius:0 8px 8px 0;
+  padding:14px 16px;margin-top:14px}
+.aviso h3{color:var(--alerta);margin-bottom:6px}
+.dos{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:5px 14px;font-size:13.5px}
+dt{color:var(--tinta2);white-space:nowrap} dd{margin:0;min-width:0}
+footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--linea);
+  font-size:12.5px;color:var(--tinta3)}
+@media (max-width:560px){
+  .bar,th.bar{display:none}
+  table{min-width:330px}
+  td,th{padding-right:8px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="cabe">
+  <div>
+    <h1>Stock y Flujos de Pallets</h1>
+    <div class="sub">Pallet rojo 1,00 × 1,20 · SKU 11111111110 · extracción propia desde SAP B1</div>
+  </div>
+  <div class="sello">Saldos al 2026-10-25<br>Flujos 2026 al 2026-10-26</div>
+</header>
+
+<section>
+  <h2>La flota</h2>
+  <p>Todo el pallet rojo que SAP tiene registrado, en las 39 bodegas de la empresa.</p>
+  <div class="panel">
+    <div class="tile" style="border:none;padding:0">
+      <div class="et">Flota total</div>
+      <div class="big">810.625</div>
+      <div class="pie">pallets, leídos del saldo vivo de SAP</div>
+    </div>
+    <div class="flota"><svg viewBox="0 0 1000 34" preserveAspectRatio="none" role="img" aria-label="Reparto de la flota"><rect class="s-cli" x="0.00" y="0" width="260.69" height="34" rx="3"><title>Clientes: 212.945 (26.3%)</title></rect><rect class="s-ret" x="262.69" y="0" width="712.30" height="34" rx="3"><title>Retail: 579.026 (71.4%)</title></rect><rect class="s-pla" x="976.99" y="0" width="21.01" height="34" rx="3"><title>Planta REDTEC: 18.654 (2.3%)</title></rect></svg></div>
+    <div class="leyenda">
+      <span><i class="pt p-cli"></i>Clientes <b>212.945</b> · 26.3%</span>
+      <span><i class="pt p-ret"></i>Retail <b>579.026</b> · 71.4%</span>
+      <span><i class="pt p-pla"></i>Planta REDTEC <b>18.654</b> · 2.3%</span>
+    </div>
+  </div>
+
+  <div class="rejilla">
+    <div class="panel tile t-cli">
+      <div class="et">Clientes</div><div class="big">212.945</div>
+      <div class="pie"><b>99.5%</b> atribuido a 69 socios<br>
+      residuo sin ubicación: 1.040</div>
+    </div>
+    <div class="panel tile t-ret">
+      <div class="et">Retail</div><div class="big">579.026</div>
+      <div class="pie"><b>94.1%</b> atribuido a 59 socios<br>
+      residuo sin ubicación: 34.063</div>
+    </div>
+    <div class="panel tile t-pla">
+      <div class="et">Planta REDTEC</div><div class="big">18.654</div>
+      <div class="pie">14.265 en las nueve bodegas del indicador<br>
+      4.389 en merma, extraños y tránsito</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Movimiento neto por mes</h2>
+  <p>Cuánto subió o bajó cada bodega en el año. Un valor positivo es pallet que salió de REDTEC hacia el socio; uno negativo es pallet que volvió.</p>
+  <div class="panel">
+    <div class="leyenda" style="margin-bottom:10px">
+      <span><i class="pt p-ret"></i>Retail <b>+36.438</b> en el año</span>
+      <span><i class="pt p-cli"></i>Clientes <b>+25.113</b> en el año</span>
+    </div>
+    <div class="scroll"><svg viewBox="0 0 760 234" role="img" aria-label="Movimiento neto mensual 2026"><line class="grid" x1="54" y1="14.0" x2="760" y2="14.0"/><text class="ax" x="46" y="18.0" text-anchor="end">+12.343</text><line class="grid" x1="54" y1="139.9" x2="760" y2="139.9"/><text class="ax" x="46" y="143.9" text-anchor="end">0</text><line class="grid" x1="54" y1="204.0" x2="760" y2="204.0"/><text class="ax" x="46" y="208.0" text-anchor="end">-6.288</text><rect class="b-ret" x="62.8" y="113.6" width="24" height="26.2" rx="3"/><title>Ene · RETAIL: +2.573</title><rect class="b-cli" x="91.8" y="139.9" width="24" height="61.3" rx="3"/><title>Ene · CLIENTES: -6.012</title><text class="ax" x="89.3" y="222" text-anchor="middle">Ene</text><rect class="b-ret" x="133.4" y="28.0" width="24" height="111.9" rx="3"/><title>Feb · RETAIL: +10.968</title><rect class="b-cli" x="162.4" y="139.9" width="24" height="19.2" rx="3"/><title>Feb · CLIENTES: -1.887</title><text class="ax" x="159.9" y="222" text-anchor="middle">Feb</text><rect class="b-ret" x="204.0" y="47.2" width="24" height="92.7" rx="3"/><title>Mar · RETAIL: +9.086</title><rect class="b-cli" x="233.0" y="125.5" width="24" height="14.4" rx="3"/><title>Mar · CLIENTES: +1.409</title><text class="ax" x="230.5" y="222" text-anchor="middle">Mar</text><rect class="b-ret" x="274.6" y="139.9" width="24" height="8.1" rx="3"/><title>Abr · RETAIL: -797</title><rect class="b-cli" x="303.6" y="14.0" width="24" height="125.9" rx="3"/><title>Abr · CLIENTES: +12.343</title><text class="ax" x="301.1" y="222" text-anchor="middle">Abr</text><rect class="b-ret" x="345.2" y="119.8" width="24" height="20.0" rx="3"/><title>May · RETAIL: +1.964</title><rect class="b-cli" x="374.2" y="103.3" width="24" height="36.6" rx="3"/><title>May · CLIENTES: +3.586</title><text class="ax" x="371.7" y="222" text-anchor="middle">May</text><rect class="b-ret" x="415.8" y="115.4" width="24" height="24.5" rx="3"/><title>Jun · RETAIL: +2.398</title><rect class="b-cli" x="444.8" y="115.9" width="24" height="24.0" rx="3"/><title>Jun · CLIENTES: +2.353</title><text class="ax" x="442.3" y="222" text-anchor="middle">Jun</text><rect class="b-ret" x="486.4" y="48.2" width="24" height="91.7" rx="3"/><title>Jul · RETAIL: +8.993</title><rect class="b-cli" x="515.4" y="139.9" width="24" height="64.1" rx="3"/><title>Jul · CLIENTES: -6.288</title><text class="ax" x="512.9" y="222" text-anchor="middle">Jul</text><rect class="b-ret" x="557.0" y="115.8" width="24" height="24.1" rx="3"/><title>Ago · RETAIL: +2.365</title><rect class="b-cli" x="586.0" y="67.9" width="24" height="71.9" rx="3"/><title>Ago · CLIENTES: +7.053</title><text class="ax" x="583.5" y="222" text-anchor="middle">Ago</text><rect class="b-ret" x="627.6" y="139.9" width="24" height="18.3" rx="3"/><title>Sep · RETAIL: -1.791</title><rect class="b-cli" x="656.6" y="38.8" width="24" height="101.0" rx="3"/><title>Sep · CLIENTES: +9.907</title><text class="ax" x="654.1" y="222" text-anchor="middle">Sep</text><rect class="b-ret" x="698.2" y="133.0" width="24" height="6.9" rx="3"/><title>Oct · RETAIL: +679</title><rect class="b-cli" x="727.2" y="112.9" width="24" height="27.0" rx="3"/><title>Oct · CLIENTES: +2.649</title><text class="ax" x="724.7" y="222" text-anchor="middle">Oct</text></svg></div>
+  </div>
+</section>
+
+<section>
+  <h2>Quién tiene los pallets</h2>
+  <div class="dos" style="margin-top:14px">
+    <div class="panel">
+      <h3>Retail · top 25 de 59 con saldo</h3>
+      <div class="scroll"><table class="t-r">
+        <thead><tr><th>RUT</th><th>Socio</th><th class="num">Nivel</th><th class="num">Año</th></tr></thead>
+        <tbody><tr><td class="cod">R96829710-4</td><td class="nom">WALMART CHILE COMERCIAL</td>
+<td class="num">309.016</td>
+<td class="num d-pos">+37.511</td></tr><tr><td class="cod">R81537600-5</td><td class="nom">RENDIC HERMANOS (Unimarc)</td>
+<td class="num">73.386</td>
+<td class="num d-neg">-7.428</td></tr><tr><td class="cod">R81201000-K</td><td class="nom">CENCOSUD RETAIL</td>
+<td class="num">47.732</td>
+<td class="num d-neg">-5.546</td></tr><tr><td class="cod">R76012676-4</td><td class="nom">SMU MAYORISTA</td>
+<td class="num">27.234</td>
+<td class="num d-pos">+5.148</td></tr><tr><td class="cod">R96618540-6</td><td class="nom">ALVI SUPERMERCADO MAYORISTA</td>
+<td class="num">21.786</td>
+<td class="num d-pos">+1.015</td></tr><tr><td class="cod">R91575000-1</td><td class="nom">SOCOFAR</td>
+<td class="num">12.956</td>
+<td class="num d-pos">+3.274</td></tr><tr><td class="cod">R81788500-4</td><td class="nom">RABIE</td>
+<td class="num">9.335</td>
+<td class="num d-pos">+43</td></tr><tr><td class="cod">R78809560-0</td><td class="nom">DIST. Y COMERCIAL DIMAK</td>
+<td class="num">6.106</td>
+<td class="num d-pos">+1.555</td></tr><tr><td class="cod">R99571800-6</td><td class="nom">CENTRAL DISTRIBUCION LAGOS</td>
+<td class="num">5.966</td>
+<td class="num d-pos">+1.795</td></tr><tr><td class="cod">R96930440-6</td><td class="nom">KEYLOGISTICS CHILE</td>
+<td class="num">5.743</td>
+<td class="num d-nul">0</td></tr><tr><td class="cod">R94623000-6</td><td class="nom">SODEXO CHILE</td>
+<td class="num">5.448</td>
+<td class="num d-nul">0</td></tr><tr><td class="cod">R78627210-6</td><td class="nom">HIPERMERCADOS TOTTUS</td>
+<td class="num">4.976</td>
+<td class="num d-neg">-1.511</td></tr><tr><td class="cod">R96556940-5</td><td class="nom">PROVEEDORES INTEGRALES PRISA</td>
+<td class="num">2.925</td>
+<td class="num d-pos">+245</td></tr><tr><td class="cod">R70251100-3</td><td class="nom">CENTRAL DE COMPRAS LA CALERA</td>
+<td class="num">1.906</td>
+<td class="num d-pos">+465</td></tr><tr><td class="cod">R78752470-2</td><td class="nom">DISTRIBUIDORA PINCOYANO</td>
+<td class="num">1.827</td>
+<td class="num d-pos">+1.244</td></tr><tr><td class="cod">R76466608-9</td><td class="nom">COMERCIALIZADORA SIAD TALEB</td>
+<td class="num">1.624</td>
+<td class="num d-pos">+1.624</td></tr><tr><td class="cod">R76466343-8</td><td class="nom">COMERCIAL TEBA</td>
+<td class="num">1.503</td>
+<td class="num d-pos">+410</td></tr><tr><td class="cod">R86547000-2</td><td class="nom">MARGARITA UAUY E HIJOS</td>
+<td class="num">1.274</td>
+<td class="num d-pos">+200</td></tr><tr><td class="cod">R76421668-7</td><td class="nom">DISTRIBUIDORA CASANOVA</td>
+<td class="num">1.067</td>
+<td class="num d-pos">+695</td></tr><tr><td class="cod">R76531077-6</td><td class="nom">COMERCIAL SUDAMERICANA</td>
+<td class="num">982</td>
+<td class="num d-pos">+89</td></tr><tr><td class="cod">R76473580-3</td><td class="nom">EKONO</td>
+<td class="num">980</td>
+<td class="num d-nul">0</td></tr><tr><td class="cod">R76084682-1</td><td class="nom">OK MARKET</td>
+<td class="num">746</td>
+<td class="num d-nul">0</td></tr><tr><td class="cod">R84348700-9</td><td class="nom">ABASTECEDORA DEL COMERCIO</td>
+<td class="num">604</td>
+<td class="num d-pos">+8</td></tr><tr><td class="cod">R76407505-6</td><td class="nom">SUPERMERCADO CUGAT</td>
+<td class="num">503</td>
+<td class="num d-pos">+446</td></tr><tr><td class="cod">R76378831-8</td><td class="nom">FARMACIAS AHUMADA</td>
+<td class="num">499</td>
+<td class="num d-pos">+196</td></tr></tbody>
+      </table></div>
+      <p class="sub">Los otros 36 socios suman <b>-1.161</b>.
+      Incluye R11111111-1 "RETAIL NO HABILITADO" en -6.488, que es un saldo imposible y esta en revision.</p>
+    </div>
+    <div class="panel">
+      <h3>Clientes · top 25 de 69 con saldo</h3>
+      <div class="scroll"><table class="t-c">
+        <thead><tr><th>RUT</th><th>Socio</th><th class="num">Nivel</th><th class="num">Año</th></tr></thead>
+        <tbody><tr><td class="cod">C91004000-6</td><td class="nom">PRODUCTOS FERNANDEZ</td>
+<td class="num">27.795</td>
+<td class="num d-pos">+976</td></tr><tr><td class="cod">C92405000-4</td><td class="nom">LABORATORIO BALLERINA</td>
+<td class="num">21.084</td>
+<td class="num d-pos">+21.084</td></tr><tr><td class="cod">C91438000-6</td><td class="nom">CAMBIASO HNOS</td>
+<td class="num">18.944</td>
+<td class="num d-neg">-5.845</td></tr><tr><td class="cod">C76121450-0</td><td class="nom">INDUSTRIAS CLEANER CHILE</td>
+<td class="num">11.355</td>
+<td class="num d-pos">+4.852</td></tr><tr><td class="cod">C81860100-K</td><td class="nom">LAB. INTERNACIONAL DE COSMETICOS</td>
+<td class="num">11.196</td>
+<td class="num d-pos">+5.199</td></tr><tr><td class="cod">C76039282-0</td><td class="nom">EMBOTELLADORA METROPOLITANA</td>
+<td class="num">10.710</td>
+<td class="num d-pos">+1.357</td></tr><tr><td class="cod">C96847830-3</td><td class="nom">ILKO CHILE</td>
+<td class="num">10.472</td>
+<td class="num d-pos">+1.088</td></tr><tr><td class="cod">C85844100-5</td><td class="nom">COLGATE PALMOLIVE CHILE</td>
+<td class="num">7.561</td>
+<td class="num d-pos">+1.139</td></tr><tr><td class="cod">C90727000-9</td><td class="nom">EMPRESAS DEMARIA</td>
+<td class="num">6.739</td>
+<td class="num d-pos">+534</td></tr><tr><td class="cod">C76316386-5</td><td class="nom">EMBOTELLADORA DOS BANDERAS</td>
+<td class="num">6.292</td>
+<td class="num d-pos">+4.306</td></tr><tr><td class="cod">C96628870-1</td><td class="nom">IND. PRODUCTOS ALIMENTICIOS</td>
+<td class="num">5.952</td>
+<td class="num d-neg">-4.980</td></tr><tr><td class="cod">C96557910-9</td><td class="nom">ALIMENTOS Y FRUTOS</td>
+<td class="num">5.013</td>
+<td class="num d-pos">+588</td></tr><tr><td class="cod">C96665460-0</td><td class="nom">GOOD FOOD</td>
+<td class="num">4.955</td>
+<td class="num d-pos">+3.744</td></tr><tr><td class="cod">C76773020-9</td><td class="nom">QUINTA</td>
+<td class="num">4.932</td>
+<td class="num d-neg">-1.261</td></tr><tr><td class="cod">C78382760-3</td><td class="nom">LESAFFRE INDUSTRIAL CHILE</td>
+<td class="num">4.637</td>
+<td class="num d-pos">+366</td></tr><tr><td class="cod">C90889000-0</td><td class="nom">SOC. INDUSTRIAL KUNSTMANN</td>
+<td class="num">4.197</td>
+<td class="num d-neg">-591</td></tr><tr><td class="cod">C81852700-4</td><td class="nom">MOLINO PUENTE ALTO</td>
+<td class="num">4.179</td>
+<td class="num d-pos">+696</td></tr><tr><td class="cod">C96840350-8</td><td class="nom">PAIMASA</td>
+<td class="num">4.002</td>
+<td class="num d-pos">+766</td></tr><tr><td class="cod">C77316342-1</td><td class="nom">HALEON CHILE</td>
+<td class="num">3.645</td>
+<td class="num d-pos">+1.372</td></tr><tr><td class="cod">C76415269-7</td><td class="nom">HAMBURGO</td>
+<td class="num">3.619</td>
+<td class="num d-pos">+1.193</td></tr><tr><td class="cod">C84650700-0</td><td class="nom">PIBAMOUR</td>
+<td class="num">3.021</td>
+<td class="num d-pos">+386</td></tr><tr><td class="cod">C77784563-2</td><td class="nom">THE PROTEIN COMPANY</td>
+<td class="num">2.809</td>
+<td class="num d-pos">+992</td></tr><tr><td class="cod">C77278060-5</td><td class="nom">DAILY FOODS</td>
+<td class="num">2.528</td>
+<td class="num d-pos">+227</td></tr><tr><td class="cod">C79746250-0</td><td class="nom">ELABORADORA DE ALIMENTOS FRUTALE</td>
+<td class="num">2.280</td>
+<td class="num d-pos">+1.781</td></tr><tr><td class="cod">C77517270-3</td><td class="nom">TRANSPORTES LA MONTANA</td>
+<td class="num">2.162</td>
+<td class="num d-neg">-6.426</td></tr></tbody>
+      </table></div>
+      <p class="sub">Los otros 56 socios suman <b>21.826</b>.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Concentración en retail</h2>
+  <p>Por grupo económico, no por RUT. Cuatro grupos sostienen el 89% del pallet que está en retail.</p>
+  <div class="panel">
+    <div class="scroll"><table class="t-g">
+      <thead><tr><th>Grupo</th><th class="num">Nivel</th><th class="bar"></th><th class="num">Participación</th></tr></thead>
+      <tbody><tr><td class="nom">WALMART</td><td class="num">309.996</td><td class="bar"><span style="width:56.88%"></span></td><td class="num">56.9%</td></tr><tr><td class="nom">SMU (Unimarc + Mayorista + Alvi)</td><td class="num">122.406</td><td class="bar"><span style="width:22.46%"></span></td><td class="num">22.5%</td></tr><tr><td class="nom">CENCOSUD</td><td class="num">47.732</td><td class="bar"><span style="width:8.76%"></span></td><td class="num">8.8%</td></tr><tr><td class="nom">TOTTUS (Falabella)</td><td class="num">4.976</td><td class="bar"><span style="width:0.91%"></span></td><td class="num">0.9%</td></tr></tbody>
+    </table></div>
+    <p class="sub">Las barras van solo acá: entre los cuatro grupos el rango es comparable y la barra informa. En las tablas de socios, con WALMART en 309 mil, la cola quedaba en marcas invisibles.<br>La agrupación por holding es una lectura comercial sobre los RUT de SAP, no un dato del sistema. Falta que comercial la confirme.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Planta REDTEC</h2>
+  <p>El stock en planta es chico al lado de lo que está afuera, pero el flujo que lo atraviesa no lo es: cada estación procesa cientos de miles de pallets al año para sostener un par de miles en cualquier momento dado.</p>
+  <div class="dos" style="margin-top:14px">
+    <div class="panel">
+      <h3>Saldo por bodega</h3>
+      <div class="scroll"><table>
+        <thead><tr><th>Código</th><th>Bodega</th><th class="num">Saldo</th></tr></thead>
+        <tbody><tr><td class="cod">RT13-100</td><td class="nom">SANTIAGO INSPECCION</td><td class="num">5.447</td></tr><tr><td class="cod">RT13-103</td><td class="nom">SANTIAGO PINTURA</td><td class="num">3.664</td></tr><tr><td class="cod">RT13-266</td><td class="nom">SANTIAGO MERMA <span class="chip">fuera del indicador</span></td><td class="num">2.620</td></tr><tr><td class="cod">RT13-102</td><td class="nom">SANTIAGO REPARACION</td><td class="num">1.711</td></tr><tr><td class="cod">RT13-109</td><td class="nom">SANTIAGO EXTRANOS <span class="chip">fuera del indicador</span></td><td class="num">1.544</td></tr><tr><td class="cod">RT07-120</td><td class="nom">TALCA INSPECCION</td><td class="num">1.249</td></tr><tr><td class="cod">RT13-105</td><td class="nom">SANTIAGO DISPONIBLE</td><td class="num">1.231</td></tr><tr><td class="cod">RT07-125</td><td class="nom">TALCA DISPONIBLE</td><td class="num">559</td></tr><tr><td class="cod">RT07-123</td><td class="nom">TALCA PINTURA</td><td class="num">262</td></tr><tr><td class="cod">RT04-160</td><td class="nom">COQUIMBO TRANSITO <span class="chip">fuera del indicador</span></td><td class="num">225</td></tr><tr><td class="cod">RT07-126</td><td class="nom">TALCA TRANSITO</td><td class="num">142</td></tr><tr><td class="cod">RT07-122</td><td class="nom">TALCA REPARACION</td><td class="num">0</td></tr></tbody>
+      </table></div>
+    </div>
+    <div class="panel">
+      <h3>Flujo del año por bodega</h3>
+      <div class="scroll"><table>
+        <thead><tr><th>Código</th><th>Bodega</th><th class="num">Entradas</th><th class="num">Salidas</th><th class="num">Neto</th></tr></thead>
+        <tbody><tr><td class="cod">CLIENTES</td><td class="nom">BODEGA CLIENTES</td><td class="num">1.226.224</td><td class="num">1.199.671</td><td class="num d-pos">+26.553</td></tr><tr><td class="cod">RETAIL</td><td class="nom">BODEGA RETAILERS</td><td class="num">1.053.631</td><td class="num">1.017.877</td><td class="num d-pos">+35.754</td></tr><tr><td class="cod">RT13-105</td><td class="nom">SANTIAGO DISPONIBLE</td><td class="num">964.459</td><td class="num">967.746</td><td class="num d-neg">-3.287</td></tr><tr><td class="cod">RT13-103</td><td class="nom">SANTIAGO PINTURA</td><td class="num">918.265</td><td class="num">919.137</td><td class="num d-neg">-872</td></tr><tr><td class="cod">RT13-100</td><td class="nom">SANTIAGO INSPECCION</td><td class="num">854.880</td><td class="num">851.079</td><td class="num d-pos">+3.801</td></tr><tr><td class="cod">RT13-102</td><td class="nom">SANTIAGO REPARACION</td><td class="num">568.262</td><td class="num">573.290</td><td class="num d-neg">-5.028</td></tr><tr><td class="cod">RT07-125</td><td class="nom">TALCA DISPONIBLE</td><td class="num">163.130</td><td class="num">163.452</td><td class="num d-neg">-322</td></tr><tr><td class="cod">RT07-120</td><td class="nom">TALCA INSPECCION</td><td class="num">162.159</td><td class="num">160.518</td><td class="num d-pos">+1.641</td></tr><tr><td class="cod">RT07-123</td><td class="nom">TALCA PINTURA</td><td class="num">157.282</td><td class="num">157.020</td><td class="num d-pos">+262</td></tr><tr><td class="cod">RT07-122</td><td class="nom">TALCA REPARACION</td><td class="num">139.242</td><td class="num">141.012</td><td class="num d-neg">-1.770</td></tr><tr><td class="cod">RT04-160</td><td class="nom">COQUIMBO TRANSITO</td><td class="num">31.340</td><td class="num">31.340</td><td class="num d-nul">0</td></tr><tr><td class="cod">RT13-266</td><td class="nom">SANTIAGO MERMA</td><td class="num">3.350</td><td class="num">8.435</td><td class="num d-neg">-5.085</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Qué sostiene estas cifras</h2>
+  <div class="dos" style="margin-top:14px">
+    <div class="panel">
+      <h3>De dónde sale cada número</h3>
+      <dl>
+        <dt>Saldo por bodega</dt><dd>SAP B1 Service Layer, <code class="campo">ItemWarehouseInfoCollection.InStock</code>. Es el saldo que SAP ya tiene calculado, sin acumular series.</dd>
+        <dt>Nivel por socio</dt><dd>Serie de movimientos por ubicación extraída de SAP, repartida con el maestro de ubicaciones.</dd>
+        <dt>Flujo mensual</dt><dd>Diario de movimientos de inventario (OINM), agrupado por mes de fecha de documento.</dd>
+        <dt>Residuo</dt><dd>Saldo de bodega menos suma de los socios. No es un error de cálculo.</dd>
+      </dl>
+    </div>
+    <div class="panel">
+      <h3>Controles que pasó</h3>
+      <dl>
+        <dt>Conservación</dt><dd>La flota se mantuvo en 810.625 en tres lecturas distintas: un traspaso mueve el reparto, nunca el total.</dd>
+        <dt>Segunda fuente</dt><dd>El nivel de CLIENTES al 31-12-2025 da 187.832 por nuestra vía y 187.832 por la de Datawalt, calculadas por caminos que no comparten nada.</dd>
+        <dt>Cobertura</dt><dd>190.590 documentos en SAP y 190.590 en nuestra extracción, los diez meses al documento exacto.</dd>
+        <dt>Saldo imposible</dt><dd>Ningún socio puede tener menos de cero pallets. Hay uno que lo incumple y está identificado.</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="aviso">
+    <h3>Lo que falta resolver</h3>
+    <p><b>34.063 pallets en BODEGA RETAILERS sin ubicación asignada</b> (5.9% del retail). SAP los cuenta en la bodega pero el movimiento que los llevó ahí no registró ubicación, así que ninguna herramienta basada en ubicaciones puede decir de quién son — ni esta ni ninguna otra. En clientes el mismo efecto es de solo 1.040 pallets.</p>
+    <p style="margin-bottom:0">La pregunta para operaciones es si ese movimiento a granel es intencional o si es un hueco de registro. De la respuesta depende si el 5.9% es una categoría legítima o pallet cuya tenencia nadie puede atribuir.</p>
+  </div>
+</section>
+
+<footer>
+  Extracción propia M3DATA desde SAP B1 · base CLPRDREDTEC · saldos al 2026-10-25,
+  flujos del 2026-01-01 al 2026-10-26.
+  Los niveles por socio son del cierre del 2026-10-26; los saldos de bodega, del 2026-10-25.
+</footer>
+
+</div>
+</body>
+</html>

@@ -78,18 +78,44 @@ const CAB = [
   'CreateDate', 'UpdateDate', 'CardCode', 'CardName', 'Comments', 'JournalMemo',
   'FromWarehouse', 'ToWarehouse', 'ShipToCode', 'FolioNumber', 'VehiclePlate',
   'DocumentStatus', 'DocTotal', 'DocCurrency', 'DocRate', 'Series', 'BPLID',
+  // Estado de vigencia. Sin esto, un documento anulado se cuenta igual que uno
+  // vivo y una diferencia contra la facturacion no se puede explicar: no hay
+  // como distinguir "la OV no lo cobro" de "no correspondia cobrarlo".
+  'Cancelled', 'CancelStatus',
 ];
 
 // Campos de linea que se conservan si vienen.
+//
+// SOBRE EL PRECIO. 'PriceBefDiscount' estaba aca de mas: es el nombre de la DI
+// API, no del Service Layer, y por eso nunca llego — medido sobre las Orders de
+// septiembre, los campos de precio que vuelven son Price, PriceAfterVAT y
+// LineTotal. En el Service Layer el precio ANTES del descuento es 'UnitPrice' y
+// 'Price' es el que quedo DESPUES. Para auditar lo que la OV cobro sirve Price;
+// para ver si hubo descuento sobre la tarifa de contrato hacen falta UnitPrice
+// y DiscountPercent, que es la razon de pedirlos. Se deja PriceBefDiscount por
+// si en alguna entidad si viene: la proyeccion ignora lo que no llega.
 const LIN = [
   'LineNum', 'ItemCode', 'ItemDescription', 'Dscription', 'Quantity',
-  'WarehouseCode', 'FromWarehouseCode', 'Price', 'PriceAfterVAT',
-  'PriceBefDiscount', 'LineTotal', 'U_HX_RD_TarifaCli',
+  'WarehouseCode', 'FromWarehouseCode', 'Price', 'PriceAfterVAT', 'UnitPrice',
+  'DiscountPercent', 'Currency', 'Rate', 'PriceBefDiscount', 'LineTotal',
+  'U_HX_RD_TarifaCli',
+  // De donde NACE la linea. Es la unica forma de probar que una factura
+  // factura una orden determinada en vez de inferirlo por cliente y periodo:
+  // BaseType dice el tipo de documento de origen (17 = orden de venta) y
+  // BaseEntry su DocEntry. Sin esto, "la OV de cierre de mes llego a factura"
+  // es una conjetura por calce de fechas.
+  'BaseType', 'BaseEntry', 'BaseLine',
 ];
 
 const args   = process.argv.slice(2);
 const flag   = n => args.some(a => a === '--' + n);
-const opcion = (n, def) => { const a = args.find(x => x.startsWith('--' + n + '=')); return a ? a.split('=')[1] : def; };
+// El valor es TODO lo que viene despues del PRIMER '='. Con split('=')[1] una
+// opcion cuyo valor contiene '=' se truncaba: --resta-si=FromWarehouse=RETAIL
+// devolvia 'FromWarehouse' y la condicion quedaba en null, en silencio.
+const opcion = (n, def) => {
+  const a = args.find(x => x.startsWith('--' + n + '='));
+  return a ? a.slice(a.indexOf('=') + 1) : def;
+};
 const meses  = args.filter(a => /^\d{4}-\d{2}(-\d{2})?$/.test(a)).map(a => a.slice(0, 7));
 
 const ENTIDAD = opcion('entidad', 'StockTransfers');
@@ -453,4 +479,13 @@ if (require.main === module) {
 module.exports = {
   aplanar, nombreLineas, camposUsuario, listarMeses, finDeMes, raizDatos,
   traerMes, ENTIDADES, CAB, LIN,
+  // Se exportan para que sonda-sap-tabla.js hable con el Service Layer por
+  // ESTE cliente y no por una copia suya. Dos sesiones distintas contra el
+  // mismo host es la clase de duplicacion que despues diverge en silencio.
+  crearSesion, pedirHttp,
+  // Se exporta para que las sondas reintenten con ESTA politica y no con una
+  // copia suya. Un ETIMEDOUT de conexion ya viene marcado reintentable desde
+  // req.on('error'), asi que quien no la use se cae por algo que se arregla
+  // solo esperando 800ms.
+  conReintentos,
 };

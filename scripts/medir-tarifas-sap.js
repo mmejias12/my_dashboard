@@ -36,7 +36,13 @@
 const CONT = process.env.OS_SAP_CONTAINER || 'redtec-os-sap';
 
 const args   = process.argv.slice(2);
-const opcion = (n, def) => { const a = args.find(x => x.startsWith('--' + n + '=')); return a ? a.split('=')[1] : def; };
+// El valor es TODO lo que viene despues del PRIMER '='. Con split('=')[1] una
+// opcion cuyo valor contiene '=' se truncaba: --resta-si=FromWarehouse=RETAIL
+// devolvia 'FromWarehouse' y la condicion quedaba en null, en silencio.
+const opcion = (n, def) => {
+  const a = args.find(x => x.startsWith('--' + n + '='));
+  return a ? a.slice(a.indexOf('=') + 1) : def;
+};
 
 const ENTIDAD = opcion('entidad', 'StockTransfers');
 const TOPE    = Math.max(1, parseInt(opcion('tope', '20'), 10) || 20);

@@ -1,0 +1,422 @@
+{
+  "_que_es": "Saldo de pallet rojo por cliente en las ubicaciones de CLIENTES, al cierre del 2025-12-31. Es la SEMILLA de S0 para el modelo de arriendo: a partir de esta fecha el nivel se mantiene con los deltas propios de binmov.",
+  "_por_que_existe": "PD(p) = S0*n + R. Los movimientos dan R; S0 es el nivel al empezar la ventana y no esta en los movimientos. Hasta ahora S0 se despejaba de UNA semana de la cartola, y si esa semana estaba mal arrastraba todas las demas (LABORATORIO BALLERINA, catorce semanas falladas por un ancla mala). Con esta semilla S0 deja de salir del dato que se esta validando.",
+  "_es_un_puente_no_la_solucion": "Estos numeros vienen de WAVE (Datawalt), que es justo la dependencia que M3DATA quiere eliminar. Sirven para medir bien HOY y para que la validacion no sea circular, pero la independencia no esta lograda hasta una de dos: extraer binmov hasta donde el stock era cero, o tener el acceso _RO a HANA y leer HX_BINPALLETS directo. NO dejar esto como arquitectura permanente.",
+  "_por_que_se_le_puede_creer": "Medido el 2026-10-24: el S0 que validar-arriendo-bin.js despeja de la cartola, sin mirar Datawalt, coincide EXACTO al pallet con el nivel de WAVE en nueve clientes (ACONCAGUA 968, AVELUP 948, PUNTA DE LOBOS 271, ROCKY 213, LOS COLONOS 153, BALEARES 105, LA FUENTE NATURAL 79, ORIZON 78, LOS ALERCES 21) y dentro del 1% en varios mas. Las dos cadenas miden lo mismo.",
+  "fecha": "2025-12-31",
+  "fuente": "WAVE / Datawalt · capa semantica Inventario (39) · cube inventario_bin · vista v_inventario_bin sobre hx_binpallets",
+  "medida": "SUM(delta_qty) acumulado desde el inicio de la serie (2023-07-16) hasta la fecha",
+  "filtros": "item_code = 11111111110 (pallet rojo) · tipo_cliente = Cliente",
+  "generado": "2026-10-24T21:00:00Z (ceros confirmados contra WAVE)",
+  "_clientes": 79,
+  "saldos": [
+    {
+      "cod": "C91004000-6",
+      "nom": "PRODUCTOS FERNANDEZ SA",
+      "saldo": 26819
+    },
+    {
+      "cod": "C91438000-6",
+      "nom": "CAMBIASO HNOS S.A.C.",
+      "saldo": 24789
+    },
+    {
+      "cod": "C96628870-1",
+      "nom": "INDUSTRIAS PRODUCTOS ALIMENTICIOS SA",
+      "saldo": 10932
+    },
+    {
+      "cod": "C96847830-3",
+      "nom": "ILKO CHILE S.A.",
+      "saldo": 9384
+    },
+    {
+      "cod": "C76039282-0",
+      "nom": "EMBOTELLADORA METROPOLITANA S.A.",
+      "saldo": 9353
+    },
+    {
+      "cod": "C77517270-3",
+      "nom": "TRANSPORTES LA MONTANA LTDA",
+      "saldo": 8588
+    },
+    {
+      "cod": "C96529310-8",
+      "nom": "SOFTYS CHILE SPA",
+      "saldo": 7560
+    },
+    {
+      "cod": "C76121450-0",
+      "nom": "INDUSTRIAS CLEANER CHILE S.A.",
+      "saldo": 6503
+    },
+    {
+      "cod": "C85844100-5",
+      "nom": "COLGATE PALMOLIVE CHILE SA",
+      "saldo": 6422
+    },
+    {
+      "cod": "C90727000-9",
+      "nom": "EMPRESAS DEMARIA S.A.",
+      "saldo": 6205
+    },
+    {
+      "cod": "C76773020-9",
+      "nom": "QUINTA S.A.",
+      "saldo": 6193
+    },
+    {
+      "cod": "C81860100-K",
+      "nom": "LABORATORIO INTERNACIONAL DE COSMETICOS SA",
+      "saldo": 5997
+    },
+    {
+      "cod": "C90889000-0",
+      "nom": "SOCIEDAD INDUSTRIAL KUNSTMANN S.A.",
+      "saldo": 4788
+    },
+    {
+      "cod": "C96557910-9",
+      "nom": "ALIMENTOS Y FRUTOS SA",
+      "saldo": 4425
+    },
+    {
+      "cod": "C78382760-3",
+      "nom": "LESAFFRE INDUSTRIAL CHILE S.A.",
+      "saldo": 4271
+    },
+    {
+      "cod": "C81852700-4",
+      "nom": "MOLINO PUENTE ALTO SA",
+      "saldo": 3483
+    },
+    {
+      "cod": "C96840350-8",
+      "nom": "PAIMASA S.A.",
+      "saldo": 3236
+    },
+    {
+      "cod": "C84650700-0",
+      "nom": "PIBAMOUR LTDA",
+      "saldo": 2635
+    },
+    {
+      "cod": "C76415269-7",
+      "nom": "HAMBURGO S.A.",
+      "saldo": 2426
+    },
+    {
+      "cod": "C77278060-5",
+      "nom": "DAILY FOODS S.A.",
+      "saldo": 2301
+    },
+    {
+      "cod": "C77316342-1",
+      "nom": "HALEON CHILE SPA",
+      "saldo": 2273
+    },
+    {
+      "cod": "C76316386-5",
+      "nom": "EMBOTELLADORA DOS BANDERAS SPA",
+      "saldo": 1986
+    },
+    {
+      "cod": "C91083000-7",
+      "nom": "TUCAPEL SA",
+      "saldo": 1864
+    },
+    {
+      "cod": "C77784563-2",
+      "nom": "THE PROTEIN COMPANY SPA",
+      "saldo": 1817
+    },
+    {
+      "cod": "C76178838-8",
+      "nom": "LATIN AMERICAN FOODS S.A.",
+      "saldo": 1815
+    },
+    {
+      "cod": "C77699829-K",
+      "nom": "ALIMENTOS ANDINOS SPA.",
+      "saldo": 1767
+    },
+    {
+      "cod": "C76697659-K",
+      "nom": "PROVERDE SPA",
+      "saldo": 1574
+    },
+    {
+      "cod": "C76090492-9",
+      "nom": "HEREDIA MOLINOS SA",
+      "saldo": 1361
+    },
+    {
+      "cod": "C96665460-0",
+      "nom": "GOOD FOOD S.A.",
+      "saldo": 1211
+    },
+    {
+      "cod": "C76530620-5",
+      "nom": "COMERCIALIZADORA PAN DE AZUCAR LIMITADA",
+      "saldo": 1070
+    },
+    {
+      "cod": "C76099789-7",
+      "nom": "ACONCAGUA FOODS S.A.",
+      "saldo": 968
+    },
+    {
+      "cod": "C76135736-0",
+      "nom": "COMERCIAL ANDEN SALZ LIMITADA",
+      "saldo": 967
+    },
+    {
+      "cod": "C84673600-K",
+      "nom": "PRODUCTOS NUTRITIVOS AVELUP LIMITADA",
+      "saldo": 948
+    },
+    {
+      "cod": "C77961510-3",
+      "nom": "PUNTO AZUL S.A.",
+      "saldo": 836
+    },
+    {
+      "cod": "C99529560-1",
+      "nom": "PROCESADORA DE GRANOS AUSTRAL S.A.",
+      "saldo": 756
+    },
+    {
+      "cod": "C77666850-8",
+      "nom": "CORREA Y CIA LTDA",
+      "saldo": 754
+    },
+    {
+      "cod": "C76072046-1",
+      "nom": "COMERSUR S.A.",
+      "saldo": 703
+    },
+    {
+      "cod": "C92956000-0",
+      "nom": "MIGUEL MARITANO INDUSTRIA DE JABONES S.A.",
+      "saldo": 576
+    },
+    {
+      "cod": "C76082765-7",
+      "nom": "HIDROPONICOS LA CRUZ S.A.",
+      "saldo": 575
+    },
+    {
+      "cod": "C79746250-0",
+      "nom": "ELABORADORA DE ALIMENTOS FRUTALE LIMITADA",
+      "saldo": 499
+    },
+    {
+      "cod": "C76579112-K",
+      "nom": "COMERCIAL FG CORP SPA",
+      "saldo": 464
+    },
+    {
+      "cod": "C76522630-9",
+      "nom": "COMERCIALIZADORA AGRICOLA LO PINTO LTDA.",
+      "saldo": 460
+    },
+    {
+      "cod": "C76479351-K",
+      "nom": "DURACELL PILAS LTDA",
+      "saldo": 454
+    },
+    {
+      "cod": "C76487452-8",
+      "nom": "FH ALIMENTOS SpA.",
+      "saldo": 442
+    },
+    {
+      "cod": "C85417200-K",
+      "nom": "NALCO INDUSTRIAL SERVICES CHILE LTDA.",
+      "saldo": 420
+    },
+    {
+      "cod": "C76105584-4",
+      "nom": "MAYR-MELNHOF PACKAGING MARINETTI LTDA",
+      "saldo": 394
+    },
+    {
+      "cod": "C969299607",
+      "nom": "ORIZON S.A.",
+      "saldo": 292
+    },
+    {
+      "cod": "C76077572-K",
+      "nom": "TAK SPA",
+      "saldo": 273
+    },
+    {
+      "cod": "C76541630-2",
+      "nom": "SOCIEDAD PUNTA DE LOBOS S.A.",
+      "saldo": 271
+    },
+    {
+      "cod": "C76524352-1",
+      "nom": "AGRICOLA LOS COLONOS LTDA.",
+      "saldo": 270
+    },
+    {
+      "cod": "C78926220-9",
+      "nom": "BOETTCHER Y BOETTCHER LTDA.",
+      "saldo": 264
+    },
+    {
+      "cod": "C76528110-5",
+      "nom": "ALD LOGISTICA SpA.",
+      "saldo": 256
+    },
+    {
+      "cod": "C76549892-9",
+      "nom": "PARKPET S.A",
+      "saldo": 241
+    },
+    {
+      "cod": "C96842520-K",
+      "nom": "COMERCIAL ROCKY S.A.",
+      "saldo": 213
+    },
+    {
+      "cod": "C76871186-0",
+      "nom": "COMERCIAL LOMBARDI S.A.",
+      "saldo": 211
+    },
+    {
+      "cod": "C90823000-0",
+      "nom": "CONFITES MERELLO S.A.",
+      "saldo": 179
+    },
+    {
+      "cod": "C76130385-6",
+      "nom": "PROCARNE COMERCIAL S.A.",
+      "saldo": 102
+    },
+    {
+      "cod": "C78383620-3",
+      "nom": "GEOMAR SPA",
+      "saldo": 87
+    },
+    {
+      "cod": "C76085332-1",
+      "nom": "SOCIEDAD COMERCIAL E INVERSIONES LOS ALERCES SA",
+      "saldo": 85
+    },
+    {
+      "cod": "C96955730-4",
+      "nom": "LA FUENTE NATURAL SA",
+      "saldo": 81
+    },
+    {
+      "cod": "C76355360-4",
+      "nom": "COMERCIAL CANADA",
+      "saldo": 52
+    },
+    {
+      "cod": "C77930715-8",
+      "nom": "BALEARES SPA.",
+      "saldo": 41
+    },
+    {
+      "cod": "C83757200-2",
+      "nom": "GERMAN GUERRA y CIA SpA.",
+      "saldo": 33
+    },
+    {
+      "cod": "C79862750-3",
+      "nom": "TRANSPORTES CCU LTDA",
+      "saldo": 32
+    },
+    {
+      "cod": "C86379600-8",
+      "nom": "MOLINO BIO BIO S.A.",
+      "saldo": 30
+    },
+    {
+      "cod": "C90703000-8",
+      "nom": "NESTLE CHILE S.A",
+      "saldo": 21
+    },
+    {
+      "cod": "C76084413-6",
+      "nom": "GRAN PAVESI ALIMENTOS LIMITADA",
+      "saldo": 12
+    },
+    {
+      "cod": "C76883510-1",
+      "nom": "COMERCIALIZADORA PANOR SPA.",
+      "saldo": 0
+    },
+    {
+      "cod": "C83610800-0",
+      "nom": "MAR DEL SUR SPA",
+      "saldo": 0
+    },
+    {
+      "cod": "C76937235-0",
+      "nom": "INVERSIONES KIMUN SPA.",
+      "saldo": 0
+    },
+    {
+      "cod": "C96999710-K",
+      "nom": "COEXCA S.A.",
+      "saldo": 0
+    },
+    {
+      "cod": "C90060000-3",
+      "nom": "CIA MOLINERA SAN CRISTOBAL SA",
+      "saldo": 0
+    },
+    {
+      "cod": "C85833700-3",
+      "nom": "ARTES GRAFICAS S.A.",
+      "saldo": 0
+    },
+    {
+      "cod": "C81094100-6",
+      "nom": "COOP AGRICOLA Y LECHERA DE LA UNION LTDA",
+      "saldo": 0
+    },
+    {
+      "cod": "C77466945-0",
+      "nom": "SOCIEDAD COMERCIAL TERUEL LIMITADA",
+      "saldo": 0
+    },
+    {
+      "cod": "C76200574-3",
+      "nom": "TREMEX S.A.",
+      "saldo": 0
+    },
+    {
+      "cod": "C95293000-1",
+      "nom": "BO PACKAGING S.A.",
+      "saldo": 0
+    },
+    {
+      "cod": "C93513000-K",
+      "nom": "BEIERSDORF S.A.",
+      "saldo": 0
+    },
+    {
+      "cod": "C76493368-0",
+      "nom": "BRUEGGEN AMERICA S.A.",
+      "saldo": 0
+    },
+    {
+      "cod": "C92405000-4",
+      "nom": "LABORATORIO BALLERINA LIMITADA",
+      "saldo": 0,
+      "_cero_confirmado": true
+    },
+    {
+      "cod": "C84476300-K",
+      "nom": "INDUSTRIA DE ALIMENTOS DOS EN UNO SA",
+      "saldo": 0,
+      "_cero_confirmado": true
+    }
+  ],
+  "_ceros_confirmados": "Un socio con saldo 0 EXPLICITO no es lo mismo que un socio ausente. Ausente significa que no sabemos su partida y su nivel es una cota inferior; 0 explicito significa que lo fuimos a buscar a WAVE y al 2025-12-31 no tenia pallet rojo en ninguna ubicacion. Estos arrancan en cero porque corresponde, no porque falten. Verificado el 2026-10-24 contra v_inventario_bin, item 11111111110, acumulado desde el inicio de la serie (2023-07-16) hasta el 2025-12-31: sin filas."
+}

@@ -1,0 +1,137 @@
+name: Stock y Flujos de pallets
+
+# Deja el tablero de stock con el cierre de ayer, leyendo SAP directo.
+# Reemplaza al dato que hoy se saca a mano del Service Layer.
+#
+# EL ORDEN DE LOS PASOS NO ES DECORATIVO. El saldo por bodega que da SAP es
+# de AHORA; los movimientos llegan hasta donde se haya extraido. Si la sonda
+# corre antes que la extraccion, el ancla queda adelante de la cobertura y
+# saldo-pool se niega a cuadrar — con razon: entre una lectura y otra se
+# mueven pallets, y restar hacia atras se los comeria en silencio.
+#   extraccion -> sonda (ancla) -> saldo-pool -> comparacion -> commit
+#
+# ANTES DE PONERLE HORARIO HAY QUE RESPONDER UNA PREGUNTA ABIERTA:
+#   ¿el Service Layer de SAP acepta conexiones desde un runner de GitHub?
+# Ninguno de los workflows que ya existen usa SAP: todos van por RDTOut y por
+# Redlink, que son APIs publicas. SAP esta en un host propio y puede estar
+# cerrado a internet o filtrado por IP. Por eso este workflow arranca SOLO a
+# mano (workflow_dispatch) y el primer paso es la sonda: si SAP no contesta,
+# falla ahi con un mensaje claro y no se toca nada mas.
+#
+# Cuando la corrida manual pase, se descomenta el bloque 'schedule'.
+#
+# SECRETS que tienen que existir (Settings -> Secrets and variables -> Actions):
+#   SAP_LOGIN_URL · SAP_USER · SAP_PASS · SAP_DB · OS_STORAGE_CONN
+# Los cuatro primeros son NUEVOS en este repo. Agregarlos amplia la superficie:
+# hoy las credenciales de SAP no viven en GitHub. Conviene que el usuario de
+# SAP sea de SOLO LECTURA — todo lo que corre aca solo lee.
+
+on:
+  workflow_dispatch:
+
+  # Descomentar recien despues de que una corrida manual termine en verde.
+  #
+  # El minuto impar y el horario adelantado NO son capricho: esta medido en
+  # este mismo repo que Actions encola y descarta cuando esta congestionado, y
+  # que los minutos redondos son los peores. Declarado 05:17 de Chile para que
+  # el atraso tipico de 1 a 3 horas lo deje igual antes de la reunion.
+  # schedule:
+  #   - cron: '17 8 * * 1-6'
+
+concurrency:
+  group: stock-flujos-pallets
+  cancel-in-progress: false
+
+permissions:
+  contents: write          # el paso final commitea data/
+
+jobs:
+  cierre:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SAP_LOGIN_URL:   ${{ secrets.SAP_LOGIN_URL }}
+      SAP_USER:        ${{ secrets.SAP_USER }}
+      SAP_PASS:        ${{ secrets.SAP_PASS }}
+      SAP_DB:          ${{ secrets.SAP_DB }}
+      OS_STORAGE_CONN: ${{ secrets.OS_STORAGE_CONN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Instalar dependencia de Azure Blob
+        run: npm install @azure/storage-blob@^12 --no-save
+
+      # PASO 0 · ¿llegamos a SAP desde aca? Es la pregunta que decide todo lo
+      # demas, asi que se responde primero y sola. La sonda solo lee.
+      - name: 0) ¿SAP contesta desde el runner?
+        run: |
+          set -euo pipefail
+          node backfill/sonda-oinm-bodega.js || {
+            echo "::error::El Service Layer de SAP no contesto desde el runner de GitHub."
+            echo "::error::Ningun otro workflow de este repo usa SAP, asi que esto nunca se probo."
+            echo "::error::Si es por red, las salidas son: self-hosted runner dentro de REDTEC,"
+            echo "::error::o dejar este proceso en el Programador de tareas de una maquina interna."
+            exit 1
+          }
+
+      - name: Calcular fechas (zona Chile)
+        id: f
+        run: |
+          set -euo pipefail
+          echo "mes=$(TZ=America/Santiago date +%Y-%m)"  >> "$GITHUB_OUTPUT"
+          echo "hoy=$(TZ=America/Santiago date +%F)"     >> "$GITHUB_OUTPUT"
+
+      # 1 · los documentos del dia. --forzar porque el mes en curso ya existe.
+      - name: 1) Extraer el mes en curso de SAP
+        run: node backfill/backfill-sap-bin.js ${{ steps.f.outputs.mes }} --forzar
+
+      # 2 · el ancla, DESPUES de extraer para que la cobertura la alcance.
+      - name: 2) Saldo por bodega (el ancla)
+        run: node backfill/sonda-oinm-bodega.js --salida=data/bodegas-hoy.json
+
+      - name: 3) Nivel por socio · RETAIL
+        run: |
+          node scripts/saldo-pool.js --bodega=RETAIL \
+            --semilla=backfill/s0-semilla-retail-2025-12-31.json \
+            --bodegas=data/bodegas-hoy.json \
+            --json=data/stock-retail.json
+
+      - name: 3b) Nivel por socio · CLIENTES
+        run: |
+          node scripts/saldo-pool.js --bodega=CLIENTES \
+            --semilla=backfill/s0-semilla-2025-12-31.json \
+            --bodegas=data/bodegas-hoy.json \
+            --json=data/stock-clientes.json
+
+      # 4 · la copia fechada. Sin memoria no hay con que comparar mañana, y la
+      # comparacion es lo unico que una lectura en vivo de SAP no puede dar.
+      - name: 4) Guardar la copia del dia y comparar con la anterior
+        run: |
+          set -euo pipefail
+          mkdir -p data/historico
+          for f in bodegas-hoy stock-retail stock-clientes; do
+            cp "data/$f.json" "data/historico/${{ steps.f.outputs.hoy }}-$f.json"
+          done
+          node scripts/comparar-cierres.js --dir=data/historico --hasta=${{ steps.f.outputs.hoy }}
+          # 60 dias alcanzan de sobra para investigar y evitan que el repo se
+          # llene: la comparacion solo necesita la copia anterior.
+          ls -1 data/historico/*.json | sort | head -n -180 | xargs -r rm --
+
+      - name: 5) Commit (solo si cambio algo)
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/stock-retail.json data/stock-clientes.json data/bodegas-hoy.json data/historico
+          if git diff --staged --quiet; then
+            echo "Sin cambios: no hay nada que commitear."
+          else
+            git commit -m "Stock y flujos de pallets · cierre ${{ steps.f.outputs.hoy }}"
+            git push
+          fi

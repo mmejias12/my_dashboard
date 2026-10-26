@@ -259,12 +259,30 @@ tr.gtot td{background:var(--bg-surface);font-weight:700;border-top:2px solid var
 .sem-num{font-family:'JetBrains Mono',monospace;font-size:1.5rem;font-weight:600;letter-spacing:-.5px;
   line-height:1.15;margin-top:.15rem}
 .sem-sub{font-size:11.5px;color:var(--text-sec);margin-top:.15rem;line-height:1.45}
+/* Desglose de bodega virtual: lo que se cuenta en la planta pero no llega a
+   ella. Sin esto el número grande da a entender que todo es de esa planta. */
+.sem-desg{display:flex;gap:7px;flex-wrap:wrap;margin-top:.3rem;font-size:11.5px}
+.sem-desg span{padding:2px 8px;border-radius:5px;background:var(--bg-3,rgba(127,127,127,.12));
+  border:1px solid var(--border);color:var(--text-sec)}
+.sem-desg b{font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--text)}
+.sem-desg .virt{border-style:dashed}
+.sem-desg .virt b{color:var(--warn)}
 .sem-acc{display:flex;gap:7px;flex-wrap:wrap;margin-top:.55rem}
 .sem-cambios{margin-top:.5rem;border-top:1px solid var(--border);padding-top:.45rem}
 .sem-cambio{font-size:11.5px;display:flex;justify-content:space-between;gap:10px;padding:2px 0}
 .sem-cambio b{font-family:'JetBrains Mono',monospace}
 .sem-cambio .sube{color:var(--ok)} .sem-cambio .baja{color:var(--danger)}
 .sem-cambio .nuevo{color:var(--info)} .sem-cambio .fuera{color:var(--text-muted)}
+/* Por qué se movió algo después del visto bueno. Va visible y además en el
+   tooltip: en la tablet de Transporte no hay mouse que acercar. */
+.sem-por{font-size:11px;color:var(--text-sec);padding:1px 0 4px 2px;line-height:1.35;
+  display:flex;gap:5px;align-items:flex-start;cursor:help}
+.sem-por i{opacity:.75;margin-top:1px;flex:none}
+.sem-por span{overflow:hidden;text-overflow:ellipsis;display:-webkit-box;
+  -webkit-line-clamp:2;-webkit-box-orient:vertical}
+.sem-por.sin{color:var(--text-muted);font-style:italic}
+.lnk-motivo{flex:none;background:none;border:none;padding:0 0 0 4px;cursor:pointer;
+  font:inherit;color:var(--info);text-decoration:underline;font-style:normal}
 
 /* selector de período (mismo componente que Ops y la cartola) */
 .rg{position:relative;display:inline-block}
@@ -1048,6 +1066,36 @@ function armarRegistro(){
     direccion:SEL.direccion||'', comuna:SEL.comuna||'', region:SEL.region||'', zona:SEL.zona||''
   };
 }
+/* Por qué se movió algo después del visto bueno ===========================
+   El servidor guarda PRIMERO el retiro y recién entonces avisa que falta el
+   motivo. El orden importa: una pregunta sin responder nunca puede terminar
+   haciendo perder un dato cargado en terreno. Si el que movió no contesta,
+   el cambio queda marcado "sin motivo anotado" y Logística lo completa desde
+   el semáforo.                                                            */
+async function pedirMotivo(j, queCambio){
+  var mp = j && j.motivo_pendiente;
+  if(!mp) return;
+  var txt=prompt('Ese día ya estaba confirmado por Logística y Transporte '+
+    'planificó con los números anteriores.\n\nEscribe por qué '+(queCambio||'cambió')+
+    ', para que sepan a qué atenerse:');
+  if(txt===null || !txt.trim()){
+    toast('El cambio queda sin motivo; Transporte lo va a ver marcado así.',true);
+    return;
+  }
+  await anotarMotivo(mp.fecha, mp.planta, mp.entrada, txt.trim());
+}
+async function anotarMotivo(fecha, planta, entrada, motivo){
+  try{
+    var r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({accion:'anotar',fecha:fecha,planta:planta,entrada:entrada,motivo:motivo})});
+    var k=await r.json().catch(function(){ return {}; });
+    if(!r.ok||!k.ok) throw new Error(k.error||('HTTP '+r.status));
+    if(k.plantas) ESTADO={plantas:k.plantas, puede_confirmar:ESTADO&&ESTADO.puede_confirmar};
+    toast('✓ Motivo anotado');
+    if(typeof pintarProgramacion==='function' && VISTA==='programacion') pintarProgramacion();
+    return true;
+  }catch(e){ toast('No se pudo anotar el motivo: '+e.message,true); return false; }
+}
 async function guardar(confirmandoDup){
   var rec = confirmandoDup ? PEND_DUP : armarRegistro();
   if(!rec) return;
@@ -1069,6 +1117,7 @@ async function guardar(confirmandoDup){
     if(!r.ok || !j.ok) throw new Error(j.error||('el servidor respondió HTTP '+r.status));
 
     toast('✓ Retiro guardado');
+    await pedirMotivo(j,'entró este retiro');
     // El acumulado se reinicia con este retiro: hay que releer el historial o
     // el próximo recinto que se elija seguiría sumando desde el retiro viejo.
     MEM=[]; cargarHistorial(true); limpiarForm(); estado('al día','ok','cloud-check');
@@ -1695,6 +1744,74 @@ function fechaHoraCorta(v){
   return d.toLocaleString('es-CL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
 }
 /* soloLectura = la pantalla de Transporte: mismo semáforo, sin botones */
+/* Bodegas virtuales ========================================================
+   Hay recintos que se cuentan dentro de una planta pero cuyos pallets NO
+   llegan a esa planta: Coquimbo virtual dentro de REDTEC SANTIAGO. El número
+   grande del semáforo los suma —y debe sumarlos, porque es lo programado del
+   día— pero visualmente da a entender que todo eso es carga de Santiago.
+   Acá se separa. Para sumar otra bodega virtual basta agregar su zona.     */
+var BODEGAS_VIRTUALES = {
+  'REDTEC SANTIAGO': { corto:'Stgo', zonas:['Coquimbo'], etiqueta:'Coquimbo virtual' }
+};
+function desgloseVirtual(planta, totalPlanta){
+  var cfg=BODEGAS_VIRTUALES[planta];
+  if(!cfg || !cfg.zonas || !cfg.zonas.length) return null;
+  var filas=(window.REG||[]).filter(function(r){ return (r.planta||'')===planta; });
+  if(!filas.length) return null;
+  // El número grande lo calcula el servidor. Si lo que hay en pantalla no suma
+  // lo mismo, NO se desglosa: un desglose que no cuadra con el total confunde
+  // más de lo que aclara.
+  var suma=filas.reduce(function(s,r){ return s+Number(r.cantidad||0); },0);
+  if(suma!==Number(totalPlanta)) return null;
+  var virt=filas.filter(function(r){ return cfg.zonas.indexOf(r.zona||'')>=0; });
+  var pv=virt.reduce(function(s,r){ return s+Number(r.cantidad||0); },0);
+  if(!pv) return null;
+  return { corto:cfg.corto, etiqueta:cfg.etiqueta,
+           propio:suma-pv, propio_n:filas.length-virt.length,
+           virtual:pv, virtual_n:virt.length, total:suma };
+}
+function htmlDesglose(pl){
+  var d=desgloseVirtual(pl.planta, pl.total_actual);
+  if(!d) return '';
+  var rt=function(n){ return n+' retiro'+(n===1?'':'s'); };
+  return '<div class="sem-desg">'+
+    '<span title="'+esc(rt(d.propio_n))+' que sí llegan a '+esc(pl.planta)+'">'+
+      esc(d.corto)+' <b>'+num(d.propio)+'</b></span>'+
+    '<span class="virt" title="'+esc(rt(d.virtual_n))+' en '+esc(d.etiqueta)+
+      ': se cuentan en '+esc(pl.planta)+' pero no llegan a la planta">'+
+      esc(d.etiqueta)+' <b>'+num(d.virtual)+'</b></span>'+
+    '<span title="Suma de los dos">total <b>'+num(d.total)+'</b></span></div>';
+}
+/* Motivo de un cambio posterior al visto bueno ============================
+   El servidor cuelga de cada cambio los motivos que anotó quien movió el
+   dato. Se muestran bajo el cambio, y el tooltip agrega quién y cuándo. Si
+   el cambio existe pero nadie lo explicó, se dice: un cambio sin explicar es
+   justamente lo que Transporte necesita poder reclamar.                   */
+function htmlMotivos(c, planta, editable){
+  var ms=(c.motivos||[]).filter(function(m){ return m && m.motivo; });
+  if(!ms.length){
+    if(!c.motivos || !c.motivos.length) return '';
+    var vacia=c.motivos[0];
+    var boton = editable ? '<button class="lnk-motivo" data-motivo-fecha="'+esc(DIA)+
+        '" data-motivo-planta="'+esc(planta)+'" data-motivo-entrada="'+esc(vacia.id||'')+
+        '">anotar</button>' : '';
+    return '<div class="sem-por sin" title="Se movió después del visto bueno y '+
+           'todavía nadie anotó por qué"><i class="ti ti-help-circle"></i>'+
+           '<span>sin motivo anotado'+(vacia.por?' · lo movió '+esc(corto(vacia.por)):'')+
+           '</span>'+boton+'</div>';
+  }
+  // Un recinto puede tener varios movimientos en el mismo día y se muestran
+  // juntos. Si alguno quedó sin explicar hay que decirlo igual: si no, el
+  // motivo de uno tapa el silencio del otro.
+  var mudos=(c.motivos||[]).length-ms.length;
+  var corto_=ms.map(function(m){ return m.motivo; }).join(' · ')+
+             (mudos>0?' · ('+mudos+' sin motivo)':'');
+  var full=ms.map(function(m){
+    return m.motivo+' — '+corto(m.por||'')+(m.en?', '+fechaHoraCorta(m.en):'');
+  }).concat(mudos>0?[mudos+' movimiento'+(mudos>1?'s':'')+' más sin motivo anotado']:[]).join('\n');
+  return '<div class="sem-por'+(mudos>0?' hay-mudo':'')+'" title="'+esc(full)+'">'+
+         '<i class="ti ti-message-2"></i><span>'+esc(corto_)+'</span></div>';
+}
 function semaforoHTML(soloLectura){
   if(!ESTADO || !ESTADO.plantas) return '';
   return ESTADO.plantas.filter(function(pl){
@@ -1706,7 +1823,8 @@ function semaforoHTML(soloLectura){
       '<div class="sem-tit">'+esc(pl.planta)+
         '<span class="sem-est">'+esc(SEM_TXT[pl.estado]||pl.estado)+'</span></div>'+
       '<div class="sem-num">'+num(pl.total_actual)+' <span style="font-size:12px;font-weight:400;'+
-        'color:var(--text-muted)">pallets · '+pl.retiros_actual+' retiro'+(pl.retiros_actual===1?'':'s')+'</span></div>';
+        'color:var(--text-muted)">pallets · '+pl.retiros_actual+' retiro'+(pl.retiros_actual===1?'':'s')+'</span></div>'+
+      htmlDesglose(pl);
 
     if(pl.estado==='preliminar') h+='<div class="sem-sub">Logística todavía no da el visto bueno. '+
       (soloLectura?'Es un avance para ir dimensionando; los números pueden cambiar.'
@@ -1725,7 +1843,8 @@ function semaforoHTML(soloLectura){
         var et = c.tipo==='nuevo'?'entró':(c.tipo==='eliminado'?'salió':(c.delta>0?'subió':'bajó'));
         h+='<div class="sem-cambio"><span>'+esc(c.recinto)+'</span>'+
            '<span class="'+k+'">'+et+' <b>'+(c.delta>0?'+':'')+num(c.delta)+'</b>'+
-           (c.tipo==='nuevo'||c.tipo==='eliminado'?'':' ('+num(c.antes)+' → '+num(c.ahora)+')')+'</span></div>';
+           (c.tipo==='nuevo'||c.tipo==='eliminado'?'':' ('+num(c.antes)+' → '+num(c.ahora)+')')+'</span></div>'+
+           htmlMotivos(c, pl.planta, !soloLectura && ESTADO.puede_confirmar);
       });
       if(pl.cambios.length>8) h+='<div class="sem-cambio"><span style="color:var(--text-muted)">y '+
         (pl.cambios.length-8)+' cambio(s) más</span><span></span></div>';
@@ -2073,7 +2192,9 @@ async function guardarEd(){
       body:JSON.stringify({accion:'editar',id:EDIT.id,mes:(EDIT.fecha_retiro||'').slice(0,7),cambios:cambios})});
     var j=await r.json().catch(function(){ return {}; });
     if(!r.ok||!j.ok) throw new Error(j.error||('HTTP '+r.status));
-    toast('✓ Retiro actualizado'); MEM=[]; cerrarEd(); recargarVista();
+    toast('✓ Retiro actualizado'); MEM=[]; cerrarEd();
+    await pedirMotivo(j,'cambió');
+    recargarVista();
   }catch(e){ toast('No se pudo actualizar: '+e.message,true); }
 }
 async function eliminarActual(){
@@ -2084,7 +2205,9 @@ async function eliminarActual(){
       body:JSON.stringify({accion:'eliminar',id:EDIT.id,mes:(EDIT.fecha_retiro||'').slice(0,7)})});
     var j=await r.json().catch(function(){ return {}; });
     if(!r.ok||!j.ok) throw new Error(j.error||('HTTP '+r.status));
-    toast('Retiro eliminado'); MEM=[]; cerrarEd(); recargarVista();
+    toast('Retiro eliminado'); MEM=[]; cerrarEd();
+    await pedirMotivo(j,'se eliminó');
+    recargarVista();
   }catch(e){ toast('No se pudo eliminar: '+e.message,true); }
 }
 
@@ -2956,6 +3079,14 @@ document.addEventListener('DOMContentLoaded', async function(){
     if(sc){ cambiarEstado(sc.dataset.semConf,'confirmar'); return; }
     var sr=e.target.closest ? e.target.closest('[data-sem-reab]') : null;
     if(sr){ cambiarEstado(sr.dataset.semReab,'reabrir'); return; }
+    var mo=e.target.closest ? e.target.closest('[data-motivo-entrada]') : null;
+    if(mo){
+      var t=prompt('¿Por qué se movió esto después del visto bueno?\n\n'+
+                   'Lo va a leer Transporte al mirar la programación.');
+      if(t && t.trim()) anotarMotivo(mo.dataset.motivoFecha, mo.dataset.motivoPlanta,
+                                     mo.dataset.motivoEntrada, t.trim());
+      return;
+    }
     var dia=e.target.closest ? e.target.closest('.esp-dia[data-fecha]') : null;
     if(dia){ $('f_fecha').value=dia.dataset.fecha; pintarHintFecha(); return; }
     if(!(e.target.closest && e.target.closest('#combo'))){

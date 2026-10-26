@@ -233,6 +233,8 @@ function datos(bod, ret, cli, extra) {
     grupos: gr,
     flujo: (extra && Array.isArray(extra.flujo_por_bodega)) ? extra.flujo_por_bodega : null,
     controles: (extra && Array.isArray(extra.controles)) ? extra.controles : null,
+    aviso_nota: (extra && typeof extra.aviso_nota === 'string' && extra.aviso_nota.trim())
+                  ? extra.aviso_nota.trim() : null,
     extra_medido: (extra && extra.medido) || null,
     ventana: { nivel: String((bod && bod.generado) || '').slice(0, 10),
                flujo_desde: vr.desde || vc.desde || null,
@@ -580,6 +582,9 @@ function pagina(d) {
            'movimiento que los llevó ahí no registró ubicación, así que ninguna herramienta ' +
            'basada en ubicaciones los puede atribuir: ni la nuestra ni la que se está ' +
            'reemplazando.</p>');
+    // La nota de contraste va ANTES de la pregunta abierta: primero se dice
+    // que el problema no es del metodo, despues se pregunta de quien es.
+    if (d.aviso_nota) H.push('    <p>' + esc(d.aviso_nota) + '</p>');
     H.push('    <p style="margin-bottom:0">La pregunta para operaciones es si ese movimiento a ' +
            'granel es intencional o si es un hueco de registro. De la respuesta depende si ese ' +
            pct1(rr, b.RETAIL.nivel) + ' es una categoría legítima o pallet cuya tenencia nadie ' +

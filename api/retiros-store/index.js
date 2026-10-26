@@ -15,6 +15,14 @@
 //    POST {accion:'editar',   id, cambios:{}}  -> edita campos permitidos
 //    POST {accion:'eliminar', id, mes}         -> elimina uno
 //    POST {accion:'restaurar',mes, respaldo}   -> restaura un respaldo del mes
+//    POST {accion:'anotar', fecha, planta, entrada, motivo}
+//                                              -> explica un cambio hecho
+//                                                 después del visto bueno
+//
+//    Las tres primeras aceptan además 'motivo_cambio': si la (fecha, planta)
+//    ya estaba confirmada, el cambio queda anotado con ese texto para que
+//    Transporte sepa por qué se movió. Si viene vacío, la respuesta trae
+//    'motivo_pendiente' y la vista lo pregunta enseguida.
 //
 //  ---------------------------------------------------------------------------
 //  DIFERENCIAS DELIBERADAS CON EL BACKEND DE GOOGLE (y con clientes-store)
@@ -434,7 +442,7 @@ function fotografiar(registros, fecha, planta) {
 }
 
 // Qué se movió entre el snapshot y lo que hay ahora.
-function comparar(foto, ahora) {
+function comparar(foto, ahora, motivos) {
   const cambios = [];
   const claves = new Set(Object.keys((foto && foto.porClave) || {}).concat(Object.keys(ahora.porClave)));
   claves.forEach(k => {
@@ -446,10 +454,42 @@ function comparar(foto, ahora) {
       clave: k, recinto: (b && b.recinto) || (a && a.recinto) || k,
       antes, ahora: despues, delta: despues - antes,
       tipo: !a ? 'nuevo' : (!b || despues === 0 ? 'eliminado' : (despues > antes ? 'subio' : 'bajo')),
+      // Lo que escribió quien movió el dato, para que Transporte sepa por qué.
+      motivos: (motivos || []).filter(m => String(m.clave).toUpperCase() === k),
     });
   });
   cambios.sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta));
   return cambios;
+}
+
+// Motivo de un cambio hecho DESPUÉS del visto bueno.
+//
+// Vive en el estado de la (fecha, planta) y NO en el registro, por dos
+// razones: un retiro eliminado también hay que poder explicarlo y su registro
+// ya no existe, y el motivo pertenece a ese ciclo de confirmación, así que al
+// reconfirmar se borra junto con la foto vieja.
+//
+// No se anota nada si esa (fecha, planta) todavía no está confirmada: antes
+// del semáforo mover cantidades es el trabajo normal de Logística, no un
+// cambio que haya que justificarle a Transporte.
+const MAX_MOTIVOS = 60;
+async function anotarCambio(fecha, planta, entrada, log) {
+  if (!fecha || !planta) return null;
+  const mes = mesDe(fecha);
+  const { estados } = await leerEstados(mes);
+  const previo = estados[claveEstado(fecha, planta)];
+  if (!previo || !previo.confirmado) return null;
+
+  const e = Object.assign({ id: nuevoId(), en: new Date().toISOString(), motivo: '' }, entrada);
+  const r = await mutarEstados(mes, (es) => {
+    const k = claveEstado(fecha, planta);
+    const g = es[k];
+    if (!g || !g.confirmado) return { estados: es };
+    es[k] = Object.assign({}, g, { motivos: (g.motivos || []).concat([e]).slice(-MAX_MOTIVOS) });
+    return { estados: es };
+  }, log);
+  if (r.error) { log.warn(`retiros-store: no se pudo anotar el motivo en ${fecha}|${planta}: ${r.error}`); return null; }
+  return e;
 }
 
 // Estado de cada planta para una fecha.
@@ -466,7 +506,7 @@ async function estadoDelDia(fecha, log) {
     const g = estados[claveEstado(fecha, planta)] || null;
     let estado = 'preliminar', cambios = [];
     if (g && g.confirmado) {
-      cambios = comparar(g.snapshot, ahora);
+      cambios = comparar(g.snapshot, ahora, g.motivos);
       estado = cambios.length ? 'cambiado' : 'confirmado';
     }
     return {
@@ -727,7 +767,13 @@ module.exports = async function (context, req) {
         return responder(200, { ok: true, registro: r.resultado, mes, idempotente: true });
       }
       log.info(`retiros-store: ${quien(p)} registró ${rec.recinto} ${rec.fecha_retiro} ${rec.horario} (${rec.cantidad} pallets)`);
-      return responder(200, { ok: true, registro: r.resultado, mes, total_mes: r.total });
+      const anot = await anotarCambio(rec.fecha_retiro, rec.planta, {
+        clave: String(rec.clave).toUpperCase(), recinto: rec.recinto, accion: 'agregar',
+        antes: 0, ahora: Number(rec.cantidad || 0), delta: Number(rec.cantidad || 0),
+        por: quien(p), motivo: limpiaTexto(cuerpo.motivo_cambio || '', 300),
+      }, log);
+      return responder(200, Object.assign({ ok: true, registro: r.resultado, mes, total_mes: r.total },
+        anot && !anot.motivo ? { motivo_pendiente: { fecha: rec.fecha_retiro, planta: rec.planta, entrada: anot.id } } : {}));
     }
 
     // -- editar ---------------------------------------------------------
@@ -744,11 +790,14 @@ module.exports = async function (context, req) {
       // hace como eliminar + agregar para no dejarlo duplicado en los dos.
       const mesDestino = v.campos.fecha_retiro ? mesDe(v.campos.fecha_retiro) : mes;
 
-      let sacado = null;
+      let sacado = null, previo = null;
       const r1 = await mutarMes(mes, (registros) => {
         const i = registros.findIndex(x => x.id === id);
         if (i < 0) return { error: 'ese registro ya no existe', status: 404 };
         const actual = registros[i];
+        previo = { clave: String(actual.clave).toUpperCase(), recinto: actual.recinto,
+                   fecha: actual.fecha_retiro, planta: actual.planta,
+                   cantidad: Number(actual.cantidad || 0) };
         if (!esOficina(p) && String(actual.usuario || '').toLowerCase() !== String(quien(p)).toLowerCase()) {
           return { error: 'solo puedes editar los retiros que registraste tú', status: 403 };
         }
@@ -777,7 +826,36 @@ module.exports = async function (context, req) {
         }
       }
       log.info(`retiros-store: ${quien(p)} editó ${id} (${mes}${mesDestino !== mes ? ' -> ' + mesDestino : ''})`);
-      return responder(200, { ok: true, registro: r1.resultado, mes: mesDestino });
+
+      // Una edición puede tocar DOS programaciones: si cambió de día o de
+      // planta, sale de una y entra en la otra, y las dos pueden estar
+      // confirmadas. Se anota en cada una lo que le pasó a ella.
+      const ahoraR = r1.resultado, motivoTxt = limpiaTexto(cuerpo.motivo_cambio || '', 300);
+      const mismoCajon = previo && previo.fecha === ahoraR.fecha_retiro && previo.planta === ahoraR.planta;
+      const nuevaCant = Number(ahoraR.cantidad || 0);
+      const anots = [];
+      if (previo && mismoCajon) {
+        if (previo.cantidad !== nuevaCant || previo.clave !== String(ahoraR.clave).toUpperCase()) {
+          anots.push(await anotarCambio(ahoraR.fecha_retiro, ahoraR.planta, {
+            clave: String(ahoraR.clave).toUpperCase(), recinto: ahoraR.recinto, accion: 'editar',
+            antes: previo.cantidad, ahora: nuevaCant, delta: nuevaCant - previo.cantidad,
+            por: quien(p), motivo: motivoTxt,
+          }, log));
+        }
+      } else if (previo) {
+        anots.push(await anotarCambio(previo.fecha, previo.planta, {
+          clave: previo.clave, recinto: previo.recinto, accion: 'editar',
+          antes: previo.cantidad, ahora: 0, delta: -previo.cantidad,
+          por: quien(p), motivo: motivoTxt,
+        }, log));
+        anots.push(await anotarCambio(ahoraR.fecha_retiro, ahoraR.planta, {
+          clave: String(ahoraR.clave).toUpperCase(), recinto: ahoraR.recinto, accion: 'editar',
+          antes: 0, ahora: nuevaCant, delta: nuevaCant, por: quien(p), motivo: motivoTxt,
+        }, log));
+      }
+      const pend = anots.filter(a => a && !a.motivo)[0];
+      return responder(200, Object.assign({ ok: true, registro: r1.resultado, mes: mesDestino },
+        pend ? { motivo_pendiente: { fecha: ahoraR.fecha_retiro, planta: ahoraR.planta, entrada: pend.id } } : {}));
     }
 
     // -- eliminar -------------------------------------------------------
@@ -799,7 +877,15 @@ module.exports = async function (context, req) {
 
       if (r.error) return responder(r.status, { error: r.error });
       log.info(`retiros-store: ${quien(p)} eliminó ${id} de ${mes}`);
-      return responder(200, { ok: true, eliminado: r.resultado, mes, total_mes: r.total });
+      const fuera = r.resultado;
+      const anotDel = await anotarCambio(fuera.fecha_retiro, fuera.planta, {
+        clave: String(fuera.clave).toUpperCase(), recinto: fuera.recinto, accion: 'eliminar',
+        antes: Number(fuera.cantidad || 0), ahora: 0, delta: -Number(fuera.cantidad || 0),
+        por: quien(p), motivo: limpiaTexto(cuerpo.motivo_cambio || '', 300),
+      }, log);
+      return responder(200, Object.assign({ ok: true, eliminado: r.resultado, mes, total_mes: r.total },
+        anotDel && !anotDel.motivo
+          ? { motivo_pendiente: { fecha: fuera.fecha_retiro, planta: fuera.planta, entrada: anotDel.id } } : {}));
     }
 
     // -- restaurar ------------------------------------------------------
@@ -827,6 +913,42 @@ module.exports = async function (context, req) {
     }
 
     // -- confirmar / reabrir la programación de una planta ---------------
+    // -- anotar ---------------------------------------------------------
+    // El motivo se pide DESPUÉS de guardar, no antes: primero el retiro queda
+    // a salvo y recién ahí se le pregunta al que lo movió por qué. Así una
+    // pregunta sin responder nunca hace perder el dato en terreno.
+    if (accion === 'anotar') {
+      if (!puedeRegistrar(p) && !esOficina(p)) {
+        return responder(403, { error: 'no tienes permiso para anotar motivos' });
+      }
+      const fecha = String(cuerpo.fecha || '');
+      const planta = limpiaTexto(cuerpo.planta || '', 60);
+      const entrada = String(cuerpo.entrada || '');
+      const motivo = limpiaTexto(cuerpo.motivo || '', 300);
+      if (!fechaValida(fecha)) return responder(400, { error: 'fecha inválida' });
+      if (!planta || !entrada) return responder(400, { error: 'falta la planta o la entrada' });
+      if (!motivo) return responder(400, { error: 'el motivo no puede ir vacío' });
+
+      const r = await mutarEstados(mesDe(fecha), (estados) => {
+        const k = claveEstado(fecha, planta);
+        const g = estados[k];
+        if (!g || !g.confirmado) return { error: 'esa programación ya no está confirmada', status: 409 };
+        const lista = (g.motivos || []).slice();
+        const i = lista.findIndex(m => m.id === entrada);
+        if (i < 0) return { error: 'ese cambio ya no está en la lista', status: 404 };
+        // Solo el que hizo el cambio lo explica; oficina puede corregirlo.
+        if (!esOficina(p) && String(lista[i].por || '').toLowerCase() !== String(quien(p)).toLowerCase()) {
+          return { error: 'solo puedes anotar los cambios que hiciste tú', status: 403 };
+        }
+        lista[i] = Object.assign({}, lista[i], { motivo, anotado_en: new Date().toISOString() });
+        estados[k] = Object.assign({}, g, { motivos: lista });
+        return { estados, resultado: lista[i] };
+      }, log);
+      if (r.error) return responder(r.status, { error: r.error });
+      log.info(`retiros-store: ${quien(p)} anotó el motivo de un cambio en ${fecha}|${planta}`);
+      return responder(200, { ok: true, motivo: r.resultado, plantas: await estadoDelDia(fecha, log) });
+    }
+
     if (accion === 'confirmar' || accion === 'reabrir') {
       if (!esOficina(p)) {
         return responder(403, { error: 'solo Logística puede cambiar el estado de la programación' });
@@ -855,17 +977,22 @@ module.exports = async function (context, req) {
             accion: 'reabrir', por: quien(p), en: new Date().toISOString(),
             total: g.snapshot ? g.snapshot.total : null, motivo: limpiaTexto(cuerpo.motivo || '', 200),
           }]).slice(-20);
+          // Los motivos pertenecen al ciclo de confirmación que se cierra.
           estados[k] = { fecha, planta, confirmado: false, historial: hist };
           return { estados, resultado: { estado: 'preliminar' } };
         }
         const previo = estados[k];
+        const explicados = ((previo && previo.motivos) || []).filter(m => m.motivo).length;
         const hist = ((previo && previo.historial) || []).concat([{
           accion: previo && previo.confirmado ? 'reconfirmar' : 'confirmar',
           por: quien(p), en: new Date().toISOString(), total: ahora.total,
+          cambios_explicados: explicados || undefined,
         }]).slice(-20);
+        // La foto nueva deja los cambios anteriores adentro: sus motivos ya
+        // cumplieron su trabajo y empieza un ciclo limpio.
         estados[k] = {
           fecha, planta, confirmado: true, por: quien(p), en: new Date().toISOString(),
-          nota: limpiaTexto(cuerpo.nota || '', 300), snapshot: ahora, historial: hist,
+          nota: limpiaTexto(cuerpo.nota || '', 300), snapshot: ahora, historial: hist, motivos: [],
         };
         return { estados, resultado: { estado: 'confirmado', total: ahora.total, retiros: ahora.n } };
       }, log);

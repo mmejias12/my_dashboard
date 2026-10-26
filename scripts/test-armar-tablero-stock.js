@@ -53,7 +53,7 @@ chk('las nueve del indicador', F.nueve === 14265, String(F.nueve));
 chk('y lo que queda fuera', F.fuera === 4389, String(F.fuera));
 chk('nueve + fuera = planta', F.nueve + F.fuera === F.planta);
 // una bodega del indicador en cero SI se muestra: que TALCA REPARACION este
-// vacia es informacion. Una que no es del indicador y esta en cero, no.
+// vacia es informacion. Una que no es del indicador y esta en cero, no.2026
 chk('una del indicador en cero se muestra', F.filas.some(x => x.cod === 'RT07-122'));
 chk('una de fuera en cero no se muestra', !F.filas.some(x => x.cod === 'RT14-170'));
 chk('ordena de mayor a menor', F.filas[0].cod === 'RT13-100' && F.filas[0].nivel === 5447);

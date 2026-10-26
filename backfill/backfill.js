@@ -10,7 +10,7 @@
 //    cd backfill
 //    npm i @azure/storage-blob
 //    $env:OS_STORAGE_CONN = "<conn>"
-//    $env:REDTEC_API_KEY  = "<key>"        # opcional (hay default)
+//    $env:REDTEC_API_KEY  = "<key>"        # OBLIGATORIA: ya no hay default
 //    node backfill.js                      # 2023-01-01 → hoy
 //    node backfill.js 2024-01-01 2024-12-31   # o un rango puntual (reanudar)
 // ============================================================================

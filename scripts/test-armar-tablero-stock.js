@@ -288,5 +288,34 @@ chk('y se escapa como todo lo demas', A.pagina(A.datos(BOD,
     {socios:[],nivel:{bodega:212945},mensual:[],ventana:{}},
     {aviso_nota:'<b>x</b>'})).includes('&lt;b&gt;x&lt;/b&gt;'));
 
+console.log('\n— frescura: la pagina tiene que delatar su propia antiguedad —');
+chk('el mismo dia no avisa', A.antiguedad('2026-10-25','2026-10-25').texto === null);
+// un dia de atraso es lo NORMAL: el tablero muestra el cierre de ayer
+chk('un dia de atraso tampoco', A.antiguedad('2026-10-25','2026-10-26').texto === null);
+chk('dos dias ya avisa', A.antiguedad('2026-10-25','2026-10-27').nivel === 'atrasado');
+chk('y dice cuantos', /Hace 2 días/.test(A.antiguedad('2026-10-25','2026-10-27').texto));
+chk('muchos dias escala a grave', A.antiguedad('2026-10-25','2026-11-05').nivel === 'viejo');
+chk('y nombra la causa', /no está corriendo/.test(A.antiguedad('2026-10-25','2026-11-05').texto));
+// una fecha futura no es frescura: es un reloj o un dato mal puesto
+chk('una fecha futura se delata', A.antiguedad('2026-10-25','2026-10-20').nivel === 'futuro');
+chk('una fecha ilegible no se adivina', A.antiguedad('ayer','2026-10-25').nivel === 'desconocido');
+chk('sin fecha tampoco', A.antiguedad(null,'2026-10-25').dias === null);
+chk('cruza el cambio de mes', A.antiguedad('2026-09-30','2026-10-02').dias === 2);
+chk('y el cambio de año', A.antiguedad('2025-12-31','2026-01-02').dias === 2);
+
+console.log('\n— la fecha va embebida y la cuenta la hace el navegador —');
+chk('el sello lleva la fecha como dato', /<div class="sello" data-medido="2026-10-25"/.test(PG),
+    (PG.match(/<div class="sello"[^>]*/)||[''])[0]);
+chk('hay un contenedor para el aviso', /<div class="rancio" id="rancio" hidden>/.test(PG));
+chk('va antes de la cabecera, no al final', PG.indexOf('id="rancio"') < PG.indexOf('<h1>'));
+// la pagina embebe la MISMA funcion probada aca: si se escribiera a mano una
+// copia para el navegador, las dos podrian divergir sin que nadie lo note
+chk('la pagina embebe la funcion probada', PG.includes(A.antiguedad.toString()));
+chk('el script cierra bien la etiqueta', PG.includes('<\/script>') && !PG.includes('</script></script>'));
+chk('el script va dentro de un bloque script', PG.indexOf('function antiguedad') > PG.indexOf('<script>'));
+// si el navegador falla, la pagina tiene que seguir siendo legible
+chk('el aviso arranca oculto', /id="rancio" hidden/.test(PG));
+chk('el script esta envuelto en try', /try \{[\s\S]*catch \(e\)/.test(PG.slice(PG.indexOf('(function () {'))));
+
 console.log('\n' + ok + ' ok, ' + fail + ' fallas');
 process.exit(fail ? 1 : 0);

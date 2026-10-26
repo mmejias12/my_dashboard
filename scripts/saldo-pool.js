@@ -269,6 +269,32 @@ function leerBodegas(json) {
  *  no. Es lo que hay que restar para mover el nivel de bodega en el tiempo, y
  *  no es lo mismo que la suma de los socios: las ubicaciones sin atribuir
  *  tambien mueven la bodega. */
+/** Las ubicaciones de la bodega que ADEMAS tienen socio conocido.
+ *  Existe para poder medir las dos sumas por separado: el movimiento de todas
+ *  las ubicaciones de la bodega y el de las que sabemos de quien son. La
+ *  diferencia entre ambas es el movimiento que no se puede atribuir, y es el
+ *  analogo en flujo del residuo que ya mostramos en el nivel.
+ *  NO decide cual de las dos es la buena: las muestra juntas para poder
+ *  contrastarlas contra SAP mes a mes. */
+/** Las dos series mensuales, pareadas por mes. Vive aparte de main() para
+ *  poder probarla: la vez pasada el defecto estuvo justo aca —una columna
+ *  mostraba la otra— y ninguna prueba lo podia ver porque el armado de la
+ *  tabla estaba enterrado en el cuerpo del programa. */
+function filasMensuales(pmTodas, pmSoc) {
+  const s = new Map((Array.isArray(pmSoc) ? pmSoc : []).map(x => [x.mes, Number(x.neto) || 0]));
+  return (Array.isArray(pmTodas) ? pmTodas : []).map(x => {
+    const todas = Number(x.neto) || 0, conSocio = s.get(x.mes) || 0;
+    return { mes: x.mes, todas, conSocio, sinSocio: todas - conSocio };
+  });
+}
+
+function binsConSocio(deBodega, mapa) {
+  const out = new Set();
+  if (!deBodega || !deBodega.forEach) return out;
+  deBodega.forEach(b => { if (mapa && mapa.get && mapa.get(b)) out.add(b); });
+  return out;
+}
+
 function deltaDeBodega(filas, deBodega) {
   const porDia = new Map();
   let usadas = 0;
@@ -627,7 +653,7 @@ function cuadrar(nivelBodega, sumaSocios) {
 
 module.exports = { deltaDiario, nivelDeSocio, nivelesPool, resumenPool, veredicto,
                    binsDeBodega, nombresDeMaestro, cotaSemilla, quietos,
-                   leerBodegas, deltaDeBodega, anclaAplicable, nivelHaciaAtras, cuadrar,
+                   leerBodegas, deltaDeBodega, binsConSocio, filasMensuales, anclaAplicable, nivelHaciaAtras, cuadrar,
                    sumaSemilla, sinBom, frescuraCobertura, desfaseLecturas, conSigno,
                    resumenSinSocio, flujoPorLinea, netoPorMes, serieDiaria,
                    movimientoPorDia, cierreDelDia, posteoRetroactivo, salidaJson,
@@ -751,9 +777,11 @@ async function main() {
     // una proyeccion y no se presenta como medicion
     const post = movimientoDespuesDe(fechas, fechaAncla);
     const db = deltaDeBodega(filas, deBodega);
+    // la misma cuenta, pero solo sobre las ubicaciones con socio conocido
+    const dbSoc = deltaDeBodega(filas, binsConSocio(deBodega, mapa));
     const posteriores = V.diasDeVentana(corte, vn.hasta).filter(d => d > corte);
     const hacia = nivelHaciaAtras(w.saldo, db.porDia, posteriores);
-    anc = { ruta: rutaBod, bod, w, fechaAncla, fr, des, post, db, hacia };
+    anc = { ruta: rutaBod, bod, w, fechaAncla, fr, des, post, db, dbSoc, hacia };
   }
 
   console.log('\n── EL NIVEL AL ' + corte + ' ' + '─'.repeat(45));
@@ -854,16 +882,25 @@ async function main() {
   // ── EL NETO MES A MES, CON LA HORA EN QUE SE EXTRAJO CADA BLOB ────────────
   if (anc) {
     const pm = netoPorMes(anc.db.porDia);
+    // La MISMA cuenta restringida a las ubicaciones con socio. Las dos columnas
+    // van juntas a proposito: contra SAP solo una de las dos cuadra, y hasta
+    // haberlas comparado mes a mes no hay manera de saber cual.
+    const fm = filasMensuales(pm, netoPorMes(anc.dbSoc ? anc.dbSoc.porDia : null));
+    const ps = new Map(fm.map(x => [x.mes, x.conSocio]));
+    const pd = new Map(fm.map(x => [x.mes, x.sinSocio]));
     const guard = new Map(cob.map(c => [c.mes, c.guardado]));
     console.log('\n── EL NETO DE ' + bodega + ' MES A MES ' + '─'.repeat(39));
     const info = new Map(cob.map(c => [c.mes, c]));
-    console.log('  ' + 'mes'.padEnd(10) + 'neto'.padStart(12) + '   ' + 'extraido'.padEnd(18) +
+    console.log('  ' + 'mes'.padEnd(10) + 'todas'.padStart(12) + 'con socio'.padStart(12) +
+                'sin socio'.padStart(12) + '   ' + 'extraido'.padEnd(18) +
                 'raros'.padStart(7) + 'fallidos'.padStart(10));
-    let totRaros = 0, totFall = 0;
+    let totRaros = 0, totFall = 0, totSoc = 0;
     for (const x of pm) {
       const c = info.get(x.mes) || {};
-      totRaros += c.raros || 0; totFall += c.fallidos || 0;
-      console.log('  ' + x.mes.padEnd(10) + conSigno(x.neto).padStart(12) + '   ' +
+      const s = ps.get(x.mes) || 0;
+      totRaros += c.raros || 0; totFall += c.fallidos || 0; totSoc += s;
+      console.log('  ' + x.mes.padEnd(10) + conSigno(x.neto).padStart(12) +
+                  conSigno(s).padStart(12) + conSigno(pd.get(x.mes) || 0).padStart(12) + '   ' +
                   String(guard.get(x.mes) || '(sin hora)').slice(0, 16).replace('T', ' ').padEnd(18) +
                   String(c.raros == null ? '?' : c.raros).padStart(7) +
                   String(c.fallidos == null ? '?' : c.fallidos).padStart(10));
@@ -873,9 +910,13 @@ async function main() {
       console.log('  leer y ' + mil(totFall) + ' documento(s) fallidos. Eso es movimiento real que');
       console.log('  SAP tiene y nosotros no: explica un mes corto sin necesidad de otra teoria.');
     }
-    console.log('  ' + 'suma'.padEnd(10) + conSigno(pm.reduce((a, x) => a + x.neto, 0)).padStart(12));
+    const totTodas = pm.reduce((a, x) => a + x.neto, 0);
+    console.log('  ' + 'suma'.padEnd(10) + conSigno(totTodas).padStart(12) +
+                conSigno(totSoc).padStart(12) + conSigno(totTodas - totSoc).padStart(12));
     console.log('  Si la diferencia contra SAP esta en UN mes, ese blob se re-extrae y listo.');
     console.log('  Si esta repartida en los diez, el problema es de metodo.');
+    console.log('  La columna que cuadre contra el movimiento de la bodega en SAP es la que');
+    console.log('  va al tablero; la otra mide algo distinto y hay que decir cual es.');
   }
 
   // ── LA SERIE DIARIA DE UN MES ─────────────────────────────────────────────

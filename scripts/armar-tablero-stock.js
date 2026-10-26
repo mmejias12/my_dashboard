@@ -235,6 +235,10 @@ function datos(bod, ret, cli, extra) {
     controles: (extra && Array.isArray(extra.controles)) ? extra.controles : null,
     aviso_nota: (extra && typeof extra.aviso_nota === 'string' && extra.aviso_nota.trim())
                   ? extra.aviso_nota.trim() : null,
+    // Un bloque en verificacion se marca donde esta, no en una nota al pie:
+    // quien mira el grafico tiene que ver la advertencia sin bajar la vista.
+    mensual_nota: (extra && typeof extra.mensual_nota === 'string' && extra.mensual_nota.trim())
+                  ? extra.mensual_nota.trim() : null,
     extra_medido: (extra && extra.medido) || null,
     ventana: { nivel: String((bod && bod.generado) || '').slice(0, 10),
                flujo_desde: vr.desde || vc.desde || null,
@@ -411,6 +415,9 @@ th.num{text-align:right}
 .d-pos{color:var(--ok)} .d-neg{color:var(--grave)} .d-nul{color:var(--tinta3)}
 .chip{font:500 10px/1 var(--f-tit);text-transform:uppercase;letter-spacing:.06em;
   border:1px solid var(--linea);border-radius:999px;padding:3px 7px;color:var(--tinta3);white-space:nowrap}
+.enrevision{border:1px dashed var(--alerta);border-radius:6px;background:var(--panel);
+  color:var(--tinta2);font-size:13.5px;padding:10px 13px;margin:10px 0 0}
+.enrevision b{color:var(--alerta)}
 .rancio{border:1px solid var(--alerta);border-left:3px solid var(--alerta);border-radius:6px;
   background:var(--panel);color:var(--alerta);font:600 14px/1.4 var(--f-txt);
   padding:11px 14px;margin-bottom:18px}
@@ -507,6 +514,8 @@ function pagina(d) {
     H.push('<section>\n  <h2>Movimiento neto por mes</h2>');
     H.push('  <p>Cuánto subió o bajó cada bodega en el año. Un valor positivo es pallet que salió de ' +
            'REDTEC hacia el socio; uno negativo es pallet que volvió.</p>');
+    if (d.mensual_nota)
+      H.push('  <div class="enrevision"><b>En verificación.</b> ' + esc(d.mensual_nota) + '</div>');
     H.push('  <div class="panel">\n    <div class="leyenda" style="margin-bottom:10px">');
     H.push('      <span><i class="pt p-ret"></i>Retail <b>' + conSigno(d.anio.ret) + '</b> en el año</span>');
     H.push('      <span><i class="pt p-cli"></i>Clientes <b>' + conSigno(d.anio.cli) + '</b> en el año</span>');

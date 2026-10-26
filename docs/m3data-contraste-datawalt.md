@@ -1,6 +1,6 @@
 # M3DATA contra Datawalt · contraste del stock de pallet rojo
 
-**Fecha de la medición:** 26 de octubre de 2026
+**Fecha de la medición:** 25 de octubre de 2026
 **Alcance:** SKU 11111111110 (pallet rojo 1,00 × 1,20), base CLPRDREDTEC.
 
 ## Por qué el contraste sirve

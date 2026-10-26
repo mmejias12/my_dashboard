@@ -244,6 +244,31 @@ function datos(bod, ret, cli, extra) {
   };
 }
 
+// ── frescura ─────────────────────────────────────────────────────────────────
+// La antiguedad NO se puede calcular al armar la pagina. Si el proceso diario
+// se cae, la pagina no se vuelve a armar: un cartel escrito en el build se
+// congela junto con el dato y sigue diciendo "de hoy" para siempre. Por eso la
+// fecha va EMBEBIDA y la cuenta la hace el navegador contra su propio reloj,
+// cada vez que alguien abre el tablero. Es el unico pedazo de javascript de
+// esta pagina y existe por eso.
+function antiguedad(medido, hoy) {
+  const m = String(medido || '').slice(0, 10), h = String(hoy || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(m) || !/^\d{4}-\d{2}-\d{2}$/.test(h))
+    return { dias: null, nivel: 'desconocido',
+             texto: 'No se pudo determinar de cuándo es este dato.' };
+  const dias = Math.round((Date.parse(h + 'T00:00:00Z') - Date.parse(m + 'T00:00:00Z')) / 86400000);
+  // Una fecha futura no es frescura: es un reloj mal puesto o un dato mal
+  // fechado, y callarlo seria peor que avisarlo.
+  if (dias < 0) return { dias, nivel: 'futuro',
+    texto: 'Este tablero dice estar medido el ' + m + ', que es posterior a hoy. Algo está mal fechado.' };
+  if (dias <= 1) return { dias, nivel: 'fresco', texto: null };
+  if (dias <= 3) return { dias, nivel: 'atrasado',
+    texto: 'Este tablero muestra el cierre del ' + m + '. Hace ' + dias + ' días que no se actualiza.' };
+  return { dias, nivel: 'viejo',
+    texto: 'Este tablero muestra el cierre del ' + m + '. Hace ' + dias +
+           ' días que no se actualiza: el proceso diario no está corriendo.' };
+}
+
 // ── graficos ─────────────────────────────────────────────────────────────────
 // La barra de la flota: el ancho de cada tramo es su porcentaje de 1000, menos
 // 2 de separacion. Sin esa separacion los tres colores se tocan y el ojo lee
@@ -386,6 +411,10 @@ th.num{text-align:right}
 .d-pos{color:var(--ok)} .d-neg{color:var(--grave)} .d-nul{color:var(--tinta3)}
 .chip{font:500 10px/1 var(--f-tit);text-transform:uppercase;letter-spacing:.06em;
   border:1px solid var(--linea);border-radius:999px;padding:3px 7px;color:var(--tinta3);white-space:nowrap}
+.rancio{border:1px solid var(--alerta);border-left:3px solid var(--alerta);border-radius:6px;
+  background:var(--panel);color:var(--alerta);font:600 14px/1.4 var(--f-txt);
+  padding:11px 14px;margin-bottom:18px}
+.rancio[data-nivel="viejo"],.rancio[data-nivel="futuro"]{border-color:var(--grave);color:var(--grave)}
 .aviso{border-left:3px solid var(--alerta);background:var(--panel);border-radius:0 8px 8px 0;
   padding:14px 16px;margin-top:14px}
 .aviso h3{color:var(--alerta);margin-bottom:6px}
@@ -437,9 +466,10 @@ function pagina(d) {
          '&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">');
   H.push('<style>' + CSS + '</style>\n</head>\n<body>\n<div class="wrap">\n');
 
+  H.push('<div class="rancio" id="rancio" hidden></div>');
   H.push('<header class="cabe">\n  <div>\n    <h1>Stock y Flujos de Pallets</h1>');
   H.push('    <div class="sub">Pallet rojo 1,00 × 1,20 · SKU 11111111110 · extracción propia desde SAP B1</div>');
-  H.push('  </div>\n  <div class="sello">Saldos al ' + esc(v.nivel) +
+  H.push('  </div>\n  <div class="sello" data-medido="' + esc(v.nivel) + '">Saldos al ' + esc(v.nivel) +
          (v.flujo_hasta ? '<br>Flujos ' + esc(String(v.flujo_desde || '').slice(0, 4)) + ' al ' + esc(v.flujo_hasta) : '') +
          '</div>\n</header>\n');
 
@@ -605,6 +635,26 @@ function pagina(d) {
          '\n  Saldo de bodega leído de SAP el ' + esc(String(d.generado).slice(0, 16).replace('T', ' ')) +
          ' UTC.\n  Página armada por scripts/armar-tablero-stock.js: ninguna cifra está escrita a mano.' +
          '\n</footer>\n');
+  // El unico javascript de la pagina. Se embebe la MISMA funcion que esta
+  // probada en el test —no una copia escrita a mano para el navegador— para
+  // que no puedan divergir: toString() publica el codigo tal cual.
+  H.push('<script>\n' + antiguedad.toString() + '\n' + [
+    '(function () {',
+    '  try {',
+    '    var s = document.querySelector(".sello[data-medido]");',
+    '    var c = document.getElementById("rancio");',
+    '    if (!s || !c) return;',
+    '    var d = new Date();',
+    '    var hoy = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") +',
+    '              "-" + String(d.getDate()).padStart(2, "0");',
+    '    var a = antiguedad(s.getAttribute("data-medido"), hoy);',
+    '    if (!a.texto) return;',
+    '    c.textContent = a.texto;',
+    '    c.setAttribute("data-nivel", a.nivel);',
+    '    c.hidden = false;',
+    '  } catch (e) { /* sin aviso es mejor que sin pagina */ }',
+    '})();',
+  ].join('\n') + '\n<\/script>');
   H.push('</div>\n</body>\n</html>\n');
   return H.join('\n');
 }
@@ -672,7 +722,7 @@ function main() {
 module.exports = { esNumero, mil, conSigno, clasePos, pct, pct1, esc, sinBom,
                    NUEVE, GRUPOS, MESES, OPCIONES,
                    clasificarFlota, cortarSocios, porGrupo, mesesPareados, datos,
-                   svgFlota, svgMeses, filaSocio, tablaSocios, notaImposibles, pagina,
+                   antiguedad, svgFlota, svgMeses, filaSocio, tablaSocios, notaImposibles, pagina,
                    opcion, opcionesRaras, leerJson, CSS };
 
 if (require.main === module) main();

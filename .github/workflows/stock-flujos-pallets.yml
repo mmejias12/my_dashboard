@@ -10,15 +10,30 @@ name: Stock y Flujos de pallets
 # mueven pallets, y restar hacia atras se los comeria en silencio.
 #   extraccion -> sonda (ancla) -> saldo-pool -> comparacion -> commit
 #
-# ANTES DE PONERLE HORARIO HAY QUE RESPONDER UNA PREGUNTA ABIERTA:
-#   ¿el Service Layer de SAP acepta conexiones desde un runner de GitHub?
-# Ninguno de los workflows que ya existen usa SAP: todos van por RDTOut y por
-# Redlink, que son APIs publicas. SAP esta en un host propio y puede estar
-# cerrado a internet o filtrado por IP. Por eso este workflow arranca SOLO a
-# mano (workflow_dispatch) y el primer paso es la sonda: si SAP no contesta,
-# falla ahi con un mensaje claro y no se toca nada mas.
+# RESPONDIDO Y MEDIDO · 25-10-2026 · corrida #2
+#   El Service Layer de SAP NO contesta desde un runner de GitHub.
+#   Tres rutas, 120 s de timeout cada una. No hubo ECONNREFUSED ni ENOTFOUND:
+#   el DNS resuelve y la conexion queda colgada, que es la firma de un
+#   firewall que DESCARTA en silencio, no de un puerto cerrado ni de un host
+#   caido. En el mismo rato, /api/sap-stock-proxy (Azure Function de REDTEC)
+#   hizo login contra ESE MISMO host y puerto en 1,6 s. Conclusion: filtro por
+#   IP. Las de Azure estan permitidas, las de GitHub no.
 #
-# Cuando la corrida manual pase, se descomenta el bloque 'schedule'.
+# POR ESO EL BLOQUE 'schedule' SIGUE COMENTADO, y no por precaucion: con el
+# acceso como esta hoy, una corrida programada solo gastaría seis minutos de
+# timeout todas las mañanas. El cierre diario corre en una maquina de REDTEC
+# (backfill/cierre-diario.ps1, Programador de tareas) y empuja el resultado.
+#
+# ESTE WORKFLOW SE DEJA, a mano, por dos razones: sirve de prueba para el dia
+# en que se abra el acceso —una corrida y se sabe—, y documenta la cadena
+# completa en un solo archivo. Si alguna vez pasa en verde, se descomenta el
+# schedule y el cierre se muda de vuelta aca.
+#
+# LAS SALIDAS, SI SE QUIERE MOVER A LA NUBE: un runner self-hosted dentro de
+# REDTEC; pedirle al admin de SAP que habilite las IPs del runner (son muchas
+# y rotan: mala idea); o correr el cierre como Azure Function con timer, que
+# es lo mas limpio porque las IPs de Azure YA estan habilitadas y la Function
+# App ya existe.
 #
 # SECRETS que tienen que existir (Settings -> Secrets and variables -> Actions):
 #   SAP_LOGIN_URL · SAP_USER · SAP_PASS · SAP_DB · OS_STORAGE_CONN
@@ -67,18 +82,86 @@ jobs:
       - name: Instalar dependencia de Azure Blob
         run: npm install @azure/storage-blob@^12 --no-save
 
-      # PASO 0 · ¿llegamos a SAP desde aca? Es la pregunta que decide todo lo
-      # demas, asi que se responde primero y sola. La sonda solo lee.
-      - name: 0) ¿SAP contesta desde el runner?
+      # PASO -1 · ¿esta el codigo en el repositorio? La primera corrida fallo
+      # justo aqui: el workflow estaba subido y los scripts no, y el paso 0 lo
+      # reporto como "SAP no contesta". Un archivo que falta tiene que
+      # nombrarse solo, sin que nadie interprete.
+      - name: -1) ¿Esta el codigo que este workflow ejecuta?
         run: |
-          set -euo pipefail
-          node backfill/sonda-oinm-bodega.js || {
-            echo "::error::El Service Layer de SAP no contesto desde el runner de GitHub."
-            echo "::error::Ningun otro workflow de este repo usa SAP, asi que esto nunca se probo."
-            echo "::error::Si es por red, las salidas son: self-hosted runner dentro de REDTEC,"
-            echo "::error::o dejar este proceso en el Programador de tareas de una maquina interna."
+          set -uo pipefail
+          falta=0
+          for f in \
+            backfill/sonda-oinm-bodega.js \
+            backfill/backfill-sap-bin.js \
+            backfill/backfill-sap.js \
+            backfill/sonda-sap-bin.js \
+            backfill/sonda-sap-ubicacion.js \
+            backfill/s0-semilla-2025-12-31.json \
+            backfill/s0-semilla-retail-2025-12-31.json \
+            scripts/saldo-pool.js \
+            scripts/comparar-cierres.js \
+            scripts/armar-tablero-stock.js \
+            scripts/medir-emisiones.js \
+            scripts/validar-arriendo-bin.js \
+            scripts/sonda-arriendo.js \
+            scripts/sonda-saldo.js ; do
+            [ -f "$f" ] || { echo "::error::Falta en el repositorio: $f"; falta=1; }
+          done
+          [ "$falta" -eq 0 ] || {
+            echo "::error::El workflow esta subido pero el codigo que ejecuta no."
             exit 1
           }
+          # Estar no alcanza: backfill-sap.js ya existia en el repo en una
+          # version anterior a que se exportara conReintentos. Una copia vieja
+          # pasa el test de existencia y revienta recien en el paso 1.
+          node -e '
+            const S = require("./backfill/backfill-sap.js");
+            const falta = ["crearSesion", "raizDatos", "conReintentos"]
+              .filter(k => typeof S[k] !== "function");
+            if (falta.length) {
+              console.error("::error::backfill/backfill-sap.js es una version vieja: no exporta " + falta.join(", "));
+              console.error("::error::Hay que commitear la copia de trabajo, no solo los archivos nuevos.");
+              process.exit(1);
+            }
+          ' || exit 1
+          echo "Los 14 archivos estan y backfill-sap.js exporta lo que hace falta."
+
+      # PASO 0 · ¿llegamos a SAP desde aca? Es la pregunta que decide todo lo
+      # demas, asi que se responde primero y sola. La sonda SOLO LEE.
+      #
+      # Este paso NO adivina. La version anterior gritaba "SAP no contesto"
+      # ante cualquier salida distinta de cero, y mando a buscar un problema
+      # de red que no existia. Ahora se guarda la salida de la sonda, se
+      # clasifica, y si no calza con ningun caso conocido se dice eso.
+      - name: 0) ¿SAP contesta desde el runner?
+        run: |
+          set -uo pipefail
+          salida="$(node backfill/sonda-oinm-bodega.js 2>&1)"; codigo=$?
+          printf '%s\n' "$salida"
+          [ "$codigo" -eq 0 ] && exit 0
+
+          if printf '%s' "$salida" | grep -q 'MODULE_NOT_FOUND'; then
+            echo "::error::Falta un archivo que la sonda requiere: mirar la linea"
+            echo "::error::'Cannot find module' de arriba. Es el repositorio, no SAP."
+          elif printf '%s' "$salida" | grep -q 'Faltan variables de entorno'; then
+            echo "::error::Faltan secrets: la sonda nombra arriba exactamente cuales."
+            echo "::error::Settings -> Secrets and variables -> Actions -> New repository secret."
+            echo "::error::SAP_USER lleva UN solo backslash (dominio\\usuario), no dos."
+          elif printf '%s' "$salida" | grep -qE 'Timeout [0-9]+s contra SAP|ETIMEDOUT|ECONNREFUSED|ENOTFOUND|EHOSTUNREACH|ECONNRESET|socket hang up'; then
+            echo "::error::El Service Layer de SAP no contesto desde el runner de GitHub."
+            echo "::error::Esto YA SE MIDIO el 25-10-2026 y dio lo mismo: tres timeouts de 120 s,"
+            echo "::error::sin ECONNREFUSED ni ENOTFOUND. Es filtro por IP, no caida ni credenciales:"
+            echo "::error::la Azure Function de REDTEC hizo login contra ese mismo host en 1,6 s."
+            echo "::error::Mientras no se habilite el acceso, el cierre corre en una maquina de"
+            echo "::error::REDTEC con backfill/cierre-diario.ps1. Este workflow es solo la prueba."
+          elif printf '%s' "$salida" | grep -qE 'HTTP 40[0-9]'; then
+            echo "::error::SAP contesto y rechazo la peticion (4xx). La red esta bien."
+            echo "::error::Si es 401, son las credenciales: SAP_USER, SAP_PASS, SAP_DB."
+          else
+            echo "::error::La sonda fallo con codigo $codigo y la salida no calza con ningun"
+            echo "::error::caso conocido. Esta completa arriba: leerla antes de concluir nada."
+          fi
+          exit 1
 
       - name: Calcular fechas (zona Chile)
         id: f
@@ -109,6 +192,20 @@ jobs:
             --bodegas=data/bodegas-hoy.json \
             --json=data/stock-clientes.json
 
+      # 3c · el tablero. Se arma aca, en el runner, y se commitea armado: la
+      # pagina que abre gerencia es un archivo estatico que no depende de nada
+      # en tiempo de lectura. Si este paso falla, el tablero queda con el dato
+      # de ayer en vez de quedar en blanco.
+      - name: 3c) Armar el tablero
+        run: |
+          node scripts/armar-tablero-stock.js \
+            --bodegas=data/bodegas-hoy.json \
+            --retail=data/stock-retail.json \
+            --clientes=data/stock-clientes.json \
+            --extra=data/tablero-extra.json \
+            --datos=data/datos-stock.json \
+            --salida=stock-flujos-pallets.html
+
       # 4 · la copia fechada. Sin memoria no hay con que comparar mañana, y la
       # comparacion es lo unico que una lectura en vivo de SAP no puede dar.
       - name: 4) Guardar la copia del dia y comparar con la anterior
@@ -128,7 +225,8 @@ jobs:
           set -euo pipefail
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/stock-retail.json data/stock-clientes.json data/bodegas-hoy.json data/historico
+          git add data/stock-retail.json data/stock-clientes.json data/bodegas-hoy.json \
+                  data/datos-stock.json stock-flujos-pallets.html data/historico
           if git diff --staged --quiet; then
             echo "Sin cambios: no hay nada que commitear."
           else

@@ -317,5 +317,37 @@ chk('el script va dentro de un bloque script', PG.indexOf('function antiguedad')
 chk('el aviso arranca oculto', /id="rancio" hidden/.test(PG));
 chk('el script esta envuelto en try', /try \{[\s\S]*catch \(e\)/.test(PG.slice(PG.indexOf('(function () {'))));
 
+console.log('\n— la marca de verificacion del grafico mensual —');
+const REV = A.datos(BOD,
+  {socios:SOC, nivel:{bodega:579026}, mensual:[{mes:'2026-01',neto:5}], ventana:{}},
+  {socios:[], nivel:{bodega:212945}, mensual:[{mes:'2026-01',neto:7}], ventana:{}},
+  {medido:'2026-10-26', mensual_nota:'El reparto entre meses no esta corroborado.'});
+const PR = A.pagina(REV);
+chk('la marca sale en la pagina', PR.includes('El reparto entre meses no esta corroborado.'));
+chk('dice que esta en verificacion', PR.includes('<b>En verificación.</b>'));
+// tiene que estar JUNTO al grafico, no al pie: quien mira las barras la ve
+// OJO: 'enrevision' tambien esta en la hoja de estilo, asi que buscar la
+// palabra suelta da siempre verdadero. Hay que buscar el div.
+const DIV = '<div class="enrevision">';
+chk('va dentro de la seccion del movimiento mensual',
+    PR.indexOf('Movimiento neto por mes') < PR.indexOf(DIV) &&
+    PR.indexOf(DIV) < PR.indexOf('Quién tiene los pallets'));
+chk('va antes del grafico, no despues',
+    PR.indexOf(DIV) < PR.indexOf('<svg viewBox="0 0 760'));
+chk('sin nota no aparece el cartel', !A.pagina(D1).includes(DIV));
+chk('una nota en blanco no deja el cartel vacio', A.datos(BOD,
+    {socios:SOC,nivel:{bodega:579026},mensual:[],ventana:{}},
+    {socios:[],nivel:{bodega:212945},mensual:[],ventana:{}},
+    {mensual_nota:'  '}).mensual_nota === null);
+chk('se escapa como todo lo demas', A.pagina(A.datos(BOD,
+    {socios:SOC,nivel:{bodega:579026},mensual:[{mes:'2026-01',neto:5}],ventana:{}},
+    {socios:[],nivel:{bodega:212945},mensual:[],ventana:{}},
+    {mensual_nota:'<b>x</b>'})).includes('&lt;b&gt;x&lt;/b&gt;'));
+// sin meses no hay seccion, asi que tampoco marca
+chk('sin grafico no hay marca', !A.pagina(A.datos(BOD,
+    {socios:SOC,nivel:{bodega:579026},mensual:[],ventana:{}},
+    {socios:[],nivel:{bodega:212945},mensual:[],ventana:{}},
+    {mensual_nota:'algo'})).includes(DIV));
+
 console.log('\n' + ok + ' ok, ' + fail + ' fallas');
 process.exit(fail ? 1 : 0);

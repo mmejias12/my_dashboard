@@ -639,5 +639,48 @@ chk('--desfase mueve el tope entre lecturas', P.OPCIONES.indexOf('desfase') >= 0
 chk('--diario abre un mes dia a dia', P.OPCIONES.indexOf('diario') >= 0);
 chk('--json emite la salida del tablero', P.OPCIONES.indexOf('json') >= 0);
 
+console.log('\n— las ubicaciones de la bodega que ademas tienen socio —');
+const BINSBOD = new Set([10, 11, 12, 13]);
+const MAPABOD = new Map([[10, 'R1'], [12, 'R3'], [99, 'R9']]);
+const CSBOD = P.binsConSocio(BINSBOD, MAPABOD);
+chk('se queda con las que tienen socio', [...CSBOD].sort().join() === '10,12', [...CSBOD].join());
+// una ubicacion con socio que NO es de esta bodega no entra: el maestro trae todas
+chk('no entra una de otra bodega', !CSBOD.has(99));
+// sin mapa no se adivina: ninguna tiene socio conocido
+chk('sin mapa no hay socios', P.binsConSocio(BINSBOD, null).size === 0);
+chk('sin bodega tampoco', P.binsConSocio(null, MAPABOD).size === 0);
+// un socio vacio o nulo no cuenta como socio conocido
+chk('un socio vacio no cuenta', P.binsConSocio(new Set([1]), new Map([[1, '']])).size === 0);
+chk('un socio nulo tampoco', P.binsConSocio(new Set([1]), new Map([[1, null]])).size === 0);
+
+console.log('\n— las dos sumas se separan de verdad —');
+const FILASBOD = [
+  { BinAbsEntry: 10, DocDate: '2026-02-03', delta:  100 },
+  { BinAbsEntry: 12, DocDate: '2026-02-10', delta:   50 },
+  { BinAbsEntry: 11, DocDate: '2026-02-14', delta: -400 },
+  { BinAbsEntry: 77, DocDate: '2026-02-20', delta:  999 },
+];
+const todas   = P.netoPorMes(P.deltaDeBodega(FILASBOD, BINSBOD).porDia);
+const soloSoc = P.netoPorMes(P.deltaDeBodega(FILASBOD, P.binsConSocio(BINSBOD, MAPABOD)).porDia);
+chk('todas las de la bodega suman -250', todas[0].neto === -250, JSON.stringify(todas));
+chk('las que tienen socio suman +150', soloSoc[0].neto === 150, JSON.stringify(soloSoc));
+// la resta es justamente el movimiento que no se puede atribuir
+chk('la diferencia es el movimiento sin socio', todas[0].neto - soloSoc[0].neto === -400);
+chk('ninguna de las dos toca la bodega ajena', !JSON.stringify(todas).includes('999'));
+
+console.log('\n— la tabla mensual pareada —');
+const FMES = P.filasMensuales(
+  [{mes:'2026-01',neto:2573},{mes:'2026-02',neto:7626},{mes:'2026-05',neto:1964}],
+  [{mes:'2026-01',neto:2573},{mes:'2026-02',neto:10968}]);
+chk('respeta el orden de la columna de todas', FMES.map(x=>x.mes).join()==='2026-01,2026-02,2026-05');
+chk('parea cada mes con el suyo', FMES[1].todas===7626 && FMES[1].conSocio===10968, JSON.stringify(FMES[1]));
+// LA COLUMNA NO PUEDE COPIAR A LA OTRA: ese fue el defecto que se escapo
+chk('las dos columnas son distintas', FMES[1].todas !== FMES[1].conSocio);
+chk('la tercera es la resta', FMES[1].sinSocio === 7626 - 10968, String(FMES[1].sinSocio));
+// un mes sin contraparte vale cero, no el del mes vecino
+chk('un mes sin contraparte es cero', FMES[2].conSocio === 0 && FMES[2].sinSocio === 1964);
+chk('cuando coinciden la resta es cero', FMES[0].sinSocio === 0);
+chk('sin series no revienta', P.filasMensuales(null,null).length === 0);
+
 console.log('\n'+ok+' ok, '+fail+' fallas\n');
 process.exit(fail?1:0);

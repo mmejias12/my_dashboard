@@ -181,7 +181,8 @@ chk('la flota sale del dato', PG.includes('>810.625<'));
 chk('la cantidad de bodegas tambien', PG.includes('en las 15 bodegas de la empresa'));
 chk('el residuo de retail tambien', PG.includes('residuo sin ubicación: 34.063'));
 chk('el aviso usa el residuo de hoy, no uno escrito a mano',
-    /34\.063 pallets en BODEGA RETAILERS/.test(PG) && /\(5,9% del retail\)/.test(PG));
+    /34\.063 pallets de BODEGA RETAILERS sin retailer identificado/.test(PG) &&
+    /\(5,9% del retail\)/.test(PG));
 // la hora que se muestra es la de la LECTURA de SAP, no la de la corrida:
 // decir "pagina generada" al lado de la hora del dato lo hace pasar por fresco
 chk('dice cuando se leyo SAP', /Saldo de bodega leído de SAP el 2026-10-25 04:15 UTC/.test(PG),
@@ -247,8 +248,8 @@ console.log('\n— el aviso sale del dato, no de un numero escrito —');
 const OTRO = A.datos(BOD, {socios:SOC, nivel:{bodega:579026, socios:500000, residuo:12345}, mensual:[], ventana:{}},
                           {socios:[], nivel:{bodega:212945, socios:211905, residuo:1040}, mensual:[], ventana:{}}, null);
 const PO = A.pagina(OTRO);
-chk('el aviso usa el residuo que vino', PO.includes('12.345 pallets en BODEGA RETAILERS'));
-chk('y no el de ayer', !PO.includes('34.063 pallets en BODEGA RETAILERS'));
+chk('el aviso usa el residuo que vino', PO.includes('12.345 pallets de BODEGA RETAILERS'));
+chk('y no el de ayer', !PO.includes('34.063 pallets de BODEGA RETAILERS'));
 chk('el porcentaje se recalcula', PO.includes('(2,1% del retail)'), 'no');
 // con residuo cero no hay nada que avisar
 chk('sin residuo no hay aviso', !A.pagina(A.datos(BOD,
@@ -271,14 +272,12 @@ chk('la nota sale en el aviso', PC.includes('Datawalt deja 35.565 sin atribuir.'
 // va ANTES de la pregunta abierta: primero el contraste, despues la pregunta
 // Va ENTRE el parrafo del residuo y la pregunta abierta, y una sola vez:
 // comparar solo el primer indice deja pasar una copia extra mas arriba.
-chk('va una sola vez y en su lugar',
+chk('va una sola vez y dentro del aviso',
     (PC.match(/Datawalt deja 35\.565 sin atribuir\./g) || []).length === 1 &&
-    PC.indexOf('Datawalt deja') > PC.indexOf('SAP los cuenta en la bodega') &&
-    PC.indexOf('Datawalt deja') < PC.indexOf('La pregunta para operaciones'),
+    PC.indexOf('Datawalt deja') > PC.indexOf('sin retailer identificado'),
     String((PC.match(/Datawalt deja/g)||[]).length));
 chk('sin nota el aviso sigue entero',
-    A.pagina(D1).includes('La pregunta para operaciones') &&
-    !A.pagina(D1).includes('Datawalt'));
+    A.pagina(D1).includes('sin retailer identificado') && !A.pagina(D1).includes('Datawalt'));
 // una nota vacia o de puro espacio no deja un parrafo en blanco
 chk('una nota vacia no se dibuja', A.datos(BOD,
     {socios:SOC,nivel:{bodega:579026},mensual:[],ventana:{}},
@@ -348,6 +347,47 @@ chk('sin grafico no hay marca', !A.pagina(A.datos(BOD,
     {socios:SOC,nivel:{bodega:579026},mensual:[],ventana:{}},
     {socios:[],nivel:{bodega:212945},mensual:[],ventana:{}},
     {mensual_nota:'algo'})).includes(DIV));
+
+console.log('\n— el residuo tiene nombre, no es un misterio —');
+const EXTRA_RES = {medido:'2026-10-26', sistemico:17890, residuo_detalle:[
+  {cantidad:17890, que:'en la ubicación de sistema de la bodega.'},
+  {cantidad:17620, que:'en la ubicación RETAIL NA / NO HABILITADO.'}]};
+const DRES = A.datos(BOD, {socios:SOC, nivel:{bodega:579026, socios:544963, residuo:34063}, mensual:[], ventana:{}},
+                          {socios:[], nivel:{bodega:212945}, mensual:[], ventana:{}}, EXTRA_RES);
+const PRES = A.pagina(DRES);
+chk('el desglose aparece', PRES.includes('17.890') && PRES.includes('17.620'));
+chk('con su explicacion', PRES.includes('ubicación RETAIL NA / NO HABILITADO.'));
+// 17.890 tambien sale arriba, en la flota: hay que mirar la fila del desglose
+chk('va dentro del aviso',
+    PRES.indexOf('sin retailer identificado') < PRES.indexOf('<dt>17.890</dt>'));
+// una partida sin cantidad valida no se dibuja a medias
+chk('una partida sin cantidad se descarta',
+    A.datos(BOD,{socios:SOC,nivel:{bodega:1,residuo:1},mensual:[],ventana:{}},
+                {socios:[],nivel:{bodega:1},mensual:[],ventana:{}},
+                {residuo_detalle:[{que:'sin numero'},{cantidad:5,que:'ok'}]}).residuo_detalle.length === 1);
+chk('una partida sin texto tambien', A.datos(BOD,
+    {socios:SOC,nivel:{bodega:1,residuo:1},mensual:[],ventana:{}},
+    {socios:[],nivel:{bodega:1},mensual:[],ventana:{}},
+    {residuo_detalle:[{cantidad:5}]}).residuo_detalle.length === 0);
+chk('sin desglose el aviso sigue entero', A.pagina(D1).includes('sin retailer identificado'));
+chk('el texto del desglose se escapa', A.pagina(A.datos(BOD,
+    {socios:SOC,nivel:{bodega:1,residuo:1},mensual:[],ventana:{}},
+    {socios:[],nivel:{bodega:1},mensual:[],ventana:{}},
+    {residuo_detalle:[{cantidad:5,que:'<b>x</b>'}]})).includes('&lt;b&gt;x&lt;/b&gt;'));
+
+console.log('\n— lo sistemico no es flota —');
+chk('se declara cuanto no rota', DRES.sistemico === 17890);
+chk('la pagina lo dice', PRES.includes('17.890</b> son sistémicos y no rotan'));
+// OJO con includes: '-792.735' CONTIENE '792.735', asi que una resta al reves
+// pasaria desapercibida. Hay que mirar la etiqueta completa.
+chk('y calcula la flota en rotacion',
+    PRES.includes('la flota en rotación es <b>792.735</b>') && !PRES.includes('<b>-792.735</b>'),
+    (PRES.match(/la flota en rotación es <b>[^<]*<\/b>/)||[''])[0]);
+// sin el dato declarado no se inventa una flota en rotacion
+chk('sin declararlo no aparece', D1.sistemico === null && !A.pagina(D1).includes('no rotan'));
+chk('un sistemico no numerico no cuenta', A.datos(BOD,
+    {socios:SOC,nivel:{bodega:1},mensual:[],ventana:{}},
+    {socios:[],nivel:{bodega:1},mensual:[],ventana:{}}, {sistemico:'mucho'}).sistemico === null);
 
 console.log('\n' + ok + ' ok, ' + fail + ' fallas');
 process.exit(fail ? 1 : 0);

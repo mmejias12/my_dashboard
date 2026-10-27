@@ -169,10 +169,17 @@ jobs:
           set -euo pipefail
           echo "mes=$(TZ=America/Santiago date +%Y-%m)"  >> "$GITHUB_OUTPUT"
           echo "hoy=$(TZ=America/Santiago date +%F)"     >> "$GITHUB_OUTPUT"
+          echo "ventana=$(TZ=America/Santiago date -d '3 days ago' +%F)" >> "$GITHUB_OUTPUT"
+          echo "mesv=$(TZ=America/Santiago date -d '3 days ago' +%Y-%m)" >> "$GITHUB_OUTPUT"
 
-      # 1 · los documentos del dia. --forzar porque el mes en curso ya existe.
-      - name: 1) Extraer el mes en curso de SAP
-        run: node backfill/backfill-sap-bin.js ${{ steps.f.outputs.mes }} --forzar
+      # 1 · los documentos nuevos, en una ventana de tres dias y no el mes
+      #     entero: rehacer el mes son ~16.000 documentos y casi una hora.
+      #     Tres dias porque SAP acepta posteos con fecha vieja.
+      - name: 1) Extraer lo nuevo de SAP
+        run: |
+          node backfill/backfill-sap-bin.js \
+            ${{ steps.f.outputs.mesv }} ${{ steps.f.outputs.mes }} \
+            --desde=${{ steps.f.outputs.ventana }} --forzar
 
       # 2 · el ancla, DESPUES de extraer para que la cobertura la alcance.
       - name: 2) Saldo por bodega (el ancla)

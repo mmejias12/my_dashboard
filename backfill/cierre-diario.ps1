@@ -141,12 +141,12 @@ Paso '6/6' 'commiteando y empujando'
 $archivos = @("$dir/stock-retail.json", "$dir/stock-clientes.json", "$dir/bodegas-hoy.json",
               "$dir/datos-stock.json", 'stock-flujos-pallets.html', $hist)
 git add -- $archivos
-if ($LASTEXITCODE -ne 0) { Muere 'fallo git add (¿se corrio fuera del repositorio?)' }
+if ($LASTEXITCODE -ne 0) { Muere 'fallo git add: se corrio fuera del repositorio?' }
 git diff --staged --quiet
 if ($LASTEXITCODE -eq 0) {
   Write-Host '  sin cambios: no hay nada que commitear.'
 } else {
-  git commit -m "Stock y flujos de pallets · cierre $hoy"
+  git commit -m "Stock y flujos de pallets - cierre $hoy"
   if ($LASTEXITCODE -ne 0) { Muere 'fallo el commit' }
   git push
   if ($LASTEXITCODE -ne 0) { Muere 'el commit quedo local: fallo el push (revisar credenciales de git)' }

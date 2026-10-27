@@ -283,6 +283,18 @@ tr.gtot td{background:var(--bg-surface);font-weight:700;border-top:2px solid var
 .sem-por.sin{color:var(--text-muted);font-style:italic}
 .lnk-motivo{flex:none;background:none;border:none;padding:0 0 0 4px;cursor:pointer;
   font:inherit;color:var(--info);text-decoration:underline;font-style:normal}
+/* Reapertura del día: el motivo que escribió Logística al reabrir. Es el
+   canal real por el que se explica un cambio post-semáforo, así que se
+   muestra completo y no solo en el tooltip. */
+.sem-reap{font-size:11.5px;color:var(--text-sec);line-height:1.5;margin-top:.4rem;
+  display:flex;gap:6px;align-items:flex-start;cursor:help;
+  border-left:2px solid var(--warn);padding:2px 0 2px 7px}
+.sem-reap i{opacity:.8;margin-top:2px;flex:none}
+.sem-reap b{color:var(--text)}
+.sem-reap b.sube{color:var(--ok)} .sem-reap b.baja{color:var(--danger)}
+.sem-reap .rz{color:var(--text)}
+.sem-reap .rz.sin{color:var(--text-muted);font-style:italic}
+.sem-reap.mudo{border-left-color:var(--text-muted)}
 
 /* selector de período (mismo componente que Ops y la cartola) */
 .rg{position:relative;display:inline-block}
@@ -658,6 +670,59 @@ function htmlDesglose(pl){
    dato. Se muestran bajo el cambio, y el tooltip agrega quién y cuándo. Si
    el cambio existe pero nadie lo explicó, se dice: un cambio sin explicar es
    justamente lo que Transporte necesita poder reclamar.                   */
+/* Reaperturas del día =====================================================
+   El camino real de Logística no es editar con el semáforo en verde: es
+   REABRIR, mover, y volver a cerrar. Visto desde los cambios eso no deja
+   rastro —al reconfirmar la foto vuelve a calzar y la lista queda vacía—
+   pero el motivo que se escribe al reabrir sí quedó guardado, y el antes y
+   el después salen de los totales que el historial anota en cada paso.
+   Esto es lo que Transporte necesita leer: qué se movió después de que ya
+   había planificado, y por qué.                                           */
+function ciclosReapertura(pl){
+  var h=(pl&&pl.historial)||[], out=[];
+  for(var i=0;i<h.length;i++){
+    if(h[i].accion!=='reabrir') continue;
+    var cierre=null;
+    for(var j=i+1;j<h.length;j++){
+      if(h[j].accion==='reabrir') break;                 // se reabrió otra vez sin cerrar
+      if(h[j].accion==='confirmar'||h[j].accion==='reconfirmar'){ cierre=h[j]; break; }
+    }
+    out.push({ por:h[i].por||'', en:h[i].en, motivo:h[i].motivo||'',
+               antes:(typeof h[i].total==='number')?h[i].total:null,
+               despues:(cierre && typeof cierre.total==='number')?cierre.total:null,
+               cerrado_en:cierre?cierre.en:null, cerrado_por:cierre?(cierre.por||''):'',
+               abierto:!cierre });
+  }
+  return out.slice(-3);                                   // las últimas tres bastan
+}
+function htmlReaperturas(pl){
+  var cs=ciclosReapertura(pl);
+  if(!cs.length) return '';
+  return cs.map(function(c){
+    var d=(c.antes!=null && c.despues!=null) ? c.despues-c.antes : null;
+    var cifras = d===null ? '' :
+      ' · '+num(c.antes)+' → '+num(c.despues)+
+      ' <b class="'+(d>0?'sube':(d<0?'baja':''))+'">'+(d>0?'+':'')+num(d)+'</b>';
+    var cab = '<b>Reabierto</b> '+(c.por?'por '+esc(corto(c.por)):'')+
+              (c.en?' a las '+esc(horaCorta(c.en)):'')+cifras+
+              (c.abierto?' · <b>sigue abierto</b>':
+                (c.cerrado_en?' · cerrado a las '+esc(horaCorta(c.cerrado_en)):''));
+    var texto = c.motivo
+      ? '<span class="rz">«'+esc(c.motivo)+'»</span>'
+      : '<span class="rz sin">sin motivo anotado al reabrir</span>';
+    var ayuda = (c.motivo||'sin motivo anotado al reabrir')+
+      (c.por?' — reabrió '+corto(c.por):'')+(c.en?', '+fechaHoraCorta(c.en):'')+
+      (c.cerrado_en?'\nvolvió a cerrarlo '+corto(c.cerrado_por)+', '+fechaHoraCorta(c.cerrado_en):'')+
+      (d!==null?'\nla programación pasó de '+num(c.antes)+' a '+num(c.despues)+' pallets':'');
+    return '<div class="sem-reap'+(c.motivo?'':' mudo')+'" title="'+esc(ayuda)+'">'+
+           '<i class="ti ti-lock-open"></i><span>'+cab+'<br>'+texto+'</span></div>';
+  }).join('');
+}
+function horaCorta(v){
+  if(!v) return '';
+  var d=new Date(v); if(isNaN(d)) return '';
+  return d.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
+}
 function htmlMotivos(c, planta, editable){
   var ms=(c.motivos||[]).filter(function(m){ return m && m.motivo; });
   if(!ms.length){
@@ -701,6 +766,7 @@ function semaforoHTML(){
       ' pallets (confirmado por '+esc(corto(pl.confirmado_por))+' el '+esc(fechaHoraCorta(pl.confirmado_en))+
       ') y ahora va en '+num(pl.total_actual)+'. Logística todavía no valida los cambios.</div>';
     if(pl.nota) h+='<div class="sem-sub">Nota de Logística: '+esc(pl.nota)+'</div>';
+    h+=htmlReaperturas(pl);
     if(pl.cambios&&pl.cambios.length){
       h+='<div class="sem-cambios">';
       pl.cambios.slice(0,10).forEach(function(c){

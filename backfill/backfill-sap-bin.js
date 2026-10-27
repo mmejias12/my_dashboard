@@ -61,7 +61,7 @@ const SB = require('./sonda-sap-bin.js');         // que coleccion es "de ubicac
 const CONT = process.env.OS_SAP_CONTAINER || 'redtec-os-sap';
 const args = process.argv.slice(2);
 const OPCIONES = ['entidad', 'fecha', 'item', 'bodega', 'clientes', 'conc', 'pausa', 'pagina', 'tope',
-                  'prefijo'];
+                  'prefijo', 'desde'];
 const BANDERAS = ['maestro', 'forzar', 'crudo'];
 const opcion = (n, d) => {
   const a = args.find(x => x.startsWith('--' + n + '='));
@@ -78,6 +78,7 @@ const PAGINA = Math.max(20, Math.min(500, parseInt(opcion('pagina', '200'), 10) 
 const CONC = Math.max(1, Math.min(32, parseInt(opcion('conc', '8'), 10) || 8));
 const PAUSA = Math.max(0, parseInt(opcion('pausa', '120'), 10) || 0);
 const FORZAR = flag('forzar');
+const VENTANA = opcion('desde', null);   // ventana incremental: YYYY-MM-DD
 
 const mil = n => Number(n).toLocaleString('es-CL');
 
@@ -136,6 +137,62 @@ function filasDeDocumento(doc, claveLineas, item) {
  *  $skip/$top sobre un orden unico por la misma razon que backfill-sap.js: la
  *  clave de continuacion cambia de nombre entre dialectos y seguirla fue como
  *  truncamos un mes entero en silencio. */
+/* ── LA VENTANA INCREMENTAL ─────────────────────────────────────────────────
+ *  El cierre diario re-extraia el MES ENTERO todos los dias: 15.688 documentos
+ *  y 58 minutos para traer, en el fondo, el movimiento de un dia. Con --desde
+ *  se trae solo la cola del mes y se fusiona con lo que ya esta en el blob.
+ *
+ *  LA FASE 1 SIGUE SIENDO DEL MES COMPLETO, y no es un descuido: son 80
+ *  peticiones de 15.768, o sea segundos, y es lo unico que deja saber cuantos
+ *  documentos tiene el mes de verdad. Sin eso, _docs contaria solo la ventana
+ *  y la sonda de cobertura reportaria un faltante que no existe.
+ *
+ *  POR QUE UNA VENTANA DE VARIOS DIAS Y NO DE UNO: SAP acepta documentos
+ *  post-fechados y posteos con fecha vieja. Un dia de ventana se perderia
+ *  justamente los que llegan tarde, que son los que interesan.          */
+
+/** Hasta donde llega la ventana dentro de ESTE mes. Devuelve el corte, o dice
+ *  por que no hay ninguno. Un mes entero anterior a la ventana no se toca. */
+function corteDeVentana(desde, mes) {
+  const m = String(mes == null ? '' : mes).trim();
+  if (!/^\d{4}-\d{2}$/.test(m)) return { error: 'mes invalido: ' + mes };
+  const pri = m + '-01', ult = S.finDeMes(m);
+  const d = String(desde == null ? '' : desde).trim();
+  if (!d) return { corte: null, completo: true };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return { error: '--desde no es YYYY-MM-DD: ' + desde };
+  if (d <= pri) return { corte: pri, completo: true };   // la ventana cubre el mes entero
+  if (d > ult) return { corte: null, fuera: true };      // el mes quedo entero antes de la ventana
+  return { corte: d, completo: false };
+}
+
+/** Que documentos hay que volver a pedir y cuales quedan como estaban.
+ *  Un documento SIN fecha legible se vuelve a pedir: es el lado seguro. */
+function partirEntries(entries, corte) {
+  const traer = [], antes = [];
+  for (const e of (Array.isArray(entries) ? entries : [])) {
+    if (!e || e.DocEntry == null) continue;
+    const f = String(e.DocDate == null ? '' : e.DocDate).slice(0, 10);
+    if (!corte || !/^\d{4}-\d{2}-\d{2}$/.test(f) || f >= corte) traer.push(e.DocEntry);
+    else antes.push(e.DocEntry);
+  }
+  return { traer, antes };
+}
+
+/** Las filas del blob viejo anteriores al corte, mas las recien traidas.
+ *  Se conserva por FECHA y no por DocEntry a proposito: asi, si un documento
+ *  de la ventana se anulo en SAP y ya no vuelve, sus filas desaparecen igual.
+ *  Una fila vieja sin fecha legible NO se conserva, porque su documento se
+ *  vuelve a pedir y quedaria duplicada. */
+function fusionarFilas(viejas, nuevas, corte) {
+  const n = Array.isArray(nuevas) ? nuevas.slice() : [];
+  if (!corte) return n;
+  const conservadas = (Array.isArray(viejas) ? viejas : []).filter(f => {
+    const d = f && String(f.DocDate == null ? '' : f.DocDate).slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(d) && d < corte;
+  });
+  return conservadas.concat(n);
+}
+
 function urlLista(raiz, entidad, campoFecha, desde, hasta, top, skip) {
   if (!raiz || !entidad || !campoFecha || !desde || !hasta) return null;
   const filtro = campoFecha + " ge '" + desde + "' and " + campoFecha + " le '" + hasta + "'";
@@ -233,7 +290,7 @@ function atribuir(filas, mapa) {
   return { con, sin };
 }
 
-module.exports = { deltaDeAsignacion, filasDeDocumento, urlLista, urlPorClave,
+module.exports = { corteDeVentana, partirEntries, fusionarFilas, deltaDeAsignacion, filasDeDocumento, urlLista, urlPorClave,
                    saldoPorBin, atribuir, controlDePuntas, urlSociosPorPrefijo,
                    OPCIONES, BANDERAS };
 
@@ -258,6 +315,10 @@ function esNoExiste(e) {
 async function existeBlob(cc, nombre) {
   try { return await cc.getBlobClient(nombre).exists(); }
   catch (e) { if (esNoExiste(e)) return false; throw e; }
+}
+async function leerJson(cc, nombre) {
+  const buf = await cc.getBlobClient(nombre).downloadToBuffer();
+  return JSON.parse(buf.toString('utf8'));
 }
 async function escribirJson(cc, nombre, obj) {
   const buf = Buffer.from(JSON.stringify(obj), 'utf8');
@@ -368,7 +429,26 @@ async function maestro(ses, raiz, cc) {
 async function unMes(ses, raiz, cc, mes) {
   const desde = mes + '-01', hasta = S.finDeMes(mes);
   const nombre = 'binmov/' + mes + '.json';
-  if (!FORZAR && await existeBlob(cc, nombre)) { console.log(mes + ': ya esta, se salta (--forzar para rehacer)'); return null; }
+
+  const v = corteDeVentana(VENTANA, mes);
+  if (v.error) { console.error(v.error); process.exit(1); }
+  if (v.fuera) { console.log(mes + ': entero antes de la ventana --desde, se deja como esta'); return null; }
+  const corte = v.completo ? null : v.corte;
+  let viejas = null;
+  if (corte) {
+    // Sin blob previo no hay con que fusionar, y escribir solo la ventana
+    // dejaria un mes incompleto haciendose pasar por completo.
+    if (!await existeBlob(cc, nombre)) {
+      console.error(mes + ': --desde necesita el blob del mes ya extraido, y no esta.');
+      console.error('  Corre el mes completo una vez (sin --desde) y despues incremental.');
+      process.exit(1);
+    }
+    const j = await leerJson(cc, nombre);
+    viejas = (j && j.filas) || [];
+    console.log(mes + ': ventana desde ' + corte + ' · blob previo con ' + mil(viejas.length) + ' filas');
+  } else if (!FORZAR && await existeBlob(cc, nombre)) {
+    console.log(mes + ': ya esta, se salta (--forzar para rehacer)'); return null;
+  }
 
   // FASE 1 · descubrir los DocEntry
   const entries = [];
@@ -381,27 +461,40 @@ async function unMes(ses, raiz, cc, mes) {
       return x;
     });
     pedidos++;
-    const v = (r.json && r.json.value) || [];
-    for (const d of v) entries.push(d.DocEntry);
-    if (!v.length) break;
-    if (v.length < paso) {
+    const pag = (r.json && r.json.value) || [];
+    // la FECHA tambien, que es lo que decide si el documento entra en la ventana
+    for (const d of pag) entries.push({ DocEntry: d.DocEntry, DocDate: d[CAMPO_FECHA] });
+    if (!pag.length) break;
+    if (pag.length < paso) {
       // pagina corta: final de verdad o tope del servidor. Se pregunta.
-      const s = await ses.get(urlLista(raiz, ENTIDAD, CAMPO_FECHA, desde, hasta, 1, skip + v.length));
+      const s = await ses.get(urlLista(raiz, ENTIDAD, CAMPO_FECHA, desde, hasta, 1, skip + pag.length));
       pedidos++;
       if (!((s.json && s.json.value) || []).length) break;
-      paso = v.length;
+      paso = pag.length;
     }
-    skip += v.length;
+    skip += pag.length;
     if (pedidos > 5000) throw new Error('Mas de 5000 peticiones listando ' + mes);
   }
   console.log(mes + ': ' + mil(entries.length) + ' documentos (fase 1, ' + pedidos + ' peticiones)');
-  if (!entries.length) return { mes, filas: [], docs: 0, fallidos: [], raros: [] };
+  if (!entries.length) return { mes, desde, hasta, filas: [], docs: 0, fallidos: [], raros: [], corte };
+
+  // FASE 2 solo sobre la ventana. La fase 1 ya recorrio el mes entero, asi que
+  // _docs sigue siendo el total del mes y la sonda de cobertura sigue valiendo.
+  const part = partirEntries(entries, corte);
+  const aPedir = part.traer;
+  if (corte) console.log('  ' + mil(aPedir.length) + ' documentos en la ventana · ' +
+                         mil(part.antes.length) + ' quedan como estaban');
+  if (!aPedir.length) {
+    const solo = fusionarFilas(viejas, [], corte);
+    return { mes, desde, hasta, filas: solo, docs: entries.length, fallidos: [], raros: [],
+             corte, conservadas: solo.length, nuevas: 0 };
+  }
 
   // FASE 2 · uno por uno, que es la unica forma de que vengan las asignaciones
   const filas = [], fallidos = [], raros = [];
   let hechos = 0, t0 = Date.now();
-  for (let i = 0; i < entries.length; i += CONC) {
-    const lote = entries.slice(i, i + CONC);
+  for (let i = 0; i < aPedir.length; i += CONC) {
+    const lote = aPedir.slice(i, i + CONC);
     await Promise.all(lote.map(async de => {
       try {
         const r = await conReintentos(async () => {
@@ -418,14 +511,16 @@ async function unMes(ses, raiz, cc, mes) {
     }));
     hechos += lote.length;
     if (PAUSA) await new Promise(r => setTimeout(r, PAUSA));
-    if (hechos % (CONC * 25) === 0 || hechos === entries.length) {
+    if (hechos % (CONC * 25) === 0 || hechos === aPedir.length) {
       const seg = (Date.now() - t0) / 1000;
-      process.stdout.write('\r  ' + mil(hechos) + '/' + mil(entries.length) +
+      process.stdout.write('\r  ' + mil(hechos) + '/' + mil(aPedir.length) +
         '   ' + (seg ? (hechos / seg * 60).toFixed(0) : '0') + '/min   filas: ' + mil(filas.length) + '   ');
     }
   }
   process.stdout.write('\n');
-  return { mes, desde, hasta, filas, docs: entries.length, fallidos, raros };
+  const todas = fusionarFilas(viejas, filas, corte);
+  return { mes, desde, hasta, filas: todas, docs: entries.length, fallidos, raros,
+           corte, conservadas: todas.length - filas.length, nuevas: filas.length };
 }
 
 // ── main ────────────────────────────────────────────────────────────────────
@@ -469,6 +564,9 @@ async function main() {
       _solo_entra: cp.soloEntra, _descuadradas: cp.descuadradas,
       _fallidos: res.fallidos, _tipos_desconocidos: res.raros.length,
       _guardado: new Date().toISOString(),
+      _desde_ventana: res.corte || null,
+      _filas_conservadas: res.corte ? (res.conservadas || 0) : null,
+      _filas_nuevas: res.corte ? (res.nuevas || 0) : null,
       filas: res.filas,
     };
     const n = await escribirJson(cc, 'binmov/' + res.mes + '.json', payload);

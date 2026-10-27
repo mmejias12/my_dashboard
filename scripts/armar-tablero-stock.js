@@ -216,6 +216,10 @@ function datos(bod, ret, cli, extra) {
     generado: (bod && bod.generado) || new Date().toISOString(),
     flota: fl.total,
     bodegas_cuantas: fl.bodegas,
+    // Pallet que existe en SAP sólo como instrumento de recuperación. No es
+    // flota: no rota. Se declara en el archivo de extras porque la bodega no
+    // lo distingue, es una regla de negocio.
+    sistemico: (extra && esNumero(extra.sistemico)) ? Number(extra.sistemico) : null,
     bodegas: {
       CLIENTES: { nivel: fl.clientes, socios: Number(nc.socios) || 0,
                   residuo: Number(nc.residuo) || 0, n: sc.conSaldo,
@@ -235,6 +239,8 @@ function datos(bod, ret, cli, extra) {
     controles: (extra && Array.isArray(extra.controles)) ? extra.controles : null,
     aviso_nota: (extra && typeof extra.aviso_nota === 'string' && extra.aviso_nota.trim())
                   ? extra.aviso_nota.trim() : null,
+    residuo_detalle: (extra && Array.isArray(extra.residuo_detalle))
+                  ? extra.residuo_detalle.filter(x => x && x.que && esNumero(x.cantidad)) : null,
     // Un bloque en verificacion se marca donde esta, no en una nota al pie:
     // quien mira el grafico tiene que ver la advertencia sin bajar la vista.
     mensual_nota: (extra && typeof extra.mensual_nota === 'string' && extra.mensual_nota.trim())
@@ -486,7 +492,10 @@ function pagina(d) {
          ' bodegas de la empresa, repartido en las tres patas del pool.</p>');
   H.push('  <div class="panel">\n    <div class="tile" style="border:none;padding:0">');
   H.push('      <div class="et">Flota total</div>\n      <div class="big">' + mil(d.flota) + '</div>');
-  H.push('      <div class="pie">pallets, leídos del saldo vivo de SAP</div>\n    </div>');
+  H.push('      <div class="pie">pallets, leídos del saldo vivo de SAP' +
+         (d.sistemico ? '<br>de los cuales <b>' + mil(d.sistemico) + '</b> son sistémicos y no rotan: ' +
+                        'la flota en rotación es <b>' + mil(d.flota - d.sistemico) + '</b>' : '') +
+         '</div>\n    </div>');
   H.push('    <div class="flota">' + svgFlota(d) + '</div>\n    <div class="leyenda">');
   for (const [cl, nom, val] of [['p-cli', 'Clientes', b.CLIENTES.nivel],
                                 ['p-ret', 'Retail', b.RETAIL.nivel],
@@ -601,7 +610,8 @@ function pagina(d) {
   H.push('        <dt>Flujo mensual</dt><dd>Diario de movimientos de inventario (OINM), agrupado ' +
          'por mes de fecha de documento.</dd>');
   H.push('        <dt>Residuo</dt><dd>Saldo de bodega menos suma de los socios. No es un error de ' +
-         'cálculo: es pallet que SAP cuenta en la bodega sin ubicación asignada.</dd>');
+         'cálculo ni pallet perdido: son dos ubicaciones de SAP que existen justamente para el ' +
+         'pallet que no tiene dueño identificado.</dd>');
   H.push('      </dl>\n    </div>');
   if (d.controles && d.controles.length) {
     H.push('    <div class="panel">\n      <h3>Controles que pasó</h3>\n      <dl>');
@@ -616,18 +626,19 @@ function pagina(d) {
   const rr = b.RETAIL.residuo;
   if (rr > 0) {
     H.push('  <div class="aviso">\n    <h3>Lo que falta resolver</h3>');
-    H.push('    <p><b>' + mil(rr) + ' pallets en BODEGA RETAILERS sin ubicación asignada</b> (' +
-           pct1(rr, b.RETAIL.nivel) + ' del retail). SAP los cuenta en la bodega pero el ' +
-           'movimiento que los llevó ahí no registró ubicación, así que ninguna herramienta ' +
-           'basada en ubicaciones los puede atribuir: ni la nuestra ni la que se está ' +
-           'reemplazando.</p>');
-    // La nota de contraste va ANTES de la pregunta abierta: primero se dice
-    // que el problema no es del metodo, despues se pregunta de quien es.
-    if (d.aviso_nota) H.push('    <p>' + esc(d.aviso_nota) + '</p>');
-    H.push('    <p style="margin-bottom:0">La pregunta para operaciones es si ese movimiento a ' +
-           'granel es intencional o si es un hueco de registro. De la respuesta depende si ese ' +
-           pct1(rr, b.RETAIL.nivel) + ' es una categoría legítima o pallet cuya tenencia nadie ' +
-           'puede acreditar.</p>\n  </div>');
+    H.push('    <p><b>' + mil(rr) + ' pallets de BODEGA RETAILERS sin retailer identificado</b> (' +
+           pct1(rr, b.RETAIL.nivel) + ' del retail). No están perdidos ni mal registrados: SAP los ' +
+           'tiene en ubicaciones que existen para eso.</p>');
+    // El desglose viene del dato medido, con su fecha, no de una explicacion
+    // escrita a mano: si manana cambia el reparto, cambia el texto.
+    if (d.residuo_detalle && d.residuo_detalle.length) {
+      H.push('    <dl style="margin:8px 0">');
+      for (const x of d.residuo_detalle)
+        H.push('      <dt>' + mil(x.cantidad) + '</dt><dd>' + esc(x.que) + '</dd>');
+      H.push('    </dl>');
+    }
+    if (d.aviso_nota) H.push('    <p style="margin-bottom:0">' + esc(d.aviso_nota) + '</p>');
+    H.push('\n  </div>');
   }
   // Un descalce entre la sonda y el ancla no se esconde: invalida la pagina.
   if (d.descalces && d.descalces.length) {

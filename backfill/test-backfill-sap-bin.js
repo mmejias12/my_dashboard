@@ -236,5 +236,75 @@ chk('sin prefijo no hay url', B.urlSociosPorPrefijo('https://h/b1s/v1', '') === 
 chk('sin raiz tampoco', B.urlSociosPorPrefijo(null, 'R') === null);
 chk('--prefijo es una opcion con valor', B.OPCIONES.indexOf('prefijo') >= 0);
 
+console.log('\n— la ventana incremental: hasta donde llega el corte —');
+chk('sin --desde el mes va entero', B.corteDeVentana(null,'2026-10').completo === true &&
+    B.corteDeVentana(null,'2026-10').corte == null);
+chk('una fecha dentro del mes es el corte', B.corteDeVentana('2026-10-24','2026-10').corte === '2026-10-24');
+chk('y no se marca como completo', B.corteDeVentana('2026-10-24','2026-10').completo === false);
+// una ventana que empieza antes del mes cubre el mes entero: no hay que fusionar
+chk('una fecha anterior al mes cubre todo',
+    B.corteDeVentana('2026-09-15','2026-10').completo === true);
+chk('el primer dia tambien', B.corteDeVentana('2026-10-01','2026-10').completo === true);
+// un mes entero anterior a la ventana NO se toca
+chk('un mes anterior a la ventana queda fuera', B.corteDeVentana('2026-10-24','2026-09').fuera === true);
+chk('el ultimo dia del mes todavia entra', B.corteDeVentana('2026-10-31','2026-10').corte === '2026-10-31');
+chk('febrero bisiesto se respeta', B.corteDeVentana('2024-02-29','2024-02').corte === '2024-02-29');
+chk('una fecha mal escrita se rechaza', /no es YYYY-MM-DD/.test(B.corteDeVentana('24-10-2026','2026-10').error||''));
+chk('un mes mal escrito tambien', /mes invalido/.test(B.corteDeVentana(null,'octubre').error||''));
+
+console.log('\n— que documentos se vuelven a pedir —');
+const ENT = [
+  { DocEntry: 1, DocDate: '2026-10-02' },
+  { DocEntry: 2, DocDate: '2026-10-23' },
+  { DocEntry: 3, DocDate: '2026-10-24' },
+  { DocEntry: 4, DocDate: '2026-10-26T00:00:00Z' },
+  { DocEntry: 5, DocDate: null },
+  { DocEntry: 6, DocDate: '2026-10-05T12:00:00Z' },   // con hora y ANTES del corte
+];
+const P1 = B.partirEntries(ENT, '2026-10-24');
+chk('se piden los del corte en adelante', P1.traer.join() === '3,4,5', P1.traer.join());
+chk('los anteriores quedan como estaban', P1.antes.join() === '1,2,6', P1.antes.join());
+// SIN cortar la fecha a diez, una con hora no calza el patron y se volveria a
+// pedir aunque sea vieja: es la diferencia entre fusionar y re-extraer medio mes
+chk('una fecha con hora ANTERIOR al corte no se vuelve a pedir', !P1.traer.includes(6));
+// el corte es INCLUSIVO: el dia del corte se vuelve a pedir
+chk('el dia del corte se vuelve a pedir', P1.traer.includes(3));
+// una fecha con hora se corta a diez caracteres, no se descarta
+chk('una fecha con hora se entiende', P1.traer.includes(4));
+// sin fecha legible se pide: es el lado seguro
+chk('un documento sin fecha se pide', P1.traer.includes(5));
+chk('sin corte se piden todos', B.partirEntries(ENT, null).traer.length === 6);
+chk('una entrada sin DocEntry se ignora', B.partirEntries([{DocDate:'2026-10-25'}], null).traer.length === 0);
+chk('sin entradas no revienta', B.partirEntries(null,'2026-10-24').traer.length === 0);
+
+console.log('\n— la fusion con lo que ya estaba —');
+const VIEJAS = [
+  { DocEntry: 1, DocDate: '2026-10-02', delta:  5 },
+  { DocEntry: 2, DocDate: '2026-10-23', delta:  7 },
+  { DocEntry: 3, DocDate: '2026-10-24', delta: 11 },   // dentro de la ventana: se descarta
+  { DocEntry: 9, DocDate: '',           delta: 99 },   // sin fecha: se descarta
+  { DocEntry: 8, DocDate: '2026-10-05T12:00:00Z', delta: 23 },   // con hora, anterior
+];
+const NUEVAS = [
+  { DocEntry: 3, DocDate: '2026-10-24', delta: 13 },   // el mismo doc, valor corregido
+  { DocEntry: 7, DocDate: '2026-10-26', delta: 17 },
+];
+const F = B.fusionarFilas(VIEJAS, NUEVAS, '2026-10-24');
+chk('conserva lo anterior al corte', F.filter(x=>x.DocEntry===1||x.DocEntry===2).length === 2);
+// la version vieja de un documento de la ventana NO puede sobrevivir
+chk('no quedan dos versiones del mismo documento',
+    F.filter(x=>x.DocEntry===3).length === 1 && F.find(x=>x.DocEntry===3).delta === 13);
+chk('entra lo nuevo', F.some(x=>x.DocEntry===7));
+// una fila vieja sin fecha se descarta: su documento se vuelve a pedir
+chk('una fila vieja sin fecha no se conserva', !F.some(x=>x.DocEntry===9));
+chk('una fila vieja con hora anterior al corte se conserva', F.some(x=>x.DocEntry===8));
+chk('el total cuadra', F.length === 5, String(F.length));
+// un documento de la ventana que se anulo en SAP desaparece, no queda colgado
+chk('un documento anulado en la ventana desaparece',
+    !B.fusionarFilas(VIEJAS, [], '2026-10-24').some(x=>x.DocEntry===3));
+chk('sin corte la fusion es solo lo nuevo', B.fusionarFilas(VIEJAS, NUEVAS, null).length === 2);
+chk('sin filas viejas tampoco revienta', B.fusionarFilas(null, NUEVAS, '2026-10-24').length === 2);
+chk('--desde es una opcion con valor', B.OPCIONES.indexOf('desde') >= 0);
+
 console.log('\n'+ok+' ok, '+fail+' fallas\n');
 process.exit(fail?1:0);

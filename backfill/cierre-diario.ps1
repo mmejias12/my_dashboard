@@ -69,10 +69,22 @@ function Muere([string]$que) { [Console]::Error.WriteLine("ERROR: $que"); exit 1
 
 Write-Host "── cierre diario $hoy ────────────────────────────────"
 
-# 1 · los documentos del dia. --forzar porque el mes en curso ya existe.
-Paso '1/6' "extrayendo $mes de SAP"
-node backfill/backfill-sap-bin.js $mes --forzar
-if ($LASTEXITCODE -ne 0) { Muere "fallo la extraccion de $mes" }
+# 1 · los documentos nuevos. VENTANA DE TRES DIAS, no el mes entero: medido el
+#     26-oct, rehacer octubre completo son 15.688 documentos y 58 minutos para
+#     traer el movimiento de un dia. Con --desde se piden solo los de la cola y
+#     se fusionan con el blob que ya esta.
+#     TRES DIAS Y NO UNO porque SAP acepta posteos con fecha vieja: una ventana
+#     de un dia se perderia justamente los que llegan tarde.
+#     Los dos meses van cuando la ventana cruza el cambio de mes; si no, es el
+#     mismo mes dos veces y el script lo resuelve igual. --forzar se queda
+#     porque los primeros dias del mes la ventana cubre el mes entero y sin el
+#     se saltaria el blob recien creado.
+$ventana = (Get-Date).AddDays(-3)
+$desde   = $ventana.ToString('yyyy-MM-dd')
+$mesIni  = $ventana.ToString('yyyy-MM')
+Paso '1/6' "extrayendo desde $desde (meses $mesIni..$mes)"
+node backfill/backfill-sap-bin.js $mesIni $mes --desde=$desde --forzar
+if ($LASTEXITCODE -ne 0) { Muere "fallo la extraccion desde $desde" }
 
 # 2 · el ancla. Va DESPUES de la extraccion para que la cobertura la alcance.
 #     Al reves, el ancla queda adelante de los movimientos y saldo-pool se

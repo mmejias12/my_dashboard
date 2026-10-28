@@ -199,6 +199,23 @@ chk('con extra si aparece el flujo', A.pagina(A.datos(BOD,
      controles:[{titulo:'Cobertura', texto:'190.590 y 190.590'}]}))
     .includes('Flujo del año por bodega'));
 
+console.log('\n— la nota del gráfico mensual puede estar resuelta —');
+const NOTA = (extra) => A.pagina(A.datos(BOD,
+  {socios:SOC,nivel:{bodega:579026},mensual:[{mes:'2026-01',neto:5}],ventana:{}},
+  {socios:[],nivel:{bodega:212945},mensual:[{mes:'2026-01',neto:5}],ventana:{}}, extra));
+const ENV = NOTA({mensual_nota:'falta zanjar cual columna'});
+chk('por omisión sigue diciendo en verificación',
+    /<div class="enrevision"><b>En verificación\.<\/b> falta zanjar/.test(ENV), ENV.slice(0,0));
+const VER = NOTA({mensual_nota:'quedó zanjado contra M2LINK', mensual_verificado:true});
+chk('marcada como verificada cambia el cartel',
+    /<div class="resuelto"><b>Verificado\.<\/b> quedó zanjado/.test(VER));
+chk('y ya no grita en verificación', !/En verificación/.test(VER), VER.slice(0,0));
+// la bandera sin nota no dibuja nada: no hay cartel vacío
+chk('la bandera sola no dibuja cartel',
+    !/class="resuelto"/.test(NOTA({mensual_verificado:true})));
+chk('un valor raro en la bandera no verifica',
+    /class="enrevision"/.test(NOTA({mensual_nota:'x', mensual_verificado:0})));
+
 console.log('\n— un control puede NO pasar, y entonces se dice —');
 // el titulo era "Controles que paso": un panel que solo sabe decir que todo
 // esta bien miente el dia que algo deja de estarlo, y ese dia llego

@@ -245,6 +245,11 @@ function datos(bod, ret, cli, extra) {
     // quien mira el grafico tiene que ver la advertencia sin bajar la vista.
     mensual_nota: (extra && typeof extra.mensual_nota === 'string' && extra.mensual_nota.trim())
                   ? extra.mensual_nota.trim() : null,
+    // Una nota puede estar en verificacion o ya resuelta. Mientras la unica
+    // forma de poner una nota fue gritar "En verificacion", la nota que
+    // informa un resultado ya establecido tenia que salir con una alarma que
+    // ya no corresponde, o no salir.
+    mensual_verificado: !!(extra && extra.mensual_verificado),
     extra_medido: (extra && extra.medido) || null,
     ventana: { nivel: String((bod && bod.generado) || '').slice(0, 10),
                flujo_desde: vr.desde || vc.desde || null,
@@ -426,6 +431,9 @@ th.num{text-align:right}
 .enrevision{border:1px dashed var(--alerta);border-radius:6px;background:var(--panel);
   color:var(--tinta2);font-size:13.5px;padding:10px 13px;margin:10px 0 0}
 .enrevision b{color:var(--alerta)}
+.resuelto{border:1px solid var(--linea);border-radius:6px;background:var(--panel);
+  color:var(--tinta2);font-size:13.5px;padding:10px 13px;margin:10px 0 0}
+.resuelto b{color:var(--ok)}
 .rancio{border:1px solid var(--alerta);border-left:3px solid var(--alerta);border-radius:6px;
   background:var(--panel);color:var(--alerta);font:600 14px/1.4 var(--f-txt);
   padding:11px 14px;margin-bottom:18px}
@@ -526,7 +534,9 @@ function pagina(d) {
     H.push('  <p>Cuánto subió o bajó cada bodega en el año. Un valor positivo es pallet que salió de ' +
            'REDTEC hacia el socio; uno negativo es pallet que volvió.</p>');
     if (d.mensual_nota)
-      H.push('  <div class="enrevision"><b>En verificación.</b> ' + esc(d.mensual_nota) + '</div>');
+      H.push('  <div class="' + (d.mensual_verificado ? 'resuelto' : 'enrevision') + '">' +
+             (d.mensual_verificado ? '<b>Verificado.</b> ' : '<b>En verificación.</b> ') +
+             esc(d.mensual_nota) + '</div>');
     H.push('  <div class="panel">\n    <div class="leyenda" style="margin-bottom:10px">');
     H.push('      <span><i class="pt p-ret"></i>Retail <b>' + conSigno(d.anio.ret) + '</b> en el año</span>');
     H.push('      <span><i class="pt p-cli"></i>Clientes <b>' + conSigno(d.anio.cli) + '</b> en el año</span>');

@@ -306,5 +306,68 @@ chk('sin corte la fusion es solo lo nuevo', B.fusionarFilas(VIEJAS, NUEVAS, null
 chk('sin filas viejas tampoco revienta', B.fusionarFilas(null, NUEVAS, '2026-10-24').length === 2);
 chk('--desde es una opcion con valor', B.OPCIONES.indexOf('desde') >= 0);
 
+console.log('\n— lineasDeDocumento: el movimiento de bodega, que es lo unico que ve la planta —');
+// los nombres de los campos NO son un supuesto: los confirmo la sonda contra
+// SAP el 27-10-2026, buscandolos por contenido. Si alguien los cambia aca sin
+// volver a medir, esta prueba es el recordatorio.
+chk('los campos son los que confirmo la sonda',
+    B.CAMPO_DESDE === 'FromWarehouseCode' && B.CAMPO_HACIA === 'WarehouseCode',
+    B.CAMPO_DESDE + ' / ' + B.CAMPO_HACIA);
+const DOCP = { DocEntry: 77, DocNum: 9001, DocDate: '2026-10-27T00:00:00Z', StockTransferLines: [
+  { LineNum: 0, ItemCode: '11111111110', Quantity: 3635, FromWarehouseCode: 'RETAIL',   WarehouseCode: 'RT13-100' },
+  { LineNum: 1, ItemCode: '11111111110', Quantity: 1500, FromWarehouseCode: 'RT13-102', WarehouseCode: 'RT13-103' },
+  { LineNum: 2, ItemCode: '99999',       Quantity: 10,   FromWarehouseCode: 'RETAIL',   WarehouseCode: 'RT13-100' },
+  null,
+]};
+let LD = B.lineasDeDocumento(DOCP, 'StockTransferLines', '11111111110');
+chk('una fila por linea del item', LD.length === 2, String(LD.length));
+chk('de donde sale y a donde entra',
+    LD[0].desde === 'RETAIL' && LD[0].hacia === 'RT13-100' && LD[0].cantidad === 3635,
+    JSON.stringify(LD[0]));
+chk('la cadena de planta queda legible',
+    LD[1].desde === 'RT13-102' && LD[1].hacia === 'RT13-103');
+chk('otro item no entra', !LD.some(x => x.ItemCode === '99999'));
+chk('una linea nula no revienta ni entra', LD.length === 2);
+chk('la fecha se recorta a diez', LD[0].DocDate === '2026-10-27');
+chk('arrastra documento y linea para poder rastrear',
+    LD[0].DocEntry === 77 && LD[0].DocNum === 9001 && LD[1].LineNum === 1);
+// una punta ausente NO se inventa: hay lineas que mueven contra algo que no
+// es una bodega, y taparlas seria perder que existen
+let UNA = B.lineasDeDocumento({ DocEntry:1, DocDate:'2026-10-27', L:[
+  { ItemCode:'1', Quantity:5, WarehouseCode:'RT13-100' }] }, 'L', '1');
+chk('una punta ausente queda en null', UNA[0].desde === null && UNA[0].hacia === 'RT13-100');
+chk('un codigo con espacios se recorta', B.lineasDeDocumento({ DocEntry:1, DocDate:'d', L:[
+  { ItemCode:'1', Quantity:1, FromWarehouseCode:'  RETAIL  ' }] }, 'L', '1')[0].desde === 'RETAIL');
+chk('un codigo vacio no es una punta', B.lineasDeDocumento({ DocEntry:1, DocDate:'d', L:[
+  { ItemCode:'1', Quantity:1, FromWarehouseCode:'   ' }] }, 'L', '1')[0].desde === null);
+chk('una cantidad ilegible es cero, no NaN', B.lineasDeDocumento({ DocEntry:1, DocDate:'d', L:[
+  { ItemCode:'1', Quantity:'x', WarehouseCode:'RETAIL' }] }, 'L', '1')[0].cantidad === 0);
+chk('sin filtro de item pasan todas',
+    B.lineasDeDocumento(DOCP, 'StockTransferLines', null).length === 3);
+chk('sin documento o sin clave no hay lineas',
+    B.lineasDeDocumento(null, 'L', '1').length === 0 &&
+    B.lineasDeDocumento(DOCP, null, '1').length === 0 &&
+    B.lineasDeDocumento({}, 'L', '1').length === 0);
+// la fusion incremental es la MISMA que la de las filas: le basta DocDate
+const VL = [{ DocDate:'2026-10-20', desde:'A', hacia:'B', cantidad:1 }];
+const NL = [{ DocDate:'2026-10-27', desde:'C', hacia:'D', cantidad:2 }];
+chk('las lineas se fusionan con la misma regla que las filas',
+    B.fusionarFilas(VL, NL, '2026-10-25').length === 2 &&
+    B.fusionarFilas(VL, NL, '2026-10-15').length === 1);
+
+console.log('\n— ventanaUsable: un blob sin lineas no se puede fusionar —');
+// las lineas viven en su propio blob: saldo-pool lee los diez binmov dos veces
+// por cierre y no tiene por que descargar 25 MB que no usa
+chk('las lineas van en su propio prefijo', B.PREFIJO_LINEAS === 'lineasbod/', B.PREFIJO_LINEAS);
+// fusionar la ventana contra un blob viejo dejaria un mes con lineas solo en
+// los ultimos dias, haciendose pasar por completo. Peor que no tener nada.
+chk('un blob sin lineas no sirve para la ventana',
+    B.ventanaUsable({ filas: [1,2,3] }).ok === false);
+chk('y se dice por que', /no trae lineas de bodega/.test(B.ventanaUsable({ filas: [] }).motivo));
+chk('un mes legitimamente vacio si sirve', B.ventanaUsable({ filas: [], lineas: [] }).ok === true);
+chk('con lineas sirve', B.ventanaUsable({ lineas: [{}] }).ok === true && B.ventanaUsable({ lineas:[{}] }).motivo === null);
+chk('sin blob no sirve', B.ventanaUsable(null).ok === false);
+chk('lineas que no es un arreglo no sirve', B.ventanaUsable({ lineas: 'si' }).ok === false);
+
 console.log('\n'+ok+' ok, '+fail+' fallas\n');
 process.exit(fail?1:0);

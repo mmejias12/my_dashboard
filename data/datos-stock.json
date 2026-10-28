@@ -1,7 +1,7 @@
 {
  "_que_es": "Stock de pallet rojo por socio y por bodega, extraido de SAP B1 por M3DATA. La bodega manda en cuantos hay; la ubicacion manda en de quien son.",
  "generado": "2026-10-27T20:44:29.729Z",
- "flota": 811655,
+ "pool": 811655,
  "bodegas_cuantas": 39,
  "sistemico": 17890,
  "bodegas": {
@@ -641,45 +641,61 @@
  "controles": [
   {
    "titulo": "Conservación",
-   "texto": "La flota se mantuvo en 810.625 en tres lecturas distintas: un traspaso mueve el reparto, nunca el total."
+   "estado": "no pasa",
+   "medido": "2026-10-27",
+   "texto": "Un traspaso mueve el reparto, nunca el total. Entre el 26 y el 27 de octubre el pool subió 1.030 (810.625 → 811.655) y las cuatro etapas de planta netearon +9, así que no fue un traspaso: entraron pallets al pool y todavía no está establecido de dónde."
   },
   {
    "titulo": "Segunda fuente · bodega",
+   "medido": "2026-10-26",
    "texto": "Las 22 bodegas con movimiento del SKU coinciden al pallet con Datawalt, que lee SAP por una vía que no comparte ningún paso con la nuestra."
   },
   {
    "titulo": "Segunda fuente · socio",
+   "medido": "2026-10-26",
    "texto": "De los 50 socios mayores, 42 dan el mismo nivel por los dos caminos. Las ocho diferencias son ubicaciones identificadas, no incertidumbre."
   },
   {
    "titulo": "Segunda fuente · historia",
+   "medido": "2026-10-26",
    "texto": "El nivel de CLIENTES al 31-12-2025 da 187.832 por nuestra vía y 187.832 por la de Datawalt, calculadas hacia atrás y hacia adelante respectivamente."
   },
   {
    "titulo": "Segunda fuente · flujo",
+   "medido": "2026-10-26",
    "texto": "El movimiento neto de enero a septiembre, con el mes cerrado, da 35.759 en retail y 22.464 en clientes por los dos caminos, al pallet. Octubre está abierto y difiere por el corte de cada lectura."
   },
   {
    "titulo": "Cobertura",
-   "texto": "190.590 documentos en SAP y 190.590 en nuestra extracción, los diez meses al documento exacto."
+   "medido": "2026-10-27",
+   "texto": "Los nueve meses ya cerrados dan 174.918 documentos en SAP y 174.918 en nuestra extracción, al documento exacto. Octubre sigue abierto: SAP cuenta 2 más que el blob, menos de lo que entra en los minutos que separan una lectura de la otra."
+  },
+  {
+   "titulo": "Posteo retroactivo",
+   "medido": "2026-10-27",
+   "texto": "Comparando la copia del 26 con la del 27, un solo día cambió su movimiento en cada bodega —el 26 de octubre, −1.926 en retail y +2.628 en clientes— más una deriva de 48 pallets que el ancla movió y la capa de ubicaciones no registró, con el mismo signo opuesto en las dos. Es lo único que una consulta en vivo a SAP no puede dar, porque no guarda memoria de ayer."
   },
   {
    "titulo": "Saldo imposible",
-   "texto": "Ningún socio puede tener menos de cero pallets. Hay uno que lo incumple, está identificado y está en revisión."
+   "estado": "no pasa",
+   "medido": "2026-10-27",
+   "texto": "Ningún socio puede tener menos de cero pallets. Cinco lo incumplen en algún día del año: uno en retail, que llega a −6.488, y cuatro en clientes, el mayor de −296. Todos están identificados y la causa es la misma: falta movimiento o sobra una ubicación atribuida a ese socio."
   }
  ],
  "aviso_nota": "Las dos ubicaciones quedan fuera de la atribución por socio a propósito: nadie es su dueño. La pregunta abierta es si el saldo sistémico se limpia alguna vez o sólo crece, y cuánto del RETAIL NA se puede resolver por código de ubicación.",
  "residuo_detalle": [
   {
    "cantidad": 17890,
-   "que": "en la ubicación de sistema de la bodega. Cuando se encuentran pallets en un centro de distribución que no está registrado —y no hay cómo saber cómo llegaron— se crean ahí para poder emitir el documento de retiro. Es un instrumento de recuperación: no vuelven a la rotación y contablemente no quedan en ninguna parte."
+   "que": "en la ubicación de sistema de la bodega. Cuando se encuentran pallets en un centro de distribución que no está registrado —y no hay cómo saber cómo llegaron— se crean ahí para poder emitir el documento de retiro. Es un instrumento de recuperación: no vuelven a la rotación y contablemente no quedan en ninguna parte.",
+   "medido": "2026-10-26"
   },
   {
    "cantidad": 17620,
-   "que": "en la ubicación RETAIL NA / NO HABILITADO, que es el reconocimiento explícito de SAP de que ese pallet está en retail y no tiene retailer asignado."
+   "que": "en la ubicación RETAIL NA / NO HABILITADO, que es el reconocimiento explícito de SAP de que ese pallet está en retail y no tiene retailer asignado.",
+   "medido": "2026-10-26"
   }
  ],
- "mensual_nota": "Este gráfico suma el movimiento de todas las ubicaciones de la bodega. Para retail da +28.703 en el año; el movimiento que SAP le atribuye a esa bodega es +36.195 y el de las ubicaciones con socio conocido, +36.692. Las tres miden cosas distintas y todavía no está establecido cuál corresponde mostrar aquí, así que las barras sirven para ver la forma del año y no para citar una cifra. Clientes no tiene esta duda: +24.962 contra +24.594, diferencia de hora de lectura.",
+ "mensual_nota": "Este gráfico suma el movimiento de todas las ubicaciones de la bodega. Para retail da +26.325 en el año; el de las ubicaciones con socio conocido da +35.808. Las dos miden cosas distintas y todavía no está establecido cuál corresponde mostrar aquí, así que las barras sirven para ver la forma del año y no para citar una cifra. Clientes tiene la misma duda en menor escala: +27.710 contra +28.294.",
  "extra_medido": "2026-10-26",
  "ventana": {
   "nivel": "2026-10-27",

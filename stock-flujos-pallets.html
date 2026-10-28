@@ -50,7 +50,9 @@ section{margin-top:34px}
 .tile .pie{font-size:13px;color:var(--tinta2);min-width:0}
 .tile{border-left:3px solid var(--linea)}
 .t-cli{border-left-color:var(--cli)} .t-ret{border-left-color:var(--ret)} .t-pla{border-left-color:var(--pla)}
-.flota{display:block;width:100%;height:34px;margin:4px 0 10px}
+.pool{display:block;width:100%;height:34px;margin:4px 0 10px}
+.fecha{color:var(--tinta3);font-size:12px;white-space:nowrap}
+.malo{color:var(--grave)}
 .s-cli{fill:var(--cli)} .s-ret{fill:var(--ret)} .s-pla{fill:var(--pla)}
 .leyenda{display:flex;flex-wrap:wrap;gap:16px;font-size:13.5px;color:var(--tinta2);margin-top:2px}
 .leyenda b{color:var(--tinta);font-weight:600}
@@ -119,15 +121,15 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--linea);
 </header>
 
 <section>
-  <h2>La flota</h2>
+  <h2>El pool</h2>
   <p>Todo el pallet rojo que SAP tiene registrado, en las 39 bodegas de la empresa, repartido en las tres patas del pool.</p>
   <div class="panel">
     <div class="tile" style="border:none;padding:0">
-      <div class="et">Flota total</div>
+      <div class="et">Pool total</div>
       <div class="big">811.655</div>
-      <div class="pie">pallets, leídos del saldo vivo de SAP<br>de los cuales <b>17.890</b> son sistémicos y no rotan: la flota en rotación es <b>793.765</b></div>
+      <div class="pie">pallets, leídos del saldo vivo de SAP<br>de los cuales <b>17.890</b> son sistémicos y no rotan: el pool en rotación es <b>793.765</b></div>
     </div>
-    <div class="flota"><svg viewBox="0 0 1000 34" preserveAspectRatio="none" role="img" aria-label="Reparto de la flota"><rect class="s-cli" x="0.00" y="0" width="263.55" height="34" rx="3"><title>Clientes: 215.539 (26,6%)</title></rect><rect class="s-ret" x="265.55" y="0" width="708.65" height="34" rx="3"><title>Retail: 576.802 (71,1%)</title></rect><rect class="s-pla" x="976.20" y="0" width="21.80" height="34" rx="3"><title>Planta REDTEC: 19.314 (2,4%)</title></rect></svg></div>
+    <div class="pool"><svg viewBox="0 0 1000 34" preserveAspectRatio="none" role="img" aria-label="Reparto del pool"><rect class="s-cli" x="0.00" y="0" width="263.55" height="34" rx="3"><title>Clientes: 215.539 (26,6%)</title></rect><rect class="s-ret" x="265.55" y="0" width="708.65" height="34" rx="3"><title>Retail: 576.802 (71,1%)</title></rect><rect class="s-pla" x="976.20" y="0" width="21.80" height="34" rx="3"><title>Planta REDTEC: 19.314 (2,4%)</title></rect></svg></div>
     <div class="leyenda">
       <span><i class="pt p-cli"></i>Clientes <b>215.539</b> · 26,6%</span>
       <span><i class="pt p-ret"></i>Retail <b>576.802</b> · 71,1%</span>
@@ -157,7 +159,7 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--linea);
 <section>
   <h2>Movimiento neto por mes</h2>
   <p>Cuánto subió o bajó cada bodega en el año. Un valor positivo es pallet que salió de REDTEC hacia el socio; uno negativo es pallet que volvió.</p>
-  <div class="enrevision"><b>En verificación.</b> Este gráfico suma el movimiento de todas las ubicaciones de la bodega. Para retail da +28.703 en el año; el movimiento que SAP le atribuye a esa bodega es +36.195 y el de las ubicaciones con socio conocido, +36.692. Las tres miden cosas distintas y todavía no está establecido cuál corresponde mostrar aquí, así que las barras sirven para ver la forma del año y no para citar una cifra. Clientes no tiene esta duda: +24.962 contra +24.594, diferencia de hora de lectura.</div>
+  <div class="enrevision"><b>En verificación.</b> Este gráfico suma el movimiento de todas las ubicaciones de la bodega. Para retail da +26.325 en el año; el de las ubicaciones con socio conocido da +35.808. Las dos miden cosas distintas y todavía no está establecido cuál corresponde mostrar aquí, así que las barras sirven para ver la forma del año y no para citar una cifra. Clientes tiene la misma duda en menor escala: +27.710 contra +28.294.</div>
   <div class="panel">
     <div class="leyenda" style="margin-bottom:10px">
       <span><i class="pt p-ret"></i>Retail <b>+26.325</b> en el año</span>
@@ -240,17 +242,17 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--linea);
       </dl>
     </div>
     <div class="panel">
-      <h3>Controles que pasó</h3>
+      <h3>Controles</h3>
       <dl>
-        <dt>Conservación</dt><dd>La flota se mantuvo en 810.625 en tres lecturas distintas: un traspaso mueve el reparto, nunca el total.</dd>
-        <dt>Segunda fuente · bodega</dt><dd>Las 22 bodegas con movimiento del SKU coinciden al pallet con Datawalt, que lee SAP por una vía que no comparte ningún paso con la nuestra.</dd>
-        <dt>Segunda fuente · socio</dt><dd>De los 50 socios mayores, 42 dan el mismo nivel por los dos caminos. Las ocho diferencias son ubicaciones identificadas, no incertidumbre.</dd>
-        <dt>Segunda fuente · historia</dt><dd>El nivel de CLIENTES al 31-12-2025 da 187.832 por nuestra vía y 187.832 por la de Datawalt, calculadas hacia atrás y hacia adelante respectivamente.</dd>
-        <dt>Segunda fuente · flujo</dt><dd>El movimiento neto de enero a septiembre, con el mes cerrado, da 35.759 en retail y 22.464 en clientes por los dos caminos, al pallet. Octubre está abierto y difiere por el corte de cada lectura.</dd>
-        <dt>Cobertura</dt><dd>190.590 documentos en SAP y 190.590 en nuestra extracción, los diez meses al documento exacto.</dd>
-        <dt>Saldo imposible</dt><dd>Ningún socio puede tener menos de cero pallets. Hay uno que lo incumple, está identificado y está en revisión.</dd>
+        <dt class="malo">Conservación · NO PASA</dt><dd>Un traspaso mueve el reparto, nunca el total. Entre el 26 y el 27 de octubre el pool subió 1.030 (810.625 → 811.655) y las cuatro etapas de planta netearon +9, así que no fue un traspaso: entraron pallets al pool y todavía no está establecido de dónde. <span class="fecha">medido el 2026-10-27</span></dd>
+        <dt>Segunda fuente · bodega</dt><dd>Las 22 bodegas con movimiento del SKU coinciden al pallet con Datawalt, que lee SAP por una vía que no comparte ningún paso con la nuestra. <span class="fecha">medido el 2026-10-26</span></dd>
+        <dt>Segunda fuente · socio</dt><dd>De los 50 socios mayores, 42 dan el mismo nivel por los dos caminos. Las ocho diferencias son ubicaciones identificadas, no incertidumbre. <span class="fecha">medido el 2026-10-26</span></dd>
+        <dt>Segunda fuente · historia</dt><dd>El nivel de CLIENTES al 31-12-2025 da 187.832 por nuestra vía y 187.832 por la de Datawalt, calculadas hacia atrás y hacia adelante respectivamente. <span class="fecha">medido el 2026-10-26</span></dd>
+        <dt>Segunda fuente · flujo</dt><dd>El movimiento neto de enero a septiembre, con el mes cerrado, da 35.759 en retail y 22.464 en clientes por los dos caminos, al pallet. Octubre está abierto y difiere por el corte de cada lectura. <span class="fecha">medido el 2026-10-26</span></dd>
+        <dt>Cobertura</dt><dd>Los nueve meses ya cerrados dan 174.918 documentos en SAP y 174.918 en nuestra extracción, al documento exacto. Octubre sigue abierto: SAP cuenta 2 más que el blob, menos de lo que entra en los minutos que separan una lectura de la otra. <span class="fecha">medido el 2026-10-27</span></dd>
+        <dt>Posteo retroactivo</dt><dd>Comparando la copia del 26 con la del 27, un solo día cambió su movimiento en cada bodega —el 26 de octubre, −1.926 en retail y +2.628 en clientes— más una deriva de 48 pallets que el ancla movió y la capa de ubicaciones no registró, con el mismo signo opuesto en las dos. Es lo único que una consulta en vivo a SAP no puede dar, porque no guarda memoria de ayer. <span class="fecha">medido el 2026-10-27</span></dd>
+        <dt class="malo">Saldo imposible · NO PASA</dt><dd>Ningún socio puede tener menos de cero pallets. Cinco lo incumplen en algún día del año: uno en retail, que llega a −6.488, y cuatro en clientes, el mayor de −296. Todos están identificados y la causa es la misma: falta movimiento o sobra una ubicación atribuida a ese socio. <span class="fecha">medido el 2026-10-27</span></dd>
       </dl>
-      <p class="sub">Medidos al 2026-10-26.</p>
     </div>
   </div>
 
@@ -258,9 +260,10 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--linea);
     <h3>Lo que falta resolver</h3>
     <p><b>32.572 pallets de BODEGA RETAILERS sin retailer identificado</b> (5,6% del retail). No están perdidos ni mal registrados: SAP los tiene en ubicaciones que existen para eso.</p>
     <dl style="margin:8px 0">
-      <dt>17.890</dt><dd>en la ubicación de sistema de la bodega. Cuando se encuentran pallets en un centro de distribución que no está registrado —y no hay cómo saber cómo llegaron— se crean ahí para poder emitir el documento de retiro. Es un instrumento de recuperación: no vuelven a la rotación y contablemente no quedan en ninguna parte.</dd>
-      <dt>17.620</dt><dd>en la ubicación RETAIL NA / NO HABILITADO, que es el reconocimiento explícito de SAP de que ese pallet está en retail y no tiene retailer asignado.</dd>
+      <dt>17.890</dt><dd>en la ubicación de sistema de la bodega. Cuando se encuentran pallets en un centro de distribución que no está registrado —y no hay cómo saber cómo llegaron— se crean ahí para poder emitir el documento de retiro. Es un instrumento de recuperación: no vuelven a la rotación y contablemente no quedan en ninguna parte. <span class="fecha">medido el 2026-10-26</span></dd>
+      <dt>17.620</dt><dd>en la ubicación RETAIL NA / NO HABILITADO, que es el reconocimiento explícito de SAP de que ese pallet está en retail y no tiene retailer asignado. <span class="fecha">medido el 2026-10-26</span></dd>
     </dl>
+    <p>El desglose suma <b>35.510</b> y el residuo de hoy es <b>32.572</b>: -2.938 de diferencia. El desglose se midió aparte y la corrida diaria no lo rehace, así que el reparto que se ve es el de su fecha, no el de hoy.</p>
     <p style="margin-bottom:0">Las dos ubicaciones quedan fuera de la atribución por socio a propósito: nadie es su dueño. La pregunta abierta es si el saldo sistémico se limpia alguna vez o sólo crece, y cuánto del RETAIL NA se puede resolver por código de ubicación.</p>
 
   </div>

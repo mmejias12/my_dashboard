@@ -70,6 +70,40 @@ function leerConteo(cuerpo) {
   return parseInt(t, 10);
 }
 
+/** CUANTOS DOCUMENTOS NUEVOS CABEN entre la extraccion y esta consulta.
+ *
+ *  POR QUE HACE FALTA, medido el 27-10-2026: esta sonda dijo "LA FASE 1 SE
+ *  ESTA SALTANDO DOCUMENTOS: faltan 2 en 2026-10". El blob se habia guardado
+ *  minutos antes y el mes venia corriendo a decenas de documentos por hora:
+ *  dos documentos en esos minutos es lo que se espera de un mes ABIERTO, no
+ *  un defecto. Acusar paginacion con ese dato era afirmar mas de lo medido.
+ *
+ *  Y NO ES UNA EXCUSA QUE TAPE TODO: la corrida anterior tenia un hueco de
+ *  251 con ~19 esperados. El mismo criterio que hoy absuelve, ese dia acusa.
+ *
+ *  COMO SE CALCULA. La tasa del propio mes —sus documentos divididos por lo
+ *  que llevaba corrido cuando se extrajo— multiplicada por el rato en que el
+ *  mes siguio ABIERTO entre la extraccion y ahora. Para un mes ya cerrado ese
+ *  solape es cero y no se perdona nada: un mes cerrado que crece es un
+ *  posteo con fecha vieja o un documento que no llego, y las dos cosas hay
+ *  que mirarlas. */
+function huecoEsperado(docs, desde, hasta, guardado, ahora) {
+  const d = Number(docs);
+  if (!isFinite(d) || d <= 0) return null;
+  const t0 = Date.parse(String(desde || '') + 'T00:00:00Z');
+  const tf = Date.parse(String(hasta || '') + 'T00:00:00Z') + 86400000;  // fin del ultimo dia
+  const t1 = Date.parse(String(guardado || ''));
+  const t2 = Date.parse(String(ahora || ''));
+  // Las dos comparaciones de abajo ya descartan cualquier NaN: una fecha que no
+  // se pudo leer hace falsas las dos, y entonces se devuelve null. Un isFinite
+  // aparte seria codigo que nunca decide nada.
+  if (!(tf > t0) || !(t2 >= t1)) return null;
+  const corrido = Math.min(t1, tf) - t0;        // cuanto del mes llevaba andado al extraer
+  if (!(corrido > 0)) return null;
+  const solape = Math.max(0, Math.min(t2, tf) - Math.max(t1, t0));
+  return Math.ceil((d / corrido) * solape);
+}
+
 /** Compara lo que dice SAP contra lo que quedo en el blob. */
 function comparar(filas) {
   const out = [];
@@ -78,7 +112,17 @@ function comparar(filas) {
     const sap = f.sap == null ? null : Number(f.sap);
     const nuestro = f.nuestro == null ? null : Number(f.nuestro);
     const falta = (sap == null || nuestro == null) ? null : sap - nuestro;
-    out.push({ mes: f.mes, sap, nuestro, falta,
+    const esperado = huecoEsperado(nuestro, f.desde, f.hasta, f.guardado, f.ahora);
+    // Un mes ya CERRADO cuyo blob se saco antes de que cerrara no cubre el mes,
+    // y eso no es una estimacion: le faltan dias enteros por construccion. No
+    // hay que explicarlo con el reloj ni acusar paginacion, hay que re-extraerlo.
+    const tf = Date.parse(String(f.hasta || '') + 'T00:00:00Z') + 86400000;
+    const tA = Date.parse(String(f.ahora || '')), tG = Date.parse(String(f.guardado || ''));
+    const cerrado = (isFinite(tf) && isFinite(tA)) ? tA >= tf : null;
+    const incompleto = cerrado === true && isFinite(tG) && tG < tf;
+    out.push({ mes: f.mes, sap, nuestro, falta, esperado, cerrado, incompleto,
+               explicado: cerrado === false && falta != null && falta > 0 &&
+                          esperado != null && falta <= esperado,
                medible: sap != null && nuestro != null });
   }
   return out.sort((a, b) => a.mes < b.mes ? -1 : a.mes > b.mes ? 1 : 0);
@@ -86,10 +130,12 @@ function comparar(filas) {
 
 function resumen(comp) {
   const c = (comp || []).filter(x => x && x.medible);
-  const cortos = c.filter(x => x.falta > 0);
-  const sobran = c.filter(x => x.falta < 0);
+  const incompletos = c.filter(x => x.incompleto);
+  const cortos = c.filter(x => x.falta > 0 && !x.explicado && !x.incompleto);
+  const explicados = c.filter(x => x.falta > 0 && x.explicado);
+  const sobran = c.filter(x => x.falta < 0 && !x.incompleto);
   return { medidos: c.length, noMedibles: (comp || []).length - c.length,
-           cortos, sobran,
+           cortos, sobran, explicados, incompletos,
            faltanDocs: cortos.reduce((a, x) => a + x.falta, 0),
            sapTotal: c.reduce((a, x) => a + x.sap, 0),
            nuestroTotal: c.reduce((a, x) => a + x.nuestro, 0) };
@@ -99,11 +145,20 @@ function veredicto(r) {
   if (!r || !r.medidos) return { nivel: 'sin datos',
     texto: 'No se pudo comparar ningun mes: falta el conteo de SAP o el blob.' };
   const p = [];
+  const expl = (r.explicados || []), inc = (r.incompletos || []);
+  if (inc.length)
+    p.push('BLOB SACADO ANTES DE QUE EL MES CERRARA, en ' + inc.length + ' mes(es) — ' +
+           inc.slice(0, 6).map(x => x.mes).join(', ') +
+           '. No cubren el mes completo por construccion, no por paginacion: hay que ' +
+           're-extraerlos antes de poder juzgar nada ahi.');
   if (r.cortos.length)
-    p.push('LA FASE 1 SE ESTA SALTANDO DOCUMENTOS: faltan ' + mil(r.faltanDocs) + ' en ' +
+    p.push('FALTAN DOCUMENTOS: ' + mil(r.faltanDocs) + ' en ' +
            r.cortos.length + ' mes(es) — ' +
-           r.cortos.slice(0, 6).map(x => x.mes + ' ' + conSigno(-x.falta)).join(', ') +
-           '. Es la paginacion, no el modelo: el documento existe en SAP y no llego al blob.');
+           r.cortos.slice(0, 6).map(x => x.mes + ' ' + conSigno(-x.falta) +
+             (x.esperado != null ? ' (el tiempo transcurrido explica ' + mil(x.esperado) + ')' : '')).join(', ') +
+           '. Existen en SAP y no estan en el blob, y es mas de lo que explica el rato ' +
+           'que paso desde la extraccion. O la fase 1 se salta paginas, o se posteo con ' +
+           'fecha vieja despues de extraer: para distinguirlo, re-extraer ese mes y volver a comparar.');
   if (r.sobran.length)
     p.push('Y en ' + r.sobran.length + ' mes(es) el blob tiene MAS documentos que SAP (' +
            r.sobran.slice(0, 6).map(x => x.mes + ' ' + conSigno(-x.falta)).join(', ') +
@@ -111,15 +166,23 @@ function veredicto(r) {
            'se borraron documentos en SAP despues de extraerlos.');
   if (r.noMedibles)
     p.push(r.noMedibles + ' mes(es) sin comparar por falta de conteo o de blob.');
-  if (!p.length) return { nivel: 'si',
-    texto: 'Los ' + r.medidos + ' meses cuadran al documento: ' + mil(r.sapTotal) +
-           ' en SAP y ' + mil(r.nuestroTotal) + ' en los blobs. La fase 1 no pierde nada, ' +
-           'asi que lo que falta se pierde DENTRO del documento: lineas o asignaciones ' +
-           'de ubicacion que la respuesta no trajo.' };
+  if (!p.length) {
+    const cola = expl.length
+      ? '  En ' + expl.length + ' mes(es) SAP cuenta unos pocos mas (' +
+        expl.map(x => x.mes + ' ' + conSigno(-x.falta)).join(', ') +
+        '), y caben de sobra en el rato que paso desde la extraccion. Mientras el mes ' +
+        'siga abierto el conteo no lo puede juzgar; se zanja cuando cierre.'
+      : '';
+    return { nivel: 'si',
+      texto: 'Los ' + r.medidos + ' meses cuadran al documento: ' + mil(r.sapTotal) +
+             ' en SAP y ' + mil(r.nuestroTotal) + ' en los blobs. La fase 1 no pierde nada, ' +
+             'asi que lo que falta se pierde DENTRO del documento: lineas o asignaciones ' +
+             'de ubicacion que la respuesta no trajo.' + cola };
+  }
   return { nivel: 'no', texto: p.join('  ') };
 }
 
-module.exports = { urlConteo, leerConteo, comparar, resumen, veredicto, OPCIONES, BANDERAS };
+module.exports = { urlConteo, leerConteo, huecoEsperado, comparar, resumen, veredicto, OPCIONES, BANDERAS };
 
 // ── main ────────────────────────────────────────────────────────────────────
 async function main() {
@@ -157,29 +220,34 @@ async function main() {
       else console.log('  ' + mes + ': $count HTTP ' + r.status);
     } catch (e) { console.log('  ' + mes + ': $count error ' + String(e.message || e).slice(0, 60)); }
 
-    let nuestro = null;
+    let nuestro = null, guardado = null;
     try {
       const b = cc.getBlobClient('binmov/' + mes + '.json');
       if (await b.exists()) {
         const j = JSON.parse((await b.downloadToBuffer()).toString('utf8'));
         nuestro = Number(j._docs);
         if (!isFinite(nuestro)) nuestro = null;
+        guardado = j._guardado || null;
       }
     } catch (e) { console.log('  ' + mes + ': blob error ' + String(e.message || e).slice(0, 60)); }
 
-    filas.push({ mes, sap, nuestro });
+    filas.push({ mes, sap, nuestro, desde, hasta, guardado, ahora: new Date().toISOString() });
   }
 
   const comp = comparar(filas);
   const r = resumen(comp);
 
   console.log('── DOCUMENTOS POR MES ' + '─'.repeat(52));
-  console.log('  ' + 'mes'.padEnd(10) + 'SAP'.padStart(10) + 'blob'.padStart(10) + 'faltan'.padStart(10));
+  console.log('  ' + 'mes'.padEnd(10) + 'SAP'.padStart(10) + 'blob'.padStart(10) +
+              'faltan'.padStart(10) + '   lo que explica el reloj');
   for (const x of comp)
     console.log('  ' + x.mes.padEnd(10) +
                 (x.sap == null ? '?' : mil(x.sap)).padStart(10) +
                 (x.nuestro == null ? '?' : mil(x.nuestro)).padStart(10) +
-                (x.falta == null ? '?' : (x.falta ? conSigno(-x.falta) : '0')).padStart(10));
+                (x.falta == null ? '?' : (x.falta ? conSigno(-x.falta) : '0')).padStart(10) +
+                (x.falta > 0 && x.esperado != null
+                   ? '   hasta ' + mil(x.esperado) + (x.explicado ? '  ← alcanza' : '  ← NO alcanza')
+                   : ''));
   if (r.medidos)
     console.log('  ' + 'suma'.padEnd(10) + mil(r.sapTotal).padStart(10) +
                 mil(r.nuestroTotal).padStart(10) +

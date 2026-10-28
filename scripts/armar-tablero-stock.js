@@ -773,7 +773,7 @@ function main() {
   }
 }
 
-module.exports = { esNumero, mil, conSigno, clasePos, pct, pct1, esc, sinBom,
+module.exports = { NUEVE, esNumero, mil, conSigno, clasePos, pct, pct1, esc, sinBom,
                    NUEVE, GRUPOS, MESES, OPCIONES,
                    clasificarPool, cortarSocios, porGrupo, mesesPareados, datos,
                    antiguedad, svgPool, svgMeses, filaSocio, tablaSocios, notaImposibles, pagina,

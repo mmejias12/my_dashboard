@@ -40,7 +40,7 @@ const OPCIONES = ['bodegas', 'retail', 'clientes', 'extra', 'datos', 'salida'];
 
 // ── las nueve bodegas del indicador de planta ────────────────────────────────
 // Enrique definio nueve estaciones como "planta" para el indicador. MERMA,
-// EXTRAÑOS y los TRANSITO estan en la flota pero fuera del indicador, y esa
+// EXTRAÑOS y los TRANSITO estan en el pool pero fuera del indicador, y esa
 // distincion no la trae SAP: es una decision de negocio y por eso esta
 // declarada aca y no deducida.
 const NUEVE = new Set(['RT13-100', 'RT13-102', 'RT13-103', 'RT13-105',
@@ -106,11 +106,11 @@ function sinBom(txt) {
 
 // ── derivaciones ─────────────────────────────────────────────────────────────
 
-// La bodega manda en CUANTOS hay. Aca solo se reparte el total de la flota en
+// La bodega manda en CUANTOS hay. Aca solo se reparte el total del pool en
 // las tres patas del pool: lo que esta en clientes, lo que esta en retail y lo
 // que esta en planta. Planta es "todo lo demas", no una lista: si manana
 // aparece una bodega nueva, entra sola.
-function clasificarFlota(bodegas) {
+function clasificarPool(bodegas) {
   const filas = Array.isArray(bodegas) ? bodegas : [];
   let clientes = 0, retail = 0, planta = 0, nueve = 0, fuera = 0;
   const dePlanta = [];
@@ -193,7 +193,7 @@ function mesesPareados(mensualRet, mensualCli) {
 // no calcula nada: si un numero esta mal, esta mal aca, en un solo lugar, y
 // hay una prueba que lo agarra.
 function datos(bod, ret, cli, extra) {
-  const fl = clasificarFlota(bod && bod.bodegas);
+  const fl = clasificarPool(bod && bod.bodegas);
   const sr = cortarSocios(ret && ret.socios, 25);
   const sc = cortarSocios(cli && cli.socios, 25);
   const gr = porGrupo(ret && ret.socios, GRUPOS);
@@ -201,7 +201,7 @@ function datos(bod, ret, cli, extra) {
   const nr = (ret && ret.nivel) || {}, nc = (cli && cli.nivel) || {};
   const vr = (ret && ret.ventana) || {}, vc = (cli && cli.ventana) || {};
 
-  // El total de la flota lo dice la sonda; el nivel de cada bodega tambien.
+  // El total del pool lo dice la sonda; el nivel de cada bodega tambien.
   // Si el nivel que saldo-pool uso como ancla no es el mismo que trae la
   // sonda, los dos lados se leyeron en momentos distintos y hay que decirlo.
   const descalces = [];
@@ -214,10 +214,10 @@ function datos(bod, ret, cli, extra) {
     _que_es: 'Stock de pallet rojo por socio y por bodega, extraido de SAP B1 por M3DATA. ' +
              'La bodega manda en cuantos hay; la ubicacion manda en de quien son.',
     generado: (bod && bod.generado) || new Date().toISOString(),
-    flota: fl.total,
+    pool: fl.total,
     bodegas_cuantas: fl.bodegas,
-    // Pallet que existe en SAP sólo como instrumento de recuperación. No es
-    // flota: no rota. Se declara en el archivo de extras porque la bodega no
+    // Pallet que existe en SAP sólo como instrumento de recuperación. No
+    // vuelve a rotar, así que no es pool en circulación. Se declara en el archivo de extras porque la bodega no
     // lo distingue, es una regla de negocio.
     sistemico: (extra && esNumero(extra.sistemico)) ? Number(extra.sistemico) : null,
     bodegas: {
@@ -280,11 +280,11 @@ function antiguedad(medido, hoy) {
 }
 
 // ── graficos ─────────────────────────────────────────────────────────────────
-// La barra de la flota: el ancho de cada tramo es su porcentaje de 1000, menos
+// La barra del pool: el ancho de cada tramo es su porcentaje de 1000, menos
 // 2 de separacion. Sin esa separacion los tres colores se tocan y el ojo lee
 // un solo bloque.
-function svgFlota(d) {
-  const t = Number(d.flota) || 0;
+function svgPool(d) {
+  const t = Number(d.pool) || 0;
   const tramos = [
     { c: 's-cli', nom: 'Clientes',      v: d.bodegas.CLIENTES.nivel },
     { c: 's-ret', nom: 'Retail',        v: d.bodegas.RETAIL.nivel },
@@ -299,7 +299,7 @@ function svgFlota(d) {
     x += w;
   }
   return '<svg viewBox="0 0 1000 34" preserveAspectRatio="none" role="img" ' +
-         'aria-label="Reparto de la flota">' + piezas + '</svg>';
+         'aria-label="Reparto del pool">' + piezas + '</svg>';
 }
 
 // Las barras mensuales. El cero NO es el borde inferior: un mes negativo tiene
@@ -387,7 +387,9 @@ section{margin-top:34px}
 .tile .pie{font-size:13px;color:var(--tinta2);min-width:0}
 .tile{border-left:3px solid var(--linea)}
 .t-cli{border-left-color:var(--cli)} .t-ret{border-left-color:var(--ret)} .t-pla{border-left-color:var(--pla)}
-.flota{display:block;width:100%;height:34px;margin:4px 0 10px}
+.pool{display:block;width:100%;height:34px;margin:4px 0 10px}
+.fecha{color:var(--tinta3);font-size:12px;white-space:nowrap}
+.malo{color:var(--grave)}
 .s-cli{fill:var(--cli)} .s-ret{fill:var(--ret)} .s-pla{fill:var(--pla)}
 .leyenda{display:flex;flex-wrap:wrap;gap:16px;font-size:13.5px;color:var(--tinta2);margin-top:2px}
 .leyenda b{color:var(--tinta);font-weight:600}
@@ -486,22 +488,22 @@ function pagina(d) {
          (v.flujo_hasta ? '<br>Flujos ' + esc(String(v.flujo_desde || '').slice(0, 4)) + ' al ' + esc(v.flujo_hasta) : '') +
          '</div>\n</header>\n');
 
-  // ── la flota ──
-  H.push('<section>\n  <h2>La flota</h2>');
+  // ── el pool ──
+  H.push('<section>\n  <h2>El pool</h2>');
   H.push('  <p>Todo el pallet rojo que SAP tiene registrado, en las ' + mil(d.bodegas_cuantas) +
          ' bodegas de la empresa, repartido en las tres patas del pool.</p>');
   H.push('  <div class="panel">\n    <div class="tile" style="border:none;padding:0">');
-  H.push('      <div class="et">Flota total</div>\n      <div class="big">' + mil(d.flota) + '</div>');
+  H.push('      <div class="et">Pool total</div>\n      <div class="big">' + mil(d.pool) + '</div>');
   H.push('      <div class="pie">pallets, leídos del saldo vivo de SAP' +
          (d.sistemico ? '<br>de los cuales <b>' + mil(d.sistemico) + '</b> son sistémicos y no rotan: ' +
-                        'la flota en rotación es <b>' + mil(d.flota - d.sistemico) + '</b>' : '') +
+                        'el pool en rotación es <b>' + mil(d.pool - d.sistemico) + '</b>' : '') +
          '</div>\n    </div>');
-  H.push('    <div class="flota">' + svgFlota(d) + '</div>\n    <div class="leyenda">');
+  H.push('    <div class="pool">' + svgPool(d) + '</div>\n    <div class="leyenda">');
   for (const [cl, nom, val] of [['p-cli', 'Clientes', b.CLIENTES.nivel],
                                 ['p-ret', 'Retail', b.RETAIL.nivel],
                                 ['p-pla', 'Planta REDTEC', b.PLANTA.nivel]])
     H.push('      <span><i class="pt ' + cl + '"></i>' + nom + ' <b>' + mil(val) + '</b> · ' +
-           pct1(val, d.flota) + '</span>');
+           pct1(val, d.pool) + '</span>');
   H.push('    </div>\n  </div>\n');
   H.push('  <div class="rejilla">');
   H.push('    <div class="panel tile t-cli">\n      <div class="et">Clientes</div><div class="big">' +
@@ -614,11 +616,22 @@ function pagina(d) {
          'pallet que no tiene dueño identificado.</dd>');
   H.push('      </dl>\n    </div>');
   if (d.controles && d.controles.length) {
-    H.push('    <div class="panel">\n      <h3>Controles que pasó</h3>\n      <dl>');
-    for (const c of d.controles)
-      H.push('        <dt>' + esc(c.titulo) + '</dt><dd>' + esc(c.texto) + '</dd>');
-    H.push('      </dl>\n      <p class="sub">Medidos al ' + esc(d.extra_medido || 'sin fecha') +
-           '.</p>\n    </div>');
+    // "Controles que paso" era el titulo. Un panel que solo sabe decir que todo
+    // paso miente el dia que algo deja de pasar, y ese dia llego: la
+    // conservacion del pool se rompio el 27-10. Cada control dice si pasa.
+    H.push('    <div class="panel">\n      <h3>Controles</h3>\n      <dl>');
+    // Cada control con SU fecha, no una sola para todos. Se habian mezclado
+    // controles medidos en dias distintos bajo un unico "medidos al ...", y eso
+    // envejece mal: el que se recalcula todos los dias se lee tan viejo como el
+    // que no se toca hace una semana, o al reves.
+    for (const c of d.controles) {
+      const malo = c.estado === 'no pasa';
+      H.push('        <dt' + (malo ? ' class="malo"' : '') + '>' + esc(c.titulo) +
+             (malo ? ' · NO PASA' : '') + '</dt><dd>' + esc(c.texto) +
+             ' <span class="fecha">medido el ' + esc(c.medido || d.extra_medido || 'sin fecha') +
+             '</span></dd>');
+    }
+    H.push('      </dl>\n    </div>');
   }
   H.push('  </div>\n');
 
@@ -634,8 +647,19 @@ function pagina(d) {
     if (d.residuo_detalle && d.residuo_detalle.length) {
       H.push('    <dl style="margin:8px 0">');
       for (const x of d.residuo_detalle)
-        H.push('      <dt>' + mil(x.cantidad) + '</dt><dd>' + esc(x.que) + '</dd>');
+        H.push('      <dt>' + mil(x.cantidad) + '</dt><dd>' + esc(x.que) +
+               ' <span class="fecha">medido el ' + esc(x.medido || d.extra_medido || 'sin fecha') +
+               '</span></dd>');
       H.push('    </dl>');
+      // EL DESGLOSE NO SE RECALCULA SOLO y el residuo si. El dia que dejen de
+      // sumar lo mismo, el lector ve dos numeros que no cuadran y no sabe cual
+      // creer. Se dice aca, con la resta hecha, antes de que lo note el.
+      const sd = d.residuo_detalle.reduce((a, x) => a + Number(x.cantidad), 0);
+      if (sd !== rr)
+        H.push('    <p>El desglose suma <b>' + mil(sd) + '</b> y el residuo de hoy es <b>' +
+               mil(rr) + '</b>: ' + conSigno(rr - sd) + ' de diferencia. El desglose se midió ' +
+               'aparte y la corrida diaria no lo rehace, así que el reparto que se ve es el de ' +
+               'su fecha, no el de hoy.</p>');
     }
     if (d.aviso_nota) H.push('    <p style="margin-bottom:0">' + esc(d.aviso_nota) + '</p>');
     H.push('\n  </div>');
@@ -727,7 +751,7 @@ function main() {
   fs.writeFileSync(rSal, pagina(d), { encoding: 'utf8' });
 
   console.log('Tablero armado.');
-  console.log('  flota ' + mil(d.flota) + '  =  clientes ' + mil(d.bodegas.CLIENTES.nivel) +
+  console.log('  pool ' + mil(d.pool) + '  =  clientes ' + mil(d.bodegas.CLIENTES.nivel) +
               ' + retail ' + mil(d.bodegas.RETAIL.nivel) + ' + planta ' + mil(d.bodegas.PLANTA.nivel));
   console.log('  socios con saldo: retail ' + d.bodegas.RETAIL.n + ', clientes ' + d.bodegas.CLIENTES.n);
   console.log('  año: retail ' + conSigno(d.anio.ret) + ', clientes ' + conSigno(d.anio.cli));
@@ -741,8 +765,8 @@ function main() {
 
 module.exports = { esNumero, mil, conSigno, clasePos, pct, pct1, esc, sinBom,
                    NUEVE, GRUPOS, MESES, OPCIONES,
-                   clasificarFlota, cortarSocios, porGrupo, mesesPareados, datos,
-                   antiguedad, svgFlota, svgMeses, filaSocio, tablaSocios, notaImposibles, pagina,
+                   clasificarPool, cortarSocios, porGrupo, mesesPareados, datos,
+                   antiguedad, svgPool, svgMeses, filaSocio, tablaSocios, notaImposibles, pagina,
                    opcion, opcionesRaras, leerJson, CSS };
 
 if (require.main === module) main();

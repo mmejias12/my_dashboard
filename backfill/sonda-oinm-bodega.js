@@ -160,10 +160,10 @@ function juntar(niveles, mapa) {
   });
 }
 
-/** LA FLOTA, partida por si la bodega maneja ubicaciones o no. Ese corte es
+/** EL POOL, partido por si la bodega maneja ubicaciones o no. Ese corte es
  *  el que importa: lo que esta en una bodega CON ubicaciones se puede abrir
  *  por socio, lo que esta en una SIN ubicaciones nunca se va a poder. */
-function totalFlota(filas) {
+function totalPool(filas) {
   const f = (filas || []).filter(Boolean);
   const con = f.filter(x => x.conUbicaciones === true);
   const sin = f.filter(x => x.conUbicaciones === false);
@@ -248,7 +248,7 @@ function salidaJson(filas, total, item, generado) {
           'desde esa fecha; ItemWarehouseInfoCollection no guarda historia.',
     item: item || null,
     generado: generado || new Date().toISOString(),
-    flota: total ? total.total : null,
+    pool: total ? total.total : null,
     conUbicaciones: total ? total.conUbicaciones : null,
     sinUbicaciones: total ? total.sinUbicaciones : null,
     bodegas: (filas || []).map(f => ({
@@ -286,7 +286,7 @@ function filasDeRespuesta(json) {
 }
 
 module.exports = { clasificarCantidades, saldoDeFila, nivelPorBodega, mapaBodegas,
-                   juntar, totalFlota, residuo, veredicto, urlsNivel, urlBodegas,
+                   juntar, totalPool, residuo, veredicto, urlsNivel, urlBodegas,
                    filaMuestra, salidaJson, canalReporte,
                    filasDeRespuesta, RE_LIMITE, RE_COMPROMISO, RE_SALDO, RE_AMBIGUA,
                    OPCIONES, BANDERAS };
@@ -360,7 +360,7 @@ async function main() {
   }
   const mapa = mapaBodegas(cat);
   const filas = juntar(niv.filas, mapa);
-  const t = totalFlota(filas);
+  const t = totalPool(filas);
 
   di('\n── EL NIVEL POR BODEGA ' + '─'.repeat(51));
   di('  ' + 'bodega'.padEnd(12) + 'nombre'.padEnd(32) + 'saldo'.padStart(11) + '   ubicaciones');
@@ -376,7 +376,7 @@ async function main() {
     if (ceros) console.log('  ... y ' + ceros + ' bodega(s) en cero (--todas para verlas)');
   }
 
-  di('\n  flota: ' + mil(t.total) + ' pallets en ' + t.bodegas + ' bodegas');
+  di('\n  pool: ' + mil(t.total) + ' pallets en ' + t.bodegas + ' bodegas');
   di('    con ubicaciones (' + t.nConUbicaciones + '): ' + mil(t.conUbicaciones) +
               '   ← se puede abrir por socio');
   di('    sin ubicaciones (' + t.nSinUbicaciones + '): ' + mil(t.sinUbicaciones) +

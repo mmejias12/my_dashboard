@@ -1,0 +1,19 @@
+# ============================================================================
+#  .gitattributes  ·  fin de linea
+#
+#  POR QUE EXISTE. La corrida diaria escribe los JSON y el HTML con LF, y git
+#  avisaba en CADA commit que los iba a convertir a CRLF en el proximo
+#  checkout. Ocho avisos por dia que no dicen nada: nadie edita esos archivos
+#  a mano. Peor que inutil, un aviso que siempre sale deja de leerse, y el dia
+#  que salga uno de verdad va a pasar igual de desapercibido.
+#
+#  No cambia nada de lo que ya esta commiteado: git guarda LF en el indice de
+#  todas formas, asi que esto solo fija como se escriben en el disco.
+#  Los .ps1 van en CRLF, que es lo que espera el Programador de tareas.
+# ============================================================================
+*.json   text eol=lf
+*.html   text eol=lf
+*.js     text eol=lf
+*.md     text eol=lf
+*.yml    text eol=lf
+*.ps1    text eol=crlf

@@ -89,6 +89,9 @@ th.num{text-align:right}
 .enrevision{border:1px dashed var(--alerta);border-radius:6px;background:var(--panel);
   color:var(--tinta2);font-size:13.5px;padding:10px 13px;margin:10px 0 0}
 .enrevision b{color:var(--alerta)}
+.resuelto{border:1px solid var(--linea);border-radius:6px;background:var(--panel);
+  color:var(--tinta2);font-size:13.5px;padding:10px 13px;margin:10px 0 0}
+.resuelto b{color:var(--ok)}
 .rancio{border:1px solid var(--alerta);border-left:3px solid var(--alerta);border-radius:6px;
   background:var(--panel);color:var(--alerta);font:600 14px/1.4 var(--f-txt);
   padding:11px 14px;margin-bottom:18px}
@@ -159,7 +162,7 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--linea);
 <section>
   <h2>Movimiento neto por mes</h2>
   <p>Cuánto subió o bajó cada bodega en el año. Un valor positivo es pallet que salió de REDTEC hacia el socio; uno negativo es pallet que volvió.</p>
-  <div class="enrevision"><b>En verificación.</b> Este gráfico suma el movimiento de todas las ubicaciones de la bodega. Para retail da +26.325 en el año; el de las ubicaciones con socio conocido da +35.808. Las dos miden cosas distintas y todavía no está establecido cuál corresponde mostrar aquí, así que las barras sirven para ver la forma del año y no para citar una cifra. Clientes tiene la misma duda en menor escala: +27.710 contra +28.294.</div>
+  <div class="resuelto"><b>Verificado.</b> Este gráfico suma el movimiento de todas las ubicaciones de la bodega, y ésa es la medida correcta. Contra el cierre 2025 del propio M2LINK: el nivel de BODEGA RETAILERS al 31-12-2025 da 532.587 por esta vía, descontando la ubicación de sistema que M2LINK no cuenta, y 532.584 según M2LINK. Tres pallets de diferencia. Contar sólo las ubicaciones con socio conocido quedaría 9.480 abajo, que es exactamente el movimiento de las 52 ubicaciones sin socio.</div>
   <div class="panel">
     <div class="leyenda" style="margin-bottom:10px">
       <span><i class="pt p-ret"></i>Retail <b>+26.325</b> en el año</span>
@@ -248,7 +251,8 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--linea);
         <dt>Segunda fuente · bodega</dt><dd>Las 22 bodegas con movimiento del SKU coinciden al pallet con Datawalt, que lee SAP por una vía que no comparte ningún paso con la nuestra. <span class="fecha">medido el 2026-10-26</span></dd>
         <dt>Segunda fuente · socio</dt><dd>De los 50 socios mayores, 42 dan el mismo nivel por los dos caminos. Las ocho diferencias son ubicaciones identificadas, no incertidumbre. <span class="fecha">medido el 2026-10-26</span></dd>
         <dt>Segunda fuente · historia</dt><dd>El nivel de CLIENTES al 31-12-2025 da 187.832 por nuestra vía y 187.832 por la de Datawalt, calculadas hacia atrás y hacia adelante respectivamente. <span class="fecha">medido el 2026-10-26</span></dd>
-        <dt>Segunda fuente · flujo</dt><dd>El movimiento neto de enero a septiembre, con el mes cerrado, da 35.759 en retail y 22.464 en clientes por los dos caminos, al pallet. Octubre está abierto y difiere por el corte de cada lectura. <span class="fecha">medido el 2026-10-26</span></dd>
+        <dt>Segunda fuente · cierre 2025</dt><dd>El nivel de BODEGA RETAILERS al 31-12-2025 da 532.587 por nuestra vía, descontando la ubicación de sistema que M2LINK no cuenta, y 532.584 según el propio M2LINK: tres pallets de diferencia sobre medio millón, medidos por dos sistemas que no comparten ningún paso. <span class="fecha">medido el 2026-10-28</span></dd>
+        <dt>Segunda fuente · flujo</dt><dd>El movimiento neto de enero a septiembre dio 35.759 en retail y 22.464 en clientes por los dos caminos, al pallet. Se midió antes de re-extraer los meses y contra la columna de ubicaciones con socio, así que con el criterio establecido el 28-10 hay que rehacerla. <span class="fecha">medido el 2026-10-26</span></dd>
         <dt>Cobertura</dt><dd>Los nueve meses ya cerrados dan 174.918 documentos en SAP y 174.918 en nuestra extracción, al documento exacto. Octubre sigue abierto: SAP cuenta 2 más que el blob, menos de lo que entra en los minutos que separan una lectura de la otra. <span class="fecha">medido el 2026-10-27</span></dd>
         <dt>Posteo retroactivo</dt><dd>Comparando la copia del 26 con la del 27, un solo día cambió su movimiento en cada bodega —el 26 de octubre, −1.926 en retail y +2.628 en clientes— más una deriva de 48 pallets que el ancla movió y la capa de ubicaciones no registró, con el mismo signo opuesto en las dos. Es lo único que una consulta en vivo a SAP no puede dar, porque no guarda memoria de ayer. <span class="fecha">medido el 2026-10-27</span></dd>
         <dt class="malo">Saldo imposible · NO PASA</dt><dd>Ningún socio puede tener menos de cero pallets. Cinco lo incumplen en algún día del año: uno en retail, que llega a −6.488, y cuatro en clientes, el mayor de −296. Todos están identificados y la causa es la misma: falta movimiento o sobra una ubicación atribuida a ese socio. <span class="fecha">medido el 2026-10-27</span></dd>

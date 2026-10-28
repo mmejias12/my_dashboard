@@ -121,9 +121,9 @@ chk('una bodega con saldo fuera del catalogo se marca, no se descarta',
     JSON.stringify(de('RT13-999')));
 chk('y sigue estando', j.length === 6, String(j.length));
 
-// ── la flota ───────────────────────────────────────────────────────────────
-console.log('\n— la flota, partida por si se puede abrir por socio —');
-const t = O.totalFlota(j);
+// ── el pool ───────────────────────────────────────────────────────────────
+console.log('\n— el pool, partido por si se puede abrir por socio —');
+const t = O.totalPool(j);
 chk('el total los suma a todos, negativo incluido',
     t.total === 579104 + 214385 + 1771 - 12 + 559, String(t.total));
 chk('lo que se puede abrir por socio', t.conUbicaciones === 579104 + 214385 + 0, String(t.conUbicaciones));
@@ -137,7 +137,7 @@ chk('la bodega negativa se caza', t.negativas.length === 1 && t.negativas[0].whs
 // una bodega vacia es posible; una bodega con menos de cero no
 chk('una bodega en cero NO es una bodega imposible',
     !t.negativas.some(x => x.whs === 'RT13-000'), t.negativas.map(x => x.whs).join());
-chk('totalFlota de nada', O.totalFlota(null).total === 0 && O.totalFlota([]).bodegas === 0);
+chk('totalPool de nada', O.totalPool(null).total === 0 && O.totalPool([]).bodegas === 0);
 
 // ── el control: bodega contra sus ubicaciones ──────────────────────────────
 console.log('\n— el residuo: pallets en la bodega sin ubicacion asignada —');
@@ -186,7 +186,7 @@ chk('y dice cuanto se puede abrir por socio y cuanto no',
 chk('y avisa de la bodega negativa', /NEGATIVO/.test(v.texto) && /RT13-999/.test(v.texto), v.texto);
 chk('y avisa de la que no esta en el catalogo', /no estan en el catalogo/.test(v.texto), v.texto);
 // sin bodegas con saldo NO hay camino, por mas que las rutas hayan dado 200
-v = O.veredicto(O.totalFlota([]), [{ url: '/x', estado: 'HTTP 200 · vino sin filas' }]);
+v = O.veredicto(O.totalPool([]), [{ url: '/x', estado: 'HTTP 200 · vino sin filas' }]);
 chk('sin saldo no hay camino', v.nivel === 'no', v.nivel);
 chk('y se dicen las rutas que se probaron', /HTTP 200/.test(v.texto), v.texto);
 chk('veredicto de nada', O.veredicto(null, null).nivel === 'no');
@@ -225,9 +225,9 @@ chk('filaMuestra de nada', O.filaMuestra(null) === null && O.filaMuestra([]) ===
 // ── la salida para otro programa ───────────────────────────────────────────
 console.log('\n— la salida json —');
 const js = O.salidaJson(j, t, '11111111110', '2026-10-24T00:00:00Z');
-chk('lleva la flota y las dos mitades',
-    js.flota === t.total && js.conUbicaciones === t.conUbicaciones &&
-    js.sinUbicaciones === t.sinUbicaciones, JSON.stringify([js.flota, js.conUbicaciones]));
+chk('lleva el pool y las dos mitades',
+    js.pool === t.total && js.conUbicaciones === t.conUbicaciones &&
+    js.sinUbicaciones === t.sinUbicaciones, JSON.stringify([js.pool, js.conUbicaciones]));
 chk('lleva todas las bodegas, las de cero incluidas', js.bodegas.length === j.length);
 chk('cada bodega lleva si maneja ubicaciones',
     js.bodegas.find(b => b.whs === 'RETAIL').conUbicaciones === true &&

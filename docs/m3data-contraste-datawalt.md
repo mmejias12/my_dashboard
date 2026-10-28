@@ -39,7 +39,7 @@ Las 22 bodegas con movimiento del SKU coinciden **al pallet**, sin excepción.
 | TALCA TRANSITO | 142 | 142 |
 | TALCA REPARACION | 0 | 0 |
 | (ocho bodegas más, todas en 0) | 0 | 0 |
-| **Flota** | **810.625** | **810.625** |
+| **Pool** | **810.625** | **810.625** |
 
 ## Resultado 2 · nivel por socio: 42 de los 50 mayores coinciden al pallet
 
@@ -122,7 +122,7 @@ acumulado no se mueve, y el cierre de un día es la apertura del siguiente.
 ## Qué habilita este contraste
 
 1. El tablero de stock puede presentarse a gerencia con segunda fuente: el
-   total de la flota y el saldo de cada bodega están verificados contra un
+   total del pool y el saldo de cada bodega están verificados contra un
    sistema independiente.
 2. El reemplazo de M2LINK no depende de resolver el 5,9%: el proveedor actual
    tampoco lo resuelve.

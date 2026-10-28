@@ -26,7 +26,7 @@ chk('un nombre con < no sale crudo a la pagina',
 chk('el BOM de PowerShell se saca', A.sinBom('﻿{"a":1}') === '{"a":1}');
 chk('y un texto sin BOM queda igual', A.sinBom('{"a":1}') === '{"a":1}');
 
-console.log('\n— reparto de la flota: la bodega manda en cuantos hay —');
+console.log('\n— reparto del pool: la bodega manda en cuantos hay —');
 const BOD = { generado:'2026-10-25T04:15:44.042Z', bodegas:[
   {whs:'CLIENTES', nombre:'BODEGA CLIENTES', saldo:212945},
   {whs:'RETAIL',   nombre:'BODEGA RETAILERS', saldo:579026},
@@ -44,7 +44,7 @@ const BOD = { generado:'2026-10-25T04:15:44.042Z', bodegas:[
   {whs:'RT07-122', nombre:'TALCA REPARACION',    saldo:0},
   {whs:'RT14-170', nombre:'ARICA TRANSITO',      saldo:0},
 ]};
-const F = A.clasificarFlota(BOD.bodegas);
+const F = A.clasificarPool(BOD.bodegas);
 chk('clientes', F.clientes === 212945, String(F.clientes));
 chk('retail', F.retail === 579026, String(F.retail));
 chk('planta es todo lo demas, no una lista', F.planta === 18654, String(F.planta));
@@ -60,12 +60,12 @@ chk('ordena de mayor a menor', F.filas[0].cod === 'RT13-100' && F.filas[0].nivel
 chk('marca cuales son del indicador',
     F.filas.find(x=>x.cod==='RT13-266').nueve === false &&
     F.filas.find(x=>x.cod==='RT13-100').nueve === true);
-chk('sin bodegas no revienta', A.clasificarFlota(null).total === 0);
+chk('sin bodegas no revienta', A.clasificarPool(null).total === 0);
 // cuantas bodegas hay es un dato, no un numero escrito en la prosa
 chk('cuenta las bodegas', F.bodegas === 15, String(F.bodegas));
 // un whs con espacios es el mismo whs: SAP los trae a veces
 chk('un codigo con espacios se reconoce',
-    A.clasificarFlota([{whs:' RETAIL ', saldo:10}]).retail === 10);
+    A.clasificarPool([{whs:' RETAIL ', saldo:10}]).retail === 10);
 
 console.log('\n— el corte de socios —');
 const SOC = [
@@ -127,10 +127,10 @@ chk('conSigno(null) es un guion', A.conSigno(null)==='—');
 chk('pct con total nulo es nulo', A.pct(5, null)===null);
 chk('mil de un string numerico funciona', A.mil('810625')==='810.625');
 
-console.log('\n— geometria de la barra de la flota —');
+console.log('\n— geometria de la barra del pool —');
 const D1 = A.datos(BOD, {socios:SOC, nivel:{bodega:579026, socios:424626, residuo:34063}, mensual:[], ventana:{}},
                         {socios:[], nivel:{bodega:212945, socios:211905, residuo:1040}, mensual:[], ventana:{}}, null);
-const SV = A.svgFlota(D1);
+const SV = A.svgPool(D1);
 // cada tramo ocupa su porcentaje de 1000 MENOS 2 de separacion; sin esa
 // separacion los tres colores se tocan y el ojo lee un solo bloque
 chk('el tramo de clientes', /class="s-cli" x="0\.00" .*width="260\.69"/.test(SV), SV.slice(0,160));
@@ -140,7 +140,7 @@ chk('cada tramo trae su tooltip con cifra y porcentaje',
     /<title>Clientes: 212\.945 \(26,3%\)<\/title>/.test(SV));
 // el title tiene que estar DENTRO del rect o no es tooltip de nada
 chk('el title va dentro del rect', /<rect[^>]*><title>/.test(SV) && !/\/><title>/.test(SV));
-chk('una flota en cero no da anchos negativos', !/width="-/.test(A.svgFlota(
+chk('un pool en cero no da anchos negativos', !/width="-/.test(A.svgPool(
     A.datos({bodegas:[]}, {socios:[],nivel:{},mensual:[],ventana:{}}, {socios:[],nivel:{},mensual:[],ventana:{}}, null))));
 
 console.log('\n— geometria de las barras mensuales —');
@@ -177,7 +177,7 @@ const PG = A.pagina(D1);
 chk('es un documento completo', /^<!doctype html>/.test(PG) && /<\/html>\s*$/.test(PG));
 chk('trae su hoja de estilo adentro', PG.includes('--marca:#b5342a'));
 chk('declara el titulo', /<title>Stock y Flujos de Pallets<\/title>/.test(PG));
-chk('la flota sale del dato', PG.includes('>810.625<'));
+chk('el pool sale del dato', PG.includes('>810.625<'));
 chk('la cantidad de bodegas tambien', PG.includes('en las 15 bodegas de la empresa'));
 chk('el residuo de retail tambien', PG.includes('residuo sin ubicación: 34.063'));
 chk('el aviso usa el residuo de hoy, no uno escrito a mano',
@@ -191,13 +191,89 @@ chk('y que ninguna cifra esta a mano', /ninguna cifra está escrita a mano/.test
 // sin tablero-extra.json esas secciones NO se dibujan: un hueco visible es
 // mejor que una cifra de hace un mes presentada como de hoy
 chk('sin extra no aparece el flujo por bodega', !PG.includes('Flujo del año por bodega'));
-chk('sin extra no aparecen los controles', !PG.includes('Controles que pasó'));
+chk('sin extra no aparecen los controles', !PG.includes('<h3>Controles</h3>'));
 chk('con extra si aparece el flujo', A.pagina(A.datos(BOD,
     {socios:SOC,nivel:{bodega:579026},mensual:[],ventana:{}},
     {socios:[],nivel:{bodega:212945},mensual:[],ventana:{}},
     {medido:'2026-10-26', flujo_por_bodega:[['RETAIL','BODEGA RETAILERS',1053631,1017877]],
      controles:[{titulo:'Cobertura', texto:'190.590 y 190.590'}]}))
     .includes('Flujo del año por bodega'));
+
+console.log('\n— un control puede NO pasar, y entonces se dice —');
+// el titulo era "Controles que paso": un panel que solo sabe decir que todo
+// esta bien miente el dia que algo deja de estarlo, y ese dia llego
+const EST = A.pagina(A.datos(BOD,
+  {socios:SOC,nivel:{bodega:579026},mensual:[],ventana:{}},
+  {socios:[],nivel:{bodega:212945},mensual:[],ventana:{}},
+  {medido:'2026-10-27', controles:[
+    {titulo:'Conservación', texto:'subió 1.030', estado:'no pasa', medido:'2026-10-27'},
+    {titulo:'Cobertura', texto:'cuadra'}]}));
+chk('el titulo ya no afirma que todos pasaron',
+    EST.includes('<h3>Controles</h3>') && !EST.includes('Controles que pasó'));
+chk('el que no pasa se marca', /<dt class="malo">Conservación · NO PASA<\/dt>/.test(EST),
+    (EST.match(/<dt[^>]*>Conservación[^<]*</)||[''])[0]);
+chk('y el que pasa no lleva marca', /<dt>Cobertura<\/dt>/.test(EST) && !/Cobertura · NO PASA/.test(EST));
+chk('un estado desconocido no marca nada', !/NO PASA/.test(A.pagina(A.datos(BOD,
+  {socios:SOC,nivel:{bodega:579026},mensual:[],ventana:{}},
+  {socios:[],nivel:{bodega:212945},mensual:[],ventana:{}},
+  {controles:[{titulo:'X', texto:'y', estado:'mas o menos'}]}))));
+
+console.log('\n— el desglose del residuo envejece y se avisa —');
+// el residuo se recalcula todos los dias; el desglose no. Cuando dejan de
+// sumar lo mismo hay que decirlo, no dejar que el lector descubra dos cifras
+// que no cuadran y no sepa cual creer.
+const DES = (det, nivRet, socRet) => A.pagina(A.datos(BOD,
+  {socios:[{cod:'R1',nivel:socRet}], nivel:{bodega:nivRet, socios:socRet, residuo:nivRet-socRet},
+   mensual:[], ventana:{}},
+  {socios:[], nivel:{bodega:212945, socios:212945, residuo:0}, mensual:[], ventana:{}},
+  {medido:'2026-10-26', residuo_detalle:det}));
+// cuadra: no se dice nada
+const CUA = DES([{cantidad:600, que:'en la ubicación de sistema'},
+                 {cantidad:400, que:'en RETAIL NA'}], 579026, 578026);
+chk('cuando el desglose suma el residuo no hay aviso', !/de diferencia/.test(CUA));
+chk('y el desglose igual sale', /600<\/dt><dd>en la ubicación de sistema/.test(CUA));
+// no cuadra: se dice, con la resta hecha
+const NOC = DES([{cantidad:600, que:'en la ubicación de sistema'},
+                 {cantidad:400, que:'en RETAIL NA'}], 579026, 578226);
+chk('cuando no suma, se avisa con las dos cifras',
+    /El desglose suma <b>1.000<\/b> y el residuo de hoy es <b>800<\/b>/.test(NOC),
+    (NOC.match(/El desglose suma[^<]*<b>[^<]*<\/b>[^<]*<b>[^<]*<\/b>[^.]*/)||[''])[0]);
+chk('y con la diferencia firmada', /: -200 de diferencia/.test(NOC));
+// OJO: '-200' contiene '200'; hay que mirar el signo, no el numero suelto
+chk('la resta va en el sentido correcto', !/: \+200 de diferencia/.test(NOC));
+chk('cada parte del desglose lleva su fecha',
+    /en RETAIL NA <span class="fecha">medido el 2026-10-26<\/span>/.test(NOC));
+chk('y una parte con fecha propia la usa',
+    /<span class="fecha">medido el 2026-10-20<\/span>/.test(
+      DES([{cantidad:800, que:'x', medido:'2026-10-20'}], 579026, 578226)));
+
+console.log('\n— cada control con su propia fecha —');
+// Se habian mezclado controles medidos en dias distintos bajo un unico
+// "medidos al ...". El que se recalcula hoy no puede leerse tan viejo como el
+// que no se toca hace una semana.
+const CTL = A.pagina(A.datos(BOD,
+  {socios:SOC,nivel:{bodega:579026},mensual:[],ventana:{}},
+  {socios:[],nivel:{bodega:212945},mensual:[],ventana:{}},
+  {medido:'2026-10-26', controles:[
+    {titulo:'Cobertura', texto:'cuadra', medido:'2026-10-27'},
+    {titulo:'Segunda fuente', texto:'coincide'}]}));
+chk('el control con fecha propia la muestra',
+    /cuadra <span class="fecha">medido el 2026-10-27<\/span>/.test(CTL),
+    (CTL.match(/cuadra[^<]*<span[^>]*>[^<]*</)||[''])[0]);
+chk('el que no la trae cae en la del archivo',
+    /coincide <span class="fecha">medido el 2026-10-26<\/span>/.test(CTL));
+// la fecha de cada uno reemplaza al pie que decia una sola para todos
+chk('ya no hay un pie con una sola fecha para todos', !/Medidos al /.test(CTL), CTL.slice(0,0));
+const SF = A.pagina(A.datos(BOD,
+  {socios:SOC,nivel:{bodega:579026},mensual:[],ventana:{}},
+  {socios:[],nivel:{bodega:212945},mensual:[],ventana:{}},
+  {controles:[{titulo:'X', texto:'y'}]}));
+chk('sin ninguna fecha lo dice, no se la inventa',
+    /y <span class="fecha">medido el sin fecha<\/span>/.test(SF));
+chk('la fecha tambien se escapa', A.pagina(A.datos(BOD,
+  {socios:SOC,nivel:{bodega:579026},mensual:[],ventana:{}},
+  {socios:[],nivel:{bodega:212945},mensual:[],ventana:{}},
+  {controles:[{titulo:'X', texto:'y', medido:'<b>hoy</b>'}]})).includes('&lt;b&gt;hoy&lt;/b&gt;'));
 
 console.log('\n— el descalce entre la sonda y el ancla no se esconde —');
 const DD = A.datos(BOD, {socios:SOC, nivel:{bodega:579000}, mensual:[], ventana:{}},
@@ -357,7 +433,7 @@ const DRES = A.datos(BOD, {socios:SOC, nivel:{bodega:579026, socios:544963, resi
 const PRES = A.pagina(DRES);
 chk('el desglose aparece', PRES.includes('17.890') && PRES.includes('17.620'));
 chk('con su explicacion', PRES.includes('ubicación RETAIL NA / NO HABILITADO.'));
-// 17.890 tambien sale arriba, en la flota: hay que mirar la fila del desglose
+// 17.890 tambien sale arriba, en el pool: hay que mirar la fila del desglose
 chk('va dentro del aviso',
     PRES.indexOf('sin retailer identificado') < PRES.indexOf('<dt>17.890</dt>'));
 // una partida sin cantidad valida no se dibuja a medias
@@ -375,15 +451,15 @@ chk('el texto del desglose se escapa', A.pagina(A.datos(BOD,
     {socios:[],nivel:{bodega:1},mensual:[],ventana:{}},
     {residuo_detalle:[{cantidad:5,que:'<b>x</b>'}]})).includes('&lt;b&gt;x&lt;/b&gt;'));
 
-console.log('\n— lo sistemico no es flota —');
+console.log('\n— lo sistemico no es pool —');
 chk('se declara cuanto no rota', DRES.sistemico === 17890);
 chk('la pagina lo dice', PRES.includes('17.890</b> son sistémicos y no rotan'));
 // OJO con includes: '-792.735' CONTIENE '792.735', asi que una resta al reves
 // pasaria desapercibida. Hay que mirar la etiqueta completa.
-chk('y calcula la flota en rotacion',
-    PRES.includes('la flota en rotación es <b>792.735</b>') && !PRES.includes('<b>-792.735</b>'),
-    (PRES.match(/la flota en rotación es <b>[^<]*<\/b>/)||[''])[0]);
-// sin el dato declarado no se inventa una flota en rotacion
+chk('y calcula el pool en rotacion',
+    PRES.includes('el pool en rotación es <b>792.735</b>') && !PRES.includes('<b>-792.735</b>'),
+    (PRES.match(/el pool en rotación es <b>[^<]*<\/b>/)||[''])[0]);
+// sin el dato declarado no se inventa un pool en rotacion
 chk('sin declararlo no aparece', D1.sistemico === null && !A.pagina(D1).includes('no rotan'));
 chk('un sistemico no numerico no cuenta', A.datos(BOD,
     {socios:SOC,nivel:{bodega:1},mensual:[],ventana:{}},

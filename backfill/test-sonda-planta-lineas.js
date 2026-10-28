@@ -51,6 +51,35 @@ chk('el mas frecuente va primero aunque aparezca despues',
 chk('los valores de muestra se topan en cinco',
     P.camposConBodega(MUCHAS.map(w=>({W:w})), new Set(MUCHAS))[0].valores.length===5);
 
+console.log('\n— cual de los dos campos es el origen —');
+// MEDIDO el 2026-10-27: los dos campos salian en las 835 lineas, el desempate
+// cayo en el alfabeto y quedo todo invertido. RETAIL aparecio con -368 cuando
+// nuestra serie, medida por otro camino, dice +368.
+const EMPATE = [{campo:'FromWarehouseCode',veces:835},{campo:'WarehouseCode',veces:835}];
+let E = P.elegirPuntas(EMPATE);
+chk('con los dos empatados manda el nombre, no el alfabeto',
+    E.desde==='FromWarehouseCode' && E.hacia==='WarehouseCode', JSON.stringify(E));
+chk('y se declara que el nombre lo resolvio', E.seguro===true && /nombre/.test(E.regla));
+// al reves en la lista: el resultado no puede depender del orden de entrada
+chk('el orden de la lista no cambia el resultado',
+    P.elegirPuntas([EMPATE[1],EMPATE[0]]).desde==='FromWarehouseCode');
+// si ningun nombre lo declara, se elige por frecuencia PERO se dice que es suposicion
+let G = P.elegirPuntas([{campo:'BodegaA',veces:9},{campo:'BodegaB',veces:4}]);
+chk('sin pista en el nombre se usa la frecuencia', G.hacia==='BodegaA' && G.desde==='BodegaB');
+chk('y se declara que es una suposicion', G.seguro===false && /suposicion/.test(G.regla));
+// dos campos que los dos parecen origen tampoco resuelven nada
+chk('dos candidatos a origen no resuelven',
+    P.elegirPuntas([{campo:'FromA',veces:9},{campo:'FromB',veces:9}]).seguro===false);
+// y tampoco resuelven cuando SI hay un candidato a destino: con dos campos que
+// dicen "from" no se sabe cual es, y elegir el primero seria tirar una moneda
+const DOSFROM = P.elegirPuntas([{campo:'FromA',veces:9},{campo:'FromB',veces:8},{campo:'W',veces:7}]);
+chk('dos "from" con un destino disponible tampoco resuelven',
+    DOSFROM.seguro===false && /suposicion/.test(DOSFROM.regla), JSON.stringify(DOSFROM));
+chk('con un solo campo no hay origen', P.elegirPuntas([{campo:'W',veces:9}]).desde===null);
+chk('y se dice que es una sola punta', /una sola punta/.test(P.elegirPuntas([{campo:'W',veces:9}]).regla));
+chk('sin campos no revienta', P.elegirPuntas(null).hacia===null && P.elegirPuntas([]).desde===null);
+chk('una entrada basura se ignora', P.elegirPuntas([null,{campo:'W',veces:1}]).hacia==='W');
+
 console.log('\n— la arista de una linea —');
 const A = P.aristaDeLinea(L[0],'FromWarehouseCode','WarehouseCode','111');
 chk('de donde sale y a donde entra', A.desde==='RT13-100' && A.hacia==='RT13-102' && A.cantidad===10);

@@ -109,6 +109,74 @@ function deltaDeAsignacion(a) {
 /** Aplana un documento a una fila por asignacion de ubicacion. Solo del item
  *  pedido: traer todo el inventario para quedarse con el pallet rojo es gastar
  *  almacenamiento en algo que nadie va a leer. */
+/*  LOS DOS CAMPOS DE BODEGA DE UNA LINEA.
+ *
+ *  No son un supuesto: los confirmo backfill/sonda-planta-lineas.js contra SAP
+ *  el 2026-10-27, buscandolos por CONTENIDO —que campos traian un codigo de
+ *  bodega conocido— y no por nombre. Aparecieron en las 835 lineas del dia.
+ *  Cual de los dos es el origen lo dice el nombre, y lo confirmo el contraste:
+ *  con esta asignacion RETAIL dio entradas 5.127, salidas 4.759 y neto +368,
+ *  identico a lo que la capa de ubicaciones ya media por otro camino. Dado
+ *  vuelta daba -368.
+ *
+ *  Si algun dia SAP los renombra, la sonda lo vuelve a decir. Aca quedan
+ *  escritos una sola vez para no repetirlos en cada funcion. */
+const CAMPO_DESDE = 'FromWarehouseCode';
+const CAMPO_HACIA = 'WarehouseCode';
+
+/** EL MOVIMIENTO DE BODEGA DE CADA LINEA, que es lo unico que ve la planta.
+ *
+ *  POR QUE HACE FALTA. filasDeDocumento() solo produce filas donde hay
+ *  ASIGNACION DE UBICACION, y las bodegas de planta —inspeccion, reparacion,
+ *  pintura, disponible— no manejan ubicaciones. Resultado: de la planta no
+ *  teniamos ni un movimiento, y habia que pedirselo a Datawalt, que lee OINM
+ *  y registra una fila por bodega sin decir de donde vino el pallet.
+ *
+ *  El documento ya venia completo en la misma respuesta: estos tres campos
+ *  llegaban y se tiraban.
+ *
+ *  Una punta ausente queda en null y NO se inventa: hay lineas que mueven
+ *  contra algo que no es una bodega, y taparlas seria perder justo la
+ *  informacion de que existen. */
+function lineasDeDocumento(doc, claveLineas, item) {
+  const out = [];
+  const lineas = (doc && claveLineas && doc[claveLineas]) || [];
+  const lee = v => (typeof v === 'string' && v.trim()) ? v.trim() : null;
+  for (const l of lineas) {
+    if (!l) continue;
+    if (item && String(l.ItemCode || '') !== String(item)) continue;
+    const q = Number(l.Quantity);
+    out.push({ DocEntry: doc.DocEntry, DocNum: doc.DocNum,
+               DocDate: String(doc.DocDate || '').slice(0, 10),
+               LineNum: l.LineNum, ItemCode: l.ItemCode,
+               desde: lee(l[CAMPO_DESDE]), hacia: lee(l[CAMPO_HACIA]),
+               cantidad: isFinite(q) ? q : 0 });
+  }
+  return out;
+}
+
+/*  LAS LINEAS VAN EN SU PROPIO BLOB, no dentro de binmov.
+ *
+ *  Medido: son ~2,5 MB por mes. saldo-pool lee los diez binmov en cada corrida
+ *  y dos veces (retail y clientes): meterlas ahi serian 50 MB de descarga por
+ *  cierre que ese script no usa para nada. Aparte, binmov no cambia de forma
+ *  y lo que ya lo lee sigue igual. */
+const PREFIJO_LINEAS = 'lineasbod/';
+
+/** SI EL BLOB DE LINEAS PREVIO SIRVE PARA FUSIONAR CON LA VENTANA.
+ *
+ *  Un mes extraido ANTES de que se guardaran las lineas no las tiene, y
+ *  fusionar la ventana contra el dejaria un mes con lineas solo en los
+ *  ultimos dias, haciendose pasar por completo. Eso es peor que no tener
+ *  nada: el tablero mostraria una planta que arranca a mitad de mes y nadie
+ *  sabria por que. Se para y se dice que hay que rehacer el mes una vez. */
+function ventanaUsable(blob) {
+  const b = blob || {};
+  if (!Array.isArray(b.lineas))
+    return { ok: false, motivo: 'el blob previo no trae lineas de bodega: se extrajo antes de que se guardaran' };
+  return { ok: true, motivo: null };
+}
+
 function filasDeDocumento(doc, claveLineas, item) {
   const out = [], raros = [];
   const lineas = (doc && claveLineas && doc[claveLineas]) || [];
@@ -290,7 +358,8 @@ function atribuir(filas, mapa) {
   return { con, sin };
 }
 
-module.exports = { corteDeVentana, partirEntries, fusionarFilas, deltaDeAsignacion, filasDeDocumento, urlLista, urlPorClave,
+module.exports = { corteDeVentana, partirEntries, fusionarFilas, deltaDeAsignacion, filasDeDocumento,
+                   lineasDeDocumento, ventanaUsable, CAMPO_DESDE, CAMPO_HACIA, PREFIJO_LINEAS, urlLista, urlPorClave,
                    saldoPorBin, atribuir, controlDePuntas, urlSociosPorPrefijo,
                    OPCIONES, BANDERAS };
 
@@ -429,12 +498,13 @@ async function maestro(ses, raiz, cc) {
 async function unMes(ses, raiz, cc, mes) {
   const desde = mes + '-01', hasta = S.finDeMes(mes);
   const nombre = 'binmov/' + mes + '.json';
+  const nombreL = PREFIJO_LINEAS + mes + '.json';
 
   const v = corteDeVentana(VENTANA, mes);
   if (v.error) { console.error(v.error); process.exit(1); }
   if (v.fuera) { console.log(mes + ': entero antes de la ventana --desde, se deja como esta'); return null; }
   const corte = v.completo ? null : v.corte;
-  let viejas = null;
+  let viejas = null, viejasLineas = null;
   if (corte) {
     // Sin blob previo no hay con que fusionar, y escribir solo la ventana
     // dejaria un mes incompleto haciendose pasar por completo.
@@ -444,8 +514,17 @@ async function unMes(ses, raiz, cc, mes) {
       process.exit(1);
     }
     const j = await leerJson(cc, nombre);
+    const jl = await existeBlob(cc, nombreL) ? await leerJson(cc, nombreL) : null;
+    const us = ventanaUsable(jl);
+    if (!us.ok) {
+      console.error(mes + ': no se puede usar --desde porque ' + us.motivo + '.');
+      console.error('  Corre ese mes una vez SIN --desde (con --forzar) y despues incremental.');
+      process.exit(1);
+    }
     viejas = (j && j.filas) || [];
-    console.log(mes + ': ventana desde ' + corte + ' · blob previo con ' + mil(viejas.length) + ' filas');
+    viejasLineas = (jl && jl.lineas) || [];
+    console.log(mes + ': ventana desde ' + corte + ' · blob previo con ' + mil(viejas.length) +
+                ' filas y ' + mil(viejasLineas.length) + ' lineas de bodega');
   } else if (!FORZAR && await existeBlob(cc, nombre)) {
     console.log(mes + ': ya esta, se salta (--forzar para rehacer)'); return null;
   }
@@ -476,7 +555,7 @@ async function unMes(ses, raiz, cc, mes) {
     if (pedidos > 5000) throw new Error('Mas de 5000 peticiones listando ' + mes);
   }
   console.log(mes + ': ' + mil(entries.length) + ' documentos (fase 1, ' + pedidos + ' peticiones)');
-  if (!entries.length) return { mes, desde, hasta, filas: [], docs: 0, fallidos: [], raros: [], corte };
+  if (!entries.length) return { mes, desde, hasta, filas: [], lineas: [], docs: 0, fallidos: [], raros: [], corte };
 
   // FASE 2 solo sobre la ventana. La fase 1 ya recorrio el mes entero, asi que
   // _docs sigue siendo el total del mes y la sonda de cobertura sigue valiendo.
@@ -486,12 +565,13 @@ async function unMes(ses, raiz, cc, mes) {
                          mil(part.antes.length) + ' quedan como estaban');
   if (!aPedir.length) {
     const solo = fusionarFilas(viejas, [], corte);
-    return { mes, desde, hasta, filas: solo, docs: entries.length, fallidos: [], raros: [],
-             corte, conservadas: solo.length, nuevas: 0 };
+    const soloL = fusionarFilas(viejasLineas, [], corte);
+    return { mes, desde, hasta, filas: solo, lineas: soloL, docs: entries.length,
+             fallidos: [], raros: [], corte, conservadas: solo.length, nuevas: 0 };
   }
 
   // FASE 2 · uno por uno, que es la unica forma de que vengan las asignaciones
-  const filas = [], fallidos = [], raros = [];
+  const filas = [], lineas = [], fallidos = [], raros = [];
   let hechos = 0, t0 = Date.now();
   for (let i = 0; i < aPedir.length; i += CONC) {
     const lote = aPedir.slice(i, i + CONC);
@@ -507,6 +587,8 @@ async function unMes(ses, raiz, cc, mes) {
         const res = filasDeDocumento(doc, kl, ITEM);
         filas.push.apply(filas, res.filas);
         raros.push.apply(raros, res.raros);
+        // El movimiento de bodega de la linea, que es lo unico que ve la planta.
+        lineas.push.apply(lineas, lineasDeDocumento(doc, kl, ITEM));
       } catch (e) { fallidos.push({ DocEntry: de, error: String(e.message).slice(0, 200) }); }
     }));
     hechos += lote.length;
@@ -519,7 +601,8 @@ async function unMes(ses, raiz, cc, mes) {
   }
   process.stdout.write('\n');
   const todas = fusionarFilas(viejas, filas, corte);
-  return { mes, desde, hasta, filas: todas, docs: entries.length, fallidos, raros,
+  const todasL = fusionarFilas(viejasLineas, lineas, corte);
+  return { mes, desde, hasta, filas: todas, lineas: todasL, docs: entries.length, fallidos, raros,
            corte, conservadas: todas.length - filas.length, nuevas: filas.length };
 }
 
@@ -563,6 +646,8 @@ async function main() {
       _lineas: cp.lineas, _dos_puntas: cp.dosPuntas, _solo_sale: cp.soloSale,
       _solo_entra: cp.soloEntra, _descuadradas: cp.descuadradas,
       _fallidos: res.fallidos, _tipos_desconocidos: res.raros.length,
+      _lineas_bodega: (res.lineas || []).length,
+      _lineas_bodega_en: PREFIJO_LINEAS + res.mes + '.json',
       _guardado: new Date().toISOString(),
       _desde_ventana: res.corte || null,
       _filas_conservadas: res.corte ? (res.conservadas || 0) : null,
@@ -570,12 +655,27 @@ async function main() {
       filas: res.filas,
     };
     const n = await escribirJson(cc, 'binmov/' + res.mes + '.json', payload);
+    // El movimiento de bodega linea por linea, en su propio blob: es lo que
+    // deja medir la planta, que no tiene ubicaciones y hasta ahora no veiamos.
+    const nl = await escribirJson(cc, PREFIJO_LINEAS + res.mes + '.json', {
+      mes: res.mes, desde: res.desde, hasta: res.hasta,
+      _que_es: 'Movimiento de bodega por linea de documento: de que bodega sale y a cual entra. ' +
+               'Es la unica via a las bodegas de planta, que no manejan ubicaciones.',
+      _campos_sap: CAMPO_DESDE + ' (origen) / ' + CAMPO_HACIA + ' (destino)',
+      _confirmado: 'backfill/sonda-planta-lineas.js contra SAP el 2026-10-27',
+      _item: ITEM, _docs: res.docs, _lineas: (res.lineas || []).length,
+      _guardado: new Date().toISOString(),
+      _desde_ventana: res.corte || null,
+      lineas: res.lineas || [],
+    });
     console.log('  ' + res.mes + ': ' + mil(res.filas.length) + ' filas · ' +
                 mil(sb.porBin.size) + ' ubicaciones · ' + mil(n) + ' bytes' +
                 (res.fallidos.length ? '   ·  FALLIDOS: ' + res.fallidos.length : '') +
                 (res.raros.length ? '   ·  BinActionType desconocido: ' + res.raros.length : ''));
     // El control es POR LINEA. El neto del mes no es cero y no tiene por que
     // serlo: es el crecimiento neto del pool en manos de clientes.
+    console.log('  ' + res.mes + ': ' + mil((res.lineas || []).length) + ' lineas de bodega · ' +
+                mil(nl) + ' bytes   ·  ' + PREFIJO_LINEAS + res.mes + '.json');
     console.log('     lineas: ' + mil(cp.lineas) + '   ·  con las dos puntas: ' + mil(cp.dosPuntas) +
                 '   ·  solo sale: ' + mil(cp.soloSale) + '   ·  solo entra: ' + mil(cp.soloEntra));
     console.log('     neto del mes: ' + mil(sb.total) + ' pallets' +

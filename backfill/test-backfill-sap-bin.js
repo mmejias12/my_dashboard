@@ -319,7 +319,7 @@ const DOCP = { DocEntry: 77, DocNum: 9001, DocDate: '2026-10-27T00:00:00Z', Stoc
   { LineNum: 2, ItemCode: '99999',       Quantity: 10,   FromWarehouseCode: 'RETAIL',   WarehouseCode: 'RT13-100' },
   null,
 ]};
-let LD = B.lineasDeDocumento(DOCP, 'StockTransferLines', '11111111110');
+let LD = B.lineasDeDocumento(DOCP, 'StockTransferLines', '11111111110', 'ambas', 'traspaso');
 chk('una fila por linea del item', LD.length === 2, String(LD.length));
 chk('de donde sale y a donde entra',
     LD[0].desde === 'RETAIL' && LD[0].hacia === 'RT13-100' && LD[0].cantidad === 3635,
@@ -334,26 +334,89 @@ chk('arrastra documento y linea para poder rastrear',
 // una punta ausente NO se inventa: hay lineas que mueven contra algo que no
 // es una bodega, y taparlas seria perder que existen
 let UNA = B.lineasDeDocumento({ DocEntry:1, DocDate:'2026-10-27', L:[
-  { ItemCode:'1', Quantity:5, WarehouseCode:'RT13-100' }] }, 'L', '1');
+  { ItemCode:'1', Quantity:5, WarehouseCode:'RT13-100' }] }, 'L', '1', 'ambas', 'traspaso');
 chk('una punta ausente queda en null', UNA[0].desde === null && UNA[0].hacia === 'RT13-100');
 chk('un codigo con espacios se recorta', B.lineasDeDocumento({ DocEntry:1, DocDate:'d', L:[
-  { ItemCode:'1', Quantity:1, FromWarehouseCode:'  RETAIL  ' }] }, 'L', '1')[0].desde === 'RETAIL');
+  { ItemCode:'1', Quantity:1, FromWarehouseCode:'  RETAIL  ' }] }, 'L', '1', 'ambas')[0].desde === 'RETAIL');
 chk('un codigo vacio no es una punta', B.lineasDeDocumento({ DocEntry:1, DocDate:'d', L:[
-  { ItemCode:'1', Quantity:1, FromWarehouseCode:'   ' }] }, 'L', '1')[0].desde === null);
+  { ItemCode:'1', Quantity:1, FromWarehouseCode:'   ' }] }, 'L', '1', 'ambas')[0].desde === null);
 chk('una cantidad ilegible es cero, no NaN', B.lineasDeDocumento({ DocEntry:1, DocDate:'d', L:[
-  { ItemCode:'1', Quantity:'x', WarehouseCode:'RETAIL' }] }, 'L', '1')[0].cantidad === 0);
+  { ItemCode:'1', Quantity:'x', WarehouseCode:'RETAIL' }] }, 'L', '1', 'ambas')[0].cantidad === 0);
 chk('sin filtro de item pasan todas',
-    B.lineasDeDocumento(DOCP, 'StockTransferLines', null).length === 3);
+    B.lineasDeDocumento(DOCP, 'StockTransferLines', null, 'ambas').length === 3);
 chk('sin documento o sin clave no hay lineas',
-    B.lineasDeDocumento(null, 'L', '1').length === 0 &&
-    B.lineasDeDocumento(DOCP, null, '1').length === 0 &&
-    B.lineasDeDocumento({}, 'L', '1').length === 0);
+    B.lineasDeDocumento(null, 'L', '1', 'ambas').length === 0 &&
+    B.lineasDeDocumento(DOCP, null, '1', 'ambas').length === 0 &&
+    B.lineasDeDocumento({}, 'L', '1', 'ambas').length === 0);
 // la fusion incremental es la MISMA que la de las filas: le basta DocDate
 const VL = [{ DocDate:'2026-10-20', desde:'A', hacia:'B', cantidad:1 }];
 const NL = [{ DocDate:'2026-10-27', desde:'C', hacia:'D', cantidad:2 }];
 chk('las lineas se fusionan con la misma regla que las filas',
     B.fusionarFilas(VL, NL, '2026-10-25').length === 2 &&
     B.fusionarFilas(VL, NL, '2026-10-15').length === 1);
+
+// LAS TRES ENTIDADES. Medido el 29-10-2026: la cadena de planta no son
+// traspasos. Inspeccion sale por salida de mercancias y reparacion y pintura
+// entran por entrada de mercancias. Leyendo solo traspasos se veia media
+// planta y el nivel de inspeccion daba -76.636.
+chk('se leen las tres entidades que mueven el pallet',
+    B.ENTIDADES.map(e => e.entidad).join(',') ===
+    'StockTransfers,InventoryGenExits,InventoryGenEntries', JSON.stringify(B.ENTIDADES));
+// cada entidad con su direccion: si salida y entrada se dan vuelta, los
+// pallets que inspeccion despacha se cuentan como recibidos y el nivel sale
+// con el signo cambiado en los dos extremos de la cadena
+chk('cada entidad declara su propia direccion',
+    B.ENTIDADES.map(e => e.entidad + ':' + e.direccion + ':' + e.tipo).join(' ') ===
+    'StockTransfers:ambas:traspaso InventoryGenExits:sale:salida InventoryGenEntries:entra:entrada',
+    JSON.stringify(B.ENTIDADES));
+// el recorrido extra lee TODAS las entidades menos la que ya leyo la fase de
+// traspasos: incluirla duplica cada linea del mes, dejar fuera otra deja la
+// planta a medias
+chk('el recorrido extra son las otras dos',
+    B.entidadesExtra().map(e => e.entidad).join(',') ===
+    'InventoryGenExits,InventoryGenEntries', JSON.stringify(B.entidadesExtra()));
+chk('el recorrido extra no repite la entidad principal',
+    B.entidadesExtra().length === B.ENTIDADES.length - 1);
+chk('la entidad principal se lee como traspaso con las dos puntas',
+    B.comoSeLee('StockTransfers').direccion === 'ambas' &&
+    B.comoSeLee('StockTransfers').tipo === 'traspaso');
+chk('una entidad fuera de la tabla se trata como traspaso',
+    B.comoSeLee('Loquesea').direccion === 'ambas' && B.comoSeLee('Loquesea').tipo === 'traspaso');
+chk('una salida consultada por nombre se lee como salida',
+    B.comoSeLee('InventoryGenExits').direccion === 'sale' &&
+    B.comoSeLee('InventoryGenEntries').direccion === 'entra',
+    JSON.stringify([B.comoSeLee('InventoryGenExits'), B.comoSeLee('InventoryGenEntries')]));
+// Esta se verifica sobre el TEXTO del archivo y no ejecutandola: el recorrido
+// vive dentro de unMes, que pide paginas a SAP y no se puede correr en una
+// prueba. Lo que se protege es concreto: si el recorrido iterara ENTIDADES en
+// vez de entidadesExtra(), leeria los traspasos dos veces y cada linea de
+// traspaso del mes quedaria duplicada en el blob.
+const FUENTE = require('fs').readFileSync(require('path').join(__dirname, 'backfill-sap-bin.js'), 'utf8');
+chk('el recorrido extra itera la lista filtrada, no la tabla completa',
+    /for \(const E of entidadesExtra\(\)\)/.test(FUENTE) &&
+    !/for \(const E of ENTIDADES[^.]/.test(FUENTE));
+const UNALIN = { DocEntry:5, DocDate:'2026-10-26', L:[
+  { ItemCode:'1', Quantity:300, FromWarehouseCode:'RETAIL', WarehouseCode:'RT13-100' }] };
+const porDir = d => B.lineasDeDocumento(UNALIN, 'L', '1', d, 't')[0];
+// una salida de mercancias saca pallets de la bodega SIN contraparte: la
+// bodega de la linea es el ORIGEN, y el destino no existe
+chk('en una salida la bodega es el origen y no hay destino',
+    porDir('sale').desde === 'RT13-100' && porDir('sale').hacia === null,
+    JSON.stringify(porDir('sale')));
+// y en una entrada es al reves
+chk('en una entrada la bodega es el destino y no hay origen',
+    porDir('entra').hacia === 'RT13-100' && porDir('entra').desde === null);
+chk('en un traspaso van las dos puntas',
+    porDir('ambas').desde === 'RETAIL' && porDir('ambas').hacia === 'RT13-100');
+chk('sin direccion se asume traspaso',
+    B.lineasDeDocumento(UNALIN, 'L', '1', null, 't')[0].desde === 'RETAIL');
+chk('cada linea queda etiquetada con su tipo',
+    B.lineasDeDocumento(UNALIN, 'L', '1', 'sale', 'salida')[0].tipo === 'salida');
+chk('sin tipo queda como traspaso',
+    B.lineasDeDocumento(UNALIN, 'L', '1', 'ambas')[0].tipo === 'traspaso');
+// la direccion NO cambia la cantidad: el signo lo pone la punta que se llena
+chk('la cantidad es la misma en las tres',
+    porDir('sale').cantidad === 300 && porDir('entra').cantidad === 300 && porDir('ambas').cantidad === 300);
 
 console.log('\n— ventanaUsable: un blob sin lineas no se puede fusionar —');
 // las lineas viven en su propio blob: saldo-pool lee los diez binmov dos veces

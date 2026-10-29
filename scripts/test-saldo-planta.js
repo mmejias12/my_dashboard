@@ -101,20 +101,84 @@ chk('y dice que dia y cuanto', IMP[0].cierre===-1250 && IMP[0].dia==='2026-10-26
 chk('sin negativos no hay nada', S.nivelesImposibles([{whs:'A',dias:[{dia:'d',cierre:0}]}]).length===0);
 chk('un cero no es negativo', S.nivelesImposibles([{whs:'A',dias:[{dia:'d',cierre:0}]}]).length===0);
 
+console.log('\n— la ley del pool: los traspasos netean cero, la produccion mueve el total —');
+// Medido contra OINM el 29-10-2026, octubre: traspasos 505.048 de entrada y
+// 505.048 de salida, y produccion +3.101. La primera version de este control
+// exigia que la suma de TODOS los netos diera cero y marcaba revisar con
+// +3.461, que era el dato correcto y el control equivocado.
+const LINP=[
+  {desde:'RETAIL',hacia:'RT13-100',cantidad:300},   // traspaso: netea cero solo
+  {desde:'RT13-102',hacia:'RT13-103',cantidad:100}, // traspaso
+  {desde:'RT13-100',hacia:null,cantidad:250},       // salida de mercancias
+  {desde:null,hacia:'RT13-102',cantidad:400},       // entrada de mercancias
+  {desde:null,hacia:null,cantidad:9},               // ninguna punta es bodega
+];
+const LEY=S.leyDelPool(LINP);
+chk('los traspasos netean cero por construccion', LEY.traspasos===0 && LEY.cumple===true);
+chk('y se cuentan', LEY.nTraspaso===2 && LEY.nUnaPunta===2 && LEY.nSinPunta===1, JSON.stringify(LEY));
+// la entrada SUMA al pool y la salida RESTA: 400 - 250
+chk('la produccion es lo unico que mueve el total', LEY.produccion===150, LEY.produccion);
+chk('una entrada sola suma', S.leyDelPool([{desde:null,hacia:'A',cantidad:7}]).produccion===7);
+chk('una salida sola resta', S.leyDelPool([{desde:'A',hacia:null,cantidad:7}]).produccion===-7);
+chk('una punta en cadena vacia no es bodega',
+    S.leyDelPool([{desde:'A',hacia:'',cantidad:7}]).produccion===-7);
+chk('sin lineas la ley se cumple', S.leyDelPool([]).cumple===true && S.leyDelPool(null).produccion===0);
+chk('una linea nula no se cuenta', S.leyDelPool([null,{desde:'A',hacia:'B',cantidad:1}]).nTraspaso===1);
+// una cantidad ilegible no puede contaminar el neto
+chk('una cantidad ilegible cuenta como cero',
+    S.leyDelPool([{desde:null,hacia:'A',cantidad:'x'}]).produccion===0);
+
+console.log('\n— la cuadratura: el neto por bodega tiene que dar la produccion —');
+// ESTE es el control que si puede fallar: si no da, hay una linea leida mal
+const NET=[{whs:'RT13-100',neto:50},{whs:'RT13-102',neto:500},{whs:'RT13-103',neto:100},
+           {whs:'RETAIL',neto:-300},{whs:'RT13-102b',neto:-200}];
+chk('cuadra cuando la suma da la produccion',
+    S.cuadraturaDelNeto(NET,{produccion:150}).cuadra===true,
+    JSON.stringify(S.cuadraturaDelNeto(NET,{produccion:150})));
+const MAL=S.cuadraturaDelNeto(NET,{produccion:0});
+chk('no cuadra contra cero, que era la ley vieja', MAL.cuadra===false && MAL.diferencia===150, JSON.stringify(MAL));
+chk('y dice cuanto falta', S.cuadraturaDelNeto([{neto:10}],{produccion:4}).diferencia===6);
+chk('sin netos la suma es cero', S.cuadraturaDelNeto(null,{produccion:0}).cuadra===true);
+chk('sin ley se espera cero', S.cuadraturaDelNeto([{neto:0}],null).cuadra===true);
+
+console.log('\n— el ancla tiene que ser igual o mas nueva que la ultima linea —');
+// Visto el 29-10-2026: ancla del 28-10 17:41 con lineas hasta el 29-10. El
+// nivel se calcula hacia atras desde el ancla, asi que restar un movimiento
+// que el ancla todavia no vio corre TODA la serie.
+chk('un ancla mas vieja que la ultima linea no sirve',
+    S.anclaAlDia('2026-10-28','2026-10-29').ok===false);
+chk('y dice las dos fechas',
+    /28.*29|29/.test(S.anclaAlDia('2026-10-28','2026-10-29').motivo) &&
+    /toda la serie queda corrida/.test(S.anclaAlDia('2026-10-28','2026-10-29').motivo),
+    S.anclaAlDia('2026-10-28','2026-10-29').motivo);
+chk('el mismo dia si sirve', S.anclaAlDia('2026-10-29','2026-10-29').ok===true);
+chk('un ancla mas nueva si sirve', S.anclaAlDia('2026-10-30','2026-10-29').ok===true);
+chk('acepta una marca de tiempo completa', S.anclaAlDia('2026-10-29T14:39:00Z','2026-10-29').ok===true);
+chk('sin fecha de lectura no se puede saber', S.anclaAlDia('','2026-10-29').ok===false);
+chk('sin lineas no hay con que comparar', S.anclaAlDia('2026-10-28','').ok===true);
+chk('una fecha mal escrita no se da por buena', S.anclaAlDia('28-10-2026','2026-10-29').ok===false);
+
 console.log('\n— el veredicto —');
 const SERIES=[{whs:'A',dias:[{dia:'d',cierre:5}]},{whs:'B',dias:[{dia:'d',cierre:1}]}];
-const LEY_OK={suma:0,cumple:true,explicadoPorUnaPunta:true};
-let v = S.veredicto(SERIES,[],LEY_OK);
+const CUAD_OK={suma:150,esperado:150,diferencia:0,cuadra:true};
+const ANC_OK={ok:true,motivo:null};
+let v = S.veredicto(SERIES,[],CUAD_OK,ANC_OK);
 chk('todo limpio dicta que si', v.nivel==='si', v.nivel);
 chk('y dice cuantas bodegas cerro', /2 bodegas de planta/.test(v.texto), v.texto);
-v = S.veredicto(SERIES,IMP,LEY_OK);
+v = S.veredicto(SERIES,IMP,CUAD_OK,ANC_OK);
 chk('con un nivel imposible manda a revisar', v.nivel==='revisar' && /NEGATIVO/.test(v.texto), v.texto);
 chk('y lo nombra con su dia', /RT13-100 \(-1\.250 el 2026-10-26\)/.test(v.texto), v.texto);
-v = S.veredicto(SERIES,[],{suma:500,cumple:false,explicadoPorUnaPunta:false});
-chk('un descuadre sin explicar manda a revisar', v.nivel==='revisar' && /\+500/.test(v.texto), v.texto);
-v = S.veredicto(SERIES,[],{suma:500,cumple:false,explicadoPorUnaPunta:true});
-chk('un descuadre que explican las lineas de una punta no alarma', v.nivel==='si', v.texto);
-chk('sin bodegas no hay veredicto', S.veredicto([],[],LEY_OK).nivel==='sin datos');
+// el nivel negativo esta en SAP, medido contra OINM: decir "falta movimiento"
+// manda a buscar donde no hay nada
+chk('y no culpa al calculo', /SAP tiene esos dias en negativo/.test(v.texto) &&
+    /FECHA del documento/.test(v.texto) && !/falta movimiento/.test(v.texto), v.texto);
+v = S.veredicto(SERIES,[],{suma:500,esperado:150,diferencia:350,cuadra:false},ANC_OK);
+chk('un descuadre contra la produccion manda a revisar',
+    v.nivel==='revisar' && /\+350 sin explicar/.test(v.texto), v.texto);
+chk('y dice que eso si es una linea mal leida', /linea leida mal/.test(v.texto), v.texto);
+v = S.veredicto(SERIES,[],CUAD_OK,{ok:false,motivo:'el ancla se leyo antes'});
+chk('un ancla vieja manda a revisar', v.nivel==='revisar' && /ANCLA/.test(v.texto), v.texto);
+chk('sin bodegas no hay veredicto', S.veredicto([],[],CUAD_OK,ANC_OK).nivel==='sin datos');
 
 console.log('\n'+ok+' ok, '+fail+' fallas\n');
 process.exit(fail?1:0);

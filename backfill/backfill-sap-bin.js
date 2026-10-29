@@ -138,18 +138,64 @@ const CAMPO_HACIA = 'WarehouseCode';
  *  Una punta ausente queda en null y NO se inventa: hay lineas que mueven
  *  contra algo que no es una bodega, y taparlas seria perder justo la
  *  informacion de que existen. */
-function lineasDeDocumento(doc, claveLineas, item) {
+/*  LAS TRES ENTIDADES QUE MUEVEN EL PALLET, y en que direccion.
+ *
+ *  Medido el 29-10-2026 con sonda-cantidad-linea.js: la cadena de planta NO
+ *  son traspasos. Inspeccion SALE por salida de mercancias y reparacion y
+ *  pintura ENTRAN por entrada de mercancias — las dos contra una orden de
+ *  fabricacion (BaseType 202). Leyendo solo StockTransfers se veia media
+ *  planta: inspeccion recibia y no despachaba nunca, y su nivel daba -76.636.
+ *
+ *  Un documento de salida o de entrada tiene UNA sola bodega en la linea, y
+ *  eso es correcto: una salida de mercancias saca pallets sin contraparte.
+ *  Por eso cada entidad declara que punta llena.
+ *
+ *  CUAL ES LA CANTIDAD, tambien medido y no supuesto: Quantity, que ademas
+ *  coincide con InventoryQuantity en las 288 lineas del mes. No hay unidad de
+ *  medida de por medio ni documentos anulados que descontar. Se verifico
+ *  contra el nivel que reporta SAP: con estas cantidades SANTIAGO INSPECCION
+ *  abre octubre en +234 y con las de OINM en -5.661, que es imposible. */
+const ENTIDADES = [
+  { entidad: 'StockTransfers',      tipo: 'traspaso', direccion: 'ambas' },
+  { entidad: 'InventoryGenExits',   tipo: 'salida',   direccion: 'sale'  },
+  { entidad: 'InventoryGenEntries', tipo: 'entrada',  direccion: 'entra' },
+];
+
+/** Las entidades que el recorrido extra tiene que leer: todas MENOS la que ya
+ *  se leyo en la fase de traspasos. Volver a incluirla duplicaria cada linea
+ *  de traspaso del mes, y dejarla fuera a ella o a cualquier otra vuelve a
+ *  dejar la planta a medias. */
+function entidadesExtra() {
+  return ENTIDADES.filter(e => e.entidad !== ENTIDAD);
+}
+
+/** Como se lee una entidad. Si --entidad apunta a una que no esta en la tabla
+ *  se la trata como traspaso, que es lo que era antes de medir las tres. */
+function comoSeLee(nombre) {
+  for (const e of ENTIDADES) if (e.entidad === nombre) return e;
+  return { entidad: nombre, tipo: 'traspaso', direccion: 'ambas' };
+}
+const PRINCIPAL = comoSeLee(ENTIDAD);
+
+/** La linea de movimiento, sea cual sea la entidad. La direccion decide que
+ *  punta se llena; una punta que el documento no tiene queda en null y NO se
+ *  inventa, porque "no hay contraparte" es informacion, no un hueco. */
+function lineasDeDocumento(doc, claveLineas, item, direccion, tipo) {
   const out = [];
   const lineas = (doc && claveLineas && doc[claveLineas]) || [];
   const lee = v => (typeof v === 'string' && v.trim()) ? v.trim() : null;
+  const dir = direccion || 'ambas';
   for (const l of lineas) {
     if (!l) continue;
     if (item && String(l.ItemCode || '') !== String(item)) continue;
     const q = Number(l.Quantity);
+    const bod = lee(l[CAMPO_HACIA]);
     out.push({ DocEntry: doc.DocEntry, DocNum: doc.DocNum,
                DocDate: String(doc.DocDate || '').slice(0, 10),
                LineNum: l.LineNum, ItemCode: l.ItemCode,
-               desde: lee(l[CAMPO_DESDE]), hacia: lee(l[CAMPO_HACIA]),
+               tipo: tipo || 'traspaso',
+               desde: dir === 'sale' ? bod : (dir === 'entra' ? null : lee(l[CAMPO_DESDE])),
+               hacia: dir === 'sale' ? null : bod,
                cantidad: isFinite(q) ? q : 0 });
   }
   return out;
@@ -359,7 +405,8 @@ function atribuir(filas, mapa) {
 }
 
 module.exports = { corteDeVentana, partirEntries, fusionarFilas, deltaDeAsignacion, filasDeDocumento,
-                   lineasDeDocumento, ventanaUsable, CAMPO_DESDE, CAMPO_HACIA, PREFIJO_LINEAS, urlLista, urlPorClave,
+                   lineasDeDocumento, ventanaUsable, CAMPO_DESDE, CAMPO_HACIA, PREFIJO_LINEAS, ENTIDADES, entidadesExtra, comoSeLee,
+                   urlLista, urlPorClave,
                    saldoPorBin, atribuir, controlDePuntas, urlSociosPorPrefijo,
                    OPCIONES, BANDERAS };
 
@@ -588,7 +635,7 @@ async function unMes(ses, raiz, cc, mes) {
         filas.push.apply(filas, res.filas);
         raros.push.apply(raros, res.raros);
         // El movimiento de bodega de la linea, que es lo unico que ve la planta.
-        lineas.push.apply(lineas, lineasDeDocumento(doc, kl, ITEM));
+        lineas.push.apply(lineas, lineasDeDocumento(doc, kl, ITEM, PRINCIPAL.direccion, PRINCIPAL.tipo));
       } catch (e) { fallidos.push({ DocEntry: de, error: String(e.message).slice(0, 200) }); }
     }));
     hechos += lote.length;
@@ -600,6 +647,44 @@ async function unMes(ses, raiz, cc, mes) {
     }
   }
   process.stdout.write('\n');
+
+  // LAS OTRAS DOS ENTIDADES. Solo aportan lineas de movimiento de bodega: no
+  // tienen asignacion de ubicacion, asi que no tocan ni filas ni el control de
+  // puntas. Sin esto la planta se ve a medias —inspeccion recibe y no despacha
+  // nunca— y su nivel se va a negativo.
+  for (const E of entidadesExtra()) {
+    const cl = [];
+    for (let sk = 0; ; sk += PAGINA) {
+      const r = await conReintentos(async () => {
+        const x = await ses.get(urlLista(raiz, E.entidad, CAMPO_FECHA, desde, hasta, PAGINA, sk));
+        if (x.status !== 200) throw errorSap(x, E.entidad + ' ' + mes + ' skip ' + sk);
+        return x;
+      });
+      const pag = (r.json && r.json.value) || [];
+      for (const d of pag) cl.push({ DocEntry: d.DocEntry, DocDate: d[CAMPO_FECHA] });
+      if (pag.length < PAGINA) break;     // se avanza por lo RECIBIDO, no por lo pedido
+    }
+    const pedir = partirEntries(cl, corte).traer;
+    let n = 0;
+    for (let i = 0; i < pedir.length; i += CONC) {
+      await Promise.all(pedir.slice(i, i + CONC).map(async de => {
+        try {
+          const r = await conReintentos(async () => {
+            const x = await ses.get(urlPorClave(raiz, E.entidad, de));
+            if (x.status !== 200) throw errorSap(x, E.entidad + '(' + de + ')');
+            return x;
+          });
+          const ls = lineasDeDocumento(r.json, S.nombreLineas(r.json), ITEM, E.direccion, E.tipo);
+          lineas.push.apply(lineas, ls);
+          n += ls.length;
+        } catch (e) { fallidos.push({ entidad: E.entidad, DocEntry: de, error: String(e.message).slice(0, 200) }); }
+      }));
+      if (PAUSA) await new Promise(r => setTimeout(r, PAUSA));
+    }
+    console.log('  ' + mes + ': ' + E.entidad + ' · ' + mil(cl.length) + ' documentos' +
+                (corte ? ' (' + mil(pedir.length) + ' en la ventana)' : '') + ' · ' + mil(n) + ' lineas');
+  }
+
   const todas = fusionarFilas(viejas, filas, corte);
   const todasL = fusionarFilas(viejasLineas, lineas, corte);
   return { mes, desde, hasta, filas: todas, lineas: todasL, docs: entries.length, fallidos, raros,
@@ -664,6 +749,9 @@ async function main() {
       _campos_sap: CAMPO_DESDE + ' (origen) / ' + CAMPO_HACIA + ' (destino)',
       _confirmado: 'backfill/sonda-planta-lineas.js contra SAP el 2026-10-27',
       _item: ITEM, _docs: res.docs, _lineas: (res.lineas || []).length,
+      _entidades: ENTIDADES.map(e => e.entidad).join(', '),
+      _por_tipo: (res.lineas || []).reduce((a, l) => {
+        const k = (l && l.tipo) || 'sin tipo'; a[k] = (a[k] || 0) + 1; return a; }, {}),
       _guardado: new Date().toISOString(),
       _desde_ventana: res.corte || null,
       lineas: res.lineas || [],

@@ -3417,6 +3417,19 @@ document.addEventListener('click', function(e){
   .hw-rotar #hw-aviso .hw-alt { animation:hw-msgB 11s ease-in-out infinite; }
   @keyframes hw-msgA{ 0%,42%{opacity:1} 50%,92%{opacity:0} 100%{opacity:1} }
   @keyframes hw-msgB{ 0%,42%{opacity:0} 50%,92%{opacity:1} 100%{opacity:0} }
+  /* La píldora suelta los murciélagos a pedido. El estado clickeable lo
+     enciende el script con .hw-click y SÓLO si el vuelo puede ocurrir: con
+     prefers-reduced-motion no vuela nada, y un cursor de mano ahí prometería
+     algo que no va a pasar. */
+  #hw-aviso.hw-click{ pointer-events:auto;cursor:pointer;-webkit-user-select:none;user-select:none;
+    transition:transform .12s ease,border-color .15s ease,box-shadow .15s ease; }
+  #hw-aviso.hw-click:hover{ border-color:rgba(232,128,31,.62);
+    box-shadow:0 0 0 1px rgba(0,0,0,.25) inset,0 2px 14px rgba(232,128,31,.30); }
+  /* el transform completo, porque el de base centra la píldora */
+  #hw-aviso.hw-click:active{ transform:translate(-50%,-50%) scale(.96); }
+  #hw-aviso.hw-click:focus-visible{ outline:2px solid #E8801F;outline-offset:2px; }
+  /* mientras hay un vuelo en curso el clic no hace nada: se nota en el cursor */
+  #hw-aviso.hw-click.hw-volando{ cursor:default; }
   @media (max-width:1100px){ #hw-aviso{ display:none; } }
 
   /* 3 · sombrero de bruja sobre la R */
@@ -3510,12 +3523,34 @@ document.addEventListener('click', function(e){
     /* 2 · aviso central — sólo cerca de la fecha */
     if (HW.aviso && FUERTE){
       var a = document.createElement('div');
-      a.id='hw-aviso'; a.setAttribute('aria-hidden','true');
+      a.id='hw-aviso';
+      /* Si los murciélagos se pueden soltar a pedido, esto deja de ser adorno
+         y pasa a ser un control: rol, foco y teclado. Si no (movimiento
+         reducido o vuelo apagado), queda decorativo y fuera del foco, como
+         estaba. */
+      var clickeable = HW.vuelo && !reduce;
+      if (clickeable){
+        a.className = 'hw-click';
+        a.setAttribute('role','button');
+        a.setAttribute('tabindex','0');
+        a.setAttribute('aria-label', HW.msg1 + ' — soltar los murciélagos');
+        a.title = 'Soltar los murciélagos';
+      } else {
+        a.setAttribute('aria-hidden','true');
+      }
       var ico = '<svg class="hw-ico" viewBox="-9 -9.5 18 18">'+CALABAZA+'</svg>';
       a.innerHTML =
         '<span class="hw-msg hw-base">'+ico+'<span class="hw-txt">'+HW.msg1+'</span></span>'+
         (HW.rotar ? '<span class="hw-msg hw-alt">'+ico+'<span class="hw-txt">'+HW.msg2+'</span></span>' : '');
       bar.appendChild(a);
+      if (clickeable){
+        a.addEventListener('click', vuelo);
+        /* Un botón de verdad responde a Enter y a espacio. El preventDefault
+           del espacio es para que no haga scroll de la página. */
+        a.addEventListener('keydown', function(e){
+          if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar'){ e.preventDefault(); vuelo(); }
+        });
+      }
     }
 
     /* 3 · sombrero de bruja sobre la R */
@@ -3635,6 +3670,11 @@ document.addEventListener('click', function(e){
 
   /* ── murciélagos cruzando ──────────────────────────────────────── */
   function vuelo(){
+    /* UN vuelo a la vez. Dos canvas encimados no se ven "el doble": el
+       clearRect de cada uno borra su propia capa y el resultado parpadea. */
+    if (document.getElementById('hw-vuelo')) return;
+    var aviso = document.getElementById('hw-aviso');
+    if (aviso) aviso.classList.add('hw-volando');
     var cv = document.createElement('canvas');
     cv.id='hw-vuelo'; cv.setAttribute('aria-hidden','true');
     document.body.appendChild(cv);
@@ -3670,7 +3710,10 @@ document.addEventListener('click', function(e){
         ctx.restore();
       }
       if (vida < 3.6) requestAnimationFrame(anim);
-      else if (cv.parentNode) cv.parentNode.removeChild(cv);
+      else {
+        if (cv.parentNode) cv.parentNode.removeChild(cv);
+        if (aviso) aviso.classList.remove('hw-volando');
+      }
     })(t0);
   }
 

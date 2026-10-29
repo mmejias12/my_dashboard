@@ -168,6 +168,17 @@ chk('y dice cuantas bodegas cerro', /2 bodegas de planta/.test(v.texto), v.texto
 v = S.veredicto(SERIES,IMP,CUAD_OK,ANC_OK);
 chk('con un nivel imposible manda a revisar', v.nivel==='revisar' && /NEGATIVO/.test(v.texto), v.texto);
 chk('y lo nombra con su dia', /RT13-100 \(-1\.250 el 2026-10-26\)/.test(v.texto), v.texto);
+// un mensaje que dice CINCO y nombra CUATRO se lee como un error de cuenta
+const CINCO = [1,2,3,4,5].map(i => ({ whs:'B'+i, nombre:'x', cierre:-i, dia:'2026-10-0'+i }));
+const v5 = S.veredicto(SERIES, CINCO, CUAD_OK, ANC_OK);
+chk('si corta la lista dice cuantas quedaron fuera',
+    /5 bodega\(s\) con nivel NEGATIVO/.test(v5.texto) && /y 1 mas/.test(v5.texto), v5.texto);
+chk('nombra solo las primeras cuatro',
+    /B1 /.test(v5.texto) && /B4 /.test(v5.texto) && v5.texto.indexOf('B5 (') < 0, v5.texto);
+// con cuatro o menos no sobra ninguna y no se agrega la coletilla
+chk('con cuatro no dice que sobren', !/y 0 mas/.test(S.veredicto(SERIES, CINCO.slice(0,4), CUAD_OK, ANC_OK).texto) &&
+    !/ mas\./.test(S.veredicto(SERIES, CINCO.slice(0,4), CUAD_OK, ANC_OK).texto),
+    S.veredicto(SERIES, CINCO.slice(0,4), CUAD_OK, ANC_OK).texto);
 // el nivel negativo esta en SAP, medido contra OINM: decir "falta movimiento"
 // manda a buscar donde no hay nada
 chk('y no culpa al calculo', /SAP tiene esos dias en negativo/.test(v.texto) &&

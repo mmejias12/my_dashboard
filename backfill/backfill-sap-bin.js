@@ -367,6 +367,45 @@ function controlDePuntas(filas) {
   return { lineas: porLinea.size, dosPuntas, soloSale, soloEntra, ceroNeto, descuadradas };
 }
 
+/** EL RESUMEN DE LAS LINEAS DE BODEGA, por tipo de documento y por puntas.
+ *
+ *  Por que existe: la corrida del 29-10 imprimia el control de UBICACIONES
+ *  justo debajo del renglon de las lineas de bodega, indentado, y se leia como
+ *  si lo describiera. Son dos cosas distintas —una cuenta asignaciones de
+ *  ubicacion, la otra movimiento de bodega— y confundirlas es confundir si una
+ *  corrida sirve o no.
+ *
+ *  Lo que este resumen deja ver de una mirada: cuanto aporto cada entidad. Si
+ *  salida o entrada vienen en cero, la cadena de planta volvio a quedar a
+ *  medias y no hay que seguir. */
+function resumenDeLineas(lineas) {
+  const porTipo = new Map();
+  let dosPuntas = 0, soloSale = 0, soloEntra = 0, sinPuntas = 0;
+  for (const l of (lineas || [])) {
+    if (!l) continue;
+    const t = l.tipo || 'sin tipo';
+    porTipo.set(t, (porTipo.get(t) || 0) + 1);
+    const d = l.desde != null && l.desde !== '', h = l.hacia != null && l.hacia !== '';
+    if (d && h) dosPuntas++; else if (d) soloSale++; else if (h) soloEntra++; else sinPuntas++;
+  }
+  // En el orden de ENTIDADES y no alfabetico: asi el renglon se lee en el
+  // mismo orden en que se extrajo, y un tipo inesperado queda al final.
+  const orden = ENTIDADES.map(e => e.tipo);
+  const tipos = [...porTipo.keys()].sort((x, y) => {
+    const a = orden.indexOf(x), b = orden.indexOf(y);
+    return (a < 0 ? 99 : a) - (b < 0 ? 99 : b) || (x < y ? -1 : x > y ? 1 : 0);
+  }).map(t => ({ tipo: t, lineas: porTipo.get(t) }));
+  return { total: tipos.reduce((a, t) => a + t.lineas, 0), tipos,
+           dosPuntas, soloSale, soloEntra, sinPuntas };
+}
+
+/** Las entidades que no aportaron ni una linea. Vale la pena nombrarlas: una
+ *  entidad en cero no es un dato curioso, es la planta a medias otra vez. */
+function entidadesSinLineas(resumen) {
+  const con = new Set(((resumen && resumen.tipos) || []).filter(t => t.lineas > 0).map(t => t.tipo));
+  return ENTIDADES.filter(e => !con.has(e.tipo)).map(e => e.entidad);
+}
+
 /** Las filas atribuidas a un cliente con el mapa de ubicaciones. Las que no se
  *  pueden atribuir se devuelven aparte: una fila sin cliente no se descarta en
  *  silencio, porque es justo la que despues no cuadra. */
@@ -407,7 +446,7 @@ function atribuir(filas, mapa) {
 module.exports = { corteDeVentana, partirEntries, fusionarFilas, deltaDeAsignacion, filasDeDocumento,
                    lineasDeDocumento, ventanaUsable, CAMPO_DESDE, CAMPO_HACIA, PREFIJO_LINEAS, ENTIDADES, entidadesExtra, comoSeLee,
                    urlLista, urlPorClave,
-                   saldoPorBin, atribuir, controlDePuntas, urlSociosPorPrefijo,
+                   saldoPorBin, atribuir, controlDePuntas, resumenDeLineas, entidadesSinLineas, urlSociosPorPrefijo,
                    OPCIONES, BANDERAS };
 
 // ── infraestructura ─────────────────────────────────────────────────────────
@@ -756,23 +795,36 @@ async function main() {
       _desde_ventana: res.corte || null,
       lineas: res.lineas || [],
     });
-    console.log('  ' + res.mes + ': ' + mil(res.filas.length) + ' filas · ' +
+    // DOS BLOQUES, cada uno rotulado con lo que mide. Antes el control de
+    // ubicaciones salia indentado debajo del renglon de las lineas de bodega y
+    // se leia como si las describiera.
+    console.log('  ' + res.mes + ' · UBICACIONES: ' + mil(res.filas.length) + ' filas · ' +
                 mil(sb.porBin.size) + ' ubicaciones · ' + mil(n) + ' bytes' +
                 (res.fallidos.length ? '   ·  FALLIDOS: ' + res.fallidos.length : '') +
                 (res.raros.length ? '   ·  BinActionType desconocido: ' + res.raros.length : ''));
     // El control es POR LINEA. El neto del mes no es cero y no tiene por que
     // serlo: es el crecimiento neto del pool en manos de clientes.
-    console.log('  ' + res.mes + ': ' + mil((res.lineas || []).length) + ' lineas de bodega · ' +
-                mil(nl) + ' bytes   ·  ' + PREFIJO_LINEAS + res.mes + '.json');
-    console.log('     lineas: ' + mil(cp.lineas) + '   ·  con las dos puntas: ' + mil(cp.dosPuntas) +
+    console.log('     lineas de documento: ' + mil(cp.lineas) + '   ·  con las dos puntas: ' + mil(cp.dosPuntas) +
                 '   ·  solo sale: ' + mil(cp.soloSale) + '   ·  solo entra: ' + mil(cp.soloEntra));
     console.log('     neto del mes: ' + mil(sb.total) + ' pallets' +
-                '   (lo que entro al pool menos lo que salio; NO tiene que dar cero)');
+                '   (lo que entro al pool en manos de clientes menos lo que salio; NO tiene que dar cero)');
     if (cp.descuadradas.length) {
       console.log('     OJO: ' + cp.descuadradas.length + ' linea(s) con las dos puntas que NO netean cero.');
       for (const d of cp.descuadradas.slice(0, 5))
         console.log('        DocEntry ' + d.DocEntry + ' linea ' + d.LineNum + '  neto ' + d.neto);
     } else console.log('     las lineas con las dos puntas netean cero: cuadra');
+
+    const rl = resumenDeLineas(res.lineas);
+    console.log('  ' + res.mes + ' · BODEGA: ' + mil(rl.total) + ' lineas de movimiento · ' +
+                mil(nl) + ' bytes   ·  ' + PREFIJO_LINEAS + res.mes + '.json');
+    console.log('     por documento: ' + (rl.tipos.map(t => t.tipo + ' ' + mil(t.lineas)).join('   ·  ') || 'ninguna'));
+    console.log('     puntas: traspaso con origen y destino ' + mil(rl.dosPuntas) +
+                '   ·  solo origen ' + mil(rl.soloSale) + '   ·  solo destino ' + mil(rl.soloEntra) +
+                (rl.sinPuntas ? '   ·  SIN BODEGA ' + mil(rl.sinPuntas) : ''));
+    const vacias = entidadesSinLineas(rl);
+    if (vacias.length)
+      console.log('     OJO: sin una sola linea en ' + vacias.join(', ') +
+                  '. La cadena de planta queda a medias y el nivel se va a negativo.');
     totFilas += res.filas.length; totDocs += res.docs;
     totFall += res.fallidos.length; totRaros += res.raros.length;
   }

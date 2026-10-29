@@ -24,7 +24,7 @@ const DOCS=[
  {DocEntry:3,DocNum:13,StockTransferLines:[
    {ItemCode:'111',WarehouseCode:'RT13-100',Quantity:1,InventoryQuantity:1,UoMCode:'UN'}]},
  null];
-let LI=Q.lineasDeInteres(DOCS,'111','WarehouseCode','RT13-100');
+let LI=Q.lineasDeInteres(DOCS,'111',[{campo:'WarehouseCode',valor:'RT13-100'}]);
 chk('solo el item pedido', LI.length===4, String(LI.length));
 // un codigo con espacios es la misma bodega: comparar sin recortar la perderia
 chk('la bodega se recorta al comparar', LI.some(x=>x.linea.WarehouseCode==='  RT13-100  '));
@@ -37,10 +37,30 @@ chk('un booleano no entra por ninguna de las dos puertas',
     !Q.valoresDeTexto(LI,6).some(x=>x.campo==='Impreso'));
 chk('lee las dos formas de nombrar las lineas',
     LI.some(x=>x.DocEntry===3), JSON.stringify(LI.map(x=>x.DocEntry)));
-chk('sin bodega entran todas las del item', Q.lineasDeInteres(DOCS,'111','WarehouseCode',null).length===5);
-chk('sin item entran todas', Q.lineasDeInteres(DOCS,null,'WarehouseCode','RT13-100').length===5);
+chk('sin bodega entran todas las del item', Q.lineasDeInteres(DOCS,'111',[]).length===5);
+chk('sin item entran todas', Q.lineasDeInteres(DOCS,null,[{campo:'WarehouseCode',valor:'RT13-100'}]).length===5);
 chk('una linea nula no revienta', LI.length===4);
-chk('sin documentos no hay lineas', Q.lineasDeInteres(null,'111','W','X').length===0);
+chk('sin documentos no hay lineas', Q.lineasDeInteres(null,'111',[{campo:'W',valor:'X'}]).length===0);
+
+// el filtro es generico: cuando la pregunta cambia de bodega a otro campo, no
+// hay que tocar el codigo
+console.log('\n— los filtros campo=valor —');
+chk('lee varios', JSON.stringify(Q.leerFiltros('A=1,B=2').filtros)==='[{"campo":"A","valor":"1"},{"campo":"B","valor":"2"}]');
+chk('recorta espacios', Q.leerFiltros(' A = 1 ').filtros[0].campo==='A');
+chk('un valor con = adentro no se parte mal', Q.leerFiltros('A=x=y').filtros[0].valor==='x=y');
+chk('vacio no es filtro', Q.leerFiltros('').filtros.length===0 && Q.leerFiltros(null).filtros.length===0);
+chk('sin campo es error', /filtro sin campo=valor/.test(Q.leerFiltros('=1').error||''));
+chk('sin igual tambien', /filtro sin campo=valor/.test(Q.leerFiltros('A').error||''));
+chk('pasa cuando calza', Q.pasaFiltros({A:'1'},[{campo:'A',valor:'1'}])===true);
+chk('y recorta al comparar', Q.pasaFiltros({A:'  1 '},[{campo:'A',valor:'1'}])===true);
+chk('no pasa cuando no calza', Q.pasaFiltros({A:'2'},[{campo:'A',valor:'1'}])===false);
+chk('un campo ausente no pasa', Q.pasaFiltros({},[{campo:'A',valor:'1'}])===false);
+chk('sin filtros pasa todo', Q.pasaFiltros({},[])===true && Q.pasaFiltros({},null)===true);
+chk('dos filtros se cumplen los dos',
+    Q.pasaFiltros({A:'1',B:'2'},[{campo:'A',valor:'1'},{campo:'B',valor:'2'}])===true &&
+    Q.pasaFiltros({A:'1',B:'3'},[{campo:'A',valor:'1'},{campo:'B',valor:'2'}])===false);
+chk('se puede filtrar por un campo que no es bodega',
+    Q.lineasDeInteres(DOCS,'111',[{campo:'UoMCode',valor:'PAQ'}]).length===2);
 
 console.log('\n— cada campo numerico, totalizado —');
 // la gracia: NO elegir ninguno. Se suman todos y despues se mira cual calza.

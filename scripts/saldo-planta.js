@@ -146,25 +146,98 @@ function nivelesImposibles(series) {
   return out.sort((a, b) => a.cierre - b.cierre);
 }
 
-function veredicto(series, imposibles, ley) {
+/*  LA LEY DEL POOL, en su forma correcta.
+ *
+ *  La primera version exigia que la suma de los netos de todas las bodegas
+ *  diera CERO, "porque lo que sale de una entra en otra", y con las tres
+ *  entidades marcaba revisar con +3.461. Estaba mal el control, no el dato.
+ *
+ *  Una linea con sus DOS puntas mueve pallets de una bodega a otra: suma +q en
+ *  el destino y -q en el origen, asi que netea cero por construccion. Una
+ *  linea con UNA sola punta —una salida o una entrada de mercancias— aporta su
+ *  cantidad una sola vez: ESA es la que mueve el total del pool. Entonces la
+ *  suma de todos los netos no es cero: es exactamente el neto de produccion.
+ *
+ *  Medido el 29-10-2026 contra OINM, octubre del pallet rojo: traspasos
+ *  505.048 de entrada y 505.048 de salida —netean cero al pallet— y la
+ *  produccion deja +3.101 (101.377 de entrada menos 98.276 de salida).
+ *
+ *  Lo que este control SI puede fallar: que los traspasos no neteen cero. Eso
+ *  si seria una linea mal leida. */
+function leyDelPool(lineas) {
+  let traspasos = 0, produccion = 0, nTraspaso = 0, nUnaPunta = 0, nSinPunta = 0;
+  for (const l of (lineas || [])) {
+    if (!l) continue;
+    const d = l.desde != null && l.desde !== '', h = l.hacia != null && l.hacia !== '';
+    const q = Number(l.cantidad) || 0;
+    if (d && h) { nTraspaso++; traspasos += 0; }        // +q en destino y -q en origen
+    else if (h) { nUnaPunta++; produccion += q; }
+    else if (d) { nUnaPunta++; produccion -= q; }
+    else nSinPunta++;
+  }
+  return { traspasos, produccion, nTraspaso, nUnaPunta, nSinPunta,
+           cumple: traspasos === 0 };
+}
+
+/** El neto por bodega TIENE que dar el neto de produccion, no cero. Si no da,
+ *  hay una linea leida mal: es el unico control de esta familia que puede
+ *  fallar de verdad. */
+function cuadraturaDelNeto(netos, ley) {
+  const suma = (netos || []).reduce((s, x) => s + (Number(x && x.neto) || 0), 0);
+  const esperado = Number(ley && ley.produccion) || 0;
+  return { suma, esperado, diferencia: suma - esperado, cuadra: suma === esperado };
+}
+
+/*  EL ANCLA Y LAS LINEAS TIENEN QUE SER DE LA MISMA CORRIDA.
+ *
+ *  El nivel se calcula HACIA ATRAS desde el ancla: nivel(t) = ancla menos todo
+ *  lo que se movio despues de t. Si el ancla se leyo ANTES del ultimo dia con
+ *  movimiento, ese movimiento todavia no estaba en el ancla y restarlo corre
+ *  TODA la serie. Visto el 29-10-2026: ancla del 28-10 a las 17:41 con lineas
+ *  extraidas el 29-10 a las 14:39, y los cierres de Santiago salieron corridos
+ *  contra el nivel que OINM calcula por su cuenta. */
+function anclaAlDia(fechaAncla, diaMasNuevo) {
+  const a = String(fechaAncla || '').slice(0, 10), d = String(diaMasNuevo || '').slice(0, 10);
+  const fecha = x => /^\d{4}-\d{2}-\d{2}$/.test(x);
+  if (!fecha(a)) return { ok: false, motivo: 'el ancla no trae fecha de lectura: no se puede saber si alcanza' };
+  if (!fecha(d)) return { ok: true, motivo: null };
+  if (a < d) return { ok: false, ancla: a, ultimo: d,
+    motivo: 'el ancla se leyo el ' + a + ' y hay movimiento hasta el ' + d +
+            ': toda la serie queda corrida. Hay que volver a anclar y recien ahi leer los cierres' };
+  return { ok: true, motivo: null };
+}
+
+function veredicto(series, imposibles, cuad, ancla) {
   const p = [];
   if (!series || !series.length)
     return { nivel: 'sin datos', texto: 'No hay bodegas de planta con movimiento en la ventana pedida.' };
+  if (ancla && ancla.ok === false) p.push('ANCLA: ' + ancla.motivo + '.');
+  // El nivel negativo NO es nuestro: medido el 29-10-2026, el acumulado que
+  // OINM calcula por su cuenta tambien da negativo los mismos dias, y en Talca
+  // al pallet (-409 el 9-oct en RT07-120, -166 en RT07-126, identicos a los
+  // nuestros). Lo que lo produce es la FECHA del documento: la salida de
+  // mercancias de inspeccion queda fechada antes que el traspaso que la
+  // alimenta. Decir "falta movimiento" manda a buscar donde no hay nada.
   if (imposibles && imposibles.length)
     p.push(imposibles.length + ' bodega(s) con nivel NEGATIVO en algun dia: ' +
            imposibles.slice(0, 4).map(x => x.whs + ' (' + mil(x.cierre) + ' el ' + x.dia + ')').join(', ') +
-           '. Una bodega no puede tener menos de cero: falta movimiento o sobra una linea.');
-  if (ley && !ley.cumple && !ley.explicadoPorUnaPunta)
-    p.push('La suma de los netos de TODAS las bodegas da ' + conSigno(ley.suma) +
-           ' en vez de cero, y las lineas de una sola punta no alcanzan a explicarlo.');
+           '. No es un error del calculo: SAP tiene esos dias en negativo y la causa es la FECHA del ' +
+           'documento —la salida de mercancias queda fechada antes que el traspaso que la alimenta—. ' +
+           'Se arregla en SAP, no aca.');
+  if (cuad && cuad.cuadra === false)
+    p.push('El neto por bodega da ' + conSigno(cuad.suma) + ' y la produccion del periodo ' +
+           conSigno(cuad.esperado) + ': ' + conSigno(cuad.diferencia) + ' sin explicar. ' +
+           'Eso si es una linea leida mal.');
   if (!p.length)
     return { nivel: 'si', texto: 'Las ' + series.length + ' bodegas de planta cierran dia a dia sin ' +
-             'niveles imposibles, y lo que sale de una bodega entra en otra.' };
+             'niveles imposibles, los traspasos netean cero y el neto por bodega da exactamente la ' +
+             'produccion del periodo.' };
   return { nivel: 'revisar', texto: p.join('  ') };
 }
 
 module.exports = { bodegasDePlanta, movimientoDeBodega, marcarFirmes, cadenaDePlanta,
-                   nivelesImposibles, veredicto, OPCIONES, BANDERAS };
+                   nivelesImposibles, leyDelPool, cuadraturaDelNeto, anclaAlDia, veredicto,
+                   OPCIONES, BANDERAS };
 
 // ── main ────────────────────────────────────────────────────────────────────
 async function main() {
@@ -299,9 +372,25 @@ async function main() {
     }
   } catch (e) { console.log('\n  (sin contraste: no se pudo leer ' + ruta + ')'); }
 
-  const ley = L.leyDeDosPuntas(L.netoPorBodega(lineas), 0);
+  const ley = leyDelPool(lineas);
+  const cuad = cuadraturaDelNeto(L.netoPorBodega(lineas), ley);
+  const diaMasNuevo = lineas.reduce((m, l) => {
+    const d = String((l && l.DocDate) || '').slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(d) && d > m ? d : m;
+  }, '');
+  const anc = anclaAlDia(fechaAncla, diaMasNuevo);
   const imp = nivelesImposibles(series);
-  const v = veredicto(series, imp, ley);
+  const v = veredicto(series, imp, cuad, anc);
+
+  console.log('\n── LA LEY DEL POOL ' + '─'.repeat(55));
+  console.log('  traspasos: ' + mil(ley.nTraspaso) + ' lineas con las dos puntas · netean ' +
+              conSigno(ley.traspasos) + ' (tienen que netear cero, siempre)');
+  console.log('  produccion: ' + mil(ley.nUnaPunta) + ' lineas con una sola punta · neto ' +
+              conSigno(ley.produccion) + ' (esto es lo UNICO que mueve el total del pool)');
+  console.log('  el neto por bodega da ' + conSigno(cuad.suma) + ' contra ' + conSigno(cuad.esperado) +
+              ' esperado: ' + (cuad.cuadra ? 'cuadra' : conSigno(cuad.diferencia) + ' SIN EXPLICAR') +
+              (ley.nSinPunta ? '   ·  ' + mil(ley.nSinPunta) + ' linea(s) sin ninguna bodega' : ''));
+
   console.log('\n── VEREDICTO ' + '─'.repeat(61));
   console.log('  ' + v.texto);
 

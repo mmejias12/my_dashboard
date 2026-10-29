@@ -42,7 +42,7 @@ const S = require('./backfill-sap.js');
 const B = require('./backfill-sap-bin.js');      // urlLista, urlPorClave: una regla, un lugar
 
 const args = process.argv.slice(2);
-const OPCIONES = ['dia', 'entidad', 'bodega', 'esperado', 'item', 'campo', 'conc', 'pausa', 'tope'];
+const OPCIONES = ['dia', 'hasta', 'entidad', 'bodega', 'filtro', 'esperado', 'item', 'campo', 'conc', 'pausa', 'tope'];
 const BANDERAS = ['todos'];
 const opcion = (n, d) => { const p = '--' + n + '='; for (const a of args) if (a.indexOf(p) === 0) return a.slice(p.length); return d; };
 const bandera = n => args.indexOf('--' + n) >= 0;
@@ -59,11 +59,40 @@ function estaAnulado(doc) {
   return false;
 }
 
-/** Las lineas del item que tocan la bodega pedida, con la marca de anulado
- *  del documento al que pertenecen. Sin bodega entran todas. */
-function lineasDeInteres(docs, item, campoBodega, bodega) {
+/** LOS FILTROS, escritos como campo=valor.
+ *
+ *  POR QUE GENERICO y no un --bodega y nada mas: cuando los totales no
+ *  calzaron, la pregunta siguiente fue "y si partimos por TreeType", y
+ *  despues va a ser por otro campo. Un filtro que solo sabe de bodegas obliga
+ *  a tocar el codigo cada vez que cambia la pregunta. */
+function leerFiltros(texto) {
   const out = [];
-  const w = String(bodega == null ? '' : bodega).trim();
+  for (const parte of String(texto == null ? '' : texto).split(',')) {
+    const t = parte.trim();
+    if (!t) continue;
+    const i = t.indexOf('=');
+    if (i <= 0) return { error: 'filtro sin campo=valor: ' + t };
+    out.push({ campo: t.slice(0, i).trim(), valor: t.slice(i + 1).trim() });
+  }
+  return { filtros: out };
+}
+
+/** Si la linea pasa todos los filtros. Se compara recortando, porque un codigo
+ *  con espacios es el mismo codigo. */
+function pasaFiltros(linea, filtros) {
+  for (const f of (filtros || [])) {
+    if (!f || !f.campo) continue;
+    const v = (linea || {})[f.campo];
+    if (v == null) return false;
+    if (String(v).trim() !== String(f.valor).trim()) return false;
+  }
+  return true;
+}
+
+/** Las lineas del item que pasan los filtros, con la marca de anulado del
+ *  documento al que pertenecen. Sin filtros entran todas. */
+function lineasDeInteres(docs, item, filtros) {
+  const out = [];
   for (const doc of (docs || [])) {
     if (!doc) continue;
     const anulado = estaAnulado(doc);
@@ -71,10 +100,7 @@ function lineasDeInteres(docs, item, campoBodega, bodega) {
     for (const l of lineas) {
       if (!l) continue;
       if (item && String(l.ItemCode == null ? '' : l.ItemCode) !== String(item)) continue;
-      if (w) {
-        const v = campoBodega ? l[campoBodega] : null;
-        if (typeof v !== 'string' || v.trim() !== w) continue;
-      }
+      if (!pasaFiltros(l, filtros)) continue;
       out.push({ linea: l, anulado, DocEntry: doc.DocEntry, DocNum: doc.DocNum });
     }
   }
@@ -166,7 +192,7 @@ function veredicto(conAnulados, sinAnulados, esperado, anuladas, totales) {
            'estamos trayendo de mas o de menos antes de construir nada encima.' };
 }
 
-module.exports = { estaAnulado, lineasDeInteres, totalesNumericos, valoresDeTexto,
+module.exports = { estaAnulado, leerFiltros, pasaFiltros, lineasDeInteres, totalesNumericos, valoresDeTexto,
                    numeroEsperado, candidatos, veredicto, OPCIONES, BANDERAS };
 
 // ── main ────────────────────────────────────────────────────────────────────
@@ -182,10 +208,20 @@ async function main() {
   }
   const dia = opcion('dia', null);
   if (!dia || !/^\d{4}-\d{2}-\d{2}$/.test(dia)) { console.error('Falta --dia=YYYY-MM-DD'); process.exit(1); }
+  // Una ventana, no un dia suelto: contra el nivel de la bodega un solo dia no
+  // zanja nada —las lecturas son a horas distintas y el margen se come la
+  // diferencia—, y sobre un mes entero el mismo margen es despreciable.
+  const hasta = opcion('hasta', dia);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(hasta) || hasta < dia) {
+    console.error('--hasta no es YYYY-MM-DD posterior o igual a --dia: ' + hasta); process.exit(1);
+  }
   const ENTIDAD = opcion('entidad', 'InventoryGenExits');
   const ITEM = opcion('item', '11111111110');
   const BODEGA = opcion('bodega', null);
   const CAMPO = opcion('campo', 'WarehouseCode');
+  const lf = leerFiltros(opcion('filtro', ''));
+  if (lf.error) { console.error(lf.error); process.exit(1); }
+  const FILTROS = (BODEGA ? [{ campo: CAMPO, valor: BODEGA }] : []).concat(lf.filtros);
   const ESPERADO = opcion('esperado', null);
   const CONC = Math.max(1, Math.min(16, parseInt(opcion('conc', '6'), 10) || 6));
   const PAUSA = Math.max(0, parseInt(opcion('pausa', '0'), 10) || 0);
@@ -193,21 +229,22 @@ async function main() {
 
   const raiz = S.raizDatos(process.env.SAP_LOGIN_URL);
   const ses = S.crearSesion();
-  console.log('Con que numero se mide una linea   ·  ' + dia + '   ·  ' + ENTIDAD);
+  console.log('Con que numero se mide una linea   ·  ' + dia +
+              (hasta !== dia ? ' a ' + hasta : '') + '   ·  ' + ENTIDAD);
   console.log('Raiz: ' + raiz + '   ·  base ' + process.env.SAP_DB);
   console.log('SOLO LEE. Totaliza TODOS los campos numericos; no elige ninguno por su nombre.');
-  console.log('item ' + ITEM + (BODEGA ? '   ·  bodega ' + BODEGA + ' (campo ' + CAMPO + ')' : '') +
+  console.log('item ' + ITEM + (FILTROS.length ? '   ·  ' + FILTROS.map(f => f.campo + '=' + f.valor).join('  ') : '') +
               (ESPERADO != null ? '   ·  esperado ' + mil(ESPERADO) : '   ·  SIN --esperado') + '\n');
 
   const claves = [];
   for (let skip = 0; ; skip += 200) {
-    const r = await ses.get(B.urlLista(raiz, ENTIDAD, 'DocDate', dia, dia, 200, skip));
+    const r = await ses.get(B.urlLista(raiz, ENTIDAD, 'DocDate', dia, hasta, 200, skip));
     if (r.status !== 200) { console.error('lista HTTP ' + r.status); process.exit(1); }
     const v = (r.json && r.json.value) || [];
     for (const d of v) claves.push(d.DocEntry);
     if (v.length < 200) break;      // se avanza por lo RECIBIDO, no por lo pedido
   }
-  console.log('  documentos del dia: ' + mil(claves.length));
+  console.log('  documentos en la ventana: ' + mil(claves.length));
 
   const docs = [], fallidos = [];
   let hechos = 0;
@@ -230,14 +267,14 @@ async function main() {
     for (const f of fallidos.slice(0, 5)) console.log('     DocEntry ' + f.DocEntry + ': ' + f.error);
   }
 
-  const lineas = lineasDeInteres(docs, ITEM, CAMPO, BODEGA);
+  const lineas = lineasDeInteres(docs, ITEM, FILTROS);
   const anuladas = lineas.filter(x => x.anulado).length;
   const docsAnulados = docs.filter(estaAnulado).length;
   console.log('  lineas que entran: ' + mil(lineas.length) +
               '   ·  de documentos anulados: ' + mil(anuladas) +
               ' (' + mil(docsAnulados) + ' documento(s))\n');
   if (!lineas.length) {
-    console.log('  No hay lineas que cumplan el filtro. Revisa --bodega y --campo.\n');
+    console.log('  No hay lineas que cumplan el filtro. Revisa --bodega y --filtro.\n');
     return;
   }
 

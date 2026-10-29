@@ -418,6 +418,55 @@ chk('sin tipo queda como traspaso',
 chk('la cantidad es la misma en las tres',
     porDir('sale').cantidad === 300 && porDir('entra').cantidad === 300 && porDir('ambas').cantidad === 300);
 
+console.log('\n— resumenDeLineas: de una mirada, cuanto aporto cada entidad —');
+// Por que importa: la corrida del 29-10 imprimia el control de UBICACIONES
+// indentado debajo del renglon de lineas de bodega y se leia como si lo
+// describiera. Son dos medidas distintas.
+const LB = [
+  { tipo:'traspaso', desde:'RETAIL',   hacia:'RT13-100' },
+  { tipo:'traspaso', desde:'RT13-100', hacia:'RT13-102' },
+  { tipo:'traspaso', desde:'RT13-100', hacia:null       },   // traspaso a bodega sin ubicacion
+  { tipo:'salida',   desde:'RT13-100', hacia:null       },
+  { tipo:'entrada',  desde:null,       hacia:'RT13-102' },
+  { tipo:'entrada',  desde:null,       hacia:'RT13-102' },
+  { tipo:'traspaso', desde:null,       hacia:null       },   // ninguna punta es bodega
+];
+const RL = B.resumenDeLineas(LB);
+chk('el resumen cuenta todas las lineas', RL.total === 7, RL.total);
+// el orden es el de ENTIDADES y no alfabetico: se lee en el orden en que se
+// extrajo (alfabetico pondria entrada antes que salida y antes que traspaso)
+chk('los tipos salen en el orden en que se extraen',
+    RL.tipos.map(t => t.tipo + ':' + t.lineas).join(' ') === 'traspaso:4 salida:1 entrada:2',
+    JSON.stringify(RL.tipos));
+chk('las puntas se cuentan aparte',
+    RL.dosPuntas === 2 && RL.soloSale === 2 && RL.soloEntra === 2 && RL.sinPuntas === 1,
+    JSON.stringify(RL));
+chk('una linea sin tipo no se pierde',
+    B.resumenDeLineas([{ desde:'A', hacia:'B' }]).tipos[0].tipo === 'sin tipo');
+// un tipo que no esta en la tabla va al final y no se cuela entre los conocidos
+chk('un tipo inesperado queda al final',
+    B.resumenDeLineas([{ tipo:'zzz' }, { tipo:'entrada' }, { tipo:'traspaso' }])
+      .tipos.map(t => t.tipo).join(',') === 'traspaso,entrada,zzz');
+chk('un arreglo vacio da cero y no revienta',
+    B.resumenDeLineas([]).total === 0 && B.resumenDeLineas(null).total === 0 &&
+    B.resumenDeLineas([]).tipos.length === 0);
+chk('una linea nula no se cuenta', B.resumenDeLineas([null, { tipo:'salida', desde:'A' }]).total === 1);
+// una punta en cadena vacia no es una bodega: tratarla como tal pondria una
+// salida de mercancias en la columna de los traspasos
+chk('una punta vacia no cuenta como bodega',
+    B.resumenDeLineas([{ tipo:'salida', desde:'RT13-100', hacia:'' }]).soloSale === 1);
+// ESTA es la que avisa a tiempo: si salida o entrada vienen en cero, la cadena
+// de planta volvio a quedar a medias y el nivel se va a negativo
+chk('se nombra la entidad que no aporto ni una linea',
+    B.entidadesSinLineas(B.resumenDeLineas([{ tipo:'traspaso', desde:'A', hacia:'B' }])).join(',') ===
+    'InventoryGenExits,InventoryGenEntries',
+    JSON.stringify(B.entidadesSinLineas(B.resumenDeLineas([{ tipo:'traspaso' }]))));
+chk('con las tres presentes no se avisa nada', B.entidadesSinLineas(RL).length === 0);
+chk('un tipo presente pero en cero cuenta como ausente',
+    B.entidadesSinLineas({ tipos: [{ tipo:'traspaso', lineas:3 }, { tipo:'salida', lineas:0 },
+                                   { tipo:'entrada', lineas:9 }] }).join(',') === 'InventoryGenExits');
+chk('sin resumen se nombran las tres', B.entidadesSinLineas(null).length === 3);
+
 console.log('\n— ventanaUsable: un blob sin lineas no se puede fusionar —');
 // las lineas viven en su propio blob: saldo-pool lee los diez binmov dos veces
 // por cierre y no tiene por que descargar 25 MB que no usa

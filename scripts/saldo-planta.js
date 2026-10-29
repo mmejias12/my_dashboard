@@ -218,12 +218,18 @@ function veredicto(series, imposibles, cuad, ancla) {
   // nuestros). Lo que lo produce es la FECHA del documento: la salida de
   // mercancias de inspeccion queda fechada antes que el traspaso que la
   // alimenta. Decir "falta movimiento" manda a buscar donde no hay nada.
-  if (imposibles && imposibles.length)
+  // Un mensaje que dice CINCO y nombra CUATRO se lee como un error de cuenta.
+  // Si se corta la lista hay que decir cuantas quedaron fuera.
+  if (imposibles && imposibles.length) {
+    const TOPE_IMP = 4;
+    const sobran = imposibles.length - TOPE_IMP;
     p.push(imposibles.length + ' bodega(s) con nivel NEGATIVO en algun dia: ' +
-           imposibles.slice(0, 4).map(x => x.whs + ' (' + mil(x.cierre) + ' el ' + x.dia + ')').join(', ') +
+           imposibles.slice(0, TOPE_IMP).map(x => x.whs + ' (' + mil(x.cierre) + ' el ' + x.dia + ')').join(', ') +
+           (sobran > 0 ? ' y ' + sobran + ' mas' : '') +
            '. No es un error del calculo: SAP tiene esos dias en negativo y la causa es la FECHA del ' +
            'documento —la salida de mercancias queda fechada antes que el traspaso que la alimenta—. ' +
            'Se arregla en SAP, no aca.');
+  }
   if (cuad && cuad.cuadra === false)
     p.push('El neto por bodega da ' + conSigno(cuad.suma) + ' y la produccion del periodo ' +
            conSigno(cuad.esperado) + ': ' + conSigno(cuad.diferencia) + ' sin explicar. ' +

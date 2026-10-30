@@ -111,13 +111,22 @@ if ($LASTEXITCODE -ne 0) { Muere 'fallo CLIENTES' }
 #     asi que si el ancla fuera mas vieja que las lineas toda la serie quedaria
 #     corrida. Aca el orden lo garantiza y el aviso de "ancla corrida" no puede
 #     aparecer.
-#     Los dos meses son el de la ventana y el actual, los mismos del paso 1:
-#     son los unicos con blob lineasbod/ garantizado.
+#     EL MES ANTERIOR Y EL ACTUAL, no la ventana de extraccion. $mesIni es la
+#     ventana de TRES DIAS del paso 1 y casi siempre vale lo mismo que $mes:
+#     usarla aca dejaria la vista con solo el mes en curso, y el dia 1 con un
+#     solo dia. El mes anterior da contexto siempre.
 #     NO MATA LA CORRIDA. Si falla, el tablero se arma igual sin esa seccion:
 #     armar-tablero-stock trata planta.json como entrada opcional. Una seccion
 #     nueva no puede dejar a gerencia sin el tablero.
-Paso '4/7' 'calculando la distribucion diaria de planta'
-node scripts/saldo-planta.js --meses="$mesIni,$mes" --json="$dir/planta.json"
+$mesPrev = (Get-Date -Day 1).AddDays(-1).ToString('yyyy-MM')
+Paso '4/7' "calculando la distribucion diaria de planta ($mesPrev..$mes)"
+node scripts/saldo-planta.js --meses="$mesPrev,$mes" --json="$dir/planta.json"
+if ($LASTEXITCODE -ne 0) {
+  # El mes anterior puede no tener blob lineasbod/ todavia: se reintenta con
+  # el mes en curso solo, que es mejor que quedarse sin la seccion.
+  Write-Warning "no se pudo con $mesPrev (falta su blob de lineas?): se reintenta solo con $mes"
+  node scripts/saldo-planta.js --meses="$mes" --json="$dir/planta.json"
+}
 if ($LASTEXITCODE -ne 0) {
   Write-Warning 'fallo la distribucion diaria de planta: el tablero se arma sin esa seccion'
   Remove-Item (Join-Path $dir 'planta.json') -ErrorAction SilentlyContinue

@@ -207,6 +207,33 @@ function anclaAlDia(fechaAncla, diaMasNuevo) {
   return { ok: true, motivo: null };
 }
 
+/*  LO QUE SE ESCRIBE EN EL JSON, aparte de main() para poder probarlo.
+ *
+ *  El json lleva SU PROPIO VEREDICTO. Sin eso, quien lo consume no tiene como
+ *  saber que la serie salio corrida: el aviso se lo lleva la consola y el
+ *  archivo se ve igual de sano. Con ancla_al_dia en false, armar-tablero se
+ *  niega a dibujarla en vez de publicar numeros que no calzan con el saldo
+ *  por bodega de mas arriba. */
+function payloadJson(p) {
+  const x = p || {};
+  const anc = x.ancla || {}, ver = x.veredicto || {};
+  return {
+    _que_es: 'Stock de planta por bodega y por dia. El cierre de cada dia es al termino del dia; ' +
+             'el del dia en curso va con firme:false porque todavia le pueden entrar movimientos.',
+    _ojo: anc.ok ? null : 'SERIE CORRIDA: ' + (anc.motivo || 'no se pudo verificar el ancla'),
+    generado: x.generado || null,
+    ancla: x.anclaLeida || null,
+    meses: x.meses || [],
+    ancla_al_dia: anc.ok === true,
+    veredicto: { nivel: ver.nivel || null, texto: ver.texto || null },
+    indicador: Number(x.indicador) || 0,
+    fueraDelIndicador: Number(x.fueraDelIndicador) || 0,
+    cierreFirme: x.cierreFirme || null,
+    bodegas: x.bodegas || [],
+    cadena: x.cadena || [],
+  };
+}
+
 function veredicto(series, imposibles, cuad, ancla) {
   const p = [];
   if (!series || !series.length)
@@ -242,7 +269,7 @@ function veredicto(series, imposibles, cuad, ancla) {
 }
 
 module.exports = { bodegasDePlanta, movimientoDeBodega, marcarFirmes, cadenaDePlanta,
-                   nivelesImposibles, leyDelPool, cuadraturaDelNeto, anclaAlDia, veredicto,
+                   nivelesImposibles, leyDelPool, cuadraturaDelNeto, anclaAlDia, payloadJson, veredicto,
                    OPCIONES, BANDERAS };
 
 // ── main ────────────────────────────────────────────────────────────────────
@@ -402,13 +429,12 @@ async function main() {
 
   const salida = opcion('json', null);
   if (salida) {
-    fs.writeFileSync(salida, JSON.stringify({
-      _que_es: 'Stock de planta por bodega y por dia. El cierre de cada dia es al termino del dia; ' +
-               'el del dia en curso va con firme:false porque todavia le pueden entrar movimientos.',
-      generado: new Date().toISOString(), ancla: bod.generado || null, meses,
+    fs.writeFileSync(salida, JSON.stringify(payloadJson({
+      generado: new Date().toISOString(), anclaLeida: bod.generado || null, meses,
+      ancla: anc, veredicto: v,
       indicador: nueve, fueraDelIndicador: resto, cierreFirme: diaFirme,
       bodegas: series, cadena: cadenaDePlanta(lineas, conjunto).aristas,
-    }, null, 1), 'utf8');
+    }), null, 1), 'utf8');
     console.log('\n  escrito: ' + salida);
   }
   console.log('');

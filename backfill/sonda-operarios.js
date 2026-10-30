@@ -10,12 +10,16 @@
 //  OWOR.U_HX_OPERARIO, que apunta a la tabla de usuario @HX_OPERARIOS. NO
 //  esta en el movimiento de inventario, que es donde se busco primero.
 //
-//  Medido el 29-10-2026 sobre la exportacion de RRHH (3.355 ordenes, enero a
-//  octubre): el 49,6% de los pallets planificados cuelga de una orden sin un
-//  RUT valido. El pintado de Santiago tiene 140 ordenes con el operario EN
-//  BLANCO (505.448 pallets) y la reparacion de Santiago tiene un tercio de su
-//  produccion bajo codigos de relleno (333-3, 111-3, 1111111-3). Talca esta
-//  limpio. Dos operarios tienen una FECHA como codigo.
+//  Medido contra SAP el 30-10-2026, periodo 21-sep a 19-oct: de 238.397
+//  pallets producidos, 169.235 (71%) cuelgan de una orden sin un RUT. La
+//  INSPECCION entera —108.535 pallets— no trae operario, y el pintado de
+//  Santiago tampoco. Reparacion si lo trae, pero un tercio bajo codigos de
+//  relleno (777-7, 9999-2, 333-3, 111-3, 11-1). Talca esta limpio.
+//
+//  OJO CON LEER ESTO DESDE UN EXCEL: el codigo 11-1 abierto en Excel se
+//  convierte en la fecha 11-ene. Lo que parecia "un operario con una fecha
+//  como codigo" era la planilla, no SAP. Por eso esta sonda lee del Service
+//  Layer y no de una exportacion.
 //
 //  POR QUE IMPORTA QUE EL CODIGO SEA UN RUT. El bono viaja por RUT de punta a
 //  punta: la planilla de produccion, la hoja que recibe RRHH y Talana usan el
@@ -41,7 +45,7 @@
 const S = require('./backfill-sap.js');
 
 const args = process.argv.slice(2);
-const OPCIONES = ['desde', 'hasta', 'tabla', 'campo', 'tope', 'pagina'];
+const OPCIONES = ['desde', 'hasta', 'tabla', 'campo', 'tope', 'pagina', 'item'];
 const BANDERAS = ['detalle'];
 const opcion = (n, d) => { const p = '--' + n + '='; for (const a of args) if (a.indexOf(p) === 0) return a.slice(p.length); return d; };
 const bandera = n => args.indexOf('--' + n) >= 0;
@@ -142,14 +146,14 @@ function cantidadDeOrden(orden) {
 /** El resumen por proceso: cuanto cuelga de un operario identificable y
  *  cuanto no. Lo que no se puede atribuir no se reparte ni se descarta: se
  *  cuenta aparte. */
-function coberturaPorProceso(ordenes, nombres) {
+function coberturaPorProceso(ordenes, nombres, itemPallet) {
   const m = new Map();
   const nom = nombres instanceof Map ? nombres : new Map(Object.entries(nombres || {}));
   for (const o of (ordenes || [])) {
     if (!o) continue;
     const k = o.item || '(sin item)';
-    const e = m.get(k) || { item: k, ordenes: 0, total: 0, conRut: 0, sinOperario: 0,
-                            codigoMalo: 0, noPersona: 0 };
+    const e = m.get(k) || { item: k, familia: familiaDeItem(k, itemPallet), ordenes: 0,
+                            total: 0, conRut: 0, sinOperario: 0, codigoMalo: 0, noPersona: 0 };
     const { valor } = cantidadDeOrden(o);
     e.ordenes++; e.total += valor;
     const c = clasificarCodigo(o.operario);
@@ -184,6 +188,28 @@ function codigosAArreglar(ordenes, nombres) {
                                         (a.codigo < b.codigo ? -1 : a.codigo > b.codigo ? 1 : 0));
 }
 
+/*  NO SE SUMAN PALLETS CON TABLAS.
+ *
+ *  La primera corrida contra SAP imprimio "300.594 de 403.095 (74,6%)" y ese
+ *  numero no significa nada: sumaba 238.397 pallets con 164.698 tablas, tacos
+ *  y varas. REDTEC fabrica sus propios semielaborados, asi que entre las
+ *  ordenes de fabricacion conviven las dos cosas.
+ *
+ *  La regla: produce pallets la orden cuyo item es el pallet —o una variante
+ *  suya, los semielaborados <item>-1 y <item>-2— o cuyo codigo nombra el
+ *  pallet (REP-PAL-ROJOS, PIN-PAL-ROJOS, INSP-PAL-ROJOS). Lo demas es insumo.
+ *  CONVER-PINT-ROJA convierte pintura y cae del lado correcto solo.
+ *
+ *  Se declara aca y se imprime en la corrida, para que se pueda discutir la
+ *  regla en vez de descubrirla leyendo el codigo. */
+function familiaDeItem(item, itemPallet) {
+  const i = String(item == null ? '' : item).trim().toUpperCase();
+  if (!i) return 'insumo';
+  const pal = String(itemPallet == null ? '' : itemPallet).trim().toUpperCase();
+  if (pal && (i === pal || i.indexOf(pal + '-') === 0)) return 'pallet';
+  return /PAL/.test(i) ? 'pallet' : 'insumo';
+}
+
 /*  UN CODIGO USADO EN DOS PLANTAS ES UNA SENAL, no un dato curioso.
  *
  *  Una persona trabaja en una planta. Si el mismo codigo aparece produciendo
@@ -208,30 +234,50 @@ function codigosEnDosPlantas(ordenes, nombres) {
     .sort((a, b) => (b.SANTIAGO + b.TALCA) - (a.SANTIAGO + a.TALCA));
 }
 
-/** El veredicto. Un numero sin umbral no dice si hay que hacer algo. */
+/** El total por familia. Cada una lleva su propia cuenta porque sus unidades
+ *  no son comparables. */
+function porFamilia(cobertura) {
+  const m = new Map();
+  for (const c of (cobertura || [])) {
+    const f = c.familia || 'insumo';
+    const e = m.get(f) || { familia: f, total: 0, conRut: 0, procesos: 0 };
+    e.total += c.total; e.conRut += c.conRut; e.procesos++;
+    m.set(f, e);
+  }
+  return [...m.values()].sort((a, b) => b.total - a.total ||
+                                        (a.familia < b.familia ? -1 : 1));
+}
+
+/** El veredicto, POR FAMILIA. Un solo porcentaje sobre pallets mas tablas no
+ *  dice nada, y el que importa para el bono es el de los pallets. */
 function veredicto(cobertura, arreglar, dosPlantas, cual) {
-  const tot = (cobertura || []).reduce((s, c) => s + c.total, 0);
-  const ok = (cobertura || []).reduce((s, c) => s + c.conRut, 0);
+  const fam = porFamilia(cobertura);
+  const tot = fam.reduce((s, f) => s + f.total, 0);
   if (!tot) return { nivel: 'sin datos', texto: 'No hay ordenes de fabricacion en el periodo pedido.' };
   const p = [];
-  const malo = tot - ok;
-  p.push(mil(malo) + ' de ' + mil(tot) + ' (' + pct(malo, tot) + ') de la produccion cuelga de una ' +
-         'orden sin un RUT que identifique a una persona.');
+  for (const f of fam) {
+    const malo = f.total - f.conRut;
+    p.push((f.familia === 'pallet' ? 'PALLETS' : 'INSUMOS') + ': ' + mil(malo) + ' de ' + mil(f.total) +
+           ' (' + pct(malo, f.total) + ') cuelga de una orden sin un RUT que identifique a una persona.');
+  }
   if (dosPlantas && dosPlantas.length)
     p.push(dosPlantas.length + ' codigo(s) producen en las DOS plantas, que es la firma de un codigo ' +
            'compartido por dos personas: ' + dosPlantas.slice(0, 3).map(x => x.codigo).join(', ') + '.');
   if (cual === 'planificada')
     p.push('OJO: SAP no devolvio la cantidad COMPLETADA y se esta midiendo sobre la PLANIFICADA. ' +
            'Un bono sobre lo planificado paga por lo que se pensaba hacer.');
-  const nivel = malo === 0 ? 'si' : (malo / tot > 0.05 ? 'no sirve para pagar' : 'revisar');
-  if (malo === 0)
-    return { nivel: 'si', texto: 'Las ' + mil(tot) + ' unidades del periodo cuelgan de un RUT valido.' +
-             (p.length > 1 ? '  ' + p.slice(1).join('  ') : '') };
+  // El bono de produccion se paga por pallets: ESA es la familia que manda.
+  const pal = fam.find(f => f.familia === 'pallet');
+  const base = pal || fam[0];
+  const malo = base.total - base.conRut;
+  const nivel = malo === 0 ? 'si' : (malo / base.total > 0.05 ? 'no sirve para pagar' : 'revisar');
+  if (malo === 0 && fam.length === 1)
+    return { nivel: 'si', texto: 'Las ' + mil(tot) + ' unidades del periodo cuelgan de un RUT valido.' };
   return { nivel, texto: p.join('  ') };
 }
 
 module.exports = { dv, partirRut, clasificarCodigo, pareceProceso, normalizarOrden, cantidadDeOrden,
-                   coberturaPorProceso, codigosAArreglar, plantaDeItem, codigosEnDosPlantas,
+                   coberturaPorProceso, codigosAArreglar, familiaDeItem, porFamilia, plantaDeItem, codigosEnDosPlantas,
                    veredicto, OPCIONES, BANDERAS };
 
 // ── main ────────────────────────────────────────────────────────────────────
@@ -323,14 +369,26 @@ async function main() {
               '   ·  con completada: ' + mil(conCompletada) + '/' + mil(ordenes.length) +
               '   ·  con rechazada: ' + mil(conRechazada) + '/' + mil(ordenes.length));
 
-  const cob = coberturaPorProceso(ordenes, op.nombres);
-  console.log('\n── COBERTURA DEL OPERARIO, POR PROCESO ' + '─'.repeat(34));
-  console.log('  ' + 'proceso'.padEnd(28) + 'total'.padStart(10) + 'con RUT'.padStart(11) +
-              'sin oper.'.padStart(11) + 'cod. malo'.padStart(11) + 'no persona'.padStart(12));
-  for (const c of cob.slice(0, TOPE))
-    console.log('  ' + String(c.item).slice(0, 27).padEnd(28) + mil(c.total).padStart(10) +
-                mil(c.conRut).padStart(11) + mil(c.sinOperario).padStart(11) +
-                mil(c.codigoMalo).padStart(11) + mil(c.noPersona).padStart(12));
+  const ITEM = opcion('item', '11111111110');
+  const cob = coberturaPorProceso(ordenes, op.nombres, ITEM);
+  // Los pallets van primero y aparte: las tablas y los tacos se cuentan en
+  // otra unidad y sumarlos da un numero que no existe.
+  for (const fam of ['pallet', 'insumo']) {
+    const filas = cob.filter(c => c.familia === fam);
+    if (!filas.length) continue;
+    console.log('\n── ' + (fam === 'pallet' ? 'PALLETS' : 'FABRICACION DE INSUMO (tablas, tacos, pintura)') +
+                ' ' + '─'.repeat(Math.max(4, 58 - (fam === 'pallet' ? 7 : 46))));
+    console.log('  ' + 'proceso'.padEnd(28) + 'total'.padStart(10) + 'con RUT'.padStart(11) +
+                'sin oper.'.padStart(11) + 'cod. malo'.padStart(11) + 'no persona'.padStart(12));
+    for (const c of filas.slice(0, TOPE))
+      console.log('  ' + String(c.item).slice(0, 27).padEnd(28) + mil(c.total).padStart(10) +
+                  mil(c.conRut).padStart(11) + mil(c.sinOperario).padStart(11) +
+                  mil(c.codigoMalo).padStart(11) + mil(c.noPersona).padStart(12));
+    const t = filas.reduce((a, c) => a + c.total, 0), r = filas.reduce((a, c) => a + c.conRut, 0);
+    console.log('  ' + 'suma'.padEnd(28) + mil(t).padStart(10) + mil(r).padStart(11) +
+                '   ' + pct(t - r, t) + ' sin RUT');
+  }
+  console.log('\n  (produce pallets la orden cuyo item es ' + ITEM + ', una variante suya, o nombra PAL)');
 
   const arr = codigosAArreglar(ordenes, op.nombres);
   if (arr.length) {

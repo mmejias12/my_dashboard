@@ -13,6 +13,7 @@
 :root{
   --bg:#faf8f6; --panel:#ffffff; --linea:#e4ded8; --tinta:#1c1917; --tinta2:#57514b; --tinta3:#8a817a;
   --marca:#b5342a; --cli:#1f6fb2; --ret:#c65a1e; --pla:#0e8f7a;
+  --ent:#0e8f7a; --sal:#7d5ba6;
   --ok:#0e8f7a; --alerta:#b06a00; --grave:#b5342a;
   --f-tit:'Archivo',system-ui,sans-serif; --f-txt:'Source Sans 3',system-ui,sans-serif;
   --f-cod:'IBM Plex Mono',ui-monospace,monospace;
@@ -20,11 +21,13 @@
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#171513; --panel:#201d1b; --linea:#332e2a; --tinta:#f2eeea; --tinta2:#b5aca4; --tinta3:#857c74;
   --marca:#e06054; --cli:#4792d2; --ret:#d4762c; --pla:#28a386;
+  --ent:#28a386; --sal:#a384c9;
   --ok:#28a386; --alerta:#d99a2b; --grave:#e06054; color-scheme:dark;
 }}
 :root[data-theme="dark"]{
   --bg:#171513; --panel:#201d1b; --linea:#332e2a; --tinta:#f2eeea; --tinta2:#b5aca4; --tinta3:#857c74;
   --marca:#e06054; --cli:#4792d2; --ret:#d4762c; --pla:#28a386;
+  --ent:#28a386; --sal:#a384c9;
   --ok:#28a386; --alerta:#d99a2b; --grave:#e06054; color-scheme:dark;
 }
 *{box-sizing:border-box}
@@ -36,6 +39,7 @@ body{background:var(--bg);color:var(--tinta);font:16px/1.55 var(--f-txt);
 h1{font:600 30px/1.15 var(--f-tit);margin:0;text-wrap:balance;letter-spacing:-.01em}
 h2{font:600 19px/1.25 var(--f-tit);margin:0 0 4px;text-wrap:balance}
 h3{font:600 14px/1.3 var(--f-tit);margin:0 0 10px;text-transform:uppercase;letter-spacing:.07em;color:var(--tinta2)}
+h4{font:600 12px/1.3 var(--f-tit);margin:22px 0 8px;text-transform:uppercase;letter-spacing:.08em;color:var(--tinta2)}
 p{margin:0 0 10px;max-width:68ch}
 .sub{color:var(--tinta2);font-size:14px;margin-top:6px}
 .cabe{display:flex;flex-wrap:wrap;gap:14px;align-items:baseline;justify-content:space-between;
@@ -45,11 +49,27 @@ p{margin:0 0 10px;max-width:68ch}
 section{margin-top:34px}
 .panel{background:var(--panel);border:1px solid var(--linea);border-radius:8px;padding:18px}
 .rejilla{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin-top:14px}
+.rejilla-4{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.rejilla-4 .big{font-size:clamp(22px,3.4vw,30px)}
+/* Los filtros van en una fila, arriba de lo que filtran. 44px de alto
+   minimo: abajo de eso el dedo no acierta en un telefono. */
+.filtros{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:flex-end;margin-bottom:4px}
+.filtros label{display:flex;flex-direction:column;gap:6px;min-width:0;
+  font:600 11px/1 var(--f-tit);text-transform:uppercase;letter-spacing:.08em;color:var(--tinta2)}
+.filtros select{font:400 15px var(--f-txt);color:var(--tinta);background:var(--panel);
+  border:1px solid var(--linea);border-radius:6px;padding:9px 11px;min-height:44px;
+  min-width:min(100%,250px);max-width:100%}
+.filtros select:focus-visible{outline:2px solid var(--marca);outline-offset:2px}
+/* Un grafico de 25 dias encogido al ancho de un telefono deja las etiquetas
+   en 5px: ilegibles. Con min-width el .scroll hace su trabajo y se desplaza. */
+.grafdia svg{min-width:620px}
 .tile .et{font:600 11px/1 var(--f-tit);text-transform:uppercase;letter-spacing:.09em;color:var(--tinta2)}
 .tile .big{font:700 clamp(28px,5vw,40px)/1 var(--f-tit);margin:9px 0 2px;letter-spacing:-.02em}
 .tile .pie{font-size:13px;color:var(--tinta2);min-width:0}
 .tile{border-left:3px solid var(--linea)}
 .t-cli{border-left-color:var(--cli)} .t-ret{border-left-color:var(--ret)} .t-pla{border-left-color:var(--pla)}
+.t-ent{border-left-color:var(--ent)} .t-sal{border-left-color:var(--sal)} .t-mal{border-left-color:var(--grave)}
+.t-mal .big{color:var(--grave)}
 .pool{display:block;width:100%;height:34px;margin:4px 0 10px}
 .fecha{color:var(--tinta3);font-size:12px;white-space:nowrap}
 .malo{color:var(--grave)}
@@ -58,8 +78,14 @@ section{margin-top:34px}
 .leyenda b{color:var(--tinta);font-weight:600}
 .pt{width:10px;height:10px;border-radius:2px;display:inline-block;margin-right:6px;vertical-align:-1px}
 .p-cli{background:var(--cli)} .p-ret{background:var(--ret)} .p-pla{background:var(--pla)}
+.p-ent{background:var(--ent)} .p-sal{background:var(--sal)}
 svg{display:block;width:100%;height:auto;max-width:100%}
 .b-ret{fill:var(--ret)} .b-cli{fill:var(--cli)}
+.b-ent{fill:var(--ent)} .b-sal{fill:var(--sal)}
+.n-pos{fill:var(--pla)} .n-neg{fill:var(--grave)}
+/* El cero del grafico de nivel no es una linea de reja mas: es la frontera
+   entre un nivel posible y uno imposible. Se dibuja mas firme. */
+.cero{stroke:var(--tinta2);stroke-width:1.5}
 .grid{stroke:var(--linea);stroke-width:1}
 .ax{fill:var(--tinta3);font:500 11px var(--f-cod)}
 /* Sin min-width:0 un hijo de grid se estira al ancho de su tabla y el
@@ -233,6 +259,54 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--linea);
 </section>
 
 <section>
+  <h2>Distribución diaria en planta</h2>
+  <p>Cómo se mueve cada estación día por día: con qué nivel abrió, cuánto entró, cuánto salió y con qué nivel cerró. Son las 9 bodegas del indicador: merma, extraños y los tránsito están en el pool pero su nivel no lo mueve el recorrido del pallet.</p>
+  <div class="panel">
+    <div class="filtros">
+      <label for="pd-bod">Bodega<select id="pd-bod">
+        <optgroup label="SANTIAGO">
+          <option value="RT13-100" selected>SANTIAGO INSPECCION · RT13-100</option>
+          <option value="RT13-102">SANTIAGO REPARACION · RT13-102</option>
+          <option value="RT13-103">SANTIAGO PINTURA · RT13-103</option>
+          <option value="RT13-105">SANTIAGO DISPONIBLE · RT13-105</option>
+        </optgroup>
+        <optgroup label="TALCA">
+          <option value="RT07-120">TALCA INSPECCION · RT07-120</option>
+          <option value="RT07-122">TALCA REPARACION · RT07-122</option>
+          <option value="RT07-123">TALCA PINTURA · RT07-123</option>
+          <option value="RT07-125">TALCA DISPONIBLE · RT07-125</option>
+          <option value="RT07-126">TALCA TRANSITO · RT07-126</option>
+        </optgroup>
+      </select></label>
+      <label for="pd-mes">Mes<select id="pd-mes">
+        <option value="2026-09">Sep 2026</option>
+        <option value="2026-10" selected>Oct 2026</option>
+      </select></label>
+    </div>
+    <div id="pd-panel"><h3>SANTIAGO INSPECCION <span class="cod">RT13-100</span></h3>
+<div class="sub">Oct 2026 · 25 días con movimiento, del 2026-10-01 al 2026-10-30</div>
+<div class="rejilla rejilla-4">
+<div class="panel tile t-mal"><div class="et">Apertura</div><div class="big">-672</div><div class="pie">con lo que abrió el 2026-10-01</div></div>
+<div class="panel tile t-ent"><div class="et">Entradas</div><div class="big">92.680</div><div class="pie">pallets que llegaron en el mes</div></div>
+<div class="panel tile t-sal"><div class="et">Salidas</div><div class="big">88.553</div><div class="pie">pallets que se fueron en el mes</div></div>
+<div class="panel tile"><div class="et">Cierre</div><div class="big">3.455</div><div class="pie">con lo que cerró el 2026-10-30 (día en curso)</div></div>
+</div>
+<p class="sub">Movió <b class="d-pos">+4.127</b> en el mes.</p>
+<h4>Entradas y salidas de cada día</h4>
+<div class="leyenda" style="margin:0 0 8px"><span><i class="pt p-ent"></i>Entradas <b>92.680</b> en el mes</span><span><i class="pt p-sal"></i>Salidas <b>88.553</b> en el mes</span></div>
+<div class="scroll grafdia"><svg viewBox="0 0 760 206" role="img" aria-label="Entradas y salidas por dia"><line class="grid" x1="52" y1="12.0" x2="752" y2="12.0"/><text class="ax" x="44" y="16.0" text-anchor="end">8.249</text><line class="grid" x1="52" y1="96.0" x2="752" y2="96.0"/><text class="ax" x="44" y="100.0" text-anchor="end">0</text><line class="grid" x1="52" y1="180.0" x2="752" y2="180.0"/><text class="ax" x="44" y="184.0" text-anchor="end">8.249</text><rect class="b-ent" x="52.8" y="50.6" width="12.5" height="45.4" rx="2"><title>2026-10-01 · entradas 4.457</title></rect><rect class="b-sal" x="66.8" y="96.0" width="12.5" height="43.6" rx="2"><title>2026-10-01 · salidas 4.279</title></rect><rect class="b-ent" x="80.8" y="58.5" width="12.5" height="37.5" rx="2"><title>2026-10-02 · entradas 3.679</title></rect><rect class="b-sal" x="94.8" y="96.0" width="12.5" height="54.5" rx="2"><title>2026-10-02 · salidas 5.355</title></rect><rect class="b-ent" x="108.8" y="81.8" width="12.5" height="14.2" rx="2"><title>2026-10-03 · entradas 1.392</title></rect><rect class="b-sal" x="122.8" y="96.0" width="12.5" height="0.0" rx="2"><title>2026-10-03 · salidas 0</title></rect><rect class="b-ent" x="136.8" y="46.5" width="12.5" height="49.5" rx="2"><title>2026-10-05 · entradas 4.865</title></rect><rect class="b-sal" x="150.8" y="96.0" width="12.5" height="44.0" rx="2"><title>2026-10-05 · salidas 4.322</title></rect><rect class="b-ent" x="164.8" y="77.7" width="12.5" height="18.3" rx="2"><title>2026-10-06 · entradas 1.799</title></rect><rect class="b-sal" x="178.8" y="96.0" width="12.5" height="24.6" rx="2"><title>2026-10-06 · salidas 2.414</title></rect><rect class="b-ent" x="192.8" y="72.5" width="12.5" height="23.5" rx="2"><title>2026-10-07 · entradas 2.307</title></rect><rect class="b-sal" x="206.8" y="96.0" width="12.5" height="31.6" rx="2"><title>2026-10-07 · salidas 3.100</title></rect><rect class="b-ent" x="220.8" y="61.6" width="12.5" height="34.4" rx="2"><title>2026-10-08 · entradas 3.380</title></rect><rect class="b-sal" x="234.8" y="96.0" width="12.5" height="29.6" rx="2"><title>2026-10-08 · salidas 2.902</title></rect><rect class="b-ent" x="248.8" y="62.8" width="12.5" height="33.2" rx="2"><title>2026-10-09 · entradas 3.263</title></rect><rect class="b-sal" x="262.8" y="96.0" width="12.5" height="84.0" rx="2"><title>2026-10-09 · salidas 8.249</title></rect><rect class="b-ent" x="276.8" y="63.6" width="12.5" height="32.4" rx="2"><title>2026-10-10 · entradas 3.184</title></rect><rect class="b-sal" x="290.8" y="96.0" width="12.5" height="0.0" rx="2"><title>2026-10-10 · salidas 0</title></rect><rect class="b-ent" x="304.8" y="17.2" width="12.5" height="78.8" rx="2"><title>2026-10-13 · entradas 7.735</title></rect><rect class="b-sal" x="318.8" y="96.0" width="12.5" height="57.2" rx="2"><title>2026-10-13 · salidas 5.619</title></rect><rect class="b-ent" x="332.8" y="61.7" width="12.5" height="34.3" rx="2"><title>2026-10-14 · entradas 3.373</title></rect><rect class="b-sal" x="346.8" y="96.0" width="12.5" height="36.4" rx="2"><title>2026-10-14 · salidas 3.571</title></rect><rect class="b-ent" x="360.8" y="52.9" width="12.5" height="43.1" rx="2"><title>2026-10-15 · entradas 4.232</title></rect><rect class="b-sal" x="374.8" y="96.0" width="12.5" height="39.8" rx="2"><title>2026-10-15 · salidas 3.912</title></rect><rect class="b-ent" x="388.8" y="52.3" width="12.5" height="43.7" rx="2"><title>2026-10-16 · entradas 4.292</title></rect><rect class="b-sal" x="402.8" y="96.0" width="12.5" height="66.5" rx="2"><title>2026-10-16 · salidas 6.532</title></rect><rect class="b-ent" x="416.8" y="67.6" width="12.5" height="28.4" rx="2"><title>2026-10-17 · entradas 2.793</title></rect><rect class="b-sal" x="430.8" y="96.0" width="12.5" height="0.0" rx="2"><title>2026-10-17 · salidas 0</title></rect><rect class="b-ent" x="444.8" y="33.5" width="12.5" height="62.5" rx="2"><title>2026-10-19 · entradas 6.136</title></rect><rect class="b-sal" x="458.8" y="96.0" width="12.5" height="58.2" rx="2"><title>2026-10-19 · salidas 5.717</title></rect><rect class="b-ent" x="472.8" y="55.2" width="12.5" height="40.8" rx="2"><title>2026-10-20 · entradas 4.006</title></rect><rect class="b-sal" x="486.8" y="96.0" width="12.5" height="43.5" rx="2"><title>2026-10-20 · salidas 4.273</title></rect><rect class="b-ent" x="500.8" y="74.0" width="12.5" height="22.0" rx="2"><title>2026-10-21 · entradas 2.164</title></rect><rect class="b-sal" x="514.8" y="96.0" width="12.5" height="23.6" rx="2"><title>2026-10-21 · salidas 2.317</title></rect><rect class="b-ent" x="528.8" y="53.8" width="12.5" height="42.2" rx="2"><title>2026-10-22 · entradas 4.144</title></rect><rect class="b-sal" x="542.8" y="96.0" width="12.5" height="39.3" rx="2"><title>2026-10-22 · salidas 3.862</title></rect><rect class="b-ent" x="556.8" y="54.0" width="12.5" height="42.0" rx="2"><title>2026-10-23 · entradas 4.122</title></rect><rect class="b-sal" x="570.8" y="96.0" width="12.5" height="62.1" rx="2"><title>2026-10-23 · salidas 6.102</title></rect><rect class="b-ent" x="584.8" y="75.0" width="12.5" height="21.0" rx="2"><title>2026-10-24 · entradas 2.058</title></rect><rect class="b-sal" x="598.8" y="96.0" width="12.5" height="0.0" rx="2"><title>2026-10-24 · salidas 0</title></rect><rect class="b-ent" x="612.8" y="42.9" width="12.5" height="53.1" rx="2"><title>2026-10-26 · entradas 5.214</title></rect><rect class="b-sal" x="626.8" y="96.0" width="12.5" height="51.0" rx="2"><title>2026-10-26 · salidas 5.007</title></rect><rect class="b-ent" x="640.8" y="56.8" width="12.5" height="39.2" rx="2"><title>2026-10-27 · entradas 3.845</title></rect><rect class="b-sal" x="654.8" y="96.0" width="12.5" height="43.2" rx="2"><title>2026-10-27 · salidas 4.241</title></rect><rect class="b-ent" x="668.8" y="51.1" width="12.5" height="44.9" rx="2"><title>2026-10-28 · entradas 4.411</title></rect><rect class="b-sal" x="682.8" y="96.0" width="12.5" height="47.5" rx="2"><title>2026-10-28 · salidas 4.665</title></rect><rect class="b-ent" x="696.8" y="46.3" width="12.5" height="49.7" rx="2"><title>2026-10-29 · entradas 4.883</title></rect><rect class="b-sal" x="710.8" y="96.0" width="12.5" height="21.5" rx="2"><title>2026-10-29 · salidas 2.114</title></rect><rect class="b-ent" x="724.8" y="86.4" width="12.5" height="9.6" rx="2"><title>2026-10-30 · entradas 946</title></rect><rect class="b-sal" x="738.8" y="96.0" width="12.5" height="0.0" rx="2"><title>2026-10-30 · salidas 0</title></rect><text class="ax" x="66.0" y="199" text-anchor="middle">01</text><text class="ax" x="94.0" y="199" text-anchor="middle">02</text><text class="ax" x="122.0" y="199" text-anchor="middle">03</text><text class="ax" x="150.0" y="199" text-anchor="middle">05</text><text class="ax" x="178.0" y="199" text-anchor="middle">06</text><text class="ax" x="206.0" y="199" text-anchor="middle">07</text><text class="ax" x="234.0" y="199" text-anchor="middle">08</text><text class="ax" x="262.0" y="199" text-anchor="middle">09</text><text class="ax" x="290.0" y="199" text-anchor="middle">10</text><text class="ax" x="318.0" y="199" text-anchor="middle">13</text><text class="ax" x="346.0" y="199" text-anchor="middle">14</text><text class="ax" x="374.0" y="199" text-anchor="middle">15</text><text class="ax" x="402.0" y="199" text-anchor="middle">16</text><text class="ax" x="430.0" y="199" text-anchor="middle">17</text><text class="ax" x="458.0" y="199" text-anchor="middle">19</text><text class="ax" x="486.0" y="199" text-anchor="middle">20</text><text class="ax" x="514.0" y="199" text-anchor="middle">21</text><text class="ax" x="542.0" y="199" text-anchor="middle">22</text><text class="ax" x="570.0" y="199" text-anchor="middle">23</text><text class="ax" x="598.0" y="199" text-anchor="middle">24</text><text class="ax" x="626.0" y="199" text-anchor="middle">26</text><text class="ax" x="654.0" y="199" text-anchor="middle">27</text><text class="ax" x="682.0" y="199" text-anchor="middle">28</text><text class="ax" x="710.0" y="199" text-anchor="middle">29</text><text class="ax" x="738.0" y="199" text-anchor="middle">30</text></svg></div>
+<h4>Nivel con el que cerró cada día</h4>
+<div class="scroll grafdia"><svg viewBox="0 0 760 154" role="img" aria-label="Nivel al cierre de cada dia"><line class="grid" x1="52" y1="12.0" x2="752" y2="12.0"/><text class="ax" x="44" y="16.0" text-anchor="end">3.455</text><line class="grid" x1="52" y1="128.0" x2="752" y2="128.0"/><text class="ax" x="44" y="132.0" text-anchor="end">-6.151</text><line class="cero" x1="52" y1="53.7" x2="752" y2="53.7"/><text class="ax" x="44" y="57.7" text-anchor="end">0</text><rect class="n-neg" x="53.5" y="53.7" width="25.0" height="6.0" rx="2"><title>2026-10-01 · cierre -494</title></rect><rect class="n-neg" x="81.5" y="53.7" width="25.0" height="26.2" rx="2"><title>2026-10-02 · cierre -2.170</title></rect><rect class="n-neg" x="109.5" y="53.7" width="25.0" height="9.4" rx="2"><title>2026-10-03 · cierre -778</title></rect><rect class="n-neg" x="137.5" y="53.7" width="25.0" height="2.8" rx="2"><title>2026-10-05 · cierre -235</title></rect><rect class="n-neg" x="165.5" y="53.7" width="25.0" height="10.3" rx="2"><title>2026-10-06 · cierre -850</title></rect><rect class="n-neg" x="193.5" y="53.7" width="25.0" height="19.8" rx="2"><title>2026-10-07 · cierre -1.643</title></rect><rect class="n-neg" x="221.5" y="53.7" width="25.0" height="14.1" rx="2"><title>2026-10-08 · cierre -1.165</title></rect><rect class="n-neg" x="249.5" y="53.7" width="25.0" height="74.3" rx="2"><title>2026-10-09 · cierre -6.151</title></rect><rect class="n-neg" x="277.5" y="53.7" width="25.0" height="35.8" rx="2"><title>2026-10-10 · cierre -2.967</title></rect><rect class="n-neg" x="305.5" y="53.7" width="25.0" height="10.3" rx="2"><title>2026-10-13 · cierre -851</title></rect><rect class="n-neg" x="333.5" y="53.7" width="25.0" height="12.7" rx="2"><title>2026-10-14 · cierre -1.049</title></rect><rect class="n-neg" x="361.5" y="53.7" width="25.0" height="8.8" rx="2"><title>2026-10-15 · cierre -729</title></rect><rect class="n-neg" x="389.5" y="53.7" width="25.0" height="35.9" rx="2"><title>2026-10-16 · cierre -2.969</title></rect><rect class="n-neg" x="417.5" y="53.7" width="25.0" height="2.1" rx="2"><title>2026-10-17 · cierre -176</title></rect><rect class="n-pos" x="445.5" y="50.8" width="25.0" height="2.9" rx="2"><title>2026-10-19 · cierre 243</title></rect><rect class="n-neg" x="473.5" y="53.7" width="25.0" height="1.6" rx="2"><title>2026-10-20 · cierre -24</title></rect><rect class="n-neg" x="501.5" y="53.7" width="25.0" height="2.1" rx="2"><title>2026-10-21 · cierre -177</title></rect><rect class="n-pos" x="529.5" y="52.1" width="25.0" height="1.6" rx="2"><title>2026-10-22 · cierre 105</title></rect><rect class="n-neg" x="557.5" y="53.7" width="25.0" height="22.6" rx="2"><title>2026-10-23 · cierre -1.875</title></rect><rect class="n-pos" x="585.5" y="51.5" width="25.0" height="2.2" rx="2"><title>2026-10-24 · cierre 183</title></rect><rect class="n-pos" x="613.5" y="49.0" width="25.0" height="4.7" rx="2"><title>2026-10-26 · cierre 390</title></rect><rect class="n-neg" x="641.5" y="53.7" width="25.0" height="1.6" rx="2"><title>2026-10-27 · cierre -6</title></rect><rect class="n-neg" x="669.5" y="53.7" width="25.0" height="3.1" rx="2"><title>2026-10-28 · cierre -260</title></rect><rect class="n-pos" x="697.5" y="23.4" width="25.0" height="30.3" rx="2"><title>2026-10-29 · cierre 2.509</title></rect><rect class="n-pos" x="725.5" y="12.0" width="25.0" height="41.7" rx="2"><title>2026-10-30 · cierre 3.455 (dia en curso)</title></rect><text class="ax" x="66.0" y="147" text-anchor="middle">01</text><text class="ax" x="94.0" y="147" text-anchor="middle">02</text><text class="ax" x="122.0" y="147" text-anchor="middle">03</text><text class="ax" x="150.0" y="147" text-anchor="middle">05</text><text class="ax" x="178.0" y="147" text-anchor="middle">06</text><text class="ax" x="206.0" y="147" text-anchor="middle">07</text><text class="ax" x="234.0" y="147" text-anchor="middle">08</text><text class="ax" x="262.0" y="147" text-anchor="middle">09</text><text class="ax" x="290.0" y="147" text-anchor="middle">10</text><text class="ax" x="318.0" y="147" text-anchor="middle">13</text><text class="ax" x="346.0" y="147" text-anchor="middle">14</text><text class="ax" x="374.0" y="147" text-anchor="middle">15</text><text class="ax" x="402.0" y="147" text-anchor="middle">16</text><text class="ax" x="430.0" y="147" text-anchor="middle">17</text><text class="ax" x="458.0" y="147" text-anchor="middle">19</text><text class="ax" x="486.0" y="147" text-anchor="middle">20</text><text class="ax" x="514.0" y="147" text-anchor="middle">21</text><text class="ax" x="542.0" y="147" text-anchor="middle">22</text><text class="ax" x="570.0" y="147" text-anchor="middle">23</text><text class="ax" x="598.0" y="147" text-anchor="middle">24</text><text class="ax" x="626.0" y="147" text-anchor="middle">26</text><text class="ax" x="654.0" y="147" text-anchor="middle">27</text><text class="ax" x="682.0" y="147" text-anchor="middle">28</text><text class="ax" x="710.0" y="147" text-anchor="middle">29</text><text class="ax" x="738.0" y="147" text-anchor="middle">30</text></svg></div>
+<div class="enrevision"><b>19 de los 25 días cierran en negativo</b>, el peor el 2026-10-09 en -6.151. No es un error del cálculo: SAP tiene esos días en negativo y la causa es la fecha del documento —la salida de mercancías queda fechada antes que el traspaso que la alimenta—. Se arregla en SAP, no acá.</div>
+<h4>Día por día</h4>
+<div class="scroll"><table>
+<thead><tr><th>Día</th><th class="num">Apertura</th><th class="num">Entradas</th><th class="num">Salidas</th><th class="num">Neto</th><th class="num">Cierre</th></tr></thead>
+<tbody><tr><td class="cod">2026-10-01</td><td class="num">-672</td><td class="num">4.457</td><td class="num">4.279</td><td class="num d-pos">+178</td><td class="num malo">-494</td></tr><tr><td class="cod">2026-10-02</td><td class="num">-494</td><td class="num">3.679</td><td class="num">5.355</td><td class="num d-neg">-1.676</td><td class="num malo">-2.170</td></tr><tr><td class="cod">2026-10-03</td><td class="num">-2.170</td><td class="num">1.392</td><td class="num">0</td><td class="num d-pos">+1.392</td><td class="num malo">-778</td></tr><tr><td class="cod">2026-10-05</td><td class="num">-778</td><td class="num">4.865</td><td class="num">4.322</td><td class="num d-pos">+543</td><td class="num malo">-235</td></tr><tr><td class="cod">2026-10-06</td><td class="num">-235</td><td class="num">1.799</td><td class="num">2.414</td><td class="num d-neg">-615</td><td class="num malo">-850</td></tr><tr><td class="cod">2026-10-07</td><td class="num">-850</td><td class="num">2.307</td><td class="num">3.100</td><td class="num d-neg">-793</td><td class="num malo">-1.643</td></tr><tr><td class="cod">2026-10-08</td><td class="num">-1.643</td><td class="num">3.380</td><td class="num">2.902</td><td class="num d-pos">+478</td><td class="num malo">-1.165</td></tr><tr><td class="cod">2026-10-09</td><td class="num">-1.165</td><td class="num">3.263</td><td class="num">8.249</td><td class="num d-neg">-4.986</td><td class="num malo">-6.151</td></tr><tr><td class="cod">2026-10-10</td><td class="num">-6.151</td><td class="num">3.184</td><td class="num">0</td><td class="num d-pos">+3.184</td><td class="num malo">-2.967</td></tr><tr><td class="cod">2026-10-13</td><td class="num">-2.967</td><td class="num">7.735</td><td class="num">5.619</td><td class="num d-pos">+2.116</td><td class="num malo">-851</td></tr><tr><td class="cod">2026-10-14</td><td class="num">-851</td><td class="num">3.373</td><td class="num">3.571</td><td class="num d-neg">-198</td><td class="num malo">-1.049</td></tr><tr><td class="cod">2026-10-15</td><td class="num">-1.049</td><td class="num">4.232</td><td class="num">3.912</td><td class="num d-pos">+320</td><td class="num malo">-729</td></tr><tr><td class="cod">2026-10-16</td><td class="num">-729</td><td class="num">4.292</td><td class="num">6.532</td><td class="num d-neg">-2.240</td><td class="num malo">-2.969</td></tr><tr><td class="cod">2026-10-17</td><td class="num">-2.969</td><td class="num">2.793</td><td class="num">0</td><td class="num d-pos">+2.793</td><td class="num malo">-176</td></tr><tr><td class="cod">2026-10-19</td><td class="num">-176</td><td class="num">6.136</td><td class="num">5.717</td><td class="num d-pos">+419</td><td class="num">243</td></tr><tr><td class="cod">2026-10-20</td><td class="num">243</td><td class="num">4.006</td><td class="num">4.273</td><td class="num d-neg">-267</td><td class="num malo">-24</td></tr><tr><td class="cod">2026-10-21</td><td class="num">-24</td><td class="num">2.164</td><td class="num">2.317</td><td class="num d-neg">-153</td><td class="num malo">-177</td></tr><tr><td class="cod">2026-10-22</td><td class="num">-177</td><td class="num">4.144</td><td class="num">3.862</td><td class="num d-pos">+282</td><td class="num">105</td></tr><tr><td class="cod">2026-10-23</td><td class="num">105</td><td class="num">4.122</td><td class="num">6.102</td><td class="num d-neg">-1.980</td><td class="num malo">-1.875</td></tr><tr><td class="cod">2026-10-24</td><td class="num">-1.875</td><td class="num">2.058</td><td class="num">0</td><td class="num d-pos">+2.058</td><td class="num">183</td></tr><tr><td class="cod">2026-10-26</td><td class="num">183</td><td class="num">5.214</td><td class="num">5.007</td><td class="num d-pos">+207</td><td class="num">390</td></tr><tr><td class="cod">2026-10-27</td><td class="num">390</td><td class="num">3.845</td><td class="num">4.241</td><td class="num d-neg">-396</td><td class="num malo">-6</td></tr><tr><td class="cod">2026-10-28</td><td class="num">-6</td><td class="num">4.411</td><td class="num">4.665</td><td class="num d-neg">-254</td><td class="num malo">-260</td></tr><tr><td class="cod">2026-10-29</td><td class="num">-260</td><td class="num">4.883</td><td class="num">2.114</td><td class="num d-pos">+2.769</td><td class="num">2.509</td></tr><tr><td class="cod">2026-10-30 <span class="chip">en curso</span></td><td class="num">2.509</td><td class="num">946</td><td class="num">0</td><td class="num d-pos">+946</td><td class="num">3.455</td></tr></tbody></table></div></div>
+    <p class="sub">Los cierres se calculan hacia atrás desde el saldo vivo de SAP del 2026-10-30, restando los movimientos de cada día. El cierre del último día es, por construcción, el saldo que muestra la tabla de más arriba.</p>
+  </div>
+</section>
+
+<section>
   <h2>Qué sostiene estas cifras</h2>
   <div class="dos" style="margin-top:14px">
     <div class="panel">
@@ -312,6 +386,230 @@ function antiguedad(medido, hoy) {
     c.setAttribute("data-nivel", a.nivel);
     c.hidden = false;
   } catch (e) { /* sin aviso es mejor que sin pagina */ }
+})();
+var MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+function esNumero(n) {
+  return typeof n === 'number' ? isFinite(n)
+       : (typeof n === 'string' && n.trim() !== '' && isFinite(Number(n)));
+}
+function mil(n) {
+  if (!esNumero(n)) return '—';
+  return Math.round(Number(n)).toLocaleString('es-CL');
+}
+function conSigno(n) {
+  if (!esNumero(n)) return '—';
+  const v = Number(n);
+  return (v > 0 ? '+' : '') + mil(v);
+}
+function clasePos(n) {
+  const v = Number(n) || 0;
+  return v > 0 ? 'd-pos' : v < 0 ? 'd-neg' : 'd-nul';
+}
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function etiquetaDeMes(mes) {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(mes == null ? '' : mes));
+  if (!m) return String(mes == null ? '' : mes);
+  return (MESES[Number(m[2]) - 1] || m[2]) + ' ' + m[1];
+}
+function diasDelMes(bodega, mes) {
+  const p = String(mes == null ? '' : mes);
+  return (((bodega && bodega.dias) || [])).filter(d => d && String(d.dia).slice(0, 7) === p);
+}
+function resumenDelMes(dias) {
+  const ds = Array.isArray(dias) ? dias : [];
+  if (!ds.length) return null;
+  let entradas = 0, salidas = 0, negativos = 0, peor = null, enCurso = false;
+  for (const d of ds) {
+    entradas += Number(d.entradas) || 0;
+    salidas += Number(d.salidas) || 0;
+    const c = Number(d.cierre) || 0;
+    if (c < 0) { negativos++; if (!peor || c < peor.cierre) peor = { dia: String(d.dia), cierre: c }; }
+    if (d.firme === false) enCurso = true;
+  }
+  const apertura = Number(ds[0].apertura) || 0;
+  const cierre = Number(ds[ds.length - 1].cierre) || 0;
+  return { n: ds.length, desde: String(ds[0].dia), hasta: String(ds[ds.length - 1].dia),
+           apertura, cierre, entradas, salidas,
+           neto: cierre - apertura, netoFlujo: entradas - salidas,
+           cuadra: (cierre - apertura) === (entradas - salidas),
+           negativos, peor, enCurso };
+}
+function altoVisible(h, v) {
+  if (!v) return 0;
+  return Math.max(1.6, h);
+}
+function ejeDeDias(ds, An, izq, der, Al) {
+  const slot = (An - izq - der) / Math.max(1, ds.length);
+  // Con muchos dias las etiquetas se pisan: se rotula uno de cada n, y
+  // siempre el primero, para que el lector sepa donde empieza el mes.
+  const salto = slot >= 26 ? 1 : slot >= 15 ? 2 : slot >= 10 ? 3 : 5;
+  let t = '';
+  ds.forEach((d, i) => {
+    if (i % salto) return;
+    t += '<text class="ax" x="' + (izq + i * slot + slot / 2).toFixed(1) + '" y="' + (Al - 7) +
+         '" text-anchor="middle">' + esc(String(d.dia).slice(8)) + '</text>';
+  });
+  return { slot, etiquetas: t };
+}
+function svgFlujoDia(dias) {
+  const ds = Array.isArray(dias) ? dias : [];
+  if (!ds.length) return '';
+  const An = 760, izq = 52, der = 8, arriba = 12, abajo = 26, mitad = 84;
+  const Al = arriba + mitad * 2 + abajo, y0 = arriba + mitad;
+  const tope = Math.max(1, ...ds.map(d => Math.max(Number(d.entradas) || 0, Number(d.salidas) || 0)));
+  const esc_ = mitad / tope;
+  const { slot, etiquetas } = ejeDeDias(ds, An, izq, der, Al);
+  const ancho = Math.max(2.5, Math.min(26, slot / 2 - 1.5));   // 1,5px de aire entre las dos barras
+
+  let g = '';
+  const linea = (v, y, txt) => '<line class="grid" x1="' + izq + '" y1="' + y.toFixed(1) +
+    '" x2="' + (An - der) + '" y2="' + y.toFixed(1) + '"/><text class="ax" x="' + (izq - 8) +
+    '" y="' + (y + 4).toFixed(1) + '" text-anchor="end">' + esc(txt) + '</text>';
+  g += linea(tope, arriba, mil(tope));
+  g += linea(0, y0, '0');
+  g += linea(tope, y0 + mitad, mil(tope));
+
+  ds.forEach((d, i) => {
+    const x = izq + i * slot + (slot - (2 * ancho + 1.5)) / 2;
+    const ent = Number(d.entradas) || 0, sal = Number(d.salidas) || 0;
+    const he = altoVisible(ent * esc_, ent), hs = altoVisible(sal * esc_, sal);
+    g += '<rect class="b-ent" x="' + x.toFixed(1) + '" y="' + (y0 - he).toFixed(1) +
+         '" width="' + ancho.toFixed(1) + '" height="' + he.toFixed(1) + '" rx="2">' +
+         '<title>' + esc(d.dia) + ' · entradas ' + mil(ent) + '</title></rect>';
+    g += '<rect class="b-sal" x="' + (x + ancho + 1.5).toFixed(1) + '" y="' + y0.toFixed(1) +
+         '" width="' + ancho.toFixed(1) + '" height="' + hs.toFixed(1) + '" rx="2">' +
+         '<title>' + esc(d.dia) + ' · salidas ' + mil(sal) + '</title></rect>';
+  });
+  return '<svg viewBox="0 0 ' + An + ' ' + Al + '" role="img" ' +
+         'aria-label="Entradas y salidas por dia">' + g + etiquetas + '</svg>';
+}
+function svgNivelDia(dias) {
+  const ds = Array.isArray(dias) ? dias : [];
+  if (!ds.length) return '';
+  const An = 760, izq = 52, der = 8, arriba = 12, abajo = 26, util = 116;
+  const Al = arriba + util + abajo;
+  const vals = ds.map(d => Number(d.cierre) || 0);
+  // El cero SIEMPRE entra en la escala: es la frontera entre un nivel posible
+  // y uno imposible, y es justo lo que hay que poder ver.
+  const alto = Math.max(0, ...vals), bajo = Math.min(0, ...vals);
+  const rango = (alto - bajo) || 1, esc_ = util / rango;
+  const y0 = arriba + alto * esc_;
+  const { slot, etiquetas } = ejeDeDias(ds, An, izq, der, Al);
+  const ancho = Math.max(2.5, Math.min(48, slot - 3));
+
+  let g = '';
+  const linea = (v, cl) => {
+    const y = arriba + (alto - v) * esc_;
+    return '<line class="' + cl + '" x1="' + izq + '" y1="' + y.toFixed(1) + '" x2="' + (An - der) +
+           '" y2="' + y.toFixed(1) + '"/><text class="ax" x="' + (izq - 8) + '" y="' +
+           (y + 4).toFixed(1) + '" text-anchor="end">' + esc(mil(v)) + '</text>';
+  };
+  if (alto > 0) g += linea(alto, 'grid');
+  if (bajo < 0) g += linea(bajo, 'grid');
+  g += linea(0, 'cero');
+
+  ds.forEach((d, i) => {
+    const v = Number(d.cierre) || 0, h = altoVisible(Math.abs(v) * esc_, v);
+    const x = izq + i * slot + (slot - ancho) / 2;
+    g += '<rect class="' + (v < 0 ? 'n-neg' : 'n-pos') + '" x="' + x.toFixed(1) + '" y="' +
+         (v >= 0 ? y0 - h : y0).toFixed(1) + '" width="' + ancho.toFixed(1) + '" height="' +
+         h.toFixed(1) + '" rx="2">' + '<title>' + esc(d.dia) + ' · cierre ' + mil(v) +
+         (d.firme === false ? ' (dia en curso)' : '') + '</title></rect>';
+  });
+  return '<svg viewBox="0 0 ' + An + ' ' + Al + '" role="img" ' +
+         'aria-label="Nivel al cierre de cada dia">' + g + etiquetas + '</svg>';
+}
+function tablaDeDias(dias) {
+  const ds = Array.isArray(dias) ? dias : [];
+  let f = '';
+  for (const d of ds) {
+    const neto = (Number(d.entradas) || 0) - (Number(d.salidas) || 0);
+    const c = Number(d.cierre) || 0;
+    f += '<tr><td class="cod">' + esc(d.dia) +
+         (d.firme === false ? ' <span class="chip">en curso</span>' : '') +
+         '</td><td class="num">' + mil(d.apertura) + '</td><td class="num">' + mil(d.entradas) +
+         '</td><td class="num">' + mil(d.salidas) + '</td><td class="num ' + clasePos(neto) + '">' +
+         conSigno(neto) + '</td><td class="num' + (c < 0 ? ' malo' : '') + '">' + mil(c) +
+         '</td></tr>';
+  }
+  return '<div class="scroll"><table>\n' +
+    '<thead><tr><th>Día</th><th class="num">Apertura</th><th class="num">Entradas</th>' +
+    '<th class="num">Salidas</th><th class="num">Neto</th><th class="num">Cierre</th></tr></thead>\n' +
+    '<tbody>' + f + '</tbody></table></div>';
+}
+function panelDeMes(bodega, mes) {
+  if (!bodega) return '<p class="sub">No hay datos de esa bodega.</p>';
+  const ds = diasDelMes(bodega, mes);
+  const r = resumenDelMes(ds);
+  const titulo = '<h3>' + esc(bodega.nom) + ' <span class="cod">' + esc(bodega.cod) + '</span></h3>';
+  if (!r)
+    return titulo + '<p class="sub">Sin movimiento registrado en ' + esc(etiquetaDeMes(mes)) +
+           '. El saldo de la bodega no cambió ningún día de ese mes, o ese mes no entró en la corrida.</p>';
+
+  const H = [titulo];
+  H.push('<div class="sub">' + esc(etiquetaDeMes(mes)) + ' · ' + mil(r.n) + ' día' +
+         (r.n === 1 ? '' : 's') + ' con movimiento, del ' + esc(r.desde) + ' al ' + esc(r.hasta) +
+         '</div>');
+  H.push('<div class="rejilla rejilla-4">');
+  for (const [et, val, pie, cl] of [
+    ['Apertura', mil(r.apertura), 'con lo que abrió el ' + r.desde, r.apertura < 0 ? 't-mal' : ''],
+    ['Entradas', mil(r.entradas), 'pallets que llegaron en el mes', 't-ent'],
+    ['Salidas', mil(r.salidas), 'pallets que se fueron en el mes', 't-sal'],
+    ['Cierre', mil(r.cierre), 'con lo que cerró el ' + r.hasta +
+      (r.enCurso ? ' (día en curso)' : ''), r.cierre < 0 ? 't-mal' : ''],
+  ])
+    H.push('<div class="panel tile' + (cl ? ' ' + cl : '') + '"><div class="et">' + et + '</div><div class="big">' +
+           val + '</div><div class="pie">' + esc(pie) + '</div></div>');
+  H.push('</div>');
+  H.push('<p class="sub">Movió <b class="' + clasePos(r.neto) + '">' + conSigno(r.neto) +
+         '</b> en el mes' + (r.cuadra ? '' : ' — pero entradas menos salidas da ' +
+         conSigno(r.netoFlujo) + ', y cierre menos apertura da ' + conSigno(r.neto) +
+         ': el json viene roto y este panel no se puede leer') + '.</p>');
+
+  H.push('<h4>Entradas y salidas de cada día</h4>');
+  H.push('<div class="leyenda" style="margin:0 0 8px">' +
+         '<span><i class="pt p-ent"></i>Entradas <b>' + mil(r.entradas) + '</b> en el mes</span>' +
+         '<span><i class="pt p-sal"></i>Salidas <b>' + mil(r.salidas) + '</b> en el mes</span></div>');
+  H.push('<div class="scroll grafdia">' + svgFlujoDia(ds) + '</div>');
+
+  H.push('<h4>Nivel con el que cerró cada día</h4>');
+  H.push('<div class="scroll grafdia">' + svgNivelDia(ds) + '</div>');
+  if (r.negativos)
+    H.push('<div class="enrevision"><b>' + mil(r.negativos) + ' de los ' + mil(r.n) +
+           ' días cierran en negativo</b>, el peor el ' + esc(r.peor.dia) + ' en ' +
+           mil(r.peor.cierre) + '. No es un error del cálculo: SAP tiene esos días en negativo ' +
+           'y la causa es la fecha del documento —la salida de mercancías queda fechada antes ' +
+           'que el traspaso que la alimenta—. Se arregla en SAP, no acá.</div>');
+
+  H.push('<h4>Día por día</h4>');
+  H.push(tablaDeDias(ds));
+  return H.join('\n');
+}
+function rehidratar(compacta) {
+  return (Array.isArray(compacta) ? compacta : []).map(b => ({
+    cod: b.c, nom: b.n, nivel: b.v,
+    dias: (b.d || []).map(x => ({ dia: x[0], apertura: x[1], entradas: x[2],
+                                  salidas: x[3], cierre: x[4], firme: x.length < 6 })),
+  }));
+}
+var PD = rehidratar([{"c":"RT07-120","n":"TALCA INSPECCION","v":342,"d":[["2026-09-01",757,1020,1639,138],["2026-09-02",138,250,321,67],["2026-09-03",67,435,1039,-537],["2026-09-04",-537,1190,1481,-828],["2026-09-07",-828,928,1140,-1040],["2026-09-08",-1040,1256,542,-326],["2026-09-09",-326,828,914,-412],["2026-09-10",-412,356,978,-1034],["2026-09-11",-1034,1530,302,194],["2026-09-14",194,662,756,100],["2026-09-15",100,545,1012,-367],["2026-09-16",-367,923,281,275],["2026-09-17",275,754,1224,-195],["2026-09-21",-195,727,1205,-673],["2026-09-22",-673,1476,647,156],["2026-09-23",156,246,998,-596],["2026-09-24",-596,1183,311,276],["2026-09-25",276,629,1171,-266],["2026-09-28",-266,956,412,278],["2026-09-29",278,258,978,-442],["2026-09-30",-442,1183,513,228],["2026-10-01",228,343,293,278],["2026-10-02",278,1166,1910,-466],["2026-10-05",-466,437,935,-964],["2026-10-06",-964,1308,624,-280],["2026-10-07",-280,443,1140,-977],["2026-10-08",-977,1228,641,-390],["2026-10-09",-390,768,1042,-664],["2026-10-13",-664,1208,991,-447],["2026-10-14",-447,731,197,87],["2026-10-15",87,410,954,-457],["2026-10-16",-457,906,752,-303],["2026-10-19",-303,695,1297,-905],["2026-10-20",-905,1024,816,-697],["2026-10-21",-697,915,467,-249],["2026-10-22",-249,926,1134,-457],["2026-10-23",-457,907,363,87],["2026-10-26",87,766,1214,-361],["2026-10-27",-361,889,441,87],["2026-10-28",87,354,413,28],["2026-10-29",28,690,376,342]]},{"c":"RT13-100","n":"SANTIAGO INSPECCION","v":3455,"d":[["2026-09-01",-483,5148,4489,176],["2026-09-02",176,4310,4085,401],["2026-09-03",401,3998,3871,528],["2026-09-04",528,3675,5559,-1356],["2026-09-05",-1356,1644,0,288],["2026-09-07",288,4309,4431,166],["2026-09-08",166,4066,4077,155],["2026-09-09",155,3240,4511,-1116],["2026-09-10",-1116,5574,4202,256],["2026-09-11",256,3941,6095,-1898],["2026-09-12",-1898,1761,0,-137],["2026-09-14",-137,3408,4165,-894],["2026-09-15",-894,5492,4814,-216],["2026-09-16",-216,4032,3401,415],["2026-09-17",415,3715,5435,-1305],["2026-09-21",-1305,2433,2373,-1245],["2026-09-22",-1245,3895,3544,-894],["2026-09-23",-894,4129,4754,-1519],["2026-09-24",-1519,4349,3623,-793],["2026-09-25",-793,4753,7364,-3404],["2026-09-26",-3404,2684,0,-720],["2026-09-28",-720,4940,4675,-455],["2026-09-29",-455,4368,4470,-557],["2026-09-30",-557,3655,3770,-672],["2026-10-01",-672,4457,4279,-494],["2026-10-02",-494,3679,5355,-2170],["2026-10-03",-2170,1392,0,-778],["2026-10-05",-778,4865,4322,-235],["2026-10-06",-235,1799,2414,-850],["2026-10-07",-850,2307,3100,-1643],["2026-10-08",-1643,3380,2902,-1165],["2026-10-09",-1165,3263,8249,-6151],["2026-10-10",-6151,3184,0,-2967],["2026-10-13",-2967,7735,5619,-851],["2026-10-14",-851,3373,3571,-1049],["2026-10-15",-1049,4232,3912,-729],["2026-10-16",-729,4292,6532,-2969],["2026-10-17",-2969,2793,0,-176],["2026-10-19",-176,6136,5717,243],["2026-10-20",243,4006,4273,-24],["2026-10-21",-24,2164,2317,-177],["2026-10-22",-177,4144,3862,105],["2026-10-23",105,4122,6102,-1875],["2026-10-24",-1875,2058,0,183],["2026-10-26",183,5214,5007,390],["2026-10-27",390,3845,4241,-6],["2026-10-28",-6,4411,4665,-260],["2026-10-29",-260,4883,2114,2509],["2026-10-30",2509,946,0,3455,0]]},{"c":"RT07-122","n":"TALCA REPARACION","v":0,"d":[["2026-09-01",675,599,0,1274],["2026-09-02",1274,285,455,1104],["2026-09-03",1104,720,726,1098],["2026-09-04",1098,722,214,1606],["2026-09-07",1606,737,662,1681],["2026-09-08",1681,413,0,2094],["2026-09-09",2094,652,945,1801],["2026-09-10",1801,791,662,1930],["2026-09-11",1930,302,995,1237],["2026-09-14",1237,486,690,1033],["2026-09-15",1033,394,311,1116],["2026-09-16",1116,826,1072,870],["2026-09-17",870,665,281,1254],["2026-09-21",1254,742,651,1345],["2026-09-22",1345,582,321,1606],["2026-09-23",1606,608,600,1614],["2026-09-24",1614,311,1400,525],["2026-09-25",525,926,540,911],["2026-09-28",911,412,0,1323],["2026-09-29",1323,756,600,1479],["2026-09-30",1479,513,731,1261],["2026-10-01",1261,293,961,593],["2026-10-02",593,1180,293,1480],["2026-10-05",1480,710,969,1221],["2026-10-06",1221,447,436,1232],["2026-10-07",1232,856,1241,847],["2026-10-08",847,464,0,1311],["2026-10-09",1311,735,795,1251],["2026-10-13",1251,798,309,1740],["2026-10-14",1740,197,703,1234],["2026-10-15",1234,694,643,1285],["2026-10-16",1285,633,661,1257],["2026-10-19",1257,895,0,2152],["2026-10-20",2152,632,1312,1472],["2026-10-21",1472,386,393,1465],["2026-10-22",1465,812,808,1469],["2026-10-23",1469,363,901,931],["2026-10-26",931,809,681,1059],["2026-10-27",1059,387,500,946],["2026-10-28",946,354,696,604],["2026-10-29",604,376,354,626],["2026-10-30",626,0,626,0,0]]},{"c":"RT13-102","n":"SANTIAGO REPARACION","v":4103,"d":[["2026-09-01",7412,2816,5870,4358],["2026-09-02",4358,1965,2630,3693],["2026-09-03",3693,1530,3939,1284],["2026-09-04",1284,2031,0,3315],["2026-09-07",3315,2013,1454,3874],["2026-09-08",3874,1945,750,5069],["2026-09-09",5069,2207,2485,4791],["2026-09-10",4791,1976,2739,4028],["2026-09-11",4028,2643,1507,5164],["2026-09-14",5164,2022,1168,6018],["2026-09-15",6018,4197,2824,7391],["2026-09-16",7391,1573,5305,3659],["2026-09-17",3659,1889,1152,4396],["2026-09-21",4396,1343,2390,3349],["2026-09-22",3349,2167,3359,2157],["2026-09-23",2157,2359,3348,1168],["2026-09-24",1168,3619,2848,1939],["2026-09-25",1939,3668,1341,4266],["2026-09-28",4266,2336,1562,5040],["2026-09-29",5040,2138,3019,4159],["2026-09-30",4159,1916,2869,3206],["2026-10-01",3206,2110,2539,2777],["2026-10-02",2777,3053,1029,4801],["2026-10-05",4801,2415,2702,4514],["2026-10-06",4514,1308,1000,4822],["2026-10-07",4822,1535,4460,1897],["2026-10-08",1897,1391,1930,1358],["2026-10-09",1358,4394,748,5004],["2026-10-13",5004,3224,3776,4452],["2026-10-14",4452,1907,3548,2811],["2026-10-15",2811,2229,1346,3694],["2026-10-16",3694,3264,2029,4929],["2026-10-19",4929,3617,2945,5601],["2026-10-20",5601,2071,2203,5469],["2026-10-21",5469,1154,2850,3773],["2026-10-22",3773,1713,3314,2172],["2026-10-23",2172,2985,651,4506],["2026-10-26",4506,2143,2602,4047],["2026-10-27",4047,2134,1500,4681],["2026-10-28",4681,2409,2875,4215],["2026-10-29",4215,1106,1218,4103]]},{"c":"RT07-123","n":"TALCA PINTURA","v":0,"d":[["2026-09-01",156,57,0,213],["2026-09-02",213,491,606,98],["2026-09-03",98,1045,726,417],["2026-09-04",417,391,214,594],["2026-09-07",594,1065,867,792],["2026-09-08",792,129,0,921],["2026-09-09",921,1207,1329,799],["2026-09-10",799,849,1000,648],["2026-09-11",648,995,1000,643],["2026-09-14",643,960,1099,504],["2026-09-15",504,560,388,676],["2026-09-16",676,527,895,308],["2026-09-17",308,464,551,221],["2026-09-21",221,1114,651,684],["2026-09-22",684,386,354,716],["2026-09-23",716,990,783,923],["2026-09-24",923,1400,1954,369],["2026-09-25",369,783,540,612],["2026-09-28",612,0,210,402],["2026-09-29",402,822,754,470],["2026-09-30",470,731,974,227],["2026-10-01",227,961,1183,5],["2026-10-02",5,821,293,533],["2026-10-05",533,1193,1165,561],["2026-10-06",561,612,436,737],["2026-10-07",737,1524,1788,473],["2026-10-08",473,174,0,647],["2026-10-09",647,1099,1000,746],["2026-10-13",746,502,541,707],["2026-10-14",707,703,910,500],["2026-10-15",500,903,945,458],["2026-10-16",458,780,854,384],["2026-10-19",384,402,0,786],["2026-10-20",786,1496,1691,591],["2026-10-21",591,697,1018,270],["2026-10-22",270,1130,808,592],["2026-10-23",592,901,1000,493],["2026-10-26",493,1086,1000,579],["2026-10-27",579,554,894,239],["2026-10-28",239,755,930,64],["2026-10-29",64,354,354,64],["2026-10-30",64,626,690,0,0]]},{"c":"RT13-103","n":"SANTIAGO PINTURA","v":1424,"d":[["2026-09-01",4101,7625,7516,4210],["2026-09-02",4210,4750,3340,5620],["2026-09-03",5620,6640,6450,5810],["2026-09-04",5810,4218,2058,7970],["2026-09-07",7970,4434,8031,4373],["2026-09-08",4373,2972,3093,4252],["2026-09-09",4252,5059,5987,3324],["2026-09-10",3324,4965,4956,3333],["2026-09-11",3333,5964,2694,6603],["2026-09-14",6603,3935,5960,4578],["2026-09-15",4578,5493,6375,3696],["2026-09-16",3696,7313,7545,3464],["2026-09-17",3464,3315,1798,4981],["2026-09-21",4981,4080,4951,4110],["2026-09-22",4110,4766,5418,3458],["2026-09-23",3458,5773,6809,2422],["2026-09-24",2422,4655,4308,2769],["2026-09-25",2769,5033,2833,4969],["2026-09-28",4969,5227,5630,4566],["2026-09-29",4566,5471,4808,5229],["2026-09-30",5229,4933,7132,3030],["2026-10-01",3030,4716,4544,3202],["2026-10-02",3202,4580,1029,6753],["2026-10-05",6753,4609,5818,5544],["2026-10-06",5544,2106,2500,5150],["2026-10-07",5150,6025,7356,3819],["2026-10-08",3819,3441,2000,5260],["2026-10-09",5260,5233,5340,5153],["2026-10-13",5153,6171,6934,4390],["2026-10-14",4390,5253,7400,2243],["2026-10-15",2243,3029,0,5272],["2026-10-16",5272,6317,4500,7089],["2026-10-19",7089,6245,9996,3338],["2026-10-20",3338,4405,3444,4299],["2026-10-21",4299,4046,6139,2206],["2026-10-22",2206,5463,5559,2110],["2026-10-23",2110,5343,870,6583],["2026-10-26",6583,5992,8114,4461],["2026-10-27",4461,3607,3000,5068],["2026-10-28",5068,5152,7437,2783],["2026-10-29",2783,2848,4207,1424]]},{"c":"RT07-125","n":"TALCA DISPONIBLE","v":319,"d":[["2026-09-01",900,983,1248,635],["2026-09-02",635,606,456,785],["2026-09-03",785,726,844,667],["2026-09-04",667,796,1060,403],["2026-09-07",403,867,476,794],["2026-09-08",794,0,820,-26],["2026-09-09",-26,1329,1056,247],["2026-09-10",247,1000,760,487],["2026-09-11",487,1000,900,587],["2026-09-14",587,1099,1088,598],["2026-09-15",598,757,1306,49],["2026-09-16",49,895,734,210],["2026-09-17",210,1714,1137,787],["2026-09-21",787,651,1204,234],["2026-09-22",234,354,522,66],["2026-09-23",66,783,730,119],["2026-09-24",119,1954,912,1161],["2026-09-25",1161,540,1320,381],["2026-09-28",381,210,508,83],["2026-09-29",83,754,832,5],["2026-09-30",5,974,942,37],["2026-10-01",37,1183,1164,56],["2026-10-02",56,494,540,10],["2026-10-05",10,1165,976,199],["2026-10-06",199,436,432,203],["2026-10-07",203,1788,528,1463],["2026-10-08",1463,60,1032,491],["2026-10-09",491,1000,418,1073],["2026-10-13",1073,541,1320,294],["2026-10-14",294,910,654,550],["2026-10-15",550,945,1174,321],["2026-10-16",321,854,406,769],["2026-10-19",769,0,358,411],["2026-10-20",411,1691,1528,574],["2026-10-21",574,1018,1351,241],["2026-10-22",241,808,988,61],["2026-10-23",61,1000,502,559],["2026-10-26",559,1000,946,613],["2026-10-27",613,894,1054,453],["2026-10-28",453,930,1140,243],["2026-10-29",243,354,344,253],["2026-10-30",253,690,624,319,0]]},{"c":"RT13-105","n":"SANTIAGO DISPONIBLE","v":2816,"d":[["2026-09-01",4140,8252,4441,7951],["2026-09-02",7951,3341,5628,5664],["2026-09-03",5664,6450,4016,8098],["2026-09-04",8098,2258,3834,6522],["2026-09-07",6522,8571,5658,9435],["2026-09-08",9435,3093,5242,7286],["2026-09-09",7286,6527,5200,8613],["2026-09-10",8613,4958,4356,9215],["2026-09-11",9215,2694,5148,6761],["2026-09-14",6761,6536,7484,5813],["2026-09-15",5813,4323,5880,4256],["2026-09-16",4256,7605,7648,4213],["2026-09-17",4213,3286,1456,6043],["2026-09-21",6043,5392,6462,4973],["2026-09-22",4973,5418,3420,6971],["2026-09-23",6971,6809,6108,7672],["2026-09-24",7672,2505,3906,6271],["2026-09-25",6271,2833,5547,3557],["2026-09-28",3557,5630,5946,3241],["2026-09-29",3241,4808,2980,5069],["2026-09-30",5069,7132,4148,8053],["2026-10-01",8053,5616,5040,8629],["2026-10-02",8629,0,3948,4681],["2026-10-05",4681,6358,6656,4383],["2026-10-06",4383,3292,4140,3535],["2026-10-07",3535,7356,5472,5419],["2026-10-08",5419,2540,4128,3831],["2026-10-09",3831,5648,5592,3887],["2026-10-13",3887,7726,8274,3339],["2026-10-14",3339,7400,3048,7691],["2026-10-15",7691,0,4881,2810],["2026-10-16",2810,4941,4143,3608],["2026-10-19",3608,10248,7243,6613],["2026-10-20",6613,3444,3288,6769],["2026-10-21",6769,6391,5505,7655],["2026-10-22",7655,5559,4141,9073],["2026-10-23",9073,0,6496,2577],["2026-10-26",2577,8114,6276,4415],["2026-10-27",4415,3000,2556,4859],["2026-10-28",4859,7437,5455,6841],["2026-10-29",6841,4740,5009,6572],["2026-10-30",6572,0,3756,2816,0]]},{"c":"RT07-126","n":"TALCA TRANSITO","v":142,"d":[["2026-09-04",142,0,200,-58],["2026-09-07",-58,200,0,142],["2026-09-16",142,0,60,82],["2026-09-17",82,60,0,142],["2026-09-21",142,441,441,142],["2026-10-09",142,0,308,-166],["2026-10-14",-166,308,0,142],["2026-10-16",142,357,441,58],["2026-10-20",58,84,0,142]]}]);
+(function () {
+  try {
+    var b = document.getElementById("pd-bod"), m = document.getElementById("pd-mes"),
+        caja = document.getElementById("pd-panel");
+    if (!b || !m || !caja) return;
+    function pintar() {
+      var hay = null;
+      for (var i = 0; i < PD.length; i++) if (PD[i].cod === b.value) hay = PD[i];
+      caja.innerHTML = panelDeMes(hay, m.value);
+    }
+    b.addEventListener("change", pintar);
+    m.addEventListener("change", pintar);
+  } catch (e) { /* el panel por defecto ya esta escrito: sin js igual se lee */ }
 })();
 </script>
 </div>

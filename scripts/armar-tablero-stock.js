@@ -801,6 +801,17 @@ function rehidratar(compacta) {
  *  escapa solo esa secuencia y no todo "</": un "</" dentro de una expresion
  *  regular del codigo publicado —y hay varias— se rompe si se le mete una
  *  barra invertida. */
+/*  UN DATO QUE VIAJA ADENTRO DE UN <script> NO PUEDE TRAER UN '<' CRUDO.
+ *
+ *  Adentro de un script el parser de html no corta solo en "</script": la
+ *  secuencia "<!--<script" tambien lo mete en otro estado y a partir de ahi
+ *  deja de leer lo que uno cree. Escapar el '<' como \u003c en el json
+ *  elimina la familia entera de casos de una, sigue siendo json valido y se
+ *  parsea identico. Es mas barato que enumerar las secuencias peligrosas. */
+function jsonSeguro(x) {
+  return JSON.stringify(x).replace(/</g, '\\u003c');
+}
+
 function sinCierreDeScript(js) {
   return String(js == null ? '' : js).replace(/<\/(script)/gi, '<\\/$1');
 }
@@ -823,9 +834,9 @@ function jsDePlanta(d) {
   const fns = [esNumero, mil, conSigno, clasePos, esc, etiquetaDeMes, diasDelMes,
                resumenDelMes, altoVisible, ejeDeDias, svgFlujoDia, svgNivelDia, tablaDeDias,
                panelDeMes, rehidratar];
-  return '\nvar MESES = ' + JSON.stringify(MESES) + ';\n' +
+  return '\nvar MESES = ' + jsonSeguro(MESES) + ';\n' +
          fns.map(f => f.toString()).join('\n') + '\n' +
-         'var PD = rehidratar(' + JSON.stringify(serieCompacta(serie)) + ');\n' + [
+         'var PD = rehidratar(' + jsonSeguro(serieCompacta(serie)) + ');\n' + [
     '(function () {',
     '  try {',
     '    var b = document.getElementById("pd-bod"), m = document.getElementById("pd-mes"),',
@@ -1384,7 +1395,7 @@ module.exports = { esNumero, mil, conSigno, clasePos, pct, pct1, esc, sinBom,
                    plantaDeBodega, gruposDeSerie, etiquetaDeMes, mesesDeSerie,
                    diasDelMes, resumenDelMes, altoVisible, ejeDeDias, svgFlujoDia, svgNivelDia,
                    tablaDeDias, panelDeMes, bloqueDePlanta,
-                   serieCompacta, rehidratar, sinCierreDeScript, jsDePlanta,
+                   serieCompacta, rehidratar, jsonSeguro, sinCierreDeScript, jsDePlanta,
                    NUEVE, GRUPOS, MESES, OPCIONES,
                    clasificarPool, cortarSocios, porGrupo, mesesPareados, datos,
                    antiguedad, svgPool, svgMeses, tablaDePlanta, filaSocio, tablaSocios, notaImposibles, pagina,

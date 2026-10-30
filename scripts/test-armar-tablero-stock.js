@@ -483,7 +483,7 @@ chk('un sistemico no numerico no cuenta', A.datos(BOD,
     {socios:[],nivel:{bodega:1},mensual:[],ventana:{}}, {sistemico:'mucho'}).sistemico === null);
 
 console.log('\n— la distribucion diaria de planta, entrada opcional —');
-const PLA = { ancla:'2026-10-29T14:00:00Z', meses:['2026-09','2026-10'], bodegas:[
+const PLA = { ancla:'2026-10-29T14:00:00Z', ancla_al_dia:true, meses:['2026-09','2026-10'], bodegas:[
   { whs:'RT13-105', nombre:'SANTIAGO DISPONIBLE', indicador:true, nivel:1730, dias:[
     { dia:'2026-10-27', apertura:1160, entradas:3000, salidas:2556, cierre:1604, firme:true },
     { dia:'2026-10-26', apertura:-678, entradas:8114, salidas:6276, cierre:1160, firme:true } ] },
@@ -534,18 +534,30 @@ chk('el recorrido manda sobre el codigo de bodega',
 console.log('\n— el ancla de la serie y la del tablero tienen que ser la misma —');
 // si no, los cierres diarios no son los mismos numeros que el saldo por
 // bodega de mas arriba y la pagina se contradice sola
-chk('misma fecha, calza', A.anclaCalza({ ancla:'2026-10-29T14:00:00Z' }, { generado:'2026-10-29T09:00:00Z' }).ok === true);
-const AM = A.anclaCalza({ ancla:'2026-10-28T17:41:00Z' }, { generado:'2026-10-29T14:39:00Z' });
+chk('misma fecha y declarada al dia, calza',
+    A.anclaCalza({ ancla:'2026-10-29T14:00:00Z', ancla_al_dia:true }, { generado:'2026-10-29T09:00:00Z' }).ok === true);
+// Que las dos fechas coincidan NO basta: las dos salen del mismo
+// bodegas-hoy.json, asi que una serie calculada con lineas mas nuevas que el
+// ancla declara la misma fecha y viene corrida igual. saldo-planta lo sabe y
+// lo escribe; aca se exige.
+const COR = A.anclaCalza({ ancla:'2026-10-28T17:41:00Z', ancla_al_dia:false }, { generado:'2026-10-28T17:41:00Z' });
+chk('misma fecha pero marcada como corrida: no se dibuja', COR.ok === false, JSON.stringify(COR));
+chk('y dice que saldo-planta la marco', /marcó como corrida/.test(COR.motivo), COR.motivo);
+// fallar cerrado: un json viejo que no declara el campo tampoco pasa
+const VIE = A.anclaCalza({ ancla:'2026-10-29T14:00:00Z' }, { generado:'2026-10-29T09:00:00Z' });
+chk('un json sin ancla_al_dia tampoco pasa', VIE.ok === false, JSON.stringify(VIE));
+chk('y dice que falta el campo', /no trae ancla_al_dia/.test(VIE.motivo), VIE.motivo);
+const AM = A.anclaCalza({ ancla:'2026-10-28T17:41:00Z', ancla_al_dia:true }, { generado:'2026-10-29T14:39:00Z' });
 chk('distinta fecha, no calza', AM.ok === false);
 chk('y dice las dos fechas', /2026-10-28/.test(AM.motivo) && /2026-10-29/.test(AM.motivo), AM.motivo);
-chk('sin ancla en la serie lo dice', /serie de planta no trae ancla/.test(A.anclaCalza({}, { generado:'2026-10-29' }).motivo));
-chk('sin fecha en el tablero lo dice', /tablero no trae fecha/.test(A.anclaCalza({ ancla:'2026-10-29' }, {}).motivo));
+chk('sin ancla en la serie lo dice', /serie de planta no trae ancla/.test(A.anclaCalza({ ancla_al_dia:true }, { generado:'2026-10-29' }).motivo));
+chk('sin fecha en el tablero lo dice', /tablero no trae fecha/.test(A.anclaCalza({ ancla:'2026-10-29', ancla_al_dia:true }, {}).motivo));
 chk('sin nada no revienta', A.anclaCalza(null, null).ok === false);
 // dos textos iguales que NO son fechas no son un ancla que calce: sin fecha
 // no hay nada que comparar y hay que decirlo
 chk('dos valores iguales que no son fechas no calzan',
-    A.anclaCalza({ ancla:'hoy' }, { generado:'hoy' }).ok === false,
-    JSON.stringify(A.anclaCalza({ ancla:'hoy' }, { generado:'hoy' })));
+    A.anclaCalza({ ancla:'hoy', ancla_al_dia:true }, { generado:'hoy' }).ok === false,
+    JSON.stringify(A.anclaCalza({ ancla:'hoy', ancla_al_dia:true }, { generado:'hoy' })));
 
 console.log('\n— datos() con y sin la planta —');
 const VAC = { socios:[], nivel:{}, mensual:[], ventana:{} };

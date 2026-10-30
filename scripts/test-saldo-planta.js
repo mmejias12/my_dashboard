@@ -158,6 +158,30 @@ chk('sin fecha de lectura no se puede saber', S.anclaAlDia('','2026-10-29').ok==
 chk('sin lineas no hay con que comparar', S.anclaAlDia('2026-10-28','').ok===true);
 chk('una fecha mal escrita no se da por buena', S.anclaAlDia('28-10-2026','2026-10-29').ok===false);
 
+console.log('\n— lo que se escribe en el json —');
+// El json lleva SU PROPIO veredicto: sin eso, el aviso se lo lleva la consola
+// y el archivo se ve igual de sano. armar-tablero exige ancla_al_dia para
+// dibujar, asi que una serie corrida no se publica sola.
+const PJ_OK = S.payloadJson({ generado:'2026-10-30T12:00:00Z', anclaLeida:'2026-10-30T11:00:00Z',
+  meses:['2026-09','2026-10'], ancla:{ ok:true, motivo:null },
+  veredicto:{ nivel:'si', texto:'todo bien' }, indicador:15963, fueraDelIndicador:4389,
+  cierreFirme:'2026-10-29', bodegas:[{ whs:'RT13-100' }], cadena:[{ desde:'A' }] });
+chk('con el ancla al dia lo declara', PJ_OK.ancla_al_dia === true);
+chk('y no pone el aviso', PJ_OK._ojo === null);
+chk('lleva el veredicto adentro', PJ_OK.veredicto.nivel === 'si' && PJ_OK.veredicto.texto === 'todo bien');
+chk('y los numeros', PJ_OK.indicador === 15963 && PJ_OK.fueraDelIndicador === 4389 &&
+    PJ_OK.cierreFirme === '2026-10-29' && PJ_OK.bodegas.length === 1 && PJ_OK.cadena.length === 1);
+chk('el ancla que se guarda es la LEIDA, no el resultado del control',
+    PJ_OK.ancla === '2026-10-30T11:00:00Z');
+const PJ_MAL = S.payloadJson({ ancla:{ ok:false, motivo:'el ancla se leyo el 28 y hay movimiento hasta el 29' },
+  veredicto:{ nivel:'revisar', texto:'x' } });
+chk('con el ancla corrida lo declara en false', PJ_MAL.ancla_al_dia === false);
+chk('y lo grita en _ojo', /SERIE CORRIDA/.test(PJ_MAL._ojo) && /hay movimiento hasta el 29/.test(PJ_MAL._ojo),
+    PJ_MAL._ojo);
+// sin control de ancla tampoco se declara al dia: fallar cerrado
+chk('sin control de ancla no se declara al dia', S.payloadJson({}).ancla_al_dia === false);
+chk('sin nada no revienta', S.payloadJson(null).ancla_al_dia === false && S.payloadJson(null).bodegas.length === 0);
+
 console.log('\n— el veredicto —');
 const SERIES=[{whs:'A',dias:[{dia:'d',cierre:5}]},{whs:'B',dias:[{dia:'d',cierre:1}]}];
 const CUAD_OK={suma:150,esperado:150,diferencia:0,cuadra:true};

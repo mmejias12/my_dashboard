@@ -159,6 +159,66 @@ chk('un turno con RUT valido igual entra en la lista a arreglar',
     /turno o un proceso/.test(O.codigosAArreglar(TURNO, NOMT)[0].motivo),
     JSON.stringify(O.codigosAArreglar(TURNO, NOMT)));
 
+console.log('\n— no se suman pallets con tablas —');
+// La primera corrida contra SAP imprimio "300.594 de 403.095 (74,6%)" y ese
+// numero no existe: sumaba 238.397 pallets con 164.698 tablas y tacos.
+chk('un proceso que nombra PAL produce pallets',
+    O.familiaDeItem('REP-PAL-ROJOS','11111111110') === 'pallet' &&
+    O.familiaDeItem('INSP-PAL-ROJOS','11111111110') === 'pallet' &&
+    O.familiaDeItem('PIN-PAL-ROJOS-TALCA','11111111110') === 'pallet');
+chk('el item del pallet tambien', O.familiaDeItem('11111111110','11111111110') === 'pallet');
+chk('y sus semielaborados', O.familiaDeItem('11111111110-1','11111111110') === 'pallet' &&
+    O.familiaDeItem('11111111110-2','11111111110') === 'pallet');
+// una tabla NO es un pallet: 21111611110 empieza parecido y no lo es
+chk('una tabla es insumo', O.familiaDeItem('21111611110','11111111110') === 'insumo' &&
+    O.familiaDeItem('22112811110','11111111110') === 'insumo', O.familiaDeItem('21111611110','11111111110'));
+chk('la conversion de pintura es insumo', O.familiaDeItem('CONVER-PINT-ROJA','11111111110') === 'insumo');
+chk('no distingue mayusculas', O.familiaDeItem('rep-pal-rojos','11111111110') === 'pallet');
+chk('sin item cae en insumo', O.familiaDeItem(null,'11111111110') === 'insumo' && O.familiaDeItem('','x') === 'insumo');
+// el item del pallet es un parametro: si cambia, la regla lo sigue
+chk('el item del pallet se puede cambiar',
+    O.familiaDeItem('99999','99999') === 'pallet' && O.familiaDeItem('11111111110','99999') === 'insumo');
+// el guion importa: un item que EMPIEZA con el del pallet pero sigue con
+// otra cifra es otro item, no una variante suya
+chk('un item que solo empieza igual no es una variante',
+    O.familiaDeItem('999997','99999') === 'insumo', O.familiaDeItem('999997','99999'));
+const MIX = O.coberturaPorProceso([
+  { item:'REP-PAL-ROJOS', operario:'12329559-5', completada:100 },
+  { item:'INSP-PAL-ROJOS', operario:null, completada:900 },
+  { item:'21111611110', operario:'12329559-5', completada:5000 },
+  { item:'22112811110', operario:'333-3', completada:3000 },
+], NOM, '11111111110');
+chk('la cobertura marca la familia de cada proceso',
+    MIX.filter(c=>c.familia==='pallet').length === 2 && MIX.filter(c=>c.familia==='insumo').length === 2,
+    JSON.stringify(MIX.map(c=>[c.item,c.familia])));
+const FAM = O.porFamilia(MIX);
+chk('y se suman por separado',
+    FAM.find(f=>f.familia==='pallet').total === 1000 &&
+    FAM.find(f=>f.familia==='insumo').total === 8000, JSON.stringify(FAM));
+chk('la familia mas grande va primero', FAM[0].familia === 'insumo');
+chk('sin cobertura no hay familias', O.porFamilia([]).length === 0 && O.porFamilia(null).length === 0);
+// un proceso al que no se le marco familia NO puede caer del lado de los
+// pallets: ahi es donde se decide si se puede pagar
+chk('sin familia marcada cae en insumo',
+    O.porFamilia([{ total:7, conRut:0 }])[0].familia === 'insumo');
+const VMIX = O.veredicto(MIX, [], [], 'completada');
+chk('el veredicto da un porcentaje POR familia', /PALLETS:/.test(VMIX.texto) && /INSUMOS:/.test(VMIX.texto), VMIX.texto);
+chk('y no uno solo que los mezcle', !/1\.000 de 9\.000/.test(VMIX.texto) && !/9\.000/.test(VMIX.texto), VMIX.texto);
+chk('el de pallets sale con su propia cuenta', /900 de 1\.000 \(90\.0%\)/.test(VMIX.texto), VMIX.texto);
+// el bono se paga por pallets: esa familia es la que decide el nivel
+chk('el nivel lo decide la familia de los pallets', VMIX.nivel === 'no sirve para pagar', VMIX.nivel);
+const SOLOINS = O.veredicto(O.coberturaPorProceso(
+  [{ item:'21111611110', operario:null, completada:100 }], NOM, '11111111110'), [], [], 'completada');
+chk('sin pallets decide la familia que haya', SOLOINS.nivel === 'no sirve para pagar', SOLOINS.nivel);
+// los pallets mandan AUNQUE sean la familia mas chica: el bono se paga por
+// pallets, no por tablas
+const CHICO = O.veredicto(O.coberturaPorProceso([
+  { item:'REP-PAL-ROJOS', operario:null, completada:100 },        // 100% sin RUT, y es lo que importa
+  { item:'21111611110', operario:'12329559-5', completada:90000 }, // mucho mas grande y todo limpio
+], NOM, '11111111110'), [], [], 'completada');
+chk('los pallets mandan aunque sean la familia mas chica',
+    CHICO.nivel === 'no sirve para pagar', CHICO.nivel + ' · ' + CHICO.texto);
+
 console.log('\n— el mismo codigo en dos plantas —');
 // una persona trabaja en una planta; el mismo codigo en las dos es la firma
 // de dos personas compartiendolo, y el bono de una se le suma a la otra
@@ -184,6 +244,7 @@ console.log('\n— el veredicto —');
 const V = O.veredicto(COB, ARR, DOS, 'completada');
 chk('dice cuanto no se puede atribuir', /1\.180 de 1\.380/.test(V.texto), V.texto);
 chk('y con que porcentaje', /85\.5%/.test(V.texto), V.texto);
+chk('y los nombra como pallets porque REP- y PIN- lo son', /PALLETS:/.test(V.texto), V.texto);
 chk('la cuenta del veredicto cuadra con la cobertura',
     COB.reduce((s,c)=>s+c.total,0) === 1380 && COB.reduce((s,c)=>s+c.conRut,0) === 200);
 // mas de un 5% sin atribuir no sirve para pagar: no es un detalle

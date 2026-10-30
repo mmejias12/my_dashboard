@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="/sesion.js"></script>
 <style>
 /* Tablero operativo: una fila de cifras, luego las tres patas del pool, luego
    el detalle por socio. Neutros calidos sobre el rojo del pallet. */
@@ -42,6 +43,11 @@ h3{font:600 14px/1.3 var(--f-tit);margin:0 0 10px;text-transform:uppercase;lette
 h4{font:600 12px/1.3 var(--f-tit);margin:22px 0 8px;text-transform:uppercase;letter-spacing:.08em;color:var(--tinta2)}
 p{margin:0 0 10px;max-width:68ch}
 .sub{color:var(--tinta2);font-size:14px;margin-top:6px}
+/* La migaja ubica la vista dentro del portal. El unico enlace de la pagina:
+   el camino de vuelta al panel. */
+.migaja{font-size:12px;color:var(--tinta3);margin-top:7px}
+.migaja a{color:var(--tinta2);text-decoration:none;border-bottom:1px solid var(--linea)}
+.migaja a:hover{color:var(--marca);border-bottom-color:var(--marca)}
 .cabe{display:flex;flex-wrap:wrap;gap:14px;align-items:baseline;justify-content:space-between;
   border-bottom:2px solid var(--marca);padding-bottom:14px}
 .sello{font:500 12px/1 var(--f-cod);color:var(--tinta2);border:1px solid var(--linea);
@@ -110,6 +116,13 @@ th.num{text-align:right}
 .t-c .bar span{background:var(--cli);opacity:1}
 .t-g .bar span{background:var(--ret);opacity:1}
 .d-pos{color:var(--ok)} .d-neg{color:var(--grave)} .d-nul{color:var(--tinta3)}
+/* El subtotal cierra su bloque: linea arriba y peso, para que no se lea como
+   una bodega mas. El bloque referencial va atenuado porque no suma. */
+tr.tot td{border-top:1.5px solid var(--linea);border-bottom:none;
+  font:600 13px/1.3 var(--f-tit);text-transform:uppercase;letter-spacing:.06em;padding-top:8px}
+tbody.ref{color:var(--tinta2)}
+tbody.ref td{opacity:.78}
+tbody.ref tr.tot td{opacity:1}
 .chip{font:500 10px/1 var(--f-tit);text-transform:uppercase;letter-spacing:.06em;
   border:1px solid var(--linea);border-radius:999px;padding:3px 7px;color:var(--tinta3);white-space:nowrap}
 .enrevision{border:1px dashed var(--alerta);border-radius:6px;background:var(--panel);
@@ -144,6 +157,7 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--linea);
 <header class="cabe">
   <div>
     <h1>Stock y Flujos de Pallets</h1>
+    <div class="migaja"><a href="m3link_dashboard_dark.html">Panel M3LINK</a> › Stock SAP › Stock y Flujos de Pallets · extracción propia M3DATA</div>
     <div class="sub">Pallet rojo 1,00 × 1,20 · SKU 11111111110 · extracción propia desde SAP B1</div>
   </div>
   <div class="sello" data-medido="2026-10-30">Saldos al 2026-10-30<br>Flujos 2026 al 2026-10-30</div>
@@ -151,19 +165,20 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--linea);
 
 <section>
   <h2>El pool</h2>
-  <p>Todo el pallet rojo que SAP tiene registrado, en las 39 bodegas de la empresa, repartido en las tres patas del pool.</p>
+  <p>El pallet rojo que está rotando, repartido en las tres patas del pool. Lo que SAP tiene en bodega y no rota —merma, extraños y el tránsito que no es del indicador— se muestra aparte y no suma. SAP registra el pallet rojo en 39 bodegas de la empresa.</p>
   <div class="panel">
     <div class="tile" style="border:none;padding:0">
-      <div class="et">Pool total</div>
-      <div class="big">812.572</div>
-      <div class="pie">pallets, leídos del saldo vivo de SAP<br>de los cuales <b>17.890</b> son sistémicos y no rotan: el pool en rotación es <b>794.682</b></div>
+      <div class="et">Pool</div>
+      <div class="big">808.183</div>
+      <div class="pie">pallets de pool, leídos del saldo vivo de SAP<br>de los cuales <b>17.890</b> son sistémicos y no vuelven a rotar: en circulación quedan <b>790.293</b></div>
     </div>
-    <div class="pool"><svg viewBox="0 0 1000 34" preserveAspectRatio="none" role="img" aria-label="Reparto del pool"><rect class="s-cli" x="0.00" y="0" width="265.28" height="34" rx="3"><title>Clientes: 217.181 (26,7%)</title></rect><rect class="s-ret" x="267.28" y="0" width="709.82" height="34" rx="3"><title>Retail: 578.401 (71,2%)</title></rect><rect class="s-pla" x="979.09" y="0" width="18.91" height="34" rx="3"><title>Planta REDTEC: 16.990 (2,1%)</title></rect></svg></div>
+    <div class="pool"><svg viewBox="0 0 1000 34" preserveAspectRatio="none" role="img" aria-label="Reparto del pool"><rect class="s-cli" x="0.00" y="0" width="266.73" height="34" rx="3"><title>Clientes: 217.181 (26,9%)</title></rect><rect class="s-ret" x="268.73" y="0" width="713.68" height="34" rx="3"><title>Retail: 578.401 (71,6%)</title></rect><rect class="s-pla" x="984.41" y="0" width="13.59" height="34" rx="3"><title>Planta REDTEC: 12.601 (1,6%)</title></rect></svg></div>
     <div class="leyenda">
-      <span><i class="pt p-cli"></i>Clientes <b>217.181</b> · 26,7%</span>
-      <span><i class="pt p-ret"></i>Retail <b>578.401</b> · 71,2%</span>
-      <span><i class="pt p-pla"></i>Planta REDTEC <b>16.990</b> · 2,1%</span>
+      <span><i class="pt p-cli"></i>Clientes <b>217.181</b> · 26,9%</span>
+      <span><i class="pt p-ret"></i>Retail <b>578.401</b> · 71,6%</span>
+      <span><i class="pt p-pla"></i>Planta REDTEC <b>12.601</b> · 1,6%</span>
     </div>
+    <p class="sub" style="margin:12px 0 0">Fuera del indicador, referencial —<b>no suma</b>—: 4.389 en santiago merma (2.620), santiago extranos (1.544), coquimbo transito (225). Contándolos, SAP tiene <b>812.572</b> en bodega.</p>
   </div>
 
   <div class="rejilla">
@@ -178,9 +193,9 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--linea);
       residuo sin ubicación: 32.015</div>
     </div>
     <div class="panel tile t-pla">
-      <div class="et">Planta REDTEC</div><div class="big">16.990</div>
-      <div class="pie">12.601 en las nueve bodegas del indicador<br>
-      4.389 en merma, extraños y tránsito</div>
+      <div class="et">Planta REDTEC</div><div class="big">12.601</div>
+      <div class="pie">en las nueve bodegas del indicador<br>
+      4.389 más en merma, extraños y tránsito, que no suman</div>
     </div>
   </div>
 </section>
@@ -238,13 +253,14 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--linea);
 
 <section>
   <h2>Planta REDTEC</h2>
-  <p>El stock en planta es chico al lado de lo que está afuera, pero el flujo que lo atraviesa no lo es: cada estación procesa cientos de miles de pallets al año para sostener un par de miles en cualquier momento dado.</p>
+  <p>El stock en planta es chico al lado de lo que está afuera, pero el flujo que lo atraviesa no lo es: cada estación procesa cientos de miles de pallets al año para sostener un par de miles en cualquier momento dado. El indicador son las nueve estaciones del recorrido del pallet; merma, extraños y el tránsito que no es del indicador se muestran como referencia y no entran en el pool.</p>
   <div class="dos" style="margin-top:14px">
     <div class="panel">
       <h3>Saldo por bodega</h3>
       <div class="scroll"><table>
         <thead><tr><th>Código</th><th>Bodega</th><th class="num">Saldo</th></tr></thead>
-        <tbody><tr><td class="cod">RT13-102</td><td class="nom">SANTIAGO REPARACION</td><td class="num">4.103</td></tr><tr><td class="cod">RT13-100</td><td class="nom">SANTIAGO INSPECCION</td><td class="num">3.455</td></tr><tr><td class="cod">RT13-105</td><td class="nom">SANTIAGO DISPONIBLE</td><td class="num">2.816</td></tr><tr><td class="cod">RT13-266</td><td class="nom">SANTIAGO MERMA <span class="chip">fuera del indicador</span></td><td class="num">2.620</td></tr><tr><td class="cod">RT13-109</td><td class="nom">SANTIAGO EXTRANOS <span class="chip">fuera del indicador</span></td><td class="num">1.544</td></tr><tr><td class="cod">RT13-103</td><td class="nom">SANTIAGO PINTURA</td><td class="num">1.424</td></tr><tr><td class="cod">RT07-120</td><td class="nom">TALCA INSPECCION</td><td class="num">342</td></tr><tr><td class="cod">RT07-125</td><td class="nom">TALCA DISPONIBLE</td><td class="num">319</td></tr><tr><td class="cod">RT04-160</td><td class="nom">COQUIMBO TRANSITO <span class="chip">fuera del indicador</span></td><td class="num">225</td></tr><tr><td class="cod">RT07-126</td><td class="nom">TALCA TRANSITO</td><td class="num">142</td></tr><tr><td class="cod">RT07-122</td><td class="nom">TALCA REPARACION</td><td class="num">0</td></tr><tr><td class="cod">RT07-123</td><td class="nom">TALCA PINTURA</td><td class="num">0</td></tr></tbody>
+        <tbody><tr><td class="cod">RT13-102</td><td class="nom">SANTIAGO REPARACION</td><td class="num">4.103</td></tr><tr><td class="cod">RT13-100</td><td class="nom">SANTIAGO INSPECCION</td><td class="num">3.455</td></tr><tr><td class="cod">RT13-105</td><td class="nom">SANTIAGO DISPONIBLE</td><td class="num">2.816</td></tr><tr><td class="cod">RT13-103</td><td class="nom">SANTIAGO PINTURA</td><td class="num">1.424</td></tr><tr><td class="cod">RT07-120</td><td class="nom">TALCA INSPECCION</td><td class="num">342</td></tr><tr><td class="cod">RT07-125</td><td class="nom">TALCA DISPONIBLE</td><td class="num">319</td></tr><tr><td class="cod">RT07-126</td><td class="nom">TALCA TRANSITO</td><td class="num">142</td></tr><tr><td class="cod">RT07-122</td><td class="nom">TALCA REPARACION</td><td class="num">0</td></tr><tr><td class="cod">RT07-123</td><td class="nom">TALCA PINTURA</td><td class="num">0</td></tr><tr class="tot"><td class="cod"></td><td class="nom ">Indicador de planta</td><td class="num ">12.601</td></tr></tbody>
+        <tbody class="ref"><tr><td class="cod">RT13-266</td><td class="nom">SANTIAGO MERMA</td><td class="num">2.620</td></tr><tr><td class="cod">RT13-109</td><td class="nom">SANTIAGO EXTRANOS</td><td class="num">1.544</td></tr><tr><td class="cod">RT04-160</td><td class="nom">COQUIMBO TRANSITO</td><td class="num">225</td></tr><tr class="tot"><td class="cod"></td><td class="nom malo">Referencial — no suma</td><td class="num malo">4.389</td></tr></tbody>
       </table></div>
     </div>
     <div class="panel">

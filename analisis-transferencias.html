@@ -108,7 +108,7 @@
     padding:6px 0;text-transform:uppercase;letter-spacing:.5px}
   /* Alto fijo y no cuadrado: con 6 columnas al ancho completo, aspect-ratio:1
      daba celdas de 200px y un mes no entraba en pantalla. */
-  .day{height:92px;background:var(--bg-input);border:1px solid var(--border);
+  .day{height:104px;background:var(--bg-input);border:1px solid var(--border);
     border-radius:var(--radius-sm);padding:6px;cursor:pointer;
     display:flex;flex-direction:column;position:relative;
     transition:border-color .15s}
@@ -117,15 +117,18 @@
   .day.nodata{cursor:default;opacity:.45}
   .day-num{font-size:12px;font-weight:600;color:var(--text-primary)}
   .day.empty .day-num{color:var(--text-muted)}
-  .day-data{margin-top:auto;text-align:right;line-height:1.15}
-  .day-big{font-size:14px;font-weight:700;font-family:'JetBrains Mono',monospace}
-  .day-sub{font-size:10px;color:var(--text-secondary);margin-top:2px;
-    font-family:'JetBrains Mono',monospace}
-  .day-sub{white-space:nowrap}
+  /* Las tres cantidades en columna a la izquierda y el saldo al costado:
+     en una sola línea no se pueden agrandar sin que se salgan de la celda a
+     anchos normales (medido: a 1100px la línea ya ocupaba 116 de 130px). */
+  .day-data{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:6px}
+  .day-big{font-size:19px;font-weight:700;font-family:'JetBrains Mono',monospace;
+    text-align:right;flex:none}
+  .day-sub{font-size:11px;color:var(--text-secondary);line-height:1.35;
+    font-family:'JetBrains Mono',monospace;white-space:nowrap}
   .day-sub .se{color:var(--c-emi)} .day-sub .st{color:var(--c-tra)} .day-sub .sd{color:var(--c-dev)}
   /* La letra va SIEMPRE, no sólo el color: tres números seguidos sin rótulo no
      se pueden separar en impresión, ni con daltonismo, ni de reojo. */
-  .day-sub b{font-weight:600;opacity:.68;font-size:9px}
+  .day-sub b{font-weight:600;opacity:.68;font-size:10px;margin-right:4px}
   /* Saldo negativo = volvió más de lo que salió. Ámbar de aviso, no rojo de
      error: es una señal para mirar el día, no un dato malo. */
   .day-big.neg{color:var(--c-dif)}
@@ -988,10 +991,11 @@ function renderCalendario() {
          siendo el volumen dentro del mes. */
       if (nivel) cel.className += ' h-' + (c.big < 0 ? 'n' : 'e') + nivel;
       html += '<div class="day-data">' +
-              '<div class="day-big' + (c.big < 0 ? ' neg' : '') + '">' + fmtNum(c.big) + '</div>' +
-              '<div class="day-sub"><b>E</b> <span class="se">' + fmtNum(c.emi) + '</span> ' +
-              '<b>T</b> <span class="st">' + fmtNum(c.tra) + '</span> ' +
-              '<b>D</b> <span class="sd">' + fmtNum(c.dev) + '</span></div></div>';
+              '<div class="day-sub">' +
+              '<div><b>E</b><span class="se">' + fmtNum(c.emi) + '</span></div>' +
+              '<div><b>T</b><span class="st">' + fmtNum(c.tra) + '</span></div>' +
+              '<div><b>D</b><span class="sd">' + fmtNum(c.dev) + '</span></div></div>' +
+              '<div class="day-big' + (c.big < 0 ? ' neg' : '') + '">' + fmtNum(c.big) + '</div></div>';
       cel.title = iso + ' · emisiones ' + fmtNum(c.emi) +
                   ' · transferencias ' + fmtNum(c.tra) +
                   ' · devoluciones ' + fmtNum(c.dev) +

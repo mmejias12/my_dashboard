@@ -159,7 +159,7 @@ function tarjetas(datos, bodegas) {
   const fallan = ctrl.filter(c => c.estado === 'no pasa');
   const t = [];
 
-  t.push({ et: 'Reparto del pool', hint: 'cli / ret / planta', kv: mil(d.pool), u: 'pallets',
+  t.push({ clave: 'pool', et: 'Reparto del pool', hint: 'cli / ret / planta', kv: mil(d.pool), u: 'pallets',
            stack: [ { v: Number(cli.nivel) || 0, c: 'var(--cli)', nom: 'Clientes' },
                     { v: Number(ret.nivel) || 0, c: 'var(--ret)', nom: 'Retail' },
                     { v: Number(pla.nivel) || 0, c: 'var(--pla)', nom: 'Planta' } ],
@@ -167,30 +167,30 @@ function tarjetas(datos, bodegas) {
                mil(d.fuera_del_pool) + ' fuera del indicador no suman',
            chip: null });
 
-  t.push({ et: 'Planta · indicador', hint: 'nueve bodegas', kv: mil(pla.nivel), u: 'pallets',
+  t.push({ clave: 'planta', et: 'Planta · indicador', hint: 'nueve bodegas', kv: mil(pla.nivel), u: 'pallets',
            bullet: { v: Number(pla.nivel) || 0, tope: Number(pla.sap) || 0, marca: Number(pla.sap) || 0 },
            ks: '<b>' + mil(pla.fuera) + '</b> más en merma, extraños y tránsito ' +
                '<span class="mut">— referencial, no suman</span>',
            chip: null });
 
-  t.push({ et: 'Atribución por socio', hint: 'socios / bodega', kv: pct1(atrib, (Number(cli.nivel) || 0) + (Number(ret.nivel) || 0)), u: '',
+  t.push({ clave: 'atribucion', et: 'Atribución por socio', hint: 'socios / bodega', kv: pct1(atrib, (Number(cli.nivel) || 0) + (Number(ret.nivel) || 0)), u: '',
            ks: 'clientes <b>' + pct1(cli.socios, cli.nivel) + '</b> · retail <b>' + pct1(ret.socios, ret.nivel) + '</b>',
            bullet: { v: atrib, tope: (Number(cli.nivel) || 0) + (Number(ret.nivel) || 0),
                      marca: (Number(cli.nivel) || 0) + (Number(ret.nivel) || 0) },
            chip: null });
 
-  t.push({ et: 'Sin ubicación', hint: 'bodega − socios', kv: mil(residuo), u: 'pallets',
+  t.push({ clave: 'residuo', et: 'Sin ubicación', hint: 'bodega − socios', kv: mil(residuo), u: 'pallets',
            ks: 'retail <b>' + mil(ret.residuo) + '</b> · clientes <b>' + mil(cli.residuo) + '</b>' +
                '<br><span class="mut">ubicaciones que existen para el pallet sin dueño identificado</span>',
            chip: residuo > 0 ? { c: 'warn', t: pct1(residuo, d.pool) + ' del pool' } : null });
 
   const anio = (d && d.anio) || {};
-  t.push({ et: 'Movimiento del año', hint: 'neto salido', kv: conSigno((Number(anio.ret) || 0) + (Number(anio.cli) || 0)), u: 'pallets',
+  t.push({ clave: 'anio', et: 'Movimiento del año', hint: 'neto salido', kv: conSigno((Number(anio.ret) || 0) + (Number(anio.cli) || 0)), u: 'pallets',
            ks: 'retail <b>' + conSigno(anio.ret) + '</b> · clientes <b>' + conSigno(anio.cli) + '</b>' +
                '<br><span class="mut">positivo = pallet que salió de REDTEC</span>',
            chip: null });
 
-  t.push({ et: 'Días en negativo', hint: 'cierre < 0', kv: mil(neg), u: 'de ' + mil(dias),
+  t.push({ clave: 'negativos', et: 'Días en negativo', hint: 'cierre < 0', kv: mil(neg), u: 'de ' + mil(dias),
            ks: neg ? 'en <b>' + mil(bs.filter(x => x.salud.n).length) + '</b> de ' + mil(bs.length) +
                      ' estaciones<br><span class="mut">es la fecha del documento en SAP, no el cálculo</span>'
                    : 'ninguna estación cierra bajo cero',
@@ -198,13 +198,13 @@ function tarjetas(datos, bodegas) {
            chip: neg ? { c: 'crit', t: pct1(neg, dias) + ' de los días' } : { c: 'good', t: 'sin negativos' } });
 
   const cob = ctrl.find(c => /cobertura/i.test(c.titulo || ''));
-  t.push({ et: 'Cobertura', hint: 'docs SAP vs nuestros', kv: cob ? '100' : '—', u: cob ? '%' : '',
+  t.push({ clave: 'cobertura', et: 'Cobertura', hint: 'docs SAP vs nuestros', kv: cob ? '100' : '—', u: cob ? '%' : '',
            ks: cob ? esc(recortar(cob.texto, 120))
                    : 'el control de cobertura no vino en esta corrida',
            chip: cob ? { c: 'good', t: 'medido el ' + esc(cob.medido || d.extra_medido || 's/f') }
                      : { c: 'nodata', t: 'sin dato' } });
 
-  t.push({ et: 'Controles', hint: 'pasan / total', kv: mil(ctrl.length - fallan.length), u: 'de ' + mil(ctrl.length),
+  t.push({ clave: 'controles', et: 'Controles', hint: 'pasan / total', kv: mil(ctrl.length - fallan.length), u: 'de ' + mil(ctrl.length),
            ks: fallan.length ? 'no pasan: <b>' + fallan.map(c => esc(c.titulo)).join('</b>, <b>') + '</b>'
                              : 'todos los controles pasan',
            bar: { v: ctrl.length - fallan.length, tope: ctrl.length || 1,
@@ -373,6 +373,23 @@ button,select{font-family:inherit}
 .kv small{font:600 12px Inter;color:var(--ink2);margin-left:5px;letter-spacing:0}
 .ks{font-size:11px;color:var(--ink2);margin-top:7px;line-height:1.4}
 .ks b{color:var(--ink)} .ks .mut,.mut{color:var(--ink3)}
+.card.abre{cursor:pointer}
+.abrir{position:absolute;right:11px;bottom:9px;color:var(--ink3);font-size:13px;line-height:1;
+  opacity:.55;transition:opacity .2s, color .2s}
+.card.abre:hover .abrir,.card.abre:focus-visible .abrir{opacity:1;color:var(--marca)}
+.card.abre:focus-visible{outline:2px solid var(--marca);outline-offset:2px}
+/* La tabla del desglose: las filas suman y el pie es el total. El pie va con
+   linea arriba para que no se lea como una fila mas. */
+table.desg{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:4px}
+table.desg td{padding:8px 10px 8px 0;border-bottom:1px solid var(--line);vertical-align:top}
+table.desg td.num{text-align:right;white-space:nowrap;font-family:"JetBrains Mono",ui-monospace,monospace;
+  font-weight:600;width:1%}
+table.desg .m{color:var(--ink3);font-size:10.5px;margin-top:3px;line-height:1.4;max-width:58ch}
+table.desg tfoot td{border-top:1.5px solid var(--line2);border-bottom:none;padding-top:9px;
+  font:700 12px Inter;text-transform:uppercase;letter-spacing:.05em}
+table.desg tfoot td.num{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:13px}
+table.desg.ref{color:var(--ink2)}
+table.desg.ref tbody td{opacity:.8}
 .stat{display:inline-flex;align-items:center;gap:5px;font:700 10.5px Inter;padding:2px 8px;
   border-radius:999px;border:1px solid currentColor;margin-top:8px}
 .st-good{color:var(--good)} .st-warn{color:var(--warn)}
@@ -519,9 +536,18 @@ function chipEstado(c) {
   return '<span class="stat st-' + esc(c.c) + '">' + esc(c.t) + '</span>';
 }
 
+/*  LA TARJETA ABRE SU DESGLOSE.
+ *
+ *  La flecha de la esquina es la que avisa que hay algo abajo; sin ella nadie
+ *  descubre que la tarjeta se puede abrir. Va con role y tabindex porque es un
+ *  boton de verdad, aunque se vea como una tarjeta. */
 function tarjetaHtml(t, i) {
-  const H = ['<div class="card lift rise" style="animation-delay:' + (i * 45) + 'ms">'];
+  const H = ['<div class="card lift rise' + (t.clave ? ' abre' : '') + '"' +
+             (t.clave ? ' data-kpi="' + esc(t.clave) + '" role="button" tabindex="0"' +
+                        ' aria-label="Ver cómo se compone: ' + esc(t.et) + '"' : '') +
+             ' style="animation-delay:' + (i * 45) + 'ms">'];
   H.push('<div class="ct"><h4>' + esc(t.et) + '</h4><span class="hint">' + esc(t.hint) + '</span></div>');
+  if (t.clave) H.push('<span class="abrir" aria-hidden="true">↗</span>');
   H.push('<div class="kv">' + t.kv + (t.u ? '<small>' + esc(t.u) + '</small>' : '') + '</div>');
   if (t.stack) {
     const tot = t.stack.reduce((a, s) => a + s.v, 0) || 1;
@@ -601,6 +627,194 @@ function listaHtml(items, vacio) {
     '<span class="v ' + (x.cls === 'crit' ? 'malo' : '') + '">' + esc(x.v) + '</span></div>').join('') + '</div>';
 }
 
+/*  CÓMO SE COMPONE CADA CIFRA PUBLICADA.
+ *
+ *  Una tarjeta que dice 12.601 y no deja ver de dónde salen obliga a creerle.
+ *  Cada tarjeta abre su desglose, y el desglose SUMA: las filas tienen que dar
+ *  el total declarado. Cuando no dan —y hay un caso real, el detalle del
+ *  residuo, que se midió en otra fecha— el panel dice la diferencia en vez de
+ *  mostrar un cuadro que no cuadra.
+ *
+ *  El bloque 'extra' es para lo que acompaña pero NO suma: ahí van las
+ *  bodegas fuera del indicador. Va aparte a propósito, nunca mezclado con las
+ *  filas que sí suman. */
+function desglose(clave, titulo, kv, u, intro, filas, total, extra, nota) {
+  const fs = (filas || []).filter(f => f);
+  const numericas = fs.filter(f => f.v != null);
+  const suma = numericas.reduce((a, f) => a + (Number(f.v) || 0), 0);
+  const t = total || null;
+  const cuadra = !t || numericas.length === 0 || suma === Number(t.v);
+  return { clave, titulo, kv, u, intro, filas: fs, total: t,
+           suma, cuadra, descuadre: t ? suma - Number(t.v) : 0,
+           extra: extra || null, nota: nota || null };
+}
+
+/*  EL ORDEN DEL RECORRIDO: inspeccion primero, disponible al final, y dentro
+ *  de cada etapa la planta grande antes. Es el orden que explica el camino del
+ *  pallet, distinto del de la tabla —que ordena por salud, o sea por lo que
+ *  hay que mirar primero—. Dos ordenes porque son dos preguntas distintas. */
+function porRecorrido(bodegas) {
+  const paso = e => { const i = ETAPAS.indexOf(e); return i < 0 ? ETAPAS.length : i; };
+  return (Array.isArray(bodegas) ? bodegas : []).slice()
+    .sort((a, b) => paso(a.etapa) - paso(b.etapa) || b.nivel - a.nivel ||
+                    (a.cod < b.cod ? -1 : a.cod > b.cod ? 1 : 0));
+}
+
+function composiciones(datos, bodegas) {
+  const d = datos || {};
+  const b = d.bodegas || {};
+  const cli = b.CLIENTES || {}, ret = b.RETAIL || {}, pla = b.PLANTA || {};
+  const bs = Array.isArray(bodegas) ? bodegas : [];
+  const plantas = Array.isArray(d.planta) ? d.planta : [];
+  const ctrl = Array.isArray(d.controles) ? d.controles : [];
+  const fueras = plantas.filter(p => !p.nueve && p.nivel !== 0);
+  const bloqueFuera = {
+    a: 'Fuera del indicador — no suma',
+    filas: fueras.map(p => ({ a: p.nom, b: p.cod, v: p.nivel })),
+    v: Number(d.fuera_del_pool) || 0,
+  };
+  const C = {};
+
+  C.pool = desglose('pool', 'Reparto del pool', mil(d.pool), 'pallets',
+    'El pallet rojo que está rotando, repartido en las tres patas. Cada pata es una bodega de SAP ' +
+    'y su saldo lo dicta SAP, no un cálculo nuestro.',
+    [{ a: 'Clientes', b: 'BODEGA CLIENTES', v: Number(cli.nivel) || 0 },
+     { a: 'Retail', b: 'BODEGA RETAILERS', v: Number(ret.nivel) || 0 },
+     { a: 'Planta REDTEC', b: 'las nueve bodegas del indicador', v: Number(pla.nivel) || 0 }],
+    { a: 'Pool', v: Number(d.pool) || 0 }, bloqueFuera,
+    'Contándolos, SAP tiene ' + mil(d.pool_sap) + ' en bodega. No son pallet perdido: están en ' +
+    'bodegas de SAP que no participan del recorrido, así que sumarlos infla el pool.');
+
+  C.planta = desglose('planta', 'Planta · indicador', mil(pla.nivel), 'pallets',
+    'Las nueve estaciones del recorrido del pallet, en el orden en que lo atraviesan. ' +
+    'La definición de cuáles cuentan es de negocio, no de SAP: está declarada en el código.',
+    porRecorrido(bs).map(x => ({ a: x.nom, b: x.cod + ' · ' + x.etapa.charAt(0) + x.etapa.slice(1).toLowerCase(),
+                                 v: x.nivel })),
+    { a: 'Indicador de planta', v: Number(pla.nivel) || 0 }, bloqueFuera,
+    'Una estación en cero no es un dato que falte: es una estación vacía, y eso es información.');
+
+  const atribuido = (Number(cli.socios) || 0) + (Number(ret.socios) || 0);
+  const bodega = (Number(cli.nivel) || 0) + (Number(ret.nivel) || 0);
+  C.atribucion = desglose('atribucion', 'Atribución por socio', pct1(atribuido, bodega), '',
+    'De lo que hay en las dos bodegas de afuera, cuánto se puede decir de quién es. ' +
+    'El total lo dicta la bodega; la ubicación sólo lo reparte.',
+    [{ a: 'Clientes · atribuido', b: mil(cli.n) + ' socios con saldo', v: Number(cli.socios) || 0 },
+     { a: 'Retail · atribuido', b: mil(ret.n) + ' socios con saldo', v: Number(ret.socios) || 0 }],
+    { a: 'Atribuido a un socio', v: atribuido },
+    { a: 'Sin ubicación — el resto de la bodega',
+      filas: [{ a: 'Clientes', b: 'residuo', v: Number(cli.residuo) || 0 },
+              { a: 'Retail', b: 'residuo', v: Number(ret.residuo) || 0 }],
+      v: (Number(cli.residuo) || 0) + (Number(ret.residuo) || 0) },
+    mil(atribuido) + ' de ' + mil(bodega) + ' que suman las dos bodegas: ' +
+    pct1(atribuido, bodega) + '.');
+
+  const residuo = (Number(cli.residuo) || 0) + (Number(ret.residuo) || 0);
+  const det = Array.isArray(d.residuo_detalle) ? d.residuo_detalle : [];
+  C.residuo = desglose('residuo', 'Sin ubicación', mil(residuo), 'pallets',
+    'Saldo de bodega menos la suma de los socios. No es pallet perdido ni un error de cálculo: ' +
+    'SAP tiene ubicaciones que existen justamente para el pallet sin dueño identificado.',
+    [{ a: 'Retail', b: 'BODEGA RETAILERS', v: Number(ret.residuo) || 0 },
+     { a: 'Clientes', b: 'BODEGA CLIENTES', v: Number(cli.residuo) || 0 }],
+    { a: 'Sin ubicación', v: residuo },
+    det.length ? { a: 'Cómo se repartía al ' + esc(String(d.extra_medido || 's/f')) +
+                      ' — medido aparte, no se recalcula solo',
+                   filas: det.map(x => ({ a: recortar(x.que, 120), b: null, v: Number(x.cantidad) || 0 })),
+                   v: det.reduce((a, x) => a + (Number(x.cantidad) || 0), 0) } : null,
+    det.length ? 'El desglose se midió el ' + esc(String(d.extra_medido || 's/f')) +
+                 ' y suma ' + mil(det.reduce((a, x) => a + (Number(x.cantidad) || 0), 0)) +
+                 '; el residuo de hoy es ' + mil(residuo) + '. La corrida diaria rehace el residuo ' +
+                 'pero no el reparto, así que esa diferencia es de fecha, no de cálculo.' : null);
+
+  const meses = Array.isArray(d.meses) ? d.meses : [];
+  const anio = (Number(d.anio && d.anio.ret) || 0) + (Number(d.anio && d.anio.cli) || 0);
+  C.anio = desglose('anio', 'Movimiento del año', conSigno(anio), 'pallets',
+    'Cuánto subió o bajó cada bodega, mes a mes. Un valor positivo es pallet que salió de REDTEC ' +
+    'hacia el socio; uno negativo es pallet que volvió.',
+    meses.map(m => ({ a: esc(m.etiqueta), b: 'retail ' + conSigno(m.ret) + ' · clientes ' + conSigno(m.cli),
+                      v: (Number(m.ret) || 0) + (Number(m.cli) || 0) })),
+    { a: 'Neto del año', v: anio }, null,
+    'Retail ' + conSigno(d.anio && d.anio.ret) + ' y clientes ' + conSigno(d.anio && d.anio.cli) +
+    ' en el año. Sale del diario de movimientos de inventario (OINM), agrupado por mes de fecha ' +
+    'de documento — por eso un posteo retroactivo mueve un mes ya cerrado.');
+
+  const conNeg = bs.filter(x => x.salud.n > 0);
+  const dias = bs.reduce((a, x) => a + x.dias, 0);
+  const neg = bs.reduce((a, x) => a + x.salud.n, 0);
+  C.negativos = desglose('negativos', 'Días en negativo', mil(neg), 'de ' + mil(dias),
+    'Días en que una estación cierra bajo cero. Es imposible —no hay media bodega de pallets en ' +
+    'menos— y la causa está identificada: la fecha del documento en SAP.',
+    conNeg.map(x => ({ a: x.nom, b: x.cod + ' · de ' + mil(x.dias) + ' días medidos · peor el ' +
+                          (x.peor ? x.peor.dia : '—') + ' en ' + mil(x.peor ? x.peor.cierre : 0),
+                       v: x.salud.n })),
+    { a: 'Días bajo cero', v: neg },
+    { a: 'Estaciones que no cierran bajo cero ningún día',
+      filas: bs.filter(x => x.salud.n === 0 && x.dias)
+               .map(x => ({ a: x.nom, b: x.cod + ' · ' + mil(x.dias) + ' días', v: 0 })), v: 0 },
+    'La salida de mercancías queda fechada antes que el traspaso que la alimenta, así que el ' +
+    'nivel cae antes de subir. Se verificó contra OINM por otra vía: da los mismos días y los ' +
+    'mismos números. Se arregla en SAP, no acá.');
+
+  const cob = ctrl.find(c => /cobertura/i.test(c.titulo || ''));
+  C.cobertura = desglose('cobertura', 'Cobertura', cob ? '100' : '—', cob ? '%' : '',
+    'Cuántos documentos de SAP llegaron a nuestra extracción. Es el control que dice si falta algo.',
+    cob ? [{ a: String(cob.titulo), b: String(cob.texto || ''), v: null }] : [],
+    null, null,
+    cob ? 'Medido el ' + esc(String(cob.medido || d.extra_medido || 's/f')) + '.'
+        : 'El control de cobertura no vino en esta corrida, así que no hay con qué responder. ' +
+          'No se inventa un 100%.');
+
+  C.controles = desglose('controles', 'Controles', mil(ctrl.length - ctrl.filter(c => c.estado === 'no pasa').length),
+    'de ' + mil(ctrl.length),
+    'Cada control con su resultado y la fecha en que se midió. Un control que no pasa no se ' +
+    'esconde: se nombra.',
+    ctrl.slice().sort((a, x) => (a.estado === 'no pasa' ? 0 : 1) - (x.estado === 'no pasa' ? 0 : 1))
+        .map(c => ({ a: String(c.titulo) + (c.estado === 'no pasa' ? ' · NO PASA' : ''),
+                     b: String(c.texto || ''), v: null,
+                     malo: c.estado === 'no pasa',
+                     fecha: String(c.medido || d.extra_medido || 's/f') })),
+    null, null, null);
+
+  return C;
+}
+
+/*  EL DESGLOSE DIBUJADO.
+ *
+ *  Corre en los dos lados: el servidor no lo usa, pero se publica con
+ *  toString() y el navegador lo llama tal cual. Si la suma no da, el panel lo
+ *  dice en su propia fila: un desglose que no cuadra y no lo declara es peor
+ *  que no tener desglose. */
+function desgloseHtml(c) {
+  if (!c) return '<p class="mut">No hay desglose para esa cifra.</p>';
+  const fila = f => '<tr><td>' + esc(f.a) +
+    (f.b ? '<div class="m">' + esc(f.b) + '</div>' : '') +
+    (f.fecha ? '<div class="m">medido el ' + esc(f.fecha) + '</div>' : '') +
+    '</td><td class="num' + (f.malo ? ' malo' : '') + '">' +
+    (f.v == null ? '' : mil(f.v)) + '</td></tr>';
+  const H = ['<div class="code">' + esc(c.clave) + '</div><h3>' + esc(c.titulo) + '</h3>'];
+  H.push('<div class="kv" style="margin-top:6px">' + c.kv +
+         (c.u ? '<small>' + esc(c.u) + '</small>' : '') + '</div>');
+  if (c.intro) H.push('<p class="mut" style="margin:10px 0 0;max-width:62ch">' + esc(c.intro) + '</p>');
+  if (c.filas.length) {
+    H.push('<h5>Se compone de</h5><table class="desg">');
+    H.push('<tbody>' + c.filas.map(fila).join('') + '</tbody>');
+    if (c.total)
+      H.push('<tfoot><tr><td>' + esc(c.total.a) + '</td><td class="num">' + mil(c.total.v) +
+             '</td></tr></tfoot>');
+    H.push('</table>');
+    if (c.total && !c.cuadra)
+      H.push('<p class="malo" style="font-weight:600;margin:10px 0 0">Las filas suman ' +
+             mil(c.suma) + ' y el total declarado es ' + mil(c.total.v) + ': ' +
+             conSigno(c.descuadre) + ' de diferencia.</p>');
+  }
+  if (c.extra && c.extra.filas && c.extra.filas.length) {
+    H.push('<h5>' + esc(c.extra.a) + '</h5><table class="desg ref">');
+    H.push('<tbody>' + c.extra.filas.map(fila).join('') + '</tbody>');
+    H.push('<tfoot><tr><td>Suma</td><td class="num">' + mil(c.extra.v) + '</td></tr></tfoot></table>');
+  }
+  if (c.nota) H.push('<p class="mut" style="margin:14px 0 0;max-width:62ch">' + esc(c.nota) + '</p>');
+  return H.join('');
+}
+
 /*  LA R DE REDTEC.
  *
  *  Es el mismo PNG que el portal usa de logo y de favicon. Va embebido para
@@ -674,7 +888,7 @@ function pagina(d) {
 
   // ── ① ¿Como estamos? ──
   H.push('<section class="band"><div class="bandh"><span class="num">1</span>' +
-         '<h3>¿Cómo estamos?</h3><span>valor · comparación · estado</span></div>');
+         '<h3>¿Cómo estamos?</h3><span>clic en una tarjeta para ver cómo se compone esa cifra</span></div>');
   H.push('<div class="grid g4">' + tarjetas(d, bodegas).map(tarjetaHtml).join('') + '</div></section>');
 
   // ── ② ¿Donde esta el problema? ──
@@ -761,7 +975,7 @@ function pagina(d) {
   H.push('<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Detalle de la estación">' +
          '<button class="dx" id="dxc" type="button" aria-label="Cerrar">✕</button>' +
          '<div id="dbody"></div></aside>');
-  H.push(script(serie, mes0));
+  H.push(script(serie, mes0, composiciones(d, bodegas)));
   H.push('</body>\n</html>\n');
   return H.join('\n');
 }
@@ -847,13 +1061,15 @@ function metodo(d) {
  *  detalle. El cajon dibuja con las MISMAS funciones probadas que usa
  *  stock-flujos-pallets.html, publicadas con toString(), no con una copia
  *  escrita a mano. */
-function script(serie, mes0) {
+function script(serie, mes0, desg) {
   const fns = [esNumero, mil, conSigno, clasePos, esc, etiquetaDeMes, diasDelMes, resumenDelMes,
-               altoVisible, ejeDeDias, svgFlujoDia, svgNivelDia, tablaDeDias, rehidratar];
+               altoVisible, ejeDeDias, svgFlujoDia, svgNivelDia, tablaDeDias, rehidratar,
+               desgloseHtml];
   const cuerpo = 'var MESES = ' + jsonSeguro(MESES) + ';\n' +
     fns.map(f => f.toString()).join('\n') + '\n' +
     'var PD = rehidratar(' + jsonSeguro(serieCompacta(serie)) + ');\n' +
-    'var MES0 = ' + jsonSeguro(mes0) + ';\n' + [
+    'var MES0 = ' + jsonSeguro(mes0) + ';\n' +
+    'var DESG = ' + jsonSeguro(desg || {}) + ';\n' + [
     '(function () {',
     '  function $(s, r) { return (r || document).querySelector(s); }',
     '  try {',
@@ -929,15 +1145,22 @@ function script(serie, mes0) {
     '      return \'<div class="card"><div class="ct"><h4>\' + esc(et) + \'</h4></div><div class="kv\' +',
     '             (malo ? \' malo\' : \'\') + \'">\' + v + \'</div></div>\';',
     '    }',
-    '    document.addEventListener("click", function (e) {',
-    '      var t = e.target.closest("[data-cod]"); if (!t) return;',
-    '      ultimo = t; abrir(t.getAttribute("data-cod"));',
-    '    });',
+    '    function abrirKpi(clave) {',
+    '      dbody.innerHTML = desgloseHtml(DESG[clave]);',
+    '      drawer.classList.add("on"); scrim.classList.add("on");',
+    '      $("#dxc").focus();',
+    '    }',
+    '    function desde(el) {',
+    '      var k = el.closest("[data-kpi]"); if (k) { ultimo = k; abrirKpi(k.getAttribute("data-kpi")); return true; }',
+    '      var c = el.closest("[data-cod]"); if (c) { ultimo = c; abrir(c.getAttribute("data-cod")); return true; }',
+    '      return false;',
+    '    }',
+    '    document.addEventListener("click", function (e) { desde(e.target); });',
     '    document.addEventListener("keydown", function (e) {',
     '      if (e.key === "Escape") { cerrar(); return; }',
     '      if (e.key !== "Enter" && e.key !== " ") return;',
-    '      var t = e.target.closest && e.target.closest("[data-cod]");',
-    '      if (t) { e.preventDefault(); ultimo = t; abrir(t.getAttribute("data-cod")); }',
+    '      if (!e.target.closest) return;',
+    '      if (desde(e.target)) e.preventDefault();',
     '    });',
     '    $("#dxc").addEventListener("click", cerrar);',
     '    scrim.addEventListener("click", cerrar);',
@@ -988,6 +1211,7 @@ function main() {
 module.exports = { ETAPAS, GLIFO, ORDEN_SALUD, HITOS, CSS,
                    etapaDeBodega, saludDeBodega, bodegasDelCockpit, matrizPlantaEtapa,
                    titular, tarjetas, decisiones, diasHasta, hitos,
+                   desglose, composiciones, desgloseHtml, porRecorrido,
                    recortar, chipEstado, tarjetaHtml, matrizHtml, filaCartera, listaHtml,
                    dumbbell, metodo, script, pagina,
                    opcion, opcionesRaras, leerJson, OPCIONES };

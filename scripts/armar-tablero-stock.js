@@ -105,6 +105,22 @@ function anclaCalza(planta, bodegasHoy) {
     return { ok: false, ancla: a, tablero: b,
              motivo: 'la serie de planta se ancló el ' + a + ' y el tablero el ' + b +
                      ': los cierres diarios no serían los mismos números que el saldo por bodega' };
+  /*  QUE LAS DOS FECHAS COINCIDAN NO BASTA.
+   *
+   *  saldo-planta puede haber calculado la serie con un ancla mas vieja que
+   *  las lineas que leyo —pasa si se corre a mano, fuera del cierre diario— y
+   *  en ese caso TODA la serie queda corrida aunque el json y el tablero
+   *  declaren la misma fecha, porque los dos salen del mismo bodegas-hoy.
+   *  Por eso saldo-planta escribe su propio veredicto en ancla_al_dia y aca
+   *  se exige. Si el campo no viene, el json es de una version que no lo
+   *  declaraba: tampoco se dibuja. Fallar cerrado. */
+  if (planta.ancla_al_dia !== true)
+    return { ok: false,
+             motivo: 'la serie de planta no viene declarada al dia (' +
+                     (planta.ancla_al_dia === false
+                        ? 'saldo-planta la marcó como corrida'
+                        : 'el json no trae ancla_al_dia') +
+                     '): habría que volver a anclar y recalcularla' };
   return { ok: true, motivo: null };
 }
 

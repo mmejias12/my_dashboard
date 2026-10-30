@@ -205,9 +205,24 @@ function clasificarPool(bodegas) {
     if (saldo !== 0 || NUEVE.has(whs))
       dePlanta.push({ cod: whs, nom: String((b && b.nombre) || whs), nivel: saldo, nueve: NUEVE.has(whs) });
   }
-  dePlanta.sort((a, b) => b.nivel - a.nivel || (a.cod < b.cod ? -1 : 1));
+  /*  LAS DEL INDICADOR PRIMERO, DESPUES LAS DE REFERENCIA.
+   *
+   *  Mezcladas por saldo, MERMA sale tercera y se lee como una estacion mas
+   *  del recorrido. Son dos bloques distintos —uno suma al pool y el otro
+   *  no— y el orden tiene que decirlo antes que la letra chica. */
+  dePlanta.sort((a, b) => (a.nueve === b.nueve ? 0 : a.nueve ? -1 : 1) ||
+                          b.nivel - a.nivel || (a.cod < b.cod ? -1 : 1));
+  /*  DOS TOTALES, Y LOS DOS SE DECLARAN.
+   *
+   *  total es lo que SAP tiene en bodega y sirve para cuadrar contra SAP.
+   *  rotacion es el pool de verdad: merma, extraños y el transito que no es
+   *  del indicador estan en una bodega de SAP pero no son pallet que rote,
+   *  y sumarlos infla el pool. Decision de Mauro el 30-10-2026: el indicador
+   *  de planta son las nueve y lo demas se muestra, no se suma. */
   return { clientes, retail, planta, nueve, fuera, filas: dePlanta,
-           bodegas: filas.length, total: clientes + retail + planta };
+           bodegas: filas.length,
+           total: clientes + retail + planta,
+           rotacion: clientes + retail + nueve };
 }
 
 // Un socio "con saldo" es uno cuyo nivel no es cero. Los negativos cuentan:
@@ -292,7 +307,12 @@ function datos(bod, ret, cli, extra, planta) {
     _que_es: 'Stock de pallet rojo por socio y por bodega, extraido de SAP B1 por M3DATA. ' +
              'La bodega manda en cuantos hay; la ubicacion manda en de quien son.',
     generado: (bod && bod.generado) || new Date().toISOString(),
-    pool: fl.total,
+    // EL TITULAR ES EL POOL EN ROTACION, no lo que SAP tiene en bodega. Los
+    // dos viajan: pool_sap queda para poder cuadrar contra SAP y para que la
+    // pagina pueda decir de donde sale la diferencia.
+    pool: fl.rotacion,
+    pool_sap: fl.total,
+    fuera_del_pool: fl.fuera,
     bodegas_cuantas: fl.bodegas,
     // Pallet que existe en SAP sólo como instrumento de recuperación. No
     // vuelve a rotar, así que no es pool en circulación. Se declara en el archivo de extras porque la bodega no
@@ -305,7 +325,9 @@ function datos(bod, ret, cli, extra, planta) {
       RETAIL:   { nivel: fl.retail, socios: Number(nr.socios) || 0,
                   residuo: Number(nr.residuo) || 0, n: sr.conSaldo,
                   de: ((ret && ret.controles && ret.controles.maestro) || {}).conSocio || null },
-      PLANTA:   { nivel: fl.planta, nueve: fl.nueve, fuera: fl.fuera },
+      // El nivel de planta ES el indicador. Lo que esta fuera se declara
+      // aparte y lo que SAP tiene en esas bodegas tambien, pero no suman.
+      PLANTA:   { nivel: fl.nueve, fuera: fl.fuera, sap: fl.planta },
     },
     meses,
     anio: { ret: meses.reduce((a, m) => a + m.ret, 0), cli: meses.reduce((a, m) => a + m.cli, 0) },
@@ -857,6 +879,11 @@ h3{font:600 14px/1.3 var(--f-tit);margin:0 0 10px;text-transform:uppercase;lette
 h4{font:600 12px/1.3 var(--f-tit);margin:22px 0 8px;text-transform:uppercase;letter-spacing:.08em;color:var(--tinta2)}
 p{margin:0 0 10px;max-width:68ch}
 .sub{color:var(--tinta2);font-size:14px;margin-top:6px}
+/* La migaja ubica la vista dentro del portal. El unico enlace de la pagina:
+   el camino de vuelta al panel. */
+.migaja{font-size:12px;color:var(--tinta3);margin-top:7px}
+.migaja a{color:var(--tinta2);text-decoration:none;border-bottom:1px solid var(--linea)}
+.migaja a:hover{color:var(--marca);border-bottom-color:var(--marca)}
 .cabe{display:flex;flex-wrap:wrap;gap:14px;align-items:baseline;justify-content:space-between;
   border-bottom:2px solid var(--marca);padding-bottom:14px}
 .sello{font:500 12px/1 var(--f-cod);color:var(--tinta2);border:1px solid var(--linea);
@@ -925,6 +952,13 @@ th.num{text-align:right}
 .t-c .bar span{background:var(--cli);opacity:1}
 .t-g .bar span{background:var(--ret);opacity:1}
 .d-pos{color:var(--ok)} .d-neg{color:var(--grave)} .d-nul{color:var(--tinta3)}
+/* El subtotal cierra su bloque: linea arriba y peso, para que no se lea como
+   una bodega mas. El bloque referencial va atenuado porque no suma. */
+tr.tot td{border-top:1.5px solid var(--linea);border-bottom:none;
+  font:600 13px/1.3 var(--f-tit);text-transform:uppercase;letter-spacing:.06em;padding-top:8px}
+tbody.ref{color:var(--tinta2)}
+tbody.ref td{opacity:.78}
+tbody.ref tr.tot td{opacity:1}
 .chip{font:500 10px/1 var(--f-tit);text-transform:uppercase;letter-spacing:.06em;
   border:1px solid var(--linea);border-radius:999px;padding:3px 7px;color:var(--tinta3);white-space:nowrap}
 .enrevision{border:1px dashed var(--alerta);border-radius:6px;background:var(--panel);
@@ -951,6 +985,30 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--linea);
   td,th{padding-right:8px}
 }
 `;
+
+/*  EL SALDO POR BODEGA, EN DOS BLOQUES CON SUS SUBTOTALES.
+ *
+ *  Una tabla corrida de doce bodegas suma 16.990 y el titular dice 12.601.
+ *  Quien la sume con el dedo encuentra una diferencia que la pagina no le
+ *  explico. Van las nueve con su subtotal —que es el indicador— y despues las
+ *  de referencia con el suyo, marcado como que no suma. */
+function tablaDePlanta(filas) {
+  const todas = Array.isArray(filas) ? filas : [];
+  const nueve = todas.filter(p => p.nueve), resto = todas.filter(p => !p.nueve);
+  const suma = fs => fs.reduce((a, p) => a + (Number(p.nivel) || 0), 0);
+  const fila = p => '<tr><td class="cod">' + esc(p.cod) + '</td><td class="nom">' + esc(p.nom) +
+                    '</td><td class="num">' + mil(p.nivel) + '</td></tr>';
+  const total = (txt, v, cl) => '<tr class="tot"><td class="cod"></td><td class="nom ' + cl + '">' +
+                    esc(txt) + '</td><td class="num ' + cl + '">' + mil(v) + '</td></tr>';
+  let t = '<div class="scroll"><table>\n' +
+          '        <thead><tr><th>Código</th><th>Bodega</th><th class="num">Saldo</th></tr></thead>\n' +
+          '        <tbody>' + nueve.map(fila).join('') +
+          total('Indicador de planta', suma(nueve), '') + '</tbody>';
+  if (resto.length)
+    t += '\n        <tbody class="ref">' + resto.map(fila).join('') +
+         total('Referencial — no suma', suma(resto), 'malo') + '</tbody>';
+  return t + '\n      </table></div>';
+}
 
 function filaSocio(s) {
   return '<tr><td class="cod">' + esc(s.cod) + '</td><td class="nom">' + esc(s.nom) + '</td>' +
@@ -986,10 +1044,20 @@ function pagina(d) {
   H.push('<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>');
   H.push('<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700' +
          '&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">');
+  /*  LA PAGINA VIVE DENTRO DEL PORTAL.
+   *
+   *  sesion.js es lo que cierra por inactividad y reconoce el login
+   *  disfrazado de 200. Esta pagina no hace ni un fetch, asi que esa parte le
+   *  sobra, pero una vista del portal que no vence cuando las demas vencen es
+   *  una vista que queda abierta toda la noche en un monitor. Servida fuera
+   *  del portal el script no resuelve y la pagina sale igual. */
+  H.push('<script src="/sesion.js"><\/script>');
   H.push('<style>' + CSS + '</style>\n</head>\n<body>\n<div class="wrap">\n');
 
   H.push('<div class="rancio" id="rancio" hidden></div>');
   H.push('<header class="cabe">\n  <div>\n    <h1>Stock y Flujos de Pallets</h1>');
+  H.push('    <div class="migaja"><a href="m3link_dashboard_dark.html">Panel M3LINK</a> › ' +
+         'Stock SAP › Stock y Flujos de Pallets · extracción propia M3DATA</div>');
   H.push('    <div class="sub">Pallet rojo 1,00 × 1,20 · SKU 11111111110 · extracción propia desde SAP B1</div>');
   H.push('  </div>\n  <div class="sello" data-medido="' + esc(v.nivel) + '">Saldos al ' + esc(v.nivel) +
          (v.flujo_hasta ? '<br>Flujos ' + esc(String(v.flujo_desde || '').slice(0, 4)) + ' al ' + esc(v.flujo_hasta) : '') +
@@ -997,13 +1065,15 @@ function pagina(d) {
 
   // ── el pool ──
   H.push('<section>\n  <h2>El pool</h2>');
-  H.push('  <p>Todo el pallet rojo que SAP tiene registrado, en las ' + mil(d.bodegas_cuantas) +
-         ' bodegas de la empresa, repartido en las tres patas del pool.</p>');
+  H.push('  <p>El pallet rojo que está rotando, repartido en las tres patas del pool. Lo que ' +
+         'SAP tiene en bodega y no rota —merma, extraños y el tránsito que no es del indicador— ' +
+         'se muestra aparte y no suma. SAP registra el pallet rojo en ' + mil(d.bodegas_cuantas) +
+         ' bodegas de la empresa.</p>');
   H.push('  <div class="panel">\n    <div class="tile" style="border:none;padding:0">');
-  H.push('      <div class="et">Pool total</div>\n      <div class="big">' + mil(d.pool) + '</div>');
-  H.push('      <div class="pie">pallets, leídos del saldo vivo de SAP' +
-         (d.sistemico ? '<br>de los cuales <b>' + mil(d.sistemico) + '</b> son sistémicos y no rotan: ' +
-                        'el pool en rotación es <b>' + mil(d.pool - d.sistemico) + '</b>' : '') +
+  H.push('      <div class="et">Pool</div>\n      <div class="big">' + mil(d.pool) + '</div>');
+  H.push('      <div class="pie">pallets de pool, leídos del saldo vivo de SAP' +
+         (d.sistemico ? '<br>de los cuales <b>' + mil(d.sistemico) + '</b> son sistémicos y no vuelven ' +
+                        'a rotar: en circulación quedan <b>' + mil(d.pool - d.sistemico) + '</b>' : '') +
          '</div>\n    </div>');
   H.push('    <div class="pool">' + svgPool(d) + '</div>\n    <div class="leyenda">');
   for (const [cl, nom, val] of [['p-cli', 'Clientes', b.CLIENTES.nivel],
@@ -1011,7 +1081,21 @@ function pagina(d) {
                                 ['p-pla', 'Planta REDTEC', b.PLANTA.nivel]])
     H.push('      <span><i class="pt ' + cl + '"></i>' + nom + ' <b>' + mil(val) + '</b> · ' +
            pct1(val, d.pool) + '</span>');
-  H.push('    </div>\n  </div>\n');
+  H.push('    </div>');
+  /*  LO QUE NO SUMA SE DICE DONDE ESTA EL TOTAL, no en una nota al pie.
+   *
+   *  Quien sume las bodegas de SAP va a obtener 4.389 mas que el titular.
+   *  Tiene que poder ver de donde sale la diferencia en el mismo lugar donde
+   *  lee el numero, o va a concluir que faltan pallets. */
+  const fueras = (d.planta || []).filter(p => !p.nueve && p.nivel !== 0);
+  if (d.fuera_del_pool > 0)
+    H.push('    <p class="sub" style="margin:12px 0 0">Fuera del indicador, referencial ' +
+           '—<b>no suma</b>—: ' + mil(d.fuera_del_pool) + ' en ' +
+           (fueras.length
+              ? fueras.map(p => esc(p.nom.toLowerCase()) + ' (' + mil(p.nivel) + ')').join(', ')
+              : 'merma, extraños y tránsito') +
+           '. Contándolos, SAP tiene <b>' + mil(d.pool_sap) + '</b> en bodega.</p>');
+  H.push('  </div>\n');
   H.push('  <div class="rejilla">');
   H.push('    <div class="panel tile t-cli">\n      <div class="et">Clientes</div><div class="big">' +
          mil(b.CLIENTES.nivel) + '</div>\n      <div class="pie"><b>' + atrib(b.CLIENTES) +
@@ -1022,9 +1106,9 @@ function pagina(d) {
          '</b> atribuido a ' + mil(b.RETAIL.n) + ' socios<br>\n      residuo sin ubicación: ' +
          mil(b.RETAIL.residuo) + '</div>\n    </div>');
   H.push('    <div class="panel tile t-pla">\n      <div class="et">Planta REDTEC</div><div class="big">' +
-         mil(b.PLANTA.nivel) + '</div>\n      <div class="pie">' + mil(b.PLANTA.nueve) +
-         ' en las nueve bodegas del indicador<br>\n      ' + mil(b.PLANTA.fuera) +
-         ' en merma, extraños y tránsito</div>\n    </div>');
+         mil(b.PLANTA.nivel) + '</div>\n      <div class="pie">en las nueve bodegas del indicador' +
+         '<br>\n      ' + mil(b.PLANTA.fuera) + ' más en merma, extraños y tránsito, que no suman' +
+         '</div>\n    </div>');
   H.push('  </div>\n</section>\n');
 
   // ── movimiento mensual ──
@@ -1078,15 +1162,13 @@ function pagina(d) {
   H.push('<section>\n  <h2>Planta REDTEC</h2>');
   H.push('  <p>El stock en planta es chico al lado de lo que está afuera, pero el flujo que lo ' +
          'atraviesa no lo es: cada estación procesa cientos de miles de pallets al año para ' +
-         'sostener un par de miles en cualquier momento dado.</p>');
+         'sostener un par de miles en cualquier momento dado. El indicador son las nueve ' +
+         'estaciones del recorrido del pallet; merma, extraños y el tránsito que no es del ' +
+         'indicador se muestran como referencia y no entran en el pool.</p>');
   H.push('  <div class="dos" style="margin-top:14px">');
-  H.push('    <div class="panel">\n      <h3>Saldo por bodega</h3>\n      <div class="scroll"><table>');
-  H.push('        <thead><tr><th>Código</th><th>Bodega</th><th class="num">Saldo</th></tr></thead>');
-  H.push('        <tbody>' + d.planta.map(p =>
-    '<tr><td class="cod">' + esc(p.cod) + '</td><td class="nom">' + esc(p.nom) +
-    (p.nueve ? '' : ' <span class="chip">fuera del indicador</span>') +
-    '</td><td class="num">' + mil(p.nivel) + '</td></tr>').join('') + '</tbody>');
-  H.push('      </table></div>\n    </div>');
+  H.push('    <div class="panel">\n      <h3>Saldo por bodega</h3>');
+  H.push('      ' + tablaDePlanta(d.planta));
+  H.push('    </div>');
 
   // El flujo por bodega todavia no lo produce la cadena diaria: viene de
   // tablero-extra.json con su propia fecha. Si no esta, no se dibuja — una
@@ -1305,7 +1387,7 @@ module.exports = { esNumero, mil, conSigno, clasePos, pct, pct1, esc, sinBom,
                    serieCompacta, rehidratar, sinCierreDeScript, jsDePlanta,
                    NUEVE, GRUPOS, MESES, OPCIONES,
                    clasificarPool, cortarSocios, porGrupo, mesesPareados, datos,
-                   antiguedad, svgPool, svgMeses, filaSocio, tablaSocios, notaImposibles, pagina,
+                   antiguedad, svgPool, svgMeses, tablaDePlanta, filaSocio, tablaSocios, notaImposibles, pagina,
                    opcion, opcionesRaras, leerJson, CSS };
 
 if (require.main === module) main();

@@ -49,6 +49,11 @@ chk('clientes', F.clientes === 212945, String(F.clientes));
 chk('retail', F.retail === 579026, String(F.retail));
 chk('planta es todo lo demas, no una lista', F.planta === 18654, String(F.planta));
 chk('la identidad cierra', F.total === 810625 && F.total === F.clientes + F.retail + F.planta);
+// EL POOL QUE MANDA es el de rotacion: merma, extraños y el transito que no
+// es del indicador estan en una bodega de SAP pero no son pallet que rote.
+chk('el pool en rotacion deja fuera lo que no rota', F.rotacion === 806236, String(F.rotacion));
+chk('y es el total menos lo que esta fuera del indicador', F.rotacion === F.total - F.fuera);
+chk('rotacion = clientes + retail + las nueve', F.rotacion === F.clientes + F.retail + F.nueve);
 chk('las nueve del indicador', F.nueve === 14265, String(F.nueve));
 chk('y lo que queda fuera', F.fuera === 4389, String(F.fuera));
 chk('nueve + fuera = planta', F.nueve + F.fuera === F.planta);
@@ -57,6 +62,14 @@ chk('nueve + fuera = planta', F.nueve + F.fuera === F.planta);
 chk('una del indicador en cero se muestra', F.filas.some(x => x.cod === 'RT07-122'));
 chk('una de fuera en cero no se muestra', !F.filas.some(x => x.cod === 'RT14-170'));
 chk('ordena de mayor a menor', F.filas[0].cod === 'RT13-100' && F.filas[0].nivel === 5447);
+// Las del indicador van PRIMERO aunque alguna de referencia tenga mas saldo:
+// MERMA con 2.620 sale antes que TALCA DISPONIBLE con 559 si se ordena solo
+// por saldo, y se lee como una estacion mas del recorrido.
+chk('las del indicador van antes que las de referencia',
+    F.filas.findIndex(x => !x.nueve) === 9, String(F.filas.findIndex(x => !x.nueve)));
+chk('y dentro de cada bloque manda el saldo',
+    F.filas.filter(x => !x.nueve).map(x => x.cod).join(',') === 'RT13-266,RT13-109,RT04-160',
+    F.filas.filter(x => !x.nueve).map(x => x.cod).join(','));
 chk('marca cuales son del indicador',
     F.filas.find(x=>x.cod==='RT13-266').nueve === false &&
     F.filas.find(x=>x.cod==='RT13-100').nueve === true);
@@ -133,11 +146,16 @@ const D1 = A.datos(BOD, {socios:SOC, nivel:{bodega:579026, socios:424626, residu
 const SV = A.svgPool(D1);
 // cada tramo ocupa su porcentaje de 1000 MENOS 2 de separacion; sin esa
 // separacion los tres colores se tocan y el ojo lee un solo bloque
-chk('el tramo de clientes', /class="s-cli" x="0\.00" .*width="260\.69"/.test(SV), SV.slice(0,160));
-chk('el de retail arranca donde termina el anterior', /class="s-ret" x="262\.69" .*width="712\.30"/.test(SV));
-chk('y el de planta cierra', /class="s-pla" x="976\.99" .*width="21\.01"/.test(SV));
+chk('el tramo de clientes', /class="s-cli" x="0\.00" .*width="262\.12"/.test(SV), SV.slice(0,160));
+chk('el de retail arranca donde termina el anterior', /class="s-ret" x="264\.12" .*width="716\.18"/.test(SV));
+chk('y el de planta cierra', /class="s-pla" x="982\.31" .*width="15\.69"/.test(SV));
 chk('cada tramo trae su tooltip con cifra y porcentaje',
-    /<title>Clientes: 212\.945 \(26,3%\)<\/title>/.test(SV));
+    /<title>Clientes: 212\.945 \(26,4%\)<\/title>/.test(SV));
+// la barra reparte el pool en ROTACION: si repartiera el total de SAP, los
+// tres tramos no llegarian al borde y nadie sabria por que
+chk('los tres tramos llenan la barra',
+    Math.abs([...SV.matchAll(/width="([\d.]+)"/g)].reduce((a, m) => a + Number(m[1]), 0) + 6 - 1000) < 0.1,
+    String([...SV.matchAll(/width="([\d.]+)"/g)].reduce((a, m) => a + Number(m[1]), 0)));
 // el title tiene que estar DENTRO del rect o no es tooltip de nada
 chk('el title va dentro del rect', /<rect[^>]*><title>/.test(SV) && !/\/><title>/.test(SV));
 chk('un pool en cero no da anchos negativos', !/width="-/.test(A.svgPool(
@@ -177,8 +195,18 @@ const PG = A.pagina(D1);
 chk('es un documento completo', /^<!doctype html>/.test(PG) && /<\/html>\s*$/.test(PG));
 chk('trae su hoja de estilo adentro', PG.includes('--marca:#b5342a'));
 chk('declara el titulo', /<title>Stock y Flujos de Pallets<\/title>/.test(PG));
-chk('el pool sale del dato', PG.includes('>810.625<'));
-chk('la cantidad de bodegas tambien', PG.includes('en las 15 bodegas de la empresa'));
+chk('el titular es el pool, no lo que SAP tiene en bodega',
+    /<div class="et">Pool<\/div>\s*<div class="big">806\.236</.test(PG),
+    (PG.match(/<div class="et">Pool[\s\S]{0,80}/) || [''])[0]);
+chk('la cantidad de bodegas tambien', PG.includes('en 15 bodegas de la empresa'));
+// lo que no suma se dice DONDE esta el total, no en una nota al pie
+chk('declara lo que queda fuera y no suma', /Fuera del indicador, referencial —<b>no suma<\/b>—: 4\.389/.test(PG),
+    (PG.match(/Fuera del indicador[^<]*<b>[^<]*<\/b>[^<]*/) || [''])[0]);
+chk('y nombra cada bodega de referencia con su saldo',
+    /santiago merma \(2\.620\)/.test(PG) && /extraños \(1\.544\)/.test(PG) &&
+    /coquimbo transito \(225\)/.test(PG), (PG.match(/no suma<\/b>—:[^.]*/) || [''])[0]);
+chk('y declara el total de SAP para que nadie crea que faltan pallets',
+    /Contándolos, SAP tiene <b>810\.625<\/b> en bodega/.test(PG));
 chk('el residuo de retail tambien', PG.includes('residuo sin ubicación: 34.063'));
 chk('el aviso usa el residuo de hoy, no uno escrito a mano',
     /34\.063 pallets de BODEGA RETAILERS sin retailer identificado/.test(PG) &&
@@ -470,12 +498,17 @@ chk('el texto del desglose se escapa', A.pagina(A.datos(BOD,
 
 console.log('\n— lo sistemico no es pool —');
 chk('se declara cuanto no rota', DRES.sistemico === 17890);
-chk('la pagina lo dice', PRES.includes('17.890</b> son sistémicos y no rotan'));
+chk('la pagina lo dice', PRES.includes('17.890</b> son sistémicos y no vuelven a rotar'));
 // OJO con includes: '-792.735' CONTIENE '792.735', asi que una resta al reves
 // pasaria desapercibida. Hay que mirar la etiqueta completa.
-chk('y calcula el pool en rotacion',
-    PRES.includes('el pool en rotación es <b>792.735</b>') && !PRES.includes('<b>-792.735</b>'),
-    (PRES.match(/el pool en rotación es <b>[^<]*<\/b>/)||[''])[0]);
+chk('y descuenta lo sistemico para dar lo que circula',
+    PRES.includes('en circulación quedan <b>788.346</b>') && !PRES.includes('<b>-788.346</b>'),
+    (PRES.match(/en circulación quedan <b>[^<]*<\/b>/)||[''])[0]);
+// las tres cifras son distintas y cada una lleva su nombre: si dos se llaman
+// igual, el lector no sabe cual es cual
+chk('las tres cifras del pool no se confunden entre si',
+    PRES.indexOf('>806.236<') >= 0 && PRES.indexOf('<b>788.346</b>') >= 0 &&
+    PRES.indexOf('<b>810.625</b>') >= 0);
 // sin el dato declarado no se inventa un pool en rotacion
 chk('sin declararlo no aparece', D1.sistemico === null && !A.pagina(D1).includes('no rotan'));
 chk('un sistemico no numerico no cuenta', A.datos(BOD,
@@ -922,9 +955,18 @@ chk('y lo de abajo tambien', abajo(PGCON) === abajo(PGSIN));
 chk('el aviso de pagina rancia sigue', /function antiguedad/.test(PGCON) && /function antiguedad/.test(PGSIN));
 chk('sin planta no viaja la serie', PGSIN.indexOf('var PD = rehidratar') < 0);
 chk('con planta si', PGCON.indexOf('var PD = rehidratar') >= 0);
-// NADA puede cerrar el script antes de tiempo
-chk('el bloque de script no se cierra solo',
-    (PGCON.match(/<\/script>/g) || []).length === 1, String((PGCON.match(/<\/script>/g) || []).length));
+// NADA puede cerrar un bloque de script antes de tiempo. La cuenta que
+// importa no es "uno": es que cada <script> tenga exactamente su cierre. Uno
+// de mas significa que algo del contenido cerro el bloque por su cuenta y la
+// pagina quedo partida en dos.
+const cuentaScripts = t => [(t.match(/<script\b/g) || []).length, (t.match(/<\/script>/g) || []).length];
+chk('cada bloque de script tiene su cierre y ninguno de mas',
+    cuentaScripts(PGCON)[0] === cuentaScripts(PGCON)[1], cuentaScripts(PGCON).join(' vs '));
+chk('y son los dos que la pagina declara', cuentaScripts(PGCON)[0] === 2, String(cuentaScripts(PGCON)[0]));
+// la pagina vive dentro del portal: migaja y vuelta al panel
+chk('trae la migaja del portal', /Stock SAP › Stock y Flujos de Pallets/.test(PGCON));
+chk('y el camino de vuelta al panel', /href="m3link_dashboard_dark\.html"/.test(PGCON));
+chk('y carga sesion.js como las demas vistas', /<script src="\/sesion\.js">/.test(PGCON));
 // y la prueba de verdad: un nombre de bodega hostil. esc() no sirve adentro
 // de un <script>, porque ahi no se escribe html sino javascript.
 const HOSTIL = A.datos(BOD, VAC, VAC, null, { ancla:'2026-10-29T14:00:00Z', ancla_al_dia:true,
@@ -932,9 +974,70 @@ const HOSTIL = A.datos(BOD, VAC, VAC, null, { ancla:'2026-10-29T14:00:00Z', ancl
     indicador:true, nivel:1, dias:[{ dia:'2026-10-01', apertura:0, entradas:1, salidas:0, cierre:1, firme:true }] }] });
 const PGHOSTIL = A.pagina(HOSTIL);
 chk('un nombre con </script> no parte la pagina en dos',
-    (PGHOSTIL.match(/<\/script>/g) || []).length === 1,
-    String((PGHOSTIL.match(/<\/script>/g) || []).length));
+    cuentaScripts(PGHOSTIL)[0] === cuentaScripts(PGHOSTIL)[1],
+    cuentaScripts(PGHOSTIL).join(' vs '));
 chk('y queda escapado dentro del javascript', PGHOSTIL.indexOf('<\\/script>') >= 0);
+
+console.log('\n— el saldo por bodega va en dos bloques con sus subtotales —');
+// Una tabla corrida de doce bodegas suma 16.990 y el titular dice 12.601:
+// quien la sume con el dedo encuentra una diferencia que nadie le explico.
+const FIL = [
+  { cod:'RT13-102', nom:'SANTIAGO REPARACION', nivel:4103, nueve:true },
+  { cod:'RT13-100', nom:'SANTIAGO INSPECCION', nivel:3455, nueve:true },
+  { cod:'RT07-122', nom:'TALCA REPARACION',    nivel:0,    nueve:true },
+  { cod:'RT13-266', nom:'SANTIAGO MERMA',      nivel:2620, nueve:false },
+  { cod:'RT04-160', nom:'COQUIMBO TRANSITO',   nivel:225,  nueve:false },
+];
+const TP = A.tablaDePlanta(FIL);
+chk('dos tbody: el del indicador y el de referencia', (TP.match(/<tbody/g) || []).length === 2,
+    String((TP.match(/<tbody/g) || []).length));
+chk('el bloque de referencia va marcado', /<tbody class="ref">/.test(TP));
+chk('el subtotal del indicador suma SOLO las nueve', /Indicador de planta<\/td><td class="num ">7\.558</.test(TP),
+    (TP.match(/Indicador de planta[^<]*<\/td><td[^>]*>[^<]*/) || [''])[0]);
+chk('y el referencial suma SOLO las de afuera', /Referencial — no suma<\/td><td class="num malo">2\.845</.test(TP),
+    (TP.match(/Referencial[^<]*<\/td><td[^>]*>[^<]*/) || [''])[0]);
+// los dos subtotales juntos dan lo que SAP tiene en esas bodegas
+chk('y entre los dos dan el total de SAP', 7558 + 2845 === FIL.reduce((a, p) => a + p.nivel, 0));
+chk('el referencial va en rojo y el del indicador no',
+    /Referencial — no suma<\/td><td class="num malo"/.test(TP) &&
+    /Indicador de planta<\/td><td class="num "/.test(TP));
+// el orden de los bloques: primero lo que suma
+chk('el indicador va antes que la referencia',
+    TP.indexOf('Indicador de planta') < TP.indexOf('Referencial'));
+chk('y cada bodega esta en su bloque',
+    TP.indexOf('SANTIAGO REPARACION') < TP.indexOf('Indicador de planta') &&
+    TP.indexOf('SANTIAGO MERMA') > TP.indexOf('Indicador de planta'));
+// una bodega del indicador en cero SI aparece: que TALCA REPARACION este
+// vacia es informacion
+chk('una del indicador en cero igual aparece', TP.indexOf('TALCA REPARACION') >= 0);
+// sin nada fuera del indicador NO hay segundo bloque: un "Referencial 0" es
+// una fila que no dice nada
+chk('sin bodegas de referencia no hay segundo bloque',
+    A.tablaDePlanta(FIL.filter(p => p.nueve)).indexOf('Referencial') < 0);
+chk('y sin json no revienta', typeof A.tablaDePlanta(null) === 'string' &&
+    typeof A.tablaDePlanta(undefined) === 'string');
+// los nombres vienen de SAP
+chk('un nombre con < no sale crudo',
+    A.tablaDePlanta([{ cod:'X', nom:'<b>X</b>', nivel:1, nueve:true }]).indexOf('<b>X</b>') < 0);
+
+console.log('\n— la linea de lo que no suma —');
+// sin nada fuera del indicador la linea NO sale: decir "fuera del indicador,
+// 0" es ruido que hace dudar de un numero que esta bien
+const SOLONUEVE = { generado:'2026-10-25T04:15:44.042Z', bodegas:[
+  {whs:'CLIENTES', nombre:'BODEGA CLIENTES', saldo:100},
+  {whs:'RETAIL',   nombre:'BODEGA RETAILERS', saldo:200},
+  {whs:'RT13-100', nombre:'SANTIAGO INSPECCION', saldo:50}]};
+const PGSOLO = A.pagina(A.datos(SOLONUEVE, VAC, VAC, null));
+chk('sin nada fuera, la linea no sale', PGSOLO.indexOf('Fuera del indicador') < 0);
+chk('y el pool es la suma de las tres patas', /<div class="et">Pool<\/div>\s*<div class="big">350</.test(PGSOLO),
+    (PGSOLO.match(/<div class="et">Pool[\s\S]{0,60}/) || [''])[0]);
+// y la linea nombra SOLO las de referencia, no las del indicador
+// OJO: [^.]* corta en el primer punto y "4.389" trae uno, asi que un
+// recorte ingenuo nunca llega a ver los nombres. Se corta por el texto.
+const lineaFuera = (PGCON.match(/no suma<\/b>—:([\s\S]*?)Contándolos/) || ['', ''])[1];
+chk('la linea nombra las tres de referencia', /merma/.test(lineaFuera) &&
+    /extraños|extranos/.test(lineaFuera) && /coquimbo/.test(lineaFuera), lineaFuera);
+chk('y ninguna del indicador', !/inspeccion|reparacion|pintura|disponible/.test(lineaFuera), lineaFuera);
 
 console.log('\n' + ok + ' ok, ' + fail + ' fallas');
 process.exit(fail ? 1 : 0);

@@ -17,12 +17,23 @@ const SERIE=[
     dia('2026-10-06',30,0,0,30) ] },
   { cod:'RT07-126', nom:'TALCA TRANSITO', nivel:0, dias:[] },
 ];
-const D={ pool:808183, pool_sap:812572, fuera_del_pool:4389, sistemico:17890,
+// Las cuatro de SERIE suman 7.877 y las tres de fuera 4.389: el fixture cuadra
+// consigo mismo, que es lo unico que permite probar que el desglose cuadra.
+const D={ pool:803459, pool_sap:807848, fuera_del_pool:4389, sistemico:17890,
   bodegas:{ CLIENTES:{nivel:217181,socios:215714,residuo:1467,n:69},
             RETAIL:{nivel:578401,socios:546386,residuo:32015,n:60},
-            PLANTA:{nivel:12601,fuera:4389,sap:16990} },
-  anio:{ret:28577,cli:29149}, meses:[{mes:'2026-10',etiqueta:'Oct',ret:5,cli:-3}],
-  planta:[], planta_dias:SERIE, planta_ancla:'2026-10-30T15:54:23.303Z',
+            PLANTA:{nivel:7877,fuera:4389,sap:12266} },
+  anio:{ret:28577,cli:29149},
+  meses:[{mes:'2026-09',etiqueta:'Sep',ret:14000,cli:14000},
+         {mes:'2026-10',etiqueta:'Oct',ret:14577,cli:15149}],
+  planta:[{cod:'RT13-100',nom:'SANTIAGO INSPECCION',nivel:3455,nueve:true},
+          {cod:'RT13-102',nom:'SANTIAGO REPARACION',nivel:4103,nueve:true},
+          {cod:'RT07-125',nom:'TALCA DISPONIBLE',nivel:319,nueve:true},
+          {cod:'RT07-126',nom:'TALCA TRANSITO',nivel:0,nueve:true},
+          {cod:'RT13-266',nom:'SANTIAGO MERMA',nivel:2620,nueve:false},
+          {cod:'RT13-109',nom:'SANTIAGO EXTRANOS',nivel:1544,nueve:false},
+          {cod:'RT04-160',nom:'COQUIMBO TRANSITO',nivel:225,nueve:false}],
+  planta_dias:SERIE, planta_ancla:'2026-10-30T15:54:23.303Z',
   controles:[{titulo:'Conservación',texto:'Un traspaso mueve el reparto, nunca el total, y entre el 26 y el 27 de octubre el pool subió mil treinta unidades enteras',estado:'no pasa',medido:'2026-10-27'},
              {titulo:'Cobertura',texto:'Los nueve meses ya cerrados dan 174.918 documentos en SAP y 174.918 en nuestra extracción',medido:'2026-10-27'},
              {titulo:'Segunda fuente',texto:'coinciden al pallet',medido:'2026-10-26'}],
@@ -99,7 +110,7 @@ chk('sin bodegas no revienta', A.matrizPlantaEtapa(null).celdas.length===0);
 console.log('\n— el titular dice la conclusion, no el dato —');
 const TI=A.titular(D,BS);
 chk('nombra cuantas estaciones estan mal', /2 de 4 estaciones/.test(TI.frase), TI.frase);
-chk('con el pool al lado', /808\.183/.test(TI.frase));
+chk('con el pool al lado', /803\.459/.test(TI.frase), TI.frase);
 chk('y el nivel es el peor que haya', TI.nivel==='rojo', TI.nivel);
 chk('la cola trae los dias y el peor cierre', /3 de 9 días/.test(TI.cola) && /-10/.test(TI.cola), TI.cola);
 // el dia que no haya negativos, el titular lo tiene que decir solo
@@ -114,9 +125,9 @@ console.log('\n— las tarjetas —');
 const TJ=A.tarjetas(D,BS);
 chk('ocho tarjetas', TJ.length===8, String(TJ.length));
 chk('la primera reparte el pool en tres', TJ[0].stack.length===3 &&
-    TJ[0].stack.reduce((a,s)=>a+s.v,0)===808183, String(TJ[0].stack.reduce((a,s)=>a+s.v,0)));
-chk('y declara el total de SAP', /812\.572/.test(TJ[0].ks));
-chk('planta muestra el indicador, no lo que SAP tiene', TJ[1].kv==='12.601', TJ[1].kv);
+    TJ[0].stack.reduce((a,s)=>a+s.v,0)===803459, String(TJ[0].stack.reduce((a,s)=>a+s.v,0)));
+chk('y declara el total de SAP', /807\.848/.test(TJ[0].ks), TJ[0].ks);
+chk('planta muestra el indicador, no lo que SAP tiene', TJ[1].kv==='7.877', TJ[1].kv);
 chk('y dice que lo de fuera no suma', /no suman/.test(TJ[1].ks));
 chk('los dias en negativo salen de la serie', TJ[5].kv==='3' && /de 9/.test(TJ[5].u), TJ[5].kv+' '+TJ[5].u);
 chk('con chip critico cuando los hay', TJ[5].chip.c==='crit', JSON.stringify(TJ[5].chip));
@@ -262,6 +273,132 @@ chk('y uno con </script> no parte la pagina',
 const SINPLANTA=A.pagina({...D, planta_dias:null});
 chk('sin serie diaria la pagina igual sale', /^<!doctype html>/.test(SINPLANTA));
 chk('y el titular lo dice', /sin distribución diaria/.test(SINPLANTA));
+
+console.log('\n— el orden del recorrido, distinto del de la tabla —');
+const PR=A.porRecorrido(BS);
+chk('empieza por inspeccion y termina en transito',
+    PR.map(x=>x.etapa).join(',')==='INSPECCION,REPARACION,DISPONIBLE,TRANSITO', PR.map(x=>x.etapa).join(','));
+// la TABLA ordena por salud; el desglose por recorrido. Son dos preguntas.
+chk('no es el mismo orden que el de la tabla',
+    PR.map(x=>x.cod).join(',')!==BS.map(x=>x.cod).join(','),
+    PR.map(x=>x.cod).join(',')+' vs '+BS.map(x=>x.cod).join(','));
+chk('y no pierde ni agrega bodegas', PR.length===BS.length);
+chk('no muta la lista que recibe', BS.map(x=>x.cod).join(',')===A.bodegasDelCockpit(SERIE).map(x=>x.cod).join(','));
+chk('sin lista no revienta', A.porRecorrido(null).length===0);
+
+console.log('\n— un desglose SUMA, y si no, lo dice —');
+const DOK=A.desglose('x','T','9','u','i',[{a:'a',v:4},{a:'b',v:5}],{a:'Total',v:9},null,null);
+chk('cuando suma, cuadra', DOK.cuadra===true && DOK.suma===9 && DOK.descuadre===0);
+const DMAL=A.desglose('x','T','9','u','i',[{a:'a',v:4},{a:'b',v:5}],{a:'Total',v:20},null,null);
+chk('cuando no suma, lo declara', DMAL.cuadra===false && DMAL.descuadre===-11, JSON.stringify({c:DMAL.cuadra,d:DMAL.descuadre}));
+// filas sin numero (textos) no pueden inventar un descuadre
+chk('las filas de solo texto no cuadran ni descuadran',
+    A.desglose('x','T','-','','i',[{a:'a',v:null}],null,null,null).cuadra===true);
+chk('una fila nula no cuenta', A.desglose('x','T','4','','i',[null,{a:'a',v:4}],{a:'T',v:4},null,null).cuadra===true);
+// una fila de texto mezclada con numeros NO puede arrastrar la suma a cero
+// y un desglose que es SOLO texto con un total declarado no puede gritar un
+// descuadre de -20: no hay nada que sumar, asi que no hay contradiccion que
+// detectar. Callar es correcto; inventar un descuadre no.
+const SOLOTEXTO=A.desglose('x','T','20','','i',[{a:'un control',v:null}],{a:'T',v:20},null,null);
+chk('solo texto con total no inventa un descuadre', SOLOTEXTO.cuadra===true,
+    SOLOTEXTO.suma+' vs '+SOLOTEXTO.total.v+' → '+SOLOTEXTO.cuadra);
+const MIXTO=A.desglose('x','T','4','','i',[{a:'nota',v:null},{a:'a',v:4}],{a:'T',v:4},null,null);
+chk('una fila de texto no entra en la suma', MIXTO.cuadra===true && MIXTO.suma===4,
+    MIXTO.suma+' / '+MIXTO.cuadra);
+
+console.log('\n— las composiciones de cada cifra publicada —');
+const CO=A.composiciones(D,BS);
+chk('hay una por cada tarjeta',
+    Object.keys(CO).join(',')==='pool,planta,atribucion,residuo,anio,negativos,cobertura,controles',
+    Object.keys(CO).join(','));
+// ESTA es la prueba que importa: lo que el desglose muestra tiene que sumar
+// lo que la tarjeta publica. Si no, la pagina se contradice sola.
+for (const k of Object.keys(CO))
+  chk('el desglose de ' + k + ' cuadra', CO[k].cuadra===true,
+      CO[k].total ? CO[k].suma + ' vs ' + CO[k].total.v : 'sin total');
+// y las claves tienen que ser las mismas que declaran las tarjetas
+chk('cada tarjeta declara la clave de su desglose',
+    A.tarjetas(D,BS).map(t=>t.clave).join(',')===Object.keys(CO).join(','),
+    A.tarjetas(D,BS).map(t=>t.clave).join(','));
+chk('y el numero del desglose es el de la tarjeta',
+    A.tarjetas(D,BS).every(t=>CO[t.clave].kv===t.kv),
+    A.tarjetas(D,BS).map(t=>t.clave+':'+t.kv+'/'+CO[t.clave].kv).join(' '));
+
+chk('el pool se compone de las tres patas', CO.pool.filas.length===3 && CO.pool.total.v===803459);
+chk('y lo de fuera va aparte, sin sumar', CO.pool.extra.v===4389 &&
+    CO.pool.extra.filas.length===3, String(CO.pool.extra.filas.length));
+// la secuencia COMPLETA, no solo los extremos: por salud daria
+// Inspeccion, Disponible, Reparacion, Transito y los extremos calzarian igual
+chk('planta lista sus bodegas en orden de recorrido',
+    CO.planta.filas.map(f=>f.b.split(' · ')[1]).join(',')==='Inspeccion,Reparacion,Disponible,Transito',
+    CO.planta.filas.map(f=>f.b).join(' | '));
+chk('atribucion reconcilia contra el saldo de las dos bodegas',
+    CO.atribucion.total.v===215714+546386 && /762\.100 de 795\.582/.test(CO.atribucion.nota), CO.atribucion.nota);
+chk('el año suma los meses', CO.anio.filas.length===2 && CO.anio.total.v===57726);
+chk('los negativos listan solo las estaciones que los tienen',
+    CO.negativos.filas.length===2 && CO.negativos.total.v===3,
+    CO.negativos.filas.map(f=>f.a).join(' | '));
+// las sanas van en el bloque que NO suma, para que se vea que están sin
+// inflar el total de días malos
+chk('y las sanas van aparte', CO.negativos.extra && CO.negativos.extra.filas.length===1 &&
+    CO.negativos.extra.v===0, JSON.stringify(CO.negativos.extra && CO.negativos.extra.v));
+// el que no pasa va primero AUNQUE venga ultimo en el json: un control que
+// falla escondido en la fila nueve es un control que nadie ve
+const CTRLREV=A.composiciones({...D, controles:[
+  {titulo:'Pasa uno',texto:'t',medido:'2026-10-26'},
+  {titulo:'Pasa dos',texto:'t',medido:'2026-10-26'},
+  {titulo:'Falla',texto:'t',estado:'no pasa',medido:'2026-10-27'}]}, BS);
+chk('los controles ponen primero el que no pasa',
+    /NO PASA/.test(CTRLREV.controles.filas[0].a) && CTRLREV.controles.filas[0].malo===true,
+    CTRLREV.controles.filas.map(f=>f.a).join(' | '));
+chk('y cada uno trae su fecha', CO.controles.filas.every(f=>f.fecha));
+// sin el control de cobertura NO se inventa un 100
+const SINCOB2=A.composiciones({...D, controles:[]}, BS);
+chk('sin control de cobertura el desglose lo dice', SINCOB2.cobertura.kv==='—' &&
+    /No se inventa un 100/.test(SINCOB2.cobertura.nota), SINCOB2.cobertura.nota);
+chk('sin datos no revienta', Object.keys(A.composiciones(null,null)).length===8);
+
+// Y al reves: si el json viene incoherente —una bodega del indicador que no
+// esta en la serie diaria— el desglose NO puede disimularlo.
+const INCOH=A.composiciones({...D, bodegas:{...D.bodegas, PLANTA:{nivel:99999,fuera:4389,sap:1}}}, BS);
+chk('un total que no calza con sus partes queda declarado',
+    INCOH.planta.cuadra===false && INCOH.planta.descuadre===7877-99999,
+    INCOH.planta.suma+' vs '+INCOH.planta.total.v);
+
+console.log('\n— el desglose dibujado —');
+const DH=A.desgloseHtml(CO.planta);
+chk('lleva el titulo y la cifra', /Planta · indicador/.test(DH) && /7\.877/.test(DH));
+chk('una fila por componente, mas un pie por bloque',
+    (DH.match(/<tr>/g)||[]).length===CO.planta.filas.length+CO.planta.extra.filas.length+2,
+    (DH.match(/<tr>/g)||[]).length+' para '+CO.planta.filas.length+'+'+CO.planta.extra.filas.length);
+chk('el total va en el pie de la tabla', /<tfoot><tr><td>Indicador de planta<\/td><td class="num">7\.877/.test(DH));
+chk('y el bloque que no suma va marcado', /class="desg ref"/.test(DH));
+// si no cuadra, el panel lo dice EN EL PANEL, no en silencio
+const DHMAL=A.desgloseHtml(A.desglose('x','T','20','','i',[{a:'a',v:4}],{a:'Total',v:20},null,null));
+chk('un desglose que no cuadra lo grita', /Las filas suman 4 y el total declarado es 20/.test(DHMAL),
+    (DHMAL.match(/Las filas[^<]*/)||[''])[0]);
+chk('y uno que cuadra no dice nada', DH.indexOf('de diferencia')<0);
+chk('sin composicion no revienta', /No hay desglose/.test(A.desgloseHtml(null)));
+// los nombres vienen de SAP
+chk('escapa el texto de las filas',
+    A.desgloseHtml(A.desglose('x','<b>T</b>','1','','<i>i</i>',[{a:'<u>a</u>',b:'<s>b</s>',v:1}],null,null,'<em>n</em>'))
+      .indexOf('<u>a</u>')<0);
+
+console.log('\n— la tarjeta abre su desglose —');
+const TH=A.tarjetaHtml(A.tarjetas(D,BS)[1],0);
+chk('la tarjeta declara su clave', /data-kpi="planta"/.test(TH));
+chk('y es un boton de verdad', /role="button"/.test(TH) && /tabindex="0"/.test(TH) && /aria-label=/.test(TH));
+chk('con la flecha que avisa que se abre', /class="abrir"/.test(TH) && /↗/.test(TH));
+// una tarjeta sin clave NO finge que se abre
+const SINCLAVE=A.tarjetaHtml({et:'X',hint:'y',kv:'1',u:''},0);
+chk('una tarjeta sin desglose no finge', SINCLAVE.indexOf('data-kpi')<0 && SINCLAVE.indexOf('abrir')<0);
+const PGK=A.pagina(D);
+chk('las ocho tarjetas de la pagina abren', (PGK.match(/data-kpi="/g)||[]).length===8,
+    String((PGK.match(/data-kpi="/g)||[]).length));
+chk('y las composiciones viajan al navegador con contenido',
+    /var DESG = \{/.test(PGK) && PGK.indexOf('"clave":"planta"')>=0 && PGK.indexOf('"clave":"controles"')>=0,
+    (PGK.match(/var DESG = .{0,40}/)||[''])[0]);
+chk('con el renderizador publicado, no una copia', PGK.indexOf('function desgloseHtml(')>=0);
 
 console.log('\n' + ok + ' ok, ' + fail + ' fallas');
 process.exit(fail ? 1 : 0);

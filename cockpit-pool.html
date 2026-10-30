@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cockpit del Pool · Pallet Rojo</title>
+<meta name="description" content="Lectura ejecutiva del pool de pallet rojo de REDTEC: reparto, salud por estación y distribución diaria de planta. Extracción propia M3DATA desde SAP B1.">
+<link rel="icon" type="image/png" href="data:image/png;base64,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">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<script src="/sesion.js"></script>
+<style>
+:root{
+  --marca:#C0170C; --r:13px;
+  --good:#4ade80; --warn:#fcd34d; --crit:#f87171; --nodata:#6f7c93;
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0f1117; --bg2:#141822;
+  --card:#181b23; --card2:#1e222d; --line:rgba(255,255,255,.07); --line2:rgba(255,255,255,.14);
+  --ink:#e8eaf0; --ink2:#9da3b4; --ink3:#5a6070;
+  --cli:#4b8fdd; --ret:#d1721f; --pla:#16a89a;
+  --glow:0 0 0 1px rgba(255,255,255,.04), 0 10px 30px -14px rgba(0,0,0,.7);
+  --glowh:0 0 0 1px rgba(192,23,12,.40), 0 18px 40px -16px rgba(192,23,12,.35);
+}
+:root[data-theme="light"]{
+  color-scheme:light;
+  --bg:#f2f4f8; --bg2:#eaedf3;
+  --card:#ffffff; --card2:#f6f8fb; --line:rgba(16,24,40,.10); --line2:rgba(16,24,40,.18);
+  --ink:#101420; --ink2:#495261; --ink3:#757e8c;
+  --cli:#2a78d6; --ret:#d9641e; --pla:#0f9b8a;
+  --good:#15803d; --warn:#a16207; --crit:#b91c1c; --nodata:#757e8c;
+  --glow:0 1px 2px rgba(16,24,40,.05), 0 8px 24px -16px rgba(16,24,40,.20);
+  --glowh:0 0 0 1px rgba(192,23,12,.35), 0 16px 34px -18px rgba(192,23,12,.30);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);
+  font:13px/1.5 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+body{min-height:100vh;background:
+  radial-gradient(1100px 560px at 88% -12%, rgba(192,23,12,.10), transparent 62%),
+  radial-gradient(900px 480px at -12% 18%, rgba(75,143,221,.09), transparent 62%), var(--bg)}
+:root[data-theme="light"] body{background:var(--bg)}
+button,select{font-family:inherit}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+.wrap{max-width:1440px;margin:0 auto;
+  padding:18px max(16px,env(safe-area-inset-right,0px)) 40px max(16px,env(safe-area-inset-left,0px))}
+
+/* cabecera */
+.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:11px;min-width:0}
+.logo{width:38px;height:38px;border-radius:11px;background:var(--card);border:1px solid var(--line);
+  display:grid;place-items:center;flex:none;box-shadow:0 8px 20px -10px rgba(192,23,12,.55)}
+.logo img{width:24px;height:24px;object-fit:contain;display:block}
+.brand h1{margin:0;font:700 18px/1.15 Inter,sans-serif;letter-spacing:-.2px}
+.brand small{display:block;color:var(--ink2);font:500 11.5px Inter;margin-top:2px}
+.spacer{flex:1}
+.pill{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:999px;
+  background:var(--card);border:1px solid var(--line);color:var(--ink2);font-size:11.5px;
+  font-weight:600;white-space:nowrap}
+.pill b{color:var(--ink)}
+.pill .mono{font-size:11px}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
+.seg{display:inline-flex;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:3px}
+.seg button{border:0;background:transparent;color:var(--ink2);font-size:11.5px;font-weight:600;
+  padding:6px 10px;border-radius:7px;cursor:pointer;transition:.2s}
+.seg button.on{background:var(--marca);color:#fff}
+.seg button:focus-visible,.chip:focus-visible,.cart tbody tr:focus-visible,.dx:focus-visible{
+  outline:2px solid var(--marca);outline-offset:2px}
+
+/* filtros */
+.filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:16px 0 6px}
+.flabel{font:700 10.5px Inter;letter-spacing:.5px;text-transform:uppercase;color:var(--ink3);margin-right:2px}
+.chip{border:1px solid var(--line);background:var(--card);color:var(--ink2);border-radius:999px;
+  padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;
+  display:inline-flex;align-items:center;gap:6px;min-height:32px}
+.chip:hover{border-color:var(--line2);color:var(--ink)}
+.chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip .n{font:600 10.5px "JetBrains Mono",ui-monospace,monospace;opacity:.72}
+.fsep{width:1px;height:22px;background:var(--line);margin:0 6px}
+
+/* titular */
+.headline{margin:16px 0 4px;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+.headline h2{margin:0;font:700 24px/1.25 Inter,sans-serif;letter-spacing:-.3px;text-wrap:balance}
+.headline h2 em{font-style:normal}
+.hl-rojo em{color:var(--crit)} .hl-amarillo em{color:var(--warn)}
+.hl-verde em{color:var(--good)} .hl-sindato em{color:var(--ink2)}
+.headline .sub{color:var(--ink2);font-size:12.5px}
+
+/* franjas y tarjetas */
+.band{margin-top:24px}
+.bandh{display:flex;align-items:center;gap:10px;margin:0 0 10px;flex-wrap:wrap}
+.bandh .num{width:22px;height:22px;border-radius:7px;background:var(--card2);border:1px solid var(--line);
+  display:grid;place-items:center;font:700 11px "JetBrains Mono",ui-monospace,monospace;color:var(--marca);flex:none}
+.bandh h3{margin:0;font:600 13.5px Inter,sans-serif;letter-spacing:.1px}
+.bandh span{color:var(--ink3);font-size:11.5px}
+.grid{display:grid;gap:12px}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g64{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 15px;
+  box-shadow:var(--glow);position:relative;overflow:hidden;min-width:0;
+  transition:transform .25s ease, box-shadow .25s ease, border-color .25s}
+.card.lift:hover{transform:translateY(-2px);box-shadow:var(--glowh);border-color:rgba(192,23,12,.35)}
+.ct{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.ct h4{margin:0;font:700 10.5px Inter;letter-spacing:.55px;text-transform:uppercase;color:var(--ink2)}
+.ct .hint{font-size:10.5px;color:var(--ink3);white-space:nowrap}
+.kv{font:700 28px/1 Inter,sans-serif;letter-spacing:-.8px}
+.kv small{font:600 12px Inter;color:var(--ink2);margin-left:5px;letter-spacing:0}
+.ks{font-size:11px;color:var(--ink2);margin-top:7px;line-height:1.4}
+.ks b{color:var(--ink)} .ks .mut,.mut{color:var(--ink3)}
+.stat{display:inline-flex;align-items:center;gap:5px;font:700 10.5px Inter;padding:2px 8px;
+  border-radius:999px;border:1px solid currentColor;margin-top:8px}
+.st-good{color:var(--good)} .st-warn{color:var(--warn)}
+.st-crit{color:var(--crit)} .st-nodata{color:var(--nodata)}
+
+/* barras */
+.stack{display:flex;height:10px;border-radius:999px;overflow:hidden;background:var(--card2);gap:2px;margin-top:10px}
+.stack i{display:block;height:100%}
+.legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:10.5px;color:var(--ink2)}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend .sw{width:9px;height:9px;border-radius:3px;flex:none}
+.bullet{position:relative;height:12px;border-radius:999px;background:var(--card2);margin-top:12px}
+.bullet .fill{position:absolute;left:0;top:2px;bottom:2px;border-radius:999px;background:var(--pla)}
+.bullet .mark{position:absolute;top:-3px;bottom:-3px;width:3px;border-radius:2px;background:var(--ink2);opacity:.75}
+.barra{height:8px;border-radius:999px;background:var(--card2);margin-top:11px;overflow:hidden}
+.barra i{display:block;height:100%;border-radius:999px}
+
+/* matriz planta x etapa */
+.mtx{display:grid;gap:5px;margin-top:4px;overflow-x:auto}
+.mtx .hd{font:700 10px Inter;letter-spacing:.5px;text-transform:uppercase;color:var(--ink3);
+  display:flex;align-items:center;justify-content:center;text-align:center;padding:4px 2px}
+.mtx .rh{justify-content:flex-start;padding-left:2px}
+.cel{border-radius:9px;border:1px solid var(--line);background:var(--card2);min-height:52px;
+  display:grid;place-items:center;gap:1px;padding:6px 4px;text-align:center;font-size:10.5px}
+.cel b{font:700 15px/1 Inter;display:block}
+.cel small{color:var(--ink2);font-size:9.5px;display:block}
+.c-verde{background:color-mix(in srgb,var(--good) 20%,var(--card2));border-color:color-mix(in srgb,var(--good) 45%,transparent);color:var(--good)}
+.c-amarillo{background:color-mix(in srgb,var(--warn) 20%,var(--card2));border-color:color-mix(in srgb,var(--warn) 45%,transparent);color:var(--warn)}
+.c-rojo{background:color-mix(in srgb,var(--crit) 22%,var(--card2));border-color:color-mix(in srgb,var(--crit) 50%,transparent);color:var(--crit)}
+.c-sindato{color:var(--nodata)}
+.c-vacio{opacity:.35;color:var(--ink3)}
+
+/* listas de la franja de decisiones */
+.list{display:flex;flex-direction:column;gap:2px;max-height:260px;overflow:auto;margin:0 -4px;padding:0 4px}
+.li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:8px 6px;border-radius:9px}
+.li:hover{background:var(--card2)}
+.li .t{font-size:12px;line-height:1.35;color:var(--ink);overflow:hidden;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.li .m{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.li .m{font-size:10.5px;color:var(--ink3);margin-top:3px;line-height:1.35}
+.li .v{font:600 11.5px "JetBrains Mono",ui-monospace,monospace;white-space:nowrap;text-align:right}
+.ico{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font:800 12px Inter;flex:none;
+  border:1px solid currentColor}
+.i-crit{color:var(--crit)} .i-warn{color:var(--warn)} .i-good{color:var(--good)} .i-nodata{color:var(--nodata)}
+.empty{padding:22px 6px;color:var(--ink3);font-size:12px;text-align:center}
+
+/* cartera */
+.tblwrap{overflow:auto;max-height:520px;margin:0 -15px -14px;padding:0 15px}
+table.cart{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;min-width:760px}
+.cart th{font:700 10px Inter;letter-spacing:.5px;text-transform:uppercase;color:var(--ink3);text-align:left;
+  padding:8px 10px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card);z-index:1;white-space:nowrap}
+.cart th.num,.cart td.num{text-align:right}
+.cart td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap}
+.cart tbody tr{cursor:pointer;transition:background .2s}
+.cart tbody tr:hover,.cart tbody tr.hl{background:var(--card2)}
+.cart tbody tr.hl td:first-child{box-shadow:inset 3px 0 0 var(--marca)}
+.cart .pn{font-weight:600;color:var(--ink)}
+.cart .pc{font:500 10.5px "JetBrains Mono",ui-monospace,monospace;color:var(--ink3);margin-top:2px}
+.cart .num{font-family:"JetBrains Mono",ui-monospace,monospace;font-weight:600}
+.minib{position:relative;width:110px;height:8px;border-radius:999px;background:var(--card2);display:inline-block;vertical-align:middle}
+.minib .fill{position:absolute;left:0;top:0;bottom:0;border-radius:999px;background:var(--pla)}
+.salud{display:inline-flex;align-items:center;gap:6px;font:700 11px Inter}
+.salud i{font-style:normal;font-size:11px}
+.s-verde{color:var(--good)} .s-amarillo{color:var(--warn)} .s-rojo{color:var(--crit)} .s-sindato{color:var(--nodata)}
+
+/* cajon de detalle */
+.scrim{position:fixed;inset:0;background:rgba(3,7,15,.55);backdrop-filter:blur(3px);opacity:0;
+  pointer-events:none;transition:opacity .3s;z-index:40}
+.scrim.on{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;height:100vh;width:min(880px,96vw);background:var(--bg2);
+  border-left:1px solid var(--line);box-shadow:-30px 0 60px -24px rgba(0,0,0,.6);
+  transform:translateX(102%);transition:transform .45s cubic-bezier(.2,.8,.2,1);z-index:50;
+  overflow:auto;padding:20px 22px 34px;overscroll-behavior:contain}
+.drawer.on{transform:none}
+.dx{position:absolute;top:14px;right:16px;border:1px solid var(--line2);background:var(--card);
+  color:var(--ink);width:32px;height:32px;border-radius:9px;cursor:pointer;font-size:16px;line-height:1}
+.drawer h3{margin:4px 44px 2px 0;font:700 20px/1.2 Inter,sans-serif}
+.drawer .code{font:600 11px "JetBrains Mono",ui-monospace,monospace;color:var(--marca)}
+.drawer h5{margin:20px 0 8px;font:700 10.5px Inter;letter-spacing:.55px;text-transform:uppercase;color:var(--ink2)}
+.k4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px}
+.k4 .card{padding:11px 12px} .k4 .kv{font-size:20px}
+
+/* los dos graficos del dia, publicados desde armar-tablero-stock.js */
+.scroll{overflow-x:auto;margin:0 -4px;padding:0 4px;max-width:100%}
+.scroll svg{display:block;width:100%;height:auto;min-width:620px}
+.scroll.dbl svg{min-width:0}
+.b-ent{fill:var(--pla)} .b-sal{fill:var(--ret)}
+.b-ret{fill:var(--ret)} .b-cli{fill:var(--cli)}
+.n-pos{fill:var(--pla)} .n-neg{fill:var(--crit)}
+.grid-l{stroke:var(--line2);stroke-width:1} line.grid{stroke:var(--line2);stroke-width:1}
+.cero{stroke:var(--ink2);stroke-width:1.5}
+.ax{fill:var(--ink3);font:500 11px "JetBrains Mono",ui-monospace,monospace}
+.drawer table{width:100%;border-collapse:collapse;font-size:12px;min-width:520px}
+.drawer th{text-align:left;font:700 10px Inter;letter-spacing:.5px;text-transform:uppercase;color:var(--ink3);
+  padding:0 10px 7px 0;border-bottom:1px solid var(--line);white-space:nowrap}
+.drawer td{padding:6px 10px 6px 0;border-bottom:1px solid var(--line)}
+.drawer .num{text-align:right;font-family:"JetBrains Mono",ui-monospace,monospace;font-weight:600;white-space:nowrap}
+.drawer th.num{text-align:right}
+.cod{font:400 11px "JetBrains Mono",ui-monospace,monospace;color:var(--ink3);white-space:nowrap}
+.malo{color:var(--crit)}
+.d-pos{color:var(--good)} .d-neg{color:var(--crit)} .d-nul{color:var(--ink3)}
+
+/* metodo y pie */
+details.metodo{margin-top:24px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:13px 16px;color:var(--ink2);font-size:12px;line-height:1.6}
+details.metodo summary{cursor:pointer;font-weight:700;color:var(--ink)}
+details.metodo dt{color:var(--ink);font-weight:600;margin-top:10px}
+details.metodo dd{margin:2px 0 0}
+details.metodo code{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11px;color:var(--ink)}
+.foot{margin-top:16px;color:var(--ink3);font-size:11px;display:flex;justify-content:space-between;
+  flex-wrap:wrap;gap:8px;border-top:1px solid var(--line);padding-top:14px}
+.foot a{color:var(--ink2)}
+
+/* entrada escalonada */
+.rise{opacity:0;transform:translateY(10px);animation:rise .55s cubic-bezier(.2,.8,.2,1) forwards}
+@keyframes rise{to{opacity:1;transform:none}}
+
+@media (max-width:1100px){.g4{grid-template-columns:repeat(2,minmax(0,1fr))}.g64,.g3{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:620px){
+  .fsep{display:none}.wrap{padding:14px 16px 30px}.g4{grid-template-columns:minmax(0,1fr)}
+  .k4{grid-template-columns:repeat(2,minmax(0,1fr))}.headline h2{font-size:19px}
+  .drawer{padding:16px 16px 28px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <div class="brand"><span class="logo"><img src="data:image/png;base64,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" alt="REDTEC"></span><div><h1>Cockpit del Pool</h1><small>Pallet rojo 1,00 × 1,20 · SKU 11111111110 · extracción propia M3DATA desde SAP B1</small></div></div>
+  <span class="spacer"></span>
+  <span class="pill">Saldos al <b class="mono">2026-10-30</b></span>
+  <span class="pill">Flujos hasta <b class="mono">2026-10-30</b></span>
+  <div class="seg" id="tema" role="group" aria-label="Tema"><button type="button" data-t="dark" class="on">Oscuro</button><button type="button" data-t="light">Claro</button></div>
+  <a class="pill" href="m3link_dashboard_dark.html">‹ Panel M3LINK</a>
+</header>
+<div class="filters" id="filtros">
+  <span class="flabel">Planta</span>
+  <button type="button" class="chip on" data-f="planta" data-v="">Todas <span class="n">9</span></button>
+  <button type="button" class="chip" data-f="planta" data-v="SANTIAGO">SANTIAGO <span class="n">4</span></button>
+  <button type="button" class="chip" data-f="planta" data-v="TALCA">TALCA <span class="n">5</span></button>
+  <span class="fsep"></span><span class="flabel">Salud</span>
+  <button type="button" class="chip on" data-f="salud" data-v="">Todas <span class="n">9</span></button>
+  <button type="button" class="chip" data-f="salud" data-v="rojo">◆ Rojo <span class="n">2</span></button>
+  <button type="button" class="chip" data-f="salud" data-v="amarillo">▲ Amarillo <span class="n">2</span></button>
+  <button type="button" class="chip" data-f="salud" data-v="verde">● Verde <span class="n">5</span></button>
+</div>
+<div class="headline hl-rojo"><h2>Pool de <em>808.183</em> pallets; <em>4 de 9 estaciones</em> cierran días en negativo</h2><span class="sub">64 de 349 días · peor -6.151 en RT07-120</span></div>
+<section class="band"><div class="bandh"><span class="num">1</span><h3>¿Cómo estamos?</h3><span>valor · comparación · estado</span></div>
+<div class="grid g4"><div class="card lift rise" style="animation-delay:0ms"><div class="ct"><h4>Reparto del pool</h4><span class="hint">cli / ret / planta</span></div><div class="kv">808.183<small>pallets</small></div><div class="stack"><i style="width:26.87%;background:var(--cli)"></i><i style="width:71.57%;background:var(--ret)"></i><i style="width:1.56%;background:var(--pla)"></i></div><div class="legend"><span><i class="sw" style="background:var(--cli)"></i>Clientes <b>217.181</b> · 26,9%</span><span><i class="sw" style="background:var(--ret)"></i>Retail <b>578.401</b> · 71,6%</span><span><i class="sw" style="background:var(--pla)"></i>Planta <b>12.601</b> · 1,6%</span></div><div class="ks">de <b>812.572</b> que SAP tiene en bodega · 4.389 fuera del indicador no suman</div></div><div class="card lift rise" style="animation-delay:45ms"><div class="ct"><h4>Planta · indicador</h4><span class="hint">nueve bodegas</span></div><div class="kv">12.601<small>pallets</small></div><div class="bullet"><span class="fill" style="width:74.17%"></span><span class="mark" style="left:100.00%"></span></div><div class="ks"><b>4.389</b> más en merma, extraños y tránsito <span class="mut">— referencial, no suman</span></div></div><div class="card lift rise" style="animation-delay:90ms"><div class="ct"><h4>Atribución por socio</h4><span class="hint">socios / bodega</span></div><div class="kv">95,8%</div><div class="bullet"><span class="fill" style="width:95.79%"></span><span class="mark" style="left:100.00%"></span></div><div class="ks">clientes <b>99,3%</b> · retail <b>94,5%</b></div></div><div class="card lift rise" style="animation-delay:135ms"><div class="ct"><h4>Sin ubicación</h4><span class="hint">bodega − socios</span></div><div class="kv">33.482<small>pallets</small></div><div class="ks">retail <b>32.015</b> · clientes <b>1.467</b><br><span class="mut">ubicaciones que existen para el pallet sin dueño identificado</span></div><span class="stat st-warn">4,1% del pool</span></div><div class="card lift rise" style="animation-delay:180ms"><div class="ct"><h4>Movimiento del año</h4><span class="hint">neto salido</span></div><div class="kv">+57.726<small>pallets</small></div><div class="ks">retail <b>+28.577</b> · clientes <b>+29.149</b><br><span class="mut">positivo = pallet que salió de REDTEC</span></div></div><div class="card lift rise" style="animation-delay:225ms"><div class="ct"><h4>Días en negativo</h4><span class="hint">cierre &lt; 0</span></div><div class="kv">64<small>de 349</small></div><div class="barra"><i style="width:18.34%;background:var(--crit)"></i></div><div class="ks">en <b>4</b> de 9 estaciones<br><span class="mut">es la fecha del documento en SAP, no el cálculo</span></div><span class="stat st-crit">18,3% de los días</span></div><div class="card lift rise" style="animation-delay:270ms"><div class="ct"><h4>Cobertura</h4><span class="hint">docs SAP vs nuestros</span></div><div class="kv">100<small>%</small></div><div class="ks">Los nueve meses ya cerrados dan 174.918 documentos en SAP y 174.918 en nuestra extracción, al documento exacto. Octubre…</div><span class="stat st-good">medido el 2026-10-27</span></div><div class="card lift rise" style="animation-delay:315ms"><div class="ct"><h4>Controles</h4><span class="hint">pasan / total</span></div><div class="kv">7<small>de 9</small></div><div class="barra"><i style="width:77.78%;background:var(--warn)"></i></div><div class="ks">no pasan: <b>Conservación</b>, <b>Saldo imposible</b></div><span class="stat st-warn">2 sin pasar</span></div></div></section>
+<section class="band"><div class="bandh"><span class="num">2</span><h3>¿Dónde está el problema?</h3><span>clic en una celda para ver esa estación día por día</span></div>
+<div class="grid g64">
+<div class="card rise"><div class="ct"><h4>Planta × etapa del recorrido</h4><span class="hint">días con cierre bajo cero</span></div><div class="mtx" style="grid-template-columns:120px repeat(2,minmax(72px,1fr));min-width:300px"><div class="hd rh"></div><div class="hd">SANTIAGO</div><div class="hd">TALCA</div><div class="hd rh">INSPECCION</div><div class="cel c-rojo" data-cod="RT13-100" role="button" tabindex="0" title="SANTIAGO INSPECCION — Rojo: 35 de 49 días en negativo"><b>◆</b><small>35/49</small></div><div class="cel c-rojo" data-cod="RT07-120" role="button" tabindex="0" title="TALCA INSPECCION — Rojo: 26 de 41 días en negativo"><b>◆</b><small>26/41</small></div><div class="hd rh">REPARACION</div><div class="cel c-verde" data-cod="RT13-102" role="button" tabindex="0" title="SANTIAGO REPARACION — Verde: 0 de 41 días en negativo"><b>●</b><small>0/41</small></div><div class="cel c-verde" data-cod="RT07-122" role="button" tabindex="0" title="TALCA REPARACION — Verde: 0 de 42 días en negativo"><b>●</b><small>0/42</small></div><div class="hd rh">PINTURA</div><div class="cel c-verde" data-cod="RT13-103" role="button" tabindex="0" title="SANTIAGO PINTURA — Verde: 0 de 41 días en negativo"><b>●</b><small>0/41</small></div><div class="cel c-verde" data-cod="RT07-123" role="button" tabindex="0" title="TALCA PINTURA — Verde: 0 de 42 días en negativo"><b>●</b><small>0/42</small></div><div class="hd rh">DISPONIBLE</div><div class="cel c-verde" data-cod="RT13-105" role="button" tabindex="0" title="SANTIAGO DISPONIBLE — Verde: 0 de 42 días en negativo"><b>●</b><small>0/42</small></div><div class="cel c-amarillo" data-cod="RT07-125" role="button" tabindex="0" title="TALCA DISPONIBLE — Amarillo: 1 de 42 días en negativo"><b>▲</b><small>1/42</small></div><div class="hd rh">TRANSITO</div><div class="cel c-vacio" title="SANTIAGO · TRANSITO — No existe"><b>·</b></div><div class="cel c-amarillo" data-cod="RT07-126" role="button" tabindex="0" title="TALCA TRANSITO — Amarillo: 2 de 9 días en negativo"><b>▲</b><small>2/9</small></div></div><div class="legend"><span><i class="sw" style="background:var(--good)"></i>● Verde · ningún día</span><span><i class="sw" style="background:var(--warn)"></i>▲ Amarillo · menos de la mitad</span><span><i class="sw" style="background:var(--crit)"></i>◆ Rojo · la mitad o más</span><span><i class="sw" style="background:var(--nodata)"></i>○ Sin dato</span></div><div class="ks">Un nivel bajo cero es imposible: no hay media bodega de pallets en menos. El defecto está en la <b>fecha del documento</b> en SAP —la salida de mercancías queda fechada antes que el traspaso que la alimenta— y se concentra en el ingreso a inspección, no repartido por la planta. <span class="mut">Se arregla en SAP, no acá.</span></div></div>
+<div class="card rise"><div class="ct"><h4>Estaciones con días imposibles</h4><span class="hint">peor cierre</span></div><div class="list"><div class="li"><span class="ico i-crit">◆</span><div><div class="t">TALCA INSPECCION</div><div class="m">26 de 41 días bajo cero · peor el 2026-09-07</div></div><span class="v malo">-1.040</span></div><div class="li"><span class="ico i-crit">◆</span><div><div class="t">SANTIAGO INSPECCION</div><div class="m">35 de 49 días bajo cero · peor el 2026-10-09</div></div><span class="v malo">-6.151</span></div><div class="li"><span class="ico i-warn">▲</span><div><div class="t">TALCA DISPONIBLE</div><div class="m">1 de 42 días bajo cero · peor el 2026-09-08</div></div><span class="v ">-26</span></div><div class="li"><span class="ico i-warn">▲</span><div><div class="t">TALCA TRANSITO</div><div class="m">2 de 9 días bajo cero · peor el 2026-10-09</div></div><span class="v ">-166</span></div></div></div>
+</div></section>
+<section class="band"><div class="bandh"><span class="num">3</span><h3>¿Hacia dónde vamos?</h3><span>movimiento del año y del mes en curso</span></div>
+<div class="grid g64">
+<div class="card rise"><div class="ct"><h4>Movimiento neto por mes</h4><span class="hint">positivo = salió de REDTEC</span></div><div class="scroll"><svg viewBox="0 0 760 234" role="img" aria-label="Movimiento neto mensual"><line class="grid" x1="54" y1="14.0" x2="760" y2="14.0"/><text class="ax" x="46" y="18.0" text-anchor="end">+12.343</text><line class="grid" x1="54" y1="139.9" x2="760" y2="139.9"/><text class="ax" x="46" y="143.9" text-anchor="end">0</text><line class="grid" x1="54" y1="204.0" x2="760" y2="204.0"/><text class="ax" x="46" y="208.0" text-anchor="end">-6.288</text><rect class="b-ret" x="62.8" y="120.2" width="24" height="19.7" rx="3"><title>Ene · RETAIL: +1.933</title></rect><rect class="b-cli" x="91.8" y="139.9" width="24" height="61.3" rx="3"><title>Ene · CLIENTES: -6.012</title></rect><text class="ax" x="89.3" y="222" text-anchor="middle">Ene</text><rect class="b-ret" x="133.4" y="62.1" width="24" height="77.8" rx="3"><title>Feb · RETAIL: +7.626</title></rect><rect class="b-cli" x="162.4" y="139.9" width="24" height="19.2" rx="3"><title>Feb · CLIENTES: -1.887</title></rect><text class="ax" x="159.9" y="222" text-anchor="middle">Feb</text><rect class="b-ret" x="204.0" y="47.5" width="24" height="92.4" rx="3"><title>Mar · RETAIL: +9.059</title></rect><rect class="b-cli" x="233.0" y="125.5" width="24" height="14.4" rx="3"><title>Mar · CLIENTES: +1.409</title></rect><text class="ax" x="230.5" y="222" text-anchor="middle">Mar</text><rect class="b-ret" x="274.6" y="139.9" width="24" height="16.9" rx="3"><title>Abr · RETAIL: -1.662</title></rect><rect class="b-cli" x="303.6" y="14.0" width="24" height="125.9" rx="3"><title>Abr · CLIENTES: +12.343</title></rect><text class="ax" x="301.1" y="222" text-anchor="middle">Abr</text><rect class="b-ret" x="345.2" y="119.8" width="24" height="20.0" rx="3"><title>May · RETAIL: +1.964</title></rect><rect class="b-cli" x="374.2" y="103.3" width="24" height="36.6" rx="3"><title>May · CLIENTES: +3.586</title></rect><text class="ax" x="371.7" y="222" text-anchor="middle">May</text><rect class="b-ret" x="415.8" y="124.2" width="24" height="15.7" rx="3"><title>Jun · RETAIL: +1.538</title></rect><rect class="b-cli" x="444.8" y="115.9" width="24" height="24.0" rx="3"><title>Jun · CLIENTES: +2.353</title></rect><text class="ax" x="442.3" y="222" text-anchor="middle">Jun</text><rect class="b-ret" x="486.4" y="48.2" width="24" height="91.7" rx="3"><title>Jul · RETAIL: +8.993</title></rect><rect class="b-cli" x="515.4" y="139.9" width="24" height="64.1" rx="3"><title>Jul · CLIENTES: -6.288</title></rect><text class="ax" x="512.9" y="222" text-anchor="middle">Jul</text><rect class="b-ret" x="557.0" y="126.0" width="24" height="13.9" rx="3"><title>Ago · RETAIL: +1.365</title></rect><rect class="b-cli" x="586.0" y="67.9" width="24" height="71.9" rx="3"><title>Ago · CLIENTES: +7.053</title></rect><text class="ax" x="583.5" y="222" text-anchor="middle">Ago</text><rect class="b-ret" x="627.6" y="139.9" width="24" height="18.3" rx="3"><title>Sep · RETAIL: -1.791</title></rect><rect class="b-cli" x="656.6" y="38.8" width="24" height="101.0" rx="3"><title>Sep · CLIENTES: +9.907</title></rect><text class="ax" x="654.1" y="222" text-anchor="middle">Sep</text><rect class="b-ret" x="698.2" y="139.9" width="24" height="4.6" rx="3"><title>Oct · RETAIL: -448</title></rect><rect class="b-cli" x="727.2" y="71.7" width="24" height="68.2" rx="3"><title>Oct · CLIENTES: +6.685</title></rect><text class="ax" x="724.7" y="222" text-anchor="middle">Oct</text></svg></div><div class="legend"><span><i class="sw" style="background:var(--ret)"></i>Retail <b>+28.577</b> en el año</span><span><i class="sw" style="background:var(--cli)"></i>Clientes <b>+29.149</b> en el año</span></div></div>
+<div class="card rise"><div class="ct"><h4>Apertura → cierre del mes</h4><span class="hint">Oct 2026</span></div><div class="scroll dbl"><svg viewBox="0 0 640 272" role="img" aria-label="Apertura y cierre del mes por estación"><line class="cero" x1="162.7" y1="14" x2="162.7" y2="248"/><text class="ax" x="162.7" y="264" text-anchor="middle">0</text><text class="ax" x="118" y="31" text-anchor="end">RT07-120</text><line x1="174.4" y1="27" x2="180.3" y2="27" stroke="var(--line2)" stroke-width="3" stroke-linecap="round"/><circle cx="174.4" cy="27" r="5" fill="var(--card)" stroke="var(--ink3)" stroke-width="2"><title>TALCA INSPECCION · abrió en 228</title></circle><circle cx="180.3" cy="27" r="6" fill="var(--pla)"><title>TALCA INSPECCION · cerró en 342</title></circle><text class="ax" x="586" y="31">342</text><text class="ax" x="118" y="57" text-anchor="end">RT13-100</text><line x1="128.0" y1="53" x2="340.9" y2="53" stroke="var(--line2)" stroke-width="3" stroke-linecap="round"/><circle cx="128.0" cy="53" r="5" fill="var(--card)" stroke="var(--ink3)" stroke-width="2"><title>SANTIAGO INSPECCION · abrió en -672</title></circle><circle cx="340.9" cy="53" r="6" fill="var(--pla)"><title>SANTIAGO INSPECCION · cerró en 3.455</title></circle><text class="ax" x="586" y="57">3.455</text><text class="ax" x="118" y="83" text-anchor="end">RT07-125</text><line x1="164.6" y1="79" x2="179.1" y2="79" stroke="var(--line2)" stroke-width="3" stroke-linecap="round"/><circle cx="164.6" cy="79" r="5" fill="var(--card)" stroke="var(--ink3)" stroke-width="2"><title>TALCA DISPONIBLE · abrió en 37</title></circle><circle cx="179.1" cy="79" r="6" fill="var(--pla)"><title>TALCA DISPONIBLE · cerró en 319</title></circle><text class="ax" x="586" y="83">319</text><text class="ax" x="118" y="109" text-anchor="end">RT07-126</text><line x1="170.0" y1="105" x2="170.0" y2="105" stroke="var(--line2)" stroke-width="3" stroke-linecap="round"/><circle cx="170.0" cy="105" r="5" fill="var(--card)" stroke="var(--ink3)" stroke-width="2"><title>TALCA TRANSITO · abrió en 142</title></circle><circle cx="170.0" cy="105" r="6" fill="var(--pla)"><title>TALCA TRANSITO · cerró en 142</title></circle><text class="ax" x="586" y="109">142</text><text class="ax" x="118" y="135" text-anchor="end">RT07-122</text><line x1="162.7" y1="131" x2="227.7" y2="131" stroke="var(--line2)" stroke-width="3" stroke-linecap="round"/><circle cx="227.7" cy="131" r="5" fill="var(--card)" stroke="var(--ink3)" stroke-width="2"><title>TALCA REPARACION · abrió en 1.261</title></circle><circle cx="162.7" cy="131" r="6" fill="var(--pla)"><title>TALCA REPARACION · cerró en 0</title></circle><text class="ax" x="586" y="135">0</text><text class="ax" x="118" y="161" text-anchor="end">RT13-102</text><line x1="328.0" y1="157" x2="374.3" y2="157" stroke="var(--line2)" stroke-width="3" stroke-linecap="round"/><circle cx="328.0" cy="157" r="5" fill="var(--card)" stroke="var(--ink3)" stroke-width="2"><title>SANTIAGO REPARACION · abrió en 3.206</title></circle><circle cx="374.3" cy="157" r="6" fill="var(--pla)"><title>SANTIAGO REPARACION · cerró en 4.103</title></circle><text class="ax" x="586" y="161">4.103</text><text class="ax" x="118" y="187" text-anchor="end">RT07-123</text><line x1="162.7" y1="183" x2="174.4" y2="183" stroke="var(--line2)" stroke-width="3" stroke-linecap="round"/><circle cx="174.4" cy="183" r="5" fill="var(--card)" stroke="var(--ink3)" stroke-width="2"><title>TALCA PINTURA · abrió en 227</title></circle><circle cx="162.7" cy="183" r="6" fill="var(--pla)"><title>TALCA PINTURA · cerró en 0</title></circle><text class="ax" x="586" y="187">0</text><text class="ax" x="118" y="213" text-anchor="end">RT13-103</text><line x1="236.1" y1="209" x2="318.9" y2="209" stroke="var(--line2)" stroke-width="3" stroke-linecap="round"/><circle cx="318.9" cy="209" r="5" fill="var(--card)" stroke="var(--ink3)" stroke-width="2"><title>SANTIAGO PINTURA · abrió en 3.030</title></circle><circle cx="236.1" cy="209" r="6" fill="var(--pla)"><title>SANTIAGO PINTURA · cerró en 1.424</title></circle><text class="ax" x="586" y="213">1.424</text><text class="ax" x="118" y="239" text-anchor="end">RT13-105</text><line x1="307.9" y1="235" x2="578.0" y2="235" stroke="var(--line2)" stroke-width="3" stroke-linecap="round"/><circle cx="578.0" cy="235" r="5" fill="var(--card)" stroke="var(--ink3)" stroke-width="2"><title>SANTIAGO DISPONIBLE · abrió en 8.053</title></circle><circle cx="307.9" cy="235" r="6" fill="var(--pla)"><title>SANTIAGO DISPONIBLE · cerró en 2.816</title></circle><text class="ax" x="586" y="239">2.816</text></svg></div><div class="legend"><span><i class="sw" style="background:transparent;border:2px solid var(--ink3)"></i>Abrió el mes</span><span><i class="sw" style="background:var(--pla)"></i>Cerró</span><span><i class="sw" style="background:var(--crit)"></i>Cerró bajo cero</span></div></div>
+</div></section>
+<section class="band"><div class="bandh"><span class="num">4</span><h3>¿Qué hay que decidir?</h3><span>lo que el dato pide y lo que el proyecto comprometió</span></div>
+<div class="grid g3">
+<div class="card rise"><div class="ct"><h4>Lo que el dato pide</h4><span class="hint">controles y estaciones</span></div><div class="list"><div class="li"><span class="ico i-crit">!</span><div><div class="t">Conservación no pasa</div><div class="m">Un traspaso mueve el reparto, nunca el total. Entre el 26 y el 27 de octubre el pool subió 1.030 (810.625 → 811.655) y las cuatro etapas de planta…</div></div><span class="v malo">control</span></div><div class="li"><span class="ico i-crit">!</span><div><div class="t">Saldo imposible no pasa</div><div class="m">Ningún socio puede tener menos de cero pallets. Cinco lo incumplen en algún día del año: uno en retail, que llega a −6.488, y cuatro en clientes, el…</div></div><span class="v malo">control</span></div><div class="li"><span class="ico i-crit">◆</span><div><div class="t">TALCA INSPECCION cierra en negativo 26 de 41 días</div><div class="m">peor -1.040 el 2026-09-07 · la salida queda fechada antes que el traspaso que la alimenta</div></div><span class="v malo">RT07-120</span></div><div class="li"><span class="ico i-crit">◆</span><div><div class="t">SANTIAGO INSPECCION cierra en negativo 35 de 49 días</div><div class="m">peor -6.151 el 2026-10-09 · la salida queda fechada antes que el traspaso que la alimenta</div></div><span class="v malo">RT13-100</span></div></div></div>
+<div class="card rise"><div class="ct"><h4>Compromisos del proyecto</h4><span class="hint">vencidos primero</span></div><div class="list"><div class="li"><span class="ico i-warn">▲</span><div><div class="t">Rotar la clave de SAP</div><div class="m">está en texto plano en el notebook de Colab · 2026-11-07</div></div><span class="v ">+8 d</span></div><div class="li"><span class="ico i-good">●</span><div><div class="t">Corregir los RUT en @HX_OPERARIOS</div><div class="m">campo U_RUT nuevo; la OT guarda el Code, así que arregla hacia atrás · 2026-11-15</div></div><span class="v ">+16 d</span></div><div class="li"><span class="ico i-good">●</span><div><div class="t">Migrar las tres vistas que usan RDTOut</div><div class="m">stocks-unificado, stock-calendario y Stock Plantas Respaldo · 2026-11-30</div></div><span class="v ">+31 d</span></div><div class="li"><span class="ico i-good">●</span><div><div class="t">Baja de M2LINK</div><div class="m">la extracción propia tiene que sostener sola el stock · 2026-12-01</div></div><span class="v ">+32 d</span></div></div></div>
+<div class="card rise"><div class="ct"><h4>Controles que pasan</h4><span class="hint">con su fecha</span></div><div class="list"><div class="li"><span class="ico i-good">●</span><div><div class="t">Segunda fuente · bodega</div><div class="m">Las 22 bodegas con movimiento del SKU coinciden al pallet con Datawalt, que lee SAP por una vía que no…</div></div><span class="v ">2026-10-26</span></div><div class="li"><span class="ico i-good">●</span><div><div class="t">Segunda fuente · socio</div><div class="m">De los 50 socios mayores, 42 dan el mismo nivel por los dos caminos. Las ocho diferencias son ubicaciones…</div></div><span class="v ">2026-10-26</span></div><div class="li"><span class="ico i-good">●</span><div><div class="t">Segunda fuente · historia</div><div class="m">El nivel de CLIENTES al 31-12-2025 da 187.832 por nuestra vía y 187.832 por la de Datawalt, calculadas hacia…</div></div><span class="v ">2026-10-26</span></div><div class="li"><span class="ico i-good">●</span><div><div class="t">Segunda fuente · cierre 2025</div><div class="m">El nivel de BODEGA RETAILERS al 31-12-2025 da 532.587 por nuestra vía, descontando la ubicación de sistema…</div></div><span class="v ">2026-10-28</span></div><div class="li"><span class="ico i-good">●</span><div><div class="t">Segunda fuente · flujo</div><div class="m">El movimiento neto de enero a septiembre dio 35.759 en retail y 22.464 en clientes por los dos caminos, al…</div></div><span class="v ">2026-10-26</span></div><div class="li"><span class="ico i-good">●</span><div><div class="t">Cobertura</div><div class="m">Los nueve meses ya cerrados dan 174.918 documentos en SAP y 174.918 en nuestra extracción, al documento…</div></div><span class="v ">2026-10-27</span></div><div class="li"><span class="ico i-good">●</span><div><div class="t">Posteo retroactivo</div><div class="m">Comparando la copia del 26 con la del 27, un solo día cambió su movimiento en cada bodega —el 26 de octubre…</div></div><span class="v ">2026-10-27</span></div></div></div>
+</div></section>
+<section class="band"><div class="bandh"><span class="num">5</span><h3>Las nueve estaciones</h3><span>clic en una fila para ver su mes día por día</span></div>
+<div class="card"><div class="tblwrap"><table class="cart"><thead><tr><th>Estación</th><th>Planta</th><th>Etapa</th><th class="num">Saldo</th><th class="num">Entradas</th><th class="num">Salidas</th><th class="num">Neto</th><th class="num">Días &lt; 0</th><th>Salud</th></tr></thead><tbody id="cartera"><tr data-cod="RT07-120" data-planta="TALCA" data-etapa="INSPECCION" data-salud="rojo" tabindex="0"><td><div class="pn">TALCA INSPECCION</div><div class="pc">RT07-120</div></td><td>TALCA</td><td>Inspeccion</td><td class="num">342</td><td class="num">33.449</td><td class="num">33.864</td><td class="num d-neg">-415</td><td class="num">26 / 41</td><td><span class="salud s-rojo"><i>◆</i>Rojo</span></td></tr><tr data-cod="RT13-100" data-planta="SANTIAGO" data-etapa="INSPECCION" data-salud="rojo" tabindex="0"><td><div class="pn">SANTIAGO INSPECCION</div><div class="pc">RT13-100</div></td><td>SANTIAGO</td><td>Inspeccion</td><td class="num">3.455</td><td class="num">186.199</td><td class="num">182.261</td><td class="num d-pos">+3.938</td><td class="num">35 / 49</td><td><span class="salud s-rojo"><i>◆</i>Rojo</span></td></tr><tr data-cod="RT07-125" data-planta="TALCA" data-etapa="DISPONIBLE" data-salud="amarillo" tabindex="0"><td><div class="pn">TALCA DISPONIBLE</div><div class="pc">RT07-125</div></td><td>TALCA</td><td>Disponible</td><td class="num">319</td><td class="num">35.753</td><td class="num">36.334</td><td class="num d-neg">-581</td><td class="num">1 / 42</td><td><span class="salud s-amarillo"><i>▲</i>Amarillo</span></td></tr><tr data-cod="RT07-126" data-planta="TALCA" data-etapa="TRANSITO" data-salud="amarillo" tabindex="0"><td><div class="pn">TALCA TRANSITO</div><div class="pc">RT07-126</div></td><td>TALCA</td><td>Transito</td><td class="num">142</td><td class="num">1.450</td><td class="num">1.450</td><td class="num d-nul">0</td><td class="num">2 / 9</td><td><span class="salud s-amarillo"><i>▲</i>Amarillo</span></td></tr><tr data-cod="RT07-122" data-planta="TALCA" data-etapa="REPARACION" data-salud="verde" tabindex="0"><td><div class="pn">TALCA REPARACION</div><div class="pc">RT07-122</div></td><td>TALCA</td><td>Reparacion</td><td class="num">0</td><td class="num">24.463</td><td class="num">25.138</td><td class="num d-neg">-675</td><td class="num">—</td><td><span class="salud s-verde"><i>●</i>Verde</span></td></tr><tr data-cod="RT13-102" data-planta="SANTIAGO" data-etapa="REPARACION" data-salud="verde" tabindex="0"><td><div class="pn">SANTIAGO REPARACION</div><div class="pc">RT13-102</div></td><td>SANTIAGO</td><td>Reparacion</td><td class="num">4.103</td><td class="num">94.515</td><td class="num">97.824</td><td class="num d-neg">-3.309</td><td class="num">—</td><td><span class="salud s-verde"><i>●</i>Verde</span></td></tr><tr data-cod="RT07-123" data-planta="TALCA" data-etapa="PINTURA" data-salud="verde" tabindex="0"><td><div class="pn">TALCA PINTURA</div><div class="pc">RT07-123</div></td><td>TALCA</td><td>Pintura</td><td class="num">0</td><td class="num">32.239</td><td class="num">32.395</td><td class="num d-neg">-156</td><td class="num">—</td><td><span class="salud s-verde"><i>●</i>Verde</span></td></tr><tr data-cod="RT13-103" data-planta="SANTIAGO" data-etapa="PINTURA" data-salud="verde" tabindex="0"><td><div class="pn">SANTIAGO PINTURA</div><div class="pc">RT13-103</div></td><td>SANTIAGO</td><td>Pintura</td><td class="num">1.424</td><td class="num">201.202</td><td class="num">203.879</td><td class="num d-neg">-2.677</td><td class="num">—</td><td><span class="salud s-verde"><i>●</i>Verde</span></td></tr><tr data-cod="RT13-105" data-planta="SANTIAGO" data-etapa="DISPONIBLE" data-salud="verde" tabindex="0"><td><div class="pn">SANTIAGO DISPONIBLE</div><div class="pc">RT13-105</div></td><td>SANTIAGO</td><td>Disponible</td><td class="num">2.816</td><td class="num">208.231</td><td class="num">209.555</td><td class="num d-neg">-1.324</td><td class="num">—</td><td><span class="salud s-verde"><i>●</i>Verde</span></td></tr></tbody></table></div><div class="empty" id="sinfilas" hidden>Ninguna estación con ese filtro.</div></div></section>
+<details class="metodo"><summary>¿De dónde sale cada número?</summary><dl><dt>Pool</dt><dd>Clientes + retail + las nueve bodegas del indicador de planta. Merma, extraños y el tránsito que no es del indicador están en una bodega de SAP pero no son pallet que rote: se muestran como referencia y no suman. SAP tiene <code>812.572</code> en bodega.</dd><dt>Saldo por bodega</dt><dd>SAP B1 Service Layer, <code>ItemWarehouseInfoCollection.InStock</code>. Es el saldo que SAP ya tiene calculado, sin acumular series.</dd><dt>Distribución diaria</dt><dd>Se calcula <b>hacia atrás</b> desde ese saldo vivo, restando el movimiento de cada día: <code>nivel(t) = ancla − Σ movimientos posteriores</code>. Por construcción, el cierre del último día es el saldo de la tabla.</dd><dt>Salud de una estación</dt><dd>Mira una sola cosa: cuántos días cierra bajo cero. <b>Verde</b> ninguno, <b>amarillo</b> menos de la mitad, <b>rojo</b> la mitad o más. Lo que no se puede evaluar dice <b>sin dato</b> y no se pinta de verde.</dd><dt>Niveles negativos</dt><dd>No son un error del cálculo: SAP los tiene así. La causa es la fecha del documento —la salida de mercancías queda fechada antes que el traspaso que la alimenta—. Se verificó contra OINM calculado por otra vía: da los mismos días y los mismos números. Se arregla en SAP.</dd><dt>Atribución por socio</dt><dd>Serie de movimientos por ubicación, repartida con el maestro de ubicaciones. El total lo dicta la bodega; la ubicación sólo lo reparte. Lo que no se puede ubicar es el residuo, y no es pallet perdido.</dd><dt>Esta página</dt><dd>No consulta SAP ni ningún API: lee <code>data/datos-stock.json</code>, que escribe el cierre diario. Si ese archivo no está, no hay página.</dd></dl></details>
+<div class="foot"><span>Extracción propia M3DATA desde SAP B1 · base CLPRDREDTEC · saldos al 2026-10-30 · página armada por <code>scripts/armar-cockpit-pool.js</code>, ninguna cifra escrita a mano.</span><span><a href="stock-flujos-pallets.html">Ver el detalle completo ›</a></span></div>
+</div>
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Detalle de la estación"><button class="dx" id="dxc" type="button" aria-label="Cerrar">✕</button><div id="dbody"></div></aside>
+<script>
+var MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+function esNumero(n) {
+  return typeof n === 'number' ? isFinite(n)
+       : (typeof n === 'string' && n.trim() !== '' && isFinite(Number(n)));
+}
+function mil(n) {
+  if (!esNumero(n)) return '—';
+  return Math.round(Number(n)).toLocaleString('es-CL');
+}
+function conSigno(n) {
+  if (!esNumero(n)) return '—';
+  const v = Number(n);
+  return (v > 0 ? '+' : '') + mil(v);
+}
+function clasePos(n) {
+  const v = Number(n) || 0;
+  return v > 0 ? 'd-pos' : v < 0 ? 'd-neg' : 'd-nul';
+}
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function etiquetaDeMes(mes) {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(mes == null ? '' : mes));
+  if (!m) return String(mes == null ? '' : mes);
+  return (MESES[Number(m[2]) - 1] || m[2]) + ' ' + m[1];
+}
+function diasDelMes(bodega, mes) {
+  const p = String(mes == null ? '' : mes);
+  return (((bodega && bodega.dias) || [])).filter(d => d && String(d.dia).slice(0, 7) === p);
+}
+function resumenDelMes(dias) {
+  const ds = Array.isArray(dias) ? dias : [];
+  if (!ds.length) return null;
+  let entradas = 0, salidas = 0, negativos = 0, peor = null, enCurso = false;
+  for (const d of ds) {
+    entradas += Number(d.entradas) || 0;
+    salidas += Number(d.salidas) || 0;
+    const c = Number(d.cierre) || 0;
+    if (c < 0) { negativos++; if (!peor || c < peor.cierre) peor = { dia: String(d.dia), cierre: c }; }
+    if (d.firme === false) enCurso = true;
+  }
+  const apertura = Number(ds[0].apertura) || 0;
+  const cierre = Number(ds[ds.length - 1].cierre) || 0;
+  return { n: ds.length, desde: String(ds[0].dia), hasta: String(ds[ds.length - 1].dia),
+           apertura, cierre, entradas, salidas,
+           neto: cierre - apertura, netoFlujo: entradas - salidas,
+           cuadra: (cierre - apertura) === (entradas - salidas),
+           negativos, peor, enCurso };
+}
+function altoVisible(h, v) {
+  if (!v) return 0;
+  return Math.max(1.6, h);
+}
+function ejeDeDias(ds, An, izq, der, Al) {
+  const slot = (An - izq - der) / Math.max(1, ds.length);
+  // Con muchos dias las etiquetas se pisan: se rotula uno de cada n, y
+  // siempre el primero, para que el lector sepa donde empieza el mes.
+  const salto = slot >= 26 ? 1 : slot >= 15 ? 2 : slot >= 10 ? 3 : 5;
+  let t = '';
+  ds.forEach((d, i) => {
+    if (i % salto) return;
+    t += '<text class="ax" x="' + (izq + i * slot + slot / 2).toFixed(1) + '" y="' + (Al - 7) +
+         '" text-anchor="middle">' + esc(String(d.dia).slice(8)) + '</text>';
+  });
+  return { slot, etiquetas: t };
+}
+function svgFlujoDia(dias) {
+  const ds = Array.isArray(dias) ? dias : [];
+  if (!ds.length) return '';
+  const An = 760, izq = 52, der = 8, arriba = 12, abajo = 26, mitad = 84;
+  const Al = arriba + mitad * 2 + abajo, y0 = arriba + mitad;
+  const tope = Math.max(1, ...ds.map(d => Math.max(Number(d.entradas) || 0, Number(d.salidas) || 0)));
+  const esc_ = mitad / tope;
+  const { slot, etiquetas } = ejeDeDias(ds, An, izq, der, Al);
+  const ancho = Math.max(2.5, Math.min(26, slot / 2 - 1.5));   // 1,5px de aire entre las dos barras
+
+  let g = '';
+  const linea = (v, y, txt) => '<line class="grid" x1="' + izq + '" y1="' + y.toFixed(1) +
+    '" x2="' + (An - der) + '" y2="' + y.toFixed(1) + '"/><text class="ax" x="' + (izq - 8) +
+    '" y="' + (y + 4).toFixed(1) + '" text-anchor="end">' + esc(txt) + '</text>';
+  g += linea(tope, arriba, mil(tope));
+  g += linea(0, y0, '0');
+  g += linea(tope, y0 + mitad, mil(tope));
+
+  ds.forEach((d, i) => {
+    const x = izq + i * slot + (slot - (2 * ancho + 1.5)) / 2;
+    const ent = Number(d.entradas) || 0, sal = Number(d.salidas) || 0;
+    const he = altoVisible(ent * esc_, ent), hs = altoVisible(sal * esc_, sal);
+    g += '<rect class="b-ent" x="' + x.toFixed(1) + '" y="' + (y0 - he).toFixed(1) +
+         '" width="' + ancho.toFixed(1) + '" height="' + he.toFixed(1) + '" rx="2">' +
+         '<title>' + esc(d.dia) + ' · entradas ' + mil(ent) + '</title></rect>';
+    g += '<rect class="b-sal" x="' + (x + ancho + 1.5).toFixed(1) + '" y="' + y0.toFixed(1) +
+         '" width="' + ancho.toFixed(1) + '" height="' + hs.toFixed(1) + '" rx="2">' +
+         '<title>' + esc(d.dia) + ' · salidas ' + mil(sal) + '</title></rect>';
+  });
+  return '<svg viewBox="0 0 ' + An + ' ' + Al + '" role="img" ' +
+         'aria-label="Entradas y salidas por dia">' + g + etiquetas + '</svg>';
+}
+function svgNivelDia(dias) {
+  const ds = Array.isArray(dias) ? dias : [];
+  if (!ds.length) return '';
+  const An = 760, izq = 52, der = 8, arriba = 12, abajo = 26, util = 116;
+  const Al = arriba + util + abajo;
+  const vals = ds.map(d => Number(d.cierre) || 0);
+  // El cero SIEMPRE entra en la escala: es la frontera entre un nivel posible
+  // y uno imposible, y es justo lo que hay que poder ver.
+  const alto = Math.max(0, ...vals), bajo = Math.min(0, ...vals);
+  const rango = (alto - bajo) || 1, esc_ = util / rango;
+  const y0 = arriba + alto * esc_;
+  const { slot, etiquetas } = ejeDeDias(ds, An, izq, der, Al);
+  const ancho = Math.max(2.5, Math.min(48, slot - 3));
+
+  let g = '';
+  const linea = (v, cl) => {
+    const y = arriba + (alto - v) * esc_;
+    return '<line class="' + cl + '" x1="' + izq + '" y1="' + y.toFixed(1) + '" x2="' + (An - der) +
+           '" y2="' + y.toFixed(1) + '"/><text class="ax" x="' + (izq - 8) + '" y="' +
+           (y + 4).toFixed(1) + '" text-anchor="end">' + esc(mil(v)) + '</text>';
+  };
+  if (alto > 0) g += linea(alto, 'grid');
+  if (bajo < 0) g += linea(bajo, 'grid');
+  g += linea(0, 'cero');
+
+  ds.forEach((d, i) => {
+    const v = Number(d.cierre) || 0, h = altoVisible(Math.abs(v) * esc_, v);
+    const x = izq + i * slot + (slot - ancho) / 2;
+    g += '<rect class="' + (v < 0 ? 'n-neg' : 'n-pos') + '" x="' + x.toFixed(1) + '" y="' +
+         (v >= 0 ? y0 - h : y0).toFixed(1) + '" width="' + ancho.toFixed(1) + '" height="' +
+         h.toFixed(1) + '" rx="2">' + '<title>' + esc(d.dia) + ' · cierre ' + mil(v) +
+         (d.firme === false ? ' (dia en curso)' : '') + '</title></rect>';
+  });
+  return '<svg viewBox="0 0 ' + An + ' ' + Al + '" role="img" ' +
+         'aria-label="Nivel al cierre de cada dia">' + g + etiquetas + '</svg>';
+}
+function tablaDeDias(dias) {
+  const ds = Array.isArray(dias) ? dias : [];
+  let f = '';
+  for (const d of ds) {
+    const neto = (Number(d.entradas) || 0) - (Number(d.salidas) || 0);
+    const c = Number(d.cierre) || 0;
+    f += '<tr><td class="cod">' + esc(d.dia) +
+         (d.firme === false ? ' <span class="chip">en curso</span>' : '') +
+         '</td><td class="num">' + mil(d.apertura) + '</td><td class="num">' + mil(d.entradas) +
+         '</td><td class="num">' + mil(d.salidas) + '</td><td class="num ' + clasePos(neto) + '">' +
+         conSigno(neto) + '</td><td class="num' + (c < 0 ? ' malo' : '') + '">' + mil(c) +
+         '</td></tr>';
+  }
+  return '<div class="scroll"><table>\n' +
+    '<thead><tr><th>Día</th><th class="num">Apertura</th><th class="num">Entradas</th>' +
+    '<th class="num">Salidas</th><th class="num">Neto</th><th class="num">Cierre</th></tr></thead>\n' +
+    '<tbody>' + f + '</tbody></table></div>';
+}
+function rehidratar(compacta) {
+  return (Array.isArray(compacta) ? compacta : []).map(b => ({
+    cod: b.c, nom: b.n, nivel: b.v,
+    dias: (b.d || []).map(x => ({ dia: x[0], apertura: x[1], entradas: x[2],
+                                  salidas: x[3], cierre: x[4], firme: x.length < 6 })),
+  }));
+}
+var PD = rehidratar([{"c":"RT07-120","n":"TALCA INSPECCION","v":342,"d":[["2026-09-01",757,1020,1639,138],["2026-09-02",138,250,321,67],["2026-09-03",67,435,1039,-537],["2026-09-04",-537,1190,1481,-828],["2026-09-07",-828,928,1140,-1040],["2026-09-08",-1040,1256,542,-326],["2026-09-09",-326,828,914,-412],["2026-09-10",-412,356,978,-1034],["2026-09-11",-1034,1530,302,194],["2026-09-14",194,662,756,100],["2026-09-15",100,545,1012,-367],["2026-09-16",-367,923,281,275],["2026-09-17",275,754,1224,-195],["2026-09-21",-195,727,1205,-673],["2026-09-22",-673,1476,647,156],["2026-09-23",156,246,998,-596],["2026-09-24",-596,1183,311,276],["2026-09-25",276,629,1171,-266],["2026-09-28",-266,956,412,278],["2026-09-29",278,258,978,-442],["2026-09-30",-442,1183,513,228],["2026-10-01",228,343,293,278],["2026-10-02",278,1166,1910,-466],["2026-10-05",-466,437,935,-964],["2026-10-06",-964,1308,624,-280],["2026-10-07",-280,443,1140,-977],["2026-10-08",-977,1228,641,-390],["2026-10-09",-390,768,1042,-664],["2026-10-13",-664,1208,991,-447],["2026-10-14",-447,731,197,87],["2026-10-15",87,410,954,-457],["2026-10-16",-457,906,752,-303],["2026-10-19",-303,695,1297,-905],["2026-10-20",-905,1024,816,-697],["2026-10-21",-697,915,467,-249],["2026-10-22",-249,926,1134,-457],["2026-10-23",-457,907,363,87],["2026-10-26",87,766,1214,-361],["2026-10-27",-361,889,441,87],["2026-10-28",87,354,413,28],["2026-10-29",28,690,376,342]]},{"c":"RT13-100","n":"SANTIAGO INSPECCION","v":3455,"d":[["2026-09-01",-483,5148,4489,176],["2026-09-02",176,4310,4085,401],["2026-09-03",401,3998,3871,528],["2026-09-04",528,3675,5559,-1356],["2026-09-05",-1356,1644,0,288],["2026-09-07",288,4309,4431,166],["2026-09-08",166,4066,4077,155],["2026-09-09",155,3240,4511,-1116],["2026-09-10",-1116,5574,4202,256],["2026-09-11",256,3941,6095,-1898],["2026-09-12",-1898,1761,0,-137],["2026-09-14",-137,3408,4165,-894],["2026-09-15",-894,5492,4814,-216],["2026-09-16",-216,4032,3401,415],["2026-09-17",415,3715,5435,-1305],["2026-09-21",-1305,2433,2373,-1245],["2026-09-22",-1245,3895,3544,-894],["2026-09-23",-894,4129,4754,-1519],["2026-09-24",-1519,4349,3623,-793],["2026-09-25",-793,4753,7364,-3404],["2026-09-26",-3404,2684,0,-720],["2026-09-28",-720,4940,4675,-455],["2026-09-29",-455,4368,4470,-557],["2026-09-30",-557,3655,3770,-672],["2026-10-01",-672,4457,4279,-494],["2026-10-02",-494,3679,5355,-2170],["2026-10-03",-2170,1392,0,-778],["2026-10-05",-778,4865,4322,-235],["2026-10-06",-235,1799,2414,-850],["2026-10-07",-850,2307,3100,-1643],["2026-10-08",-1643,3380,2902,-1165],["2026-10-09",-1165,3263,8249,-6151],["2026-10-10",-6151,3184,0,-2967],["2026-10-13",-2967,7735,5619,-851],["2026-10-14",-851,3373,3571,-1049],["2026-10-15",-1049,4232,3912,-729],["2026-10-16",-729,4292,6532,-2969],["2026-10-17",-2969,2793,0,-176],["2026-10-19",-176,6136,5717,243],["2026-10-20",243,4006,4273,-24],["2026-10-21",-24,2164,2317,-177],["2026-10-22",-177,4144,3862,105],["2026-10-23",105,4122,6102,-1875],["2026-10-24",-1875,2058,0,183],["2026-10-26",183,5214,5007,390],["2026-10-27",390,3845,4241,-6],["2026-10-28",-6,4411,4665,-260],["2026-10-29",-260,4883,2114,2509],["2026-10-30",2509,946,0,3455,0]]},{"c":"RT07-122","n":"TALCA REPARACION","v":0,"d":[["2026-09-01",675,599,0,1274],["2026-09-02",1274,285,455,1104],["2026-09-03",1104,720,726,1098],["2026-09-04",1098,722,214,1606],["2026-09-07",1606,737,662,1681],["2026-09-08",1681,413,0,2094],["2026-09-09",2094,652,945,1801],["2026-09-10",1801,791,662,1930],["2026-09-11",1930,302,995,1237],["2026-09-14",1237,486,690,1033],["2026-09-15",1033,394,311,1116],["2026-09-16",1116,826,1072,870],["2026-09-17",870,665,281,1254],["2026-09-21",1254,742,651,1345],["2026-09-22",1345,582,321,1606],["2026-09-23",1606,608,600,1614],["2026-09-24",1614,311,1400,525],["2026-09-25",525,926,540,911],["2026-09-28",911,412,0,1323],["2026-09-29",1323,756,600,1479],["2026-09-30",1479,513,731,1261],["2026-10-01",1261,293,961,593],["2026-10-02",593,1180,293,1480],["2026-10-05",1480,710,969,1221],["2026-10-06",1221,447,436,1232],["2026-10-07",1232,856,1241,847],["2026-10-08",847,464,0,1311],["2026-10-09",1311,735,795,1251],["2026-10-13",1251,798,309,1740],["2026-10-14",1740,197,703,1234],["2026-10-15",1234,694,643,1285],["2026-10-16",1285,633,661,1257],["2026-10-19",1257,895,0,2152],["2026-10-20",2152,632,1312,1472],["2026-10-21",1472,386,393,1465],["2026-10-22",1465,812,808,1469],["2026-10-23",1469,363,901,931],["2026-10-26",931,809,681,1059],["2026-10-27",1059,387,500,946],["2026-10-28",946,354,696,604],["2026-10-29",604,376,354,626],["2026-10-30",626,0,626,0,0]]},{"c":"RT13-102","n":"SANTIAGO REPARACION","v":4103,"d":[["2026-09-01",7412,2816,5870,4358],["2026-09-02",4358,1965,2630,3693],["2026-09-03",3693,1530,3939,1284],["2026-09-04",1284,2031,0,3315],["2026-09-07",3315,2013,1454,3874],["2026-09-08",3874,1945,750,5069],["2026-09-09",5069,2207,2485,4791],["2026-09-10",4791,1976,2739,4028],["2026-09-11",4028,2643,1507,5164],["2026-09-14",5164,2022,1168,6018],["2026-09-15",6018,4197,2824,7391],["2026-09-16",7391,1573,5305,3659],["2026-09-17",3659,1889,1152,4396],["2026-09-21",4396,1343,2390,3349],["2026-09-22",3349,2167,3359,2157],["2026-09-23",2157,2359,3348,1168],["2026-09-24",1168,3619,2848,1939],["2026-09-25",1939,3668,1341,4266],["2026-09-28",4266,2336,1562,5040],["2026-09-29",5040,2138,3019,4159],["2026-09-30",4159,1916,2869,3206],["2026-10-01",3206,2110,2539,2777],["2026-10-02",2777,3053,1029,4801],["2026-10-05",4801,2415,2702,4514],["2026-10-06",4514,1308,1000,4822],["2026-10-07",4822,1535,4460,1897],["2026-10-08",1897,1391,1930,1358],["2026-10-09",1358,4394,748,5004],["2026-10-13",5004,3224,3776,4452],["2026-10-14",4452,1907,3548,2811],["2026-10-15",2811,2229,1346,3694],["2026-10-16",3694,3264,2029,4929],["2026-10-19",4929,3617,2945,5601],["2026-10-20",5601,2071,2203,5469],["2026-10-21",5469,1154,2850,3773],["2026-10-22",3773,1713,3314,2172],["2026-10-23",2172,2985,651,4506],["2026-10-26",4506,2143,2602,4047],["2026-10-27",4047,2134,1500,4681],["2026-10-28",4681,2409,2875,4215],["2026-10-29",4215,1106,1218,4103]]},{"c":"RT07-123","n":"TALCA PINTURA","v":0,"d":[["2026-09-01",156,57,0,213],["2026-09-02",213,491,606,98],["2026-09-03",98,1045,726,417],["2026-09-04",417,391,214,594],["2026-09-07",594,1065,867,792],["2026-09-08",792,129,0,921],["2026-09-09",921,1207,1329,799],["2026-09-10",799,849,1000,648],["2026-09-11",648,995,1000,643],["2026-09-14",643,960,1099,504],["2026-09-15",504,560,388,676],["2026-09-16",676,527,895,308],["2026-09-17",308,464,551,221],["2026-09-21",221,1114,651,684],["2026-09-22",684,386,354,716],["2026-09-23",716,990,783,923],["2026-09-24",923,1400,1954,369],["2026-09-25",369,783,540,612],["2026-09-28",612,0,210,402],["2026-09-29",402,822,754,470],["2026-09-30",470,731,974,227],["2026-10-01",227,961,1183,5],["2026-10-02",5,821,293,533],["2026-10-05",533,1193,1165,561],["2026-10-06",561,612,436,737],["2026-10-07",737,1524,1788,473],["2026-10-08",473,174,0,647],["2026-10-09",647,1099,1000,746],["2026-10-13",746,502,541,707],["2026-10-14",707,703,910,500],["2026-10-15",500,903,945,458],["2026-10-16",458,780,854,384],["2026-10-19",384,402,0,786],["2026-10-20",786,1496,1691,591],["2026-10-21",591,697,1018,270],["2026-10-22",270,1130,808,592],["2026-10-23",592,901,1000,493],["2026-10-26",493,1086,1000,579],["2026-10-27",579,554,894,239],["2026-10-28",239,755,930,64],["2026-10-29",64,354,354,64],["2026-10-30",64,626,690,0,0]]},{"c":"RT13-103","n":"SANTIAGO PINTURA","v":1424,"d":[["2026-09-01",4101,7625,7516,4210],["2026-09-02",4210,4750,3340,5620],["2026-09-03",5620,6640,6450,5810],["2026-09-04",5810,4218,2058,7970],["2026-09-07",7970,4434,8031,4373],["2026-09-08",4373,2972,3093,4252],["2026-09-09",4252,5059,5987,3324],["2026-09-10",3324,4965,4956,3333],["2026-09-11",3333,5964,2694,6603],["2026-09-14",6603,3935,5960,4578],["2026-09-15",4578,5493,6375,3696],["2026-09-16",3696,7313,7545,3464],["2026-09-17",3464,3315,1798,4981],["2026-09-21",4981,4080,4951,4110],["2026-09-22",4110,4766,5418,3458],["2026-09-23",3458,5773,6809,2422],["2026-09-24",2422,4655,4308,2769],["2026-09-25",2769,5033,2833,4969],["2026-09-28",4969,5227,5630,4566],["2026-09-29",4566,5471,4808,5229],["2026-09-30",5229,4933,7132,3030],["2026-10-01",3030,4716,4544,3202],["2026-10-02",3202,4580,1029,6753],["2026-10-05",6753,4609,5818,5544],["2026-10-06",5544,2106,2500,5150],["2026-10-07",5150,6025,7356,3819],["2026-10-08",3819,3441,2000,5260],["2026-10-09",5260,5233,5340,5153],["2026-10-13",5153,6171,6934,4390],["2026-10-14",4390,5253,7400,2243],["2026-10-15",2243,3029,0,5272],["2026-10-16",5272,6317,4500,7089],["2026-10-19",7089,6245,9996,3338],["2026-10-20",3338,4405,3444,4299],["2026-10-21",4299,4046,6139,2206],["2026-10-22",2206,5463,5559,2110],["2026-10-23",2110,5343,870,6583],["2026-10-26",6583,5992,8114,4461],["2026-10-27",4461,3607,3000,5068],["2026-10-28",5068,5152,7437,2783],["2026-10-29",2783,2848,4207,1424]]},{"c":"RT07-125","n":"TALCA DISPONIBLE","v":319,"d":[["2026-09-01",900,983,1248,635],["2026-09-02",635,606,456,785],["2026-09-03",785,726,844,667],["2026-09-04",667,796,1060,403],["2026-09-07",403,867,476,794],["2026-09-08",794,0,820,-26],["2026-09-09",-26,1329,1056,247],["2026-09-10",247,1000,760,487],["2026-09-11",487,1000,900,587],["2026-09-14",587,1099,1088,598],["2026-09-15",598,757,1306,49],["2026-09-16",49,895,734,210],["2026-09-17",210,1714,1137,787],["2026-09-21",787,651,1204,234],["2026-09-22",234,354,522,66],["2026-09-23",66,783,730,119],["2026-09-24",119,1954,912,1161],["2026-09-25",1161,540,1320,381],["2026-09-28",381,210,508,83],["2026-09-29",83,754,832,5],["2026-09-30",5,974,942,37],["2026-10-01",37,1183,1164,56],["2026-10-02",56,494,540,10],["2026-10-05",10,1165,976,199],["2026-10-06",199,436,432,203],["2026-10-07",203,1788,528,1463],["2026-10-08",1463,60,1032,491],["2026-10-09",491,1000,418,1073],["2026-10-13",1073,541,1320,294],["2026-10-14",294,910,654,550],["2026-10-15",550,945,1174,321],["2026-10-16",321,854,406,769],["2026-10-19",769,0,358,411],["2026-10-20",411,1691,1528,574],["2026-10-21",574,1018,1351,241],["2026-10-22",241,808,988,61],["2026-10-23",61,1000,502,559],["2026-10-26",559,1000,946,613],["2026-10-27",613,894,1054,453],["2026-10-28",453,930,1140,243],["2026-10-29",243,354,344,253],["2026-10-30",253,690,624,319,0]]},{"c":"RT13-105","n":"SANTIAGO DISPONIBLE","v":2816,"d":[["2026-09-01",4140,8252,4441,7951],["2026-09-02",7951,3341,5628,5664],["2026-09-03",5664,6450,4016,8098],["2026-09-04",8098,2258,3834,6522],["2026-09-07",6522,8571,5658,9435],["2026-09-08",9435,3093,5242,7286],["2026-09-09",7286,6527,5200,8613],["2026-09-10",8613,4958,4356,9215],["2026-09-11",9215,2694,5148,6761],["2026-09-14",6761,6536,7484,5813],["2026-09-15",5813,4323,5880,4256],["2026-09-16",4256,7605,7648,4213],["2026-09-17",4213,3286,1456,6043],["2026-09-21",6043,5392,6462,4973],["2026-09-22",4973,5418,3420,6971],["2026-09-23",6971,6809,6108,7672],["2026-09-24",7672,2505,3906,6271],["2026-09-25",6271,2833,5547,3557],["2026-09-28",3557,5630,5946,3241],["2026-09-29",3241,4808,2980,5069],["2026-09-30",5069,7132,4148,8053],["2026-10-01",8053,5616,5040,8629],["2026-10-02",8629,0,3948,4681],["2026-10-05",4681,6358,6656,4383],["2026-10-06",4383,3292,4140,3535],["2026-10-07",3535,7356,5472,5419],["2026-10-08",5419,2540,4128,3831],["2026-10-09",3831,5648,5592,3887],["2026-10-13",3887,7726,8274,3339],["2026-10-14",3339,7400,3048,7691],["2026-10-15",7691,0,4881,2810],["2026-10-16",2810,4941,4143,3608],["2026-10-19",3608,10248,7243,6613],["2026-10-20",6613,3444,3288,6769],["2026-10-21",6769,6391,5505,7655],["2026-10-22",7655,5559,4141,9073],["2026-10-23",9073,0,6496,2577],["2026-10-26",2577,8114,6276,4415],["2026-10-27",4415,3000,2556,4859],["2026-10-28",4859,7437,5455,6841],["2026-10-29",6841,4740,5009,6572],["2026-10-30",6572,0,3756,2816,0]]},{"c":"RT07-126","n":"TALCA TRANSITO","v":142,"d":[["2026-09-04",142,0,200,-58],["2026-09-07",-58,200,0,142],["2026-09-16",142,0,60,82],["2026-09-17",82,60,0,142],["2026-09-21",142,441,441,142],["2026-10-09",142,0,308,-166],["2026-10-14",-166,308,0,142],["2026-10-16",142,357,441,58],["2026-10-20",58,84,0,142]]}]);
+var MES0 = "2026-10";
+(function () {
+  function $(s, r) { return (r || document).querySelector(s); }
+  try {
+    var tema = $("#tema");
+    if (tema) tema.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-t]"); if (!b) return;
+      document.documentElement.setAttribute("data-theme", b.getAttribute("data-t"));
+      [].forEach.call(tema.querySelectorAll("button"), function (x) { x.classList.toggle("on", x === b); });
+      try { localStorage.setItem("cockpit-tema", b.getAttribute("data-t")); } catch (e2) {}
+    });
+    try {
+      var g = localStorage.getItem("cockpit-tema");
+      if (g === "light" || g === "dark") {
+        document.documentElement.setAttribute("data-theme", g);
+        [].forEach.call(tema.querySelectorAll("button"), function (x) {
+          x.classList.toggle("on", x.getAttribute("data-t") === g); });
+      }
+    } catch (e3) {}
+
+    var filtro = { planta: "", salud: "" };
+    var filtros = $("#filtros"), cuerpoTabla = $("#cartera"), sinfilas = $("#sinfilas");
+    function aplicar() {
+      var hay = 0;
+      [].forEach.call(cuerpoTabla.rows, function (tr) {
+        var ok = (!filtro.planta || tr.getAttribute("data-planta") === filtro.planta) &&
+                 (!filtro.salud  || tr.getAttribute("data-salud")  === filtro.salud);
+        tr.hidden = !ok; if (ok) hay++;
+      });
+      if (sinfilas) sinfilas.hidden = hay > 0;
+    }
+    if (filtros) filtros.addEventListener("click", function (e) {
+      var c = e.target.closest(".chip"); if (!c) return;
+      var f = c.getAttribute("data-f");
+      filtro[f] = c.getAttribute("data-v");
+      [].forEach.call(filtros.querySelectorAll('.chip[data-f="' + f + '"]'), function (x) {
+        x.classList.toggle("on", x === c); });
+      aplicar();
+    });
+
+    var drawer = $("#drawer"), scrim = $("#scrim"), dbody = $("#dbody"), ultimo = null;
+    function cerrar() {
+      drawer.classList.remove("on"); scrim.classList.remove("on");
+      if (ultimo && ultimo.focus) ultimo.focus();
+    }
+    function abrir(cod) {
+      var b = null, i;
+      for (i = 0; i < PD.length; i++) if (PD[i].cod === cod) b = PD[i];
+      if (!b) return;
+      var ds = diasDelMes(b, MES0), r = resumenDelMes(ds);
+      var H = ['<div class="code">' + esc(b.cod) + '</div><h3>' + esc(b.nom) + '</h3>'];
+      if (!r) { H.push('<p class="mut">Sin movimiento en ' + esc(etiquetaDeMes(MES0)) + '.</p>'); }
+      else {
+        H.push('<div class="mut">' + esc(etiquetaDeMes(MES0)) + ' · ' + mil(r.n) +
+               ' días con movimiento, del ' + esc(r.desde) + ' al ' + esc(r.hasta) + '</div>');
+        H.push('<div class="k4">');
+        H.push(tile("Apertura", mil(r.apertura), r.apertura < 0));
+        H.push(tile("Entradas", mil(r.entradas), false));
+        H.push(tile("Salidas", mil(r.salidas), false));
+        H.push(tile("Cierre", mil(r.cierre), r.cierre < 0));
+        H.push('</div>');
+        if (r.negativos) H.push('<p class="malo" style="margin:14px 0 0;font-weight:600">' +
+          mil(r.negativos) + ' de ' + mil(r.n) + ' días cierran bajo cero, el peor el ' +
+          esc(r.peor.dia) + ' en ' + mil(r.peor.cierre) + '.</p>');
+        H.push('<h5>Entradas y salidas de cada día</h5><div class="scroll">' + svgFlujoDia(ds) + '</div>');
+        H.push('<h5>Nivel con el que cerró cada día</h5><div class="scroll">' + svgNivelDia(ds) + '</div>');
+        H.push('<h5>Día por día</h5>' + tablaDeDias(ds));
+      }
+      dbody.innerHTML = H.join("");
+      drawer.classList.add("on"); scrim.classList.add("on");
+      $("#dxc").focus();
+    }
+    function tile(et, v, malo) {
+      return '<div class="card"><div class="ct"><h4>' + esc(et) + '</h4></div><div class="kv' +
+             (malo ? ' malo' : '') + '">' + v + '</div></div>';
+    }
+    document.addEventListener("click", function (e) {
+      var t = e.target.closest("[data-cod]"); if (!t) return;
+      ultimo = t; abrir(t.getAttribute("data-cod"));
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") { cerrar(); return; }
+      if (e.key !== "Enter" && e.key !== " ") return;
+      var t = e.target.closest && e.target.closest("[data-cod]");
+      if (t) { e.preventDefault(); ultimo = t; abrir(t.getAttribute("data-cod")); }
+    });
+    $("#dxc").addEventListener("click", cerrar);
+    scrim.addEventListener("click", cerrar);
+  } catch (e) { /* sin interaccion es mejor que sin pagina */ }
+})();
+</script>
+</body>
+</html>

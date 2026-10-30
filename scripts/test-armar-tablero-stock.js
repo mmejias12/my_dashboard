@@ -482,5 +482,81 @@ chk('un sistemico no numerico no cuenta', A.datos(BOD,
     {socios:SOC,nivel:{bodega:1},mensual:[],ventana:{}},
     {socios:[],nivel:{bodega:1},mensual:[],ventana:{}}, {sistemico:'mucho'}).sistemico === null);
 
+console.log('\n— la distribucion diaria de planta, entrada opcional —');
+const PLA = { ancla:'2026-10-29T14:00:00Z', meses:['2026-09','2026-10'], bodegas:[
+  { whs:'RT13-105', nombre:'SANTIAGO DISPONIBLE', indicador:true, nivel:1730, dias:[
+    { dia:'2026-10-27', apertura:1160, entradas:3000, salidas:2556, cierre:1604, firme:true },
+    { dia:'2026-10-26', apertura:-678, entradas:8114, salidas:6276, cierre:1160, firme:true } ] },
+  { whs:'RT13-100', nombre:'SANTIAGO INSPECCION', indicador:true, nivel:5758, dias:[
+    { dia:'2026-10-27', apertura:1616, entradas:3845, salidas:3471, cierre:1990, firme:true },
+    { dia:'2026-10-28', apertura:1990, entradas:4411, salidas:643, cierre:5758, firme:false } ] },
+  { whs:'RT13-266', nombre:'SANTIAGO MERMA', indicador:false, nivel:2620, dias:[
+    { dia:'2026-10-27', apertura:2600, entradas:20, salidas:0, cierre:2620, firme:true } ] },
+  { whs:'RT13-109', nombre:'SANTIAGO EXTRANOS', indicador:false, nivel:1544, dias:[] },
+  { whs:'RT04-160', nombre:'COQUIMBO TRANSITO', indicador:false, nivel:225, dias:[
+    { dia:'2026-10-26', apertura:225, entradas:266, salidas:266, cierre:225, firme:true } ] } ] };
+const SP = A.serieDePlanta(PLA);
+// Mauro, 30-10-2026: solo las nueve del indicador. Merma, extranos y transito
+// estan en el pool pero su nivel no se mueve por el recorrido del pallet.
+chk('solo entran las nueve del indicador',
+    SP.map(x => x.cod).join(',') === 'RT13-100,RT13-105', SP.map(x => x.cod).join(','));
+chk('la merma no entra', !SP.some(x => x.cod === 'RT13-266'));
+chk('el transito de Coquimbo tampoco', !SP.some(x => x.cod === 'RT04-160'));
+// el orden es el del recorrido del pallet: inspeccion antes que disponible
+chk('van en el orden del recorrido, no alfabetico',
+    SP[0].cod === 'RT13-100' && SP[1].cod === 'RT13-105', SP.map(x => x.nom).join(' | '));
+chk('cada bodega trae sus dias ordenados por fecha',
+    SP[1].dias.map(d => d.dia).join(',') === '2026-10-26,2026-10-27', SP[1].dias.map(d => d.dia).join(','));
+chk('y las cuatro cifras del dia', SP[0].dias[0].apertura === 1616 && SP[0].dias[0].entradas === 3845 &&
+    SP[0].dias[0].salidas === 3471 && SP[0].dias[0].cierre === 1990);
+// el dia en curso tiene que seguir marcado: su cierre todavia se mueve
+chk('el dia en curso llega marcado', SP[0].dias[1].firme === false && SP[0].dias[0].firme === true);
+chk('una bodega del indicador sin dias no deja una fila vacia',
+    A.serieDePlanta({ bodegas:[{ whs:'RT13-100', nombre:'X', dias:[] }] }).length === 0);
+chk('un dia mal fechado no entra',
+    A.serieDePlanta({ bodegas:[{ whs:'RT13-100', nombre:'X',
+      dias:[{ dia:'28-10-2026', cierre:1 }, { dia:'2026-10-28', cierre:2, firme:true }] }] })[0].dias.length === 1);
+chk('sin json no revienta', A.serieDePlanta(null).length === 0 && A.serieDePlanta({}).length === 0);
+// el codigo viene de SAP: un espacio de mas no puede dejar fuera a una bodega
+chk('un codigo con espacios igual entra',
+    A.serieDePlanta({ bodegas:[{ whs:' RT13-100 ', nombre:'X',
+      dias:[{ dia:'2026-10-28', cierre:2, firme:true }] }] }).length === 1);
+// ESTA es la que importa para el orden: en Santiago y Talca el codigo sube
+// junto con el recorrido, asi que ordenar por codigo da lo mismo DENTRO de
+// una planta. Mezclando las dos no: RT07-125 es DISPONIBLE y va al final
+// aunque su codigo sea menor que el de SANTIAGO INSPECCION.
+const MIX = A.serieDePlanta({ bodegas:[
+  { whs:'RT07-125', nombre:'TALCA DISPONIBLE', dias:[{ dia:'2026-10-27', cierre:1, firme:true }] },
+  { whs:'RT13-100', nombre:'SANTIAGO INSPECCION', dias:[{ dia:'2026-10-27', cierre:1, firme:true }] } ] });
+chk('el recorrido manda sobre el codigo de bodega',
+    MIX.map(x => x.cod).join(',') === 'RT13-100,RT07-125', MIX.map(x => x.cod).join(','));
+
+console.log('\n— el ancla de la serie y la del tablero tienen que ser la misma —');
+// si no, los cierres diarios no son los mismos numeros que el saldo por
+// bodega de mas arriba y la pagina se contradice sola
+chk('misma fecha, calza', A.anclaCalza({ ancla:'2026-10-29T14:00:00Z' }, { generado:'2026-10-29T09:00:00Z' }).ok === true);
+const AM = A.anclaCalza({ ancla:'2026-10-28T17:41:00Z' }, { generado:'2026-10-29T14:39:00Z' });
+chk('distinta fecha, no calza', AM.ok === false);
+chk('y dice las dos fechas', /2026-10-28/.test(AM.motivo) && /2026-10-29/.test(AM.motivo), AM.motivo);
+chk('sin ancla en la serie lo dice', /serie de planta no trae ancla/.test(A.anclaCalza({}, { generado:'2026-10-29' }).motivo));
+chk('sin fecha en el tablero lo dice', /tablero no trae fecha/.test(A.anclaCalza({ ancla:'2026-10-29' }, {}).motivo));
+chk('sin nada no revienta', A.anclaCalza(null, null).ok === false);
+// dos textos iguales que NO son fechas no son un ancla que calce: sin fecha
+// no hay nada que comparar y hay que decirlo
+chk('dos valores iguales que no son fechas no calzan',
+    A.anclaCalza({ ancla:'hoy' }, { generado:'hoy' }).ok === false,
+    JSON.stringify(A.anclaCalza({ ancla:'hoy' }, { generado:'hoy' })));
+
+console.log('\n— datos() con y sin la planta —');
+const VAC = { socios:[], nivel:{}, mensual:[], ventana:{} };
+chk('sin planta la seccion queda en null', A.datos(BOD, VAC, VAC, null).planta_dias === null);
+const DP = A.datos(BOD, VAC, VAC, null, PLA);
+chk('con planta vienen las dos bodegas del indicador', DP.planta_dias.length === 2, DP.planta_dias.length);
+chk('y el ancla y los meses para poder rotularla',
+    DP.planta_ancla === '2026-10-29T14:00:00Z' && DP.planta_meses.join(',') === '2026-09,2026-10');
+// el paso 2 es solo la cañeria: la pagina todavia no dibuja nada con esto
+chk('la pagina sigue saliendo igual con o sin planta',
+    A.pagina(A.datos(BOD, VAC, VAC, null)) === A.pagina(DP));
+
 console.log('\n' + ok + ' ok, ' + fail + ' fallas');
 process.exit(fail ? 1 : 0);

@@ -976,7 +976,18 @@ const PGHOSTIL = A.pagina(HOSTIL);
 chk('un nombre con </script> no parte la pagina en dos',
     cuentaScripts(PGHOSTIL)[0] === cuentaScripts(PGHOSTIL)[1],
     cuentaScripts(PGHOSTIL).join(' vs '));
-chk('y queda escapado dentro del javascript', PGHOSTIL.indexOf('<\\/script>') >= 0);
+// el '<' del nombre viaja escapado como \u003c: adentro de un script no
+// alcanza con cuidar "</script", porque "<!--<script" tambien cambia el estado
+// del parser
+// sinCierreDeScript quedo como defensa en profundidad: con jsonSeguro el
+// payload ya no lleva un < crudo y ninguna funcion publicada trae "</script"
+// en su texto, asi que no hay entrada que lo haga observable. Se afirma el
+// codigo, no el resultado, y se dice que por eso es.
+chk('el script de la pagina pasa por sinCierreDeScript',
+    /sinCierreDeScript\(antiguedad\.toString\(\)/.test(A.pagina.toString()), 'el blindaje se sacó de pagina()');
+chk('y el nombre viaja sin un < crudo', PGHOSTIL.indexOf('X</script>') < 0 &&
+    PGHOSTIL.indexOf('\\u003c/script') >= 0,
+    (PGHOSTIL.match(/\\u003c[^"]{0,20}/) || [''])[0]);
 
 console.log('\n— el saldo por bodega va en dos bloques con sus subtotales —');
 // Una tabla corrida de doce bodegas suma 16.990 y el titular dice 12.601:

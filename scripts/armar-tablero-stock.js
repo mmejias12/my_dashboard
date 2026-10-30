@@ -431,6 +431,396 @@ function svgMeses(meses) {
          'aria-label="Movimiento neto mensual">' + g + '</svg>';
 }
 
+
+// ── la distribucion diaria de planta: el bloque visible ──────────────────────
+
+/*  EL SELECTOR SE AGRUPA POR PLANTA; LA SERIE SE ORDENA POR RECORRIDO.
+ *
+ *  serieDePlanta() ordena por el recorrido del pallet —inspeccion primero,
+ *  disponible al final— y eso es lo correcto para LEER la cadena, pero deja
+ *  Talca y Santiago intercalados. Quien abre el selector no busca "la etapa
+ *  reparacion": busca "la reparacion de Talca". Asi que el selector agrupa por
+ *  planta y DENTRO de cada planta respeta el recorrido. Son dos ordenes con
+ *  dos trabajos distintos y por eso son dos funciones distintas.
+ *
+ *  La planta sale del primer token del nombre de SAP ("SANTIAGO INSPECCION").
+ *  No hay campo de planta en SAP: el codigo de bodega lleva el recinto (RT13,
+ *  RT07) pero esa correspondencia no esta declarada en ninguna parte, y
+ *  deducirla seria inventar. El nombre si lo dice. */
+function plantaDeBodega(nom) {
+  // El separador puede ser un tabulador y no un espacio: los nombres se
+  // escriben a mano en SAP. Se normaliza antes de cortar.
+  const u = String(nom == null ? '' : nom).trim().toUpperCase().replace(/\s+/g, ' ');
+  return u.split(' ')[0] || 'SIN PLANTA';
+}
+
+function gruposDeSerie(serie) {
+  const filas = Array.isArray(serie) ? serie : [];
+  const orden = [], porPlanta = {};
+  for (const b of filas) {
+    if (!b) continue;
+    const p = plantaDeBodega(b.nom);
+    if (!porPlanta[p]) { porPlanta[p] = { planta: p, nivel: 0, bodegas: [] }; orden.push(p); }
+    porPlanta[p].bodegas.push(b);
+    porPlanta[p].nivel += Number(b.nivel) || 0;
+  }
+  // La planta mas grande primero —Santiago sostiene el grueso del stock y es
+  // la que se mira— y a igual nivel, alfabetico, para que el orden no dependa
+  // del orden en que SAP devolvio las bodegas.
+  return orden.map(p => porPlanta[p])
+              .sort((a, b) => b.nivel - a.nivel ||
+                              (a.planta < b.planta ? -1 : a.planta > b.planta ? 1 : 0));
+}
+
+function etiquetaDeMes(mes) {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(mes == null ? '' : mes));
+  if (!m) return String(mes == null ? '' : mes);
+  return (MESES[Number(m[2]) - 1] || m[2]) + ' ' + m[1];
+}
+
+/*  LOS MESES SALEN DE LOS DIAS QUE HAY, NO DE planta.meses.
+ *
+ *  saldo-planta declara que meses se le pidieron; esto declara de que meses
+ *  hay dias dibujables. Si un mes se pidio y vino vacio —falta su blob de
+ *  lineas— el selector no puede ofrecerlo. */
+function mesesDeSerie(serie) {
+  const vistos = {}, out = [];
+  for (const b of (Array.isArray(serie) ? serie : []))
+    for (const d of ((b && b.dias) || [])) {
+      const m = String(d.dia).slice(0, 7);
+      if (!vistos[m]) { vistos[m] = true; out.push(m); }
+    }
+  return out.sort().map(m => ({ mes: m, etiqueta: etiquetaDeMes(m) }));
+}
+
+function diasDelMes(bodega, mes) {
+  const p = String(mes == null ? '' : mes);
+  return (((bodega && bodega.dias) || [])).filter(d => d && String(d.dia).slice(0, 7) === p);
+}
+
+/*  EL NETO DEL MES SE CALCULA DOS VECES A PROPOSITO.
+ *
+ *  Una vez como cierre menos apertura y otra como entradas menos salidas. Son
+ *  el mismo numero por construccion, asi que si no coinciden el json esta
+ *  roto, y la pagina prefiere decirlo a mostrar un cuadro que no cuadra. */
+function resumenDelMes(dias) {
+  const ds = Array.isArray(dias) ? dias : [];
+  if (!ds.length) return null;
+  let entradas = 0, salidas = 0, negativos = 0, peor = null, enCurso = false;
+  for (const d of ds) {
+    entradas += Number(d.entradas) || 0;
+    salidas += Number(d.salidas) || 0;
+    const c = Number(d.cierre) || 0;
+    if (c < 0) { negativos++; if (!peor || c < peor.cierre) peor = { dia: String(d.dia), cierre: c }; }
+    if (d.firme === false) enCurso = true;
+  }
+  const apertura = Number(ds[0].apertura) || 0;
+  const cierre = Number(ds[ds.length - 1].cierre) || 0;
+  return { n: ds.length, desde: String(ds[0].dia), hasta: String(ds[ds.length - 1].dia),
+           apertura, cierre, entradas, salidas,
+           neto: cierre - apertura, netoFlujo: entradas - salidas,
+           cuadra: (cierre - apertura) === (entradas - salidas),
+           negativos, peor, enCurso };
+}
+
+/*  DOS GRAFICOS, NO UNO CON DOS ESCALAS.
+ *
+ *  El flujo del dia (entradas, salidas) es un caudal y el nivel al cierre es
+ *  un stock. Superponerlos obliga a dos ejes verticales, y con dos ejes uno
+ *  elige la escala que le conviene y el grafico dice lo que uno quiera. Van
+ *  separados, uno debajo del otro, compartiendo el eje de dias.
+ *
+ *  Columnas y no linea: la serie tiene huecos —no hay sabado ni domingo— y
+ *  una linea los dibujaria como si el nivel hubiera pasado por ahi. */
+/*  UNA BARRA DE CERO PIXELES MIENTE.
+ *
+ *  Con un dia en -6.151 fijando la escala, un cierre de -6 sale de 0,1 px:
+ *  se ve igual que un dia sin dato. Un valor que existe se dibuja con un
+ *  minimo visible; el cero exacto se dibuja en cero, que es lo que
+ *  corresponde. El numero exacto siempre esta en la tabla y en el tooltip. */
+function altoVisible(h, v) {
+  if (!v) return 0;
+  return Math.max(1.6, h);
+}
+
+function ejeDeDias(ds, An, izq, der, Al) {
+  const slot = (An - izq - der) / Math.max(1, ds.length);
+  // Con muchos dias las etiquetas se pisan: se rotula uno de cada n, y
+  // siempre el primero, para que el lector sepa donde empieza el mes.
+  const salto = slot >= 26 ? 1 : slot >= 15 ? 2 : slot >= 10 ? 3 : 5;
+  let t = '';
+  ds.forEach((d, i) => {
+    if (i % salto) return;
+    t += '<text class="ax" x="' + (izq + i * slot + slot / 2).toFixed(1) + '" y="' + (Al - 7) +
+         '" text-anchor="middle">' + esc(String(d.dia).slice(8)) + '</text>';
+  });
+  return { slot, etiquetas: t };
+}
+
+function svgFlujoDia(dias) {
+  const ds = Array.isArray(dias) ? dias : [];
+  if (!ds.length) return '';
+  const An = 760, izq = 52, der = 8, arriba = 12, abajo = 26, mitad = 84;
+  const Al = arriba + mitad * 2 + abajo, y0 = arriba + mitad;
+  const tope = Math.max(1, ...ds.map(d => Math.max(Number(d.entradas) || 0, Number(d.salidas) || 0)));
+  const esc_ = mitad / tope;
+  const { slot, etiquetas } = ejeDeDias(ds, An, izq, der, Al);
+  const ancho = Math.max(2.5, Math.min(26, slot / 2 - 1.5));   // 1,5px de aire entre las dos barras
+
+  let g = '';
+  const linea = (v, y, txt) => '<line class="grid" x1="' + izq + '" y1="' + y.toFixed(1) +
+    '" x2="' + (An - der) + '" y2="' + y.toFixed(1) + '"/><text class="ax" x="' + (izq - 8) +
+    '" y="' + (y + 4).toFixed(1) + '" text-anchor="end">' + esc(txt) + '</text>';
+  g += linea(tope, arriba, mil(tope));
+  g += linea(0, y0, '0');
+  g += linea(tope, y0 + mitad, mil(tope));
+
+  ds.forEach((d, i) => {
+    const x = izq + i * slot + (slot - (2 * ancho + 1.5)) / 2;
+    const ent = Number(d.entradas) || 0, sal = Number(d.salidas) || 0;
+    const he = altoVisible(ent * esc_, ent), hs = altoVisible(sal * esc_, sal);
+    g += '<rect class="b-ent" x="' + x.toFixed(1) + '" y="' + (y0 - he).toFixed(1) +
+         '" width="' + ancho.toFixed(1) + '" height="' + he.toFixed(1) + '" rx="2">' +
+         '<title>' + esc(d.dia) + ' · entradas ' + mil(ent) + '</title></rect>';
+    g += '<rect class="b-sal" x="' + (x + ancho + 1.5).toFixed(1) + '" y="' + y0.toFixed(1) +
+         '" width="' + ancho.toFixed(1) + '" height="' + hs.toFixed(1) + '" rx="2">' +
+         '<title>' + esc(d.dia) + ' · salidas ' + mil(sal) + '</title></rect>';
+  });
+  return '<svg viewBox="0 0 ' + An + ' ' + Al + '" role="img" ' +
+         'aria-label="Entradas y salidas por dia">' + g + etiquetas + '</svg>';
+}
+
+function svgNivelDia(dias) {
+  const ds = Array.isArray(dias) ? dias : [];
+  if (!ds.length) return '';
+  const An = 760, izq = 52, der = 8, arriba = 12, abajo = 26, util = 116;
+  const Al = arriba + util + abajo;
+  const vals = ds.map(d => Number(d.cierre) || 0);
+  // El cero SIEMPRE entra en la escala: es la frontera entre un nivel posible
+  // y uno imposible, y es justo lo que hay que poder ver.
+  const alto = Math.max(0, ...vals), bajo = Math.min(0, ...vals);
+  const rango = (alto - bajo) || 1, esc_ = util / rango;
+  const y0 = arriba + alto * esc_;
+  const { slot, etiquetas } = ejeDeDias(ds, An, izq, der, Al);
+  const ancho = Math.max(2.5, Math.min(48, slot - 3));
+
+  let g = '';
+  const linea = (v, cl) => {
+    const y = arriba + (alto - v) * esc_;
+    return '<line class="' + cl + '" x1="' + izq + '" y1="' + y.toFixed(1) + '" x2="' + (An - der) +
+           '" y2="' + y.toFixed(1) + '"/><text class="ax" x="' + (izq - 8) + '" y="' +
+           (y + 4).toFixed(1) + '" text-anchor="end">' + esc(mil(v)) + '</text>';
+  };
+  if (alto > 0) g += linea(alto, 'grid');
+  if (bajo < 0) g += linea(bajo, 'grid');
+  g += linea(0, 'cero');
+
+  ds.forEach((d, i) => {
+    const v = Number(d.cierre) || 0, h = altoVisible(Math.abs(v) * esc_, v);
+    const x = izq + i * slot + (slot - ancho) / 2;
+    g += '<rect class="' + (v < 0 ? 'n-neg' : 'n-pos') + '" x="' + x.toFixed(1) + '" y="' +
+         (v >= 0 ? y0 - h : y0).toFixed(1) + '" width="' + ancho.toFixed(1) + '" height="' +
+         h.toFixed(1) + '" rx="2">' + '<title>' + esc(d.dia) + ' · cierre ' + mil(v) +
+         (d.firme === false ? ' (dia en curso)' : '') + '</title></rect>';
+  });
+  return '<svg viewBox="0 0 ' + An + ' ' + Al + '" role="img" ' +
+         'aria-label="Nivel al cierre de cada dia">' + g + etiquetas + '</svg>';
+}
+
+function tablaDeDias(dias) {
+  const ds = Array.isArray(dias) ? dias : [];
+  let f = '';
+  for (const d of ds) {
+    const neto = (Number(d.entradas) || 0) - (Number(d.salidas) || 0);
+    const c = Number(d.cierre) || 0;
+    f += '<tr><td class="cod">' + esc(d.dia) +
+         (d.firme === false ? ' <span class="chip">en curso</span>' : '') +
+         '</td><td class="num">' + mil(d.apertura) + '</td><td class="num">' + mil(d.entradas) +
+         '</td><td class="num">' + mil(d.salidas) + '</td><td class="num ' + clasePos(neto) + '">' +
+         conSigno(neto) + '</td><td class="num' + (c < 0 ? ' malo' : '') + '">' + mil(c) +
+         '</td></tr>';
+  }
+  return '<div class="scroll"><table>\n' +
+    '<thead><tr><th>Día</th><th class="num">Apertura</th><th class="num">Entradas</th>' +
+    '<th class="num">Salidas</th><th class="num">Neto</th><th class="num">Cierre</th></tr></thead>\n' +
+    '<tbody>' + f + '</tbody></table></div>';
+}
+
+/*  EL PANEL DE UNA BODEGA EN UN MES.
+ *
+ *  Esta funcion corre en los dos lados: el script la usa para dejar escrito el
+ *  panel por defecto —asi la pagina sirve sin javascript— y el navegador la
+ *  usa tal cual, publicada con toString(), para los otros. Es la misma
+ *  funcion, no una copia: no pueden divergir. */
+function panelDeMes(bodega, mes) {
+  if (!bodega) return '<p class="sub">No hay datos de esa bodega.</p>';
+  const ds = diasDelMes(bodega, mes);
+  const r = resumenDelMes(ds);
+  const titulo = '<h3>' + esc(bodega.nom) + ' <span class="cod">' + esc(bodega.cod) + '</span></h3>';
+  if (!r)
+    return titulo + '<p class="sub">Sin movimiento registrado en ' + esc(etiquetaDeMes(mes)) +
+           '. El saldo de la bodega no cambió ningún día de ese mes, o ese mes no entró en la corrida.</p>';
+
+  const H = [titulo];
+  H.push('<div class="sub">' + esc(etiquetaDeMes(mes)) + ' · ' + mil(r.n) + ' día' +
+         (r.n === 1 ? '' : 's') + ' con movimiento, del ' + esc(r.desde) + ' al ' + esc(r.hasta) +
+         '</div>');
+  H.push('<div class="rejilla rejilla-4">');
+  for (const [et, val, pie, cl] of [
+    ['Apertura', mil(r.apertura), 'con lo que abrió el ' + r.desde, r.apertura < 0 ? 't-mal' : ''],
+    ['Entradas', mil(r.entradas), 'pallets que llegaron en el mes', 't-ent'],
+    ['Salidas', mil(r.salidas), 'pallets que se fueron en el mes', 't-sal'],
+    ['Cierre', mil(r.cierre), 'con lo que cerró el ' + r.hasta +
+      (r.enCurso ? ' (día en curso)' : ''), r.cierre < 0 ? 't-mal' : ''],
+  ])
+    H.push('<div class="panel tile' + (cl ? ' ' + cl : '') + '"><div class="et">' + et + '</div><div class="big">' +
+           val + '</div><div class="pie">' + esc(pie) + '</div></div>');
+  H.push('</div>');
+  H.push('<p class="sub">Movió <b class="' + clasePos(r.neto) + '">' + conSigno(r.neto) +
+         '</b> en el mes' + (r.cuadra ? '' : ' — pero entradas menos salidas da ' +
+         conSigno(r.netoFlujo) + ', y cierre menos apertura da ' + conSigno(r.neto) +
+         ': el json viene roto y este panel no se puede leer') + '.</p>');
+
+  H.push('<h4>Entradas y salidas de cada día</h4>');
+  H.push('<div class="leyenda" style="margin:0 0 8px">' +
+         '<span><i class="pt p-ent"></i>Entradas <b>' + mil(r.entradas) + '</b> en el mes</span>' +
+         '<span><i class="pt p-sal"></i>Salidas <b>' + mil(r.salidas) + '</b> en el mes</span></div>');
+  H.push('<div class="scroll grafdia">' + svgFlujoDia(ds) + '</div>');
+
+  H.push('<h4>Nivel con el que cerró cada día</h4>');
+  H.push('<div class="scroll grafdia">' + svgNivelDia(ds) + '</div>');
+  if (r.negativos)
+    H.push('<div class="enrevision"><b>' + mil(r.negativos) + ' de los ' + mil(r.n) +
+           ' días cierran en negativo</b>, el peor el ' + esc(r.peor.dia) + ' en ' +
+           mil(r.peor.cierre) + '. No es un error del cálculo: SAP tiene esos días en negativo ' +
+           'y la causa es la fecha del documento —la salida de mercancías queda fechada antes ' +
+           'que el traspaso que la alimenta—. Se arregla en SAP, no acá.</div>');
+
+  H.push('<h4>Día por día</h4>');
+  H.push(tablaDeDias(ds));
+  return H.join('\n');
+}
+
+function bloqueDePlanta(d) {
+  const serie = (d && d.planta_dias) || null;
+  const grupos = gruposDeSerie(serie);
+  const meses = mesesDeSerie(serie);
+  // Sin un solo dia dibujable no hay bloque: un selector sin nada que mostrar
+  // es peor que no tener seccion. Esta guarda cubre tambien el caso de que no
+  // venga la serie, porque sin serie tampoco hay meses.
+  if (!meses.length) return '';
+  // Por defecto, el mes mas reciente y la primera bodega del recorrido de la
+  // planta mas grande: donde entra el pallet.
+  const mes0 = meses[meses.length - 1].mes;
+  const bod0 = grupos[0].bodegas[0];
+
+  const H = [];
+  H.push('<section>\n  <h2>Distribución diaria en planta</h2>');
+  H.push('  <p>Cómo se mueve cada estación día por día: con qué nivel abrió, cuánto entró, ' +
+         'cuánto salió y con qué nivel cerró. Son las ' + mil(serie.length) + ' bodegas del ' +
+         'indicador: merma, extraños y los tránsito están en el pool pero su nivel no lo mueve ' +
+         'el recorrido del pallet.</p>');
+  H.push('  <div class="panel">');
+  H.push('    <div class="filtros">');
+  H.push('      <label for="pd-bod">Bodega<select id="pd-bod">');
+  for (const g of grupos) {
+    H.push('        <optgroup label="' + esc(g.planta) + '">');
+    for (const b of g.bodegas)
+      H.push('          <option value="' + esc(b.cod) + '"' + (b.cod === bod0.cod ? ' selected' : '') +
+             '>' + esc(b.nom) + ' · ' + esc(b.cod) + '</option>');
+    H.push('        </optgroup>');
+  }
+  H.push('      </select></label>');
+  H.push('      <label for="pd-mes">Mes<select id="pd-mes">');
+  for (const m of meses)
+    H.push('        <option value="' + esc(m.mes) + '"' + (m.mes === mes0 ? ' selected' : '') +
+           '>' + esc(m.etiqueta) + '</option>');
+  H.push('      </select></label>');
+  H.push('    </div>');
+  // El panel por defecto va escrito: la pagina tiene que servir sin javascript.
+  H.push('    <div id="pd-panel">' + panelDeMes(bod0, mes0) + '</div>');
+  H.push('    <p class="sub">Los cierres se calculan hacia atrás desde el saldo vivo de SAP del ' +
+         esc(String(d.planta_ancla || '').slice(0, 10)) + ', restando los movimientos de cada día. ' +
+         'El cierre del último día es, por construcción, el saldo que muestra la tabla de más ' +
+         'arriba.</p>');
+  H.push('  </div>\n</section>\n');
+  return H.join('\n');
+}
+
+/*  LA SERIE QUE VIAJA AL NAVEGADOR.
+ *
+ *  Compacta a proposito: 349 dias con las claves largas son 60 KB de pagina
+ *  para gerencia. Las claves cortas y el firme solo cuando es false lo dejan
+ *  en un tercio. La forma la rearma rehidratar() del otro lado. */
+function serieCompacta(serie) {
+  return (Array.isArray(serie) ? serie : []).map(b => ({
+    c: b.cod, n: b.nom, v: b.nivel,
+    d: (b.dias || []).map(x => x.firme === false
+      ? [x.dia, x.apertura, x.entradas, x.salidas, x.cierre, 0]
+      : [x.dia, x.apertura, x.entradas, x.salidas, x.cierre]),
+  }));
+}
+
+function rehidratar(compacta) {
+  return (Array.isArray(compacta) ? compacta : []).map(b => ({
+    cod: b.c, nom: b.n, nivel: b.v,
+    dias: (b.d || []).map(x => ({ dia: x[0], apertura: x[1], entradas: x[2],
+                                  salidas: x[3], cierre: x[4], firme: x.length < 6 })),
+  }));
+}
+
+
+/*  UN NOMBRE DE SAP NO PUEDE CERRAR EL SCRIPT.
+ *
+ *  Dentro de un <script> el parser de html no entiende javascript: corta en la
+ *  primera "</script" que vea, venga de donde venga. Un nombre de bodega con
+ *  eso adentro —que en SAP nadie impide— partiria la pagina en dos. esc() no
+ *  sirve aca: esto viaja dentro de un string de javascript, no de html. Se
+ *  escapa solo esa secuencia y no todo "</": un "</" dentro de una expresion
+ *  regular del codigo publicado —y hay varias— se rompe si se le mete una
+ *  barra invertida. */
+function sinCierreDeScript(js) {
+  return String(js == null ? '' : js).replace(/<\/(script)/gi, '<\\/$1');
+}
+
+/*  EL JAVASCRIPT DEL SELECTOR.
+ *
+ *  No se escribe a mano una copia de panelDeMes() para el navegador: se
+ *  publica la MISMA funcion con toString(), junto con todo lo que necesita.
+ *  Es la regla que ya seguia antiguedad(). Dos copias de una funcion de
+ *  formato divergen, y el dia que divergen la pagina muestra un numero
+ *  distinto del que probo el test.
+ *
+ *  Lo que viaja es la serie compacta, no el html de los dieciocho paneles:
+ *  armarlos todos en el servidor eran 180 KB de pagina para que se mire uno.
+ *  El panel por defecto si va escrito, asi que sin javascript la pagina
+ *  igual se lee: lo que se pierde es poder cambiar de bodega. */
+function jsDePlanta(d) {
+  const serie = (d && d.planta_dias) || null;
+  if (!serie || !serie.length) return '';
+  const fns = [esNumero, mil, conSigno, clasePos, esc, etiquetaDeMes, diasDelMes,
+               resumenDelMes, altoVisible, ejeDeDias, svgFlujoDia, svgNivelDia, tablaDeDias,
+               panelDeMes, rehidratar];
+  return '\nvar MESES = ' + JSON.stringify(MESES) + ';\n' +
+         fns.map(f => f.toString()).join('\n') + '\n' +
+         'var PD = rehidratar(' + JSON.stringify(serieCompacta(serie)) + ');\n' + [
+    '(function () {',
+    '  try {',
+    '    var b = document.getElementById("pd-bod"), m = document.getElementById("pd-mes"),',
+    '        caja = document.getElementById("pd-panel");',
+    '    if (!b || !m || !caja) return;',
+    '    function pintar() {',
+    '      var hay = null;',
+    '      for (var i = 0; i < PD.length; i++) if (PD[i].cod === b.value) hay = PD[i];',
+    '      caja.innerHTML = panelDeMes(hay, m.value);',
+    '    }',
+    '    b.addEventListener("change", pintar);',
+    '    m.addEventListener("change", pintar);',
+    '  } catch (e) { /* el panel por defecto ya esta escrito: sin js igual se lee */ }',
+    '})();',
+  ].join('\n');
+}
+
 // ── la pagina ────────────────────────────────────────────────────────────────
 const CSS = `
 /* Tablero operativo: una fila de cifras, luego las tres patas del pool, luego
@@ -438,6 +828,7 @@ const CSS = `
 :root{
   --bg:#faf8f6; --panel:#ffffff; --linea:#e4ded8; --tinta:#1c1917; --tinta2:#57514b; --tinta3:#8a817a;
   --marca:#b5342a; --cli:#1f6fb2; --ret:#c65a1e; --pla:#0e8f7a;
+  --ent:#0e8f7a; --sal:#7d5ba6;
   --ok:#0e8f7a; --alerta:#b06a00; --grave:#b5342a;
   --f-tit:'Archivo',system-ui,sans-serif; --f-txt:'Source Sans 3',system-ui,sans-serif;
   --f-cod:'IBM Plex Mono',ui-monospace,monospace;
@@ -445,11 +836,13 @@ const CSS = `
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#171513; --panel:#201d1b; --linea:#332e2a; --tinta:#f2eeea; --tinta2:#b5aca4; --tinta3:#857c74;
   --marca:#e06054; --cli:#4792d2; --ret:#d4762c; --pla:#28a386;
+  --ent:#28a386; --sal:#a384c9;
   --ok:#28a386; --alerta:#d99a2b; --grave:#e06054; color-scheme:dark;
 }}
 :root[data-theme="dark"]{
   --bg:#171513; --panel:#201d1b; --linea:#332e2a; --tinta:#f2eeea; --tinta2:#b5aca4; --tinta3:#857c74;
   --marca:#e06054; --cli:#4792d2; --ret:#d4762c; --pla:#28a386;
+  --ent:#28a386; --sal:#a384c9;
   --ok:#28a386; --alerta:#d99a2b; --grave:#e06054; color-scheme:dark;
 }
 *{box-sizing:border-box}
@@ -461,6 +854,7 @@ body{background:var(--bg);color:var(--tinta);font:16px/1.55 var(--f-txt);
 h1{font:600 30px/1.15 var(--f-tit);margin:0;text-wrap:balance;letter-spacing:-.01em}
 h2{font:600 19px/1.25 var(--f-tit);margin:0 0 4px;text-wrap:balance}
 h3{font:600 14px/1.3 var(--f-tit);margin:0 0 10px;text-transform:uppercase;letter-spacing:.07em;color:var(--tinta2)}
+h4{font:600 12px/1.3 var(--f-tit);margin:22px 0 8px;text-transform:uppercase;letter-spacing:.08em;color:var(--tinta2)}
 p{margin:0 0 10px;max-width:68ch}
 .sub{color:var(--tinta2);font-size:14px;margin-top:6px}
 .cabe{display:flex;flex-wrap:wrap;gap:14px;align-items:baseline;justify-content:space-between;
@@ -470,11 +864,27 @@ p{margin:0 0 10px;max-width:68ch}
 section{margin-top:34px}
 .panel{background:var(--panel);border:1px solid var(--linea);border-radius:8px;padding:18px}
 .rejilla{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin-top:14px}
+.rejilla-4{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.rejilla-4 .big{font-size:clamp(22px,3.4vw,30px)}
+/* Los filtros van en una fila, arriba de lo que filtran. 44px de alto
+   minimo: abajo de eso el dedo no acierta en un telefono. */
+.filtros{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:flex-end;margin-bottom:4px}
+.filtros label{display:flex;flex-direction:column;gap:6px;min-width:0;
+  font:600 11px/1 var(--f-tit);text-transform:uppercase;letter-spacing:.08em;color:var(--tinta2)}
+.filtros select{font:400 15px var(--f-txt);color:var(--tinta);background:var(--panel);
+  border:1px solid var(--linea);border-radius:6px;padding:9px 11px;min-height:44px;
+  min-width:min(100%,250px);max-width:100%}
+.filtros select:focus-visible{outline:2px solid var(--marca);outline-offset:2px}
+/* Un grafico de 25 dias encogido al ancho de un telefono deja las etiquetas
+   en 5px: ilegibles. Con min-width el .scroll hace su trabajo y se desplaza. */
+.grafdia svg{min-width:620px}
 .tile .et{font:600 11px/1 var(--f-tit);text-transform:uppercase;letter-spacing:.09em;color:var(--tinta2)}
 .tile .big{font:700 clamp(28px,5vw,40px)/1 var(--f-tit);margin:9px 0 2px;letter-spacing:-.02em}
 .tile .pie{font-size:13px;color:var(--tinta2);min-width:0}
 .tile{border-left:3px solid var(--linea)}
 .t-cli{border-left-color:var(--cli)} .t-ret{border-left-color:var(--ret)} .t-pla{border-left-color:var(--pla)}
+.t-ent{border-left-color:var(--ent)} .t-sal{border-left-color:var(--sal)} .t-mal{border-left-color:var(--grave)}
+.t-mal .big{color:var(--grave)}
 .pool{display:block;width:100%;height:34px;margin:4px 0 10px}
 .fecha{color:var(--tinta3);font-size:12px;white-space:nowrap}
 .malo{color:var(--grave)}
@@ -483,8 +893,14 @@ section{margin-top:34px}
 .leyenda b{color:var(--tinta);font-weight:600}
 .pt{width:10px;height:10px;border-radius:2px;display:inline-block;margin-right:6px;vertical-align:-1px}
 .p-cli{background:var(--cli)} .p-ret{background:var(--ret)} .p-pla{background:var(--pla)}
+.p-ent{background:var(--ent)} .p-sal{background:var(--sal)}
 svg{display:block;width:100%;height:auto;max-width:100%}
 .b-ret{fill:var(--ret)} .b-cli{fill:var(--cli)}
+.b-ent{fill:var(--ent)} .b-sal{fill:var(--sal)}
+.n-pos{fill:var(--pla)} .n-neg{fill:var(--grave)}
+/* El cero del grafico de nivel no es una linea de reja mas: es la frontera
+   entre un nivel posible y uno imposible. Se dibuja mas firme. */
+.cero{stroke:var(--tinta2);stroke-width:1.5}
 .grid{stroke:var(--linea);stroke-width:1}
 .ax{fill:var(--tinta3);font:500 11px var(--f-cod)}
 /* Sin min-width:0 un hijo de grid se estira al ancho de su tabla y el
@@ -693,6 +1109,13 @@ function pagina(d) {
   }
   H.push('  </div>\n</section>\n');
 
+  // ── la distribucion diaria de planta ──
+  // Vacio si no vino el json: un paso que falla no deja la pagina a medias.
+  // Se empuja solo si trae algo: un push vacio deja una linea en blanco de
+  // mas, y entonces la pagina SIN planta ya no es la misma que la de antes.
+  const bloque = bloqueDePlanta(d);
+  if (bloque) H.push(bloque);
+
   // ── que sostiene estas cifras ──
   H.push('<section>\n  <h2>Qué sostiene estas cifras</h2>\n  <div class="dos" style="margin-top:14px">');
   H.push('    <div class="panel">\n      <h3>De dónde sale cada número</h3>\n      <dl>');
@@ -775,7 +1198,7 @@ function pagina(d) {
   // El unico javascript de la pagina. Se embebe la MISMA funcion que esta
   // probada en el test —no una copia escrita a mano para el navegador— para
   // que no puedan divergir: toString() publica el codigo tal cual.
-  H.push('<script>\n' + antiguedad.toString() + '\n' + [
+  H.push('<script>\n' + sinCierreDeScript(antiguedad.toString() + '\n' + [
     '(function () {',
     '  try {',
     '    var s = document.querySelector(".sello[data-medido]");',
@@ -791,7 +1214,7 @@ function pagina(d) {
     '    c.hidden = false;',
     '  } catch (e) { /* sin aviso es mejor que sin pagina */ }',
     '})();',
-  ].join('\n') + '\n<\/script>');
+  ].join('\n') + jsDePlanta(d)) + '\n<\/script>');
   H.push('</div>\n</body>\n</html>\n');
   return H.join('\n');
 }
@@ -876,6 +1299,10 @@ function main() {
 
 module.exports = { esNumero, mil, conSigno, clasePos, pct, pct1, esc, sinBom,
                    serieDePlanta, anclaCalza,
+                   plantaDeBodega, gruposDeSerie, etiquetaDeMes, mesesDeSerie,
+                   diasDelMes, resumenDelMes, altoVisible, ejeDeDias, svgFlujoDia, svgNivelDia,
+                   tablaDeDias, panelDeMes, bloqueDePlanta,
+                   serieCompacta, rehidratar, sinCierreDeScript, jsDePlanta,
                    NUEVE, GRUPOS, MESES, OPCIONES,
                    clasificarPool, cortarSocios, porGrupo, mesesPareados, datos,
                    antiguedad, svgPool, svgMeses, filaSocio, tablaSocios, notaImposibles, pagina,

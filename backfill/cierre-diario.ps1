@@ -83,19 +83,19 @@ Write-Host "── cierre diario $hoy ──────────────
 $ventana = (Get-Date).AddDays(-3)
 $desde   = $ventana.ToString('yyyy-MM-dd')
 $mesIni  = $ventana.ToString('yyyy-MM')
-Paso '1/7' "extrayendo desde $desde (meses $mesIni..$mes)"
+Paso '1/8' "extrayendo desde $desde (meses $mesIni..$mes)"
 node backfill/backfill-sap-bin.js $mesIni $mes --desde=$desde --forzar
 if ($LASTEXITCODE -ne 0) { Muere "fallo la extraccion desde $desde" }
 
 # 2 · el ancla. Va DESPUES de la extraccion para que la cobertura la alcance.
 #     Al reves, el ancla queda adelante de los movimientos y saldo-pool se
 #     niega a cuadrar: entre una lectura y otra se mueven pallets.
-Paso '2/7' 'leyendo el saldo por bodega'
+Paso '2/8' 'leyendo el saldo por bodega'
 node backfill/sonda-oinm-bodega.js --salida="$dir/bodegas-hoy.json"
 if ($LASTEXITCODE -ne 0) { Muere 'fallo la sonda de bodegas' }
 
 # 3 · el nivel por socio de cada bodega
-Paso '3/7' 'calculando el nivel por socio'
+Paso '3/8' 'calculando el nivel por socio'
 node scripts/saldo-pool.js --bodega=RETAIL `
   --semilla=backfill/s0-semilla-retail-2025-12-31.json `
   --bodegas="$dir/bodegas-hoy.json" --json="$dir/stock-retail.json"
@@ -119,7 +119,7 @@ if ($LASTEXITCODE -ne 0) { Muere 'fallo CLIENTES' }
 #     armar-tablero-stock trata planta.json como entrada opcional. Una seccion
 #     nueva no puede dejar a gerencia sin el tablero.
 $mesPrev = (Get-Date -Day 1).AddDays(-1).ToString('yyyy-MM')
-Paso '4/7' "calculando la distribucion diaria de planta ($mesPrev..$mes)"
+Paso '4/8' "calculando la distribucion diaria de planta ($mesPrev..$mes)"
 node scripts/saldo-planta.js --meses="$mesPrev,$mes" --json="$dir/planta.json"
 if ($LASTEXITCODE -ne 0) {
   # El mes anterior puede no tener blob lineasbod/ todavia: se reintenta con
@@ -134,7 +134,7 @@ if ($LASTEXITCODE -ne 0) {
 
 # 5 · la pagina. Se arma aca y se commitea armada: lo que abre gerencia es un
 #     archivo estatico que no depende de nada en tiempo de lectura.
-Paso '5/7' 'armando el tablero'
+Paso '5/8' 'armando el tablero'
 node scripts/armar-tablero-stock.js `
   --bodegas="$dir/bodegas-hoy.json" `
   --retail="$dir/stock-retail.json" `
@@ -145,9 +145,20 @@ node scripts/armar-tablero-stock.js `
   --salida='stock-flujos-pallets.html'
 if ($LASTEXITCODE -ne 0) { Muere 'fallo el armado del tablero' }
 
-# 6 · la memoria. Sin esto no hay con que comparar mañana, y la comparacion
+# 6 · el cockpit. Lee datos-stock.json, que el paso anterior acaba de escribir:
+#     no vuelve a SAP ni recalcula nada, solo cuenta lo mismo de otra forma.
+#     Por eso va DESPUES y por eso no puede matar la corrida: si falla, el
+#     tablero de detalle ya quedo bien y publicado, que es lo que no se puede
+#     perder. El cockpit se queda con el de ayer y se avisa.
+Paso '6/8' 'armando el cockpit del pool'
+node scripts/armar-cockpit-pool.js `
+  --datos="$dir/datos-stock.json" `
+  --salida='cockpit-pool.html'
+if ($LASTEXITCODE -ne 0) { Write-Warning 'fallo el armado del cockpit: queda el de la corrida anterior' }
+
+# 7 · la memoria. Sin esto no hay con que comparar mañana, y la comparacion
 #     es lo unico que una lectura en vivo de SAP no puede dar.
-Paso '6/7' 'guardando la copia del dia'
+Paso '7/8' 'guardando la copia del dia'
 # planta.json puede no existir: su paso no mata la corrida, asi que la copia
 # tampoco puede. Los otros tres SI tienen que estar — si falta uno, el cierre
 # ya habria muerto antes.
@@ -175,15 +186,16 @@ if ($porDia.Count -gt $DIAS_COPIA) {
     ForEach-Object { $_.Group | Remove-Item -Force }
 }
 
-# 7 · empujar. Sin esto el tablero queda en el disco y el sitio sigue
+# 8 · empujar. Sin esto el tablero queda en el disco y el sitio sigue
 #     mostrando el de ayer. Si el push falla, el dato YA esta calculado: se
 #     avisa y se sale con error para que el Programador lo marque, pero no se
 #     deshace nada.
-Paso '7/7' 'commiteando y empujando'
+Paso '8/8' 'commiteando y empujando'
 # Se commitea solo lo que existe: un git add con una ruta inexistente aborta
 # todo el add, y planta.json puede faltar legitimamente.
 $archivos = @("$dir/stock-retail.json", "$dir/stock-clientes.json", "$dir/bodegas-hoy.json",
-              "$dir/planta.json", "$dir/datos-stock.json", 'stock-flujos-pallets.html', $hist) |
+              "$dir/planta.json", "$dir/datos-stock.json", 'stock-flujos-pallets.html',
+              'cockpit-pool.html', $hist) |
             Where-Object { Test-Path $_ }
 git add -- $archivos
 if ($LASTEXITCODE -ne 0) { Muere 'fallo git add: se corrio fuera del repositorio?' }

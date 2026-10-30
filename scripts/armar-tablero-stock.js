@@ -36,7 +36,7 @@
 //      --salida=stock-flujos-pallets.html
 // ───────────────────────────────────────────────────────────────────────────────
 
-const OPCIONES = ['bodegas', 'retail', 'clientes', 'extra', 'datos', 'salida'];
+const OPCIONES = ['bodegas', 'retail', 'clientes', 'extra', 'planta', 'datos', 'salida'];
 
 // ── las nueve bodegas del indicador de planta ────────────────────────────────
 // Enrique definio nueve estaciones como "planta" para el indicador. MERMA,
@@ -45,6 +45,68 @@ const OPCIONES = ['bodegas', 'retail', 'clientes', 'extra', 'datos', 'salida'];
 // declarada aca y no deducida.
 const NUEVE = new Set(['RT13-100', 'RT13-102', 'RT13-103', 'RT13-105',
                        'RT07-120', 'RT07-122', 'RT07-123', 'RT07-125', 'RT07-126']);
+
+/*  LA DISTRIBUCION DIARIA DE PLANTA, entrada OPCIONAL.
+ *
+ *  Viene de saldo-planta.js --json. Se lee con el mismo trato que
+ *  tablero-extra.json: si no esta, la seccion no se dibuja y el tablero sale
+ *  igual. Un paso que falla no puede dejar la pagina de gerencia a medias.
+ *
+ *  SOLO LAS NUEVE. Merma, extraños y los transito estan en el pool pero fuera
+ *  del indicador, y para leer como se disponibiliza el pallet no aportan: su
+ *  nivel no se mueve por el recorrido, se mueve porque alguien declara una
+ *  merma. Decision de Mauro el 30-10-2026. Se filtra por NUEVE, que es la
+ *  misma regla que ya reparte el saldo de planta mas arriba: una regla, un
+ *  lugar. */
+function serieDePlanta(planta) {
+  const p = planta || {};
+  const out = [];
+  for (const b of (Array.isArray(p.bodegas) ? p.bodegas : [])) {
+    if (!b || !b.whs || !NUEVE.has(String(b.whs).trim())) continue;
+    const dias = [];
+    for (const d of (Array.isArray(b.dias) ? b.dias : [])) {
+      if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(String(d.dia))) continue;
+      dias.push({ dia: String(d.dia), apertura: Number(d.apertura) || 0,
+                  entradas: Number(d.entradas) || 0, salidas: Number(d.salidas) || 0,
+                  cierre: Number(d.cierre) || 0, firme: d.firme !== false });
+    }
+    dias.sort((x, y) => x.dia < y.dia ? -1 : x.dia > y.dia ? 1 : 0);
+    if (!dias.length) continue;      // una bodega sin dias no es una fila vacia: no va
+    out.push({ cod: String(b.whs).trim(), nom: String(b.nombre || b.whs),
+               nivel: Number(b.nivel) || 0, dias });
+  }
+  // El orden del recorrido del pallet, no el alfabetico: inspeccion primero,
+  // disponible al final. Alfabetico pondria DISPONIBLE antes que INSPECCION.
+  const ETAPAS = ['INSPECCION', 'LAVADO', 'DESARME', 'REPARACION', 'PINTURA', 'DISPONIBLE', 'TRANSITO'];
+  const orden = n => {
+    const u = String(n).toUpperCase();
+    for (let i = 0; i < ETAPAS.length; i++) if (u.indexOf(ETAPAS[i]) >= 0) return i;
+    return ETAPAS.length;
+  };
+  return out.sort((a, b) => orden(a.nom) - orden(b.nom) ||
+                            (a.cod < b.cod ? -1 : a.cod > b.cod ? 1 : 0));
+}
+
+/*  EL ANCLA DE LA SERIE Y LA DEL TABLERO TIENEN QUE SER LA MISMA.
+ *
+ *  saldo-planta calcula hacia atras desde el saldo vivo de SAP. Si ese json se
+ *  armo con un ancla distinta de la que esta mirando el tablero, los cierres
+ *  diarios no son los mismos numeros que el saldo por bodega de mas arriba, y
+ *  la pagina se contradice sola. Dentro de cierre-diario.ps1 esto no puede
+ *  pasar —el paso del ancla precede— pero una corrida a mano si puede. */
+function anclaCalza(planta, bodegasHoy) {
+  const a = String((planta && planta.ancla) || '').slice(0, 10);
+  const b = String((bodegasHoy && bodegasHoy.generado) || '').slice(0, 10);
+  const fecha = x => /^\d{4}-\d{2}-\d{2}$/.test(x);
+  if (!fecha(a) || !fecha(b))
+    return { ok: false, motivo: 'no se puede comparar el ancla: ' +
+             (fecha(a) ? 'el tablero no trae fecha' : 'la serie de planta no trae ancla') };
+  if (a !== b)
+    return { ok: false, ancla: a, tablero: b,
+             motivo: 'la serie de planta se ancló el ' + a + ' y el tablero el ' + b +
+                     ': los cierres diarios no serían los mismos números que el saldo por bodega' };
+  return { ok: true, motivo: null };
+}
 
 // ── grupos economicos de retail ──────────────────────────────────────────────
 // SAP no tiene holding: tiene RUT. La agrupacion es nuestra y esta PENDIENTE
@@ -192,7 +254,7 @@ function mesesPareados(mensualRet, mensualCli) {
 // Una sola funcion arma TODO lo que la pagina va a mostrar. La pagina despues
 // no calcula nada: si un numero esta mal, esta mal aca, en un solo lugar, y
 // hay una prueba que lo agarra.
-function datos(bod, ret, cli, extra) {
+function datos(bod, ret, cli, extra, planta) {
   const fl = clasificarPool(bod && bod.bodegas);
   const sr = cortarSocios(ret && ret.socios, 25);
   const sc = cortarSocios(cli && cli.socios, 25);
@@ -251,6 +313,11 @@ function datos(bod, ret, cli, extra) {
     // ya no corresponde, o no salir.
     mensual_verificado: !!(extra && extra.mensual_verificado),
     extra_medido: (extra && extra.medido) || null,
+    // La distribucion diaria de planta. null cuando el paso no corrio: la
+    // seccion no se dibuja y el resto del tablero sale igual.
+    planta_dias: planta ? serieDePlanta(planta) : null,
+    planta_ancla: (planta && planta.ancla) || null,
+    planta_meses: (planta && Array.isArray(planta.meses)) ? planta.meses : null,
     ventana: { nivel: String((bod && bod.generado) || '').slice(0, 10),
                flujo_desde: vr.desde || vc.desde || null,
                flujo_hasta: vr.hasta || vc.hasta || null,
@@ -748,6 +815,7 @@ function main() {
   const rRet = opcion('retail', 'data/stock-retail.json');
   const rCli = opcion('clientes', 'data/stock-clientes.json');
   const rExt = opcion('extra', 'data/tablero-extra.json');
+  const rPla = opcion('planta', 'data/planta.json');
   const rDat = opcion('datos', 'data/datos-stock.json');
   const rSal = opcion('salida', 'stock-flujos-pallets.html');
 
@@ -755,7 +823,19 @@ function main() {
   const ext = leerJson(rExt, false);
   if (!ext) console.error('Aviso: no hay ' + rExt + '. Las secciones que dependen de el no se dibujan.');
 
-  const d = datos(bod, ret, cli, ext);
+  // La distribucion diaria de planta es OPCIONAL y se valida antes de usarla:
+  // una serie anclada en otra fecha haria que la pagina se contradiga sola.
+  let pla = leerJson(rPla, false);
+  if (!pla) console.error('Aviso: no hay ' + rPla + '. La distribucion diaria de planta no se dibuja.');
+  else {
+    const ac = anclaCalza(pla, bod);
+    if (!ac.ok) {
+      console.error('Aviso: ' + ac.motivo + '. Se ignora ' + rPla + '.');
+      pla = null;
+    }
+  }
+
+  const d = datos(bod, ret, cli, ext, pla);
   const fs = require('fs');
   fs.writeFileSync(rDat, JSON.stringify(d, null, 1) + '\n', { encoding: 'utf8' });
   fs.writeFileSync(rSal, pagina(d), { encoding: 'utf8' });
@@ -765,6 +845,11 @@ function main() {
               ' + retail ' + mil(d.bodegas.RETAIL.nivel) + ' + planta ' + mil(d.bodegas.PLANTA.nivel));
   console.log('  socios con saldo: retail ' + d.bodegas.RETAIL.n + ', clientes ' + d.bodegas.CLIENTES.n);
   console.log('  año: retail ' + conSigno(d.anio.ret) + ', clientes ' + conSigno(d.anio.cli));
+  if (d.planta_dias)
+    console.log('  planta dia a dia: ' + d.planta_dias.length + ' bodegas del indicador · ' +
+                d.planta_dias.reduce((a, b) => a + b.dias.length, 0) + ' dias · anclada ' +
+                String(d.planta_ancla || '?').slice(0, 10));
+  else console.log('  planta dia a dia: no disponible');
   console.log('  ' + rDat);
   console.log('  ' + rSal);
   if (d.descalces.length) {
@@ -773,7 +858,8 @@ function main() {
   }
 }
 
-module.exports = { NUEVE, esNumero, mil, conSigno, clasePos, pct, pct1, esc, sinBom,
+module.exports = { esNumero, mil, conSigno, clasePos, pct, pct1, esc, sinBom,
+                   serieDePlanta, anclaCalza,
                    NUEVE, GRUPOS, MESES, OPCIONES,
                    clasificarPool, cortarSocios, porGrupo, mesesPareados, datos,
                    antiguedad, svgPool, svgMeses, filaSocio, tablaSocios, notaImposibles, pagina,

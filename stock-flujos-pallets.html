@@ -275,6 +275,36 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--linea);
 </section>
 
 <section>
+  <h2>Distribución diaria en planta</h2>
+  <p>Cómo se mueve cada estación día por día: con qué nivel abrió, cuánto entró, cuánto salió y con qué nivel cerró. Son las 9 bodegas del indicador: merma, extraños y los tránsito están en el pool pero su nivel no lo mueve el recorrido del pallet.</p>
+  <div class="panel">
+    <div class="filtros">
+      <label for="pd-bod">Bodega<select id="pd-bod">
+        <optgroup label="SANTIAGO">
+          <option value="RT13-100" selected>SANTIAGO INSPECCION · RT13-100</option>
+          <option value="RT13-102">SANTIAGO REPARACION · RT13-102</option>
+          <option value="RT13-103">SANTIAGO PINTURA · RT13-103</option>
+          <option value="RT13-105">SANTIAGO DISPONIBLE · RT13-105</option>
+        </optgroup>
+        <optgroup label="TALCA">
+          <option value="RT07-120">TALCA INSPECCION · RT07-120</option>
+          <option value="RT07-122">TALCA REPARACION · RT07-122</option>
+          <option value="RT07-123">TALCA PINTURA · RT07-123</option>
+          <option value="RT07-125">TALCA DISPONIBLE · RT07-125</option>
+          <option value="RT07-126">TALCA TRANSITO · RT07-126</option>
+        </optgroup>
+      </select></label>
+      <label for="pd-mes">Mes<select id="pd-mes">
+        <option value="2026-10">Oct 2026</option>
+        <option value="2026-11" selected>Nov 2026</option>
+      </select></label>
+    </div>
+    <div id="pd-panel"><h3>SANTIAGO INSPECCION <span class="cod">RT13-100</span></h3><p class="sub">Sin movimiento registrado en Nov 2026. El saldo de la bodega no cambió ningún día de ese mes, o ese mes no entró en la corrida.</p></div>
+    <p class="sub">Los cierres se calculan hacia atrás desde el saldo vivo de SAP del 2026-11-02, restando los movimientos de cada día. El cierre del último día es, por construcción, el saldo que muestra la tabla de más arriba.</p>
+  </div>
+</section>
+
+<section>
   <h2>Qué sostiene estas cifras</h2>
   <div class="dos" style="margin-top:14px">
     <div class="panel">
@@ -354,6 +384,230 @@ function antiguedad(medido, hoy) {
     c.setAttribute("data-nivel", a.nivel);
     c.hidden = false;
   } catch (e) { /* sin aviso es mejor que sin pagina */ }
+})();
+var MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+function esNumero(n) {
+  return typeof n === 'number' ? isFinite(n)
+       : (typeof n === 'string' && n.trim() !== '' && isFinite(Number(n)));
+}
+function mil(n) {
+  if (!esNumero(n)) return '—';
+  return Math.round(Number(n)).toLocaleString('es-CL');
+}
+function conSigno(n) {
+  if (!esNumero(n)) return '—';
+  const v = Number(n);
+  return (v > 0 ? '+' : '') + mil(v);
+}
+function clasePos(n) {
+  const v = Number(n) || 0;
+  return v > 0 ? 'd-pos' : v < 0 ? 'd-neg' : 'd-nul';
+}
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function etiquetaDeMes(mes) {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(mes == null ? '' : mes));
+  if (!m) return String(mes == null ? '' : mes);
+  return (MESES[Number(m[2]) - 1] || m[2]) + ' ' + m[1];
+}
+function diasDelMes(bodega, mes) {
+  const p = String(mes == null ? '' : mes);
+  return (((bodega && bodega.dias) || [])).filter(d => d && String(d.dia).slice(0, 7) === p);
+}
+function resumenDelMes(dias) {
+  const ds = Array.isArray(dias) ? dias : [];
+  if (!ds.length) return null;
+  let entradas = 0, salidas = 0, negativos = 0, peor = null, enCurso = false;
+  for (const d of ds) {
+    entradas += Number(d.entradas) || 0;
+    salidas += Number(d.salidas) || 0;
+    const c = Number(d.cierre) || 0;
+    if (c < 0) { negativos++; if (!peor || c < peor.cierre) peor = { dia: String(d.dia), cierre: c }; }
+    if (d.firme === false) enCurso = true;
+  }
+  const apertura = Number(ds[0].apertura) || 0;
+  const cierre = Number(ds[ds.length - 1].cierre) || 0;
+  return { n: ds.length, desde: String(ds[0].dia), hasta: String(ds[ds.length - 1].dia),
+           apertura, cierre, entradas, salidas,
+           neto: cierre - apertura, netoFlujo: entradas - salidas,
+           cuadra: (cierre - apertura) === (entradas - salidas),
+           negativos, peor, enCurso };
+}
+function altoVisible(h, v) {
+  if (!v) return 0;
+  return Math.max(1.6, h);
+}
+function ejeDeDias(ds, An, izq, der, Al) {
+  const slot = (An - izq - der) / Math.max(1, ds.length);
+  // Con muchos dias las etiquetas se pisan: se rotula uno de cada n, y
+  // siempre el primero, para que el lector sepa donde empieza el mes.
+  const salto = slot >= 26 ? 1 : slot >= 15 ? 2 : slot >= 10 ? 3 : 5;
+  let t = '';
+  ds.forEach((d, i) => {
+    if (i % salto) return;
+    t += '<text class="ax" x="' + (izq + i * slot + slot / 2).toFixed(1) + '" y="' + (Al - 7) +
+         '" text-anchor="middle">' + esc(String(d.dia).slice(8)) + '</text>';
+  });
+  return { slot, etiquetas: t };
+}
+function svgFlujoDia(dias) {
+  const ds = Array.isArray(dias) ? dias : [];
+  if (!ds.length) return '';
+  const An = 760, izq = 52, der = 8, arriba = 12, abajo = 26, mitad = 84;
+  const Al = arriba + mitad * 2 + abajo, y0 = arriba + mitad;
+  const tope = Math.max(1, ...ds.map(d => Math.max(Number(d.entradas) || 0, Number(d.salidas) || 0)));
+  const esc_ = mitad / tope;
+  const { slot, etiquetas } = ejeDeDias(ds, An, izq, der, Al);
+  const ancho = Math.max(2.5, Math.min(26, slot / 2 - 1.5));   // 1,5px de aire entre las dos barras
+
+  let g = '';
+  const linea = (v, y, txt) => '<line class="grid" x1="' + izq + '" y1="' + y.toFixed(1) +
+    '" x2="' + (An - der) + '" y2="' + y.toFixed(1) + '"/><text class="ax" x="' + (izq - 8) +
+    '" y="' + (y + 4).toFixed(1) + '" text-anchor="end">' + esc(txt) + '</text>';
+  g += linea(tope, arriba, mil(tope));
+  g += linea(0, y0, '0');
+  g += linea(tope, y0 + mitad, mil(tope));
+
+  ds.forEach((d, i) => {
+    const x = izq + i * slot + (slot - (2 * ancho + 1.5)) / 2;
+    const ent = Number(d.entradas) || 0, sal = Number(d.salidas) || 0;
+    const he = altoVisible(ent * esc_, ent), hs = altoVisible(sal * esc_, sal);
+    g += '<rect class="b-ent" x="' + x.toFixed(1) + '" y="' + (y0 - he).toFixed(1) +
+         '" width="' + ancho.toFixed(1) + '" height="' + he.toFixed(1) + '" rx="2">' +
+         '<title>' + esc(d.dia) + ' · entradas ' + mil(ent) + '</title></rect>';
+    g += '<rect class="b-sal" x="' + (x + ancho + 1.5).toFixed(1) + '" y="' + y0.toFixed(1) +
+         '" width="' + ancho.toFixed(1) + '" height="' + hs.toFixed(1) + '" rx="2">' +
+         '<title>' + esc(d.dia) + ' · salidas ' + mil(sal) + '</title></rect>';
+  });
+  return '<svg viewBox="0 0 ' + An + ' ' + Al + '" role="img" ' +
+         'aria-label="Entradas y salidas por dia">' + g + etiquetas + '</svg>';
+}
+function svgNivelDia(dias) {
+  const ds = Array.isArray(dias) ? dias : [];
+  if (!ds.length) return '';
+  const An = 760, izq = 52, der = 8, arriba = 12, abajo = 26, util = 116;
+  const Al = arriba + util + abajo;
+  const vals = ds.map(d => Number(d.cierre) || 0);
+  // El cero SIEMPRE entra en la escala: es la frontera entre un nivel posible
+  // y uno imposible, y es justo lo que hay que poder ver.
+  const alto = Math.max(0, ...vals), bajo = Math.min(0, ...vals);
+  const rango = (alto - bajo) || 1, esc_ = util / rango;
+  const y0 = arriba + alto * esc_;
+  const { slot, etiquetas } = ejeDeDias(ds, An, izq, der, Al);
+  const ancho = Math.max(2.5, Math.min(48, slot - 3));
+
+  let g = '';
+  const linea = (v, cl) => {
+    const y = arriba + (alto - v) * esc_;
+    return '<line class="' + cl + '" x1="' + izq + '" y1="' + y.toFixed(1) + '" x2="' + (An - der) +
+           '" y2="' + y.toFixed(1) + '"/><text class="ax" x="' + (izq - 8) + '" y="' +
+           (y + 4).toFixed(1) + '" text-anchor="end">' + esc(mil(v)) + '</text>';
+  };
+  if (alto > 0) g += linea(alto, 'grid');
+  if (bajo < 0) g += linea(bajo, 'grid');
+  g += linea(0, 'cero');
+
+  ds.forEach((d, i) => {
+    const v = Number(d.cierre) || 0, h = altoVisible(Math.abs(v) * esc_, v);
+    const x = izq + i * slot + (slot - ancho) / 2;
+    g += '<rect class="' + (v < 0 ? 'n-neg' : 'n-pos') + '" x="' + x.toFixed(1) + '" y="' +
+         (v >= 0 ? y0 - h : y0).toFixed(1) + '" width="' + ancho.toFixed(1) + '" height="' +
+         h.toFixed(1) + '" rx="2">' + '<title>' + esc(d.dia) + ' · cierre ' + mil(v) +
+         (d.firme === false ? ' (dia en curso)' : '') + '</title></rect>';
+  });
+  return '<svg viewBox="0 0 ' + An + ' ' + Al + '" role="img" ' +
+         'aria-label="Nivel al cierre de cada dia">' + g + etiquetas + '</svg>';
+}
+function tablaDeDias(dias) {
+  const ds = Array.isArray(dias) ? dias : [];
+  let f = '';
+  for (const d of ds) {
+    const neto = (Number(d.entradas) || 0) - (Number(d.salidas) || 0);
+    const c = Number(d.cierre) || 0;
+    f += '<tr><td class="cod">' + esc(d.dia) +
+         (d.firme === false ? ' <span class="chip">en curso</span>' : '') +
+         '</td><td class="num">' + mil(d.apertura) + '</td><td class="num">' + mil(d.entradas) +
+         '</td><td class="num">' + mil(d.salidas) + '</td><td class="num ' + clasePos(neto) + '">' +
+         conSigno(neto) + '</td><td class="num' + (c < 0 ? ' malo' : '') + '">' + mil(c) +
+         '</td></tr>';
+  }
+  return '<div class="scroll"><table>\n' +
+    '<thead><tr><th>Día</th><th class="num">Apertura</th><th class="num">Entradas</th>' +
+    '<th class="num">Salidas</th><th class="num">Neto</th><th class="num">Cierre</th></tr></thead>\n' +
+    '<tbody>' + f + '</tbody></table></div>';
+}
+function panelDeMes(bodega, mes) {
+  if (!bodega) return '<p class="sub">No hay datos de esa bodega.</p>';
+  const ds = diasDelMes(bodega, mes);
+  const r = resumenDelMes(ds);
+  const titulo = '<h3>' + esc(bodega.nom) + ' <span class="cod">' + esc(bodega.cod) + '</span></h3>';
+  if (!r)
+    return titulo + '<p class="sub">Sin movimiento registrado en ' + esc(etiquetaDeMes(mes)) +
+           '. El saldo de la bodega no cambió ningún día de ese mes, o ese mes no entró en la corrida.</p>';
+
+  const H = [titulo];
+  H.push('<div class="sub">' + esc(etiquetaDeMes(mes)) + ' · ' + mil(r.n) + ' día' +
+         (r.n === 1 ? '' : 's') + ' con movimiento, del ' + esc(r.desde) + ' al ' + esc(r.hasta) +
+         '</div>');
+  H.push('<div class="rejilla rejilla-4">');
+  for (const [et, val, pie, cl] of [
+    ['Apertura', mil(r.apertura), 'con lo que abrió el ' + r.desde, r.apertura < 0 ? 't-mal' : ''],
+    ['Entradas', mil(r.entradas), 'pallets que llegaron en el mes', 't-ent'],
+    ['Salidas', mil(r.salidas), 'pallets que se fueron en el mes', 't-sal'],
+    ['Cierre', mil(r.cierre), 'con lo que cerró el ' + r.hasta +
+      (r.enCurso ? ' (día en curso)' : ''), r.cierre < 0 ? 't-mal' : ''],
+  ])
+    H.push('<div class="panel tile' + (cl ? ' ' + cl : '') + '"><div class="et">' + et + '</div><div class="big">' +
+           val + '</div><div class="pie">' + esc(pie) + '</div></div>');
+  H.push('</div>');
+  H.push('<p class="sub">Movió <b class="' + clasePos(r.neto) + '">' + conSigno(r.neto) +
+         '</b> en el mes' + (r.cuadra ? '' : ' — pero entradas menos salidas da ' +
+         conSigno(r.netoFlujo) + ', y cierre menos apertura da ' + conSigno(r.neto) +
+         ': el json viene roto y este panel no se puede leer') + '.</p>');
+
+  H.push('<h4>Entradas y salidas de cada día</h4>');
+  H.push('<div class="leyenda" style="margin:0 0 8px">' +
+         '<span><i class="pt p-ent"></i>Entradas <b>' + mil(r.entradas) + '</b> en el mes</span>' +
+         '<span><i class="pt p-sal"></i>Salidas <b>' + mil(r.salidas) + '</b> en el mes</span></div>');
+  H.push('<div class="scroll grafdia">' + svgFlujoDia(ds) + '</div>');
+
+  H.push('<h4>Nivel con el que cerró cada día</h4>');
+  H.push('<div class="scroll grafdia">' + svgNivelDia(ds) + '</div>');
+  if (r.negativos)
+    H.push('<div class="enrevision"><b>' + mil(r.negativos) + ' de los ' + mil(r.n) +
+           ' días cierran en negativo</b>, el peor el ' + esc(r.peor.dia) + ' en ' +
+           mil(r.peor.cierre) + '. No es un error del cálculo: SAP tiene esos días en negativo ' +
+           'y la causa es la fecha del documento —la salida de mercancías queda fechada antes ' +
+           'que el traspaso que la alimenta—. Se arregla en SAP, no acá.</div>');
+
+  H.push('<h4>Día por día</h4>');
+  H.push(tablaDeDias(ds));
+  return H.join('\n');
+}
+function rehidratar(compacta) {
+  return (Array.isArray(compacta) ? compacta : []).map(b => ({
+    cod: b.c, nom: b.n, nivel: b.v,
+    dias: (b.d || []).map(x => ({ dia: x[0], apertura: x[1], entradas: x[2],
+                                  salidas: x[3], cierre: x[4], firme: x.length < 6 })),
+  }));
+}
+var PD = rehidratar([{"c":"RT07-120","n":"TALCA INSPECCION","v":342,"d":[["2026-10-01",228,343,293,278],["2026-10-02",278,1166,1910,-466],["2026-10-05",-466,437,935,-964],["2026-10-06",-964,1308,624,-280],["2026-10-07",-280,443,1140,-977],["2026-10-08",-977,1228,641,-390],["2026-10-09",-390,768,1042,-664],["2026-10-13",-664,1208,991,-447],["2026-10-14",-447,731,197,87],["2026-10-15",87,410,954,-457],["2026-10-16",-457,906,752,-303],["2026-10-19",-303,695,1297,-905],["2026-10-20",-905,1024,816,-697],["2026-10-21",-697,915,467,-249],["2026-10-22",-249,926,1134,-457],["2026-10-23",-457,907,363,87],["2026-10-26",87,766,1214,-361],["2026-10-27",-361,889,441,87],["2026-10-28",87,354,413,28],["2026-10-29",28,690,376,342],["2026-10-30",342,432,432,342]]},{"c":"RT13-100","n":"SANTIAGO INSPECCION","v":7161,"d":[["2026-10-01",-1936,4457,4279,-1758],["2026-10-02",-1758,3679,5355,-3434],["2026-10-03",-3434,1392,0,-2042],["2026-10-05",-2042,4865,4322,-1499],["2026-10-06",-1499,1799,2414,-2114],["2026-10-07",-2114,2307,3100,-2907],["2026-10-08",-2907,3380,2902,-2429],["2026-10-09",-2429,3263,8249,-7415],["2026-10-10",-7415,3184,0,-4231],["2026-10-13",-4231,7735,5619,-2115],["2026-10-14",-2115,3373,3571,-2313],["2026-10-15",-2313,4232,3912,-1993],["2026-10-16",-1993,4292,6532,-4233],["2026-10-17",-4233,2793,0,-1440],["2026-10-19",-1440,6136,5717,-1021],["2026-10-20",-1021,4006,4273,-1288],["2026-10-21",-1288,2164,2317,-1441],["2026-10-22",-1441,4144,3862,-1159],["2026-10-23",-1159,4122,6102,-3139],["2026-10-24",-3139,2058,0,-1081],["2026-10-26",-1081,5214,5007,-874],["2026-10-27",-874,3845,4241,-1270],["2026-10-28",-1270,4411,4665,-1524],["2026-10-29",-1524,4883,2114,1245],["2026-10-30",1245,3532,0,4777],["2026-10-31",4777,2384,0,7161]]},{"c":"RT07-122","n":"TALCA REPARACION","v":0,"d":[["2026-10-01",1261,293,961,593],["2026-10-02",593,1180,293,1480],["2026-10-05",1480,710,969,1221],["2026-10-06",1221,447,436,1232],["2026-10-07",1232,856,1241,847],["2026-10-08",847,464,0,1311],["2026-10-09",1311,735,795,1251],["2026-10-13",1251,798,309,1740],["2026-10-14",1740,197,703,1234],["2026-10-15",1234,694,643,1285],["2026-10-16",1285,633,661,1257],["2026-10-19",1257,895,0,2152],["2026-10-20",2152,632,1312,1472],["2026-10-21",1472,386,393,1465],["2026-10-22",1465,812,808,1469],["2026-10-23",1469,363,901,931],["2026-10-26",931,809,681,1059],["2026-10-27",1059,387,500,946],["2026-10-28",946,354,696,604],["2026-10-29",604,376,354,626],["2026-10-30",626,432,626,432],["2026-11-02",432,0,432,0,0]]},{"c":"RT13-102","n":"SANTIAGO REPARACION","v":2697,"d":[["2026-10-01",3487,2110,2539,3058],["2026-10-02",3058,3053,1029,5082],["2026-10-05",5082,2415,2702,4795],["2026-10-06",4795,1308,1000,5103],["2026-10-07",5103,1535,4460,2178],["2026-10-08",2178,1391,1930,1639],["2026-10-09",1639,4394,748,5285],["2026-10-13",5285,3224,3776,4733],["2026-10-14",4733,1907,3548,3092],["2026-10-15",3092,2229,1346,3975],["2026-10-16",3975,3264,2029,5210],["2026-10-19",5210,3617,2945,5882],["2026-10-20",5882,2071,2203,5750],["2026-10-21",5750,1154,2850,4054],["2026-10-22",4054,1713,3314,2453],["2026-10-23",2453,2985,651,4787],["2026-10-26",4787,2143,2602,4328],["2026-10-27",4328,2134,1500,4962],["2026-10-28",4962,2409,2875,4496],["2026-10-29",4496,1106,1218,4384],["2026-10-30",4384,0,1687,2697]]},{"c":"RT07-123","n":"TALCA PINTURA","v":0,"d":[["2026-10-01",227,961,1183,5],["2026-10-02",5,821,293,533],["2026-10-05",533,1193,1165,561],["2026-10-06",561,612,436,737],["2026-10-07",737,1524,1788,473],["2026-10-08",473,174,0,647],["2026-10-09",647,1099,1000,746],["2026-10-13",746,502,541,707],["2026-10-14",707,703,910,500],["2026-10-15",500,903,945,458],["2026-10-16",458,780,854,384],["2026-10-19",384,402,0,786],["2026-10-20",786,1496,1691,591],["2026-10-21",591,697,1018,270],["2026-10-22",270,1130,808,592],["2026-10-23",592,901,1000,493],["2026-10-26",493,1086,1000,579],["2026-10-27",579,554,894,239],["2026-10-28",239,755,930,64],["2026-10-29",64,354,354,64],["2026-10-30",64,626,690,0],["2026-11-02",0,432,432,0,0]]},{"c":"RT13-103","n":"SANTIAGO PINTURA","v":1670,"d":[["2026-10-01",3563,4716,4544,3735],["2026-10-02",3735,4580,1029,7286],["2026-10-05",7286,4609,5818,6077],["2026-10-06",6077,2106,2500,5683],["2026-10-07",5683,6025,7356,4352],["2026-10-08",4352,3441,2000,5793],["2026-10-09",5793,5233,5340,5686],["2026-10-13",5686,6171,6934,4923],["2026-10-14",4923,5253,7400,2776],["2026-10-15",2776,3029,0,5805],["2026-10-16",5805,6317,4500,7622],["2026-10-19",7622,6245,9996,3871],["2026-10-20",3871,4405,3444,4832],["2026-10-21",4832,4046,6139,2739],["2026-10-22",2739,5463,5559,2643],["2026-10-23",2643,5343,870,7116],["2026-10-26",7116,5992,8114,4994],["2026-10-27",4994,3607,3000,5601],["2026-10-28",5601,5152,7437,3316],["2026-10-29",3316,2848,4207,1957],["2026-10-30",1957,2017,2304,1670]]},{"c":"RT07-125","n":"TALCA DISPONIBLE","v":211,"d":[["2026-10-01",37,1183,1164,56],["2026-10-02",56,494,540,10],["2026-10-05",10,1165,976,199],["2026-10-06",199,436,432,203],["2026-10-07",203,1788,528,1463],["2026-10-08",1463,60,1032,491],["2026-10-09",491,1000,418,1073],["2026-10-13",1073,541,1320,294],["2026-10-14",294,910,654,550],["2026-10-15",550,945,1174,321],["2026-10-16",321,854,406,769],["2026-10-19",769,0,358,411],["2026-10-20",411,1691,1528,574],["2026-10-21",574,1018,1351,241],["2026-10-22",241,808,988,61],["2026-10-23",61,1000,502,559],["2026-10-26",559,1000,946,613],["2026-10-27",613,894,1054,453],["2026-10-28",453,930,1140,243],["2026-10-29",243,354,344,253],["2026-10-30",253,690,624,319],["2026-11-02",319,432,540,211,0]]},{"c":"RT13-105","n":"SANTIAGO DISPONIBLE","v":1426,"d":[["2026-10-01",8235,5616,5040,8811],["2026-10-02",8811,0,3948,4863],["2026-10-05",4863,6358,6656,4565],["2026-10-06",4565,3292,4140,3717],["2026-10-07",3717,7356,5472,5601],["2026-10-08",5601,2540,4128,4013],["2026-10-09",4013,5648,5592,4069],["2026-10-13",4069,7726,8274,3521],["2026-10-14",3521,7400,3048,7873],["2026-10-15",7873,0,4881,2992],["2026-10-16",2992,4941,4143,3790],["2026-10-19",3790,10248,7243,6795],["2026-10-20",6795,3444,3288,6951],["2026-10-21",6951,6391,5505,7837],["2026-10-22",7837,5559,4141,9255],["2026-10-23",9255,0,6496,2759],["2026-10-26",2759,8114,6276,4597],["2026-10-27",4597,3000,2556,5041],["2026-10-28",5041,7437,5455,7023],["2026-10-29",7023,4740,5009,6754],["2026-10-30",6754,2304,5256,3802],["2026-11-01",3802,4,2,3804],["2026-11-02",3804,0,2376,1428,0],["2026-11-03",1428,0,2,1426,0]]},{"c":"RT07-126","n":"TALCA TRANSITO","v":100,"d":[["2026-10-09",-40,0,308,-348],["2026-10-14",-348,308,0,-40],["2026-10-16",-40,357,441,-124],["2026-10-20",-124,84,0,-40],["2026-10-30",-40,140,0,100]]}]);
+(function () {
+  try {
+    var b = document.getElementById("pd-bod"), m = document.getElementById("pd-mes"),
+        caja = document.getElementById("pd-panel");
+    if (!b || !m || !caja) return;
+    function pintar() {
+      var hay = null;
+      for (var i = 0; i < PD.length; i++) if (PD[i].cod === b.value) hay = PD[i];
+      caja.innerHTML = panelDeMes(hay, m.value);
+    }
+    b.addEventListener("change", pintar);
+    m.addEventListener("change", pintar);
+  } catch (e) { /* el panel por defecto ya esta escrito: sin js igual se lee */ }
 })();
 </script>
 </div>

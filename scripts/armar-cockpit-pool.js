@@ -23,8 +23,8 @@
 // ───────────────────────────────────────────────────────────────────────────────
 
 const T = require('./armar-tablero-stock.js');
-const { mil, conSigno, pct1, esc, clasePos, esNumero, sinBom,
-        plantaDeBodega, mesesDeSerie, diasDelMes, resumenDelMes, etiquetaDeMes,
+const { mil, conSigno, pct, pct1, esc, clasePos, esNumero, sinBom,
+        plantaDeBodega, mesesDeSerie, diasDelMes, resumenDelMes, etiquetaDeMes, relojes, avisoDeFuturo,
         svgFlujoDia, svgNivelDia, tablaDeDias, sinCierreDeScript, jsonSeguro,
         serieCompacta, rehidratar, altoVisible, ejeDeDias, MESES } = T;
 
@@ -43,30 +43,39 @@ function etapaDeBodega(nom) {
   return 'OTRA';
 }
 
+/*  EL NOMBRE DE CADA ESTADO NO ES UN COLOR.
+ *
+ *  Se llamaban rojo, amarillo y verde, y en REDTEC el rojo y el verde son
+ *  TIPOS DE PALLET: la gente leia "SANTIAGO INSPECCION · rojo" y entendia que
+ *  la bodega tenia pallet rojo, no que estaba critica. El estado se nombra por
+ *  lo que es, y el color pasa a ser refuerzo del glifo y de la palabra. */
+const NOMBRE_SALUD = { critica: 'Crítica', atencion: 'Atención', sana: 'Sana', sindato: 'Sin dato' };
+
 /*  LA SALUD DE UNA BODEGA ES UNA REGLA, NO UNA OPINION.
  *
  *  Un nivel negativo es imposible: no existe media bodega de pallets en menos.
  *  Asi que el semaforo mira exactamente eso y nada mas. Lo que no se puede
- *  evaluar se dice 'sin dato' y no se pinta de verde, que es la forma mas
+ *  evaluar se dice 'sin dato' y no se pinta de sana, que es la forma mas
  *  barata de mentir en un tablero. */
 function saludDeBodega(b) {
   const dias = (b && b.dias) || [];
-  if (!dias.length) return { nivel: 'sindato', texto: 'Sin dato', n: 0, de: 0 };
+  if (!dias.length) return { nivel: 'sindato', texto: NOMBRE_SALUD.sindato, n: 0, de: 0 };
   const neg = dias.filter(d => Number(d.cierre) < 0).length;
   const parte = neg / dias.length;
-  const nivel = neg === 0 ? 'verde' : parte >= 0.5 ? 'rojo' : parte > 0 ? 'amarillo' : 'verde';
-  const texto = neg === 0 ? 'Verde' : parte >= 0.5 ? 'Rojo' : 'Amarillo';
+  const nivel = neg === 0 ? 'sana' : parte >= 0.5 ? 'critica' : parte > 0 ? 'atencion' : 'sana';
+  const texto = NOMBRE_SALUD[nivel];
   return { nivel, texto, n: neg, de: dias.length };
 }
 
-const ORDEN_SALUD = { rojo: 0, amarillo: 1, verde: 2, sindato: 3 };
-const GLIFO = { rojo: '◆', amarillo: '▲', verde: '●', sindato: '○' };
+const ORDEN_SALUD = { critica: 0, atencion: 1, sana: 2, sindato: 3 };
+const GLIFO = { critica: '◆', atencion: '▲', sana: '●', sindato: '○' };
+
 
 /*  LAS BODEGAS, ORDENADAS POR LO QUE HAY QUE MIRAR PRIMERO.
  *
  *  No por saldo ni por codigo: por salud. Un tablero que pone arriba la bodega
  *  mas grande obliga a buscar el problema; uno que pone arriba la que esta en
- *  rojo lo muestra. A igual salud, manda el recorrido. */
+ *  critica lo muestra. A igual salud, manda el recorrido. */
 function bodegasDelCockpit(serie) {
   const out = [];
   for (const b of (Array.isArray(serie) ? serie : [])) {
@@ -211,30 +220,39 @@ function matrizPlantaEtapa(bodegas) {
  *  una conclusion. El titular de un tablero que mira gerencia tiene que ser lo
  *  segundo, con lo primero al lado. Se calcula, no se escribe a mano: el dia
  *  que no haya negativos, el titular lo dice solo. */
-function titular(d, bodegas) {
+/*  CON UN FILTRO DE PLANTA PUESTO, EL TITULAR NO PUEDE SEGUIR DICIENDO EL
+ *  POOL. El pool es de toda la empresa: dejarlo en un titular que arriba dice
+ *  SANTIAGO invita a leer 808.513 como si fuera de Santiago. Filtrado, el
+ *  titular habla solo de lo que el filtro alcanza. */
+function titular(d, bodegas, planta) {
   const bs = Array.isArray(bodegas) ? bodegas : [];
-  const malas = bs.filter(b => b.salud.nivel === 'rojo' || b.salud.nivel === 'amarillo');
+  const malas = bs.filter(b => b.salud.nivel === 'critica' || b.salud.nivel === 'atencion');
   const dias = bs.reduce((a, b) => a + b.dias, 0);
   const neg = bs.reduce((a, b) => a + b.salud.n, 0);
   const pool = Number(d && d.pool) || 0;
+  const P = planta ? esc(String(planta)) : null;
+  const enc = P ? '<em>' + P + '</em> · ' : 'Pool de <em>' + mil(pool) + '</em> pallets; ';
   if (!bs.length)
-    return { frase: 'Pool de <em>' + mil(pool) + '</em> pallets', nivel: 'sindato',
+    return { frase: P ? '<em>' + P + '</em> · sin distribución diaria' :
+                        'Pool de <em>' + mil(pool) + '</em> pallets',
+             nivel: 'sindato',
              cola: 'sin distribución diaria de planta en esta corrida' };
   if (!malas.length)
-    return { frase: 'Pool de <em>' + mil(pool) + '</em> pallets; <em>ninguna estación</em> en negativo',
-             nivel: 'verde',
-             cola: mil(bs.length) + ' bodegas del indicador · ' + mil(dias) + ' días medidos' };
+    return { frase: enc + '<em>ninguna estación</em> en negativo',
+             nivel: 'sana',
+             cola: mil(bs.length) + (P ? ' estaciones' : ' bodegas del indicador') +
+                   ' · ' + mil(dias) + ' días medidos' };
   /*  El peor cierre y la estacion que lo tiene salen del MISMO registro.
    *  Sacarlos por separado — el minimo por una reduccion y el codigo por la
-   *  primera en rojo — hace que la cola nombre a una estacion que no es la
+   *  primera en critica — hace que la cola nombre a una estacion que no es la
    *  dueña del numero: con 23 dias malos TALCA INSPECCION encabeza el orden,
    *  pero el -7.415 es de SANTIAGO INSPECCION. Un numero bien calculado con
    *  la etiqueta equivocada manda a revisar la bodega que no es. */
   const dueno = bs.reduce((a, b) => (b.peor && (a == null || b.peor.cierre < a.peor.cierre)
                                      ? b : a), null);
-  return { frase: 'Pool de <em>' + mil(pool) + '</em> pallets; <em>' + mil(malas.length) + ' de ' +
+  return { frase: enc + '<em>' + mil(malas.length) + ' de ' +
                   mil(bs.length) + ' estaciones</em> cierran días en negativo',
-           nivel: malas.some(b => b.salud.nivel === 'rojo') ? 'rojo' : 'amarillo',
+           nivel: malas.some(b => b.salud.nivel === 'critica') ? 'critica' : 'atencion',
            cola: mil(neg) + ' de ' + mil(dias) + ' días · peor ' +
                  mil(dueno ? dueno.peor.cierre : 0) +
                  ' en ' + esc(dueno ? dueno.cod : bs[0].cod) };
@@ -247,7 +265,15 @@ function titular(d, bodegas) {
  *  un chip de estado. La tarjeta que no puede calcularse NO sale en cero: sale
  *  diciendo que no se puede, que es lo que hace el tablero de ITL y es lo
  *  correcto. */
-function tarjetas(datos, bodegas) {
+/*  CADA TARJETA DECLARA SU ALCANCE.
+ *
+ *  Solo dos de las ocho son de planta: el indicador y los dias en negativo.
+ *  Las otras seis hablan de clientes y retail o son controles de toda la
+ *  extraccion, y no tienen version por planta — no existe "la atribucion por
+ *  socio de Talca". Con un filtro puesto se atenuan y lo dicen, porque un
+ *  numero global al lado de un titulo que dice SANTIAGO se lee como de
+ *  Santiago. */
+function tarjetas(datos, bodegas, planta, periodo) {
   const d = datos || {};
   const b = d.bodegas || {};
   const cli = b.CLIENTES || {}, ret = b.RETAIL || {}, pla = b.PLANTA || {};
@@ -260,7 +286,7 @@ function tarjetas(datos, bodegas) {
   const fallan = ctrl.filter(c => c.estado === 'no pasa');
   const t = [];
 
-  t.push({ clave: 'pool', et: 'Reparto del pool', hint: 'cli / ret / planta', kv: mil(d.pool), u: 'pallets',
+  t.push({ clave: 'pool', et: 'Reparto del pool', hint: 'cli / ret / planta', ambito: 'global', kv: mil(d.pool), u: 'pallets',
            stack: [ { v: Number(cli.nivel) || 0, c: 'var(--cli)', nom: 'Clientes' },
                     { v: Number(ret.nivel) || 0, c: 'var(--ret)', nom: 'Retail' },
                     { v: Number(pla.nivel) || 0, c: 'var(--pla)', nom: 'Planta' } ],
@@ -272,47 +298,82 @@ function tarjetas(datos, bodegas) {
    *  las filas del dia. Su ultimo valor TIENE que dar el mismo saldo que SAP
    *  publica arriba en la tarjeta: si no da, la tarjeta lo declara en vez de
    *  dibujar una linea que no reconcilia con su propio numero. */
-  const nivelDia = nivelDiarioDePlanta(d.planta_dias);
+  /*  Con filtro, el indicador es la suma de las estaciones que el filtro
+   *  alcanza, y el referencial son las bodegas de ESA planta que no cuentan:
+   *  Coquimbo no es el referencial de Talca solo por estar fuera. */
+  const filtrado = !!planta;
+  const plantas = Array.isArray(d.planta) ? d.planta : [];
+  const nivelPla = filtrado ? bs.reduce((a2, x) => a2 + (Number(x.nivel) || 0), 0)
+                            : Number(pla.nivel) || 0;
+  const fueraPla = filtrado
+    ? plantas.filter(x => !x.nueve && plantaDeBodega(x.nom) === planta)
+             .reduce((a2, x) => a2 + (Number(x.nivel) || 0), 0)
+    : Number(pla.fuera) || 0;
+  const sapPla = nivelPla + fueraPla;
+  /*  La linea sigue a los DOS filtros: la planta y el periodo.
+   *
+   *  SE ARRASTRA PRIMERO Y SE RECORTA DESPUES, nunca al reves. Recortar la
+   *  serie y arrastrar lo que quedo borra a las estaciones que no tuvieron
+   *  movimiento en el periodo —que siguen teniendo su nivel— y el total se
+   *  desploma: en noviembre, con cuatro de nueve estaciones con documento,
+   *  daba 1.637 en vez de 13.607. El nivel de una estacion quieta no es cero,
+   *  es el mismo del dia anterior. */
+  const nivelDia = nivelDiarioDePlanta(
+    (Array.isArray(d.planta_dias) ? d.planta_dias : [])
+      .filter(x => !planta || plantaDeBodega(x && x.nom) === planta))
+    .filter(x => !periodo || String(x.dia).slice(0, String(periodo).length) === String(periodo));
   const semPla = ultimaSemana({ dias: nivelDia }, 7);
   let semRot = null;
   if (semPla.length) {
     let lo = Infinity, hi = -Infinity;
     for (const x of semPla) { if (x.cierre < lo) lo = x.cierre; if (x.cierre > hi) hi = x.cierre; }
     const fin = semPla[semPla.length - 1];
-    const calza = fin.cierre === (Number(pla.nivel) || 0);
+    /*  Con un periodo puesto la serie NO tiene por que cerrar en el saldo de
+     *  hoy: cierra donde termina ese periodo. Reclamar un descalce ahi seria
+     *  una alarma falsa, asi que el rotulo cambia en vez de acusar. */
+    const calza = fin.cierre === nivelPla;
     semRot = 'nivel del ' + esc(semPla[0].dia) + ' al ' + esc(fin.dia) +
       '<br>entre <b>' + mil(lo) + '</b> y <b>' + mil(hi) + '</b> · ' +
-      (calza ? 'cierra en <b>' + mil(fin.cierre) + '</b>, el mismo saldo que SAP'
-             : '<span class="malo">la serie cierra en ' + mil(fin.cierre) + ' y SAP dice ' +
-               mil(pla.nivel) + ': ' + conSigno(fin.cierre - (Number(pla.nivel) || 0)) +
-               ' de diferencia</span>');
+      (periodo ? 'cierra en <b>' + mil(fin.cierre) + '</b> al ' + esc(fin.dia)
+       : calza ? 'cierra en <b>' + mil(fin.cierre) + '</b>, el mismo saldo que SAP'
+               : '<span class="malo">la serie cierra en ' + mil(fin.cierre) + ' y SAP dice ' +
+                 mil(nivelPla) + ': ' + conSigno(fin.cierre - nivelPla) +
+                 ' de diferencia</span>');
   }
 
-  t.push({ clave: 'planta', et: 'Planta · indicador', hint: 'nueve bodegas', kv: mil(pla.nivel), u: 'pallets',
-           bullet: { v: Number(pla.nivel) || 0, tope: Number(pla.sap) || 0, marca: Number(pla.sap) || 0 },
-           ks: '<b>' + mil(pla.fuera) + '</b> más en merma, extraños y tránsito ' +
-               '<span class="mut">— referencial, no suman</span>',
+  t.push({ clave: 'planta', et: 'Planta · indicador',
+           hint: filtrado ? mil(bs.length) + ' en ' + esc(planta) : 'nueve bodegas',
+           kv: mil(nivelPla), u: 'pallets', ambito: 'planta',
+           bullet: { v: nivelPla, tope: sapPla, marca: sapPla },
+           ks: fueraPla
+                 ? '<b>' + mil(fueraPla) + '</b> más en merma, extraños y tránsito ' +
+                   '<span class="mut">— referencial, no suman</span>'
+                 : '<span class="mut">sin bodegas de referencia fuera del indicador' +
+                   (filtrado ? ' en ' + esc(planta) : '') + '</span>',
            sem: semPla, semTipo: 'nivel', semRot,
+           nota: periodo ? 'Este saldo es la lectura de hoy en SAP, no el del período: ' +
+                           'un saldo no se filtra por fecha. Lo que cambia con el período es el ' +
+                           'movimiento — la línea de abajo y los días en negativo.' : null,
            chip: null });
 
-  t.push({ clave: 'atribucion', et: 'Atribución por socio', hint: 'socios / bodega', kv: pct1(atrib, (Number(cli.nivel) || 0) + (Number(ret.nivel) || 0)), u: '',
+  t.push({ clave: 'atribucion', et: 'Atribución por socio', hint: 'socios / bodega', ambito: 'global', kv: pct1(atrib, (Number(cli.nivel) || 0) + (Number(ret.nivel) || 0)), u: '',
            ks: 'clientes <b>' + pct1(cli.socios, cli.nivel) + '</b> · retail <b>' + pct1(ret.socios, ret.nivel) + '</b>',
            bullet: { v: atrib, tope: (Number(cli.nivel) || 0) + (Number(ret.nivel) || 0),
                      marca: (Number(cli.nivel) || 0) + (Number(ret.nivel) || 0) },
            chip: null });
 
-  t.push({ clave: 'residuo', et: 'Sin ubicación', hint: 'bodega − socios', kv: mil(residuo), u: 'pallets',
+  t.push({ clave: 'residuo', et: 'Sin ubicación', hint: 'bodega − socios', ambito: 'global', kv: mil(residuo), u: 'pallets',
            ks: 'retail <b>' + mil(ret.residuo) + '</b> · clientes <b>' + mil(cli.residuo) + '</b>' +
                '<br><span class="mut">ubicaciones que existen para el pallet sin dueño identificado</span>',
            chip: residuo > 0 ? { c: 'warn', t: pct1(residuo, d.pool) + ' del pool' } : null });
 
   const anio = (d && d.anio) || {};
-  t.push({ clave: 'anio', et: 'Movimiento del año', hint: 'neto salido', kv: conSigno((Number(anio.ret) || 0) + (Number(anio.cli) || 0)), u: 'pallets',
+  t.push({ clave: 'anio', et: 'Movimiento del año', hint: 'neto salido', ambito: 'global', kv: conSigno((Number(anio.ret) || 0) + (Number(anio.cli) || 0)), u: 'pallets',
            ks: 'retail <b>' + conSigno(anio.ret) + '</b> · clientes <b>' + conSigno(anio.cli) + '</b>' +
                '<br><span class="mut">positivo = pallet que salió de REDTEC</span>',
            chip: null });
 
-  t.push({ clave: 'negativos', et: 'Días en negativo', hint: 'cierre < 0', kv: mil(neg), u: 'de ' + mil(dias),
+  t.push({ clave: 'negativos', et: 'Días en negativo', hint: 'cierre < 0', ambito: 'planta', kv: mil(neg), u: 'de ' + mil(dias),
            ks: neg ? 'en <b>' + mil(bs.filter(x => x.salud.n).length) + '</b> de ' + mil(bs.length) +
                      ' estaciones<br><span class="mut">es la fecha del documento en SAP, no el cálculo</span>'
                    : 'ninguna estación cierra bajo cero',
@@ -320,13 +381,13 @@ function tarjetas(datos, bodegas) {
            chip: neg ? { c: 'crit', t: pct1(neg, dias) + ' de los días' } : { c: 'good', t: 'sin negativos' } });
 
   const cob = ctrl.find(c => /cobertura/i.test(c.titulo || ''));
-  t.push({ clave: 'cobertura', et: 'Cobertura', hint: 'docs SAP vs nuestros', kv: cob ? '100' : '—', u: cob ? '%' : '',
+  t.push({ clave: 'cobertura', et: 'Cobertura', hint: 'docs SAP vs nuestros', ambito: 'global', kv: cob ? '100' : '—', u: cob ? '%' : '',
            ks: cob ? esc(recortar(cob.texto, 120))
                    : 'el control de cobertura no vino en esta corrida',
            chip: cob ? { c: 'good', t: 'medido el ' + esc(cob.medido || d.extra_medido || 's/f') }
                      : { c: 'nodata', t: 'sin dato' } });
 
-  t.push({ clave: 'controles', et: 'Controles', hint: 'pasan / total', kv: mil(ctrl.length - fallan.length), u: 'de ' + mil(ctrl.length),
+  t.push({ clave: 'controles', et: 'Controles', hint: 'pasan / total', ambito: 'global', kv: mil(ctrl.length - fallan.length), u: 'de ' + mil(ctrl.length),
            ks: fallan.length ? 'no pasan: <b>' + fallan.map(c => esc(c.titulo)).join('</b>, <b>') + '</b>'
                              : 'todos los controles pasan',
            bar: { v: ctrl.length - fallan.length, tope: ctrl.length || 1,
@@ -336,10 +397,66 @@ function tarjetas(datos, bodegas) {
   return t;
 }
 
+/*  EL DATO QUE VIAJA AL NAVEGADOR.
+ *
+ *  Todo menos las dos listas de socios, que son el 80% del json y no las usa
+ *  ninguna tarjeta. planta_dias tampoco viaja aca: ya va publicado aparte y
+ *  comprimido como PD, y se vuelve a pegar en el navegador. Duplicarlo seria
+ *  mandar la misma serie dos veces. */
+function datosPublicables(d) {
+  const o = {};
+  for (const k of Object.keys(d || {}))
+    if (k !== 'retail' && k !== 'clientes' && k !== 'planta_dias') o[k] = d[k];
+  return o;
+}
+
+/*  LOS DIAS Y LOS MESES QUE EL SELECTOR PUEDE OFRECER.
+ *
+ *  Los que EXISTEN, no los del calendario. Hoy el detalle diario llega hasta
+ *  donde se extrajo —dos meses— y el resto del año todavia no esta: un
+ *  selector que ofreciera enero devolveria una pagina vacia y se leeria como
+ *  "en enero no pasó nada". Por eso el selector dice ademas hasta donde
+ *  alcanza el dato, en vez de dejar que el usuario lo descubra. */
+function periodosDeSerie(serie) {
+  const vistos = {}, dias = [];
+  for (const b of (Array.isArray(serie) ? serie : []))
+    for (const x of ((b && b.dias) || [])) {
+      const f = String(x && x.dia).slice(0, 10);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(f) && !vistos[f]) { vistos[f] = true; dias.push(f); }
+    }
+  dias.sort();
+  const meses = [];
+  for (const f of dias) { const m = f.slice(0, 7); if (meses.indexOf(m) < 0) meses.push(m); }
+  return { dias, meses, desde: dias[0] || null, hasta: dias[dias.length - 1] || null };
+}
+
+/*  LA SERIE RECORTADA AL PERIODO.
+ *
+ *  Un recorte por fecha cambia el MOVIMIENTO, no el saldo: el indicador que
+ *  publica la tarjeta es la lectura viva de SAP y no depende de que mes se
+ *  este mirando. Eso la pagina lo dice; aca solo se recorta lo que si
+ *  corresponde recortar. */
+function serieDelPeriodo(serie, periodo) {
+  const p = String(periodo || '');
+  if (!p) return Array.isArray(serie) ? serie : [];
+  return (Array.isArray(serie) ? serie : []).map(b => Object.assign({}, b, {
+    dias: ((b && b.dias) || []).filter(x => String(x && x.dia).slice(0, p.length) === p),
+  }));
+}
+
+/*  Los conteos de los chips de salud son del subconjunto, no del total: con
+ *  SANTIAGO puesto, "Crítica 3" seria mentira si Santiago tiene una. */
+function contarSalud(bodegas) {
+  const bs = Array.isArray(bodegas) ? bodegas : [];
+  const out = { '': bs.length };
+  for (const k of Object.keys(ORDEN_SALUD)) out[k] = bs.filter(b => b.salud.nivel === k).length;
+  return out;
+}
+
 /*  LAS DECISIONES.
  *
  *  Un tablero que solo informa deja al lector preguntandose que hacer. Esta
- *  franja sale del dato —los controles que no pasan y las bodegas en rojo— mas
+ *  franja sale del dato —los controles que no pasan y las estaciones criticas— mas
  *  los pendientes que el proyecto ya tiene declarados. Lo que sale del dato se
  *  recalcula solo; lo declarado lleva su responsable. */
 function decisiones(d, bodegas) {
@@ -349,8 +466,8 @@ function decisiones(d, bodegas) {
       out.push({ ico: '!', cls: 'crit', t: String(c.titulo) + ' no pasa',
                  m: recortar(c.texto, 150), v: 'control' });
   for (const b of (Array.isArray(bodegas) ? bodegas : []))
-    if (b.salud.nivel === 'rojo')
-      out.push({ ico: '◆', cls: 'crit', t: b.nom + ' cierra en negativo ' + mil(b.salud.n) + ' de ' + mil(b.salud.de) + ' días',
+    if (b.salud.nivel === 'critica')
+      out.push({ ico: '◆', cls: 'critica', t: b.nom + ' cierra en negativo ' + mil(b.salud.n) + ' de ' + mil(b.salud.de) + ' días',
                  m: 'peor ' + mil(b.peor ? b.peor.cierre : 0) + ' el ' + (b.peor ? b.peor.dia : '—') +
                     ' · la salida queda fechada antes que el traspaso que la alimenta',
                  v: b.cod });
@@ -400,6 +517,15 @@ const CSS = `
 :root{
   --marca:#C0170C; --r:13px;
   --good:#4ade80; --warn:#fcd34d; --crit:#f87171; --nodata:#6f7c93;
+  /*  EL SEMAFORO DE SALUD TIENE SU PROPIA PALETA, fuera del rojo y del verde,
+   *  porque esos dos ya significan tipo de pallet. Los valores salen de una
+   *  busqueda en OKLCH con tres condiciones duras: contraste >= 4,5:1 contra
+   *  la superficie, separacion >= 12 entre los tres estados tambien simulando
+   *  deuteranopia, protanopia y tritanopia, y >= 11 de distancia a cada color
+   *  ya usado en la pagina (marca, clientes, retail, planta). El violeta puro
+   *  NO pasaba: para un dicromata atencion y critica se juntaban en 5,2, asi
+   *  que la rampa separa por luminosidad ademas de por tono. */
+  --sana:#c6bff8; --atencion:#b07cf7; --critica:#e0529f;
 }
 :root[data-theme="dark"]{
   color-scheme:dark;
@@ -417,6 +543,7 @@ const CSS = `
   --ink:#101420; --ink2:#495261; --ink3:#757e8c;
   --cli:#2a78d6; --ret:#d9641e; --pla:#0f9b8a;
   --good:#15803d; --warn:#a16207; --crit:#b91c1c; --nodata:#757e8c;
+  --sana:#8864c0; --atencion:#6331a0; --critica:#3d006f;
   --glow:0 1px 2px rgba(16,24,40,.05), 0 8px 24px -16px rgba(16,24,40,.20);
   --glowh:0 0 0 1px rgba(192,23,12,.35), 0 16px 34px -18px rgba(192,23,12,.30);
 }
@@ -464,13 +591,48 @@ button,select{font-family:inherit}
 .chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .chip .n{font:600 10.5px "JetBrains Mono",ui-monospace,monospace;opacity:.72}
 .fsep{width:1px;height:22px;background:var(--line);margin:0 6px}
+.dialab{display:inline-flex;align-items:center;gap:6px;font:700 10.5px Inter;letter-spacing:.5px;
+  text-transform:uppercase;color:var(--ink3)}
+.dialab select{background:var(--card);border:1px solid var(--line);color:var(--ink);
+  border-radius:999px;padding:6px 10px;font:600 12px "JetBrains Mono",ui-monospace,monospace;
+  min-height:32px;cursor:pointer}
+.dialab select:focus-visible{outline:2px solid var(--marca);outline-offset:2px}
+/*  Hasta donde llega el dato va escrito al lado del selector, no escondido en
+    el metodo: que el selector no ofrezca enero no explica por si solo que
+    enero no esta extraido todavia. */
+.cobertura{flex-basis:100%;color:var(--ink2);font-size:11.5px;margin-top:3px}
+.cobertura b{color:var(--ink2);font-family:"JetBrains Mono",ui-monospace,monospace}
+
+/* los tres relojes: cada pildora dice que gobierna, y la que va mas alla
+   de la lectura lleva su marca */
+.pill.futura{border-color:color-mix(in srgb,var(--warn) 55%,transparent)}
+.pill .av{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:50%;
+  background:var(--warn);color:#1a1205;font:700 10px Inter;margin-left:3px}
+/*  Las cifras que el filtro de planta NO alcanza se atenuan y lo dicen. El
+    rotulo esta siempre en el html y solo se muestra al filtrar: asi una
+    pagina sin javascript nunca ensena un numero global disfrazado de local. */
+.nota-periodo{margin-top:10px;padding:7px 9px;border-radius:8px;background:var(--card2);
+  border:1px solid var(--line2);color:var(--ink2);font-size:10.5px;line-height:1.45}
+.fuera-de-filtro{display:none;margin-top:10px;padding:8px 10px;border-radius:8px;
+  background:var(--card2);border:1px dashed var(--line2);color:var(--ink2);
+  font-size:11.5px;line-height:1.5}
+/*  animation:none es obligatorio, no decorativo: la entrada escalonada termina
+    con opacity:1 en su keyframe y una animacion le gana a una declaracion
+    normal, asi que sin esto la tarjeta se queda opaca y el atenuado no se ve. */
+.grid.filtrando [data-ambito="global"]{animation:none;opacity:.45;filter:saturate(.35)}
+.grid.filtrando [data-ambito="global"]:hover,
+.grid.filtrando [data-ambito="global"]:focus-within{opacity:.85;filter:none}
+.grid.filtrando [data-ambito="global"] .fuera-de-filtro{display:block}
+.aviso-fecha{margin:14px 0 0;padding:10px 13px;border-radius:10px;background:var(--card);
+  border:1px solid color-mix(in srgb,var(--warn) 45%,var(--line));color:var(--ink2);
+  font-size:12px;line-height:1.55;max-width:96ch}
 
 /* titular */
 .headline{margin:16px 0 4px;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
 .headline h2{margin:0;font:700 24px/1.25 Inter,sans-serif;letter-spacing:-.3px;text-wrap:balance}
 .headline h2 em{font-style:normal}
-.hl-rojo em{color:var(--crit)} .hl-amarillo em{color:var(--warn)}
-.hl-verde em{color:var(--good)} .hl-sindato em{color:var(--ink2)}
+.hl-critica em{color:var(--critica)} .hl-atencion em{color:var(--atencion)}
+.hl-sana em{color:var(--sana)} .hl-sindato em{color:var(--ink2)}
 .headline .sub{color:var(--ink2);font-size:12.5px}
 
 /* franjas y tarjetas */
@@ -536,13 +698,19 @@ table.desg.ref tbody td{opacity:.8}
 .mtx .rh{justify-content:flex-start;padding-left:2px}
 .cel{border-radius:9px;border:1px solid var(--line);background:var(--card2);min-height:52px;
   display:grid;place-items:center;gap:1px;padding:6px 4px;text-align:center;font-size:10.5px}
-.cel b{font:700 15px/1 Inter;display:block}
+/*  El glifo se tira hacia la tinta: el color de salud puro sobre su propio
+    tinte daba 3,7 de contraste, y a 15px eso no alcanza. La mezcla oscurece
+    en claro y aclara en oscuro sin cambiar de que color es. */
+.cel b{font:700 15px/1 Inter;display:block;color:color-mix(in srgb,currentColor 78%,var(--ink))}
 .cel small{color:var(--ink2);font-size:9.5px;display:block}
-.c-verde{background:color-mix(in srgb,var(--good) 20%,var(--card2));border-color:color-mix(in srgb,var(--good) 45%,transparent);color:var(--good)}
-.c-amarillo{background:color-mix(in srgb,var(--warn) 20%,var(--card2));border-color:color-mix(in srgb,var(--warn) 45%,transparent);color:var(--warn)}
-.c-rojo{background:color-mix(in srgb,var(--crit) 22%,var(--card2));border-color:color-mix(in srgb,var(--crit) 50%,transparent);color:var(--crit)}
+.c-sana{background:color-mix(in srgb,var(--sana) 11%,var(--card2));border-color:color-mix(in srgb,var(--sana) 45%,transparent);color:var(--sana)}
+.c-atencion{background:color-mix(in srgb,var(--atencion) 11%,var(--card2));border-color:color-mix(in srgb,var(--atencion) 45%,transparent);color:var(--atencion)}
+.c-critica{background:color-mix(in srgb,var(--critica) 12%,var(--card2));border-color:color-mix(in srgb,var(--critica) 50%,transparent);color:var(--critica)}
 .c-sindato{color:var(--nodata)}
-.c-vacio{opacity:.35;color:var(--ink3)}
+/*  El cruce que NO existe se pinta apagado a proposito —no es una celda sana—
+    pero legible: un glifo a 2,5 de contraste no comunica "no existe", se lee
+    como un defecto de render. */
+.c-vacio{opacity:.55;color:var(--ink2);background:transparent}
 
 /* listas de la franja de decisiones */
 .list{display:flex;flex-direction:column;gap:2px;max-height:260px;overflow:auto;margin:0 -4px;padding:0 4px}
@@ -556,6 +724,8 @@ table.desg.ref tbody td{opacity:.8}
 .ico{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font:800 12px Inter;flex:none;
   border:1px solid currentColor}
 .i-crit{color:var(--crit)} .i-warn{color:var(--warn)} .i-good{color:var(--good)} .i-nodata{color:var(--nodata)}
+.i-critica{color:var(--critica)} .i-atencion{color:var(--atencion)}
+.i-sana{color:var(--sana)} .i-sindato{color:var(--nodata)}
 .empty{padding:22px 6px;color:var(--ink3);font-size:12px;text-align:center}
 
 /* cartera */
@@ -575,7 +745,7 @@ table.cart{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;m
 .minib .fill{position:absolute;left:0;top:0;bottom:0;border-radius:999px;background:var(--pla)}
 .salud{display:inline-flex;align-items:center;gap:6px;font:700 11px Inter}
 .salud i{font-style:normal;font-size:11px}
-.s-verde{color:var(--good)} .s-amarillo{color:var(--warn)} .s-rojo{color:var(--crit)} .s-sindato{color:var(--nodata)}
+.s-sana{color:var(--sana)} .s-atencion{color:var(--atencion)} .s-critica{color:var(--critica)} .s-sindato{color:var(--nodata)}
 
 /* cajon de detalle */
 .scrim{position:fixed;inset:0;background:rgba(3,7,15,.55);backdrop-filter:blur(3px);opacity:0;
@@ -683,6 +853,7 @@ function chipEstado(c) {
  *  boton de verdad, aunque se vea como una tarjeta. */
 function tarjetaHtml(t, i) {
   const H = ['<div class="card lift rise' + (t.clave ? ' abre' : '') + '"' +
+             (t.ambito ? ' data-ambito="' + esc(t.ambito) + '"' : '') +
              (t.clave ? ' data-kpi="' + esc(t.clave) + '" role="button" tabindex="0"' +
                         ' aria-label="Ver cómo se compone: ' + esc(t.et) + '"' : '') +
              ' style="animation-delay:' + (i * 45) + 'ms">'];
@@ -711,11 +882,18 @@ function tarjetaHtml(t, i) {
            '%;background:' + t.bar.c + '"></i></div>');
   }
   if (t.ks) H.push('<div class="ks">' + t.ks + '</div>');
+  if (t.nota) H.push('<div class="nota-periodo">' + esc(t.nota) + '</div>');
   if (t.sem && t.sem.length)
     H.push('<div class="sem">' +
            (t.semTipo === 'nivel' ? miniNivel(t.sem) : miniSemana(t.sem)) +
            (t.semRot ? '<span class="m">' + t.semRot + '</span>' : '') + '</div>');
   H.push(chipEstado(t.chip));
+  /*  El rotulo va escrito siempre y oculto por CSS. Si se armara en el
+   *  navegador al filtrar, una pagina con el javascript caido mostraria el
+   *  numero global sin el aviso, que es justo el caso peligroso. */
+  if (t.ambito === 'global')
+    H.push('<div class="fuera-de-filtro">Esta cifra no se filtra por planta: ' +
+           'es de clientes y retail o de toda la extracción.</div>');
   return H.join('') + '</div>';
 }
 
@@ -768,7 +946,8 @@ function listaHtml(items, vacio) {
   return '<div class="list">' + items.map(x =>
     '<div class="li"><span class="ico i-' + esc(x.cls) + '">' + esc(x.ico) + '</span>' +
     '<div><div class="t">' + esc(x.t) + '</div><div class="m">' + esc(x.m) + '</div></div>' +
-    '<span class="v ' + (x.cls === 'crit' ? 'malo' : '') + '">' + esc(x.v) + '</span></div>').join('') + '</div>';
+    '<span class="v ' + (x.cls === 'crit' ? 'malo' : x.cls === 'critica' ? 's-critica' : '') +
+    '">' + esc(x.v) + '</span></div>').join('') + '</div>';
 }
 
 /*  CÓMO SE COMPONE CADA CIFRA PUBLICADA.
@@ -1077,6 +1256,8 @@ function pagina(d) {
   const meses = mesesDeSerie(serie);
   const mes0 = meses.length ? meses[meses.length - 1].mes : null;
   const hoy = String((d && d.ventana && d.ventana.nivel) || '').slice(0, 10);
+  const rel = relojes(d), aviso = avisoDeFuturo(rel);
+  const per = periodosDeSerie(serie);
   const H = [];
 
   H.push('<!doctype html>\n<html lang="es" data-theme="dark">\n<head>\n<meta charset="utf-8">');
@@ -1099,9 +1280,14 @@ function pagina(d) {
          '<small>Pallet rojo 1,00 × 1,20 · SKU 11111111110 · extracción propia M3DATA desde SAP B1</small>' +
          '</div></div>');
   H.push('  <span class="spacer"></span>');
-  H.push('  <span class="pill">Saldos al <b class="mono">' + esc(hoy) + '</b></span>');
-  if (d.cierreFirme || (d.ventana && d.ventana.flujo_hasta))
-    H.push('  <span class="pill">Flujos hasta <b class="mono">' + esc(d.ventana.flujo_hasta) + '</b></span>');
+  /*  Cada reloj dice que gobierna, en la pildora y en su title. Tres fechas
+   *  sueltas en una cabecera se leen como tres versiones del mismo dato. */
+  for (const r of rel)
+    H.push('  <span class="pill' + (r.futuro ? ' futura' : '') + '" title="' +
+           esc(r.etiqueta + ' ' + r.fecha + ' — gobierna ' + r.gobierna) + '">' +
+           esc(r.etiqueta) + ' <b class="mono">' + esc(r.fecha) + '</b>' +
+           (r.futuro ? '<span class="av" aria-label="fecha posterior a la lectura">!</span>' : '') +
+           '</span>');
   H.push('  <div class="seg" id="tema" role="group" aria-label="Tema">' +
          '<button type="button" data-t="dark" class="on">Oscuro</button>' +
          '<button type="button" data-t="light">Claro</button></div>');
@@ -1120,39 +1306,59 @@ function pagina(d) {
   H.push('  <span class="fsep"></span><span class="flabel">Salud</span>');
   H.push('  <button type="button" class="chip on" data-f="salud" data-v="">Todas <span class="n">' +
          bodegas.length + '</span></button>');
-  for (const s of ['rojo', 'amarillo', 'verde', 'sindato']) {
+  for (const s of ['critica', 'atencion', 'sana', 'sindato']) {
     const n = cuenta('salud', s);
     if (!n) continue;
     H.push('  <button type="button" class="chip" data-f="salud" data-v="' + s + '">' +
-           GLIFO[s] + ' ' + s.charAt(0).toUpperCase() + s.slice(1) + ' <span class="n">' + n + '</span></button>');
+           GLIFO[s] + ' ' + esc(NOMBRE_SALUD[s] || s) + ' <span class="n">' + n + '</span></button>');
+  }
+  /*  EL PERIODO. Solo los meses y los dias QUE EXISTEN, y la barra dice hasta
+   *  donde llega el dato: el resto del año todavia no esta extraido, y un
+   *  selector que ofreciera enero devolveria una pagina vacia que se leeria
+   *  como "en enero no pasó nada". */
+  if (per.meses.length) {
+    H.push('  <span class="fsep"></span><span class="flabel">Período</span>');
+    H.push('  <button type="button" class="chip on" data-f="periodo" data-v="">Todo <span class="n">' +
+           per.dias.length + ' días</span></button>');
+    for (const m of per.meses)
+      H.push('  <button type="button" class="chip" data-f="periodo" data-v="' + esc(m) + '">' +
+             esc(etiquetaDeMes(m)) + ' <span class="n">' +
+             per.dias.filter(x => x.slice(0, 7) === m).length + '</span></button>');
+    H.push('  <label class="dialab">Día <select id="seldia" aria-label="Validar un día">' +
+           '<option value="">—</option>' +
+           per.dias.map(x => '<option value="' + esc(x) + '">' + esc(x) + '</option>').join('') +
+           '</select></label>');
+    H.push('  <span class="cobertura">dato diario del <b>' + esc(per.desde) + '</b> al <b>' +
+           esc(per.hasta) + '</b>; los meses anteriores todavía no están extraídos</span>');
   }
   H.push('</div>');
 
   // ── titular ──
-  H.push('<div class="headline hl-' + esc(tit.nivel) + '"><h2>' + tit.frase + '</h2>' +
+  if (aviso) H.push('<div class="aviso-fecha">' + esc(aviso) + '</div>');
+  H.push('<div class="headline hl-' + esc(tit.nivel) + '" id="titular"><h2>' + tit.frase + '</h2>' +
          '<span class="sub">' + tit.cola + '</span></div>');
 
   // ── ① ¿Como estamos? ──
   H.push('<section class="band"><div class="bandh"><span class="num">1</span>' +
          '<h3>¿Cómo estamos?</h3><span>clic en una tarjeta para ver cómo se compone esa cifra</span></div>');
-  H.push('<div class="grid g4">' + tarjetas(d, bodegas).map(tarjetaHtml).join('') + '</div></section>');
+  H.push('<div class="grid g4" id="kpis">' + tarjetas(d, bodegas).map(tarjetaHtml).join('') + '</div></section>');
 
   // ── ② ¿Donde esta el problema? ──
   H.push('<section class="band"><div class="bandh"><span class="num">2</span>' +
          '<h3>¿Dónde está el problema?</h3><span>clic en una celda para ver esa estación día por día</span></div>');
   H.push('<div class="grid g64">');
   H.push('<div class="card rise"><div class="ct"><h4>Planta × etapa del recorrido</h4>' +
-         '<span class="hint">días con cierre bajo cero</span></div>' + matrizHtml(m) +
-         '<div class="legend"><span><i class="sw" style="background:var(--good)"></i>● Verde · ningún día</span>' +
-         '<span><i class="sw" style="background:var(--warn)"></i>▲ Amarillo · menos de la mitad</span>' +
-         '<span><i class="sw" style="background:var(--crit)"></i>◆ Rojo · la mitad o más</span>' +
+         '<span class="hint">días con cierre bajo cero</span></div><div id="matriz">' + matrizHtml(m) + '</div>' +
+         '<div class="legend"><span><i class="sw" style="background:var(--sana)"></i>● Sana · ningún día</span>' +
+         '<span><i class="sw" style="background:var(--atencion)"></i>▲ Atención · menos de la mitad</span>' +
+         '<span><i class="sw" style="background:var(--critica)"></i>◆ Crítica · la mitad o más</span>' +
          '<span><i class="sw" style="background:var(--nodata)"></i>○ Sin dato</span></div>' +
          '<div class="ks">Un nivel bajo cero es imposible: no hay media bodega de pallets en menos. ' +
          'El defecto está en la <b>fecha del documento</b> en SAP —la salida de mercancías queda fechada ' +
          'antes que el traspaso que la alimenta— y se concentra en el ingreso a inspección, no repartido ' +
          'por la planta. <span class="mut">Se arregla en SAP, no acá.</span></div></div>');
   const peores = bodegas.filter(b => b.salud.n > 0)
-    .map(b => ({ ico: GLIFO[b.salud.nivel], cls: b.salud.nivel === 'rojo' ? 'crit' : 'warn',
+    .map(b => ({ ico: GLIFO[b.salud.nivel], cls: b.salud.nivel,
                  t: b.nom, m: mil(b.salud.n) + ' de ' + mil(b.salud.de) + ' días bajo cero · peor el ' +
                     (b.peor ? b.peor.dia : '—'), v: mil(b.peor ? b.peor.cierre : 0) }));
   H.push('<div class="card rise"><div class="ct"><h4>Estaciones con días imposibles</h4>' +
@@ -1223,7 +1429,7 @@ function pagina(d) {
          '<div id="dbody"></div></aside>');
   const aper = {};
   for (const b of serie) if (b && b.cod != null) aper[String(b.cod)] = mesDeApertura(b);
-  H.push(script(serie, mes0, composiciones(d, bodegas), aper));
+  H.push(script(serie, mes0, composiciones(d, bodegas), aper, datosPublicables(d)));
   H.push('</body>\n</html>\n');
   return H.join('\n');
 }
@@ -1288,9 +1494,20 @@ function metodo(d) {
     '<dt>Distribución diaria</dt><dd>Se calcula <b>hacia atrás</b> desde ese saldo vivo, restando el ' +
     'movimiento de cada día: <code>nivel(t) = ancla − Σ movimientos posteriores</code>. Por ' +
     'construcción, el cierre del último día es el saldo de la tabla.</dd>' +
+    '<dt>Las tres fechas</dt><dd>No son tres versiones del mismo dato, son tres relojes. ' +
+    '<b>Saldos SAP</b> es el día en que se leyó el saldo vivo: manda sobre el pool, el indicador ' +
+    'de planta y la tabla. <b>Clientes y retail · flujos</b> es hasta dónde llega la extracción de ' +
+    'movimiento de esas dos bodegas; gobierna el gráfico del año y corta en el último mes cerrado, ' +
+    'y no dice nada de la planta. <b>Planta · movimiento</b> es la fecha del último documento de la ' +
+    'serie diaria, que es fecha de documento y no de lectura: por eso puede ir más allá del día en ' +
+    'que se leyó el saldo sin que haya contradicción — el <code>InStock</code> no mira la fecha, ' +
+    'así que ese movimiento ya está contado en el saldo.</dd>' +
     '<dt>Salud de una estación</dt><dd>Mira una sola cosa: cuántos días cierra bajo cero. ' +
-    '<b>Verde</b> ninguno, <b>amarillo</b> menos de la mitad, <b>rojo</b> la mitad o más. Lo que no ' +
-    'se puede evaluar dice <b>sin dato</b> y no se pinta de verde.</dd>' +
+    '<b>Sana</b> ninguno, <b>atención</b> menos de la mitad, <b>crítica</b> la mitad o más. Lo que ' +
+    'no se puede evaluar dice <b>sin dato</b> y no se pinta de sana. Los estados de salud no se ' +
+    'nombran por color a propósito: en REDTEC el rojo y el verde son tipos de pallet, no ' +
+    'diagnósticos, y nombrarlos igual hacía leer la salud de una estación como el color de su ' +
+    'stock.</dd>' +
     '<dt>Niveles negativos</dt><dd>No son un error del cálculo: SAP los tiene así. La causa es la ' +
     'fecha del documento —la salida de mercancías queda fechada antes que el traspaso que la ' +
     'alimenta—. Se verificó contra OINM calculado por otra vía: da los mismos días y los mismos ' +
@@ -1309,15 +1526,30 @@ function metodo(d) {
  *  detalle. El cajon dibuja con las MISMAS funciones probadas que usa
  *  stock-flujos-pallets.html, publicadas con toString(), no con una copia
  *  escrita a mano. */
-function script(serie, mes0, desg, aper) {
-  const fns = [esNumero, mil, conSigno, clasePos, esc, etiquetaDeMes, diasDelMes, resumenDelMes,
-               altoVisible, ejeDeDias, svgFlujoDia, svgNivelDia, tablaDeDias, rehidratar,
-               miniSemana, desgloseHtml];
+function script(serie, mes0, desg, aper, datos) {
+  /*  SE PUBLICAN LAS FUNCIONES, NO UNA COPIA. El navegador recalcula los dos
+   *  filtros con las MISMAS funciones que arman la pagina en el servidor, via
+   *  toString(). La alternativa —precalcular cada combinacion— eran tres
+   *  plantas por treinta y dos periodos: noventa y seis variantes, o escribir
+   *  a mano una segunda version del calculo para el navegador, que es como se
+   *  consigue que la carga inicial y el filtro digan cosas distintas. */
+  const fns = [esNumero, mil, conSigno, pct, pct1, clasePos, esc, recortar, etiquetaDeMes,
+               diasDelMes, resumenDelMes, altoVisible, ejeDeDias, svgFlujoDia, svgNivelDia,
+               tablaDeDias, rehidratar, miniSemana, miniNivel, desgloseHtml,
+               etapaDeBodega, plantaDeBodega, saludDeBodega, bodegasDelCockpit,
+               matrizPlantaEtapa, matrizHtml, filaCartera, listaHtml, chipEstado,
+               titular, contarSalud, nivelDiarioDePlanta, ultimaSemana,
+               serieDelPeriodo, tarjetas, tarjetaHtml];
   const cuerpo = 'var MESES = ' + jsonSeguro(MESES) + ';\n' +
+    'var ETAPAS = ' + jsonSeguro(ETAPAS) + ';\n' +
+    'var ORDEN_SALUD = ' + jsonSeguro(ORDEN_SALUD) + ';\n' +
+    'var GLIFO = ' + jsonSeguro(GLIFO) + ';\n' +
+    'var NOMBRE_SALUD = ' + jsonSeguro(NOMBRE_SALUD) + ';\n' +
     fns.map(f => f.toString()).join('\n') + '\n' +
     'var PD = rehidratar(' + jsonSeguro(serieCompacta(serie)) + ');\n' +
     'var MES0 = ' + jsonSeguro(mes0) + ';\n' +
     'var APER = ' + jsonSeguro(aper || {}) + ';\n' +
+    'var DAT = ' + jsonSeguro(datos || {}) + ';\n' +
     'var DESG = ' + jsonSeguro(desg || {}) + ';\n' + [
     '(function () {',
     '  function $(s, r) { return (r || document).querySelector(s); }',
@@ -1338,7 +1570,7 @@ function script(serie, mes0, desg, aper) {
     '      }',
     '    } catch (e3) {}',
     '',
-    '    var filtro = { planta: "", salud: "" };',
+    '    var filtro = { planta: "", salud: "", periodo: "" };',
     '    var filtros = $("#filtros"), cuerpoTabla = $("#cartera"), sinfilas = $("#sinfilas");',
     '    function aplicar() {',
     '      var hay = 0;',
@@ -1349,13 +1581,74 @@ function script(serie, mes0, desg, aper) {
     '      });',
     '      if (sinfilas) sinfilas.hidden = hay > 0;',
     '    }',
+    // La entrada escalonada es para la primera vez y nada mas. Si la clase se
+    // queda puesta, cada cambio de filtro vuelve a animar la rejilla entera y
+    // ademas la animacion le gana al atenuado, que entonces parpadea.
+    '    function quietas(raiz) {',
+    '      [].forEach.call((raiz || document).querySelectorAll(".rise"), function (x) {',
+    '        x.classList.remove("rise"); x.style.animationDelay = ""; });',
+    '    }',
+    '    setTimeout(quietas, 1100);',
+    // La entrada escalonada es para la primera vez y nada mas. Si la clase se
+    // queda puesta, cada cambio de filtro vuelve a animar la rejilla entera y
+    // ademas la animacion le gana al atenuado, que entonces parpadea.
+    '    function quietas(raiz) {',
+    '      [].forEach.call((raiz || document).querySelectorAll(".rise"), function (x) {',
+    '        x.classList.remove("rise"); x.style.animationDelay = ""; });',
+    '    }',
+    '    setTimeout(quietas, 1100);',
+    '',
+    // El dato que viaja no trae planta_dias —va aparte y comprimido en PD—,
+    // asi que se vuelve a pegar aca antes de recalcular nada.
+    '    DAT.planta_dias = PD;',
+    '    function serieFiltrada() {',
+    '      var s = serieDelPeriodo(PD, filtro.periodo);',
+    '      if (!filtro.planta) return s;',
+    '      return s.filter(function (b) { return plantaDeBodega(b.nom) === filtro.planta; });',
+    '    }',
+    '    function recalcular() {',
+    '      var bs = bodegasDelCockpit(serieFiltrada());',
+    '      var pl = filtro.planta || undefined, pe = filtro.periodo || undefined;',
+    '      var t = titular(DAT, bs, pl);',
+    '      var cab = $("#titular");',
+    '      if (cab) { cab.className = "headline hl-" + t.nivel;',
+    '        cab.innerHTML = "<h2>" + t.frase + "</h2><span class=\\"sub\\">" + t.cola + "</span>"; }',
+    '      var mz = $("#matriz"); if (mz) mz.innerHTML = matrizHtml(matrizPlantaEtapa(bs));',
+    '      if (cuerpoTabla) cuerpoTabla.innerHTML = bs.map(filaCartera).join("");',
+    // Las ocho tarjetas se rehacen con la MISMA funcion del servidor: no hay
+    // una version para la carga inicial y otra para el filtro.
+    '      var tj = tarjetas(DAT, bs, pl, pe), rej = $("#kpis");',
+    '      if (rej) { rej.innerHTML = tj.map(tarjetaHtml).join("");',
+    '        rej.classList.toggle("filtrando", !!pl); }',
+    '      var cs = contarSalud(bs);',
+    '      [].forEach.call(filtros.querySelectorAll(\'.chip[data-f="salud"]\'), function (x) {',
+    '        var n = x.querySelector(".n"), k = x.getAttribute("data-v");',
+    '        if (n && cs[k] != null) n.textContent = cs[k];',
+    '        x.hidden = !!(k && !cs[k]);',
+    '      });',
+    '      quietas();',
+    '      aplicar();',
+    '    }',
     '    if (filtros) filtros.addEventListener("click", function (e) {',
     '      var c = e.target.closest(".chip"); if (!c) return;',
     '      var f = c.getAttribute("data-f");',
     '      filtro[f] = c.getAttribute("data-v");',
     '      [].forEach.call(filtros.querySelectorAll(\'.chip[data-f="\' + f + \'"]\'), function (x) {',
     '        x.classList.toggle("on", x === c); });',
-    '      aplicar();',
+    // cambiar de planta rehace la tabla, asi que el filtro de salud se vuelve
+    // a aplicar despues: si no, las filas nuevas entran todas visibles
+    '      if (f === "periodo" && seldia) seldia.value = "";',
+    '      recalcular();',
+    '    });',
+    // El selector de dia y los chips de periodo son el mismo filtro: elegir un
+    // dia apaga el chip de mes y viceversa, para que no queden dos periodos
+    // puestos diciendo cosas distintas.
+    '    var seldia = $("#seldia");',
+    '    if (seldia) seldia.addEventListener("change", function () {',
+    '      filtro.periodo = seldia.value;',
+    '      [].forEach.call(filtros.querySelectorAll(\'.chip[data-f="periodo"]\'), function (x) {',
+    '        x.classList.toggle("on", !seldia.value && x.getAttribute("data-v") === ""); });',
+    '      recalcular();',
     '    });',
     '',
     '    var drawer = $("#drawer"), scrim = $("#scrim"), dbody = $("#dbody"), ultimo = null;',
@@ -1480,7 +1773,7 @@ function main() {
   console.log('Cockpit armado.');
   console.log('  pool ' + mil(d.pool) + '  ·  ' + bs.length + ' estaciones  ·  ' +
               bs.reduce((a, b) => a + b.dias, 0) + ' días');
-  console.log('  salud: ' + ['rojo', 'amarillo', 'verde', 'sindato']
+  console.log('  salud: ' + ['critica', 'atencion', 'sana', 'sindato']
     .map(s => s + ' ' + bs.filter(b => b.salud.nivel === s).length).join(' · '));
   /*  LA LINEA DE LA TARJETA SE COMPRUEBA CONTRA SAP EN CADA CORRIDA. El nivel
    *  diario arrastrado tiene que terminar en el mismo indicador que publica la
@@ -1508,6 +1801,7 @@ module.exports = { ETAPAS, GLIFO, ORDEN_SALUD, HITOS, CSS,
                    titular, tarjetas, decisiones, diasHasta, hitos,
                    desglose, composiciones, desgloseHtml, porRecorrido,
                    recortar, chipEstado, tarjetaHtml, matrizHtml, filaCartera, listaHtml,
+                   contarSalud, datosPublicables, periodosDeSerie, serieDelPeriodo,
                    dumbbell, metodo, script, pagina,
                    opcion, opcionesRaras, leerJson, OPCIONES };
 

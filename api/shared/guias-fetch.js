@@ -26,8 +26,11 @@
  *    319; VG1943 pidió 300 y se confirmaron 396.
  */
 
-const OPS_HOST = process.env.OS_OPS_HOST || 'https://apirdt1.azurewebsites.net';
-const OPS_PATH = process.env.OS_OPS_PATH || '/api/RDTOut/OpsXRangoFechas';
+/* Ya no se usan: este módulo dejó de llamar a RDTOut el 2-nov-2026 y ahora lee
+   del almacén frío y de la consulta viva (ver traerFilas). Se dejan nombrados
+   para que quede escrito de dónde venía el dato antes y nadie los reinvente. */
+// const OPS_HOST = 'https://apirdt1.azurewebsites.net';
+// const OPS_PATH = '/api/RDTOut/OpsXRangoFechas';
 
 /**
  * Pallets por fila. Confirmado por dos vías independientes:
@@ -96,25 +99,86 @@ function clasificar(op, dteNro) {
 // El catálogo vive en flota.js para que el lado cámara y el lado guía apliquen
 // exactamente el mismo criterio.
 const { patenteEnAlcance } = require('./flota');
+const cold = require('./cold-operaciones.js');
+const { consultarOps } = require('./ops-fetch.js');
+
+/* Cuántos días hacia atrás se le piden a la consulta VIVA. Redlink filtra por
+   fecha de INGRESO, así que un día basta para pescar lo que se cargó anoche
+   para salir hoy; lo anterior ya vive en el almacén frío. */
+const VIVO_DIAS = Math.max(0, Number(process.env.GUIAS_VIVO_DIAS) || 1);
+/* El andén pregunta cada 15 s y Redlink es el sistema TRANSACCIONAL del portal:
+   sin este memo lo estaríamos sondeando cuatro veces por minuto por cada
+   instancia. 60 s es menos que el tiempo que tarda un pedido en cerrarse. */
+const MEMO_MS = Math.max(0, Number(process.env.GUIAS_MEMO_MS) || 60000);
+const memo = new Map();
+
+const moverDia = (s, n) => {
+  const d = new Date(s + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+
+/* ──────────────────────────────────────────────────────────────────────────
+   DE DÓNDE SALEN LAS FILAS
+
+   Hasta el 2-nov-2026 esto le pegaba directo a RDTOut. Ese día el proveedor
+   migró su base a otro servidor y `opsxrangofechas` dejó de recibir datos
+   nuevos: medido, devolvía guías hasta el 30-oct y cero del 31 en adelante,
+   así que TODO camión que cruzaba el túnel caía en "camión sin guía" —
+   crítico, con sonido y con correo— por un problema de origen.
+
+   Ahora se leen DOS caminos y se juntan, a propósito:
+     · el almacén frío agrupa por día OPERATIVO (requerida/despacho), que es
+       el que le importa al andén, y lo llena el backfill desde Redlink;
+     · la consulta viva pasa por el interruptor OPS_ORIGEN, o sea hoy Redlink,
+       y filtra por fecha de INGRESO.
+   Una emisión cargada la semana pasada para salir hoy sólo aparece por el
+   primero; una guía creada y cerrada hace diez minutos, sólo por el segundo.
+   Gana la VIVA cuando una operación está en los dos, porque la patente y el
+   DTE se cargan recién al cerrar el pedido.
+   ────────────────────────────────────────────────────────────────────────── */
+async function traerFilas(desde, hasta) {
+  const ahora = Date.now();
+  const clave = desde + '|' + hasta;
+  const guardado = memo.get(clave);
+  if (guardado && ahora - guardado.ts < MEMO_MS) return guardado.filas;
+
+  const idDe = (f) => String(f.formHeaderiD || f.nroPedido || '');
+  const porId = new Map();
+
+  let frio = null, errorFrio = null;
+  try { frio = await cold.leerRango(cold.getContainer(), desde, hasta, { sinRl: true }); }
+  catch (e) { errorFrio = e.message; }
+  for (const f of (frio && frio.ops) || []) { const k = idDe(f); if (k) porId.set(k, f); }
+
+  let vivo = [], errorVivo = null;
+  try { vivo = await consultarOps(moverDia(desde, -VIVO_DIAS), hasta); }
+  catch (e) { errorVivo = e.message; }
+  for (const f of vivo) { const k = idDe(f); if (k) porId.set(k, f); }
+
+  /* Si los dos caminos fallaron NO se devuelve una lista vacía: el andén la
+     leería como "ninguna de estas patentes tiene guía" y pintaría de rojo
+     crítico cada camión que pase. Un origen caído tiene que verse como un
+     error, no como una flota sin documentos. */
+  const sinFrio = !frio || frio.sin_storage || errorFrio;
+  if (!porId.size && errorVivo && sinFrio) {
+    throw new Error('sin fuente de guías (vivo: ' + errorVivo + (errorFrio ? ' · frío: ' + errorFrio : '') + ')');
+  }
+
+  const filas = [...porId.values()];
+  memo.set(clave, { ts: ahora, filas });
+  /* El memo es por instancia y la Function se recicla sola; igual se poda para
+     no dejar creciendo un mapa con un rango distinto por día. */
+  if (memo.size > 24) for (const [k, v] of memo) if (ahora - v.ts > MEMO_MS) memo.delete(k);
+  return filas;
+}
 
 function normalizarPatente(p) {
   return (p || '').toUpperCase().replace(/[^A-Z0-9]/g, '') || null;
 }
 
 async function obtenerGuias(desde, hasta) {
-  const key = process.env.REDTEC_API_KEY;
-  if (!key) throw new Error('Falta la app setting REDTEC_API_KEY');
-
-  const url = `${OPS_HOST}${OPS_PATH}`
-    + `?fechaInicial=${encodeURIComponent(desde)}&fechaFinal=${encodeURIComponent(hasta)}`;
-
-  const r = await fetch(url, { headers: { Accept: 'application/json', 'X-Api-Key': key } });
-  if (!r.ok) {
-    const cuerpo = await r.text().catch(() => '');
-    throw new Error(`RDTOut ${r.status} (${desde}..${hasta}) ${cuerpo.slice(0, 120)}`);
-  }
-  const data = await r.json();
-  const filas = Array.isArray(data) ? data : [data];
+  const filas = await traerFilas(desde, hasta);
 
   return filas
     .map((f) => {
@@ -194,4 +258,5 @@ async function obtenerGuias(desde, hasta) {
         OPERACIONES_DESPACHO.includes(g.operacion.toLowerCase())));
 }
 
-module.exports = { obtenerGuias, normalizarPatente, clasificar, PALLETS_POR_FILA, OPERACIONES_DESPACHO };
+module.exports = { obtenerGuias, traerFilas, normalizarPatente, clasificar,
+  PALLETS_POR_FILA, OPERACIONES_DESPACHO, VIVO_DIAS, MEMO_MS };

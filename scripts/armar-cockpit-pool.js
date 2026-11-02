@@ -121,6 +121,53 @@ function mesesDeBodega(bodega) {
   return out.sort();
 }
 
+/*  EL NIVEL DIARIO DE LA PLANTA ENTERA.
+ *
+ *  NO es la suma de las filas que hay cada dia. La serie solo trae los dias en
+ *  que una estacion SE MOVIO, asi que un dia en que solo dos estaciones
+ *  tuvieron documento tiene dos filas — sumarlas daria un total ridiculo y
+ *  parecerian pallets evaporados. Lo que corresponde es arrastrar: una
+ *  estacion sin movimiento ese dia sigue con el nivel del dia anterior.
+ *
+ *  EL PUNTO DE PARTIDA de cada estacion es la apertura de su primer dia, que
+ *  es el unico anclaje que el json entrega para lo que habia antes de la
+ *  ventana.
+ *
+ *  LA PRUEBA DE QUE ESTA BIEN es que el ultimo total tiene que dar el mismo
+ *  13.607 que SAP: cada estacion cierra su serie en su saldo vivo, asi que la
+ *  suma arrastrada tiene que caer exactamente ahi. Si no cae, el numero esta
+ *  mal y la pagina lo dice en vez de dibujarlo. */
+function nivelDiarioDePlanta(serie) {
+  const bs = (Array.isArray(serie) ? serie : [])
+    .filter(b => b && b.cod != null && Array.isArray(b.dias) && b.dias.length);
+  if (!bs.length) return [];
+  const fecha = x => /^\d{4}-\d{2}-\d{2}$/.test(x);
+  const vistos = {}, calendario = [];
+  const nivel = {}, porDia = {};
+  for (const b of bs) {
+    const cod = String(b.cod);
+    const ord = b.dias.filter(x => x && fecha(String(x.dia)))
+                      .sort((p, q) => String(p.dia) < String(q.dia) ? -1 : 1);
+    if (!ord.length) continue;
+    nivel[cod] = Number(ord[0].apertura) || 0;
+    porDia[cod] = {};
+    for (const x of ord) {
+      const dia = String(x.dia);
+      porDia[cod][dia] = Number(x.cierre) || 0;
+      if (!vistos[dia]) { vistos[dia] = true; calendario.push(dia); }
+    }
+  }
+  calendario.sort();
+  const out = [];
+  for (const dia of calendario) {
+    for (const cod in porDia) if (porDia[cod][dia] != null) nivel[cod] = porDia[cod][dia];
+    let total = 0;
+    for (const cod in nivel) total += nivel[cod];
+    out.push({ dia, cierre: total });
+  }
+  return out;
+}
+
 /*  LA ULTIMA SEMANA DE UNA ESTACION.
  *
  *  Los ultimos n dias QUE LA ESTACION TIENE, no los ultimos n del calendario.
@@ -221,10 +268,31 @@ function tarjetas(datos, bodegas) {
                mil(d.fuera_del_pool) + ' fuera del indicador no suman',
            chip: null });
 
+  /*  LA SEMANA DE LA PLANTA ENTERA. El nivel diario arrastrado, no la suma de
+   *  las filas del dia. Su ultimo valor TIENE que dar el mismo saldo que SAP
+   *  publica arriba en la tarjeta: si no da, la tarjeta lo declara en vez de
+   *  dibujar una linea que no reconcilia con su propio numero. */
+  const nivelDia = nivelDiarioDePlanta(d.planta_dias);
+  const semPla = ultimaSemana({ dias: nivelDia }, 7);
+  let semRot = null;
+  if (semPla.length) {
+    let lo = Infinity, hi = -Infinity;
+    for (const x of semPla) { if (x.cierre < lo) lo = x.cierre; if (x.cierre > hi) hi = x.cierre; }
+    const fin = semPla[semPla.length - 1];
+    const calza = fin.cierre === (Number(pla.nivel) || 0);
+    semRot = 'nivel del ' + esc(semPla[0].dia) + ' al ' + esc(fin.dia) +
+      '<br>entre <b>' + mil(lo) + '</b> y <b>' + mil(hi) + '</b> · ' +
+      (calza ? 'cierra en <b>' + mil(fin.cierre) + '</b>, el mismo saldo que SAP'
+             : '<span class="malo">la serie cierra en ' + mil(fin.cierre) + ' y SAP dice ' +
+               mil(pla.nivel) + ': ' + conSigno(fin.cierre - (Number(pla.nivel) || 0)) +
+               ' de diferencia</span>');
+  }
+
   t.push({ clave: 'planta', et: 'Planta · indicador', hint: 'nueve bodegas', kv: mil(pla.nivel), u: 'pallets',
            bullet: { v: Number(pla.nivel) || 0, tope: Number(pla.sap) || 0, marca: Number(pla.sap) || 0 },
            ks: '<b>' + mil(pla.fuera) + '</b> más en merma, extraños y tránsito ' +
                '<span class="mut">— referencial, no suman</span>',
+           sem: semPla, semTipo: 'nivel', semRot,
            chip: null });
 
   t.push({ clave: 'atribucion', et: 'Atribución por socio', hint: 'socios / bodega', kv: pct1(atrib, (Number(cli.nivel) || 0) + (Number(ret.nivel) || 0)), u: '',
@@ -552,6 +620,12 @@ svg.mini{width:122px;height:34px;flex:none;display:block;overflow:visible}
 svg.mini .mp{fill:var(--pla)}
 svg.mini .mb{fill:var(--crit)}
 svg.mini .mej{stroke:var(--line2);stroke-width:1}
+svg.mini.nivel .mn{fill:none;stroke:var(--pla);stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round}
+svg.mini.nivel .mna{fill:var(--pla);opacity:.15;stroke:none}
+svg.mini.nivel .mnp{fill:var(--pla);opacity:.55}
+svg.mini.nivel .mnu{fill:var(--pla);stroke:var(--card);stroke-width:1.5}
+.card .sem{margin-top:11px;align-items:flex-start}
+.card .sem .m{line-height:1.5}
 
 /* los meses del cajon de estacion: solo los que esa estacion tiene */
 .dmes{display:flex;gap:7px;flex-wrap:wrap;margin:12px 0 2px}
@@ -637,6 +711,10 @@ function tarjetaHtml(t, i) {
            '%;background:' + t.bar.c + '"></i></div>');
   }
   if (t.ks) H.push('<div class="ks">' + t.ks + '</div>');
+  if (t.sem && t.sem.length)
+    H.push('<div class="sem">' +
+           (t.semTipo === 'nivel' ? miniNivel(t.sem) : miniSemana(t.sem)) +
+           (t.semRot ? '<span class="m">' + t.semRot + '</span>' : '') + '</div>');
   H.push(chipEstado(t.chip));
   return H.join('') + '</div>';
 }
@@ -897,6 +975,48 @@ function miniSemana(dias) {
          ds.length + ' días, del ' + esc(ds[0].dia) + ' al ' + esc(ds[ds.length - 1].dia) + '">' +
          '<line x1="0" y1="' + eje + '" x2="' + An + '" y2="' + eje + '" class="mej"/>' +
          barras + '</svg>';
+}
+
+/*  LA MINI-SERIE DEL NIVEL DE LA PLANTA ENTERA.
+ *
+ *  POR QUE NO SON LAS MISMAS BARRAS QUE LAS DE CADA ESTACION. Una estacion
+ *  cruza el cero todas las semanas, asi que su barra desde cero dice algo. La
+ *  planta entera no: esta semana se movio entre 13.607 y 16.525, nunca cerca
+ *  de cero. Dibujada en barras desde cero darian siete barras casi iguales al
+ *  98% del alto, y una fila plana se lee como "no se movio" cuando en realidad
+ *  oscilo casi tres mil pallets. Es exactamente el error que la escala propia
+ *  evita en las estaciones.
+ *
+ *  ASI QUE LA BANDA ES LA DE LA SEMANA y va escrita al lado, con su minimo y
+ *  su maximo: una linea sin su banda declarada puede exagerar cualquier cosa.
+ *  El ultimo punto va marcado porque es el numero que la tarjeta publica.  */
+function miniNivel(dias) {
+  const ds = (Array.isArray(dias) ? dias : []).filter(d => d && d.dia != null);
+  if (!ds.length) return '';
+  const An = 122, Al = 34, pad = 3.5;
+  let min = Infinity, max = -Infinity;
+  for (const d of ds) {
+    const v = Number(d.cierre) || 0;
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  const rango = max - min;
+  const x = i => ds.length === 1 ? An / 2 : pad + (i * (An - pad * 2)) / (ds.length - 1);
+  // Una semana sin variacion es una linea al medio, no una division por cero.
+  const y = v => rango === 0 ? Al / 2
+                             : Al - pad - ((Number(v) || 0) - min) / rango * (Al - pad * 2);
+  const pts = ds.map((d, i) => x(i).toFixed(1) + ',' + y(d.cierre).toFixed(1));
+  const area = 'M' + x(0).toFixed(1) + ',' + (Al - pad).toFixed(1) + ' L' + pts.join(' L') +
+               ' L' + x(ds.length - 1).toFixed(1) + ',' + (Al - pad).toFixed(1) + ' Z';
+  const puntos = ds.map((d, i) =>
+    '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(d.cierre).toFixed(1) + '" r="' +
+    (i === ds.length - 1 ? 3 : 1.9) + '" class="' + (i === ds.length - 1 ? 'mnu' : 'mnp') + '">' +
+    '<title>' + esc(d.dia) + ': ' + mil(d.cierre) + '</title></circle>').join('');
+  return '<svg class="mini nivel" viewBox="0 0 ' + An + ' ' + Al + '" role="img" ' +
+         'aria-label="nivel de la planta en ' + ds.length + ' días, del ' + esc(ds[0].dia) +
+         ' al ' + esc(ds[ds.length - 1].dia) + ', entre ' + mil(min) + ' y ' + mil(max) + '">' +
+         '<path d="' + area + '" class="mna"/>' +
+         '<polyline points="' + pts.join(' ') + '" class="mn"/>' + puntos + '</svg>';
 }
 
 /*  EL DESGLOSE DIBUJADO.
@@ -1362,12 +1482,29 @@ function main() {
               bs.reduce((a, b) => a + b.dias, 0) + ' días');
   console.log('  salud: ' + ['rojo', 'amarillo', 'verde', 'sindato']
     .map(s => s + ' ' + bs.filter(b => b.salud.nivel === s).length).join(' · '));
+  /*  LA LINEA DE LA TARJETA SE COMPRUEBA CONTRA SAP EN CADA CORRIDA. El nivel
+   *  diario arrastrado tiene que terminar en el mismo indicador que publica la
+   *  tarjeta. Si no termina ahi, la pagina ya lo dice en su propia cara, pero
+   *  la corrida tambien lo grita: un grafico que no reconcilia con su numero
+   *  es peor que no tener grafico. No mata el cierre —el detalle ya quedo
+   *  publicado— pero no pasa en silencio. */
+  const nd = nivelDiarioDePlanta(d.planta_dias || []);
+  const sap = Number(d.bodegas && d.bodegas.PLANTA && d.bodegas.PLANTA.nivel) || 0;
+  if (!nd.length) console.log('  sin serie diaria: la tarjeta de planta va sin su semana');
+  else if (nd[nd.length - 1].cierre === sap)
+    console.log('  nivel diario arrastrado: ' + nd.length + ' días, cierra en ' +
+                mil(sap) + ' = el indicador de SAP');
+  else
+    console.warn('  AVISO: el nivel diario arrastrado cierra en ' + mil(nd[nd.length - 1].cierre) +
+                 ' y SAP dice ' + mil(sap) + ' (' + conSigno(nd[nd.length - 1].cierre - sap) +
+                 '). La tarjeta lo declara en la página.');
   console.log('  ' + rSal);
 }
 
 module.exports = { ETAPAS, GLIFO, ORDEN_SALUD, HITOS, CSS,
                    etapaDeBodega, saludDeBodega, bodegasDelCockpit, matrizPlantaEtapa,
-                   mesDeApertura, mesesDeBodega, ultimaSemana, miniSemana,
+                   mesDeApertura, mesesDeBodega, ultimaSemana, miniSemana, miniNivel,
+                   nivelDiarioDePlanta,
                    titular, tarjetas, decisiones, diasHasta, hitos,
                    desglose, composiciones, desgloseHtml, porRecorrido,
                    recortar, chipEstado, tarjetaHtml, matrizHtml, filaCartera, listaHtml,

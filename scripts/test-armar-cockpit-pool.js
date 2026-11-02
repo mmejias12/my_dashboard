@@ -121,6 +121,27 @@ const AM=A.titular(D, A.bodegasDelCockpit([SERIE[2]]));
 chk('solo amarillas no se declara rojo', AM.nivel==='amarillo', AM.nivel);
 chk('sin serie lo dice y no inventa', /sin distribución diaria/.test(A.titular(D,[]).cola));
 
+// EL NUMERO Y SU DUEÑO. La cola trae el peor cierre de toda la serie y la
+// estacion que lo tiene. Son dos datos del mismo registro y tienen que salir
+// juntos: el orden del cockpit pone primero la que tiene MAS dias malos, que
+// no es necesariamente la que tiene el PEOR dia. Aqui RT07-120 encabeza (dos
+// dias bajo cero contra uno) y el peor cierre es de RT13-100.
+const PAR=[
+  { cod:'RT07-120', nom:'TALCA INSPECCION', nivel:50, dias:[
+    dia('2026-10-01',10,0,30,-20), dia('2026-10-02',-20,0,10,-30), dia('2026-10-03',-30,80,0,50) ] },
+  { cod:'RT13-100', nom:'SANTIAGO INSPECCION', nivel:40, dias:[
+    dia('2026-10-01',10,0,10,0), dia('2026-10-02',0,0,900,-900), dia('2026-10-03',-900,940,0,40) ] },
+];
+const TP=A.titular(D, A.bodegasDelCockpit(PAR));
+chk('el peor cierre de la cola es el minimo de toda la serie', /peor -900 /.test(TP.cola), TP.cola);
+chk('y la cola nombra a la estacion que lo tiene, no a la primera en rojo',
+    /peor -900 en RT13-100$/.test(TP.cola), TP.cola);
+chk('que no es la que encabeza el orden del cockpit',
+    A.bodegasDelCockpit(PAR)[0].cod==='RT07-120', A.bodegasDelCockpit(PAR)[0].cod);
+// la pareja viaja junta tambien cuando el dueño SI encabeza
+const TU=A.titular(D, A.bodegasDelCockpit([PAR[1],PAR[0]].map(b=>b)));
+chk('el par no depende del orden de entrada', /peor -900 en RT13-100$/.test(TU.cola), TU.cola);
+
 console.log('\n— las tarjetas —');
 const TJ=A.tarjetas(D,BS);
 chk('ocho tarjetas', TJ.length===8, String(TJ.length));

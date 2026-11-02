@@ -94,6 +94,42 @@ function serieDePlanta(planta) {
  *  diarios no son los mismos numeros que el saldo por bodega de mas arriba, y
  *  la pagina se contradice sola. Dentro de cierre-diario.ps1 esto no puede
  *  pasar —el paso del ancla precede— pero una corrida a mano si puede. */
+/*  EL ULTIMO CIERRE DE CADA BODEGA TIENE QUE SER SU SALDO VIVO.
+ *
+ *  Esta es la comprobacion que importa, y reemplaza a la de fechas que estaba
+ *  antes. Aquella exigia que saldo-planta declarara ancla_al_dia, y
+ *  saldo-planta lo decidia comparando el dia en que leyo el ancla contra el
+ *  dia del movimiento mas nuevo. Es un proxy equivocado: el InStock de SAP no
+ *  mira la fecha del documento, asi que uno fechado mañana YA esta en el ancla.
+ *  El 2-11-2026 una salida de 2 pallets fechada al dia siguiente borro la
+ *  distribucion diaria entera de las dos paginas, con la serie bien calculada.
+ *
+ *  Lo que si hay que exigir es que la serie y el tablero salgan del MISMO
+ *  saldo. Eso se comprueba directo y cruzando los dos archivos: el ultimo
+ *  cierre que trae planta.json para cada bodega contra el saldo que trae
+ *  bodegas-hoy.json. Si planta.json se calculo contra otro ancla, los cierres
+ *  diarios no son los numeros de la tabla de mas arriba y la pagina se
+ *  contradice sola — y eso esta comprobacion si lo ve, venga de donde venga.
+ *
+ *  Sin una sola bodega que comparar se falla cerrado: no se puede afirmar que
+ *  calza algo que no se miro. */
+function cierraEnElAncla(planta, bodegasHoy) {
+  const saldo = {};
+  for (const b of ((bodegasHoy && bodegasHoy.bodegas) || []))
+    if (b && b.whs != null) saldo[String(b.whs).trim()] = Number(b.saldo) || 0;
+  const malas = [];
+  let revisadas = 0;
+  for (const b of ((planta && planta.bodegas) || [])) {
+    const cod = String((b && b.whs) || '').trim();
+    const dias = (b && Array.isArray(b.dias)) ? b.dias : [];
+    if (!cod || !dias.length || !(cod in saldo)) continue;
+    revisadas++;
+    const cierre = Number(dias[dias.length - 1].cierre) || 0;
+    if (cierre !== saldo[cod]) malas.push({ whs: cod, cierre, ancla: saldo[cod] });
+  }
+  return { revisadas, malas, ok: revisadas > 0 && malas.length === 0 };
+}
+
 function anclaCalza(planta, bodegasHoy) {
   const a = String((planta && planta.ancla) || '').slice(0, 10);
   const b = String((bodegasHoy && bodegasHoy.generado) || '').slice(0, 10);
@@ -105,23 +141,25 @@ function anclaCalza(planta, bodegasHoy) {
     return { ok: false, ancla: a, tablero: b,
              motivo: 'la serie de planta se ancló el ' + a + ' y el tablero el ' + b +
                      ': los cierres diarios no serían los mismos números que el saldo por bodega' };
-  /*  QUE LAS DOS FECHAS COINCIDAN NO BASTA.
-   *
-   *  saldo-planta puede haber calculado la serie con un ancla mas vieja que
-   *  las lineas que leyo —pasa si se corre a mano, fuera del cierre diario— y
-   *  en ese caso TODA la serie queda corrida aunque el json y el tablero
-   *  declaren la misma fecha, porque los dos salen del mismo bodegas-hoy.
-   *  Por eso saldo-planta escribe su propio veredicto en ancla_al_dia y aca
-   *  se exige. Si el campo no viene, el json es de una version que no lo
-   *  declaraba: tampoco se dibuja. Fallar cerrado. */
-  if (planta.ancla_al_dia !== true)
-    return { ok: false,
-             motivo: 'la serie de planta no viene declarada al dia (' +
-                     (planta.ancla_al_dia === false
-                        ? 'saldo-planta la marcó como corrida'
-                        : 'el json no trae ancla_al_dia') +
-                     '): habría que volver a anclar y recalcularla' };
-  return { ok: true, motivo: null };
+  /*  QUE LAS DOS FECHAS COINCIDAN NO BASTA: los dos archivos salen del mismo
+   *  bodegas-hoy, asi que declaran la misma fecha aunque la serie se haya
+   *  calculado contra otro saldo. Se comprueba bodega por bodega. */
+  const cierra = cierraEnElAncla(planta, bodegasHoy);
+  if (!cierra.ok) {
+    if (!cierra.revisadas)
+      return { ok: false, cierra,
+               motivo: 'no se pudo comparar ni un cierre contra el saldo vivo: la serie de planta y ' +
+                       'el tablero no tienen bodegas en común' };
+    const TOPE = 3, sobran = cierra.malas.length - TOPE;
+    return { ok: false, cierra,
+             motivo: 'el último cierre de ' + mil(cierra.malas.length) + ' de ' + mil(cierra.revisadas) +
+                     ' bodega(s) no es su saldo vivo en SAP (' +
+                     cierra.malas.slice(0, TOPE).map(m => m.whs + ' cierra en ' + mil(m.cierre) +
+                       ' y SAP dice ' + mil(m.ancla)).join(', ') +
+                     (sobran > 0 ? ' y ' + sobran + ' mas' : '') +
+                     '): la serie se calculó contra otro ancla y habría que recalcularla' };
+  }
+  return { ok: true, motivo: null, cierra };
 }
 
 // ── grupos economicos de retail ──────────────────────────────────────────────
@@ -1357,10 +1395,11 @@ function main() {
 
   // La distribucion diaria de planta es OPCIONAL y se valida antes de usarla:
   // una serie anclada en otra fecha haria que la pagina se contradiga sola.
-  let pla = leerJson(rPla, false);
+  let pla = leerJson(rPla, false), anclaOk = null;
   if (!pla) console.error('Aviso: no hay ' + rPla + '. La distribucion diaria de planta no se dibuja.');
   else {
     const ac = anclaCalza(pla, bod);
+    anclaOk = ac.ok ? ac : null;
     if (!ac.ok) {
       console.error('Aviso: ' + ac.motivo + '. Se ignora ' + rPla + '.');
       pla = null;
@@ -1380,7 +1419,8 @@ function main() {
   if (d.planta_dias)
     console.log('  planta dia a dia: ' + d.planta_dias.length + ' bodegas del indicador · ' +
                 d.planta_dias.reduce((a, b) => a + b.dias.length, 0) + ' dias · anclada ' +
-                String(d.planta_ancla || '?').slice(0, 10));
+                String(d.planta_ancla || '?').slice(0, 10) +
+                (anclaOk && anclaOk.cierra ? ' · ' + anclaOk.cierra.revisadas + ' cierres comprobados contra el saldo vivo' : ''));
   else console.log('  planta dia a dia: no disponible');
   console.log('  ' + rDat);
   console.log('  ' + rSal);
@@ -1391,7 +1431,7 @@ function main() {
 }
 
 module.exports = { esNumero, mil, conSigno, clasePos, pct, pct1, esc, sinBom,
-                   serieDePlanta, anclaCalza,
+                   serieDePlanta, anclaCalza, cierraEnElAncla,
                    plantaDeBodega, gruposDeSerie, etiquetaDeMes, mesesDeSerie,
                    diasDelMes, resumenDelMes, altoVisible, ejeDeDias, svgFlujoDia, svgNivelDia,
                    tablaDeDias, panelDeMes, bloqueDePlanta,

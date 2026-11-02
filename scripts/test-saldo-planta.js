@@ -141,21 +141,29 @@ chk('y dice cuanto falta', S.cuadraturaDelNeto([{neto:10}],{produccion:4}).difer
 chk('sin netos la suma es cero', S.cuadraturaDelNeto(null,{produccion:0}).cuadra===true);
 chk('sin ley se espera cero', S.cuadraturaDelNeto([{neto:0}],null).cuadra===true);
 
-console.log('\n— el ancla tiene que ser igual o mas nueva que la ultima linea —');
-// Visto el 29-10-2026: ancla del 28-10 17:41 con lineas hasta el 29-10. El
-// nivel se calcula hacia atras desde el ancla, asi que restar un movimiento
-// que el ancla todavia no vio corre TODA la serie.
-chk('un ancla mas vieja que la ultima linea no sirve',
-    S.anclaAlDia('2026-10-28','2026-10-29').ok===false);
-chk('y dice las dos fechas',
-    /28.*29|29/.test(S.anclaAlDia('2026-10-28','2026-10-29').motivo) &&
-    /toda la serie queda corrida/.test(S.anclaAlDia('2026-10-28','2026-10-29').motivo),
-    S.anclaAlDia('2026-10-28','2026-10-29').motivo);
+console.log('\n— un documento con fecha futura NO corre la serie —');
+/*  Esta prueba decia lo contrario hasta el 2-11-2026. El razonamiento era que
+ *  restar del ancla un movimiento que el ancla todavia no habia visto corria
+ *  toda la serie, y es cierto para un movimiento posteado DESPUES de leer el
+ *  ancla. Pero la prueba no miraba eso: miraba la FECHA del documento, y el
+ *  InStock de SAP no la mira —cuenta el movimiento apenas se contabiliza—.
+ *  Ese dia una salida de 2 pallets fechada al dia siguiente marco la serie
+ *  como corrida y dejo la distribucion diaria en blanco en las dos paginas;
+ *  comprobado bodega por bodega, el ultimo cierre de cada una era exactamente
+ *  su InStock. Lo que de verdad protege es cierraEnElAncla(), en
+ *  armar-tablero-stock, que compara los cierres contra el saldo vivo. */
+const FUT = S.anclaAlDia('2026-10-28','2026-10-29');
+chk('una linea fechada despues del ancla no invalida la serie', FUT.ok===true, JSON.stringify(FUT));
+chk('pero queda marcada como anomalia', FUT.futuro===true);
+chk('y el motivo manda a mirar SAP, no el calculo',
+    /fecha posterior a hoy/.test(FUT.motivo) && /la serie esta bien/i.test(FUT.motivo), FUT.motivo);
 chk('el mismo dia si sirve', S.anclaAlDia('2026-10-29','2026-10-29').ok===true);
 chk('un ancla mas nueva si sirve', S.anclaAlDia('2026-10-30','2026-10-29').ok===true);
 chk('acepta una marca de tiempo completa', S.anclaAlDia('2026-10-29T14:39:00Z','2026-10-29').ok===true);
 chk('sin fecha de lectura no se puede saber', S.anclaAlDia('','2026-10-29').ok===false);
 chk('sin lineas no hay con que comparar', S.anclaAlDia('2026-10-28','').ok===true);
+// una corrida normal no lleva la marca de anomalia
+chk('sin fecha futura no se marca nada', S.anclaAlDia('2026-10-29','2026-10-29').futuro===undefined);
 chk('una fecha mal escrita no se da por buena', S.anclaAlDia('28-10-2026','2026-10-29').ok===false);
 
 console.log('\n— lo que se escribe en el json —');

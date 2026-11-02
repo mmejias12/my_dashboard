@@ -110,6 +110,10 @@ const VIVO_DIAS = Math.max(0, Number(process.env.GUIAS_VIVO_DIAS) || 1);
    sin este memo lo estaríamos sondeando cuatro veces por minuto por cada
    instancia. 60 s es menos que el tiempo que tarda un pedido en cerrarse. */
 const MEMO_MS = Math.max(0, Number(process.env.GUIAS_MEMO_MS) || 60000);
+/* Presupuesto de la consulta viva. Redlink cobra del orden de 16 s por dos días
+   y el corte de Static Web Apps es a los 45 s: sin techo, un día lento tumba el
+   endpoint completo en vez de devolver lo que alcanzó a juntar. */
+const VIVO_MS = Math.max(5000, Number(process.env.GUIAS_VIVO_MS) || 20000);
 const memo = new Map();
 
 const moverDia = (s, n) => {
@@ -143,7 +147,15 @@ async function traerFilas(desde, hasta) {
   const guardado = memo.get(clave);
   if (guardado && ahora - guardado.ts < MEMO_MS) return guardado.filas;
 
-  const idDe = (f) => String(f.formHeaderiD || f.nroPedido || '');
+  /* CLAVE DE DEDUPE: nroPedido primero, igual que cold.dedup y que el camino
+     cold de api/ops ("mismo criterio que cold.dedup: por nroPedido"). Medido en
+     producción el 2-nov con el rango 30-oct..2-nov: 1.194 filas del frío + 417
+     vivas dan 1.588 operaciones, o sea 23 están en los dos lados — y esas 23
+     traen un formHeaderiD DISTINTO en cada lado. Con la cabecera como clave se
+     colaban las 23 duplicadas y el andén mostraba dos veces la misma guía
+     (73030 y 73013, por ejemplo). nroPedido es la llave de negocio y existe en
+     las dos fuentes; la cabecera queda sólo de respaldo. */
+  const idDe = (f) => String(f.nroPedido || f.formHeaderiD || '');
   const porId = new Map();
 
   let frio = null, errorFrio = null;
@@ -151,8 +163,17 @@ async function traerFilas(desde, hasta) {
   catch (e) { errorFrio = e.message; }
   for (const f of (frio && frio.ops) || []) { const k = idDe(f); if (k) porId.set(k, f); }
 
+  /* LA VENTANA VIVA VA ACOTADA. El andén pide arrastre=3, o sea un rango de
+     cuatro días, y Redlink filtra por fecha de INGRESO: pedirle los cuatro no
+     agrega guías nuevas (los días cerrados ya están en el frío) y sí arriesga
+     el corte de 45 s en un endpoint que se consulta cada 15 s. Lo vivo cubre
+     sólo la cola, con el mismo criterio que COLD_LIVE_DIAS en api/ops. */
+  const pisoVivo = moverDia(hasta, -VIVO_DIAS);
+  let vivoDesde = moverDia(desde, -VIVO_DIAS);
+  if (vivoDesde < pisoVivo) vivoDesde = pisoVivo;
+
   let vivo = [], errorVivo = null;
-  try { vivo = await consultarOps(moverDia(desde, -VIVO_DIAS), hasta); }
+  try { vivo = await consultarOps(vivoDesde, hasta, { presupuestoMs: VIVO_MS }); }
   catch (e) { errorVivo = e.message; }
   for (const f of vivo) { const k = idDe(f); if (k) porId.set(k, f); }
 
@@ -259,4 +280,4 @@ async function obtenerGuias(desde, hasta) {
 }
 
 module.exports = { obtenerGuias, traerFilas, normalizarPatente, clasificar,
-  PALLETS_POR_FILA, OPERACIONES_DESPACHO, VIVO_DIAS, MEMO_MS };
+  PALLETS_POR_FILA, OPERACIONES_DESPACHO, VIVO_DIAS, MEMO_MS, VIVO_MS };

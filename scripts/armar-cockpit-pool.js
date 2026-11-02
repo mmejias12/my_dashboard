@@ -131,12 +131,20 @@ function titular(d, bodegas) {
     return { frase: 'Pool de <em>' + mil(pool) + '</em> pallets; <em>ninguna estación</em> en negativo',
              nivel: 'verde',
              cola: mil(bs.length) + ' bodegas del indicador · ' + mil(dias) + ' días medidos' };
+  /*  El peor cierre y la estacion que lo tiene salen del MISMO registro.
+   *  Sacarlos por separado — el minimo por una reduccion y el codigo por la
+   *  primera en rojo — hace que la cola nombre a una estacion que no es la
+   *  dueña del numero: con 23 dias malos TALCA INSPECCION encabeza el orden,
+   *  pero el -7.415 es de SANTIAGO INSPECCION. Un numero bien calculado con
+   *  la etiqueta equivocada manda a revisar la bodega que no es. */
+  const dueno = bs.reduce((a, b) => (b.peor && (a == null || b.peor.cierre < a.peor.cierre)
+                                     ? b : a), null);
   return { frase: 'Pool de <em>' + mil(pool) + '</em> pallets; <em>' + mil(malas.length) + ' de ' +
                   mil(bs.length) + ' estaciones</em> cierran días en negativo',
            nivel: malas.some(b => b.salud.nivel === 'rojo') ? 'rojo' : 'amarillo',
            cola: mil(neg) + ' de ' + mil(dias) + ' días · peor ' +
-                 mil(bs.reduce((a, b) => (b.peor && (a == null || b.peor.cierre < a) ? b.peor.cierre : a), null)) +
-                 ' en ' + esc((bs.find(b => b.salud.nivel === 'rojo') || bs[0]).cod) };
+                 mil(dueno ? dueno.peor.cierre : 0) +
+                 ' en ' + esc(dueno ? dueno.cod : bs[0].cod) };
 }
 
 /*  LAS TARJETAS DE "¿COMO ESTAMOS?".

@@ -3,6 +3,11 @@ let ok=0, fail=0;
 const chk=(n,c,d)=>{ if(c){ok++;console.log('  ok   '+n);} else {fail++;console.log('  FALLA '+n+(d?'  → '+d:''));} };
 const A=require('./armar-cockpit-pool.js');
 const T=require('./armar-tablero-stock.js');
+// El script publicado lleva dentro el CODIGO de tarjetaHtml, asi que contar
+// 'data-kpi=' o 'fuera-de-filtro' sobre la pagina entera cuenta tambien la
+// funcion que los escribe. Lo que se mide es el html, no su generador.
+const soloCuerpo = t => t.slice(0, t.indexOf('<script>'));
+
 
 // Una serie chica pero con los casos que importan: una bodega sana, una con
 // pocos dias malos, una con la mitad o mas, y una sin dias.
@@ -54,30 +59,37 @@ chk('lo que no reconoce no se inventa', A.etapaDeBodega('SANTIAGO MERMA')==='OTR
 
 console.log('\n— la salud mira UNA cosa: dias con cierre bajo cero —');
 const S0=A.saludDeBodega(SERIE[1]), S1=A.saludDeBodega(SERIE[2]), S2=A.saludDeBodega(SERIE[0]), S3=A.saludDeBodega(SERIE[3]);
-chk('sin dias bajo cero es verde', S0.nivel==='verde' && S0.n===0 && S0.de===2, JSON.stringify(S0));
-chk('menos de la mitad es amarillo', S1.nivel==='amarillo' && S1.n===1 && S1.de===4, JSON.stringify(S1));
-chk('la mitad o mas es rojo', S2.nivel==='rojo' && S2.n===2 && S2.de===3, JSON.stringify(S2));
+chk('sin dias bajo cero es verde', S0.nivel==='sana' && S0.n===0 && S0.de===2, JSON.stringify(S0));
+chk('menos de la mitad es amarillo', S1.nivel==='atencion' && S1.n===1 && S1.de===4, JSON.stringify(S1));
+chk('la mitad o mas es rojo', S2.nivel==='critica' && S2.n===2 && S2.de===3, JSON.stringify(S2));
 // lo que no se puede evaluar NO se pinta de verde: esa es la forma mas barata
 // de mentir en un tablero
-chk('sin dias es sin dato, no verde', S3.nivel==='sindato' && S3.texto==='Sin dato', JSON.stringify(S3));
-chk('y lo dice con su palabra', S0.texto==='Verde' && S1.texto==='Amarillo' && S2.texto==='Rojo');
-// justo en la mitad el borde es rojo, no amarillo: redondear hacia el lado
+chk('sin dias es sin dato, no sana', S3.nivel==='sindato' && S3.texto==='Sin dato', JSON.stringify(S3));
+// LA PALABRA NO ES UN COLOR. En REDTEC el rojo y el verde son tipos de
+// pallet: una estacion rotulada "Rojo" se leia como una bodega con pallet
+// rojo, no como una bodega critica. El estado se nombra por lo que es.
+chk('y lo dice con su palabra', S0.texto==='Sana' && S1.texto==='Atención' && S2.texto==='Crítica',
+    [S0.texto,S1.texto,S2.texto].join(' '));
+chk('y ninguna palabra de estado es un color de pallet',
+    ![S0,S1,S2,S3].some(x=>/rojo|verde|amarillo/i.test(x.texto)),
+    [S0,S1,S2,S3].map(x=>x.texto).join(' '));
+// justo en la mitad el borde es critica, no atencion: redondear hacia el lado
 // comodo es lo que hace que un tablero deje de servir
 chk('exactamente la mitad ya es rojo',
-    A.saludDeBodega({dias:[dia('2026-10-01',0,0,1,-1), dia('2026-10-02',-1,2,0,1)]}).nivel==='rojo');
+    A.saludDeBodega({dias:[dia('2026-10-01',0,0,1,-1), dia('2026-10-02',-1,2,0,1)]}).nivel==='critica');
 // CERO NO ES NEGATIVO. Una bodega que cierra el día en cero está vacía, que es
 // un estado perfectamente posible; TALCA REPARACION cierra así casi todos los
 // días. Contarlo como imposible pondría media planta en rojo.
 const CERO=A.saludDeBodega({dias:[dia('2026-10-01',5,0,5,0), dia('2026-10-02',0,3,3,0)]});
-chk('un cierre en cero no es un dia negativo', CERO.nivel==='verde' && CERO.n===0, JSON.stringify(CERO));
+chk('un cierre en cero no es un dia negativo', CERO.nivel==='sana' && CERO.n===0, JSON.stringify(CERO));
 chk('sin bodega no revienta', A.saludDeBodega(null).nivel==='sindato' && A.saludDeBodega({}).nivel==='sindato');
 
 console.log('\n— las estaciones se ordenan por lo que hay que mirar primero —');
 const BS=A.bodegasDelCockpit(SERIE);
 chk('las cuatro entran', BS.length===4, String(BS.length));
 // NO por saldo: RT13-102 tiene el saldo mas alto y va despues porque esta sana
-chk('primero la roja, despues la amarilla, despues las sanas',
-    BS.map(b=>b.salud.nivel).join(',')==='rojo,amarillo,verde,sindato', BS.map(b=>b.cod+':'+b.salud.nivel).join(' '));
+chk('primero la critica, despues la de atencion, despues las sanas',
+    BS.map(b=>b.salud.nivel).join(',')==='critica,atencion,sana,sindato', BS.map(b=>b.cod+':'+b.salud.nivel).join(' '));
 chk('y no por saldo', BS[0].cod==='RT13-100' && BS[0].nivel < BS[2].nivel);
 chk('cada una trae planta y etapa', BS[0].planta==='SANTIAGO' && BS[0].etapa==='INSPECCION');
 chk('y su flujo sumado', BS[0].entradas===30 && BS[0].salidas===45, BS[0].entradas+'/'+BS[0].salidas);
@@ -101,7 +113,7 @@ chk('las etapas en orden de recorrido',
     M.etapas.join(',')==='INSPECCION,REPARACION,DISPONIBLE,TRANSITO', M.etapas.join(','));
 chk('una celda por cruce', M.celdas.length===M.plantas.length*M.etapas.length, String(M.celdas.length));
 const cel=(p,e)=>M.celdas.find(c=>c.planta===p&&c.etapa===e);
-chk('la celda con bodega trae su salud', cel('SANTIAGO','INSPECCION').salud.nivel==='rojo');
+chk('la celda con bodega trae su salud', cel('SANTIAGO','INSPECCION').salud.nivel==='critica');
 // un cruce que NO existe no es un cruce sano: es un cruce que no existe
 chk('un cruce sin bodega se marca vacio, no verde',
     cel('TALCA','REPARACION').salud.nivel==='vacio' && cel('TALCA','REPARACION').bodega===null);
@@ -111,14 +123,14 @@ console.log('\n— el titular dice la conclusion, no el dato —');
 const TI=A.titular(D,BS);
 chk('nombra cuantas estaciones estan mal', /2 de 4 estaciones/.test(TI.frase), TI.frase);
 chk('con el pool al lado', /803\.459/.test(TI.frase), TI.frase);
-chk('y el nivel es el peor que haya', TI.nivel==='rojo', TI.nivel);
+chk('y el nivel es el peor que haya', TI.nivel==='critica', TI.nivel);
 chk('la cola trae los dias y el peor cierre', /3 de 9 días/.test(TI.cola) && /-10/.test(TI.cola), TI.cola);
 // el dia que no haya negativos, el titular lo tiene que decir solo
 const SANO=A.titular(D, A.bodegasDelCockpit([SERIE[1]]));
-chk('sin negativos cambia solo', /ninguna estación/.test(SANO.frase) && SANO.nivel==='verde', SANO.frase);
+chk('sin negativos cambia solo', /ninguna estación/.test(SANO.frase) && SANO.nivel==='sana', SANO.frase);
 // solo amarillas no es rojo
 const AM=A.titular(D, A.bodegasDelCockpit([SERIE[2]]));
-chk('solo amarillas no se declara rojo', AM.nivel==='amarillo', AM.nivel);
+chk('solo amarillas no se declara rojo', AM.nivel==='atencion', AM.nivel);
 chk('sin serie lo dice y no inventa', /sin distribución diaria/.test(A.titular(D,[]).cola));
 
 // EL NUMERO Y SU DUEÑO. La cola trae el peor cierre de toda la serie y la
@@ -215,8 +227,8 @@ chk('hay un data-cod por celda con bodega y ninguno de mas',
 chk('y la vacia no trae uno en blanco', !/data-cod=""/.test(MH));
 chk('y cada una trae su title', (MH.match(/title="/g)||[]).length>=M.celdas.length);
 const FC=A.filaCartera(BS[0]);
-chk('la fila trae los datos para filtrar', /data-planta="SANTIAGO"/.test(FC) && /data-salud="rojo"/.test(FC));
-chk('y la salud con glifo y palabra', /◆/.test(FC) && /Rojo/.test(FC));
+chk('la fila trae los datos para filtrar', /data-planta="SANTIAGO"/.test(FC) && /data-salud="critica"/.test(FC));
+chk('y la salud con glifo y palabra', /◆/.test(FC) && /Crítica/.test(FC), FC.slice(-120));
 chk('una lista vacia dice por que', /class="empty"/.test(A.listaHtml([],'nada por aca')) &&
     /nada por aca/.test(A.listaHtml([],'nada por aca')));
 // el texto de la lista sale de SAP y de los controles: no puede ir crudo
@@ -414,8 +426,8 @@ chk('con la flecha que avisa que se abre', /class="abrir"/.test(TH) && /↗/.tes
 const SINCLAVE=A.tarjetaHtml({et:'X',hint:'y',kv:'1',u:''},0);
 chk('una tarjeta sin desglose no finge', SINCLAVE.indexOf('data-kpi')<0 && SINCLAVE.indexOf('abrir')<0);
 const PGK=A.pagina(D);
-chk('las ocho tarjetas de la pagina abren', (PGK.match(/data-kpi="/g)||[]).length===8,
-    String((PGK.match(/data-kpi="/g)||[]).length));
+chk('las ocho tarjetas de la pagina abren', (soloCuerpo(PGK).match(/data-kpi="/g)||[]).length===8,
+    String((soloCuerpo(PGK).match(/data-kpi="/g)||[]).length));
 chk('y las composiciones viajan al navegador con contenido',
     /var DESG = \{/.test(PGK) && PGK.indexOf('"clave":"planta"')>=0 && PGK.indexOf('"clave":"controles"')>=0,
     (PGK.match(/var DESG = .{0,40}/)||[''])[0]);
@@ -734,8 +746,209 @@ chk('la linea llega dibujada a la pagina, no a medias',
     /<svg class="mini nivel"/.test(PGS) && /class="mnu"/.test(PGS));
 chk('con el rotulo al lado', /nivel del 2026-10-01 al /.test(PGS), '');
 chk('y una sola vez: es la tarjeta de planta, no todas',
-    (PGS.match(/<svg class="mini nivel"/g)||[]).length===1,
-    String((PGS.match(/<svg class="mini nivel"/g)||[]).length));
+    (soloCuerpo(PGS).match(/<svg class="mini nivel"/g)||[]).length===1,
+    String((soloCuerpo(PGS).match(/<svg class="mini nivel"/g)||[]).length));
+
+console.log('\n— el javascript publicado COMPILA —');
+// Se arma como un arreglo de strings, asi que nada lo revisa hasta que alguien
+// abre la pagina. Un "quietas()" sin punto y coma seguido de "[].forEach" se
+// parsea como quietas()[] y revienta la interaccion entera en silencio: la
+// pagina se ve bien y ningun chip responde. Esto lo caza en el test.
+const PGJS=A.pagina(D);
+const cuerpoJS=(() => { const i=PGJS.indexOf('<script>'), j=PGJS.lastIndexOf('<\/script>');
+  return PGJS.slice(i+8, j); })();
+chk('hay script y no esta vacio', cuerpoJS.length>2000, String(cuerpoJS.length));
+chk('y el navegador lo va a poder parsear', (() => {
+  try { new Function(cuerpoJS.replace(/<\\\/script/g, '</script')); return true; }
+  catch (e) { return 'NO: ' + e.message; }
+})()===true, (() => { try { new Function(cuerpoJS.replace(/<\\\/script/g,'</script')); return ''; }
+  catch(e){ return e.message; } })());
+
+console.log('\n— lo publicado se basta solo —');
+// pct1 llama a pct. Se publico pct1 y no pct, y el resultado fue que la pagina
+// cargaba perfecta y al primer clic en un filtro las ocho tarjetas reventaban
+// con "pct is not defined" — sin que nada en el servidor fallara. Esta prueba
+// mira cada funcion publicada, busca a quien llama, y exige que esa tambien
+// este publicada. Es la unica forma de que no vuelva a pasar con la siguiente.
+const PUB=(() => { const i=PGJS.indexOf('<script>'), j=PGJS.lastIndexOf('<\/script>');
+  return PGJS.slice(i+8, j); })();
+const declaradas=new Set([...PUB.matchAll(/^function ([A-Za-z_$][\w$]*)\(/gm)].map(m=>m[1])
+  .concat([...PUB.matchAll(/^var ([A-Za-z_$][\w$]*) =/gm)].map(m=>m[1])));
+// todo lo que el modulo exporta y que por lo tanto PODRIA hacer falta
+const delModulo=new Set(Object.keys(A).concat(Object.keys(T)).filter(k=>typeof A[k]==='function'||typeof T[k]==='function'||Array.isArray(A[k])||Array.isArray(T[k])||(A[k]&&typeof A[k]==='object')));
+const faltan=[];
+for (const nom of declaradas) {
+  const fn = A[nom] || T[nom];
+  if (typeof fn !== 'function') continue;
+  const src = fn.toString();
+  for (const otro of delModulo)
+    if (otro !== nom && new RegExp('[^\\w$.]' + otro.replace(/\$/g,'\\$') + '\\s*[(\\[.]').test(src)
+        && !declaradas.has(otro) && faltan.indexOf(otro + ' ← ' + nom) < 0)
+      faltan.push(otro + ' ← ' + nom);
+}
+chk('toda funcion publicada tiene publicado a quien llama', faltan.length===0, faltan.join(' · '));
+chk('y la lista de publicadas no esta vacia', declaradas.size>20, String(declaradas.size));
+chk('el dato viaja al navegador', /var DAT = \{/.test(PGJS));
+chk('con las constantes que esas funciones necesitan',
+    ['var ETAPAS =','var ORDEN_SALUD =','var GLIFO =','var NOMBRE_SALUD ='].every(x=>PGJS.indexOf(x)>=0));
+// las dos listas de socios son el grueso del json y no las usa ninguna
+// tarjeta: mandarlas seria peso por nada en cada carga
+const GORDO={pool:1,retail:[{cod:'a'},{cod:'b'}],clientes:[{cod:'c'}],
+             planta_dias:[{cod:'x'}],bodegas:{},controles:[]};
+const FLACO=A.datosPublicables(GORDO);
+chk('el dato publicado va sin las dos listas de socios',
+    FLACO.retail===undefined && FLACO.clientes===undefined, Object.keys(FLACO).join(','));
+chk('ni la serie de planta, que ya viaja comprimida aparte',
+    FLACO.planta_dias===undefined, Object.keys(FLACO).join(','));
+chk('y con todo lo demas intacto', FLACO.pool===1 && !!FLACO.bodegas && !!FLACO.controles,
+    Object.keys(FLACO).join(','));
+
+console.log('\n— el filtro de planta recalcula lo que es de planta —');
+const TODAS=A.bodegasDelCockpit(SERIE);
+const SGO=TODAS.filter(b=>b.planta==='SANTIAGO');
+const TITSGO=A.titular(D,SGO,'SANTIAGO');
+chk('el titular nombra la planta', /SANTIAGO/.test(TITSGO.frase), TITSGO.frase);
+// con un filtro puesto el pool NO puede seguir en el titular: 803.459 al lado
+// de la palabra SANTIAGO se lee como el pool de Santiago
+chk('y deja de mostrar el pool, que es de toda la empresa',
+    !/803\.459/.test(TITSGO.frase) && !/Pool de/.test(TITSGO.frase), TITSGO.frase);
+chk('sin filtro el pool sigue estando', /Pool de/.test(A.titular(D,TODAS).frase));
+chk('la cola cuenta solo los dias de esa planta',
+    /de 5 días/.test(TITSGO.cola), TITSGO.cola);
+const TJSGO=A.tarjetas(D,SGO,'SANTIAGO');
+const plS=TJSGO.find(x=>x.clave==='planta');
+chk('el indicador es la suma de las estaciones de esa planta',
+    plS.kv===A.mil?undefined:plS.kv==='7.558', plS.kv);
+chk('y el referencial son las bodegas fuera del indicador DE ESA PLANTA',
+    /4\.164/.test(plS.ks), plS.ks.replace(/<[^>]+>/g,''));
+// la mini-serie de la tarjeta tambien se recorta: si arrastrara las nueve
+// estaciones con el titulo SANTIAGO, la linea diria una cosa y el numero otra
+const soloSgo=SERIE.filter(x=>/^SANTIAGO/.test(x.nom));
+const esperada=A.nivelDiarioDePlanta(soloSgo);
+chk('la semana de la tarjeta se arrastra solo con las estaciones de esa planta',
+    plS.sem[plS.sem.length-1].cierre===esperada[esperada.length-1].cierre,
+    plS.sem[plS.sem.length-1].cierre+' vs '+esperada[esperada.length-1].cierre);
+chk('y no es la misma que la general',
+    plS.sem[plS.sem.length-1].cierre!==
+      A.tarjetas(D,TODAS).find(x=>x.clave==='planta').sem.slice(-1)[0].cierre,
+    plS.sem[plS.sem.length-1].cierre+' vs '+
+      A.tarjetas(D,TODAS).find(x=>x.clave==='planta').sem.slice(-1)[0].cierre);
+const TJTAL=A.tarjetas(D,TODAS.filter(b=>b.planta==='TALCA'),'TALCA');
+chk('una planta sin bodegas de referencia lo dice, no muestra las de otra',
+    /sin bodegas de referencia/.test(TJTAL.find(x=>x.clave==='planta').ks),
+    TJTAL.find(x=>x.clave==='planta').ks.replace(/<[^>]+>/g,''));
+// solo DOS de las ocho son de planta; las otras seis tienen que declararlo
+const AMB=A.tarjetas(D,TODAS).map(x=>x.clave+':'+x.ambito);
+chk('las ocho declaran su alcance', AMB.every(x=>/:(planta|global)$/.test(x)), AMB.join(' '));
+chk('y solo dos son de planta',
+    AMB.filter(x=>/:planta$/.test(x)).join(',')==='planta:planta,negativos:planta', AMB.join(' '));
+chk('la tarjeta global publica su alcance y su rotulo',
+    /data-ambito="global"/.test(A.tarjetaHtml(A.tarjetas(D,TODAS)[0],0)) &&
+    /fuera-de-filtro/.test(A.tarjetaHtml(A.tarjetas(D,TODAS)[0],0)));
+chk('y la de planta no lleva rotulo de que no se filtra',
+    /data-ambito="planta"/.test(A.tarjetaHtml(plS,1)) && !/fuera-de-filtro/.test(A.tarjetaHtml(plS,1)));
+// el rotulo va ESCRITO y oculto por css, no armado en el navegador: si el
+// javascript no corre, la pagina no puede quedar mostrando el global sin aviso
+chk('el rotulo viaja en el html, no lo arma el navegador',
+    (soloCuerpo(A.pagina(D)).match(/<div class="fuera-de-filtro">/g)||[]).length===6,
+    String((soloCuerpo(A.pagina(D)).match(/<div class="fuera-de-filtro">/g)||[]).length));
+
+console.log('\n— el navegador recalcula con lo mismo que arma la pagina —');
+// Ya no viajan vistas precalculadas: viajan el dato y las funciones. Lo que
+// hay que probar es que esas funciones, llamadas como las llama el navegador,
+// dan lo que corresponde para cada filtro.
+const filaDe = bs => bs.map(A.filaCartera).join('');
+chk('la tabla de una planta solo trae sus filas',
+    (filaDe(SGO).match(/<tr /g)||[]).length===SGO.length &&
+    !/TALCA/.test(filaDe(SGO)), String((filaDe(SGO).match(/<tr /g)||[]).length));
+chk('y la matriz se recorta con ella',
+    (A.matrizHtml(A.matrizPlantaEtapa(SGO)).match(/class="cel/g)||[]).length <
+    (A.matrizHtml(A.matrizPlantaEtapa(TODAS)).match(/class="cel/g)||[]).length);
+chk('los conteos de salud son del subconjunto, no del total',
+    A.contarSalud(SGO)['']===SGO.length &&
+    A.contarSalud(SGO).critica===SGO.filter(b=>b.salud.nivel==='critica').length,
+    JSON.stringify(A.contarSalud(SGO)));
+chk('sin bodegas los conteos son cero, no el total', A.contarSalud([])['']===0);
+
+console.log('\n— el periodo recorta el movimiento, no el saldo —');
+const PER=A.periodosDeSerie(SERIE);
+chk('los meses y los dias son los que EXISTEN',
+    PER.meses.join(',')==='2026-10' && PER.dias.length===4,
+    PER.meses.join(',')+' · '+PER.dias.length);
+chk('y declara hasta donde llega el dato',
+    PER.desde==='2026-10-01' && PER.hasta==='2026-10-06', PER.desde+'→'+PER.hasta);
+chk('sin serie no ofrece periodos', A.periodosDeSerie([]).dias.length===0 &&
+    A.periodosDeSerie(null).meses.length===0);
+// un selector que ofrezca un dia que no existe devuelve una pagina vacia, y
+// una pagina vacia se lee como "ese dia no pasó nada"
+const SUCIA=[{cod:'X',nom:'A B',dias:[{dia:'el martes',cierre:1},{dia:'2026-10-05',cierre:2}]}];
+chk('una fecha ilegible no llega al selector',
+    A.periodosDeSerie(SUCIA).dias.join(',')==='2026-10-05',
+    A.periodosDeSerie(SUCIA).dias.join(','));
+chk('ni al listado de meses',
+    A.periodosDeSerie([{cod:'X',nom:'A B',dias:[{dia:'2026-13',cierre:1}]}]).meses.length===0);
+// recortar por mes deja las estaciones y les quita los dias de fuera
+const OCT=A.serieDelPeriodo(SERIE,'2026-10');
+chk('un mes completo no pierde ninguna estacion', OCT.length===SERIE.length);
+const UNDIA=A.serieDelPeriodo(SERIE,'2026-10-02');
+chk('un dia deja solo ese dia',
+    UNDIA.every(b=>b.dias.every(x=>x.dia==='2026-10-02')), JSON.stringify(UNDIA.map(b=>b.dias.length)));
+chk('y la estacion que no se movio ese dia queda sin dias, no fuera',
+    UNDIA.length===SERIE.length && UNDIA.some(b=>b.dias.length===0));
+chk('sin periodo devuelve la serie tal cual', A.serieDelPeriodo(SERIE,'')===SERIE);
+chk('y recortar no toca la serie original',
+    SERIE[0].dias.length===3, String(SERIE[0].dias.length));
+// una estacion sin movimiento en el periodo es SIN DATO, no sana: no haber
+// tenido documento no es lo mismo que haber cerrado bien todos los dias
+chk('la estacion sin movimiento en el periodo queda sin dato, no sana',
+    A.bodegasDelCockpit(UNDIA).filter(b=>b.salud.nivel==='sindato').length>0,
+    A.bodegasDelCockpit(UNDIA).map(b=>b.cod+':'+b.salud.nivel).join(' '));
+// EL SALDO NO SE FILTRA POR FECHA, y la tarjeta tiene que decirlo
+const TJPER=A.tarjetas(D,A.bodegasDelCockpit(OCT),undefined,'2026-10');
+const plPER=TJPER.find(x=>x.clave==='planta');
+chk('con periodo el indicador sigue siendo la lectura de hoy',
+    plPER.kv===A.tarjetas(D,TODAS).find(x=>x.clave==='planta').kv, plPER.kv);
+chk('y la tarjeta avisa que un saldo no se filtra por fecha',
+    /no se filtra por fecha/.test(plPER.nota||''), String(plPER.nota));
+chk('sin periodo no aparece esa nota',
+    !A.tarjetas(D,TODAS).find(x=>x.clave==='planta').nota);
+// con periodo la serie cierra donde termina el periodo, no en el saldo de
+// hoy: reclamar un descalce ahi seria una alarma falsa
+// la linea sigue a los dos filtros: una linea que llega a noviembre debajo de
+// un tablero que dice "octubre" es la misma mentira que un numero sin filtrar
+// EL ORDEN IMPORTA. Si se recorta la serie y despues se arrastra, la estacion
+// que no tuvo movimiento en el periodo desaparece y su nivel se pierde: con
+// cuatro de nueve estaciones con documento en noviembre, el total caia de
+// 13.607 a 1.637. Se arrastra sobre la serie entera y se recorta el resultado.
+const QUIETA=[
+  {cod:'A',nom:'SANTIAGO INSPECCION',nivel:1000,dias:[
+    dia('2026-10-30',0,1000,0,1000)]},
+  {cod:'B',nom:'SANTIAGO PINTURA',nivel:7,dias:[
+    dia('2026-10-30',0,5,0,5), dia('2026-11-02',5,2,0,7)]},
+];
+const TJQ=A.tarjetas(Object.assign({},D,{planta_dias:QUIETA}),
+                     A.bodegasDelCockpit(A.serieDelPeriodo(QUIETA,'2026-11')),
+                     undefined,'2026-11');
+chk('la estacion sin movimiento en el periodo sigue aportando su nivel',
+    TJQ.find(x=>x.clave==='planta').sem.slice(-1)[0].cierre===1007,
+    String(TJQ.find(x=>x.clave==='planta').sem.slice(-1)[0].cierre));
+chk('la semana de la tarjeta tambien se recorta al periodo',
+    plPER.sem.every(x=>x.dia.slice(0,7)==='2026-10'),
+    plPER.sem.map(x=>x.dia).join(' '));
+const TJDIA=A.tarjetas(D,A.bodegasDelCockpit(A.serieDelPeriodo(SERIE,'2026-10-02')),
+                       undefined,'2026-10-02');
+chk('y con un dia elegido la linea es ese dia',
+    TJDIA.find(x=>x.clave==='planta').sem.map(x=>x.dia).join(',')==='2026-10-02',
+    TJDIA.find(x=>x.clave==='planta').sem.map(x=>x.dia).join(','));
+chk('con periodo no se acusa descalce contra el saldo de hoy',
+    !/de diferencia/.test(plPER.semRot||''), plPER.semRot);
+chk('y dice a que fecha cierra', /cierra en <b>[\d.-]+<\/b> al 2026-10/.test(plPER.semRot||''),
+    plPER.semRot);
+chk('el selector de dia llega a la pagina con los dias que hay',
+    (soloCuerpo(PGJS).match(/<option value="2026-10-\d\d">/g)||[]).length===PER.dias.length,
+    String((soloCuerpo(PGJS).match(/<option value="2026-10-\d\d">/g)||[]).length));
+chk('y la barra dice hasta donde alcanza el dato',
+    /class="cobertura"/.test(PGJS) && /todavía no están extraídos/.test(PGJS));
 
 console.log('\n' + ok + ' ok, ' + fail + ' fallas');
 process.exit(fail ? 1 : 0);

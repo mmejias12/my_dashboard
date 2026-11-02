@@ -181,9 +181,21 @@ async function traerFilas(desde, hasta) {
      leería como "ninguna de estas patentes tiene guía" y pintaría de rojo
      crítico cada camión que pase. Un origen caído tiene que verse como un
      error, no como una flota sin documentos. */
-  const sinFrio = !frio || frio.sin_storage || errorFrio;
-  if (!porId.size && errorVivo && sinFrio) {
-    throw new Error('sin fuente de guías (vivo: ' + errorVivo + (errorFrio ? ' · frío: ' + errorFrio : '') + ')');
+  /* NO basta con que la consulta viva haya lanzado error: medido el 2-nov en
+     producción, una instancia recién levantada devolvió la lista VACÍA sin
+     error ninguno (lo vivo volvió sin filas y el frío todavía no tenía el
+     contenedor listo), y el andén habría leído eso como "ninguna de estas
+     patentes tiene guía". Por eso la condición es por RESULTADO: si no se juntó
+     ni una fila y el frío no alcanzó a servir —sin storage, con error, o con
+     cero días de blob leídos— eso es un origen caído, no una flota sin
+     documentos. Un día de verdad vacío, con el frío respondiendo, sí devuelve
+     lista vacía. */
+  const frioSirvio = !!(frio && !frio.sin_storage && !errorFrio && frio.dias > 0);
+  if (!porId.size && !frioSirvio) {
+    const porQueFrio = errorFrio ? errorFrio
+      : (!frio || frio.sin_storage) ? 'sin storage' : 'sin blobs en el rango';
+    throw new Error('sin fuente de guías (vivo: ' + (errorVivo || 'sin filas') +
+                    ' · frío: ' + porQueFrio + ')');
   }
 
   const filas = [...porId.values()];

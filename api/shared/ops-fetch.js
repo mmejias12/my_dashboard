@@ -38,11 +38,16 @@ async function desdeRdt(desde, hasta) {
 }
 
 // Devuelve SIEMPRE un arreglo de filas en el contrato de RDT.
-async function consultarOps(desde, hasta) {
+//
+// opts viaja tal cual a Redlink y por omisión va vacío: la ingesta y el backfill
+// corren de madrugada, sin un request HTTP esperando del otro lado, así que no
+// quieren presupuesto de tiempo. El que SÍ lo necesita es quien llame desde una
+// Function con un cliente al otro lado — el monitor de andén pregunta cada 15 s
+// y el corte de Static Web Apps es a los 45 s — y para eso pasa
+// { presupuestoMs }. Con el origen RDT el parámetro se ignora.
+async function consultarOps(desde, hasta, opts = {}) {
   if (origenActivo() === 'redlink') {
-    // Sin presupuesto de tiempo: acá no hay un request HTTP esperando del otro
-    // lado como en la Function, y la ingesta corre de madrugada.
-    const r = await RL.consultarRedlink(desde, hasta, {});
+    const r = await RL.consultarRedlink(desde, hasta, opts || {});
     return r.filas;
   }
   return desdeRdt(desde, hasta);

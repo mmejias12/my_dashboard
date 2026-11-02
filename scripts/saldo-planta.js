@@ -196,14 +196,34 @@ function cuadraturaDelNeto(netos, ley) {
  *  TODA la serie. Visto el 29-10-2026: ancla del 28-10 a las 17:41 con lineas
  *  extraidas el 29-10 a las 14:39, y los cierres de Santiago salieron corridos
  *  contra el nivel que OINM calcula por su cuenta. */
+/*  UN DOCUMENTO CON FECHA FUTURA NO CORRE LA SERIE.
+ *
+ *  Esta prueba comparaba el dia en que se leyo el ancla contra el dia del
+ *  movimiento mas nuevo, y daba por corrida la serie cuando el segundo era
+ *  posterior. Es un proxy equivocado: el InStock de SAP NO mira la fecha del
+ *  documento, cuenta el movimiento apenas se contabiliza, asi que un documento
+ *  fechado mañana YA esta adentro del ancla y la serie esta bien calculada.
+ *
+ *  Medido el 2-11-2026: una salida de 2 pallets en RT13-105 fechada al dia
+ *  siguiente marco la serie como corrida y dejo en blanco la distribucion
+ *  diaria entera en las dos paginas. Comprobado bodega por bodega, el ultimo
+ *  cierre de cada una era exactamente su InStock, incluida esa.
+ *
+ *  Un documento con fecha futura SI es una anomalia —SAP no deberia aceptarlo—
+ *  y por eso se informa, pero como algo que arreglar en SAP, no como un motivo
+ *  para no publicar. Quien comprueba de verdad que la serie y el tablero salen
+ *  del mismo saldo es cierraEnElAncla(), en armar-tablero-stock.js, que
+ *  compara los cierres contra el saldo vivo bodega por bodega. */
 function anclaAlDia(fechaAncla, diaMasNuevo) {
   const a = String(fechaAncla || '').slice(0, 10), d = String(diaMasNuevo || '').slice(0, 10);
   const fecha = x => /^\d{4}-\d{2}-\d{2}$/.test(x);
   if (!fecha(a)) return { ok: false, motivo: 'el ancla no trae fecha de lectura: no se puede saber si alcanza' };
   if (!fecha(d)) return { ok: true, motivo: null };
-  if (a < d) return { ok: false, ancla: a, ultimo: d,
-    motivo: 'el ancla se leyo el ' + a + ' y hay movimiento hasta el ' + d +
-            ': toda la serie queda corrida. Hay que volver a anclar y recien ahi leer los cierres' };
+  if (a < d) return { ok: true, futuro: true, ancla: a, ultimo: d,
+    motivo: 'hay movimiento fechado hasta el ' + d + ' y el ancla se leyo el ' + a +
+            '. La serie esta bien: el saldo vivo de SAP ya incluye ese documento, porque el InStock ' +
+            'no mira la fecha. Lo que hay que revisar es por que SAP acepto un documento con fecha ' +
+            'posterior a hoy' };
   return { ok: true, motivo: null };
 }
 
@@ -239,6 +259,10 @@ function veredicto(series, imposibles, cuad, ancla) {
   if (!series || !series.length)
     return { nivel: 'sin datos', texto: 'No hay bodegas de planta con movimiento en la ventana pedida.' };
   if (ancla && ancla.ok === false) p.push('ANCLA: ' + ancla.motivo + '.');
+  // Un documento con fecha futura no invalida la serie, pero hay que decirlo:
+  // es la misma familia que los niveles negativos —fecha de documento— y se
+  // arregla en el mismo lugar.
+  else if (ancla && ancla.futuro) p.push('FECHA FUTURA: ' + ancla.motivo + '.');
   // El nivel negativo NO es nuestro: medido el 29-10-2026, el acumulado que
   // OINM calcula por su cuenta tambien da negativo los mismos dias, y en Talca
   // al pallet (-409 el 9-oct en RT07-120, -166 en RT07-126, identicos a los

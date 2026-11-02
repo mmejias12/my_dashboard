@@ -409,6 +409,68 @@ function datos(bod, ret, cli, extra, planta) {
 // fecha va EMBEBIDA y la cuenta la hace el navegador contra su propio reloj,
 // cada vez que alguien abre el tablero. Es el unico pedazo de javascript de
 // esta pagina y existe por eso.
+/*  LOS TRES RELOJES DE LA PAGINA.
+ *
+ *  Hay tres fechas en pantalla y significan cosas distintas. Hasta ahora se
+ *  mostraban dos sin decir que gobernaba cada una, y quien leia "Saldos al 02"
+ *  al lado de "Flujos hasta el 31" y despues veia un punto de la serie fechado
+ *  el 03 no tenia como saber cual era la buena.
+ *
+ *    saldo  · el dia en que se leyo el saldo vivo de SAP. Es el numero que la
+ *             pagina publica: el pool, el indicador de planta, la tabla de
+ *             socios. Si hay una sola fecha que importa, es esta.
+ *    flujo  · hasta donde llega la extraccion de MOVIMIENTO de clientes y
+ *             retail. Gobierna el grafico del año y el cambio por socio, y
+ *             corta en el ultimo mes cerrado. No dice nada de la planta.
+ *    planta · la fecha del ultimo DOCUMENTO de la serie diaria de planta. Es
+ *             fecha de documento, no de lectura, asi que puede ser POSTERIOR
+ *             al dia en que se leyo el saldo: SAP acepto un documento con
+ *             fecha futura y el InStock no mira la fecha, de modo que ese
+ *             movimiento ya esta dentro del saldo que se leyo antes.
+ *
+ *  Un reloj sin fecha no se inventa ni se rellena con el de al lado: se deja
+ *  fuera, porque una fecha equivocada es peor que una fecha ausente. */
+function relojes(d) {
+  const dia = x => { const t = String(x == null ? '' : x).slice(0, 10);
+                     return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : null; };
+  const v = (d && d.ventana) || {};
+  const saldo = dia(v.nivel);
+  const flujo = dia(v.flujo_hasta);
+  let planta = null;
+  for (const b of ((d && d.planta_dias) || []))
+    for (const x of ((b && b.dias) || [])) {
+      const f = dia(x && x.dia);
+      if (f && (planta == null || f > planta)) planta = f;
+    }
+  const out = [];
+  if (saldo) out.push({ clave: 'saldo', fecha: saldo, etiqueta: 'Saldos SAP al',
+                        gobierna: 'el pool, el indicador de planta y la tabla de socios: ' +
+                                  'el día en que se leyó el saldo vivo' });
+  if (flujo) out.push({ clave: 'flujo', fecha: flujo, etiqueta: 'Clientes y retail · flujos hasta',
+                        desde: dia(v.flujo_desde),
+                        gobierna: 'el movimiento del año y el cambio por socio. Corta en el último ' +
+                                  'mes cerrado y no alcanza a la planta' });
+  if (planta) out.push({ clave: 'planta', fecha: planta, etiqueta: 'Planta · movimiento hasta',
+                         futuro: !!(saldo && planta > saldo),
+                         gobierna: 'la distribución diaria de las nueve estaciones. Es fecha de ' +
+                                   'documento, no de lectura' });
+  return out;
+}
+
+/*  EL AVISO DE FECHA FUTURA. Un documento fechado despues del dia en que se
+ *  leyo el saldo no rompe el dato —el InStock de SAP no mira la fecha, asi que
+ *  ese movimiento ya esta contado— pero tampoco puede pasar callado: alguien
+ *  posteo con fecha futura y eso se arregla en SAP. */
+function avisoDeFuturo(rel) {
+  const p = (Array.isArray(rel) ? rel : []).find(r => r.clave === 'planta' && r.futuro);
+  const s = (Array.isArray(rel) ? rel : []).find(r => r.clave === 'saldo');
+  if (!p || !s) return null;
+  return 'La serie de planta llega al ' + p.fecha + ' y el saldo se leyó el ' + s.fecha + ': ' +
+         'hay un documento con fecha posterior al día de la lectura. El dato no está mal —el saldo ' +
+         'vivo de SAP ya lo incluye, porque no mira la fecha del documento— pero la fecha sí: ' +
+         'se corrige en SAP.';
+}
+
 function antiguedad(medido, hoy) {
   const m = String(medido || '').slice(0, 10), h = String(hoy || '').slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(m) || !/^\d{4}-\d{2}-\d{2}$/.test(h))
@@ -935,8 +997,18 @@ p{margin:0 0 10px;max-width:68ch}
 .migaja a:hover{color:var(--marca);border-bottom-color:var(--marca)}
 .cabe{display:flex;flex-wrap:wrap;gap:14px;align-items:baseline;justify-content:space-between;
   border-bottom:2px solid var(--marca);padding-bottom:14px}
-.sello{font:500 12px/1 var(--f-cod);color:var(--tinta2);border:1px solid var(--linea);
-  border-radius:3px;padding:6px 9px;white-space:nowrap}
+.sello{font:500 12px/1.5 var(--f-cod);color:var(--tinta2);border:1px solid var(--linea);
+  border-radius:3px;padding:7px 10px}
+.sello .rel{display:block;white-space:nowrap}
+.sello .rel b{color:var(--tinta);font-weight:600}
+.sello .rel.futura b{color:var(--alerta)}
+.sello .av{display:inline-grid;place-items:center;width:14px;height:14px;border-radius:50%;
+  background:var(--alerta);color:#fff;font:700 9px/1 var(--f-ui,inherit);font-style:normal}
+/*  El aviso de fecha futura va arriba de todo y en prosa: no es un badge que
+    alguien pueda pasar de largo, es algo que hay que ir a arreglar a SAP. */
+.aviso-fecha{margin:16px 0 0;padding:11px 14px;border-radius:6px;background:var(--panel);
+  border:1px solid var(--linea);border-left:3px solid var(--alerta);
+  color:var(--tinta2);font-size:13px;line-height:1.6}
 section{margin-top:34px}
 .panel{background:var(--panel);border:1px solid var(--linea);border-radius:8px;padding:18px}
 .rejilla{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin-top:14px}
@@ -1108,9 +1180,17 @@ function pagina(d) {
   H.push('    <div class="migaja"><a href="m3link_dashboard_dark.html">Panel M3LINK</a> › ' +
          'Stock SAP › Stock y Flujos de Pallets · extracción propia M3DATA</div>');
   H.push('    <div class="sub">Pallet rojo 1,00 × 1,20 · SKU 11111111110 · extracción propia desde SAP B1</div>');
-  H.push('  </div>\n  <div class="sello" data-medido="' + esc(v.nivel) + '">Saldos al ' + esc(v.nivel) +
-         (v.flujo_hasta ? '<br>Flujos ' + esc(String(v.flujo_desde || '').slice(0, 4)) + ' al ' + esc(v.flujo_hasta) : '') +
+  /*  TRES RELOJES, NO UNO. El sello mostraba dos fechas sin decir que
+   *  gobernaba cada una, y la serie de planta llega a una tercera. Cada linea
+   *  dice ahora de que es la fecha; el detalle completo va en el title. */
+  const rel = relojes(d), aviso = avisoDeFuturo(rel);
+  H.push('  </div>\n  <div class="sello" data-medido="' + esc(v.nivel) + '">' +
+         rel.map(r => '<span class="rel' + (r.futuro ? ' futura' : '') + '" title="' +
+                      esc(r.etiqueta + ' ' + r.fecha + ' — gobierna ' + r.gobierna) + '">' +
+                      esc(r.etiqueta) + ' <b>' + esc(r.fecha) + '</b>' +
+                      (r.futuro ? ' <i class="av">!</i>' : '') + '</span>').join('') +
          '</div>\n</header>\n');
+  if (aviso) H.push('<div class="aviso-fecha">' + esc(aviso) + '</div>\n');
 
   // ── el pool ──
   H.push('<section>\n  <h2>El pool</h2>');
@@ -1250,6 +1330,15 @@ function pagina(d) {
   // ── que sostiene estas cifras ──
   H.push('<section>\n  <h2>Qué sostiene estas cifras</h2>\n  <div class="dos" style="margin-top:14px">');
   H.push('    <div class="panel">\n      <h3>De dónde sale cada número</h3>\n      <dl>');
+  H.push('        <dt>Las fechas del sello</dt><dd>No son versiones del mismo dato, son relojes ' +
+         'distintos. <b>Saldos SAP</b> es el día en que se leyó el saldo vivo y manda sobre el pool, ' +
+         'el indicador de planta y la tabla de socios. <b>Clientes y retail · flujos</b> es hasta ' +
+         'dónde llega la extracción de movimiento de esas dos bodegas: gobierna el gráfico del año ' +
+         'y el cambio por socio, corta en el último mes cerrado y no alcanza a la planta. ' +
+         '<b>Planta · movimiento</b> es la fecha del último documento de la serie diaria — fecha de ' +
+         'documento, no de lectura—, así que puede ir más allá del día en que se leyó el saldo sin ' +
+         'que haya contradicción: el <code class="campo">InStock</code> no mira la fecha del ' +
+         'documento, de modo que ese movimiento ya está dentro del saldo.</dd>');
   H.push('        <dt>Saldo por bodega</dt><dd>SAP B1 Service Layer, ' +
          '<code class="campo">ItemWarehouseInfoCollection.InStock</code>. Es el saldo que SAP ya ' +
          'tiene calculado, sin acumular series.</dd>');
@@ -1320,9 +1409,8 @@ function pagina(d) {
   }
   H.push('</section>\n');
 
-  H.push('<footer>\n  Extracción propia M3DATA desde SAP B1 · base CLPRDREDTEC · saldos al ' +
-         esc(v.nivel) + (v.flujo_hasta ? ',\n  flujos del ' + esc(v.flujo_desde) + ' al ' +
-         esc(v.flujo_hasta) + '.' : '.') +
+  H.push('<footer>\n  Extracción propia M3DATA desde SAP B1 · base CLPRDREDTEC · ' +
+         rel.map(r => esc(r.etiqueta.toLowerCase()) + ' ' + esc(r.fecha)).join(' · ') + '.' +
          '\n  Saldo de bodega leído de SAP el ' + esc(String(d.generado).slice(0, 16).replace('T', ' ')) +
          ' UTC.\n  Página armada por scripts/armar-tablero-stock.js: ninguna cifra está escrita a mano.' +
          '\n</footer>\n');
@@ -1431,7 +1519,7 @@ function main() {
 }
 
 module.exports = { esNumero, mil, conSigno, clasePos, pct, pct1, esc, sinBom,
-                   serieDePlanta, anclaCalza, cierraEnElAncla,
+                   serieDePlanta, anclaCalza, cierraEnElAncla, relojes, avisoDeFuturo,
                    plantaDeBodega, gruposDeSerie, etiquetaDeMes, mesesDeSerie,
                    diasDelMes, resumenDelMes, altoVisible, ejeDeDias, svgFlujoDia, svgNivelDia,
                    tablaDeDias, panelDeMes, bloqueDePlanta,

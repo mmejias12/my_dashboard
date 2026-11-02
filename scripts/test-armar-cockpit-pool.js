@@ -599,5 +599,143 @@ chk('el html sigue cerrando los script que abre',
     (PGM.match(/<script/g)||[]).length===(PGM.match(/<\/script>/g)||[]).length,
     (PGM.match(/<script/g)||[]).length+'/'+(PGM.match(/<\/script>/g)||[]).length);
 
+console.log('\n— el nivel diario de la planta entera se arrastra, no se suma —');
+// Dos estaciones que no se mueven el mismo dia. Sumar las filas del dia daria
+// el nivel de UNA sola; lo correcto es arrastrar la que no tuvo documento.
+const DOS=[
+  {cod:'A',nom:'A',nivel:30,dias:[dia('2026-10-01',10,0,0,10), dia('2026-10-03',10,20,0,30)]},
+  {cod:'B',nom:'B',nivel:5,dias:[dia('2026-10-02',100,0,95,5)]},
+];
+const ND=A.nivelDiarioDePlanta(DOS);
+chk('el calendario junta los dias de todas las estaciones',
+    ND.map(x=>x.dia).join(',')==='2026-10-01,2026-10-02,2026-10-03', ND.map(x=>x.dia).join(','));
+// el dia 1 B todavia no se movio: vale su apertura (100), no cero
+chk('antes de su primer dia, una estacion vale su apertura, no cero',
+    ND[0].cierre===110, String(ND[0].cierre));
+chk('el dia que solo se mueve una, la otra arrastra su nivel',
+    ND[1].cierre===15, String(ND[1].cierre));
+chk('y al final suma los ultimos cierres de cada una',
+    ND[2].cierre===35, String(ND[2].cierre));
+// LA PRUEBA QUE IMPORTA: el ultimo total cae en el saldo vivo de SAP.
+// SERIE no sirve para esto — sus niveles declarados (7.877) no son el final de
+// sus propios dias (125), y ESA incoherencia la prueba el test de mas abajo.
+// Aca hace falta un fixture que SI cuadre consigo mismo, que es lo unico que
+// permite probar que el arrastre aterriza donde debe.
+const COHS=[
+  {cod:'RT13-100',nom:'SANTIAGO INSPECCION',nivel:300,dias:[
+    dia('2026-10-01',100,250,50,300), dia('2026-10-03',300,0,100,200),
+    dia('2026-10-05',200,100,0,300)]},
+  {cod:'RT13-102',nom:'SANTIAGO REPARACION',nivel:80,dias:[
+    dia('2026-10-02',50,40,10,80)]},
+];
+const COHD={pool:1000,pool_sap:1000,fuera_del_pool:0,
+  bodegas:{CLIENTES:{nivel:620,socios:600,residuo:20,n:3},
+           RETAIL:{nivel:0,socios:0,residuo:0,n:0},
+           PLANTA:{nivel:380,fuera:0,sap:380}},
+  anio:{ret:0,cli:0}, meses:[], planta:[
+    {cod:'RT13-100',nom:'SANTIAGO INSPECCION',nivel:300,nueve:true},
+    {cod:'RT13-102',nom:'SANTIAGO REPARACION',nivel:80,nueve:true}],
+  planta_dias:COHS, planta_ancla:'2026-10-05T12:00:00.000Z', controles:[],
+  ventana:{nivel:'2026-10-05',flujo_hasta:'2026-10-05',flujo_desde:'2026-10-01'}};
+const NDR=A.nivelDiarioDePlanta(COHS);
+chk('el ultimo total cae exactamente en el indicador declarado',
+    NDR[NDR.length-1].cierre===COHD.bodegas.PLANTA.nivel,
+    NDR[NDR.length-1].cierre+' vs '+COHD.bodegas.PLANTA.nivel);
+chk('y la suma de los ultimos cierres es ese mismo numero',
+    COHS.reduce((a,b)=>a+b.dias[b.dias.length-1].cierre,0)===380);
+chk('sin serie no inventa niveles',
+    A.nivelDiarioDePlanta([]).length===0 && A.nivelDiarioDePlanta(null).length===0);
+chk('una estacion sin dias no entra ni aporta cero',
+    A.nivelDiarioDePlanta([SERIE[3]]).length===0);
+// el orden del json no puede cambiar el resultado
+const REV=A.nivelDiarioDePlanta([{cod:'A',nom:'A',nivel:30,dias:[
+  dia('2026-10-03',10,20,0,30), dia('2026-10-01',10,0,0,10)]}]);
+chk('los dias desordenados dan el mismo arrastre',
+    REV.map(x=>x.dia+':'+x.cierre).join(',')==='2026-10-01:10,2026-10-03:30',
+    REV.map(x=>x.dia+':'+x.cierre).join(','));
+// el orden importa de verdad cuando una estacion todavia no empieza: su
+// aporte es la apertura de su PRIMER dia, y si los dias vienen al reves la
+// "primera" fila es la ultima y el nivel de arranque sale de otro dia
+const DESORD=[
+  {cod:'A',nom:'A',nivel:90,dias:[dia('2026-10-04',50,40,0,90), dia('2026-10-02',20,30,0,50)]},
+  {cod:'B',nom:'B',nivel:5,dias:[dia('2026-10-01',5,0,0,5)]},
+];
+chk('el arrastre no depende del orden en que vengan los dias',
+    A.nivelDiarioDePlanta(DESORD).map(x=>x.dia+':'+x.cierre).join(',')
+      ==='2026-10-01:25,2026-10-02:55,2026-10-04:95',
+    A.nivelDiarioDePlanta(DESORD).map(x=>x.dia+':'+x.cierre).join(','));
+chk('una fecha ilegible no entra al calendario',
+    A.nivelDiarioDePlanta([{cod:'A',dias:[{dia:'ayer',apertura:0,cierre:5},
+      dia('2026-10-02',0,5,0,5)]}]).length===1);
+
+console.log('\n— la mini-serie del nivel es una linea con su banda declarada —');
+chk('sin dias no dibuja nada', A.miniNivel([])==='' && A.miniNivel(null)==='');
+const MN=A.miniNivel([{dia:'2026-10-28',cierre:14210},{dia:'2026-10-31',cierre:16525},
+                      {dia:'2026-11-03',cierre:13607}]);
+chk('un punto por dia', (MN.match(/<circle /g)||[]).length===3,
+    String((MN.match(/<circle /g)||[]).length));
+chk('con su linea y su area', /<polyline [^>]*class="mn"/.test(MN) && /<path [^>]*class="mna"/.test(MN));
+// la banda de la semana va escrita: una linea sin banda declarada exagera
+chk('la banda de la semana va en el rotulo del svg',
+    /entre 13\.607 y 16\.525/.test(MN), MN.slice(0,170));
+chk('cada punto dice su dia y su monto', /<title>2026-10-31: 16\.525<\/title>/.test(MN));
+chk('y el ultimo punto va marcado distinto',
+    (MN.match(/class="mnu"/g)||[]).length===1 && /r="3" class="mnu"/.test(MN));
+// el maximo arriba y el minimo abajo, no al reves
+const ys=[...MN.matchAll(/<circle cx="[\d.]+" cy="([\d.]+)"/g)].map(m=>+m[1]);
+chk('el maximo queda mas arriba que el minimo', ys[1]<ys[0] && ys[1]<ys[2],
+    ys.join(','));
+chk('el ultimo, que es el minimo, queda al fondo', ys[2]===Math.max(...ys), ys.join(','));
+// una semana sin variacion no divide por cero ni dibuja un salto
+const PLANA=A.miniNivel([{dia:'2026-10-01',cierre:100},{dia:'2026-10-02',cierre:100}]);
+const yp=[...PLANA.matchAll(/cy="([\d.]+)"/g)].map(m=>+m[1]);
+chk('una semana sin variacion es una linea recta, no un error',
+    yp.length===2 && yp[0]===yp[1] && isFinite(yp[0]), yp.join(','));
+chk('y un solo dia tampoco revienta',
+    /<circle /.test(A.miniNivel([{dia:'2026-10-01',cierre:9}])));
+chk('todo cabe en la caja', (()=>{const vb=/viewBox="0 0 (\d+) (\d+)"/.exec(MN);
+    const W=+vb[1],H=+vb[2];
+    return [...MN.matchAll(/cx="([\d.]+)" cy="([\d.]+)" r="([\d.]+)"/g)]
+      .every(m=>+m[1]-+m[3]>=0 && +m[2]-+m[3]>=0 && +m[1]+ +m[3]<=W && +m[2]+ +m[3]<=H);})(),
+    MN.slice(MN.indexOf('<circle')));
+chk('la fecha va escapada en el title',
+    /<title>&lt;x&gt;: 1<\/title>/.test(A.miniNivel([{dia:'<x>',cierre:1}])));
+
+console.log('\n— la tarjeta de planta publica su semana —');
+const TJP=A.tarjetas(D,BS).find(x=>x.clave==='planta');
+chk('la tarjeta trae la semana del nivel', Array.isArray(TJP.sem) && TJP.sem.length>0,
+    String(TJP.sem&&TJP.sem.length));
+chk('y la marca como nivel, no como cierres de estacion', TJP.semTipo==='nivel', TJP.semTipo);
+chk('el rotulo declara la banda de la semana', /entre <b>/.test(TJP.semRot), TJP.semRot);
+// el numero de la tarjeta y el ultimo de la linea tienen que ser el mismo,
+// y cuando lo son la tarjeta lo dice en vez de dejarlo a la fe del que mira
+const TJC=A.tarjetas(COHD,A.bodegasDelCockpit(COHS)).find(x=>x.clave==='planta');
+chk('con un dato que cuadra, declara que el cierre es el saldo de SAP',
+    /el mismo saldo que SAP/.test(TJC.semRot), TJC.semRot);
+chk('y el ultimo punto de la linea ES el numero que la tarjeta publica',
+    TJC.sem[TJC.sem.length-1].cierre===COHD.bodegas.PLANTA.nivel,
+    TJC.sem[TJC.sem.length-1].cierre+' vs '+TJC.kv);
+// y cuando NO cuadra —el fixture SERIE no cuadra consigo mismo— la tarjeta
+// tiene que decirlo, no dibujar la linea y callarse
+chk('si la linea no cierra en el saldo de SAP, la tarjeta lo declara',
+    /de diferencia/.test(TJP.semRot) && /malo/.test(TJP.semRot), TJP.semRot);
+chk('nombrando los dos numeros y la diferencia',
+    /la serie cierra en 125 y SAP dice 7\.877: -7\.752 de diferencia/.test(TJP.semRot),
+    TJP.semRot);
+chk('las otras tarjetas no se llenan de mini-series',
+    A.tarjetas(D,BS).filter(x=>x.sem&&x.sem.length).length===1,
+    String(A.tarjetas(D,BS).filter(x=>x.sem&&x.sem.length).length));
+chk('y sin serie de planta la tarjeta no dibuja una linea vacia',
+    (x=>!x.semRot&&(!x.sem||!x.sem.length))(
+      A.tarjetas(Object.assign({},D,{planta_dias:[]}),BS).find(y=>y.clave==='planta')));
+
+const PGS=A.pagina(D);
+chk('la linea llega dibujada a la pagina, no a medias',
+    /<svg class="mini nivel"/.test(PGS) && /class="mnu"/.test(PGS));
+chk('con el rotulo al lado', /nivel del 2026-10-01 al /.test(PGS), '');
+chk('y una sola vez: es la tarjeta de planta, no todas',
+    (PGS.match(/<svg class="mini nivel"/g)||[]).length===1,
+    String((PGS.match(/<svg class="mini nivel"/g)||[]).length));
+
 console.log('\n' + ok + ' ok, ' + fail + ' fallas');
 process.exit(fail ? 1 : 0);

@@ -567,30 +567,85 @@ chk('el recorrido manda sobre el codigo de bodega',
 console.log('\n— el ancla de la serie y la del tablero tienen que ser la misma —');
 // si no, los cierres diarios no son los mismos numeros que el saldo por
 // bodega de mas arriba y la pagina se contradice sola
-chk('misma fecha y declarada al dia, calza',
-    A.anclaCalza({ ancla:'2026-10-29T14:00:00Z', ancla_al_dia:true }, { generado:'2026-10-29T09:00:00Z' }).ok === true);
-// Que las dos fechas coincidan NO basta: las dos salen del mismo
-// bodegas-hoy.json, asi que una serie calculada con lineas mas nuevas que el
-// ancla declara la misma fecha y viene corrida igual. saldo-planta lo sabe y
-// lo escribe; aca se exige.
-const COR = A.anclaCalza({ ancla:'2026-10-28T17:41:00Z', ancla_al_dia:false }, { generado:'2026-10-28T17:41:00Z' });
-chk('misma fecha pero marcada como corrida: no se dibuja', COR.ok === false, JSON.stringify(COR));
-chk('y dice que saldo-planta la marco', /marcó como corrida/.test(COR.motivo), COR.motivo);
-// fallar cerrado: un json viejo que no declara el campo tampoco pasa
-const VIE = A.anclaCalza({ ancla:'2026-10-29T14:00:00Z' }, { generado:'2026-10-29T09:00:00Z' });
-chk('un json sin ancla_al_dia tampoco pasa', VIE.ok === false, JSON.stringify(VIE));
-chk('y dice que falta el campo', /no trae ancla_al_dia/.test(VIE.motivo), VIE.motivo);
-const AM = A.anclaCalza({ ancla:'2026-10-28T17:41:00Z', ancla_al_dia:true }, { generado:'2026-10-29T14:39:00Z' });
+// el saldo vivo contra el que se comprueba el cierre de cada bodega
+const BOD1 = { generado:'2026-10-29T09:00:00Z', bodegas:[
+  { whs:'RT13-100', nombre:'SANTIAGO INSPECCION', saldo:1990 },
+  { whs:'RT13-105', nombre:'SANTIAGO DISPONIBLE', saldo:1604 } ] };
+const dia = (d, ci) => ({ dia:d, apertura:0, entradas:0, salidas:0, cierre:ci, firme:true });
+const SERIE1 = [{ whs:'RT13-100', nombre:'SANTIAGO INSPECCION',
+                  dias:[dia('2026-10-28',1616), dia('2026-10-29',1990)] },
+                { whs:'RT13-105', nombre:'SANTIAGO DISPONIBLE',
+                  dias:[dia('2026-10-28',1160), dia('2026-10-29',1604)] }];
+chk('misma fecha y los cierres calzan con el saldo vivo',
+    A.anclaCalza({ ancla:'2026-10-29T14:00:00Z', bodegas:SERIE1 }, BOD1).ok === true,
+    JSON.stringify(A.anclaCalza({ ancla:'2026-10-29T14:00:00Z', bodegas:SERIE1 }, BOD1)));
+/*  QUE LAS DOS FECHAS COINCIDAN NO BASTA. Los dos archivos salen del mismo
+ *  bodegas-hoy, asi que una serie calculada contra OTRO ancla declara la misma
+ *  fecha igual. Lo unico que lo ve es comparar los cierres con el saldo vivo.
+ *  Esto reemplaza a la exigencia de ancla_al_dia, que se decidia por la FECHA
+ *  del movimiento mas nuevo y daba falso positivo: el 2-11-2026 un documento
+ *  fechado al dia siguiente —que el InStock de SAP ya incluye— borro la
+ *  seccion entera con la serie bien calculada. */
+const OTRA = A.anclaCalza({ ancla:'2026-10-29T14:00:00Z', bodegas:[
+  { whs:'RT13-100', nombre:'X', dias:[dia('2026-10-29', 1875)] },
+  { whs:'RT13-105', nombre:'Y', dias:[dia('2026-10-29', 1604)] } ] }, BOD1);
+chk('misma fecha pero un cierre que no es el saldo vivo: no se dibuja', OTRA.ok === false, JSON.stringify(OTRA));
+chk('y nombra la bodega y los dos numeros',
+    /RT13-100 cierra en 1\.875 y SAP dice 1\.990/.test(OTRA.motivo), OTRA.motivo);
+chk('y dice cuantas reviso', /1 de 2 bodega/.test(OTRA.motivo), OTRA.motivo);
+// fallar cerrado: si no se pudo comparar ni una, no se afirma que calza
+const NADA = A.anclaCalza({ ancla:'2026-10-29T14:00:00Z', bodegas:[
+  { whs:'RT99-999', nombre:'Z', dias:[dia('2026-10-29', 5)] } ] }, BOD1);
+chk('sin una sola bodega en comun no pasa', NADA.ok === false, JSON.stringify(NADA));
+chk('y lo dice', /no tienen bodegas en común/.test(NADA.motivo), NADA.motivo);
+// una bodega sin dias no se puede comprobar y no cuenta ni a favor ni en contra
+const SINDIAS = A.anclaCalza({ ancla:'2026-10-29T14:00:00Z', bodegas:[
+  { whs:'RT13-100', nombre:'X', dias:[dia('2026-10-29',1990)] },
+  { whs:'RT13-105', nombre:'Y', dias:[] } ] }, BOD1);
+chk('una bodega sin dias no invalida el resto', SINDIAS.ok === true, JSON.stringify(SINDIAS));
+chk('y se dice que se reviso una sola', SINDIAS.cierra.revisadas === 1, String(SINDIAS.cierra.revisadas));
+// UN DOCUMENTO CON FECHA FUTURA pasa, porque el InStock ya lo incluye
+const FUTURO = A.anclaCalza({ ancla:'2026-10-29T14:00:00Z', ancla_al_dia:false, bodegas:[
+  { whs:'RT13-100', nombre:'X', dias:[dia('2026-10-29',1616), dia('2026-10-30',1990)] },
+  { whs:'RT13-105', nombre:'Y', dias:[dia('2026-10-29',1604)] } ] }, BOD1);
+chk('un movimiento fechado mañana ya no borra la seccion', FUTURO.ok === true, JSON.stringify(FUTURO));
+const AM = A.anclaCalza({ ancla:'2026-10-28T17:41:00Z', bodegas:SERIE1 }, { generado:'2026-10-29T14:39:00Z', bodegas:BOD1.bodegas });
 chk('distinta fecha, no calza', AM.ok === false);
 chk('y dice las dos fechas', /2026-10-28/.test(AM.motivo) && /2026-10-29/.test(AM.motivo), AM.motivo);
-chk('sin ancla en la serie lo dice', /serie de planta no trae ancla/.test(A.anclaCalza({ ancla_al_dia:true }, { generado:'2026-10-29' }).motivo));
-chk('sin fecha en el tablero lo dice', /tablero no trae fecha/.test(A.anclaCalza({ ancla:'2026-10-29', ancla_al_dia:true }, {}).motivo));
+chk('sin ancla en la serie lo dice', /serie de planta no trae ancla/.test(A.anclaCalza({}, { generado:'2026-10-29' }).motivo));
+chk('sin fecha en el tablero lo dice', /tablero no trae fecha/.test(A.anclaCalza({ ancla:'2026-10-29' }, {}).motivo));
 chk('sin nada no revienta', A.anclaCalza(null, null).ok === false);
 // dos textos iguales que NO son fechas no son un ancla que calce: sin fecha
 // no hay nada que comparar y hay que decirlo
 chk('dos valores iguales que no son fechas no calzan',
-    A.anclaCalza({ ancla:'hoy', ancla_al_dia:true }, { generado:'hoy' }).ok === false,
-    JSON.stringify(A.anclaCalza({ ancla:'hoy', ancla_al_dia:true }, { generado:'hoy' })));
+    A.anclaCalza({ ancla:'hoy' }, { generado:'hoy' }).ok === false,
+    JSON.stringify(A.anclaCalza({ ancla:'hoy' }, { generado:'hoy' })));
+
+console.log('\n— el cierre de cada bodega contra su saldo vivo —');
+const CE = A.cierraEnElAncla({ bodegas:SERIE1 }, BOD1);
+chk('revisa las dos y no encuentra ninguna mala', CE.revisadas === 2 && CE.malas.length === 0 && CE.ok === true,
+    JSON.stringify(CE));
+chk('una que no calza queda nombrada con sus dos numeros',
+    (() => { const x = A.cierraEnElAncla({ bodegas:[{ whs:'RT13-100', dias:[dia('2026-10-29', 7)] }] }, BOD1);
+             return x.malas.length === 1 && x.malas[0].cierre === 7 && x.malas[0].ancla === 1990; })());
+// el ULTIMO cierre, no el primero: la serie va de la fecha mas vieja a la mas nueva
+chk('compara el ultimo dia, no el primero',
+    A.cierraEnElAncla({ bodegas:[{ whs:'RT13-105', dias:[dia('2026-10-28', 99), dia('2026-10-29', 1604)] }] }, BOD1).ok === true);
+chk('una bodega que el tablero no tiene se salta', A.cierraEnElAncla({ bodegas:[{ whs:'RT99-999', dias:[dia('2026-10-29',1)] }] }, BOD1).revisadas === 0);
+// un codigo con espacios es el mismo codigo: viene de SAP
+// el codigo viene de SAP por los DOS lados: un espacio en cualquiera de los
+// dos archivos dejaria la bodega sin comparar y el control diria que calza
+chk('un codigo con espacios en la serie igual se compara',
+    A.cierraEnElAncla({ bodegas:[{ whs:' RT13-100 ', dias:[dia('2026-10-29',1990)] }] }, BOD1).ok === true);
+chk('y con espacios en el tablero tambien',
+    A.cierraEnElAncla({ bodegas:[{ whs:'RT13-100', dias:[dia('2026-10-29',1990)] }] },
+                      { bodegas:[{ whs:' RT13-100 ', saldo:1990 }] }).ok === true);
+chk('sin nada no revienta', A.cierraEnElAncla(null, null).ok === false &&
+    A.cierraEnElAncla({}, {}).revisadas === 0);
+// un saldo de cero es un saldo, no un dato que falte
+chk('un saldo en cero se compara igual',
+    A.cierraEnElAncla({ bodegas:[{ whs:'RT07-122', dias:[dia('2026-10-29',0)] }] },
+                      { bodegas:[{ whs:'RT07-122', saldo:0 }] }).ok === true);
 
 console.log('\n— datos() con y sin la planta —');
 const VAC = { socios:[], nivel:{}, mensual:[], ventana:{} };

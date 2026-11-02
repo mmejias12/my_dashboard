@@ -50,8 +50,18 @@ p{margin:0 0 10px;max-width:68ch}
 .migaja a:hover{color:var(--marca);border-bottom-color:var(--marca)}
 .cabe{display:flex;flex-wrap:wrap;gap:14px;align-items:baseline;justify-content:space-between;
   border-bottom:2px solid var(--marca);padding-bottom:14px}
-.sello{font:500 12px/1 var(--f-cod);color:var(--tinta2);border:1px solid var(--linea);
-  border-radius:3px;padding:6px 9px;white-space:nowrap}
+.sello{font:500 12px/1.5 var(--f-cod);color:var(--tinta2);border:1px solid var(--linea);
+  border-radius:3px;padding:7px 10px}
+.sello .rel{display:block;white-space:nowrap}
+.sello .rel b{color:var(--tinta);font-weight:600}
+.sello .rel.futura b{color:var(--alerta)}
+.sello .av{display:inline-grid;place-items:center;width:14px;height:14px;border-radius:50%;
+  background:var(--alerta);color:#fff;font:700 9px/1 var(--f-ui,inherit);font-style:normal}
+/*  El aviso de fecha futura va arriba de todo y en prosa: no es un badge que
+    alguien pueda pasar de largo, es algo que hay que ir a arreglar a SAP. */
+.aviso-fecha{margin:16px 0 0;padding:11px 14px;border-radius:6px;background:var(--panel);
+  border:1px solid var(--linea);border-left:3px solid var(--alerta);
+  color:var(--tinta2);font-size:13px;line-height:1.6}
 section{margin-top:34px}
 .panel{background:var(--panel);border:1px solid var(--linea);border-radius:8px;padding:18px}
 .rejilla{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin-top:14px}
@@ -160,8 +170,10 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--linea);
     <div class="migaja"><a href="m3link_dashboard_dark.html">Panel M3LINK</a> › Stock SAP › Stock y Flujos de Pallets · extracción propia M3DATA</div>
     <div class="sub">Pallet rojo 1,00 × 1,20 · SKU 11111111110 · extracción propia desde SAP B1</div>
   </div>
-  <div class="sello" data-medido="2026-11-02">Saldos al 2026-11-02<br>Flujos 2026 al 2026-10-31</div>
+  <div class="sello" data-medido="2026-11-02"><span class="rel" title="Saldos SAP al 2026-11-02 — gobierna el pool, el indicador de planta y la tabla de socios: el día en que se leyó el saldo vivo">Saldos SAP al <b>2026-11-02</b></span><span class="rel" title="Clientes y retail · flujos hasta 2026-10-31 — gobierna el movimiento del año y el cambio por socio. Corta en el último mes cerrado y no alcanza a la planta">Clientes y retail · flujos hasta <b>2026-10-31</b></span><span class="rel futura" title="Planta · movimiento hasta 2026-11-03 — gobierna la distribución diaria de las nueve estaciones. Es fecha de documento, no de lectura">Planta · movimiento hasta <b>2026-11-03</b> <i class="av">!</i></span></div>
 </header>
+
+<div class="aviso-fecha">La serie de planta llega al 2026-11-03 y el saldo se leyó el 2026-11-02: hay un documento con fecha posterior al día de la lectura. El dato no está mal —el saldo vivo de SAP ya lo incluye, porque no mira la fecha del documento— pero la fecha sí: se corrige en SAP.</div>
 
 <section>
   <h2>El pool</h2>
@@ -327,6 +339,7 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--linea);
     <div class="panel">
       <h3>De dónde sale cada número</h3>
       <dl>
+        <dt>Las fechas del sello</dt><dd>No son versiones del mismo dato, son relojes distintos. <b>Saldos SAP</b> es el día en que se leyó el saldo vivo y manda sobre el pool, el indicador de planta y la tabla de socios. <b>Clientes y retail · flujos</b> es hasta dónde llega la extracción de movimiento de esas dos bodegas: gobierna el gráfico del año y el cambio por socio, corta en el último mes cerrado y no alcanza a la planta. <b>Planta · movimiento</b> es la fecha del último documento de la serie diaria — fecha de documento, no de lectura—, así que puede ir más allá del día en que se leyó el saldo sin que haya contradicción: el <code class="campo">InStock</code> no mira la fecha del documento, de modo que ese movimiento ya está dentro del saldo.</dd>
         <dt>Saldo por bodega</dt><dd>SAP B1 Service Layer, <code class="campo">ItemWarehouseInfoCollection.InStock</code>. Es el saldo que SAP ya tiene calculado, sin acumular series.</dd>
         <dt>Nivel por socio</dt><dd>Serie de movimientos por ubicación extraída de SAP, repartida con el maestro de ubicaciones. El total lo dicta la bodega; la ubicación sólo lo reparte.</dd>
         <dt>Flujo mensual</dt><dd>Diario de movimientos de inventario (OINM), agrupado por mes de fecha de documento.</dd>
@@ -363,8 +376,7 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--linea);
 </section>
 
 <footer>
-  Extracción propia M3DATA desde SAP B1 · base CLPRDREDTEC · saldos al 2026-11-02,
-  flujos del 2026-01-01 al 2026-10-31.
+  Extracción propia M3DATA desde SAP B1 · base CLPRDREDTEC · saldos sap al 2026-11-02 · clientes y retail · flujos hasta 2026-10-31 · planta · movimiento hasta 2026-11-03.
   Saldo de bodega leído de SAP el 2026-11-02 16:34 UTC.
   Página armada por scripts/armar-tablero-stock.js: ninguna cifra está escrita a mano.
 </footer>

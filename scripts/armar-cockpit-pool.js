@@ -87,6 +87,52 @@ function bodegasDelCockpit(serie) {
                             (a.cod < b.cod ? -1 : a.cod > b.cod ? 1 : 0));
 }
 
+/*  EL MES CON QUE ABRE EL CAJON DE UNA ESTACION.
+ *
+ *  No el mes mas nuevo de la pagina: el mes mas nuevo QUE ESA ESTACION TIENE.
+ *  Cinco de las nueve cierran su serie en octubre porque SAP no les registro
+ *  movimiento despues, asi que abrir siempre en el mes mas nuevo del tablero
+ *  les muestra "sin movimiento" — y entre esas cinco estan justamente las tres
+ *  que el titular acusa. Cuando la estacion cierra dias bajo cero manda el mes
+ *  del peor dia: es el que hay que mirar, no el ultimo. */
+function mesDeApertura(bodega) {
+  const dias = (bodega && Array.isArray(bodega.dias)) ? bodega.dias : [];
+  if (!dias.length) return null;
+  let peor = null, ultimo = null;
+  for (const d of dias) {
+    const m = String(d && d.dia).slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(m)) continue;
+    if (ultimo == null || m > ultimo) ultimo = m;
+    const c = Number(d.cierre) || 0;
+    if (c < 0 && (peor == null || c < peor.c)) peor = { c, m };
+  }
+  return peor ? peor.m : ultimo;
+}
+
+/*  LOS MESES QUE UNA ESTACION TIENE. Los que tiene, no los que el tablero
+ *  ofrece: un selector que ofrece un mes vacio miente dos veces, al ofrecerlo
+ *  y al no encontrar nada. */
+function mesesDeBodega(bodega) {
+  const visto = {}, out = [];
+  for (const d of ((bodega && bodega.dias) || [])) {
+    const m = String(d && d.dia).slice(0, 7);
+    if (/^\d{4}-\d{2}$/.test(m) && !visto[m]) { visto[m] = true; out.push(m); }
+  }
+  return out.sort();
+}
+
+/*  LA ULTIMA SEMANA DE UNA ESTACION.
+ *
+ *  Los ultimos n dias QUE LA ESTACION TIENE, no los ultimos n del calendario.
+ *  Si tiene menos de n devuelve los que hay: una semana corta es un dato, y
+ *  rellenarla con ceros seria inventar dias que SAP nunca registro. */
+function ultimaSemana(bodega, n) {
+  const dias = (bodega && Array.isArray(bodega.dias)) ? bodega.dias : [];
+  const cuantos = Number(n) > 0 ? Math.floor(Number(n)) : 7;
+  return dias.slice(Math.max(0, dias.length - cuantos))
+             .map(d => ({ dia: String(d.dia), cierre: Number(d.cierre) || 0 }));
+}
+
 /*  LA MATRIZ PLANTA x ETAPA.
  *
  *  Es el grafico que contesta "¿donde esta el problema?" sin que nadie tenga
@@ -498,6 +544,18 @@ table.cart{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;m
 .drawer th.num{text-align:right}
 .cod{font:400 11px "JetBrains Mono",ui-monospace,monospace;color:var(--ink3);white-space:nowrap}
 .malo{color:var(--crit)}
+
+/* la mini-serie de cierres de la semana, dentro de la fila del desglose */
+.sem{display:flex;align-items:center;gap:9px;margin-top:6px;flex-wrap:wrap}
+.sem .m{color:var(--ink3);font-size:10.5px;line-height:1.4}
+svg.mini{width:122px;height:34px;flex:none;display:block;overflow:visible}
+svg.mini .mp{fill:var(--pla)}
+svg.mini .mb{fill:var(--crit)}
+svg.mini .mej{stroke:var(--line2);stroke-width:1}
+
+/* los meses del cajon de estacion: solo los que esa estacion tiene */
+.dmes{display:flex;gap:7px;flex-wrap:wrap;margin:12px 0 2px}
+.dmes .chip{padding:5px 11px;min-height:28px;font-size:11.5px}
 .d-pos{color:var(--good)} .d-neg{color:var(--crit)} .d-nul{color:var(--ink3)}
 
 /* metodo y pie */
@@ -693,13 +751,22 @@ function composiciones(datos, bodegas) {
     'Contándolos, SAP tiene ' + mil(d.pool_sap) + ' en bodega. No son pallet perdido: están en ' +
     'bodegas de SAP que no participan del recorrido, así que sumarlos infla el pool.');
 
+  /*  La serie cruda por codigo: bodegasDelCockpit resume los dias en un numero
+   *  —cuantos hay— y aca hacen falta los dias mismos para la mini-serie. */
+  const crudas = {};
+  for (const x of (Array.isArray(d.planta_dias) ? d.planta_dias : []))
+    if (x && x.cod != null) crudas[String(x.cod)] = x;
+
   C.planta = desglose('planta', 'Planta · indicador', mil(pla.nivel), 'pallets',
     'Las nueve estaciones del recorrido del pallet, en el orden en que lo atraviesan. ' +
     'La definición de cuáles cuentan es de negocio, no de SAP: está declarada en el código.',
     porRecorrido(bs).map(x => ({ a: x.nom, b: x.cod + ' · ' + x.etapa.charAt(0) + x.etapa.slice(1).toLowerCase(),
-                                 v: x.nivel })),
+                                 v: x.nivel, sem: ultimaSemana(crudas[x.cod], 7) })),
     { a: 'Indicador de planta', v: Number(pla.nivel) || 0 }, bloqueFuera,
-    'Una estación en cero no es un dato que falte: es una estación vacía, y eso es información.');
+    'Una estación en cero no es un dato que falte: es una estación vacía, y eso es información. ' +
+    'La mini-serie de cada fila son sus últimos siete días de cierre, y cada una está en su ' +
+    'propia escala: sirve para ver la forma de la semana, no para comparar una estación con otra. ' +
+    'No todas terminan el mismo día, porque cada una llega hasta donde SAP le registró movimiento.');
 
   const atribuido = (Number(cli.socios) || 0) + (Number(ret.socios) || 0);
   const bodega = (Number(cli.nivel) || 0) + (Number(ret.nivel) || 0);
@@ -785,6 +852,53 @@ function composiciones(datos, bodegas) {
   return C;
 }
 
+/*  LA MINI-SERIE DE CIERRES DE LA SEMANA.
+ *
+ *  Siete barras desde una linea de cero: arriba el cierre positivo, abajo el
+ *  negativo. Sirve para ver la FORMA de la semana sin abrir el detalle — que
+ *  una estacion viene cayendo, que otra rebota el mismo dia — que es lo que
+ *  un numero solo no puede decir.
+ *
+ *  LA ESCALA ES LA DE CADA ESTACION, no una comun. Una de 7.161 y otra de 100
+ *  en la misma escala dejarian la segunda plana, y una linea plana se lee como
+ *  "no pasa nada" cuando lo que pasa es que la escala la aplasto. Por eso el
+ *  panel lo dice en su nota: estas mini-series se comparan consigo mismas.
+ *
+ *  UN CIERRE EN CERO SE DIBUJA. Una marca de 1px, no nada: "cerro en cero" y
+ *  "no hay dato" no son lo mismo y no pueden verse igual.  */
+function miniSemana(dias) {
+  const ds = (Array.isArray(dias) ? dias : []).filter(d => d && d.dia != null);
+  if (!ds.length) return '';
+  const An = 122, Al = 34, w = An / ds.length, hueco = 1.6;
+  let tope = 0, hayNeg = false;
+  for (const d of ds) {
+    const v = Number(d.cierre) || 0;
+    if (v < 0) hayNeg = true;
+    tope = Math.max(tope, Math.abs(v));
+  }
+  if (!tope) tope = 1;
+  /*  EL EJE BAJA AL PISO CUANDO NO HAY NINGUN CIERRE BAJO CERO. Dejarlo
+   *  siempre al medio le quita la mitad del alto a una semana que nunca fue
+   *  negativa, y una barra aplastada se lee como "casi nada" cuando puede ser
+   *  el maximo de la estacion. La linea de cero va igual en los dos casos, asi
+   *  que donde esta el cero se ve: no hay que adivinarlo por la forma. */
+  const eje = hayNeg ? Al / 2 : Al - 1;
+  const util = Math.max(eje - 1, 1);
+  const barras = ds.map((d, i) => {
+    const v = Number(d.cierre) || 0;
+    const h = v === 0 ? 1 : Math.max(1.6, Math.abs(v) / tope * util);
+    const y = v < 0 ? eje : eje - h;
+    return '<rect x="' + (i * w + hueco / 2).toFixed(1) + '" y="' + y.toFixed(1) +
+           '" width="' + (w - hueco).toFixed(1) + '" height="' + h.toFixed(1) +
+           '" class="' + (v < 0 ? 'mb' : 'mp') + '">' +
+           '<title>' + esc(d.dia) + ': ' + mil(v) + '</title></rect>';
+  }).join('');
+  return '<svg class="mini" viewBox="0 0 ' + An + ' ' + Al + '" role="img" aria-label="cierre de ' +
+         ds.length + ' días, del ' + esc(ds[0].dia) + ' al ' + esc(ds[ds.length - 1].dia) + '">' +
+         '<line x1="0" y1="' + eje + '" x2="' + An + '" y2="' + eje + '" class="mej"/>' +
+         barras + '</svg>';
+}
+
 /*  EL DESGLOSE DIBUJADO.
  *
  *  Corre en los dos lados: el servidor no lo usa, pero se publica con
@@ -796,6 +910,10 @@ function desgloseHtml(c) {
   const fila = f => '<tr><td>' + esc(f.a) +
     (f.b ? '<div class="m">' + esc(f.b) + '</div>' : '') +
     (f.fecha ? '<div class="m">medido el ' + esc(f.fecha) + '</div>' : '') +
+    (f.sem && f.sem.length
+      ? '<div class="sem">' + miniSemana(f.sem) + '<span class="m">cierre del ' +
+        esc(f.sem[0].dia) + ' al ' + esc(f.sem[f.sem.length - 1].dia) + '</span></div>'
+      : '') +
     '</td><td class="num' + (f.malo ? ' malo' : '') + '">' +
     (f.v == null ? '' : mil(f.v)) + '</td></tr>';
   const H = ['<div class="code">' + esc(c.clave) + '</div><h3>' + esc(c.titulo) + '</h3>'];
@@ -983,7 +1101,9 @@ function pagina(d) {
   H.push('<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Detalle de la estación">' +
          '<button class="dx" id="dxc" type="button" aria-label="Cerrar">✕</button>' +
          '<div id="dbody"></div></aside>');
-  H.push(script(serie, mes0, composiciones(d, bodegas)));
+  const aper = {};
+  for (const b of serie) if (b && b.cod != null) aper[String(b.cod)] = mesDeApertura(b);
+  H.push(script(serie, mes0, composiciones(d, bodegas), aper));
   H.push('</body>\n</html>\n');
   return H.join('\n');
 }
@@ -1069,14 +1189,15 @@ function metodo(d) {
  *  detalle. El cajon dibuja con las MISMAS funciones probadas que usa
  *  stock-flujos-pallets.html, publicadas con toString(), no con una copia
  *  escrita a mano. */
-function script(serie, mes0, desg) {
+function script(serie, mes0, desg, aper) {
   const fns = [esNumero, mil, conSigno, clasePos, esc, etiquetaDeMes, diasDelMes, resumenDelMes,
                altoVisible, ejeDeDias, svgFlujoDia, svgNivelDia, tablaDeDias, rehidratar,
-               desgloseHtml];
+               miniSemana, desgloseHtml];
   const cuerpo = 'var MESES = ' + jsonSeguro(MESES) + ';\n' +
     fns.map(f => f.toString()).join('\n') + '\n' +
     'var PD = rehidratar(' + jsonSeguro(serieCompacta(serie)) + ');\n' +
     'var MES0 = ' + jsonSeguro(mes0) + ';\n' +
+    'var APER = ' + jsonSeguro(aper || {}) + ';\n' +
     'var DESG = ' + jsonSeguro(desg || {}) + ';\n' + [
     '(function () {',
     '  function $(s, r) { return (r || document).querySelector(s); }',
@@ -1122,16 +1243,40 @@ function script(serie, mes0, desg) {
     '      drawer.classList.remove("on"); scrim.classList.remove("on");',
     '      if (ultimo && ultimo.focus) ultimo.focus();',
     '    }',
-    '    function abrir(cod) {',
+    '    function mesesDe(b) {',
+    '      var visto = {}, out = [], i, m;',
+    '      for (i = 0; i < b.dias.length; i++) {',
+    '        m = String(b.dias[i].dia).slice(0, 7);',
+    '        if (!visto[m]) { visto[m] = 1; out.push(m); }',
+    '      }',
+    '      return out.sort();',
+    '    }',
+    '    function abrir(cod, mes) {',
     '      var b = null, i;',
     '      for (i = 0; i < PD.length; i++) if (PD[i].cod === cod) b = PD[i];',
     '      if (!b) return;',
-    '      var ds = diasDelMes(b, MES0), r = resumenDelMes(ds);',
+    // El mes es el que esa estacion tiene, no el mas nuevo del tablero: pedirle
+    // a una estacion que cerro en octubre los dias de noviembre devuelve nada,
+    // y eso se lee como "no pasa nada" cuando lo que pasa es que no hay mes.
+    '      var ms = mesesDe(b);',
+    '      var M = mes || APER[cod] || MES0;',
+    '      if (ms.length && ms.indexOf(M) < 0) M = ms[ms.length - 1];',
+    '      var ds = diasDelMes(b, M), r = resumenDelMes(ds);',
     '      var H = [\'<div class="code">\' + esc(b.cod) + \'</div><h3>\' + esc(b.nom) + \'</h3>\'];',
-    '      if (!r) { H.push(\'<p class="mut">Sin movimiento en \' + esc(etiquetaDeMes(MES0)) + \'.</p>\'); }',
+    '      if (ms.length > 1) {',
+    '        H.push(\'<div class="dmes">\');',
+    '        for (i = 0; i < ms.length; i++)',
+    '          H.push(\'<button type="button" class="chip\' + (ms[i] === M ? \' on\' : \'\') +',
+    '                 \'" data-dc="\' + esc(b.cod) + \'" data-dm="\' + esc(ms[i]) + \'">\' +',
+    '                 esc(etiquetaDeMes(ms[i])) + \'</button>\');',
+    '        H.push(\'</div>\');',
+    '      }',
+    '      if (!r) { H.push(\'<p class="mut">Sin movimiento en \' + esc(etiquetaDeMes(M)) + \'.</p>\'); }',
     '      else {',
-    '        H.push(\'<div class="mut">\' + esc(etiquetaDeMes(MES0)) + \' · \' + mil(r.n) +',
-    '               \' días con movimiento, del \' + esc(r.desde) + \' al \' + esc(r.hasta) + \'</div>\');',
+    '        H.push(\'<div class="mut">\' + esc(etiquetaDeMes(M)) + \' · \' + mil(r.n) +',
+    '               (r.n === 1 ? \' día con movimiento, el \' + esc(r.desde) :',
+    '                            \' días con movimiento, del \' + esc(r.desde) + \' al \' + esc(r.hasta)) +',
+    '               \'</div>\');',
     '        H.push(\'<div class="k4">\');',
     '        H.push(tile("Apertura", mil(r.apertura), r.apertura < 0));',
     '        H.push(tile("Entradas", mil(r.entradas), false));',
@@ -1159,6 +1304,10 @@ function script(serie, mes0, desg) {
     '      $("#dxc").focus();',
     '    }',
     '    function desde(el) {',
+    // El chip de mes vive DENTRO del cajon: va primero, si no lo atrapa el
+    // [data-cod] de la fila que lo abrio y el cajon se redibuja en su mes.
+    '      var m = el.closest("[data-dm]");',
+    '      if (m) { abrir(m.getAttribute("data-dc"), m.getAttribute("data-dm")); return true; }',
     '      var k = el.closest("[data-kpi]"); if (k) { ultimo = k; abrirKpi(k.getAttribute("data-kpi")); return true; }',
     '      var c = el.closest("[data-cod]"); if (c) { ultimo = c; abrir(c.getAttribute("data-cod")); return true; }',
     '      return false;',
@@ -1218,6 +1367,7 @@ function main() {
 
 module.exports = { ETAPAS, GLIFO, ORDEN_SALUD, HITOS, CSS,
                    etapaDeBodega, saludDeBodega, bodegasDelCockpit, matrizPlantaEtapa,
+                   mesDeApertura, mesesDeBodega, ultimaSemana, miniSemana,
                    titular, tarjetas, decisiones, diasHasta, hitos,
                    desglose, composiciones, desgloseHtml, porRecorrido,
                    recortar, chipEstado, tarjetaHtml, matrizHtml, filaCartera, listaHtml,

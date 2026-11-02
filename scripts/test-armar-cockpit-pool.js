@@ -421,5 +421,183 @@ chk('y las composiciones viajan al navegador con contenido',
     (PGK.match(/var DESG = .{0,40}/)||[''])[0]);
 chk('con el renderizador publicado, no una copia', PGK.indexOf('function desgloseHtml(')>=0);
 
+console.log('\n— el cajon abre en un mes que la estacion TENGA —');
+// RT13-100 del fixture tiene octubre con dos dias bajo cero: abre en octubre.
+chk('con dias bajo cero manda el mes del peor dia',
+    A.mesDeApertura(SERIE[0])==='2026-10', String(A.mesDeApertura(SERIE[0])));
+// una que cruza meses y tiene el peor en el mes VIEJO abre en el viejo, no en
+// el nuevo: el mes que hay que mirar es donde esta el problema.
+const CRUZA={cod:'RT13-999',nom:'X',nivel:5,dias:[
+  dia('2026-10-28',0,0,70,-70), dia('2026-11-01',-70,75,0,5)]};
+chk('aunque el mes del peor dia no sea el ultimo',
+    A.mesDeApertura(CRUZA)==='2026-10', String(A.mesDeApertura(CRUZA)));
+// sin ningun dia bajo cero manda el ultimo mes, que es la lectura de hoy
+const SANA={cod:'RT13-998',nom:'Y',nivel:9,dias:[
+  dia('2026-10-30',4,5,0,9), dia('2026-11-02',9,0,0,9)]};
+chk('sin dias bajo cero manda el mes mas nuevo',
+    A.mesDeApertura(SANA)==='2026-11', String(A.mesDeApertura(SANA)));
+// un cierre en CERO no es un dia malo: la estacion quedo vacia, no en falta.
+// Si contara como malo, esta abriria en octubre en vez de en la lectura de hoy.
+const ENCERO={cod:'RT13-996',nom:'W',nivel:7,dias:[
+  dia('2026-10-20',4,0,4,0), dia('2026-11-02',0,7,0,7)]};
+chk('un cierre en cero no manda el mes: no es un dia malo',
+    A.mesDeApertura(ENCERO)==='2026-11', String(A.mesDeApertura(ENCERO)));
+// con dos meses malos manda el PEOR, no el primero que aparece
+const DOSMALOS={cod:'RT13-995',nom:'V',nivel:0,dias:[
+  dia('2026-10-05',0,0,5,-5), dia('2026-11-01',-5,0,895,-900)]};
+chk('entre dos meses malos manda el del peor dia, no el primero',
+    A.mesDeApertura(DOSMALOS)==='2026-11', String(A.mesDeApertura(DOSMALOS)));
+chk('una estacion sin dias no inventa un mes', A.mesDeApertura(SERIE[3])===null);
+chk('ni revienta con nada', A.mesDeApertura(null)===null && A.mesDeApertura({})===null);
+// una fecha rota no puede elegir el mes ni tumbar la funcion
+chk('una fecha ilegible se ignora, no se ofrece',
+    A.mesDeApertura({dias:[{dia:'sin fecha',cierre:-9},{dia:'2026-10-05',cierre:3}]})==='2026-10');
+chk('los meses de una estacion son los que tiene, ordenados y sin repetir',
+    A.mesesDeBodega(CRUZA).join(',')==='2026-10,2026-11', A.mesesDeBodega(CRUZA).join(','));
+// el selector se lee de izquierda a derecha: el orden es del mes, no del orden
+// en que los dias vengan en el json
+const DESORDEN={cod:'RT13-994',nom:'U',nivel:1,dias:[
+  dia('2026-11-02',0,1,0,1), dia('2026-10-30',0,0,0,0), dia('2026-11-01',0,0,0,0)]};
+chk('y van en orden de mes aunque los dias no vengan ordenados',
+    A.mesesDeBodega(DESORDEN).join(',')==='2026-10,2026-11',
+    A.mesesDeBodega(DESORDEN).join(','));
+chk('y una sin dias no ofrece ninguno', A.mesesDeBodega(SERIE[3]).length===0);
+
+console.log('\n— la ultima semana es la de la estacion, no la del calendario —');
+const LARGA={cod:'RT13-997',nom:'Z',nivel:0,dias:[]};
+for(let i=1;i<=10;i++) LARGA.dias.push(dia('2026-10-'+String(i).padStart(2,'0'),0,0,0,i));
+const SEM=A.ultimaSemana(LARGA,7);
+chk('trae siete dias', SEM.length===7, String(SEM.length));
+chk('y son los ULTIMOS siete', SEM[0].dia==='2026-10-04' && SEM[6].dia==='2026-10-10',
+    SEM[0].dia+'..'+SEM[6].dia);
+chk('con su cierre, no con el nivel', SEM[6].cierre===10, String(SEM[6].cierre));
+chk('siete por defecto', A.ultimaSemana(LARGA).length===7);
+// menos de siete dias no se rellena: un dia inventado es peor que una semana corta
+chk('una estacion con menos dias devuelve los que hay, sin rellenar',
+    A.ultimaSemana(SERIE[1],7).length===2, String(A.ultimaSemana(SERIE[1],7).length));
+chk('y una sin dias devuelve vacio',
+    A.ultimaSemana(SERIE[3],7).length===0 && A.ultimaSemana(null,7).length===0);
+
+console.log('\n— la mini-serie de cierres —');
+chk('sin dias no dibuja nada', A.miniSemana([])==='' && A.miniSemana(null)==='');
+const MS=A.miniSemana([{dia:'2026-10-01',cierre:100},{dia:'2026-10-02',cierre:-50},
+                       {dia:'2026-10-03',cierre:0}]);
+chk('una barra por dia', (MS.match(/<rect /g)||[]).length===3,
+    String((MS.match(/<rect /g)||[]).length));
+chk('la linea de cero esta', /<line [^>]*class="mej"/.test(MS));
+// el signo no se adivina: la barra negativa cuelga del eje y la positiva sube
+const rects=[...MS.matchAll(/<rect [^>]*y="([\d.]+)"[^>]*height="([\d.]+)"[^>]*class="(m[pb])"/g)]
+  .map(m=>({y:+m[1],h:+m[2],c:m[3]}));
+const ejeDe=svg=>+(/<line [^>]*y1="([\d.]+)"/.exec(svg)[1]);
+const altoDe=svg=>+(/viewBox="0 0 \d+ (\d+)"/.exec(svg)[1]);
+const EJE=ejeDe(MS);
+chk('la positiva sube hasta el eje', rects[0].c==='mp' && rects[0].y+rects[0].h===EJE,
+    JSON.stringify(rects[0])+' eje '+EJE);
+chk('la negativa cuelga desde el eje', rects[1].c==='mb' && rects[1].y===EJE,
+    JSON.stringify(rects[1])+' eje '+EJE);
+chk('un cierre en cero deja marca y no desaparece', rects[2].h===1 && rects[2].c==='mp',
+    JSON.stringify(rects[2]));
+// la escala es la de la propia serie: el valor mas grande llega al tope
+chk('el mayor llega al tope de su propia escala', rects[0].h===EJE-1, String(rects[0].h));
+const CHICA=A.miniSemana([{dia:'2026-10-01',cierre:3},{dia:'2026-10-02',cierre:-1}]);
+const hChica=[...CHICA.matchAll(/height="([\d.]+)"/g)].map(m=>+m[1]);
+chk('una serie chica usa el mismo alto que una grande, no una escala comun',
+    hChica[0]===ejeDe(CHICA)-1, String(hChica[0]));
+// con un negativo el cero va al medio; sin ninguno baja al piso y la semana
+// usa el alto entero, porque aplastarla a la mitad la haria parecer plana
+chk('con un cierre bajo cero el eje va al medio', EJE===altoDe(MS)/2, String(EJE));
+const TODOPOS=A.miniSemana([{dia:'2026-10-01',cierre:3},{dia:'2026-10-02',cierre:9}]);
+chk('sin ninguno bajo cero el eje baja al piso',
+    ejeDe(TODOPOS)===altoDe(TODOPOS)-1, String(ejeDe(TODOPOS)));
+chk('y la barra mas alta usa mas de la mitad del alto',
+    Math.max(...[...TODOPOS.matchAll(/height="([\d.]+)"/g)].map(m=>+m[1])) > altoDe(TODOPOS)/2,
+    TODOPOS.slice(0,90));
+// un cierre en CERO no baja el eje al medio: cero no es negativo, y esa
+// semana sigue mereciendo el alto entero
+const CONCERO=A.miniSemana([{dia:'2026-10-01',cierre:0},{dia:'2026-10-02',cierre:5}]);
+chk('un cierre en cero no empuja el eje al medio',
+    ejeDe(CONCERO)===altoDe(CONCERO)-1, String(ejeDe(CONCERO)));
+// un valor chiquito al lado de uno enorme no puede desaparecer: 1 contra
+// 10.000 da menos de un pixel, y una barra de cero pixeles se lee como "no
+// hay dato" cuando el dato es que cerro en 1
+const ENANA=A.miniSemana([{dia:'2026-10-01',cierre:10000},{dia:'2026-10-02',cierre:1}]);
+const hEnana=[...ENANA.matchAll(/height="([\d.]+)"/g)].map(m=>+m[1]);
+chk('un valor minimo al lado de uno enorme sigue viendose',
+    hEnana[1]>=1.6, String(hEnana[1]));
+chk('y se distingue de la marca del cierre en cero',
+    hEnana[1]>1, hEnana.join(','));
+chk('la linea de cero se dibuja en los dos casos',
+    /class="mej"/.test(MS) && /class="mej"/.test(TODOPOS));
+chk('y nada se sale de la caja con el eje abajo',
+    [...TODOPOS.matchAll(/y="([\d.]+)"[^>]*height="([\d.]+)"/g)]
+      .every(m=>+m[1]>=0 && +m[1]+ +m[2]<=altoDe(TODOPOS)), TODOPOS.slice(0,120));
+// cada barra dice su dia y su numero al pasar por encima
+chk('cada barra nombra su dia y su cierre', /<title>2026-10-02: -50<\/title>/.test(MS), MS.slice(0,120));
+// el escape se prueba DENTRO del title: el aria-label tambien lleva la fecha,
+// asi que buscar &lt;x&gt; en cualquier parte del svg pasa igual sin escapar.
+const ESC=A.miniSemana([{dia:'<x>',cierre:1}]);
+chk('el dia va escapado dentro del title de la barra',
+    /<title>&lt;x&gt;: 1<\/title>/.test(ESC), ESC.slice(ESC.indexOf('<rect')));
+chk('y tampoco se cuela un tag crudo en el resto del svg',
+    ESC.indexOf('<x>')<0, ESC.slice(0,160));
+// un dia sin fecha no dibuja una barra anonima ni ensucia el rotulo: se cae
+// del dibujo, porque una barra que no puede decir de que dia es no informa.
+const SINF=A.miniSemana([{dia:null,cierre:5},{dia:'2026-10-02',cierre:3}]);
+chk('un dia sin fecha no dibuja barra', (SINF.match(/<rect /g)||[]).length===1,
+    String((SINF.match(/<rect /g)||[]).length));
+chk('y el rotulo arranca en el primer dia que SI tiene fecha',
+    /del 2026-10-02 al 2026-10-02/.test(SINF), SINF.slice(0,150));
+chk('si ninguno tiene fecha no dibuja nada',
+    A.miniSemana([{dia:null,cierre:5}])==='');
+chk('todo cabe en su caja', (()=>{const vb=/viewBox="0 0 (\d+) (\d+)"/.exec(MS);
+    const W=+vb[1],H=+vb[2];
+    return [...MS.matchAll(/x="([\d.]+)"[^>]*y="([\d.]+)"[^>]*width="([\d.]+)"[^>]*height="([\d.]+)"/g)]
+      .every(m=>+m[1]>=0 && +m[2]>=0 && +m[1]+ +m[3]<=W && +m[2]+ +m[4]<=H);})());
+
+console.log('\n— la semana viaja en el desglose de planta —');
+const CP=A.composiciones(D,BS);
+chk('cada fila de planta trae su semana',
+    CP.planta.filas.every(f=>Array.isArray(f.sem)), '');
+chk('con los dias de ESA estacion',
+    CP.planta.filas.find(f=>/RT13-100/.test(f.b)).sem.length===3,
+    String(CP.planta.filas.find(f=>/RT13-100/.test(f.b)).sem.length));
+chk('la que no tiene dias trae la semana vacia, no inventada',
+    CP.planta.filas.find(f=>/RT07-126/.test(f.b)).sem.length===0);
+chk('y la nota avisa que cada mini-serie va en su propia escala',
+    /propia escala/.test(CP.planta.nota), CP.planta.nota.slice(0,60));
+// el desglose sigue cuadrando: la semana es adorno, no cambia la suma
+chk('agregar la semana no mueve la suma', CP.planta.cuadra && CP.planta.suma===7877,
+    String(CP.planta.suma));
+const HP=A.desgloseHtml(CP.planta);
+chk('el html de la fila dibuja la mini-serie', /<div class="sem"><svg class="mini"/.test(HP));
+chk('y dice el tramo que cubre', /cierre del 2026-10-01 al 2026-10-03/.test(HP));
+chk('una fila sin semana no dibuja una vacia',
+    !/class="sem"/.test(A.desgloseHtml(CP.anio)));
+
+console.log('\n— el cajon de mes viaja al navegador —');
+const PGM=A.pagina(D);
+chk('el renderizador de la mini-serie va publicado', PGM.indexOf('function miniSemana(')>=0);
+chk('y el mapa de apertura tambien', /var APER = \{/.test(PGM));
+chk('con el mes del peor dia de la estacion que lo tiene',
+    /"RT13-100":"2026-10"/.test(PGM), (PGM.match(/var APER = .{0,120}/)||[''])[0]);
+chk('la estacion sin dias va en nulo, no en un mes cualquiera',
+    /"RT07-126":null/.test(PGM));
+chk('el cajon elige el mes de la estacion y no el del tablero',
+    PGM.indexOf('APER[cod] || MES0')>=0);
+chk('y si ese mes no existe cae al ultimo que la estacion tenga',
+    PGM.indexOf('ms.indexOf(M) < 0')>=0);
+chk('los chips de mes se dibujan con el cod y el mes a cuestas',
+    PGM.indexOf('data-dc=')>=0 && PGM.indexOf('data-dm=')>=0);
+chk('y el chip se atiende antes que la fila que abrio el cajon',
+    PGM.indexOf('el.closest("[data-dm]")') < PGM.indexOf('el.closest("[data-cod]")'));
+chk('una sola estacion con un solo mes no muestra selector',
+    A.pagina(Object.assign({},D,{planta_dias:[SERIE[1]]})).indexOf('ms.length > 1')>=0);
+// un mes con un solo dia no dice "1 dias ... del X al X"
+chk('un mes de un solo dia se lee en singular',
+    PGM.indexOf("día con movimiento, el ")>=0 && PGM.indexOf("r.n === 1 ?")>=0);
+chk('el html sigue cerrando los script que abre',
+    (PGM.match(/<script/g)||[]).length===(PGM.match(/<\/script>/g)||[]).length,
+    (PGM.match(/<script/g)||[]).length+'/'+(PGM.match(/<\/script>/g)||[]).length);
+
 console.log('\n' + ok + ' ok, ' + fail + ' fallas');
 process.exit(fail ? 1 : 0);

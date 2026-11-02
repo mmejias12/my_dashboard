@@ -1004,8 +1004,24 @@ const abajo  = t => t.slice(t.indexOf('<h2>Qué sostiene estas cifras</h2>'), t.
 const sinSeccion = t => { const i = t.indexOf('<section>\n  <h2>Distribución diaria en planta</h2>');
                           const j = t.indexOf('<section>\n  <h2>Qué sostiene estas cifras</h2>');
                           return i < 0 ? t : t.slice(0, i) + t.slice(j); };
-chk('quitando la seccion nueva, lo de arriba es identico', arriba(sinSeccion(PGCON)) === arriba(PGSIN));
-chk('y lo de abajo tambien', abajo(PGCON) === abajo(PGSIN));
+// El sello SI cambia a proposito: el tercer reloj —hasta donde llega el
+// movimiento de planta— solo existe cuando hay serie de planta. Se saca del
+// cotejo y se prueba aparte, en vez de aflojar la comparacion entera.
+const sinSello = t => t.replace(/<div class="sello"[\s\S]*?<\/div>\n<\/header>/, '«sello»</header>')
+                       .replace(/\n<div class="aviso-fecha">[\s\S]*?<\/div>\n/, '')
+                       .replace(/<footer>[\s\S]*?<\/footer>/, '«pie»');
+chk('quitando la seccion nueva, lo de arriba es identico',
+    arriba(sinSello(sinSeccion(PGCON))) === arriba(sinSello(PGSIN)));
+const relojesDe = t => (t.match(/class="rel/g)||[]).length;
+chk('sin serie de planta no hay reloj de planta',
+    PGSIN.indexOf('Planta · movimiento hasta')<0, String(relojesDe(PGSIN)));
+chk('con serie de planta aparece, y es UN reloj mas, no otra cabecera',
+    PGCON.indexOf('Planta · movimiento hasta')>=0 && relojesDe(PGCON)===relojesDe(PGSIN)+1,
+    relojesDe(PGSIN)+' → '+relojesDe(PGCON));
+chk('y el pie los nombra a todos',
+    (PGCON.match(/<footer>[\s\S]*?<\/footer>/)||[''])[0].indexOf('planta · movimiento hasta')>=0,
+    (PGCON.match(/<footer>[^\n]{0,150}/)||[''])[0]);
+chk('y lo de abajo tambien', abajo(sinSello(sinSeccion(PGCON))) === abajo(sinSello(PGSIN)));
 // el javascript del selector se suma al que ya habia; no lo reemplaza
 chk('el aviso de pagina rancia sigue', /function antiguedad/.test(PGCON) && /function antiguedad/.test(PGSIN));
 chk('sin planta no viaja la serie', PGSIN.indexOf('var PD = rehidratar') < 0);
@@ -1104,6 +1120,47 @@ const lineaFuera = (PGCON.match(/no suma<\/b>—:([\s\S]*?)Contándolos/) || [''
 chk('la linea nombra las tres de referencia', /merma/.test(lineaFuera) &&
     /extraños|extranos/.test(lineaFuera) && /coquimbo/.test(lineaFuera), lineaFuera);
 chk('y ninguna del indicador', !/inspeccion|reparacion|pintura|disponible/.test(lineaFuera), lineaFuera);
+
+console.log('\n— las tres fechas son tres relojes, no tres versiones del dato —');
+const D3={ventana:{nivel:'2026-11-02',flujo_desde:'2026-01-01',flujo_hasta:'2026-10-31'},
+  planta_dias:[{cod:'A',dias:[{dia:'2026-10-30',cierre:1},{dia:'2026-11-03',cierre:2}]},
+               {cod:'B',dias:[{dia:'2026-11-01',cierre:3}]}]};
+const R3=A.relojes(D3);
+chk('salen los tres', R3.map(r=>r.clave).join(',')==='saldo,flujo,planta', R3.map(r=>r.clave).join(','));
+chk('el saldo es el dia de la lectura', R3[0].fecha==='2026-11-02', R3[0].fecha);
+chk('el flujo es hasta donde llega la extraccion de clientes y retail',
+    R3[1].fecha==='2026-10-31' && R3[1].desde==='2026-01-01', JSON.stringify(R3[1]));
+// la fecha de planta es la MAS NUEVA de todas las estaciones, no la de la
+// primera: si fuera la primera, una estacion que cerro antes taparia al resto
+chk('la de planta es el ultimo documento de CUALQUIER estacion',
+    R3[2].fecha==='2026-11-03', R3[2].fecha);
+chk('y cada uno dice que gobierna', R3.every(r=>r.gobierna && r.gobierna.length>20));
+// el aviso sale solo cuando el documento va mas alla de la lectura
+chk('se marca que la de planta pasa la lectura', R3[2].futuro===true);
+chk('y el aviso nombra las dos fechas',
+    /2026-11-03/.test(A.avisoDeFuturo(R3)) && /2026-11-02/.test(A.avisoDeFuturo(R3)),
+    A.avisoDeFuturo(R3));
+chk('y explica que el dato no esta mal, la fecha si',
+    /no está mal/.test(A.avisoDeFuturo(R3)) && /se corrige en SAP/.test(A.avisoDeFuturo(R3)));
+// sin fecha futura no hay aviso: no se avisa de lo que no pasa
+const SINFUT=A.relojes({ventana:{nivel:'2026-11-05',flujo_hasta:'2026-10-31'},
+  planta_dias:[{cod:'A',dias:[{dia:'2026-11-03',cierre:1}]}]});
+chk('si la planta no pasa la lectura, no se marca', !SINFUT[2].futuro, JSON.stringify(SINFUT[2]));
+chk('y no hay aviso', A.avisoDeFuturo(SINFUT)===null);
+chk('el mismo dia tampoco es futuro',
+    !A.relojes({ventana:{nivel:'2026-11-03'},planta_dias:[{cod:'A',dias:[{dia:'2026-11-03',cierre:1}]}]})[1].futuro);
+// un reloj que no existe se deja fuera: una fecha inventada es peor que ninguna
+chk('sin serie de planta no hay reloj de planta',
+    A.relojes({ventana:{nivel:'2026-11-02',flujo_hasta:'2026-10-31'}}).length===2);
+chk('sin flujo tampoco se rellena con el saldo',
+    A.relojes({ventana:{nivel:'2026-11-02'}}).map(r=>r.clave).join(',')==='saldo');
+chk('sin ventana no revienta ni inventa', A.relojes({}).length===0 && A.relojes(null).length===0);
+chk('una fecha ilegible no se publica',
+    A.relojes({ventana:{nivel:'ayer',flujo_hasta:'2026-10-31'}}).map(r=>r.clave).join(',')==='flujo');
+chk('ni ensucia la de planta',
+    A.relojes({ventana:{nivel:'2026-11-02'},
+      planta_dias:[{cod:'A',dias:[{dia:'nunca',cierre:1},{dia:'2026-10-05',cierre:2}]}]})[1].fecha==='2026-10-05');
+chk('el aviso sin relojes no revienta', A.avisoDeFuturo([])===null && A.avisoDeFuturo(null)===null);
 
 console.log('\n' + ok + ' ok, ' + fail + ' fallas');
 process.exit(fail ? 1 : 0);

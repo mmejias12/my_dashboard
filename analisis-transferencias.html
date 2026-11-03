@@ -1429,6 +1429,36 @@ function exportarExcel() {
     };
   });
 
+  /* EMISIONES, una fila por operación (va a la hoja 3).
+     Pedida por el área el 3-nov-2026 para poder abrir el número por BODEGA DE
+     ORIGEN y por TIPO (Express, LD, 24 horas, Retiro Cliente, Recargo). Las
+     dos hojas de arriba están agregadas por período y no dejan cruzar eso, así
+     que acá va el dato crudo y desde Excel arman la dinámica que quieran sin
+     pedir otra versión.
+     Respeta exactamente lo que se ve en pantalla: el mismo filtro de cliente y
+     la misma regla de anuladas que usa el resto del informe. */
+  var emisiones = filtrarRaw()
+    .filter(function(r){ return normOp(r.operacion).indexOf('emision') >= 0; })
+    .sort(function(a, b){
+      return String(a.fechaRequerida || '').localeCompare(String(b.fechaRequerida || ''))
+          || String(a.nroPedido || '').localeCompare(String(b.nroPedido || ''));
+    })
+    .map(function(r){
+      return {
+        'Fecha requerida':  String(r.fechaRequerida || '').slice(0, 10),
+        'Fecha despacho':   String(r.fechaDespacho || '').slice(0, 10),
+        'N° pedido':        r.nroPedido || '',
+        // En emisiones el DTE es el número de guía; en 0 todavía no se emite.
+        'DTE':              (Number(r.dteNro) || '') || '',
+        'Tipo de emisión':  (r.operacion || '').trim(),
+        'Bodega origen':    (r.bodegaOrigenStr || '').trim(),
+        'Cliente destino':  (r.clienteDestinoStr || r.clienteOrigenStr || '').trim(),
+        'Etapa':            (r.etapaOperacion || '').trim(),
+        'Solicitado':       Number(r.cantidadSolicitada) || 0,
+        'Confirmado':       Number(r.cantidadConfirmada) || 0
+      };
+    });
+
   // Hoja 2: resumen KPIs
   var k = calcularKPIs();
   var resumen = [
@@ -1442,7 +1472,9 @@ function exportarExcel() {
     { Concepto: 'Total Transferencias',                  Valor: k.totalTra },
     { Concepto: 'Diferencia (Emi − Tra)',                Valor: k.dif },
     { Concepto: '% Diferencia',                          Valor: (k.pct * 100).toFixed(2) + ' %' },
-    { Concepto: 'Pallets transferidos',                  Valor: k.totalTra }
+    { Concepto: 'Pallets transferidos',                  Valor: k.totalTra },
+    { Concepto: '',                                      Valor: '' },
+    { Concepto: 'Emisiones en la hoja de detalle',       Valor: emisiones.length }
   ];
 
   var wb = XLSX.utils.book_new();
@@ -1454,10 +1486,23 @@ function exportarExcel() {
   wsD['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
   XLSX.utils.book_append_sheet(wb, wsD, 'Detalle');
 
+  /* La hoja va aunque el período no traiga emisiones: una pestaña vacía dice
+     "no hubo", y una pestaña ausente parece que el informe se quedó corto. */
+  var wsE = XLSX.utils.json_to_sheet(emisiones.length ? emisiones
+    : [{ 'Fecha requerida': '', 'Fecha despacho': '', 'N° pedido': '', 'DTE': '',
+         'Tipo de emisión': '(sin emisiones en el período)', 'Bodega origen': '',
+         'Cliente destino': '', 'Etapa': '', 'Solicitado': 0, 'Confirmado': 0 }]);
+  wsE['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 10 }, { wch: 22 },
+                  { wch: 26 }, { wch: 34 }, { wch: 20 }, { wch: 12 }, { wch: 12 }];
+  wsE['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { c: 0, r: 0 },
+    e: { c: 9, r: Math.max(1, emisiones.length) } }) };
+  XLSX.utils.book_append_sheet(wb, wsE, 'Emisiones');
+
   var nombre = 'analisis_emi_vs_tra_' + $('d1').value + '_' + $('d2').value +
                (clienteFiltro ? '_' + clienteFiltro.replace(/\s+/g,'_').substring(0,20) : '') + '.xlsx';
   XLSX.writeFile(wb, nombre);
-  setStatus('ok', '✓ Excel descargado: ' + nombre);
+  setStatus('ok', '✓ Excel descargado: ' + nombre + ' · ' + emisiones.length
+                  + ' emisión' + (emisiones.length === 1 ? '' : 'es') + ' en la hoja de detalle');
 }
 
 // ─────────────────────────────────────────────────────────────────────────

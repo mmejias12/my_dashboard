@@ -33,7 +33,13 @@ const CONN = process.env.ANDEN_STORAGE_CONN
 const CONTAINER = process.env.ANDEN_CONTAINER || 'redtec-anden';
 
 /** Acciones que el monitor puede registrar. Cualquier otra se rechaza. */
-const ACCIONES = new Set(['relocalizacion_interna', 'atendida', 'retenido', 'reversion']);
+/* 'aceptada_sin_camara' es para una GUÍA, no para un paso: el despacho está
+   cerrado y confirmado, el camión ya salió, y lo que falta es el registro de
+   la cámara. El supervisor da por buena esa salida para que la columna de
+   espera no se llene de camiones que ya no están. Como no hay carga, el
+   carga_id es sintético: 'guia:<número>'. */
+const ACCIONES = new Set(['relocalizacion_interna', 'atendida', 'retenido', 'reversion',
+                          'aceptada_sin_camara']);
 
 function contenedor() { return BlobServiceClient.fromConnectionString(CONN).getContainerClient(CONTAINER); }
 function blobMes(mes) { return `anden/${mes}.jsonl`; }     // mes = 'YYYY-MM'
@@ -110,8 +116,15 @@ function estadoVigente(eventos) {
       clasificacion: null, atendida: false, retenido: false,
       usuario: null, ts: null, detalle: null, no_sale: false,
       estado_previo: null, revertida_por: null, revertida_en: null,
+      // lo nuevo: la salida dada por buena sin registro de cámara y la
+      // observación que escribió quien firmó
+      aceptada: false, guia: null, observacion: null,
     });
     if (ev.patente && !e.patente) e.patente = ev.patente;
+    if (ev.guia && !e.guia) e.guia = ev.guia;
+    // La observación acompaña a la acción que la trajo; una acción posterior
+    // sin texto no borra la anterior (sólo la reversión limpia).
+    if (ev.motivo) e.observacion = ev.motivo;
 
     if (ev.accion === 'relocalizacion_interna') {
       e.clasificacion = 'relocalizacion_interna';
@@ -130,12 +143,18 @@ function estadoVigente(eventos) {
       e.atendida = true;
       e.retenido = true;
       if (!e.usuario) { e.usuario = ev.usuario || null; e.ts = ev.ts || null; }
+    } else if (ev.accion === 'aceptada_sin_camara') {
+      e.aceptada = true;
+      e.atendida = true;
+      if (!e.usuario) { e.usuario = ev.usuario || null; e.ts = ev.ts || null; }
     } else if (ev.accion === 'reversion') {
       e.clasificacion = null;
       e.atendida = false;
       e.retenido = false;
       e.no_sale = false;
       e.detalle = null;
+      e.aceptada = false;
+      e.observacion = null;
       e.revertida_por = ev.usuario || null;
       e.revertida_en = ev.ts || null;
     }

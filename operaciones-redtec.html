@@ -54,6 +54,13 @@ h1,h2{margin:0;font-weight:600;letter-spacing:-.01em}
 .top{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--surface)}
 .top h1{font-size:15px}
 .top .sub{font-size:11px;color:var(--muted)}
+/* De dónde sale el dato, a la vista y no sólo en el código: el área
+   preguntó si el histórico venía de m2link. La etiqueta va en .top y no
+   en una .topbar porque el workspace de pestañas esconde esa última. */
+.top .fuente-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:2px;text-align:right}
+.top .fuente{font-size:10.5px;letter-spacing:.01em;cursor:help;
+  border-bottom:1px dotted var(--line);padding-bottom:1px}
+.top .fuente b{font-weight:600;color:var(--text-2)}
 .sp{flex:1}
 .logo{width:30px;height:30px;display:flex;align-items:center;justify-content:center;text-decoration:none;flex-shrink:0;border-radius:8px}
 .logo svg{width:26px;height:26px}
@@ -239,7 +246,10 @@ tbody tr:hover{background:var(--surface-2)}
     <div class="sub">Gerencia · emisiones, transferencias, retiros y devoluciones — día a día desde 2023</div>
   </div>
   <div class="sp"></div>
-  <div class="sub" id="frescura">—</div>
+  <div class="fuente-wrap">
+    <div class="sub" id="frescura">—</div>
+    <div class="sub fuente" id="fuente">&nbsp;</div>
+  </div>
 </div>
 
 <div class="cbar">
@@ -1390,6 +1400,35 @@ async function aplicarCliente(){
 $('#cliente').onchange = aplicarCliente;
 $('#cliente').addEventListener('keydown', e=>{ if(e.key==='Enter') aplicarCliente(); });
 
+/* LA ETIQUETA DE ORIGEN.
+   Todo lo que dice sale de lo que DECLARA /api/os-diario, no de texto escrito
+   acá: el día que la cadena cambie, la etiqueta cambia sola. Si la API no lo
+   declara (versión vieja desplegada), se dice lo único que es seguro —que la
+   serie la sirve el m3link— y no se inventa el resto. */
+function pintarFuente(){
+  const el = $('#fuente'); if(!el) return;
+  const f = S.fuente || {};
+  const origen = f.origen ? String(f.origen) : null;
+  const crit = S.criterioRetiros === 'confirmacion' ? 'confirmación'
+             : S.criterioRetiros === 'requerida'    ? 'fecha requerida' : null;
+
+  const partes = ['<b>fuente:</b> m3link'];
+  if (origen) partes.push(origen);
+  if (crit)   partes.push('retiros por ' + crit);
+  el.innerHTML = partes.join(' · ');
+
+  const cuando = S.generado ? new Date(S.generado) : null;
+  const ayuda = [
+    'La serie la arma el m3link, no se consulta m2link.',
+    f.almacen ? 'Vive en ' + f.almacen + '.' : '',
+    f.arma ? 'La genera ' + f.arma + ' con las operaciones del portal' +
+             (origen ? ' (origen actual: ' + origen + ').' : '.') : '',
+    cuando && !isNaN(cuando) ? 'Último recálculo: ' + cuando.toLocaleString('es-CL') + '.' : '',
+    crit ? 'Los retiros se cuentan por ' + crit + '.' : '',
+  ].filter(Boolean).join(' ');
+  el.setAttribute('title', ayuda);
+}
+
 (async function arrancar(){
   try{
     const r = await fetch(API_DIARIO, {headers:{'Accept':'application/json'}});
@@ -1400,6 +1439,8 @@ $('#cliente').addEventListener('keydown', e=>{ if(e.key==='Enter') aplicarClient
     S.dias = d.dias||{};
     S.fechas = Object.keys(S.dias).sort();
     S.generado = d.generado;
+    S.fuente = d.fuente || null;
+    S.criterioRetiros = d.criterio_retiros || null;
     if(!S.fechas.length) throw new Error('el índice diario está vacío');
 
     // El índice de transferencias se pide ANTES del primer render: si llegara
@@ -1418,6 +1459,7 @@ $('#cliente').addEventListener('keydown', e=>{ if(e.key==='Enter') aplicarClient
 
     $('#frescura').textContent = 'datos al '+S.fechas[S.fechas.length-1]+
       ' · '+S.fechas.length.toLocaleString('es-CL')+' días';
+    pintarFuente();
 
     $('#rg-atajos').innerHTML = ATAJOS.map((a,i)=>'<button data-i="'+i+'">'+a[0]+'</button>').join('');
     $('#rg-atajos').querySelectorAll('button').forEach(b=> b.onclick=()=>{

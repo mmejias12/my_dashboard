@@ -34,6 +34,43 @@ const cold = require('../shared/cold-operaciones.js');
 // justamente lo que hay que vigilar durante la migración.
 const ORIGEN_DEF = String(process.env.OPS_ORIGEN || 'rdt').toLowerCase() === 'redlink' ? 'redlink' : 'rdt';
 
+/* ──────────────────────────────────────────────────────────────────────────
+   RECORTE EN EL SERVIDOR · ?cliente= y ?campos=
+
+   El año completo son ~178 mil filas y 193 MB de JSON: medido el 3-nov-2026,
+   la misma consulta tardó 22 s una vez y 35 s otra, y el año calendario
+   entero no volvió en 42 s. Con el corte de 45 s de la Function, a ese tamaño
+   pasar o no pasar es suerte — y cuando no pasa, el que mira la pantalla ve
+   un 500 sin explicación.
+
+   La vista "Análisis por cliente" es de UN cliente a la vez y usa 16 de los
+   ~40 campos de cada fila, pero se bajaba el universo entero y filtraba en el
+   navegador. Recortar acá, ANTES de serializar, es lo que vuelve viable el
+   año: se arma el JSON sólo con lo que se pidió.
+
+   · cliente= nombre exacto (sin distinguir mayúsculas ni espacios al borde).
+     Calza contra clienteOrigenStr O clienteDestinoStr, que es el mismo
+     criterio que usaba la vista: en emisiones el cliente va de destino y en
+     retiros de origen.
+   · campos= lista separada por comas. Lo que no exista en la fila no se
+     inventa: simplemente no viaja.
+   Sin ninguno de los dos, la respuesta queda EXACTAMENTE como antes. */
+const _norm = (v) => String(v == null ? '' : v).trim().toUpperCase();
+function recortarSalida(filas, q) {
+  const cli = _norm(q && q.cliente);
+  const campos = String((q && q.campos) || '').split(',').map(c => c.trim()).filter(Boolean);
+  if (!cli && !campos.length) return filas;
+  let out = filas;
+  if (cli) out = out.filter(o => _norm(o && o.clienteOrigenStr) === cli ||
+                                 _norm(o && o.clienteDestinoStr) === cli);
+  if (campos.length) out = out.map(o => {
+    const r = {};
+    for (const c of campos) if (o && Object.prototype.hasOwnProperty.call(o, c)) r[c] = o[c];
+    return r;
+  });
+  return out;
+}
+
 // ── INTERRUPTOR HOT/COLD (histórico desde NUESTRO storage) ──────────────────
 // La API de Redlink es lenta (~8-19 s por tramo), así que pedir historia en
 // vivo desde una vista no escala. Con OPS_COLD prendido, los días CERRADOS
@@ -194,15 +231,21 @@ module.exports = async function (context, req) {
                 omitido: vivoOmitido, span_dias: spanDias, max_dias: COLD_MAX_VIVO_DIAS }
       };
       const quiereMetaC = q.meta === '1' || q.meta === 'true';
+      /* El recorte va ANTES de serializar: ahí está la ganancia. X-Ops-Total
+         sigue diciendo el universo del rango y X-Ops-Filas lo que de verdad
+         viaja, para poder diagnosticar un filtro que no calzó. */
+      const salidaC = recortarSalida(todasC, q);
+      metaC.filas = salidaC.length;
       coldResp = {
         status: 200,
         headers: Object.assign({
           'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache',
-          'X-Ops-Total': String(todasC.length), 'X-Ops-Origen': 'cold+redlink',
+          'X-Ops-Total': String(todasC.length), 'X-Ops-Filas': String(salidaC.length),
+          'X-Ops-Origen': 'cold+redlink',
           'X-Ops-Cold-Dias': String(diasCold), 'X-Ops-Vivo-Filas': String(opsVivoLen),
           'X-Ops-Vivo-Omitido': String(vivoOmitido)
         }, CORS),
-        body: JSON.stringify(quiereMetaC ? Object.assign({ data: todasC }, metaC) : todasC)
+        body: JSON.stringify(quiereMetaC ? Object.assign({ data: salidaC }, metaC) : salidaC)
       };
     } catch (e) {
       if (context.log) context.log('OPS_COLD cayó a origen normal: ' + e.message);
@@ -370,8 +413,8 @@ module.exports = async function (context, req) {
   // Igual que en el camino cold: sólo el origen redlink trae _rl acá; RDTOut no.
   // Se recorta salvo ?full=1, dejando el camino por defecto (rdt) idéntico.
   const quiereFull = q.full === '1' || q.full === 'true';
-  const salida = (origen === 'redlink' && !quiereFull)
-    ? todas.map(({ _rl, ...resto }) => resto) : todas;
+  const salida = recortarSalida(
+    (origen === 'redlink' && !quiereFull) ? todas.map(({ _rl, ...resto }) => resto) : todas, q);
 
   context.res = {
     status: 200,
@@ -379,6 +422,7 @@ module.exports = async function (context, req) {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'no-cache',
       'X-Ops-Total': String(todas.length),
+      'X-Ops-Filas': String(salida.length),
       'X-Ops-Desde-Cache': String(delCache.length),
       'X-Ops-Dias-Guardados': String(sembrado.guardados.length),
       'X-Ops-Api-Cubrio-Rango': String(cobertura.cubrio_todo_el_rango),
@@ -387,6 +431,10 @@ module.exports = async function (context, req) {
     body: JSON.stringify(quiereMeta ? Object.assign({ data: salida }, meta) : salida)
   };
 };
+
+/* Se expone el recorte para poder probarlo sin levantar la Function ni Azure.
+   Azure lee module.exports como el handler; una propiedad extra no lo molesta. */
+module.exports.recortarSalida = recortarSalida;
 
 /* Parte un rango en tramos que el proveedor acepte. Sin rango válido, un solo
    tramo con lo que venga (el API aplicará su ventana por omisión). */

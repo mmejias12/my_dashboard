@@ -950,5 +950,52 @@ chk('el selector de dia llega a la pagina con los dias que hay',
 chk('y la barra dice hasta donde alcanza el dato',
     /class="cobertura"/.test(PGJS) && /todavía no están extraídos/.test(PGJS));
 
+console.log('\n— las tres filas de la planta: en bodega, en el aire, contable —');
+// En REDTEC el pallet sale de la bodega cuando se CREA el documento y la
+// emision se FECHA cuando el cliente la recibe. Las dos lecturas son
+// correctas y difieren exactamente en lo que va arriba del camion.
+const CONTRA=Object.assign({},D,{planta_fecha_serie:'CreaDate',
+  planta_transito:{medible:true,pallets:80,lineas:2,sin_fecha:0,motivo:null,al:'2026-10-30'}});
+const TPL=A.tarjetas(CONTRA,TODAS).find(x=>x.clave==='planta');
+chk('salen las tres filas', Array.isArray(TPL.trio) && TPL.trio.length===3,
+    JSON.stringify(TPL.trio&&TPL.trio.length));
+chk('la primera es lo que hay en bodega', TPL.trio[0].v===7877, String(TPL.trio[0].v));
+chk('la segunda es lo que va en el camion', TPL.trio[1].v===80, String(TPL.trio[1].v));
+// la de abajo TIENE que ser la suma: si no, las tres filas enredan mas
+chk('y la tercera es exactamente la suma de las dos',
+    TPL.trio[2].v===TPL.trio[0].v+TPL.trio[1].v, TPL.trio.map(r=>r.v).join(' + '));
+chk('la ultima se marca como pie, para que se lea como total', TPL.trio[2].pie===true);
+chk('cada fila dice que significa', TPL.trio.every(r=>r.m && r.m.length>12));
+// con la serie por fecha de documento las tres filas MIENTEN: la primera ya
+// incluiria lo que va en el camion y la suma lo contaria dos veces
+chk('por fecha de documento no se dibujan, porque se contaria dos veces',
+    A.tarjetas(Object.assign({},CONTRA,{planta_fecha_serie:'DocDate'}),TODAS)
+      .find(x=>x.clave==='planta').trio===null);
+// y un cero se leeria como "no hay nada en el aire", que es una afirmacion
+const NOMED=A.tarjetas(Object.assign({},D,{planta_fecha_serie:'CreaDate',
+  planta_transito:{medible:false,pallets:null,motivo:'falta re-extraer con la fecha de creación'}}),
+  TODAS).find(x=>x.clave==='planta');
+chk('sin poder medirlo se dice, no se pone en cero',
+    NOMED.trio && NOMED.trio.aun && /re-extraer/.test(NOMED.trio.aun), JSON.stringify(NOMED.trio));
+chk('y sin dato de transito la tarjeta no inventa nada',
+    A.tarjetas(D,TODAS).find(x=>x.clave==='planta').trio===null);
+// el html
+const HT=A.tarjetaHtml(TPL,0);
+chk('el html dibuja la tabla', /<table class="trio">/.test(HT));
+chk('con las tres filas', (HT.match(/<tr/g)||[]).length===3, String((HT.match(/<tr/g)||[]).length));
+chk('y el total marcado aparte', /<tr class="pie">/.test(HT));
+// los dos textos de la fila terminan dentro del html: los dos van escapados
+const SUCTRIO=A.tarjetaHtml({clave:'x',et:'x',hint:'x',kv:'1',
+  trio:[{q:'<b>q</b>',v:1,m:'<i>m</i>'}]},0);
+chk('el nombre de la fila va escapado', /&lt;b&gt;q&lt;\/b&gt;/.test(SUCTRIO), SUCTRIO.slice(-170));
+chk('y su explicacion tambien', /&lt;i&gt;m&lt;\/i&gt;/.test(SUCTRIO), SUCTRIO.slice(-170));
+chk('no se cuela ningun tag crudo de la fila',
+    SUCTRIO.indexOf('<b>q</b>')<0 && SUCTRIO.indexOf('<i>m</i>')<0);
+chk('sin trio el html no deja una tabla vacia',
+    !/<table class="trio">/.test(A.tarjetaHtml(A.tarjetas(D,TODAS)[0],0)));
+chk('y llega a la pagina cuando hay dato',
+    /<table class="trio">/.test(soloCuerpo(A.pagina(CONTRA))));
+chk('pero no con el dato de hoy', !/<table class="trio">/.test(soloCuerpo(A.pagina(D))));
+
 console.log('\n' + ok + ' ok, ' + fail + ' fallas');
 process.exit(fail ? 1 : 0);

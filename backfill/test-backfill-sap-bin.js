@@ -481,5 +481,66 @@ chk('con lineas sirve', B.ventanaUsable({ lineas: [{}] }).ok === true && B.venta
 chk('sin blob no sirve', B.ventanaUsable(null).ok === false);
 chk('lineas que no es un arreglo no sirve', B.ventanaUsable({ lineas: 'si' }).ok === false);
 
+console.log('\n— fechaDeCreacion: la fecha en que el pallet DEJA la bodega —');
+// El pallet sale de la bodega cuando se CREA el documento; el documento queda
+// fechado cuando el cliente lo recibe. Guardar solo DocDate contestaba la
+// pregunta de contabilidad a una pregunta de operaciones.
+chk('toma CreationDate y se queda con el dia',
+    B.fechaDeCreacion({ CreationDate:'2026-11-02T13:34:12Z' }) === '2026-11-02');
+chk('acepta CreateDate, que es como lo llama la tabla de HANA',
+    B.fechaDeCreacion({ CreateDate:'2026-11-02' }) === '2026-11-02');
+chk('y U_CreateDate si el campo es de usuario',
+    B.fechaDeCreacion({ U_CreateDate:'2026-11-02T00:00:00Z' }) === '2026-11-02');
+// el orden importa: el nombre del Service Layer manda sobre el de la tabla
+chk('con los dos presentes manda CreationDate',
+    B.fechaDeCreacion({ CreationDate:'2026-11-02', CreateDate:'2026-10-30' }) === '2026-11-02');
+chk('y CreateDate manda sobre U_CreateDate',
+    B.fechaDeCreacion({ CreateDate:'2026-11-02', U_CreateDate:'2026-10-30' }) === '2026-11-02');
+// UN NULL SE VE Y SE PUEDE DECLARAR; UNA FECHA INVENTADA NO. Por eso nunca
+// cae de vuelta a DocDate: si cayera, el transito daria cero y pareceria
+// medido.
+chk('sin ninguno de los tres devuelve null', B.fechaDeCreacion({ DocDate:'2026-11-02' }) === null);
+chk('no cae de vuelta a DocDate', B.fechaDeCreacion({ DocDate:'2026-11-02' }) !== '2026-11-02');
+chk('una fecha chilena no se reinterpreta', B.fechaDeCreacion({ CreateDate:'02-11-2026' }) === null);
+chk('texto suelto tampoco', B.fechaDeCreacion({ CreateDate:'hoy' }) === null);
+chk('vacio es ausencia, no una fecha', B.fechaDeCreacion({ CreateDate:'' }) === null);
+chk('un null en el campo es ausencia', B.fechaDeCreacion({ CreateDate:null }) === null);
+// 'Mon Nov 02 2026 ...' al cortar en diez da 'Mon Nov 0': un dia que no existe
+chk('un objeto Date no se adivina',
+    B.fechaDeCreacion({ CreateDate:new Date('2026-11-02T00:00:00Z') }) === null);
+chk('un epoch tampoco', B.fechaDeCreacion({ CreateDate:1793285117005 }) === null);
+chk('nulo no revienta', B.fechaDeCreacion(null) === null && B.fechaDeCreacion(undefined) === null);
+
+console.log('\n— y queda GUARDADA JUNTO a DocDate, no en vez de ella —');
+// Las dos fechas tienen que viajar juntas en la fila: con una sola, el tablero
+// puede contestar la pregunta de un area y no la de la otra.
+const DOCC = { DocEntry:35058202, DocNum:695061, DocDate:'2026-11-03T00:00:00Z',
+               CreationDate:'2026-11-02T13:34:00Z', CardCode:'C91004000-6',
+               StockTransferLines:[
+                 { LineNum:0, ItemCode:'11111111110', SerialNumbers:[], BatchNumbers:[],
+                   StockTransferLinesBinAllocations:[
+                     { BinAbsEntry:5271, Quantity:80, BinActionType:'batFromWarehouse' },
+                     { BinAbsEntry:5275, Quantity:80, BinActionType:'batToWarehouse' }] }],
+               FromWarehouse:'RT13-105', ToWarehouse:'CLIENTES' };
+const FC = B.filasDeDocumento(DOCC, 'StockTransferLines', '11111111110').filas;
+chk('filasDeDocumento pone CreaDate en cada fila',
+    FC.length === 2 && FC.every(f => f.CreaDate === '2026-11-02'), JSON.stringify(FC.map(f => f.CreaDate)));
+chk('y NO pisa DocDate', FC.every(f => f.DocDate === '2026-11-03'),
+    JSON.stringify(FC.map(f => f.DocDate)));
+chk('las dos fechas son distintas, que es todo el punto',
+    FC.every(f => f.CreaDate !== f.DocDate));
+const LC = B.lineasDeDocumento(DOCC, 'StockTransferLines', '11111111110', 'ambas', 'traspaso');
+chk('lineasDeDocumento tambien la lleva',
+    LC.length === 1 && LC[0].CreaDate === '2026-11-02' && LC[0].DocDate === '2026-11-03',
+    JSON.stringify(LC[0]));
+// un documento del dialecto viejo sigue pasando: la fecha nueva queda en null
+// y el tablero lo declara, en vez de medir un transito que no puede medir
+const VIEJO = Object.assign({}, DOCC); delete VIEJO.CreationDate;
+const FV = B.filasDeDocumento(VIEJO, 'StockTransferLines', '11111111110').filas;
+chk('un documento sin fecha de creacion sigue extrayendose',
+    FV.length === 2 && FV.every(f => f.DocDate === '2026-11-03'));
+chk('con CreaDate en null, que es lo que el tablero sabe declarar',
+    FV.every(f => f.CreaDate === null), JSON.stringify(FV.map(f => f.CreaDate)));
+
 console.log('\n'+ok+' ok, '+fail+' fallas\n');
 process.exit(fail?1:0);

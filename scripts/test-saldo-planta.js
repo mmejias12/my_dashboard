@@ -223,5 +223,94 @@ v = S.veredicto(SERIES,[],CUAD_OK,{ok:false,motivo:'el ancla se leyo antes'});
 chk('un ancla vieja manda a revisar', v.nivel==='revisar' && /ANCLA/.test(v.texto), v.texto);
 chk('sin bodegas no hay veredicto', S.veredicto([],[],CUAD_OK,ANC_OK).nivel==='sin datos');
 
+
+console.log('\n— una apertura negativa es imposible, y no es lo mismo que un cierre negativo —');
+const dia2=(d,ap,e,sa,ci)=>({dia:d,apertura:ap,entradas:e,salidas:sa,cierre:ci,firme:true});
+const SERAP=[
+  {whs:'RT13-100',nombre:'SANTIAGO INSPECCION',dias:[
+    dia2('2026-10-01',-3334,4457,4279,-3156), dia2('2026-10-02',-3156,3679,5355,-4832)]},
+  {whs:'RT13-102',nombre:'SANTIAGO REPARACION',dias:[
+    dia2('2026-10-01',4300,100,0,4400)]},
+  {whs:'RT07-126',nombre:'TALCA TRANSITO',dias:[
+    dia2('2026-10-09',-40,0,0,-40)]},
+];
+const AP=S.aperturasImposibles(SERAP);
+chk('encuentra las que abren bajo cero', AP.length===2, String(AP.length));
+chk('y no la que abre en positivo', !AP.some(x=>x.whs==='RT13-102'), AP.map(x=>x.whs).join(','));
+// se ordena por la peor: es la que dice cuanto esta corrida la serie
+chk('la peor va primero', AP[0].whs==='RT13-100' && AP[0].apertura===-3334, JSON.stringify(AP[0]));
+chk('con el dia en que abre', AP[0].dia==='2026-10-01', AP[0].dia);
+// mira la apertura del PRIMER dia, no la de cualquiera: lo que esta corrido
+// es el arranque de la ventana, no un dia del medio
+chk('mira el primer dia, no el peor del mes',
+    S.aperturasImposibles([{whs:'X',nombre:'X',dias:[
+      dia2('2026-10-01',500,0,900,-400), dia2('2026-10-02',-400,0,0,-400)]}]).length===0,
+    'una que ABRE en positivo y despues cae no es apertura imposible');
+chk('una bodega sin dias no entra', S.aperturasImposibles([{whs:'Y',nombre:'Y',dias:[]}]).length===0);
+chk('y nada revienta', S.aperturasImposibles(null).length===0 && S.aperturasImposibles([]).length===0);
+chk('una apertura en cero no es imposible',
+    S.aperturasImposibles([{whs:'Z',nombre:'Z',dias:[dia2('2026-10-01',0,5,0,5)]}]).length===0);
+
+console.log('\n— el desfase entre leer el ancla y leer las lineas —');
+const DES=(a,l)=>S.desfaseDeLectura(a,l);
+chk('unos segundos no son nada', DES('2026-11-02T16:34:46Z','2026-11-02T16:34:41Z').ok===true);
+chk('y reporta cuantos', DES('2026-11-02T16:34:46Z','2026-11-02T16:34:41Z').segundos===5);
+const TARDE=DES('2026-11-02T16:34:46Z','2026-11-02T16:32:00Z');
+chk('un ancla muy posterior a las lineas se declara', TARDE.ok===false && TARDE.segundos===166,
+    JSON.stringify(TARDE));
+chk('y dice en que direccion', /ancla se leyo 166 s DESPUES/.test(TARDE.motivo), TARDE.motivo);
+const PRONTO=DES('2026-11-02T16:34:46Z','2026-11-02T16:40:00Z');
+chk('las lineas posteriores al ancla tambien se declaran', PRONTO.ok===false, JSON.stringify(PRONTO));
+chk('con el signo al reves y su propia explicacion',
+    PRONTO.segundos===-314 && /lineas se guardaron 314 s DESPUES/.test(PRONTO.motivo), PRONTO.motivo);
+chk('el tope se puede mover', TARDE.ok===false &&
+    S.desfaseDeLectura('2026-11-02T16:34:46Z','2026-11-02T16:32:00Z',300).ok===true);
+// sin marca de tiempo no se inventa un cero: se dice que no se puede medir
+chk('sin marca no se inventa que esta bien',
+    DES('2026-11-02T16:34:46Z',null).ok===null && DES('2026-11-02T16:34:46Z',null).segundos===null);
+chk('y lo dice', /no se puede medir/.test(DES('2026-11-02T16:34:46Z',null).motivo));
+chk('una fecha ilegible es lo mismo que no tenerla',
+    DES('2026-11-02T16:34:46Z','el martes').ok===null);
+chk('sin ancla tampoco', DES(null,'2026-11-02T16:32:00Z').ok===null);
+
+console.log('\n— el veredicto separa los dos negativos —');
+const VAP=S.veredicto(SERAP,[],{cuadra:true},{ok:true},AP,{ok:true});
+chk('nombra la apertura negativa', /ABREN LA VENTANA EN NEGATIVO/.test(VAP.texto), VAP.texto.slice(0,70));
+chk('dice cuanto esta corrida la serie', /corrida por al menos 3\.334/.test(VAP.texto), VAP.texto);
+// NO puede decir "se arregla en SAP": este error es nuestro
+chk('y NO manda a arreglarlo a SAP, porque es nuestro',
+    /Se arregla midiendo la apertura, no en SAP/.test(VAP.texto) &&
+    !/la salida de mercancias/.test(VAP.texto), VAP.texto.slice(-90));
+chk('queda en revisar', VAP.nivel==='revisar');
+const VCI=S.veredicto(SERAP,[{whs:'RT13-100',cierre:-7415,dia:'2026-10-09'}],{cuadra:true},{ok:true},[],{ok:true});
+chk('el cierre negativo sigue diciendo que es la fecha del documento',
+    /FECHA del documento/.test(VCI.texto) && /Se arregla en SAP, no aca/.test(VCI.texto));
+chk('y no habla de apertura', !/ABREN LA VENTANA/.test(VCI.texto));
+chk('el desfase se declara aparte',
+    /LECTURA DESFASADA/.test(S.veredicto(SERAP,[],{cuadra:true},{ok:true},[],TARDE).texto));
+chk('y un desfase dentro de tope no dice nada',
+    !/LECTURA DESFASADA/.test(S.veredicto(SERAP,[],{cuadra:true},{ok:true},[],{ok:true}).texto));
+chk('sin nada que decir, el veredicto es si',
+    S.veredicto(SERAP,[],{cuadra:true},{ok:true},[],{ok:true}).nivel==='si');
+chk('y menciona que abren en positivo',
+    /abren la ventana en positivo/.test(S.veredicto(SERAP,[],{cuadra:true},{ok:true},[],{ok:true}).texto));
+chk('el veredicto sin los argumentos nuevos no revienta',
+    S.veredicto(SERAP,[],{cuadra:true},{ok:true}).nivel==='si');
+
+console.log('\n— el json se lleva los dos controles —');
+const PJ=S.payloadJson({generado:'2026-11-02T16:36:37Z',anclaLeida:'2026-11-02T16:34:46Z',
+  lineasGuardadas:'2026-11-02T16:32:00Z', desfase:TARDE, aperturasImposibles:AP,
+  meses:['2026-10'],ancla:{ok:true},veredicto:VAP,indicador:1,fueraDelIndicador:0,
+  cierreFirme:'2026-11-01',bodegas:SER,cadena:[]});
+chk('las aperturas imposibles viajan', PJ.aperturas_imposibles.length===2);
+chk('y las dos marcas de lectura tambien',
+    PJ.lectura.ancla==='2026-11-02T16:34:46Z' && PJ.lectura.lineas==='2026-11-02T16:32:00Z',
+    JSON.stringify(PJ.lectura));
+chk('con el desfase medido', PJ.lectura.desfase_s===166 && PJ.lectura.ok===false,
+    JSON.stringify(PJ.lectura));
+chk('sin dato, el json no finge un cero',
+    S.payloadJson({}).lectura.desfase_s===null && S.payloadJson({}).lectura.ok===null);
+chk('ni inventa aperturas', S.payloadJson({}).aperturas_imposibles.length===0);
+
 console.log('\n'+ok+' ok, '+fail+' fallas\n');
 process.exit(fail?1:0);

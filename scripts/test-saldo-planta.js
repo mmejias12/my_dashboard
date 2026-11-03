@@ -312,5 +312,127 @@ chk('sin dato, el json no finge un cero',
     S.payloadJson({}).lectura.desfase_s===null && S.payloadJson({}).lectura.ok===null);
 chk('ni inventa aperturas', S.payloadJson({}).aperturas_imposibles.length===0);
 
+
+console.log('\n— el transito: los pallets que estan en el aire —');
+// La emision se CREA el dia que el pallet sale de planta y se FECHA el dia que
+// el cliente la recibe. En el medio no cuenta por creacion y si por documento.
+const NUE=new Set(['RT13-105','RT13-100','RT13-102']);
+const l=(de,a,q,c,d)=>({desde:de,hacia:a,cantidad:q,CreaDate:c,DocDate:d});
+const LT=[
+  l('RT13-105','CLIENTES',80,'2026-11-02','2026-11-03'),   // sale, pendiente
+  l('RT13-100','RT13-105',40,'2026-11-02','2026-11-03'),   // interna, no cuenta
+  l('CLIENTES','RT13-100',10,'2026-11-02','2026-11-03'),   // entra, resta
+  l('RT13-105','CLIENTES', 5,'2026-11-01','2026-11-01'),   // ya fechada
+];
+const T2=S.enTransito(LT,'2026-11-02',NUE);
+chk('cuenta lo que salio y no esta fechado', T2.pallets===70, String(T2.pallets));
+chk('y dice cuantas lineas lo componen', T2.lineas===2, String(T2.lineas));
+// una estacion a otra cambia el reparto, no cuantos pallets hay en planta
+chk('un traspaso interno pendiente NO es transito',
+    S.enTransito([l('RT13-100','RT13-105',40,'2026-11-02','2026-11-03')],'2026-11-02',NUE).pallets===0);
+chk('una linea entre dos bodegas ajenas tampoco',
+    S.enTransito([l('CLIENTES','RETAIL',40,'2026-11-02','2026-11-03')],'2026-11-02',NUE).pallets===0);
+// una que ENTRA a planta y no esta fechada resta: viene en camino hacia aca
+chk('lo que viene entrando resta del transito',
+    S.enTransito([l('CLIENTES','RT13-100',10,'2026-11-02','2026-11-03')],'2026-11-02',NUE).pallets===-10);
+// al dia siguiente ya esta fechada y deja de estar en el aire
+chk('cuando llega la fecha deja de estar en transito', S.enTransito(LT,'2026-11-03',NUE).pallets===0);
+// el 1-nov la unica linea que existe se creo y se fecho el mismo dia: nunca
+// pasa por el aire. Y las otras tres todavia no se crean.
+chk('una linea creada y fechada el mismo dia nunca esta en transito',
+    S.enTransito(LT,'2026-11-01',NUE).pallets===0, String(S.enTransito(LT,'2026-11-01',NUE).pallets));
+chk('ni antes de crearse',
+    S.enTransito(LT,'2026-10-31',NUE).pallets===0, String(S.enTransito(LT,'2026-10-31',NUE).pallets));
+// y una creada antes del corte y fechada despues SI esta, aunque pasen dias
+chk('una que cruza varios dias sigue en el aire todos ellos',
+    [1,2,3].every(i=>S.enTransito([l('RT13-105','CLIENTES',80,'2026-11-01','2026-11-05')],
+      '2026-11-0'+i,NUE).pallets===80));
+// la identidad que une las dos lecturas
+const porCrea=S.movimientoDeBodega(LT,'RT13-105','CreaDate');
+const porDoc =S.movimientoDeBodega(LT,'RT13-105','DocDate');
+chk('el campo de fecha se puede elegir',
+    JSON.stringify(porCrea.map(x=>x.dia))!==JSON.stringify(porDoc.map(x=>x.dia)),
+    porCrea.map(x=>x.dia).join(',')+' vs '+porDoc.map(x=>x.dia).join(','));
+chk('y por defecto sigue siendo la del documento',
+    JSON.stringify(S.movimientoDeBodega(LT,'RT13-105'))===JSON.stringify(porDoc));
+// SIN LAS DOS FECHAS NO SE PUEDE MEDIR, y un cero se leeria como "no hay nada"
+const SINC=S.enTransito(LT.map(x=>({...x,CreaDate:null})),'2026-11-02',NUE);
+chk('sin fecha de creacion no se inventa un cero',
+    SINC.medible===false && SINC.pallets===null, JSON.stringify(SINC));
+chk('y dice por que', /re-extraiga/.test(SINC.motivo), SINC.motivo);
+chk('una fecha de corte ilegible tampoco da cero',
+    S.enTransito(LT,'el lunes',NUE).medible===false &&
+    S.enTransito(LT,'el lunes',NUE).pallets===null);
+chk('sin lineas no revienta', S.enTransito([],'2026-11-02',NUE).medible===false &&
+    S.enTransito(null,'2026-11-02',NUE).medible===false);
+chk('una lista de codigos sirve igual que un Set',
+    S.enTransito(LT,'2026-11-02',['RT13-105','RT13-100','RT13-102']).pallets===70);
+// una linea a medio fechar no se adivina
+// una creada sin fecha de documento salio de la bodega y no tiene dia de
+// llegada: no se puede ubicar en el tiempo, pero no puede pasar en silencio
+const SINDOC=S.enTransito([l('RT13-105','CLIENTES',80,'2026-11-02',null)],'2026-11-02',NUE);
+chk('una linea sin fecha de documento no entra al numero', SINDOC.pallets===0, String(SINDOC.pallets));
+chk('pero se cuenta aparte', SINDOC.sinFecha===1, String(SINDOC.sinFecha));
+chk('y se declara', /sin fecha de documento utilizable/.test(SINDOC.motivo||''), String(SINDOC.motivo));
+chk('cuando todas tienen las dos, no sobra nada que declarar',
+    T2.sinFecha===0 && T2.motivo===null, JSON.stringify({s:T2.sinFecha,m:T2.motivo}));
+
+console.log('\n— la cobertura de fechas se declara, no se supone —');
+chk('cuenta las que traen cada una', (c=>c.conDoc===4&&c.conCrea===4&&c.conLasDos===4&&c.completa)
+    (S.coberturaDeFechas(LT)), JSON.stringify(S.coberturaDeFechas(LT)));
+const MIX=S.coberturaDeFechas([LT[0],{...LT[1],CreaDate:null}]);
+chk('con un blob a medias lo dice', MIX.completa===false && MIX.conCrea===1,
+    JSON.stringify(MIX));
+chk('sin lineas no se declara completa', S.coberturaDeFechas([]).completa===false);
+chk('y no revienta con nada', S.coberturaDeFechas(null).lineas===0);
+
+
+console.log('\n— que fecha manda la serie de planta —');
+chk('con todas las lineas completas, manda la de creacion',
+    S.fechaQueManda({lineas:10,conCrea:10,conLasDos:10,completa:true}).campo==='CreaDate');
+// mezclar las dos daria una serie que no es ninguna de las dos
+chk('con los blobs a medias NO se mezcla: sale por documento',
+    S.fechaQueManda({lineas:10,conCrea:4,conLasDos:4,completa:false}).campo==='DocDate');
+chk('y se dice por que', /no es ninguna de las dos/.test(
+    S.fechaQueManda({lineas:10,conCrea:4,conLasDos:4,completa:false}).motivo));
+chk('sin ninguna fecha de creacion tambien sale por documento, y lo declara',
+    (f=>f.campo==='DocDate' && /re-extrayendo/.test(f.motivo))
+      (S.fechaQueManda({lineas:10,conCrea:0,conLasDos:0,completa:false})));
+chk('se puede forzar para comparar las dos lecturas',
+    (f=>f.campo==='CreaDate' && f.porDefecto===false)(S.fechaQueManda({completa:false},'CreaDate')));
+chk('una fecha forzada que no existe se ignora',
+    S.fechaQueManda({completa:true},'cualquiera').campo==='CreaDate');
+chk('sin cobertura no revienta', S.fechaQueManda(null).campo==='DocDate');
+// cuando la serie sale por la fecha que NO corresponde, el veredicto lo grita
+const FD=S.fechaQueManda({lineas:10,conCrea:0,conLasDos:0,completa:false});
+const VF=S.veredicto(SERAP,[],{cuadra:true},{ok:true},[],{ok:true},FD,{medible:false});
+chk('el veredicto avisa que la serie no es la de la planta',
+    /FECHA DE LA SERIE/.test(VF.texto) && /no "cuantos hay en planta"/.test(VF.texto),
+    VF.texto.slice(0,80));
+chk('con la fecha correcta no dice nada',
+    !/FECHA DE LA SERIE/.test(S.veredicto(SERAP,[],{cuadra:true},{ok:true},[],{ok:true},
+      {campo:'CreaDate',porDefecto:true,motivo:null},{medible:true,pallets:0}).texto));
+chk('ni cuando la forzo una persona a sabiendas',
+    !/FECHA DE LA SERIE/.test(S.veredicto(SERAP,[],{cuadra:true},{ok:true},[],{ok:true},
+      {campo:'DocDate',porDefecto:false,motivo:'forzada'},{medible:true,pallets:0}).texto));
+chk('y las lineas en el aire sin fecha de llegada se declaran',
+    /en el aire y no tienen dia de llegada/.test(
+      S.veredicto(SERAP,[],{cuadra:true},{ok:true},[],{ok:true},
+        {campo:'CreaDate',porDefecto:true},{medible:true,pallets:5,sinFecha:3}).texto));
+
+console.log('\n— el json lleva el transito, y en null cuando no se sabe —');
+const PJT=S.payloadJson({fecha:{campo:'CreaDate',motivo:null},
+  transito:{medible:true,pallets:80,lineas:2,sinFecha:0,motivo:null}, transitoAl:'2026-11-01'});
+chk('la fecha de la serie viaja', PJT.fecha_serie==='CreaDate');
+chk('y el transito con su dia', PJT.transito.pallets===80 && PJT.transito.al==='2026-11-01',
+    JSON.stringify(PJT.transito));
+// un cero se publicaria como "no hay nada en el aire", que es una afirmacion
+const PJN=S.payloadJson({transito:{medible:false,pallets:null,motivo:'falta re-extraer'}});
+chk('cuando no se puede medir va en null, no en cero',
+    PJN.transito.medible===false && PJN.transito.pallets===null, JSON.stringify(PJN.transito));
+chk('con su motivo', /falta re-extraer/.test(PJN.transito.motivo));
+chk('y sin transito tampoco finge un cero',
+    S.payloadJson({}).transito.pallets===null && S.payloadJson({}).transito.medible===false);
+
 console.log('\n'+ok+' ok, '+fail+' fallas\n');
 process.exit(fail?1:0);

@@ -192,6 +192,7 @@ function lineasDeDocumento(doc, claveLineas, item, direccion, tipo) {
     const bod = lee(l[CAMPO_HACIA]);
     out.push({ DocEntry: doc.DocEntry, DocNum: doc.DocNum,
                DocDate: String(doc.DocDate || '').slice(0, 10),
+               CreaDate: fechaDeCreacion(doc),
                LineNum: l.LineNum, ItemCode: l.ItemCode,
                tipo: tipo || 'traspaso',
                desde: dir === 'sale' ? bod : (dir === 'entra' ? null : lee(l[CAMPO_DESDE])),
@@ -238,6 +239,7 @@ function filasDeDocumento(doc, claveLineas, item) {
         if (d == null) { raros.push({ DocEntry: doc.DocEntry, LineNum: l.LineNum, tipo: a && a.BinActionType }); continue; }
         out.push({ DocEntry: doc.DocEntry, DocNum: doc.DocNum,
                    DocDate: String(doc.DocDate || '').slice(0, 10),
+                   CreaDate: fechaDeCreacion(doc),
                    CardCode: doc.CardCode || null, LineNum: l.LineNum,
                    ItemCode: l.ItemCode, BinAbsEntry: a.BinAbsEntry,
                    Quantity: Number(a.Quantity), delta: d });
@@ -245,6 +247,35 @@ function filasDeDocumento(doc, claveLineas, item) {
     }
   }
   return { filas: out, raros };
+}
+
+/*  LA FECHA DE CREACION, QUE ES OTRA COSA QUE LA DEL DOCUMENTO.
+ *
+ *  Las dos existen y las dos son correctas, pero contestan preguntas
+ *  distintas, y en REDTEC esa diferencia tiene nombre: el tránsito.
+ *
+ *  Una emision a cliente se CREA hoy —y en ese momento el pallet ya salio de
+ *  la bodega de planta, aunque el camion siga estacionado en el patio— y se
+ *  FECHA el dia en que el cliente la recibe, que es desde cuando se le cobra
+ *  arriendo. Entre una cosa y la otra el pallet no esta en ninguna bodega de
+ *  SAP: no esta en planta y todavia no esta en el cliente. Queda en el aire.
+ *
+ *    "¿cuantos pallets hay en planta?"   → fecha de CREACION
+ *    "¿desde cuando le cobro al cliente?" → fecha de DOCUMENTO
+ *
+ *  Sin guardar las dos, el tablero solo puede contestar una, y hasta ahora
+ *  contestaba la de contabilidad a una pregunta de operaciones.
+ *
+ *  EL NOMBRE DEL CAMPO NO SE ADIVINA. El Service Layer y la tabla de HANA no
+ *  lo llaman igual, asi que se prueban los dos y se deja null si no viene
+ *  ninguno: un null se ve y se puede declarar, una fecha inventada no. */
+function fechaDeCreacion(doc) {
+  const d = doc || {};
+  for (const c of ['CreationDate', 'CreateDate', 'U_CreateDate']) {
+    const v = String(d[c] == null ? '' : d[c]).slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  }
+  return null;
 }
 
 /** La url de la LISTA, que solo sirve para descubrir los DocEntry. Pagina con
@@ -444,6 +475,7 @@ function atribuir(filas, mapa) {
 }
 
 module.exports = { corteDeVentana, partirEntries, fusionarFilas, deltaDeAsignacion, filasDeDocumento,
+                   fechaDeCreacion,
                    lineasDeDocumento, ventanaUsable, CAMPO_DESDE, CAMPO_HACIA, PREFIJO_LINEAS, ENTIDADES, entidadesExtra, comoSeLee,
                    urlLista, urlPorClave,
                    saldoPorBin, atribuir, controlDePuntas, resumenDeLineas, entidadesSinLineas, urlSociosPorPrefijo,

@@ -355,6 +355,28 @@ function controlesConPlanta(extra, planta) {
              'apertura en vez de despejarla.',
     });
   }
+  /*  La serie corriendo por la fecha que NO es la de la planta no rompe
+   *  nada, pero cambia lo que el numero significa: pasa a contestar "cuantos
+   *  habia segun la fecha contable" en vez de "cuantos hay en planta". */
+  if (p.fecha_serie === 'DocDate' && p.fecha_serie_porque) {
+    base.push({
+      titulo: 'Fecha de la serie de planta', estado: 'no pasa', medido: dia,
+      texto: 'La distribución diaria de planta está saliendo por fecha de documento, que es la ' +
+             'contable. ' + esc(String(p.fecha_serie_porque)) + '. El pallet sale de la bodega ' +
+             'cuando se crea el documento, no cuando el cliente lo recibe, así que mientras tanto ' +
+             'el indicador responde «cuántos había según la fecha contable» y no «cuántos hay en ' +
+             'planta». Se arregla re-extrayendo con la fecha de creación guardada.',
+    });
+  }
+  const t = p.transito || {};
+  if (t.medible && Number(t.sin_fecha) > 0) {
+    base.push({
+      titulo: 'Pallets en el aire sin fecha de llegada', estado: 'no pasa', medido: dia,
+      texto: mil(Number(t.sin_fecha)) + ' línea(s) salieron de la bodega y no tienen fecha de ' +
+             'documento utilizable: están en tránsito y no hay día en que aterricen. No se pueden ' +
+             'ubicar en el tiempo, así que no entran en el número del tránsito.',
+    });
+  }
   const l = p.lectura || {};
   if (l.ok === false && l.desfase_s != null) {
     const seg = Number(l.desfase_s);
@@ -423,6 +445,13 @@ function datos(bod, ret, cli, extra, planta) {
     grupos: gr,
     flujo: (extra && Array.isArray(extra.flujo_por_bodega)) ? extra.flujo_por_bodega : null,
     controles: controlesConPlanta(extra, planta),
+    /*  LA IDENTIDAD QUE UNE LAS DOS LECTURAS DE LA PLANTA.
+     *  El pallet sale de la bodega cuando se CREA el documento y la emision
+     *  se FECHA cuando el cliente la recibe. En el medio esta en el aire.
+     *      planta (fecha de documento) = planta (fecha de creacion) + transito
+     *  Mientras no sea medible va en null, nunca en cero. */
+    planta_fecha_serie: (planta && planta.fecha_serie) || null,
+    planta_transito: (planta && planta.transito) || null,
     aviso_nota: (extra && typeof extra.aviso_nota === 'string' && extra.aviso_nota.trim())
                   ? extra.aviso_nota.trim() : null,
     residuo_detalle: (extra && Array.isArray(extra.residuo_detalle))

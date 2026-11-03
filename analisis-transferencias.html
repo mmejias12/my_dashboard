@@ -335,6 +335,51 @@
   .state-msg { text-align:center;padding:40px 20px;color:var(--text-muted);font-size:12px; }
   .state-msg .spinner { display:inline-block;width:14px;height:14px;border:2px solid var(--accent);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle;margin-right:8px; }
   @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* ── LOADER DE LA R ────────────────────────────────────────────────────
+     La R de REDTEC en silueta que se llena de rojo desde abajo, con la
+     superficie ondulando. Es el mismo componente de comparativo-retiros y
+     cartola, para que "está consultando" se vea igual en todo el m3link.
+     NO se vuelve a incrustar la imagen: --logo-url se arma en runtime con
+     el src del logo que la página ya trae (si no, serían 35 KB repetidos
+     por tercera vez en el mismo archivo). */
+  .loader-r{position:relative;width:78px;height:78px;flex-shrink:0;
+    filter:drop-shadow(0 8px 20px rgba(192,23,12,.30))}
+  .lr-ghost{position:absolute;inset:0;background:var(--logo-url) center/contain no-repeat;opacity:.20}
+  .lr-ring{position:absolute;inset:-9px;border-radius:50%;
+    border:1px solid rgba(192,23,12,.22);animation:lr-ring 2.9s ease-out infinite}
+  .lr-mask{position:absolute;inset:0;overflow:hidden;
+    -webkit-mask:var(--logo-url) center/contain no-repeat;mask:var(--logo-url) center/contain no-repeat;
+    animation:lr-ciclo 2.9s linear infinite}
+  .lr-liquid{position:absolute;left:-30%;width:160%;height:135%;top:100%;
+    background:linear-gradient(180deg,#ff6a5d 0%,#e8231a 38%,var(--red-logo) 66%,#8e1009 100%);
+    border-radius:44% 46% 0 0 / 15% 13% 0 0;
+    animation:lr-sube 2.9s cubic-bezier(.30,.22,.48,.92) infinite,
+              lr-ola  1.25s ease-in-out infinite alternate}
+  .lr-liquid.b{opacity:.5;left:-36%;border-radius:47% 43% 0 0 / 12% 17% 0 0;
+    animation-duration:2.9s,.95s;animation-delay:0s,-.45s}
+  .lr-brillo{position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.34) 50%,transparent 62%);
+    transform:translateX(-120%);animation:lr-brillo 2.9s ease-in-out infinite}
+  @keyframes lr-sube {0%{top:102%} 70%{top:-25%} 100%{top:-25%}}
+  @keyframes lr-ola  {from{transform:translateX(-6%) rotate(-1.4deg)} to{transform:translateX(6%) rotate(1.4deg)}}
+  @keyframes lr-ciclo{0%{opacity:0} 8%{opacity:1} 88%{opacity:1} 100%{opacity:0}}
+  @keyframes lr-brillo{0%,68%{transform:translateX(-125%)} 84%{transform:translateX(125%)} 100%{transform:translateX(125%)}}
+  @keyframes lr-ring {0%,66%{transform:scale(.84);opacity:0} 78%{transform:scale(1);opacity:.9} 100%{transform:scale(1.24);opacity:0}}
+  #cargando{display:none;flex-direction:column;align-items:center;gap:13px;
+    padding:34px 16px 30px;margin:14px 0 0}
+  #cargando.on{display:flex}
+  .lr-txt{font-size:12.5px;color:var(--text-secondary);letter-spacing:.2px;text-align:center}
+  .lr-txt b{display:block;font-size:11px;font-weight:500;color:var(--text-muted);
+    margin-top:4px;letter-spacing:.3px}
+  :root[data-theme="light"] .lr-ghost{opacity:.26;filter:grayscale(1) brightness(.55)}
+  :root[data-theme="light"] .loader-r{filter:drop-shadow(0 6px 16px rgba(192,23,12,.16))}
+  :root[data-theme="light"] .lr-ring{border-color:rgba(192,23,12,.30)}
+  :root[data-theme="light"] .lr-brillo{background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.55) 50%,transparent 62%)}
+  @media (prefers-reduced-motion:reduce){
+    .lr-mask,.lr-liquid,.lr-brillo,.lr-ring{animation:none}
+    .lr-liquid{top:-25%;border-radius:0} .lr-ring{display:none} .lr-mask{opacity:1}
+  }
   .err-msg { color:#fca5a5;font-size:12px;text-align:center;padding:30px 20px; }
 
   /* TABLA RESUMEN */
@@ -501,6 +546,14 @@
 
   <div id="status" class="status"><span class="dot"></span><span id="status-txt">Selecciona el rango y presiona "Cargar datos".</span></div>
 
+  <div id="cargando" aria-live="polite">
+    <div class="loader-r" role="status" aria-label="Consultando">
+      <div class="lr-ring"></div><div class="lr-ghost"></div>
+      <div class="lr-mask"><div class="lr-liquid b"></div><div class="lr-liquid"></div><div class="lr-brillo"></div></div>
+    </div>
+    <div class="lr-txt" id="cargando-txt"></div>
+  </div>
+
   <!-- KPIs -->
   <div class="kpis" id="kpis" style="display:none">
     <div class="kpi"><div class="kpi-lbl">Total Emisiones</div><div class="kpi-val emi" id="k-emi">—</div><div class="kpi-sub">Confirmadas en el período</div></div>
@@ -595,6 +648,35 @@ var HIST_DIRECT='https://apirdt1.azurewebsites.net/api/RDTOut/historialxnropedid
 // ─────────────────────────────────────────────────────────────────────────
 var $ = function(id) { return document.getElementById(id); };
 
+/* La máscara del loader usa la MISMA imagen del logo que la página ya trae
+   embebida, tomada del <img> del encabezado. Así no hay una tercera copia del
+   PNG en el archivo ni un SVG aparte que mantener. */
+(function fijarLogo(){
+  function go(){
+    var im = document.querySelector('img.logo-mark');
+    if (im && im.src) document.documentElement.style.setProperty('--logo-url', 'url("' + im.src + '")');
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go);
+  else go();
+})();
+
+/* De dónde salen los datos, dicho con todas sus letras: el equipo preguntó si
+   "Consultando API" era la nuestra o la del proveedor. En producción es la
+   nuestra —/proxy/ops, que lee el almacén frío más Redlink—; el API directo
+   del proveedor sólo se usa abriendo la página en localhost. */
+function origenDatos(){ return isDev ? 'API directo del proveedor (apirdt1)' : 'm3link · almacén frío + Redlink'; }
+
+function mostrarCargando(txt, sub){
+  var el = $('cargando');
+  if (!el) return;
+  $('cargando-txt').innerHTML = txt + (sub ? '<b>' + sub + '</b>' : '');
+  el.classList.add('on');
+}
+function ocultarCargando(){
+  var el = $('cargando');
+  if (el) el.classList.remove('on');
+}
+
 function setStatus(tipo, msg) {
   var el = $('status');
   el.className = 'status ' + tipo;
@@ -669,7 +751,8 @@ async function cargarDatos() {
 
   var btn = $('btn-load');
   btn.disabled = true; btn.textContent = 'Cargando...';
-  setStatus('load', 'Consultando API para ' + d1 + ' → ' + d2 + '...');
+  setStatus('load', 'Consultando ' + d1 + ' → ' + d2 + '…');
+  mostrarCargando('Consultando operaciones<br>' + d1 + ' → ' + d2, origenDatos());
 
   try {
     var url = (isDev ? API_DIRECT : API_PROXY) + '?fechaInicio=' + d1 + '&fechaFin=' + d2;
@@ -698,6 +781,9 @@ async function cargarDatos() {
     console.error('[m3link]', e);
     setStatus('err', 'Error: ' + e.message);
   } finally {
+    // El loader se apaga pase lo que pase: si quedara prendido tras un error,
+    // la pantalla diría "consultando" para siempre.
+    ocultarCargando();
     btn.disabled = false; btn.textContent = 'Cargar datos';
   }
 }

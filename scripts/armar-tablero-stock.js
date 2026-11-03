@@ -323,6 +323,54 @@ function mesesPareados(mensualRet, mensualCli) {
 // Una sola funcion arma TODO lo que la pagina va a mostrar. La pagina despues
 // no calcula nada: si un numero esta mal, esta mal aca, en un solo lugar, y
 // hay una prueba que lo agarra.
+/*  LOS CONTROLES DE PLANTA SE SUMAN A LOS DEL EXTRA.
+ *
+ *  saldo-planta ya detecta dos cosas que nadie veia: bodegas que ABREN la
+ *  ventana en negativo —la apertura no se mide, se despeja, asi que una
+ *  negativa dice que la serie del mes esta corrida— y el desfase entre leer
+ *  el saldo y leer las lineas, que es la ventana donde ese corrimiento se
+ *  produce. Vivian en planta.json, que no lo lee nadie.
+ *
+ *  Entran como controles normales para que salgan donde ya se miran los
+ *  controles, en las dos paginas, sin inventar una presentacion nueva. Un
+ *  control que hay que ir a buscar a un json no es un control.
+ *
+ *  Solo se agregan cuando FALLAN. Un tablero que lista nueve controles en
+ *  verde esconde el que esta en rojo. */
+function controlesConPlanta(extra, planta) {
+  const base = (extra && Array.isArray(extra.controles)) ? extra.controles.slice() : [];
+  const p = planta || {};
+  const dia = String(p.generado || p.ancla || '').slice(0, 10) || null;
+  const ap = Array.isArray(p.aperturas_imposibles) ? p.aperturas_imposibles : [];
+  if (ap.length) {
+    const peor = ap.reduce((a, x) => (a == null || Number(x.apertura) < Number(a.apertura) ? x : a), null);
+    base.push({
+      titulo: 'Apertura de la ventana', estado: 'no pasa', medido: dia,
+      texto: mil(ap.length) + ' bodega(s) abren la ventana en negativo, la peor ' + esc(peor.whs) +
+             ' en ' + mil(peor.apertura) + ' el ' + esc(String(peor.dia)) + '. Un nivel no puede ser ' +
+             'negativo: la apertura no se mide, se despeja como saldo vivo menos el movimiento de la ' +
+             'ventana, así que es el residuo donde cae cualquier diferencia entre el saldo y las ' +
+             'líneas. Que sea negativa significa que la serie de ese mes está corrida por al menos ' +
+             mil(-Number(peor.apertura)) + ' pallets. No se arregla en SAP: se arregla midiendo la ' +
+             'apertura en vez de despejarla.',
+    });
+  }
+  const l = p.lectura || {};
+  if (l.ok === false && l.desfase_s != null) {
+    const seg = Number(l.desfase_s);
+    base.push({
+      titulo: 'Lectura desfasada', estado: 'no pasa', medido: dia,
+      texto: 'El saldo y las líneas no se leyeron en el mismo instante: ' + mil(Math.abs(seg)) +
+             ' segundos entre una cosa y la otra' +
+             (seg > 0 ? ' (el saldo después de las líneas)' : ' (las líneas después del saldo)') +
+             '. Todo documento posteado en ese rato está en una lectura y no en la otra, y la ' +
+             'diferencia no se reporta: se va entera a la apertura y corre toda la serie del mes. ' +
+             'Esto mide la ventana del error; cuánto se produjo lo dice la apertura.',
+    });
+  }
+  return base.length ? base : null;
+}
+
 function datos(bod, ret, cli, extra, planta) {
   const fl = clasificarPool(bod && bod.bodegas);
   const sr = cortarSocios(ret && ret.socios, 25);
@@ -374,7 +422,7 @@ function datos(bod, ret, cli, extra, planta) {
     planta: fl.filas,
     grupos: gr,
     flujo: (extra && Array.isArray(extra.flujo_por_bodega)) ? extra.flujo_por_bodega : null,
-    controles: (extra && Array.isArray(extra.controles)) ? extra.controles : null,
+    controles: controlesConPlanta(extra, planta),
     aviso_nota: (extra && typeof extra.aviso_nota === 'string' && extra.aviso_nota.trim())
                   ? extra.aviso_nota.trim() : null,
     residuo_detalle: (extra && Array.isArray(extra.residuo_detalle))
@@ -1520,6 +1568,7 @@ function main() {
 
 module.exports = { esNumero, mil, conSigno, clasePos, pct, pct1, esc, sinBom,
                    serieDePlanta, anclaCalza, cierraEnElAncla, relojes, avisoDeFuturo,
+                   controlesConPlanta,
                    plantaDeBodega, gruposDeSerie, etiquetaDeMes, mesesDeSerie,
                    diasDelMes, resumenDelMes, altoVisible, ejeDeDias, svgFlujoDia, svgNivelDia,
                    tablaDeDias, panelDeMes, bloqueDePlanta,

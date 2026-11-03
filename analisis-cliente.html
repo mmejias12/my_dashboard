@@ -122,6 +122,36 @@ html,body{min-height:100%;font-family:'Inter',sans-serif;font-size:13px;backgrou
 .ctrl-date:focus{border-color:var(--accent)}
 .ctrl-select{font-size:12px;padding:8px 11px;border:1px solid var(--border-md);border-radius:6px;background:var(--bg-input);color:var(--text-pri);outline:none;font-family:'Inter',sans-serif;min-width:260px;max-width:380px;color-scheme:dark}
 .ctrl-select:focus{border-color:var(--accent)}
+/* ── Selector de período, el mismo de Ops x rango, la cartola y Emisiones vs
+   Transferencias: píldora con el rango, flechas que corren la ventana entera
+   y un popover con atajos. Las dos fechas sueltas quedaron adentro. */
+.rg{position:relative}
+.rg-pill{display:inline-flex;align-items:center;gap:6px;background:var(--bg-input);
+  border:1px solid var(--border-md);border-radius:6px;padding:2px}
+.rg-pill button{background:transparent;border:0;color:var(--text-sec);cursor:pointer;
+  font-size:15px;line-height:1;padding:5px 8px;border-radius:4px}
+.rg-pill button:hover:not(:disabled){background:var(--bg-hover);color:var(--text-pri)}
+.rg-pill button:disabled{opacity:.3;cursor:not-allowed}
+.rg-txt{font-size:13px;font-family:'JetBrains Mono',monospace;min-width:205px;
+  text-align:center;color:var(--text-pri);cursor:pointer;padding:5px 6px;border-radius:4px}
+.rg-txt:hover{background:var(--bg-hover)}
+.rg-pop{position:absolute;top:calc(100% + 7px);left:0;z-index:80;background:var(--bg-card);
+  border:1px solid var(--border-md);border-radius:9px;padding:12px;min-width:330px;
+  box-shadow:0 14px 34px rgba(0,0,0,.5);display:none}
+.rg-pop.on{display:block}
+.rg-ata{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}
+.rg-ata button{background:var(--bg-input);border:1px solid var(--border);
+  color:var(--text-sec);border-radius:6px;padding:7px 9px;font-size:12px;cursor:pointer;
+  display:flex;align-items:center;justify-content:space-between;gap:6px;font-family:'Inter',sans-serif}
+.rg-ata button:hover{border-color:var(--accent);color:var(--text-pri)}
+.rg-ata button .pesado{color:#fbbf24;font-size:13px;line-height:1}
+.rg-campos{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.rg-campos label{font-size:9.5px;color:var(--text-muted);text-transform:uppercase;
+  letter-spacing:.05em;display:block;margin-bottom:3px}
+.rg-campos .ctrl-date{width:100%}
+.rg-aviso{margin-top:10px;font-size:11px;line-height:1.45;color:var(--text-sec);
+  background:var(--bg-input);border-left:2px solid #fbbf24;border-radius:4px;padding:7px 9px;display:none}
+.rg-aviso.on{display:block}
 .btn-load{font-size:12.5px;padding:8px 16px;border:1px solid var(--border-md);border-radius:6px;background:var(--bg-input);color:var(--text-pri);cursor:pointer;font-family:'Inter',sans-serif;font-weight:500;transition:background .12s}
 .btn-load:hover{background:var(--bg-hover)}
 .btn-load:disabled{opacity:.4;cursor:not-allowed}
@@ -258,8 +288,24 @@ html,body{min-height:100%;font-family:'Inter',sans-serif;font-size:13px;backgrou
     <div class="breadcrumb">Emisiones retiros dev. › Resumen, actividad diaria, bodegas, choferes y detalle de pedidos</div>
 
     <div class="cbar">
-      <div class="ctrl-group"><span class="ctrl-label">Desde</span><input type="date" id="d1" class="ctrl-date"></div>
-      <div class="ctrl-group"><span class="ctrl-label">Hasta</span><input type="date" id="d2" class="ctrl-date"></div>
+      <div class="ctrl-group">
+        <span class="ctrl-label">Período</span>
+        <div class="rg" id="rg">
+          <div class="rg-pill">
+            <button id="rg-prev" title="Período anterior">&#8249;</button>
+            <div class="rg-txt" id="rg-txt" title="Elegir período">&mdash;</div>
+            <button id="rg-next" title="Período siguiente">&#8250;</button>
+          </div>
+          <div class="rg-pop" id="rg-pop">
+            <div class="rg-ata" id="rg-atajos"></div>
+            <div class="rg-campos">
+              <div><label for="d1">Desde</label><input type="date" id="d1" class="ctrl-date"></div>
+              <div><label for="d2">Hasta</label><input type="date" id="d2" class="ctrl-date"></div>
+            </div>
+            <div class="rg-aviso" id="rg-aviso"></div>
+          </div>
+        </div>
+      </div>
       <div class="ctrl-group">
         <span class="ctrl-label">Cliente</span>
         <select id="cliente-sel" class="ctrl-select"><option value="">— Cargando —</option></select>
@@ -366,6 +412,15 @@ var HIST_DIRECT='https://apirdt1.azurewebsites.net/api/RDTOut/historialxnropedid
 var isLocal=location.protocol==='file:';
 var isDev=['localhost','127.0.0.1'].includes(location.hostname);
 var raw=[], clienteActual='';
+/* Los 16 campos que la pantalla usa, de los ~40 que trae cada fila. Lo que no
+   está acá no viaja: es la mitad del ahorro (la otra mitad es el cliente). */
+var CAMPOS=['nroPedido','operacion','etapaOperacion','fechaRequerida','horaIngreso',
+            'clienteOrigenStr','clienteDestinoStr','bodegaOrigenStr','bodegaDestinoStr',
+            'cantidadSolicitada','cantidadDespachada','cantidadConfirmada','cantidadPendiente',
+            'chofer','patente','dteNro'];
+/* true = no hay índice de clientes y se vuelve al comportamiento viejo:
+   bajar el universo del período y armar el selector con eso. */
+var modoUniverso=false;
 var chartDiario=null, chartTipos=null;
 
 /* Cliente que se precarga solo al abrir la vista (si no está en el período, toma el de más movimiento) */
@@ -423,12 +478,32 @@ function loadData(){
   document.getElementById('empty-state').innerHTML='<div class="chart-card"><div class="state-msg"><div class="spinner"></div>Consultando API...</div></div>';
   document.getElementById('content').style.display='none';
   var d1=document.getElementById('d1').value,d2=document.getElementById('d2').value;
-  var url=(isLocal||isDev)?API_DIRECT+'?fechaInicial='+d1+'&fechaFinal='+d2:API_PROXY+'?fechaInicio='+d1+'&fechaFin='+d2;
+  /* EL RECORTE SE PIDE AL SERVIDOR. Antes esta vista bajaba TODAS las
+     operaciones de TODOS los clientes y filtraba en el navegador: el año son
+     ~178 mil filas y 193 MB, y la Function se cortaba a los 45 s con un 500.
+     Con un cliente elegido se pide sólo lo suyo y sólo los 16 campos que la
+     pantalla usa. Sin cliente (o si el índice de clientes no respondió) se
+     mantiene el camino viejo, que sigue sirviendo para rangos cortos. */
+  var filtra = !!(clienteActual && !modoUniverso);
+  var url=(isLocal||isDev)
+    ? API_DIRECT+'?fechaInicial='+d1+'&fechaFinal='+d2
+    : API_PROXY+'?fechaInicio='+d1+'&fechaFin='+d2 +
+      (filtra ? '&cliente='+encodeURIComponent(clienteActual)+'&campos='+encodeURIComponent(CAMPOS.join(',')) : '');
   fetch(url,{headers:{'Accept':'application/json'}})
     .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
     .then(function(data){
       raw=Array.isArray(data)?data:[];
       btn.disabled=false;btn.textContent='↻ Actualizar';
+
+      /* Con el filtro en el servidor la respuesta trae UN cliente, así que el
+         selector no se puede rearmar desde acá: ya lo llenó el índice. */
+      if(!modoUniverso && clienteActual){
+        pintarOperaciones();
+        if(raw.length) renderCliente();
+        else document.getElementById('empty-state').innerHTML='<div class="chart-card"><div class="state-msg">'+
+          escHtml(clienteActual)+' no tiene operaciones en el período seleccionado.</div></div>';
+        return;
+      }
 
       /* Clientes: la contraparte de cada operación (antes sólo se miraba el origen y se perdían
          los clientes que only aparecen como destino, que es el caso de todas las emisiones) */
@@ -437,13 +512,7 @@ function loadData(){
       sel.innerHTML='<option value="">— Selecciona un cliente —</option>';
       clientes.forEach(function(c){sel.innerHTML+='<option value="'+escHtml(c)+'">'+escHtml(c)+'</option>';});
 
-      /* Tipos de operación presentes en el período */
-      var ops=[...new Set(raw.map(function(r){return r.operacion||'';}))].filter(Boolean).sort();
-      var osel=document.getElementById('op-sel');
-      osel.innerHTML='<option value="__ALL__">Todas</option>';
-      ops.forEach(function(o){osel.innerHTML+='<option value="'+escHtml(o)+'">'+escHtml(o)+'</option>';});
-      if(ops.indexOf(fOp)<0) fOp='__ALL__';
-      osel.value=fOp;
+      pintarOperaciones();
 
       /* Precarga: deja la vista lista sin que el usuario tenga que elegir nada */
       var elegido=clienteActual&&clientes.indexOf(clienteActual)>=0?clienteActual:clientePorDefecto(clientes);
@@ -455,6 +524,126 @@ function loadData(){
       btn.disabled=false;btn.textContent='↻ Actualizar';
     });
 }
+/* ═════════════════════════════════════════════════════════════════════════
+   SELECTOR DE PERÍODO · el mismo componente de Ops x rango, la cartola y
+   Emisiones vs Transferencias. Las fechas siguen viviendo en #d1/#d2, que son
+   la única fuente de verdad: este componente sólo las escribe, así loadData
+   no cambia.
+   ═════════════════════════════════════════════════════════════════════════ */
+var RG_MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+/* Con filtro por cliente en el servidor un año es liviano, pero sin cliente
+   elegido se baja el universo y ahí sí hay techo. El aviso lo dice. */
+var RG_DIAS_AVISO=120;
+function rgIso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function rgDe(s){ return new Date(s+'T12:00:00'); }
+function rgHoy(){ return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Santiago',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()); }
+function rgSumar(s,n){ var d=rgDe(s); d.setDate(d.getDate()+n); return rgIso(d); }
+function rgDias(a,b){ return Math.round((rgDe(b)-rgDe(a))/86400000)+1; }
+var RG_ATAJOS=[
+  ['Este mes',         function(){ var h=rgHoy(); return [h.substring(0,8)+'01',h]; }],
+  ['Mes pasado',       function(){ var d=rgDe(rgHoy()); d.setDate(1); d.setMonth(d.getMonth()-1);
+                                   var a=rgIso(d); d.setMonth(d.getMonth()+1); d.setDate(0); return [a,rgIso(d)]; }],
+  ['Últimos 30 días',  function(){ var h=rgHoy(); return [rgSumar(h,-29),h]; }],
+  ['Últimos 90 días',  function(){ var h=rgHoy(); return [rgSumar(h,-89),h]; }],
+  ['Este trimestre',   function(){ var d=rgDe(rgHoy()); var q=Math.floor(d.getMonth()/3)*3;
+                                   return [rgIso(new Date(d.getFullYear(),q,1)),rgHoy()]; }],
+  ['Este año',         function(){ var h=rgHoy(); return [h.substring(0,4)+'-01-01',h]; }],
+  ['Año pasado',       function(){ var y=rgDe(rgHoy()).getFullYear()-1; return [y+'-01-01',y+'-12-31']; }],
+  ['Los 12 meses',     function(){ var h=rgHoy(); var d=rgDe(h); d.setFullYear(d.getFullYear()-1); d.setDate(d.getDate()+1); return [rgIso(d),h]; }],
+];
+function rgRotulo(a,b){
+  if(!a||!b) return '—';
+  var f=function(x){ return x.getDate()+' '+RG_MESES[x.getMonth()]+' '+x.getFullYear(); };
+  return f(rgDe(a))+'  →  '+f(rgDe(b));
+}
+function rgPintar(){
+  var a=document.getElementById('d1').value, b=document.getElementById('d2').value;
+  document.getElementById('rg-txt').textContent=rgRotulo(a,b);
+  var ok=!!(a&&b&&a<=b);
+  document.getElementById('rg-prev').disabled=!ok;
+  document.getElementById('rg-next').disabled=!ok;
+  var av=document.getElementById('rg-aviso');
+  if(ok&&rgDias(a,b)>RG_DIAS_AVISO&&!clienteActual){
+    av.classList.add('on');
+    av.innerHTML='<b>'+rgDias(a,b)+' días sin cliente elegido.</b> Con un cliente seleccionado '+
+      'el filtro se aplica en el servidor y el rango largo es liviano; sin cliente se baja el '+
+      'universo completo y la consulta puede cortarse.';
+  } else av.classList.remove('on');
+}
+function rgFijar(a,b,cargar){
+  document.getElementById('d1').value=a;
+  document.getElementById('d2').value=b;
+  rgPintar();
+  if(cargar!==false&&typeof loadData==='function') loadData();
+}
+/* Corre la ventana COMPLETA, no un extremo: si no, el período se achica solo. */
+function rgDesplazar(signo){
+  var a=document.getElementById('d1').value, b=document.getElementById('d2').value;
+  if(!a||!b) return;
+  var n=rgDias(a,b);
+  rgFijar(rgSumar(a,signo*n), rgSumar(b,signo*n));
+}
+function rgIniciar(){
+  document.getElementById('rg-atajos').innerHTML=RG_ATAJOS.map(function(x,i){
+    var r=x[1](), largo=rgDias(r[0],r[1])>RG_DIAS_AVISO;
+    return '<button data-i="'+i+'"'+(largo?' title="Rango largo: conviene tener un cliente elegido"':'')+
+      '>'+x[0]+(largo?' <span class="pesado">&#9888;</span>':'')+'</button>';
+  }).join('');
+  Array.prototype.forEach.call(document.getElementById('rg-atajos').querySelectorAll('button'),function(b){
+    b.addEventListener('click',function(){
+      var r=RG_ATAJOS[+b.getAttribute('data-i')][1]();
+      rgFijar(r[0],r[1]);
+      document.getElementById('rg-pop').classList.remove('on');
+    });
+  });
+  document.getElementById('rg-txt').addEventListener('click',function(){ document.getElementById('rg-pop').classList.toggle('on'); });
+  document.getElementById('rg-prev').addEventListener('click',function(){ rgDesplazar(-1); });
+  document.getElementById('rg-next').addEventListener('click',function(){ rgDesplazar(1); });
+  /* En CAPTURA: el popover convive con handlers que repintan y en burbuja el
+     clic de afuera se pierde (el defecto ya documentado del selector de Ops). */
+  document.addEventListener('click',function(e){
+    if(!e.target.closest||!e.target.closest('#rg')) document.getElementById('rg-pop').classList.remove('on');
+  },true);
+  rgPintar();
+}
+
+/* ÍNDICE DE CLIENTES · sale del rollup que ya existe (resumen/contrapartes.json
+   vía /api/os-resumen), no del dato crudo: son unos pocos KB contra los 193 MB
+   que costaba deducir la lista bajando el universo entero. Si no responde, la
+   vista cae al camino viejo en vez de quedarse sin selector. */
+function cargarClientes(){
+  var sel=document.getElementById('cliente-sel');
+  return fetch('/api/os-resumen?listar=clientes',{headers:{'Accept':'application/json'}})
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(function(d){
+      var nombres=(d&&d.nombres)||[];
+      if(!nombres.length) throw new Error('índice vacío');
+      nombres=nombres.slice().sort();
+      sel.innerHTML='<option value="">— Selecciona un cliente —</option>';
+      nombres.forEach(function(c){ sel.innerHTML+='<option value="'+escHtml(c)+'">'+escHtml(c)+'</option>'; });
+      var pref=nombres.filter(function(c){ return c.toLowerCase().indexOf(CLIENTE_DEFECTO)>=0; });
+      clienteActual=(clienteActual&&nombres.indexOf(clienteActual)>=0) ? clienteActual
+                   : (pref.length ? pref[0] : nombres[0]);
+      sel.value=clienteActual;
+      modoUniverso=false;
+    })
+    .catch(function(){
+      /* Sin índice no se inventa nada: se avisa y se vuelve al camino viejo. */
+      modoUniverso=true;
+      sel.innerHTML='<option value="">— Selecciona un cliente —</option>';
+    });
+}
+
+/* Los tipos de operación que de verdad aparecen en lo que se trajo. */
+function pintarOperaciones(){
+  var ops=[...new Set(raw.map(function(r){return r.operacion||'';}))].filter(Boolean).sort();
+  var osel=document.getElementById('op-sel');
+  osel.innerHTML='<option value="__ALL__">Todas</option>';
+  ops.forEach(function(o){osel.innerHTML+='<option value="'+escHtml(o)+'">'+escHtml(o)+'</option>';});
+  if(ops.indexOf(fOp)<0) fOp='__ALL__';
+  osel.value=fOp;
+}
+
 function clientePorDefecto(clientes){
   var pref=clientes.filter(function(c){return c.toLowerCase().indexOf(CLIENTE_DEFECTO)>=0;});
   if(pref.length) return pref[0];
@@ -690,12 +879,17 @@ window.addEventListener('DOMContentLoaded',function(){
   document.getElementById('cliente-sel').onchange=function(){
     clienteActual=this.value;
     fDrill=null;                                          /* al cambiar de cliente se limpia el drill */
-    if(clienteActual&&raw.length) renderCliente();
+    /* Con el filtro en el servidor, cambiar de cliente es una consulta nueva;
+       en el camino viejo el universo ya está en memoria y basta repintar. */
+    if(modoUniverso){ if(clienteActual&&raw.length) renderCliente(); }
+    else if(clienteActual){ loadData(); }
+    rgPintar();
   };
   document.getElementById('op-sel').onchange=function(){ setOp(this.value); };
   document.getElementById('chk-anul').onchange=function(){ fIncAnul=this.checked; if(clienteActual&&raw.length) renderCliente(); };
   document.getElementById('d1').onchange=loadData;
   document.getElementById('d2').onchange=loadData;
+  rgIniciar();
   document.addEventListener('keydown',function(e){ if(e.key==='Escape') cerrarHist(); });
 
   /* Clics delegados: Nº de pedido abre su historial; bodega/chofer filtran la vista */
@@ -735,7 +929,9 @@ window.addEventListener('DOMContentLoaded',function(){
       document.querySelectorAll('#seg-tipos button').forEach(function(x){x.classList.toggle('on',x.getAttribute('data-t')===tt);}); }
   }catch(e){}
 
-  loadData();                                             /* precarga automática al abrir */
+  /* Primero el índice de clientes (unos KB) y recién después el dato: así la
+     primera consulta ya sale filtrada por cliente en vez de traerse el mundo. */
+  cargarClientes().then(function(){ rgPintar(); loadData(); });
 });
 </script>
 

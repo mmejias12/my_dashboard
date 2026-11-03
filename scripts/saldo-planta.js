@@ -41,7 +41,7 @@ const A = require('./armar-tablero-stock.js');                 // NUEVE: una reg
 const L = require('../backfill/sonda-planta-lineas.js');       // netoPorBodega, leyDeDosPuntas
 
 const args = process.argv.slice(2);
-const OPCIONES = ['meses', 'bodegas', 'json', 'tope', 'contraste'];
+const OPCIONES = ['meses', 'bodegas', 'json', 'tope', 'contraste', 'fecha'];
 const BANDERAS = ['cadena'];
 const opcion = (n, d) => { const p = '--' + n + '='; for (const a of args) if (a.indexOf(p) === 0) return a.slice(p.length); return d; };
 const bandera = n => args.indexOf('--' + n) >= 0;
@@ -72,15 +72,16 @@ function bodegasDePlanta(bodegasHoy) {
  *  Misma forma que la serie de saldo-pool —dia, entradas, salidas, neto— para
  *  que cierreDelDia() sirva igual para las dos y la caminata hacia atras no
  *  este escrita dos veces. */
-function movimientoDeBodega(lineas, whs) {
+function movimientoDeBodega(lineas, whs, campo) {
   const w = String(whs == null ? '' : whs).trim();
+  const f = String(campo || 'DocDate');
   const m = new Map();
   // Sin guardia para w vacio a proposito: una bodega vacia no calza con
   // ninguna punta y el bucle devuelve la lista vacia solo. Un if aparte seria
   // codigo que nunca decide nada.
   for (const l of (lineas || [])) {
     if (!l) continue;
-    const d = String(l.DocDate || '').slice(0, 10);
+    const d = String(l[f] || '').slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
     const q = Number(l.cantidad) || 0;
     const entra = l.hacia === w, sale = l.desde === w;
@@ -144,6 +145,113 @@ function nivelesImposibles(series) {
     if (peor && peor.cierre < 0) out.push({ whs: s.whs, nombre: s.nombre, cierre: peor.cierre, dia: peor.dia });
   }
   return out.sort((a, b) => a.cierre - b.cierre);
+}
+
+/*  QUE FECHA MANDA LA SERIE DE PLANTA.
+ *
+ *  La de CREACION, porque la pregunta que contesta la planta es "¿cuantos
+ *  pallets hay aca?" y el pallet sale de la bodega cuando se crea el
+ *  documento, no cuando el cliente lo recibe. La de documento es la contable
+ *  y es la correcta para clientes y retail, donde lo que importa es desde
+ *  cuando se cobra arriendo.
+ *
+ *  Pero no se puede usar una fecha que el dato no trae. Mientras los blobs no
+ *  se re-extraigan con la fecha de creacion, la serie sigue saliendo por fecha
+ *  de documento Y SE DICE: una serie que cambia de significado sin avisar es
+ *  peor que una que no cambia. */
+function fechaQueManda(cobertura, pedida) {
+  const c = cobertura || {};
+  if (pedida === 'DocDate' || pedida === 'CreaDate')
+    return { campo: pedida, porDefecto: false,
+             motivo: 'la fecha la forzo quien corrio el calculo: ' + pedida };
+  if (c.completa)
+    return { campo: 'CreaDate', porDefecto: true, motivo: null };
+  if (c.conCrea > 0)
+    return { campo: 'DocDate', porDefecto: true,
+             motivo: 'solo ' + c.conCrea + ' de ' + c.lineas + ' lineas traen fecha de creacion, ' +
+                     'asi que la serie sale por fecha de documento. Mezclar las dos daria una serie ' +
+                     'que no es ninguna de las dos' };
+  return { campo: 'DocDate', porDefecto: true,
+           motivo: 'ninguna linea trae fecha de creacion todavia: la serie sale por fecha de ' +
+                   'documento, que es la contable y no la de la planta. Se arregla re-extrayendo' };
+}
+
+/*  EL TRANSITO: LOS PALLETS QUE ESTAN EN EL AIRE.
+ *
+ *  Una emision a cliente se CREA el dia en que el pallet sale de la bodega de
+ *  planta —el camion puede seguir estacionado en el patio, pero sistemicamente
+ *  ya salio— y se FECHA el dia en que el cliente la recibe, que es desde
+ *  cuando se le cobra arriendo. Entre una cosa y la otra el pallet no cuenta
+ *  en planta por fecha de creacion y si cuenta por fecha de documento.
+ *
+ *  Esa diferencia tiene nombre en REDTEC y hasta ahora no tenia numero:
+ *
+ *      planta (fecha de documento)  =  planta (fecha de creacion)  +  transito
+ *             100                   =             20               +    80
+ *
+ *  Se cuenta el NETO sobre las nueve: una linea que sale de planta suma al
+ *  transito, una que entra resta, y una que va de una estacion a otra no mueve
+ *  el total y no entra. Un traspaso interno pendiente cambia el reparto entre
+ *  estaciones, no cuantos pallets hay en planta.
+ *
+ *  SIN LAS DOS FECHAS NO SE PUEDE MEDIR, y eso se dice: devolver cero cuando
+ *  no se sabe es peor que no devolver nada, porque un cero se publica como si
+ *  significara "no hay nada en el aire". */
+function enTransito(lineas, hasta, conjunto) {
+  const dia = x => { const t = String(x == null ? '' : x).slice(0, 10);
+                     return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : null; };
+  const corte = dia(hasta);
+  const dentro = c => !!(conjunto && (conjunto.has ? conjunto.has(c) : conjunto.indexOf(c) >= 0));
+  const ls = Array.isArray(lineas) ? lineas : [];
+  let conCrea = 0;
+  for (const l of ls) if (l && dia(l.CreaDate)) conCrea++;
+  if (!corte)
+    return { medible: false, pallets: null, lineas: 0, conCrea,
+             motivo: 'no se puede medir el transito: la fecha de corte no es una fecha' };
+  // El dato viejo no trae fecha de creacion. Mientras no se re-extraiga, el
+  // transito no se puede saber, y la pagina tiene que decirlo en vez de
+  // publicar un cero que se leeria como "no hay nada en el aire".
+  if (!conCrea)
+    return { medible: false, pallets: null, lineas: 0, conCrea: 0,
+             motivo: 'ninguna linea trae fecha de creacion: el transito no se puede medir ' +
+                     'hasta que se re-extraiga guardandola' };
+  let pallets = 0, n = 0, sinFecha = 0;
+  for (const l of ls) {
+    if (!l) continue;
+    const c = dia(l.CreaDate), d = dia(l.DocDate);
+    // Creada y sin fecha de documento utilizable: salio de la bodega y no
+    // tiene dia de llegada. No se puede ubicar en el tiempo, asi que no entra
+    // al numero — pero se cuenta, porque es un pallet en el aire sin fecha de
+    // aterrizaje y eso es lo contrario de un detalle.
+    if (c && !d) { sinFecha++; continue; }
+    if (!c || !d) continue;
+    if (!(c <= corte && d > corte)) continue;
+    const sale = dentro(l.desde), entra = dentro(l.hacia);
+    if (sale === entra) continue;              // interna o ajena: no mueve el total
+    pallets += sale ? (Number(l.cantidad) || 0) : -(Number(l.cantidad) || 0);
+    n++;
+  }
+  return { medible: true, pallets, lineas: n, conCrea, sinFecha,
+           motivo: sinFecha ? sinFecha + ' linea(s) creadas sin fecha de documento utilizable: ' +
+                              'salieron de la bodega y no tienen dia de llegada' : null };
+}
+
+/*  CUANTAS LINEAS TRAEN CADA FECHA. Mientras la re-extraccion no pase por
+ *  todos los meses va a haber blobs con las dos y blobs con una sola, y la
+ *  pagina no puede mezclarlos sin decirlo. */
+function coberturaDeFechas(lineas) {
+  const ls = Array.isArray(lineas) ? lineas : [];
+  const ok = x => /^\d{4}-\d{2}-\d{2}$/.test(String(x == null ? '' : x).slice(0, 10));
+  let conDoc = 0, conCrea = 0, conLasDos = 0;
+  for (const l of ls) {
+    if (!l) continue;
+    const d = ok(l.DocDate), c = ok(l.CreaDate);
+    if (d) conDoc++;
+    if (c) conCrea++;
+    if (d && c) conLasDos++;
+  }
+  return { lineas: ls.length, conDoc, conCrea, conLasDos,
+           completa: ls.length > 0 && conLasDos === ls.length };
 }
 
 /** UNA APERTURA NEGATIVA ES OTRA COSA QUE UN CIERRE NEGATIVO.
@@ -315,6 +423,18 @@ function payloadJson(p) {
     fueraDelIndicador: Number(x.fueraDelIndicador) || 0,
     cierreFirme: x.cierreFirme || null,
     aperturas_imposibles: x.aperturasImposibles || [],
+    /*  La identidad que une las dos lecturas de la planta:
+     *      planta (fecha de documento) = planta (fecha de creacion) + transito
+     *  Mientras el transito no sea medible va en null, nunca en cero: un cero
+     *  se publica como "no hay nada en el aire", que es una afirmacion. */
+    fecha_serie: (x.fecha && x.fecha.campo) || null,
+    fecha_serie_porque: (x.fecha && x.fecha.motivo) || null,
+    transito: x.transito ? { medible: !!x.transito.medible, pallets: x.transito.pallets,
+                             lineas: x.transito.lineas || 0,
+                             sin_fecha: x.transito.sinFecha || 0,
+                             motivo: x.transito.motivo || null, al: x.transitoAl || null }
+                         : { medible: false, pallets: null, lineas: 0, sin_fecha: 0,
+                             motivo: 'no se calculo', al: null },
     lectura: {
       ancla: x.anclaLeida || null,
       lineas: x.lineasGuardadas || null,
@@ -326,7 +446,7 @@ function payloadJson(p) {
   };
 }
 
-function veredicto(series, imposibles, cuad, ancla, aperturas, desfase) {
+function veredicto(series, imposibles, cuad, ancla, aperturas, desfase, fecha, transito) {
   const p = [];
   if (!series || !series.length)
     return { nivel: 'sin datos', texto: 'No hay bodegas de planta con movimiento en la ventana pedida.' };
@@ -371,6 +491,15 @@ function veredicto(series, imposibles, cuad, ancla, aperturas, desfase) {
            'corrida por al menos ' + mil(-peor.apertura) + ' pallets, y con ella todos sus dias. ' +
            'Se arregla midiendo la apertura, no en SAP.');
   }
+  /*  Que la serie salga por una fecha distinta de la que corresponde no es un
+   *  error del dato, pero cambia lo que el numero significa, y eso se dice
+   *  arriba y no en una nota al pie. */
+  if (fecha && fecha.campo === 'DocDate' && fecha.porDefecto && fecha.motivo)
+    p.push('FECHA DE LA SERIE: ' + fecha.motivo + '. Mientras tanto el indicador de planta ' +
+           'responde "cuantos habia segun la fecha contable", no "cuantos hay en planta".');
+  if (transito && transito.medible && transito.sinFecha)
+    p.push(transito.sinFecha + ' linea(s) salieron de la bodega sin fecha de documento utilizable: ' +
+           'estan en el aire y no tienen dia de llegada.');
   if (desfase && desfase.ok === false)
     p.push('LECTURA DESFASADA: ' + desfase.motivo + '. Es la ventana en que se puede producir la ' +
            'apertura corrida de arriba; cuanto se produjo lo dice la apertura, no esto.');
@@ -387,6 +516,7 @@ function veredicto(series, imposibles, cuad, ancla, aperturas, desfase) {
 
 module.exports = { bodegasDePlanta, movimientoDeBodega, marcarFirmes, cadenaDePlanta,
                    nivelesImposibles, aperturasImposibles, desfaseDeLectura,
+                   enTransito, coberturaDeFechas, fechaQueManda,
                    leyDelPool, cuadraturaDelNeto, anclaAlDia, payloadJson, veredicto,
                    OPCIONES, BANDERAS };
 
@@ -449,9 +579,14 @@ async function main() {
   console.log('  total: ' + mil(lineas.length) + ' lineas de bodega\n');
 
   const conjunto = new Set(planta.map(x => x.whs));
+  const cob = coberturaDeFechas(lineas);
+  const fec = fechaQueManda(cob, opcion('fecha', null));
+  console.log('  fechas por linea: ' + mil(cob.conDoc) + ' con documento · ' + mil(cob.conCrea) +
+              ' con creacion   ·  la serie sale por ' + fec.campo);
+  if (fec.motivo) console.log('    ' + fec.motivo);
   const series = [];
   for (const b of planta) {
-    const mov = movimientoDeBodega(lineas, b.whs);
+    const mov = movimientoDeBodega(lineas, b.whs, fec.campo);
     if (!mov.length && !b.nivel) continue;
     series.push({ whs: b.whs, nombre: b.nombre, indicador: b.indicador, nivel: b.nivel,
                   dias: marcarFirmes(P.cierreDelDia(mov, b.nivel), fechaAncla) });
@@ -535,10 +670,14 @@ async function main() {
     return /^\d{4}-\d{2}-\d{2}$/.test(d) && d > m ? d : m;
   }, '');
   const anc = anclaAlDia(fechaAncla, diaMasNuevo);
+  // El transito se mide al ultimo dia FIRME: el dia en curso todavia tiene
+  // camiones saliendo y el numero cambiaria cada vez que se mira.
+  const transitoAl = diaFirme || fechaAncla;
+  const tra = enTransito(lineas, transitoAl, conjunto);
   const imp = nivelesImposibles(series);
   const ape = aperturasImposibles(series);
   const des = desfaseDeLectura(bod.generado, lineasGuardadas);
-  const v = veredicto(series, imp, cuad, anc, ape, des);
+  const v = veredicto(series, imp, cuad, anc, ape, des, fec, tra);
 
   console.log('\n── LA LEY DEL POOL ' + '─'.repeat(55));
   console.log('  traspasos: ' + mil(ley.nTraspaso) + ' lineas con las dos puntas · netean ' +
@@ -561,6 +700,16 @@ async function main() {
     console.log('  ' + x.whs.padEnd(10) + x.nombre.slice(0, 23).padEnd(24) +
                 mil(x.apertura).padStart(10) + '   el ' + x.dia + '   ← imposible');
 
+  console.log('\n── EN TRANSITO ' + '─'.repeat(59));
+  console.log('  Pallets que ya salieron de la bodega y que el cliente todavia no recibe.');
+  if (!tra.medible) console.log('  no se puede medir: ' + tra.motivo);
+  else {
+    console.log('  al cierre del ' + transitoAl + ':  ' + mil(tra.pallets) + ' pallets en ' +
+                mil(tra.lineas) + ' linea(s)');
+    console.log('  planta por fecha de documento = planta por fecha de creacion + ' + mil(tra.pallets));
+    if (tra.sinFecha) console.log('  ' + mil(tra.sinFecha) + ' linea(s) sin fecha de documento utilizable');
+  }
+
   console.log('\n── VEREDICTO ' + '─'.repeat(61));
   console.log('  ' + v.texto);
 
@@ -571,6 +720,7 @@ async function main() {
       ancla: anc, veredicto: v,
       indicador: nueve, fueraDelIndicador: resto, cierreFirme: diaFirme,
       aperturasImposibles: ape, lineasGuardadas, desfase: des,
+      fecha: fec, transito: tra, transitoAl,
       bodegas: series, cadena: cadenaDePlanta(lineas, conjunto).aristas,
     }), null, 1), 'utf8');
     console.log('\n  escrito: ' + salida);

@@ -17,6 +17,10 @@
 // ============================================================================
 
 const { BlobServiceClient } = require('@azure/storage-blob');
+/* Sólo para declarar de dónde se alimenta la serie. Se reusa el ayudante en vez
+   de volver a leer OPS_ORIGEN acá: una segunda copia de la regla es una copia
+   que algún día va a quedar desfasada. */
+const { origenActivo } = require('../shared/ops-fetch.js');
 
 const CONN      = process.env.OS_STORAGE_CONN;
 const CONTAINER = process.env.OS_HIST_CONTAINER || 'redtec-os-hist';
@@ -71,6 +75,19 @@ module.exports = async function (context, req) {
     context.res = { status: 200, headers: CORS, body: JSON.stringify({
       generado: d.generado, desde: d.desde, hasta: d.hasta,
       conceptos: d.conceptos, plantas: d.plantas,
+      /* DE DÓNDE SALE EL DATO, dicho por el propio endpoint. El área preguntó
+         si el histórico de Operaciones REDTEC venía de m2link: no, lo arma el
+         m3link con sus propios almacenes. Que lo declare la API evita que la
+         vista lo tenga escrito a mano y se vuelva mentira el día que cambie. */
+      fuente: {
+        vista: 'serie diaria propia del m3link',
+        almacen: CONTAINER + '/' + BLOB,
+        arma: 'scripts/rollup-diario.js',
+        origen: origenActivo(),
+      },
+      /* Con qué fecha se cuentan los retiros: es la diferencia que explica por
+         qué un día puede no calzar con otra vista. */
+      criterio_retiros: d.criterio_retiros || 'requerida',
       dias_con_datos: Object.keys(dias).length, dias }) };
   } catch (e) {
     context.log.error('os-diario', e);

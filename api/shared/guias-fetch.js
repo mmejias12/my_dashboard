@@ -142,6 +142,20 @@ const VIVO_MS = Math.max(5000, Number(process.env.GUIAS_VIVO_MS) || 12000);
 const PROG_DIAS = Math.max(0, Number(process.env.GUIAS_PROG_DIAS) || 35);
 const PROG_MS   = Math.max(0, Number(process.env.GUIAS_PROG_MS) || 900000);
 const PROG_PRESUPUESTO_MS = Math.max(5000, Number(process.env.GUIAS_PROG_PRESUPUESTO_MS) || 22000);
+/* La ventana larga sólo tiene sentido para los días RECIENTES. Un día cerrado
+   hace una semana ya está completo en el blob, así que pedirle a Redlink 35
+   días de ingreso para consultarlo es puro costo: medido en producción, la
+   primera llamada de una instancia nueva pasa de 0,4 s a 22 s. Importa porque
+   recepcion-conciliacion.html pasea por fechas pasadas con este mismo motor. */
+const PROG_SOLO_DIAS = Math.max(0, Number(process.env.GUIAS_PROG_SOLO_DIAS) || 3);
+
+/* Hoy en Santiago. GUIAS_HOY existe para poder probar el corte de arriba sin
+   depender del reloj de la máquina; en producción nunca viene puesta. */
+function hoyCL() {
+  return process.env.GUIAS_HOY || new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
+}
 
 const memo = new Map();
 const memoProg = new Map();
@@ -167,6 +181,7 @@ const moverDia = (s, n) => {
      tumbar el endpoint del andén. */
 async function traerProgramadas(hasta) {
   if (!PROG_DIAS || origenActivo() !== 'redlink') return [];
+  if (hasta < moverDia(hoyCL(), -PROG_SOLO_DIAS)) return [];
   const desdeIng = moverDia(hasta, -PROG_DIAS);
   const clave = desdeIng + '|' + hasta;
   const ahora = Date.now();
@@ -358,4 +373,4 @@ async function obtenerGuias(desde, hasta) {
 
 module.exports = { obtenerGuias, traerFilas, normalizarPatente, clasificar,
   PALLETS_POR_FILA, OPERACIONES_DESPACHO, VIVO_DIAS, MEMO_MS, VIVO_MS,
-  traerProgramadas, PROG_DIAS, PROG_MS, PROG_PRESUPUESTO_MS };
+  traerProgramadas, PROG_DIAS, PROG_MS, PROG_PRESUPUESTO_MS, PROG_SOLO_DIAS, hoyCL };

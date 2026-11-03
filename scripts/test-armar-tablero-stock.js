@@ -1162,5 +1162,63 @@ chk('ni ensucia la de planta',
       planta_dias:[{cod:'A',dias:[{dia:'nunca',cierre:1},{dia:'2026-10-05',cierre:2}]}]})[1].fecha==='2026-10-05');
 chk('el aviso sin relojes no revienta', A.avisoDeFuturo([])===null && A.avisoDeFuturo(null)===null);
 
+console.log('\n— los controles de planta llegan a donde se miran los controles —');
+const EXTRA2={controles:[{titulo:'Cobertura',texto:'todo',medido:'2026-10-27'}]};
+chk('sin planta, los controles son los del extra',
+    A.controlesConPlanta(EXTRA2,null).length===1);
+chk('sin extra ni planta no se inventa una lista',
+    A.controlesConPlanta(null,null)===null && A.controlesConPlanta({},{})===null);
+// SOLO cuando falla: un tablero con nueve controles en verde esconde el rojo
+chk('una ventana que abre bien no agrega control',
+    A.controlesConPlanta(EXTRA2,{aperturas_imposibles:[],lectura:{ok:true,desfase_s:3}}).length===1);
+const CPL=A.controlesConPlanta(EXTRA2,{generado:'2026-11-02T16:36:37Z',
+  aperturas_imposibles:[{whs:'RT13-100',apertura:-3334,dia:'2026-10-01'},
+                        {whs:'RT07-126',apertura:-40,dia:'2026-10-09'}],
+  lectura:{ok:false,desfase_s:166}});
+chk('con los dos defectos entran dos controles', CPL.length===3, String(CPL.length));
+const apC=CPL.find(c=>/Apertura/.test(c.titulo)), deC=CPL.find(c=>/Lectura/.test(c.titulo));
+chk('el de apertura no pasa', apC && apC.estado==='no pasa');
+chk('nombra la peor y cuanto esta corrida',
+    /RT13-100/.test(apC.texto) && /-3\.334/.test(apC.texto) && /3\.334 pallets/.test(apC.texto), apC.texto.slice(0,110));
+// la peor es la MAS negativa, no la primera de la lista: quien la arma puede
+// entregarla en cualquier orden y el control no puede depender de eso
+const DESORD=A.controlesConPlanta(EXTRA2,{aperturas_imposibles:[
+  {whs:'RT07-126',apertura:-40,dia:'2026-10-09'},
+  {whs:'RT13-100',apertura:-3334,dia:'2026-10-01'}]}).find(c=>/Apertura/.test(c.titulo));
+chk('la peor es la mas negativa, no la primera de la lista',
+    /RT13-100/.test(DESORD.texto) && /3\.334 pallets/.test(DESORD.texto),
+    DESORD.texto.slice(0,110));
+// este error es NUESTRO: mandarlo a SAP manda a reclamar al lugar equivocado
+// no basta con que aparezca la frase: el remedio que da tiene que ser el
+// correcto. Este error es NUESTRO y mandarlo a SAP manda a reclamar al lugar
+// equivocado, que es justo lo que pasaba antes de tener el control.
+chk('y da el remedio correcto, no el de SAP',
+    /No se arregla en SAP: se arregla midiendo la apertura en vez de despejarla\.$/.test(apC.texto.trim()),
+    apC.texto.slice(-95));
+chk('el de lectura no pasa y dice los segundos',
+    deC && deC.estado==='no pasa' && /166 segundos/.test(deC.texto), deC && deC.texto.slice(0,90));
+chk('y en que direccion', /el saldo después de las líneas/.test(deC.texto), deC.texto.slice(0,120));
+chk('al reves lo dice al reves',
+    /las líneas después del saldo/.test(
+      A.controlesConPlanta(EXTRA2,{lectura:{ok:false,desfase_s:-166}}).find(c=>/Lectura/.test(c.titulo)).texto));
+chk('un desfase no medible no inventa un control',
+    A.controlesConPlanta(EXTRA2,{lectura:{ok:null,desfase_s:null}}).length===1);
+chk('los dos llevan la fecha de la corrida', apC.medido==='2026-11-02' && deC.medido==='2026-11-02',
+    apC.medido+' '+deC.medido);
+// el codigo y la fecha vienen de SAP y pueden traer cualquier cosa; el texto
+// termina dentro del html de las dos paginas
+const SUCIO=A.controlesConPlanta(EXTRA2,{aperturas_imposibles:[
+  {whs:'<b>x</b>',apertura:-1,dia:'<i>y</i>'}]}).find(c=>/Apertura/.test(c.titulo)).texto;
+chk('el codigo de bodega va escapado', /&lt;b&gt;x&lt;\/b&gt;/.test(SUCIO), SUCIO.slice(0,90));
+chk('y la fecha tambien', /&lt;i&gt;y&lt;\/i&gt;/.test(SUCIO), SUCIO.slice(0,110));
+chk('no se cuela ningun tag crudo', SUCIO.indexOf('<')<0, SUCIO.slice(0,110));
+// y de punta a punta: datos() los lleva al json que leen las dos paginas
+const DP2=A.datos(BOD, VAC, VAC, EXTRA2, {generado:'2026-11-02T16:36:37Z',
+  aperturas_imposibles:[{whs:'RT13-100',apertura:-3334,dia:'2026-10-01'}],
+  lectura:{ok:false,desfase_s:166}, bodegas:[]});
+chk('datos() los deja en el json que leen las dos paginas',
+    DP2.controles.filter(c=>c.estado==='no pasa').length===2,
+    DP2.controles.map(c=>c.titulo).join(' | '));
+
 console.log('\n' + ok + ' ok, ' + fail + ' fallas');
 process.exit(fail ? 1 : 0);

@@ -3738,6 +3738,363 @@ document.addEventListener('click', function(e){
 })();
 </script>
 <!-- ══════════════ FIN HALLOWEEN ══════════════ -->
+<!-- ══════════════════════════════════════════════════════════════════════
+     NAVIDAD Y AÑO NUEVO · capa decorativa de temporada (REDTEC)
+     Mismo molde que Fiestas Patrias y Halloween: todo vive acá dentro y
+     para quitarlo se borra desde este comentario hasta "FIN NAVIDAD Y AÑO
+     NUEVO". No toca el layout — cada pieza es position:absolute/fixed y
+     pointer-events:none, salvo la píldora, que es un botón de verdad.
+
+     SON DOS TEMPORADAS EN UN SOLO BLOQUE y nunca conviven: Navidad corre
+     hasta el 25-12 inclusive y Año Nuevo arranca el 26-12 y termina el
+     01-01. Una sola ventana con dos modos evita el error clásico de dejar
+     el árbol puesto en año nuevo.
+
+     EL AÑO NO VA ESCRITO A MANO: se calcula (en diciembre, el que viene),
+     así que el saludo de año nuevo sigue correcto en 2027, 2028 y los que
+     sigan sin que nadie tenga que acordarse de editarlo.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style id="nv-css">
+  .nv .topbar .logo, .an .topbar .logo{ position:relative; }
+
+  /* 1 · fondo: copos en Navidad, chispas doradas en Año Nuevo.
+     Van en CSS y no en canvas a propósito: el panel queda abierto todo el
+     día en pantallas de planta, y un requestAnimationFrame eterno se nota
+     en el ventilador. Esto lo compone la GPU y no cuesta nada. */
+  #nv-fondo{ position:fixed;inset:0;z-index:9990;pointer-events:none;overflow:hidden; }
+  #nv-fondo i{ position:absolute;top:-24px;display:block;border-radius:50%;
+    background:#EAF2FF;opacity:0;animation:nv-caer linear infinite; }
+  /* Discreto a propósito: esto queda prendido todo diciembre sobre una
+     pantalla de trabajo, no es una tarjeta de saludo. Copos chicos y a
+     media opacidad se notan sin estorbar la lectura de una tabla. */
+  @keyframes nv-caer{
+    0%  { transform:translate3d(0,-24px,0) rotate(0deg);opacity:0 }
+    10% { opacity:.5 }
+    90% { opacity:.34 }
+    100%{ transform:translate3d(var(--dx,14px),102vh,0) rotate(260deg);opacity:0 }
+  }
+  .an #nv-fondo i{ background:#FFD98A;box-shadow:0 0 6px rgba(255,206,92,.6);
+    animation-name:nv-chispa; }
+  @keyframes nv-chispa{
+    0%  { transform:translate3d(0,0,0) scale(.5);opacity:0 }
+    15% { opacity:.6;transform:translate3d(var(--dx,8px),-14vh,0) scale(1) }
+    60% { opacity:.34 }
+    100%{ transform:translate3d(calc(var(--dx,8px) * 2),-44vh,0) scale(.3);opacity:0 }
+  }
+  .an #nv-fondo i{ top:auto;bottom:-16px; }
+
+  /* 2 · guirnalda de luces colgada de la barra (sólo Navidad) */
+  #nv-luces{ position:absolute;left:0;right:0;top:0;height:26px;z-index:1;
+    pointer-events:none;overflow:hidden; }
+  #nv-luces .hilo{ position:absolute;left:0;right:0;top:7px;height:1px;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.22) 12%,rgba(255,255,255,.22) 88%,transparent); }
+  #nv-luces b{ position:absolute;top:9px;width:7px;height:10px;border-radius:0 0 50% 50%/0 0 60% 60%;
+    display:block;animation:nv-titila 3.4s ease-in-out infinite; }
+  #nv-luces b::before{ content:"";position:absolute;left:2px;top:-3px;width:3px;height:3px;
+    border-radius:1px;background:rgba(255,255,255,.3); }
+  @keyframes nv-titila{ 0%,100%{ opacity:.35;filter:brightness(.8) } 50%{ opacity:1;filter:brightness(1.5) } }
+
+  /* 3 · píldora central con el saludo */
+  #nv-aviso{ position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    z-index:1;pointer-events:none;display:flex;align-items:center;gap:9px;
+    height:26px;padding:0 15px;border-radius:999px;overflow:hidden;white-space:nowrap;
+    background:linear-gradient(180deg,rgba(28,138,74,.20),rgba(192,23,12,.10));
+    border:1px solid rgba(255,255,255,.20);
+    box-shadow:0 0 0 1px rgba(0,0,0,.25) inset,0 1px 8px rgba(28,138,74,.14); }
+  .an #nv-aviso{ background:linear-gradient(180deg,rgba(255,206,92,.20),rgba(24,30,60,.14));
+    border-color:rgba(255,206,92,.42);box-shadow:0 0 0 1px rgba(0,0,0,.25) inset,0 1px 10px rgba(255,206,92,.18); }
+  #nv-aviso .nv-txt{ font-size:12px;font-weight:600;letter-spacing:.055em;
+    color:#EAF6EE;text-transform:uppercase; }
+  .an #nv-aviso .nv-txt{ color:#FFEFC9; }
+  #nv-aviso .nv-ico{ width:15px;height:15px;flex:none; }
+  /* el brillo que barre, igual que en las otras temporadas */
+  #nv-aviso::after{ content:"";position:absolute;top:0;bottom:0;width:44px;left:-60px;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.17),transparent);
+    animation:nv-brillo 7.5s ease-in-out infinite; }
+  @keyframes nv-brillo{ 0%,72%{ left:-60px } 86%{ left:105% } 100%{ left:105% } }
+  /* clickeable sólo cuando hay algo que disparar */
+  #nv-aviso.nv-click{ pointer-events:auto;cursor:pointer;-webkit-user-select:none;user-select:none;
+    transition:border-color .18s ease,box-shadow .18s ease,transform .12s ease; }
+  #nv-aviso.nv-click:hover{ border-color:rgba(255,255,255,.5);
+    box-shadow:0 0 0 1px rgba(0,0,0,.25) inset,0 2px 14px rgba(255,255,255,.14); }
+  #nv-aviso.nv-click:active{ transform:translate(-50%,-50%) scale(.96); }
+  #nv-aviso.nv-click:focus-visible{ outline:2px solid #FFD98A;outline-offset:2px; }
+  #nv-aviso.nv-click.nv-corriendo{ cursor:default; }
+  @media (max-width:1100px){ #nv-aviso{ display:none; } }
+
+  /* 4 · gorro sobre la R */
+  #nv-gorro{ position:absolute;width:30px;height:23px;left:-6px;top:-9px;
+    transform:rotate(-13deg);transform-origin:76% 100%;pointer-events:none;
+    animation:nv-saludo 11s ease-in-out infinite; }
+  @keyframes nv-saludo{
+    0%,86%{ transform:rotate(-13deg) translateY(0) scale(1) }
+    90%   { transform:rotate(-24deg) translateY(-2px) scale(1.05) }
+    94%   { transform:rotate(-8deg)  translateY(-1px) scale(1.02) }
+    100%  { transform:rotate(-13deg) translateY(0) scale(1) }
+  }
+  .nv .topbar .logo:hover #nv-gorro, .an .topbar .logo:hover #nv-gorro{
+    transform:rotate(-24deg) translateY(-2px) scale(1.06);animation:none; }
+
+  /* 5 · franja al pie de la barra */
+  #nv-franja{ position:absolute;left:50%;bottom:-1px;width:190px;height:2px;z-index:1;
+    transform:translateX(-50%);pointer-events:none;
+    background:linear-gradient(90deg,#1C8A4A 0 33.4%,#F4F7FB 33.4% 66.7%,#C0170C 66.7% 100%); }
+  .an #nv-franja{ background:linear-gradient(90deg,#FFCE5C 0 33.4%,#EAF2FF 33.4% 66.7%,#1D2440 66.7% 100%); }
+
+  /* 6 · el estallido de bienvenida */
+  #nv-estallido{ position:fixed;inset:0;z-index:9998;pointer-events:none; }
+
+  @media (prefers-reduced-motion:reduce){
+    #nv-fondo{ display:none }
+    #nv-luces b,#nv-aviso::after,#nv-gorro{ animation:none }
+  }
+</style>
+<script>
+(function(){
+  /* ── interruptores ─────────────────────────────────────────────── */
+  var NV = {
+    navDesde:'12-01', navHasta:'12-25',           // Navidad (MM-DD, inclusive)
+    navFuerteDesde:'12-15', navFuerteHasta:'12-25',  // saludo y nevada
+    anDesde:'12-26',  anHasta:'01-01',            // Año Nuevo
+    fondo:true,      // copos / chispas
+    luces:true,      // guirnalda bajo la barra (Navidad)
+    aviso:true,      // píldora central
+    gorro:true,      // gorro sobre la R
+    franja:true,     // franja de color al pie de la barra
+    estallido:true   // nevada o fuegos al ingresar (1 vez al día) y al hacer clic
+  };
+
+  /* ── ¿en qué temporada estamos? ────────────────────────────────── */
+  var hoy = new Date(), p = function(n){ return (n<10?'0':'')+n; };
+  var md = p(hoy.getMonth()+1)+'-'+p(hoy.getDate());
+  /* Año Nuevo cruza de año (26-12 → 01-01), así que el rango no se puede
+     comparar como si viviera dentro del mismo mes. */
+  function dentro(a,b){ return (a<=b) ? (md>=a && md<=b) : (md>=a || md<=b); }
+  var MODO = dentro(NV.navDesde, NV.navHasta) ? 'nav'
+           : dentro(NV.anDesde,  NV.anHasta)  ? 'an' : null;
+  if (!MODO) return;
+  var ES_NAV = MODO === 'nav';
+  var FUERTE = ES_NAV ? dentro(NV.navFuerteDesde, NV.navFuerteHasta) : true;
+  /* En diciembre el año que se saluda es el SIGUIENTE; el 1 de enero, el
+     que ya empezó. Calculado, nunca escrito a mano. */
+  var ANIO = (hoy.getMonth() === 11) ? hoy.getFullYear()+1 : hoy.getFullYear();
+
+  var NS = 'http://www.w3.org/2000/svg';
+  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', montar);
+  else montar();
+
+  function montar(){
+    var bar = document.querySelector('.topbar');
+    if (!bar) return;                       // sin barra no hay dónde colgar nada
+    document.body.classList.add(MODO === 'nav' ? 'nv' : 'an');
+    if (getComputedStyle(bar).position === 'static') bar.style.position = 'relative';
+
+    /* 1 · fondo */
+    if (NV.fondo && !reduce) pintarFondo();
+
+    /* 2 · guirnalda de luces, sólo en Navidad */
+    if (NV.luces && ES_NAV){
+      var g = document.createElement('div');
+      g.id = 'nv-luces'; g.setAttribute('aria-hidden','true');
+      var h = '<span class="hilo"></span>', cols = ['#E23B2E','#1FA85B','#FFCE5C','#5BA8FF'];
+      for (var i=0;i<22;i++){
+        h += '<b style="left:'+((i+.5)*100/22).toFixed(2)+'%;background:'+cols[i%cols.length]+
+             ';box-shadow:0 0 6px '+cols[i%cols.length]+'99;animation-delay:'+(i*0.17).toFixed(2)+'s"></b>';
+      }
+      g.innerHTML = h;
+      bar.appendChild(g);
+    }
+
+    /* 3 · píldora */
+    if (NV.aviso && FUERTE){
+      var clickeable = NV.estallido && !reduce;
+      var a = document.createElement('div');
+      a.id = 'nv-aviso';
+      if (clickeable){
+        a.className = 'nv-click';
+        a.setAttribute('role','button');
+        a.setAttribute('tabindex','0');
+        a.setAttribute('title', ES_NAV ? 'Que caiga la nieve' : 'Lanzar los fuegos artificiales');
+      } else {
+        a.setAttribute('aria-hidden','true');
+      }
+      a.innerHTML = '<span class="nv-msg">'+icono()+'<span class="nv-txt">'+
+        (ES_NAV ? 'REDTEC les desea una feliz Navidad'
+                : 'REDTEC · Feliz '+ANIO)+'</span></span>';
+      bar.appendChild(a);
+      if (clickeable){
+        a.addEventListener('click', estallido);
+        a.addEventListener('keydown', function(e){
+          if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar'){ e.preventDefault(); estallido(); }
+        });
+      }
+    }
+
+    /* 4 · gorro sobre la R */
+    if (NV.gorro){
+      var logo = bar.querySelector('.logo');
+      if (logo) logo.appendChild(ES_NAV ? gorroPascuero() : gorroFiesta());
+    }
+
+    /* 5 · franja */
+    if (NV.franja){
+      var f = document.createElement('div');
+      f.id = 'nv-franja'; f.setAttribute('aria-hidden','true');
+      bar.appendChild(f);
+    }
+
+    /* 6 · bienvenida, una vez al día */
+    if (NV.estallido && FUERTE && !reduce){
+      var clave = 'nv_bienvenida', hoyISO = hoy.getFullYear()+'-'+md, visto = null;
+      try { visto = localStorage.getItem(clave); } catch(e){}
+      if (visto !== hoyISO){
+        try { localStorage.setItem(clave, hoyISO); } catch(e){}
+        setTimeout(estallido, 500);
+      }
+    }
+  }
+
+  /* ── fondo: copos o chispas ────────────────────────────────────── */
+  function pintarFondo(){
+    var d = document.createElement('div');
+    d.id = 'nv-fondo'; d.setAttribute('aria-hidden','true');
+    var n = ES_NAV ? 20 : 16, h = '';
+    for (var i=0;i<n;i++){
+      var tam = ES_NAV ? (1.6+Math.random()*2.6) : (1.8+Math.random()*2.2);
+      h += '<i style="left:'+(Math.random()*100).toFixed(2)+'%;width:'+tam.toFixed(1)+'px;height:'+tam.toFixed(1)+'px'+
+           ';--dx:'+((Math.random()*80-40)|0)+'px'+
+           ';animation-duration:'+(ES_NAV ? (9+Math.random()*11) : (5+Math.random()*5)).toFixed(1)+'s'+
+           ';animation-delay:-'+(Math.random()*14).toFixed(1)+'s"></i>';
+    }
+    d.innerHTML = h;
+    document.body.appendChild(d);
+  }
+
+  /* ── iconos de la píldora ──────────────────────────────────────── */
+  function icono(){
+    if (ES_NAV){
+      /* arbolito: tres triángulos, tronco y estrella */
+      return '<svg class="nv-ico" viewBox="0 0 24 24" aria-hidden="true">'+
+        '<path d="M12 2.6 15.4 8H8.6z" fill="#1FA85B"/>'+
+        '<path d="M12 7 16.6 13.2H7.4z" fill="#19954A"/>'+
+        '<path d="M12 11.4 18 19H6z" fill="#14803F"/>'+
+        '<rect x="10.9" y="19" width="2.2" height="2.8" rx=".5" fill="#8A5A2B"/>'+
+        '<circle cx="9.6" cy="14.6" r="1" fill="#E23B2E"/><circle cx="14.4" cy="16.4" r="1" fill="#FFCE5C"/>'+
+        '<path d="M12 .8l.8 1.7 1.8.2-1.4 1.3.4 1.8L12 4.9l-1.6.9.4-1.8L9.4 2.7l1.8-.2z" fill="#FFCE5C"/></svg>';
+    }
+    /* copa y burbujas para año nuevo */
+    return '<svg class="nv-ico" viewBox="0 0 24 24" aria-hidden="true">'+
+      '<path d="M7 3h10l-1.1 5.2A4 4 0 0 1 12 11.4a4 4 0 0 1-3.9-3.2z" fill="#FFCE5C"/>'+
+      '<rect x="11.2" y="11.2" width="1.6" height="7" fill="#E8C071"/>'+
+      '<rect x="8.2" y="18.4" width="7.6" height="1.8" rx=".9" fill="#FFCE5C"/>'+
+      '<circle cx="17.6" cy="4.4" r="1.1" fill="#EAF2FF" opacity=".9"/>'+
+      '<circle cx="19.4" cy="8" r=".8" fill="#EAF2FF" opacity=".7"/>'+
+      '<circle cx="5.6" cy="6.4" r=".9" fill="#EAF2FF" opacity=".75"/></svg>';
+  }
+
+  /* ── gorros ────────────────────────────────────────────────────── */
+  function gorroPascuero(){
+    var s = document.createElementNS(NS,'svg');
+    s.id = 'nv-gorro'; s.setAttribute('viewBox','0 0 64 48'); s.setAttribute('aria-hidden','true');
+    s.innerHTML =
+      '<defs><linearGradient id="nvg" x1="0" y1="0" x2="0" y2="1">'+
+      '<stop offset="0" stop-color="#F0483B"/><stop offset=".62" stop-color="#C0170C"/>'+
+      '<stop offset="1" stop-color="#8E1009"/></linearGradient></defs>'+
+      /* el cono cae hacia la izquierda, igual que el sombrero de bruja */
+      '<path d="M34 30C28 22 22 14 16 8.6c-1.2-1.1.1-2.9 1.7-2.3 8 2.8 17.4 9.2 24 20.4z" '+
+            'fill="url(#nvg)" stroke="#5E0A05" stroke-width="1.7" stroke-linejoin="round"/>'+
+      /* vuelta de piel */
+      '<rect x="10" y="27.5" width="46" height="8.4" rx="4.2" fill="#F7FAFF" stroke="#C6D2E2" stroke-width="1.2"/>'+
+      /* pompón */
+      '<circle cx="16.4" cy="7.2" r="5.1" fill="#F7FAFF" stroke="#C6D2E2" stroke-width="1.2"/>'+
+      '<path d="M22 11c4.6 3.4 9.4 8.6 12.6 14" fill="none" stroke="#FF8D82" stroke-width="1" opacity=".5"/>';
+    return s;
+  }
+  function gorroFiesta(){
+    var s = document.createElementNS(NS,'svg');
+    s.id = 'nv-gorro'; s.setAttribute('viewBox','0 0 64 48'); s.setAttribute('aria-hidden','true');
+    s.innerHTML =
+      '<defs><linearGradient id="nvf" x1="0" y1="0" x2="1" y2="1">'+
+      '<stop offset="0" stop-color="#FFE6A8"/><stop offset=".5" stop-color="#FFCE5C"/>'+
+      '<stop offset="1" stop-color="#D79A1F"/></linearGradient></defs>'+
+      '<path d="M32 32 20 6.6c-.7-1.5 1-2.9 2.4-2l22.2 14.6z" fill="url(#nvf)" '+
+            'stroke="#8A6512" stroke-width="1.7" stroke-linejoin="round"/>'+
+      /* cintas del cono */
+      '<path d="M25.6 10.6 36 17.4M28.8 17.6l8.4 5.6" fill="none" stroke="#C0170C" stroke-width="1.6" opacity=".85"/>'+
+      '<ellipse cx="33" cy="33" rx="16" ry="4.4" fill="#1D2440" stroke="#0E1326" stroke-width="1.4"/>'+
+      '<circle cx="21.2" cy="5.4" r="4.2" fill="#EAF2FF" stroke="#B9C6DA" stroke-width="1.2"/>';
+    return s;
+  }
+
+  /* ── estallido: nevada en Navidad, fuegos en Año Nuevo ─────────── */
+  function estallido(){
+    /* UNO a la vez: dos canvas encimados se borran entre sí y parpadean. */
+    if (document.getElementById('nv-estallido')) return;
+    var aviso = document.getElementById('nv-aviso');
+    if (aviso) aviso.classList.add('nv-corriendo');
+    var cv = document.createElement('canvas');
+    cv.id = 'nv-estallido'; cv.setAttribute('aria-hidden','true');
+    document.body.appendChild(cv);
+    var ctx = cv.getContext('2d');
+    var dpr = Math.min(2, window.devicePixelRatio||1);
+    var W = innerWidth, H = innerHeight;
+    cv.width = W*dpr; cv.height = H*dpr; cv.style.width = W+'px'; cv.style.height = H+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+
+    var ps = [], i, DUR = ES_NAV ? 4.2 : 4.6;
+    if (ES_NAV){
+      for (i=0;i<150;i++) ps.push({
+        x: Math.random()*W, y: -20-Math.random()*H*.7,
+        vy: 70+Math.random()*130, vx: -18+Math.random()*36,
+        r: 1.6+Math.random()*3.4, fase: Math.random()*Math.PI*2, frec: .7+Math.random()*1.4
+      });
+    } else {
+      /* tres ramos que suben y revientan a distinto tiempo */
+      var cols = ['#FFCE5C','#FF7A5C','#8FD4FF','#C9A7FF','#9BE8A8'];
+      for (var r=0;r<3;r++){
+        var cx = W*(.24+r*.26), cy = H*(.24+Math.random()*.16), t0r = r*.55, col = cols[(Math.random()*cols.length)|0];
+        for (i=0;i<78;i++){
+          var ang = Math.random()*Math.PI*2, vel = 60+Math.random()*210;
+          ps.push({ x:cx, y:cy, vx:Math.cos(ang)*vel, vy:Math.sin(ang)*vel,
+                    r:1.2+Math.random()*2.2, c:col, nace:t0r });
+        }
+      }
+    }
+
+    var t0 = performance.now(), ini = t0;
+    (function anim(t){
+      var dt = Math.min(.05, (t-t0)/1000), vida = (t-ini)/1000; t0 = t;
+      ctx.clearRect(0,0,W,H);
+      var fade = vida > DUR-1 ? Math.max(0, 1-(vida-(DUR-1))/1) : 1;
+      for (var k=0;k<ps.length;k++){
+        var o = ps[k];
+        if (ES_NAV){
+          o.y += o.vy*dt; o.x += o.vx*dt + Math.sin(vida*o.frec+o.fase)*14*dt;
+          if (o.y > H+10) o.y = -10;
+          ctx.globalAlpha = .9*fade; ctx.fillStyle = '#EAF2FF';
+        } else {
+          if (vida < o.nace) continue;
+          o.vy += 170*dt;            // gravedad
+          o.vx *= (1-1.1*dt); o.vy *= (1-1.1*dt);   // roce
+          o.x += o.vx*dt; o.y += o.vy*dt;
+          ctx.globalAlpha = Math.max(0, (1-(vida-o.nace)/2.6))*fade;
+          ctx.fillStyle = o.c;
+        }
+        ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, 6.2832); ctx.fill();
+      }
+      if (vida < DUR) requestAnimationFrame(anim);
+      else {
+        if (cv.parentNode) cv.parentNode.removeChild(cv);
+        if (aviso) aviso.classList.remove('nv-corriendo');
+      }
+    })(t0);
+  }
+})();
+</script>
+<!-- ══════════════ FIN NAVIDAD Y AÑO NUEVO ══════════════ -->
+
 
 
 

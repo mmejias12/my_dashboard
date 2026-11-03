@@ -341,6 +341,29 @@ function tarjetas(datos, bodegas, planta, periodo) {
                  ' de diferencia</span>');
   }
 
+  /*  LAS TRES FILAS QUE DEJAN DE ENREDAR A TODO EL MUNDO.
+   *
+   *  En REDTEC conviven dos lecturas del mismo stock de planta y las dos son
+   *  correctas: el pallet sale de la bodega cuando se CREA el documento —el
+   *  camion puede seguir en el patio— y la emision se FECHA cuando el cliente
+   *  la recibe, que es desde cuando se le cobra arriendo. En el medio el
+   *  pallet esta en el aire.
+   *
+   *  Escribir las tres filas juntas es lo unico que hace falta: operaciones
+   *  lee la primera, finanzas la tercera, y la diferencia deja de ser un
+   *  misterio porque esta nombrada. */
+  const tra = d.planta_transito || null;
+  const porCrea = (d.planta_fecha_serie || null) === 'CreaDate';
+  let trio = null;
+  if (tra && tra.medible && porCrea)
+    trio = [{ q: 'En planta', v: nivelPla, m: 'lo que hay en bodega' },
+            { q: 'En tránsito a cliente', v: Number(tra.pallets) || 0,
+              m: 'salió, el cliente todavía no lo recibe' },
+            { q: 'Por fecha contable', v: nivelPla + (Number(tra.pallets) || 0),
+              m: 'lo que cuadra con la cartola', pie: true }];
+  else if (tra && !tra.medible)
+    trio = { aun: tra.motivo || 'el tránsito todavía no se puede medir' };
+
   t.push({ clave: 'planta', et: 'Planta · indicador',
            hint: filtrado ? mil(bs.length) + ' en ' + esc(planta) : 'nueve bodegas',
            kv: mil(nivelPla), u: 'pallets', ambito: 'planta',
@@ -350,7 +373,7 @@ function tarjetas(datos, bodegas, planta, periodo) {
                    '<span class="mut">— referencial, no suman</span>'
                  : '<span class="mut">sin bodegas de referencia fuera del indicador' +
                    (filtrado ? ' en ' + esc(planta) : '') + '</span>',
-           sem: semPla, semTipo: 'nivel', semRot,
+           sem: semPla, semTipo: 'nivel', semRot, trio,
            nota: periodo ? 'Este saldo es la lectura de hoy en SAP, no el del período: ' +
                            'un saldo no se filtra por fecha. Lo que cambia con el período es el ' +
                            'movimiento — la línea de abajo y los días en negativo.' : null,
@@ -611,6 +634,15 @@ button,select{font-family:inherit}
 /*  Las cifras que el filtro de planta NO alcanza se atenuan y lo dicen. El
     rotulo esta siempre en el html y solo se muestra al filtrar: asi una
     pagina sin javascript nunca ensena un numero global disfrazado de local. */
+/*  Las tres filas van en tabla y no en prosa: la de abajo es la suma de las
+    dos de arriba y eso se lee de una sola mirada en una columna alineada. */
+table.trio{width:100%;border-collapse:collapse;margin-top:11px;font-size:12px}
+table.trio td{padding:6px 0;border-bottom:1px solid var(--line);vertical-align:top}
+table.trio td.num{text-align:right;white-space:nowrap;font-weight:600;
+  font-family:"JetBrains Mono",ui-monospace,monospace}
+table.trio .m{color:var(--ink3);font-size:10px;margin-top:2px}
+table.trio tr.pie td{border-bottom:none;border-top:1.5px solid var(--line2);font-weight:700}
+table.trio tr.pie td.num{color:var(--ink)}
 .nota-periodo{margin-top:10px;padding:7px 9px;border-radius:8px;background:var(--card2);
   border:1px solid var(--line2);color:var(--ink2);font-size:10.5px;line-height:1.45}
 .fuera-de-filtro{display:none;margin-top:10px;padding:8px 10px;border-radius:8px;
@@ -882,6 +914,14 @@ function tarjetaHtml(t, i) {
            '%;background:' + t.bar.c + '"></i></div>');
   }
   if (t.ks) H.push('<div class="ks">' + t.ks + '</div>');
+  if (t.trio && Array.isArray(t.trio)) {
+    H.push('<table class="trio">' + t.trio.map(r =>
+      '<tr' + (r.pie ? ' class="pie"' : '') + '><td>' + esc(r.q) +
+      '<div class="m">' + esc(r.m) + '</div></td><td class="num">' + mil(r.v) + '</td></tr>').join('') +
+      '</table>');
+  } else if (t.trio && t.trio.aun) {
+    H.push('<div class="nota-periodo">En tránsito a cliente: ' + esc(t.trio.aun) + '</div>');
+  }
   if (t.nota) H.push('<div class="nota-periodo">' + esc(t.nota) + '</div>');
   if (t.sem && t.sem.length)
     H.push('<div class="sem">' +

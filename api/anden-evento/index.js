@@ -100,6 +100,25 @@ module.exports = async function (context, req) {
       context.res = { status: 400, headers: CORS, body: JSON.stringify({ error: 'falta carga_id' }) };
       return;
     }
+    /* LA OBSERVACIÓN ES OBLIGATORIA DONDE RESPALDA UNA DECISIÓN, y se exige
+       acá y no sólo en la pantalla, igual que el no_sale: un cierre sin
+       explicación sobre un camión con diferencia es justo lo que después
+       nadie puede reconstruir. Retener siempre la pide; marcar atendida, sólo
+       cuando el paso venía con faltante o sobrante. */
+    const previo = String(body.estado_previo || '').toLowerCase();
+    const exigeObs = accion === 'retenido'
+      || (accion === 'atendida' && (previo === 'faltante' || previo === 'sobrante'));
+    if (exigeObs && !txt(body.motivo, 400)) {
+      context.res = {
+        status: 400, headers: CORS,
+        body: JSON.stringify({
+          error: accion === 'retenido'
+            ? 'retener el camión exige una observación que explique por qué'
+            : 'un paso con diferencia no se cierra sin observación',
+        }),
+      };
+      return;
+    }
     if (accion === 'relocalizacion_interna' && body.no_sale !== true) {
       context.res = {
         status: 400, headers: CORS,
@@ -125,14 +144,23 @@ module.exports = async function (context, req) {
       pallets_camara: Number.isFinite(Number(body.pallets_camara)) ? Number(body.pallets_camara) : null,
       bultos: Number.isFinite(Number(body.bultos)) ? Number(body.bultos) : null,
       detalle: txt(body.detalle, 180),
-      motivo: txt(body.motivo, 180),
+      // La OBSERVACIÓN del supervisor viaja en `motivo`. 400 caracteres: con
+      // 180 no entraba una explicación de verdad ("faltaron 17 porque la
+      // última fila se devolvió a bodega, lo revisó X").
+      motivo: txt(body.motivo, 400),
+      guia: txt(body.guia, 40),
       // El estado que traía el evento antes de la clasificación: es lo que
       // permite deshacer sin volver a consultar a RDTOut.
       estado_previo: txt(body.estado_previo, 40),
       no_sale: body.no_sale === true,
       // Constancia textual de lo que se firmó, guardada junto al evento para
       // que la bitácora se lea sola dentro de diez meses.
-      declaracion: accion === 'relocalizacion_interna'
+      declaracion: accion === 'aceptada_sin_camara'
+        ? 'Salida aceptada sin registro de cámara: el despacho figura cerrado y confirmado en '
+          + 'el sistema de operaciones, de modo que el camión ya salió. El Supervisor de Despacho '
+          + 'da por buena la salida y deja constancia de que lo que falta es el registro de la '
+          + 'cámara, no el documento.'
+        : accion === 'relocalizacion_interna'
         ? 'Relocalización Interna: movimiento de pallets entre dependencias de REDTEC. '
           + 'El Supervisor de Despacho confirma expresamente que el vehículo no saldrá de las '
           + 'instalaciones como consecuencia de este movimiento. No constituye autorización de '

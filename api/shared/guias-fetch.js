@@ -100,7 +100,7 @@ function clasificar(op, dteNro) {
 // exactamente el mismo criterio.
 const { patenteEnAlcance } = require('./flota');
 const cold = require('./cold-operaciones.js');
-const { consultarOps } = require('./ops-fetch.js');
+const { consultarOps, origenActivo } = require('./ops-fetch.js');
 
 /* Cuántos días hacia atrás se le piden a la consulta VIVA. Redlink filtra por
    fecha de INGRESO, así que un día basta para pescar lo que se cargó anoche
@@ -110,17 +110,77 @@ const VIVO_DIAS = Math.max(0, Number(process.env.GUIAS_VIVO_DIAS) || 1);
    sin este memo lo estaríamos sondeando cuatro veces por minuto por cada
    instancia. 60 s es menos que el tiempo que tarda un pedido en cerrarse. */
 const MEMO_MS = Math.max(0, Number(process.env.GUIAS_MEMO_MS) || 60000);
-/* Presupuesto de la consulta viva. Redlink cobra del orden de 16 s por dos días
-   y el corte de Static Web Apps es a los 45 s: sin techo, un día lento tumba el
-   endpoint completo en vez de devolver lo que alcanzó a juntar. */
-const VIVO_MS = Math.max(5000, Number(process.env.GUIAS_VIVO_MS) || 20000);
+/* Presupuesto de la consulta viva. Sin techo, un día lento tumba el endpoint
+   completo en vez de devolver lo que alcanzó a juntar. Un día de ingreso son
+   ~3 s medidos, así que 12 s es holgado. OJO: las dos consultas vivas corren
+   UNA DESPUÉS DE LA OTRA, así que lo que tiene que caber en el corte de 45 s
+   de Static Web Apps es la SUMA de los dos presupuestos (12 + 22 = 34 s). */
+const VIVO_MS = Math.max(5000, Number(process.env.GUIAS_VIVO_MS) || 12000);
+
+/* ──────────────────────────────────────────────────────────────────────────
+   LAS EMISIONES PROGRAMADAS CON ANTICIPACIÓN
+
+   El 92% de las emisiones se ingresa días o semanas antes de la fecha de
+   despacho (medido sobre 3.052 operaciones). Como Redlink filtra por fecha de
+   INGRESO, la cola viva de un día NO las ve, y hasta ahora dependíamos de que
+   el backfill ya hubiera reescrito el blob del día. El 2-nov eso falló —el
+   blob se había escrito desde el RDTOut muerto— y once camiones con su emisión
+   cerrada aparecieron como "camión sin guía": RW5303 y CCRC36 con 540, BJCL13
+   y CPVW43 con 252, todos con la guía al pallet.
+
+   Así que se agrega una SEGUNDA consulta viva, con margen de ingreso hacia
+   atrás. No se refresca al ritmo de la primera porque no lo necesita: una
+   emisión ingresada hace tres semanas no cambia de minuto a minuto, y lo que
+   sí cambia rápido —el cierre del día— lo trae la cola corta.
+
+   Lo que cuesta, medido contra el Redlink de producción el 2-nov:
+       1 día de ingreso →  3,1 s /   837 filas
+      11 días           →  7,0 s / 6.974 filas
+      16 días           →  8,9 s / 9.585 filas
+   O sea 35 días son del orden de 15 s, una vez cada PROG_MS por instancia,
+   dentro del corte de 45 s de Static Web Apps. */
+const PROG_DIAS = Math.max(0, Number(process.env.GUIAS_PROG_DIAS) || 35);
+const PROG_MS   = Math.max(0, Number(process.env.GUIAS_PROG_MS) || 900000);
+const PROG_PRESUPUESTO_MS = Math.max(5000, Number(process.env.GUIAS_PROG_PRESUPUESTO_MS) || 22000);
+
 const memo = new Map();
+const memoProg = new Map();
+
+/* El registro Redlink crudo pesa y no lo usa nadie de este lado; sacarlo antes
+   de guardar en el memo es lo que hace que caber 35 días de ingreso en memoria
+   no sea un problema (api/ops hace lo mismo en su camino cold). */
+function sinRl(filas) {
+  for (const f of filas) if (f && f._rl !== undefined) delete f._rl;
+  return filas;
+}
 
 const moverDia = (s, n) => {
   const d = new Date(s + 'T12:00:00Z');
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 };
+
+/* Consulta larga por fecha de ingreso, memoizada aparte de la cola viva.
+   · Sólo tiene sentido con el origen Redlink: RDTOut ignora el rango pedido.
+   · Si falla, se sirve lo último bueno y si no hay nada se devuelve vacío —
+     el frío y la cola viva siguen respondiendo. Un tropiezo acá no puede
+     tumbar el endpoint del andén. */
+async function traerProgramadas(hasta) {
+  if (!PROG_DIAS || origenActivo() !== 'redlink') return [];
+  const desdeIng = moverDia(hasta, -PROG_DIAS);
+  const clave = desdeIng + '|' + hasta;
+  const ahora = Date.now();
+  const guardado = memoProg.get(clave);
+  if (guardado && ahora - guardado.ts < PROG_MS) return guardado.filas;
+
+  let filas;
+  try { filas = sinRl(await consultarOps(desdeIng, hasta, { presupuestoMs: PROG_PRESUPUESTO_MS })); }
+  catch (e) { return guardado ? guardado.filas : []; }
+
+  memoProg.set(clave, { ts: ahora, filas });
+  for (const [k, v] of memoProg) if (ahora - v.ts > PROG_MS * 2) memoProg.delete(k);
+  return filas;
+}
 
 /* ──────────────────────────────────────────────────────────────────────────
    DE DÓNDE SALEN LAS FILAS
@@ -163,6 +223,11 @@ async function traerFilas(desde, hasta) {
   catch (e) { errorFrio = e.message; }
   for (const f of (frio && frio.ops) || []) { const k = idDe(f); if (k) porId.set(k, f); }
 
+  /* Las programadas con anticipación van DESPUÉS del frío y ANTES de la cola
+     viva: le ganan al blob, que puede estar escrito desde una fuente vieja, y
+     le ceden a la consulta corta, que es la que trae el cierre de hoy. */
+  for (const f of await traerProgramadas(hasta)) { const k = idDe(f); if (k) porId.set(k, f); }
+
   /* LA VENTANA VIVA VA ACOTADA. El andén pide arrastre=3, o sea un rango de
      cuatro días, y Redlink filtra por fecha de INGRESO: pedirle los cuatro no
      agrega guías nuevas (los días cerrados ya están en el frío) y sí arriesga
@@ -173,7 +238,7 @@ async function traerFilas(desde, hasta) {
   if (vivoDesde < pisoVivo) vivoDesde = pisoVivo;
 
   let vivo = [], errorVivo = null;
-  try { vivo = await consultarOps(vivoDesde, hasta, { presupuestoMs: VIVO_MS }); }
+  try { vivo = sinRl(await consultarOps(vivoDesde, hasta, { presupuestoMs: VIVO_MS })); }
   catch (e) { errorVivo = e.message; }
   for (const f of vivo) { const k = idDe(f); if (k) porId.set(k, f); }
 
@@ -292,4 +357,5 @@ async function obtenerGuias(desde, hasta) {
 }
 
 module.exports = { obtenerGuias, traerFilas, normalizarPatente, clasificar,
-  PALLETS_POR_FILA, OPERACIONES_DESPACHO, VIVO_DIAS, MEMO_MS, VIVO_MS };
+  PALLETS_POR_FILA, OPERACIONES_DESPACHO, VIVO_DIAS, MEMO_MS, VIVO_MS,
+  traerProgramadas, PROG_DIAS, PROG_MS, PROG_PRESUPUESTO_MS };

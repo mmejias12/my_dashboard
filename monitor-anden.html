@@ -190,6 +190,26 @@ h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
 .patgrande{font-size:38px;font-weight:700;letter-spacing:.06em;text-align:center;margin:2px 0 4px;font-variant-numeric:tabular-nums}
 .subpat{text-align:center;color:var(--text-2);font-size:13px;margin-bottom:16px}
 .mfoot{padding:14px 22px;border-top:1px solid var(--line);display:flex;gap:9px;flex-wrap:wrap}
+/* Observación del supervisor. Va ARRIBA de los botones y no en un diálogo
+   aparte: si hay que escribir antes de cerrar, el campo tiene que estar a la
+   vista cuando se mira el botón, no escondido detrás de otro clic. */
+.obs-wrap{padding:13px 22px 0;display:flex;flex-direction:column;gap:5px}
+.obs-lab{font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.obs-lab b{color:var(--warning);letter-spacing:0;text-transform:none;font-size:11px}
+textarea.obs{width:100%;box-sizing:border-box;background:var(--surface-2);color:var(--text);
+  border:1px solid var(--line);border-radius:9px;padding:9px 11px;font:inherit;font-size:13px;
+  resize:vertical;min-height:54px}
+textarea.obs:focus{outline:none;border-color:var(--series-1)}
+textarea.obs.falta{border-color:var(--critical);background:rgba(208,59,59,.07)}
+.obs-err{font-size:11px;color:var(--critical)}
+.obs-hecha{margin-top:10px;background:var(--surface-2);border:1px solid var(--line);
+  border-left:2px solid var(--series-1);border-radius:9px;padding:9px 11px;font-size:12.5px;color:var(--text-2)}
+.obs-hecha b{color:var(--text)}
+/* Aceptar la salida de una guía que la cámara no registró. */
+.btn.aceptar{background:rgba(12,163,12,.14);border-color:rgba(12,163,12,.5);color:#8fd48f;
+  padding:6px 11px;min-height:30px;font-size:11.5px}
+.btn.aceptar:hover:not(:disabled){border-color:rgba(12,163,12,.85)}
+.esp .der{display:flex;flex-direction:column;align-items:flex-end;gap:7px}
 /* Tira de evidencia: una miniatura por bulto. Reemplaza al "?" que dejaba la
    ausencia de pallets_bulto en la API. */
 .fila.foto{padding:0;overflow:hidden;position:relative;min-width:74px;max-width:110px;aspect-ratio:4/3;
@@ -739,6 +759,20 @@ function encolarPendiente(ev){
    sigue viendo en pantalla: si no, una alerta cerrada volvería a sonar. */
 function aplicarPendientes(){
   S.pendientes.forEach(ev=>{
+    if(ev.accion === 'aceptada_sin_camara'){
+      // Una salida aceptada tiene que seguir fuera de la columna aunque el
+      // servidor no la haya recibido todavía: si no, reaparece al recargar y
+      // el supervisor la acepta dos veces.
+      const e = S.registro[ev.carga_id];
+      if(!(e && e.aceptada)){
+        S.registro[ev.carga_id] = Object.assign({}, e, {
+          carga_id: ev.carga_id, guia: ev.guia || null, patente: ev.patente || null,
+          aceptada: true, atendida: true, usuario: ev.usuario || null,
+          ts: ev.ts || null, local: true,
+        });
+      }
+      return;
+    }
     if(ev.accion !== 'relocalizacion_interna') return;
     if(S.registro[ev.carga_id]) return;
     S.registro[ev.carga_id] = {
@@ -766,6 +800,7 @@ async function cargarRegistro(){
     S.pendientes = S.pendientes.filter(ev=>{
       const e = S.registro[ev.carga_id];
       if(!e) return true;
+      if(ev.accion === 'aceptada_sin_camara')     return !e.aceptada;
       if(ev.accion === 'relocalizacion_interna') return e.clasificacion !== 'relocalizacion_interna';
       if(ev.accion === 'reversion')              return e.clasificacion !== null;
       if(ev.accion === 'retenido')               return !e.retenido;
@@ -793,6 +828,48 @@ async function reintentarPendientes(){
 
 /* Registro al pasar: atender y retener también dejan huella, con nombre y hora
    del servidor. No bloquea la pantalla — si falla, queda en la cola. */
+/* Una guía no tiene carga_id porque justamente NO tiene paso de cámara. Para
+   poder dejarla en la misma bitácora se le arma una clave sintética sobre el
+   número de pedido, que es la llave de negocio estable (el número de guía
+   puede repetirse entre documentos). */
+function guiaId(g){ return 'guia:' + String((g && (g.nro_pedido || g.numero)) || ''); }
+function guiaAceptada(g){
+  const r = S.registro[guiaId(g)];
+  return !!(r && r.aceptada);
+}
+
+/* Dar por buena la salida de un despacho que la cámara no registró. Se oculta
+   de inmediato y, si el servidor no contesta, el evento queda en la cola de
+   reintento como cualquier otra confirmación: lo que el supervisor decidió no
+   puede depender de que la red esté buena en ese segundo. */
+function aceptarGuia(g){
+  const id = guiaId(g);
+  const ev = {
+    carga_id: id, accion: 'aceptada_sin_camara',
+    patente: g.patente || null, guia: String(g.numero || ''),
+    fecha_carga: g.fecha || FECHA_VISTA,
+    estado_previo: 'sin_registro_camara',
+  };
+  S.registro[id] = Object.assign({}, S.registro[id], {
+    carga_id: id, guia: String(g.numero || ''), patente: g.patente || null,
+    aceptada: true, atendida: true, local: true,
+    usuario: (S.usuario && S.usuario.email) || null, ts: new Date().toISOString(),
+  });
+  render();
+  enviarEvento(ev).then(r=>{
+    if(!r.ok){ encolarPendiente(ev); return; }
+    const e = S.registro[id];
+    if(e){ e.local = false; if(r.usuario) e.usuario = r.usuario; if(r.ts) e.ts = r.ts; }
+  });
+}
+
+/* Dónde la observación deja de ser opcional: cuando respalda una decisión
+   sobre un camión que no cuadró. Un paso que salió ok se cierra sin escribir
+   nada — si se exigiera siempre, el operador terminaría poniendo un punto. */
+function obsObligatoria(v){
+  return v.estado === 'faltante' || v.estado === 'sobrante';
+}
+
 function registrarAccion(v, accion, extra){
   const ev = Object.assign({
     carga_id:v.carga_id, accion, patente:v.patente||null, fecha_carga:v.fecha_hora_carga,
@@ -1436,6 +1513,17 @@ function abrirModal(v){
 
       ${r.correo ? `<div class="cola"><span class="gh">✉</span> Alerta ${DEMO?'encolada (demo)':'enviada'} a operaciones de despacho</div>` : ''}
     </div>
+    ${v.reloc ? '' : `<div class="obs-wrap">
+      <label class="obs-lab" for="m-obs">Observación ${obsObligatoria(v)
+        ? '<b>· obligatoria para cerrar este evento</b>' : '<span style="text-transform:none;letter-spacing:0">(opcional)</span>'}</label>
+      <textarea id="m-obs" class="obs" maxlength="400" placeholder="${obsObligatoria(v)
+        ? 'Qué pasó con la diferencia y qué se hizo'
+        : 'Lo que convenga dejar escrito de este paso'}"></textarea>
+      <div class="obs-err hide" id="m-obs-err"></div>
+    </div>`}
+    ${(S.registro[v.carga_id] && S.registro[v.carga_id].observacion) ? `<div class="obs-wrap">
+      <div class="obs-hecha"><b>${esc(String(S.registro[v.carga_id].usuario||'—').split('@')[0])}</b>
+        escribió: ${esc(S.registro[v.carga_id].observacion)}</div></div>` : ''}
     <div class="mfoot">
       ${puedeClasificar(v) ? `<button class="btn reloc" id="m-reloc"
         title="Traslado de pallets entre dependencias de REDTEC: no es un despacho">⇄ Relocalización interna</button>` : ''}
@@ -1457,11 +1545,33 @@ function abrirModal(v){
   $('#scrim').classList.add('on');
   $('#m-cerrar').onclick = ()=>cerrarModal(v.carga_id);
   const bAt = $('#m-atendida'), bRet = $('#m-retener');
-  if(bAt) bAt.onclick = ()=>{ v.atendida = true; S.atendidas.add(v.carga_id);
-                              registrarAccion(v, 'atendida'); cerrarModal(v.carga_id); };
-  if(bRet) bRet.onclick = ()=>{ v.atendida = true; v.retenido = true;
+  /* La observación se exige ACÁ y también en el servidor (api/anden-evento).
+     Acá para que el operador lo vea antes de hacer clic; allá porque una regla
+     que vive sólo en el HTML se salta con un POST a mano. */
+  const obsDe = (accion)=>{
+    const ta = $('#m-obs');
+    const txt = ta ? ta.value.trim() : '';
+    const hace = accion === 'retenido' || obsObligatoria(v);
+    if(hace && !txt){
+      if(ta){
+        ta.classList.add('falta');
+        $('#m-obs-err').textContent = accion === 'retenido'
+          ? 'Para retener el camión hay que decir por qué.'
+          : 'Este paso tiene diferencia: escribe qué pasó antes de cerrarlo.';
+        $('#m-obs-err').classList.remove('hide');
+        ta.focus();
+      }
+      return null;
+    }
+    return txt || undefined;
+  };
+  if(bAt) bAt.onclick = ()=>{ const o = obsDe('atendida'); if(o === null) return;
+                              v.atendida = true; S.atendidas.add(v.carga_id);
+                              registrarAccion(v, 'atendida', {motivo:o}); cerrarModal(v.carga_id); };
+  if(bRet) bRet.onclick = ()=>{ const o = obsDe('retenido'); if(o === null) return;
+                                v.atendida = true; v.retenido = true;
                                 S.atendidas.add(v.carga_id); S.retenidos.add(v.carga_id);
-                                registrarAccion(v, 'retenido'); cerrarModal(v.carga_id); };
+                                registrarAccion(v, 'retenido', {motivo:o}); cerrarModal(v.carga_id); };
   $('#m-silencio').onclick = ()=>{ S.sonidoOn=false; $('#btn-sonido').classList.remove('on');
                                    $('#btn-sonido').textContent='Activar sonido';
                                    $('#aud-aviso').classList.remove('hide'); guardarEstado(); };
@@ -1547,7 +1657,10 @@ function render(){
   // y en la columna de espera se quedaban para siempre. Lo que falta ahí es el
   // registro de la cámara, que es un problema de cobertura, no de andén.
   const porSalir  = S.esperando.filter(g=>!g.despacho_cerrado);
-  const sinCamara = S.esperando.filter(g=>g.despacho_cerrado);
+  // Las que el supervisor ya dio por salidas no se muestran: el punto de
+  // aceptarlas es que la columna deje de acumular camiones que ya no están.
+  const sinCamara = S.esperando.filter(g=>g.despacho_cerrado && !guiaAceptada(g));
+  const aceptadas = S.esperando.filter(g=>g.despacho_cerrado && guiaAceptada(g)).length;
 
   // --- KPIs de la jornada ---
   // Los pasos que no son despacho no entran en el conteo de la jornada: si
@@ -1586,7 +1699,7 @@ function render(){
   };
 
   // --- emisiones sin cruce ---
-  $('#cnt-esp').textContent = S.esperando.length;
+  $('#cnt-esp').textContent = porSalir.length + sinCamara.length;
   const tarjetas = (lista) => lista
     .slice().sort((a,b)=>String(a.fecha??'').localeCompare(String(b.fecha??''))
                       || a.hora_emision-b.hora_emision)
@@ -1618,16 +1731,20 @@ function render(){
         </div>
         <div class="der">
           <div class="pal">${n0(g.pallets_declarados)}<small>PALLETS</small></div>
+          ${g.despacho_cerrado ? `<button class="btn aceptar" data-guia="${esc(guiaId(g))}"
+            title="El despacho está cerrado y confirmado: el camión ya salió. Queda registrado en la bitácora con tu nombre.">✓ Aceptar · ya salió</button>` : ''}
         </div>
       </div>`;
     }).join('');
 
-  $('#esperando').innerHTML = S.esperando.length ? [
+  $('#esperando').innerHTML = (porSalir.length + sinCamara.length) ? [
     porSalir.length ? `<div class="grupo"><b>Por salir</b> · ${porSalir.length}
       <span class="exp">el despacho aún no se cierra en Redlink</span></div>` + tarjetas(porSalir) : '',
     sinCamara.length ? `<div class="grupo"><b>Sin registro de cámara</b> · ${sinCamara.length}
-      <span class="exp">despachados y confirmados en Redlink; el camión ya salió</span></div>` + tarjetas(sinCamara) : '',
-  ].join('') : '<div class="vacio">Todas las emisiones del período tienen su paso registrado</div>';
+      <span class="exp">despachados y confirmados en Redlink; el camión ya salió${
+        aceptadas ? ` · ${aceptadas} ya aceptada${aceptadas>1?'s':''}` : ''}</span></div>` + tarjetas(sinCamara) : '',
+  ].join('') : `<div class="vacio">Todas las emisiones del período tienen su paso registrado${
+      aceptadas ? ` · ${aceptadas} salida${aceptadas>1?'s':''} aceptada${aceptadas>1?'s':''} sin registro de cámara` : ''}</div>`;
 
   // --- feed de pasos ---
   $('#cnt-ev').textContent = S.eventos.length;
@@ -1795,6 +1912,17 @@ function aplicarDetalle(on){
   guardarEstado();
 }
 $('#btn-detalle').onclick = ()=>aplicarDetalle(!S.detallePorBulto);
+/* Delegado: la columna de espera se repinta entera en cada render, así que
+   enganchar el botón de cada tarjeta dejaría listeners colgando. */
+$('#esperando').addEventListener('click', (e)=>{
+  const b = e.target.closest('.btn.aceptar');
+  if(!b) return;
+  const id = b.getAttribute('data-guia');
+  const g = S.esperando.find(x=>guiaId(x) === id);
+  if(!g) return;
+  b.disabled = true;
+  aceptarGuia(g);
+});
 
 /* Preferencias guardadas: los botones vuelven como estaban, sin que el
    operador tenga que reactivarlos después de cada recarga. */

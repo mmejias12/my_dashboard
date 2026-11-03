@@ -146,6 +146,71 @@ function nivelesImposibles(series) {
   return out.sort((a, b) => a.cierre - b.cierre);
 }
 
+/** UNA APERTURA NEGATIVA ES OTRA COSA QUE UN CIERRE NEGATIVO.
+ *
+ *  Un cierre bajo cero ya lo sabemos explicar: es la FECHA del documento, SAP
+ *  lo reproduce por su cuenta y se arregla en SAP. Una apertura bajo cero no:
+ *  la apertura del primer dia de la ventana no se mide, se DESPEJA
+ *
+ *      apertura = saldo vivo - todo el movimiento de la ventana
+ *
+ *  y por eso es el residuo donde cae cualquier diferencia entre el saldo y las
+ *  lineas: movimiento con fecha fuera de la ventana, o lineas y ancla leidas
+ *  en instantes distintos. El residuo no avisa, corre TODA la serie hacia
+ *  arriba o hacia abajo por igual, y lo unico que delata que esta corrido es
+ *  que la apertura quede en negativo, porque un nivel no puede ser negativo.
+ *
+ *  Es el control mas barato que tenemos contra ese error y el unico que no
+ *  necesita segunda fuente ni el mes anterior: al 2-11-2026 RT13-100 abria
+ *  octubre en -3.334, o sea su serie del mes estaba corrida por al menos esa
+ *  cantidad, y nadie lo estaba mirando. */
+function aperturasImposibles(series) {
+  const out = [];
+  for (const s of (series || [])) {
+    const dias = (s && s.dias) || [];
+    if (!dias.length) continue;
+    const a = Number(dias[0].apertura);
+    if (Number.isFinite(a) && a < 0)
+      out.push({ whs: s.whs, nombre: s.nombre, apertura: a, dia: dias[0].dia });
+  }
+  return out.sort((x, y) => x.apertura - y.apertura);
+}
+
+/** EL DESFASE ENTRE EL ANCLA Y LAS LINEAS.
+ *
+ *  La serie se calcula hacia atras desde el saldo vivo restando las lineas, y
+ *  eso solo es valido si las dos cosas se leyeron en el MISMO instante. No se
+ *  leen en el mismo instante: las lineas salen de un blob que escribio la
+ *  extraccion y el ancla de una lectura posterior. Todo documento posteado
+ *  entre las dos aparece en una y no en la otra, y la diferencia no se
+ *  reporta: se hunde en la apertura.
+ *
+ *  Esto no corrige nada. Mide la exposicion y la deja escrita en el json, que
+ *  es lo que hoy no existe: el desfase se imprimia en consola y se perdia. El
+ *  tamano del error de verdad lo dice la apertura negativa; esto dice cuanta
+ *  ventana hubo para cometerlo.
+ *
+ *  Las lineas MAS NUEVAS que el ancla es la direccion peligrosa —hay
+ *  movimiento en las lineas que el saldo todavia no tiene— pero al reves
+ *  tambien corre la serie, asi que se miden las dos. */
+function desfaseDeLectura(anclaLeida, lineasGuardadas, topeSegundos) {
+  const t = x => { const d = new Date(String(x || '')); return isNaN(d.getTime()) ? null : d.getTime(); };
+  const a = t(anclaLeida), l = t(lineasGuardadas);
+  const tope = Number(topeSegundos) > 0 ? Number(topeSegundos) : 60;
+  if (a === null || l === null)
+    return { ok: null, segundos: null, tope,
+             motivo: 'no se puede medir el desfase: falta la marca de tiempo de ' +
+                     (a === null ? 'el ancla' : 'las lineas') };
+  const seg = Math.round((a - l) / 1000);
+  if (Math.abs(seg) <= tope) return { ok: true, segundos: seg, tope, motivo: null };
+  return { ok: false, segundos: seg, tope,
+           motivo: seg > 0
+             ? 'el ancla se leyo ' + seg + ' s DESPUES que las lineas: un documento posteado en ese ' +
+               'rato esta en el saldo y no en las lineas, y la diferencia se va entera a la apertura'
+             : 'las lineas se guardaron ' + (-seg) + ' s DESPUES que el ancla: traen movimiento que el ' +
+               'saldo todavia no tenia, y esa diferencia se va entera a la apertura' };
+}
+
 /*  LA LEY DEL POOL, en su forma correcta.
  *
  *  La primera version exigia que la suma de los netos de todas las bodegas
@@ -249,12 +314,19 @@ function payloadJson(p) {
     indicador: Number(x.indicador) || 0,
     fueraDelIndicador: Number(x.fueraDelIndicador) || 0,
     cierreFirme: x.cierreFirme || null,
+    aperturas_imposibles: x.aperturasImposibles || [],
+    lectura: {
+      ancla: x.anclaLeida || null,
+      lineas: x.lineasGuardadas || null,
+      desfase_s: (x.desfase && x.desfase.segundos != null) ? x.desfase.segundos : null,
+      ok: (x.desfase && x.desfase.ok != null) ? x.desfase.ok : null,
+    },
     bodegas: x.bodegas || [],
     cadena: x.cadena || [],
   };
 }
 
-function veredicto(series, imposibles, cuad, ancla) {
+function veredicto(series, imposibles, cuad, ancla, aperturas, desfase) {
   const p = [];
   if (!series || !series.length)
     return { nivel: 'sin datos', texto: 'No hay bodegas de planta con movimiento en la ventana pedida.' };
@@ -281,19 +353,41 @@ function veredicto(series, imposibles, cuad, ancla) {
            'documento —la salida de mercancias queda fechada antes que el traspaso que la alimenta—. ' +
            'Se arregla en SAP, no aca.');
   }
+  /*  Va DESPUES de los cierres negativos y con otras palabras a proposito:
+   *  los dos dicen "negativo" y son problemas distintos. El cierre negativo
+   *  es de SAP y se arregla alla; la apertura negativa es NUESTRA, dice que
+   *  la serie del mes esta corrida, y se arregla midiendo la apertura en vez
+   *  de despejarla. Confundirlos manda a reclamar al lugar equivocado. */
+  if (aperturas && aperturas.length) {
+    const TOPE_AP = 4;
+    const sobran = aperturas.length - TOPE_AP;
+    const peor = aperturas[0];
+    p.push(aperturas.length + ' bodega(s) ABREN LA VENTANA EN NEGATIVO: ' +
+           aperturas.slice(0, TOPE_AP).map(x => x.whs + ' (' + mil(x.apertura) + ' el ' + x.dia + ')').join(', ') +
+           (sobran > 0 ? ' y ' + sobran + ' mas' : '') +
+           '. Esto NO es la fecha del documento: la apertura no se mide, se despeja como saldo vivo ' +
+           'menos el movimiento de la ventana, asi que es el residuo donde cae toda diferencia entre ' +
+           'el saldo y las lineas. Que sea negativa significa que la serie de ' + peor.whs + ' esta ' +
+           'corrida por al menos ' + mil(-peor.apertura) + ' pallets, y con ella todos sus dias. ' +
+           'Se arregla midiendo la apertura, no en SAP.');
+  }
+  if (desfase && desfase.ok === false)
+    p.push('LECTURA DESFASADA: ' + desfase.motivo + '. Es la ventana en que se puede producir la ' +
+           'apertura corrida de arriba; cuanto se produjo lo dice la apertura, no esto.');
   if (cuad && cuad.cuadra === false)
     p.push('El neto por bodega da ' + conSigno(cuad.suma) + ' y la produccion del periodo ' +
            conSigno(cuad.esperado) + ': ' + conSigno(cuad.diferencia) + ' sin explicar. ' +
            'Eso si es una linea leida mal.');
   if (!p.length)
     return { nivel: 'si', texto: 'Las ' + series.length + ' bodegas de planta cierran dia a dia sin ' +
-             'niveles imposibles, los traspasos netean cero y el neto por bodega da exactamente la ' +
-             'produccion del periodo.' };
+             'niveles imposibles, abren la ventana en positivo, los traspasos netean cero y el neto ' +
+             'por bodega da exactamente la produccion del periodo.' };
   return { nivel: 'revisar', texto: p.join('  ') };
 }
 
 module.exports = { bodegasDePlanta, movimientoDeBodega, marcarFirmes, cadenaDePlanta,
-                   nivelesImposibles, leyDelPool, cuadraturaDelNeto, anclaAlDia, payloadJson, veredicto,
+                   nivelesImposibles, aperturasImposibles, desfaseDeLectura,
+                   leyDelPool, cuadraturaDelNeto, anclaAlDia, payloadJson, veredicto,
                    OPCIONES, BANDERAS };
 
 // ── main ────────────────────────────────────────────────────────────────────
@@ -331,7 +425,7 @@ async function main() {
               planta.length + ' bodegas de planta');
   console.log('SOLO LEE. El cierre de cada dia es al TERMINO del dia; el del dia en curso va marcado.\n');
 
-  let lineas = [];
+  let lineas = [], lineasGuardadas = null;
   for (const mes of meses) {
     const nombre = 'lineasbod/' + mes + '.json';
     const b = cc.getBlobClient(nombre);
@@ -343,6 +437,11 @@ async function main() {
     }
     const j = JSON.parse((await b.downloadToBuffer()).toString('utf8'));
     const n = (j && j.lineas) || [];
+    // La marca del blob se imprimia y se perdia. Es la unica forma de saber
+    // cuanta ventana hubo entre leer las lineas y leer el ancla, asi que se
+    // guarda: manda la MAS NUEVA, que es la que mas cerca esta del ancla.
+    if (j && j._guardado && (!lineasGuardadas || String(j._guardado) > lineasGuardadas))
+      lineasGuardadas = String(j._guardado);
     console.log('  ' + nombre + ': ' + mil(n.length) + ' lineas   ·  extraido ' +
                 String(j._guardado || '?').slice(0, 16).replace('T', ' '));
     lineas = lineas.concat(n);
@@ -437,7 +536,9 @@ async function main() {
   }, '');
   const anc = anclaAlDia(fechaAncla, diaMasNuevo);
   const imp = nivelesImposibles(series);
-  const v = veredicto(series, imp, cuad, anc);
+  const ape = aperturasImposibles(series);
+  const des = desfaseDeLectura(bod.generado, lineasGuardadas);
+  const v = veredicto(series, imp, cuad, anc, ape, des);
 
   console.log('\n── LA LEY DEL POOL ' + '─'.repeat(55));
   console.log('  traspasos: ' + mil(ley.nTraspaso) + ' lineas con las dos puntas · netean ' +
@@ -448,6 +549,18 @@ async function main() {
               ' esperado: ' + (cuad.cuadra ? 'cuadra' : conSigno(cuad.diferencia) + ' SIN EXPLICAR') +
               (ley.nSinPunta ? '   ·  ' + mil(ley.nSinPunta) + ' linea(s) sin ninguna bodega' : ''));
 
+  console.log('\n── LA LECTURA ' + '─'.repeat(60));
+  console.log('  ancla leida  ' + (bod.generado || '?'));
+  console.log('  lineas desde ' + (lineasGuardadas || '?'));
+  console.log('  desfase      ' + (des.segundos == null ? 'no medible' :
+    des.segundos + ' s' + (des.ok ? '  (dentro del tope de ' + des.tope + ' s)' : '  ← FUERA DE TOPE')));
+  console.log('\n── LA APERTURA DE LA VENTANA ' + '─'.repeat(45));
+  console.log('  La apertura no se mide: se despeja. Una negativa dice que la serie esta corrida.');
+  if (!ape.length) console.log('  las ' + series.length + ' bodegas abren en positivo');
+  else for (const x of ape)
+    console.log('  ' + x.whs.padEnd(10) + x.nombre.slice(0, 23).padEnd(24) +
+                mil(x.apertura).padStart(10) + '   el ' + x.dia + '   ← imposible');
+
   console.log('\n── VEREDICTO ' + '─'.repeat(61));
   console.log('  ' + v.texto);
 
@@ -457,6 +570,7 @@ async function main() {
       generado: new Date().toISOString(), anclaLeida: bod.generado || null, meses,
       ancla: anc, veredicto: v,
       indicador: nueve, fueraDelIndicador: resto, cierreFirme: diaFirme,
+      aperturasImposibles: ape, lineasGuardadas, desfase: des,
       bodegas: series, cadena: cadenaDePlanta(lineas, conjunto).aristas,
     }), null, 1), 'utf8');
     console.log('\n  escrito: ' + salida);

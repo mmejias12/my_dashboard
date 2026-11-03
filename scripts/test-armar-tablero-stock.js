@@ -1216,6 +1216,31 @@ chk('no se cuela ningun tag crudo', SUCIO.indexOf('<')<0, SUCIO.slice(0,110));
 const DP2=A.datos(BOD, VAC, VAC, EXTRA2, {generado:'2026-11-02T16:36:37Z',
   aperturas_imposibles:[{whs:'RT13-100',apertura:-3334,dia:'2026-10-01'}],
   lectura:{ok:false,desfase_s:166}, bodegas:[]});
+// La serie corriendo por fecha de documento no rompe nada, pero cambia lo
+// que el numero significa, y eso no puede quedar sin avisar.
+const CFE=A.controlesConPlanta(EXTRA2,{generado:'2026-11-03T10:00:00Z',
+  fecha_serie:'DocDate', fecha_serie_porque:'ninguna linea trae fecha de creacion todavia'});
+const cfe=CFE.find(c=>/Fecha de la serie/.test(c.titulo));
+chk('avisa cuando la serie corre por la fecha contable', cfe && cfe.estado==='no pasa');
+chk('y explica que eso cambia la pregunta que contesta',
+    /cuántos hay en planta/.test(cfe.texto) && /cuántos había según la fecha contable/.test(cfe.texto),
+    cfe.texto.slice(-150));
+chk('con la fecha de creacion no avisa nada',
+    !A.controlesConPlanta(EXTRA2,{fecha_serie:'CreaDate'}).some(c=>/Fecha de la serie/.test(c.titulo)));
+chk('ni sin saber que fecha usa',
+    !A.controlesConPlanta(EXTRA2,{}).some(c=>/Fecha de la serie/.test(c.titulo)));
+chk('el motivo va escapado',
+    !/<b>/.test(A.controlesConPlanta(EXTRA2,{fecha_serie:'DocDate',fecha_serie_porque:'<b>x</b>'})
+      .find(c=>/Fecha de la serie/.test(c.titulo)).texto));
+// un pallet que salio de la bodega y no tiene dia de llegada
+const CAI=A.controlesConPlanta(EXTRA2,{transito:{medible:true,sin_fecha:7}})
+  .find(c=>/en el aire/.test(c.titulo));
+chk('las lineas en el aire sin fecha de llegada se declaran',
+    CAI && CAI.estado==='no pasa' && /7 línea/.test(CAI.texto), CAI && CAI.texto.slice(0,70));
+chk('sin ninguna, no hay control', !A.controlesConPlanta(EXTRA2,
+    {transito:{medible:true,sin_fecha:0}}).some(c=>/en el aire/.test(c.titulo)));
+chk('y si el transito no es medible tampoco', !A.controlesConPlanta(EXTRA2,
+    {transito:{medible:false,sin_fecha:7}}).some(c=>/en el aire/.test(c.titulo)));
 chk('datos() los deja en el json que leen las dos paginas',
     DP2.controles.filter(c=>c.estado==='no pasa').length===2,
     DP2.controles.map(c=>c.titulo).join(' | '));

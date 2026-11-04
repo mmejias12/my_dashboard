@@ -441,6 +441,50 @@ copia el día a `respaldo/<fecha>-<sello>.json` en el mismo contenedor, bajo un
 prefijo que `cold-operaciones.js` no lee. No tiene `--restaurar` a propósito: una
 restauración a ciegas es justo lo que no conviene tener a mano.
 
+**Resultado de la reparación (4-nov, 22:20).**
+
+- **2025-02-17 · recuperado.** Redlink devolvió el día con 842 filas, 20 de ellas
+  rescatadas por el margen de entrada, y el agregado del cold quedó **idéntico al
+  guardado**. No hay nada que reconstruir ahí: los dos caminos —el agregado viejo
+  derivado de RDT y el nuevo derivado del cold— dan el mismo número, que es la
+  mejor confirmación posible.
+- **2024-02-13 · sigue corto.** Con 60 días de margen (consulta desde el
+  2023-12-15) rescató 17 filas, pero los 640 de `ZWM08 WM RENTAPACK SANTIAGO`
+  siguen sin aparecer. Quedan dos posibilidades y una sola las separa: que la
+  operación se haya ingresado **antes del 2023-12-15** —y entonces el margen de
+  60 días no alcanza— o que no esté en Redlink. Por eso el script acepta ahora
+  `-Margen`:
+
+  ```
+  .\backfill\reparar-dias-cold.ps1 -Dias 2024-02-13 -Margen 365
+  ```
+
+  **Corrido con 365 días: no cambió nada.** Las mismas 723 filas y las mismas 17
+  rescatadas que con 60 — bit por bit el mismo resultado. O sea el margen nunca
+  fue el límite: **la fila no está en el origen**. `hist/2024-02-13.json` es el
+  único lugar donde esos 640 sobreviven.
+
+  Queda una hipótesis sin probar, poco probable y anotada: que ese retiro esté
+  registrado bajo otro BP (la consulta va contra el 433, y los otros 1.388
+  pallets de Walmart del mismo día sí vienen de ahí). Se probaría con
+  `REDLINK_BP` en una corrida puntual.
+
+### La exclusión no depende de que alguien se acuerde
+
+"Dejarlo excluido para siempre" es una instrucción que algún día no se repite.
+Así que el día quedó escrito en **`scripts/dias-sin-reconstruir.json`**, con su
+concepto, cuánto falta, el motivo medido y la fecha de medición, y
+`rollup-hist.js` lo lee y lo salta **solo**, sin que nadie pase `--excluir`:
+
+```
+Días vedados por registro : 2024-02-13   (scripts/dias-sin-reconstruir.json)
+    2024-02-13  retiros  falta 640 en el cold
+```
+
+Para forzarlo hay que pasar `--ignorar-vedados`, que lo anuncia en pantalla. Un
+JSON roto en ese archivo **falla** en vez de ignorarse en silencio: una lista de
+protecciones que se vacía sola sería peor que no tenerla.
+
 **Y si el origen no las tiene**, la reconstrucción de esos días perdería dato. Para
 eso el modo que escribe acepta exclusiones explícitas:
 
@@ -585,11 +629,31 @@ doce llamadas al proveedor y pasa a ser lectura de blobs.
   balanceadas, `[CmdletBinding()]` como primera sentencia, el código de salida de
   las cinco llamadas a node atendido, y la forma de los argumentos contrastada
   contra el `process.argv` real de los tres scripts). **No se pudo ejecutar**: no
-  hay PowerShell en el entorno donde se escribió.
-- `rollup-hist`: 80 comprobaciones con el cold y el blob de agregados doblados
+  hay PowerShell en el entorno donde se escribió. Las dos primeras corridas
+  fallaron, con **una sola causa** que la revisión estática no buscaba:
+
+  **El archivo no tiene BOM, así que Windows PowerShell 5.1 lo lee como ANSI
+  (CP-1252).** Un carácter de caja como `─` (U+2500) son los bytes `E2 94 80`, y
+  leído como CP-1252 el `0x94` se convierte en `”` — la comilla tipográfica de
+  cierre, que **PowerShell acepta como delimitador de cadena**. Cada raya de una
+  línea decorativa inyecta media comilla: con una cantidad impar, el parser queda
+  con una cadena abierta y a partir de ahí falla en lugares que no tienen nada que
+  ver. La línea 87 tenía 31 rayas más 2 comillas reales = 33, impar.
+
+  Eso explica también el primer error: con la cadena abierta, el parser estaba en
+  modo comando, y ahí un `<` del texto de ayuda se lee como redirección
+  (`RedirectionNotSupported`). **Mi primer arreglo —sacar los `<`— trató el
+  síntoma**, por eso el segundo intento falló igual.
+
+  **REGLA PARA LOS .ps1 DE ESTE REPO**: sólo ASCII fuera de los comentarios.
+  Y un aviso: `cierre-diario.ps1` sobrevive **por casualidad** —su línea
+  decorativa tiene 34 rayas, cantidad par—; una raya más o menos y el cierre
+  diario deja de parsear. Conviene pasar esa línea a ASCII también, o ponerle BOM
+  al archivo.
+- `rollup-hist`: 91 comprobaciones con el cold y el blob de agregados doblados
   (la línea de comandos, los tres sabores de "el blob no existe", la alarma de
   huecos, el análisis por cortes y el orden del dedupe con lectura en paralelo),
-  29 mutaciones y las 29 muerden. Tres mutaciones resultaron equivalentes y se
+  33 mutaciones y las 33 muerden. Tres mutaciones resultaron equivalentes y se
   reemplazaron por otras observables, en vez de forzarles una prueba.
 - `consulta-transporte`: 27 comprobaciones, 8 mutaciones y las 8 muerden. Una de
   ellas descubrió un defecto de verdad: `Number(x) || def` convertía un `0`

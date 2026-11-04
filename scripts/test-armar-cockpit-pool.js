@@ -1018,17 +1018,24 @@ chk('la estacion sin movimiento en el periodo queda sin dato, no sana',
 // EL SALDO NO SE FILTRA POR FECHA, y la tarjeta tiene que decirlo
 const TJPER=A.tarjetas(D,A.bodegasDelCockpit(OCT),undefined,'2026-10');
 const plPER=TJPER.find(x=>x.clave==='planta');
-chk('con periodo el indicador sigue siendo la lectura de hoy',
-    plPER.kv===A.tarjetas(D,TODAS).find(x=>x.clave==='planta').kv, plPER.kv);
-// EL AVISO VA EN LA (i) Y NO EN UN PARRAFO: ocupaba cuatro lineas en la
-// tarjeta donde el espacio es justo lo que falta
-chk('y la tarjeta avisa, dentro de la (i), que un saldo no se filtra por fecha',
-    /no se filtra por fecha/.test(plPER.info||'') && plPER.nota===null, String(plPER.nota));
+// LA CIFRA SIGUE AL PERIODO. Mostrar el saldo de hoy arriba y "cierra en
+// 9.370 al 07-10" en la linea de abajo era la misma tarjeta contando dos dias
+// distintos; adentro del cajon el calendario ya se movia.
+const ultPerT=plPER.sem[plPER.sem.length-1];
+chk('con periodo la cifra es el cierre del ultimo dia del periodo',
+    plPER.kv===String(ultPerT.cierre), plPER.kv+' vs '+ultPerT.cierre);
+chk('y la barra tambien, no se queda en el saldo de hoy',
+    plPER.bullet.v===ultPerT.cierre, String(plPER.bullet.v));
+// EL AVISO VA EN LA (i) Y NO EN UN PARRAFO
+chk('y la (i) dice de que dia es y cuanto tiene SAP hoy',
+    /cierre del 2026-10-\d\d; hoy SAP tiene /.test(plPER.info||'') && plPER.nota===null,
+    (String(plPER.info).match(/Con un período[^.]*\./)||['(sin aviso)'])[0]);
 chk('y el aviso llega al html dentro del globo',
-    /class="tip">[^<]*no se filtra por fecha/.test(A.tarjetaHtml(plPER)), '');
-chk('sin periodo la (i) no lleva ese aviso',
-    !/no se filtra por fecha/.test(
-      A.tarjetas(D,TODAS).find(x=>x.clave==='planta').info||''));
+    /class="tip">[^<]*hoy SAP tiene/.test(A.tarjetaHtml(plPER)), '');
+chk('sin periodo la cifra vuelve a ser el saldo de SAP y la (i) no avisa nada',
+    A.tarjetas(D,TODAS).find(x=>x.clave==='planta').kv==='7.877' &&
+    !/hoy SAP tiene/.test(A.tarjetas(D,TODAS).find(x=>x.clave==='planta').info||''),
+    A.tarjetas(D,TODAS).find(x=>x.clave==='planta').kv);
 // con periodo la serie cierra donde termina el periodo, no en el saldo de
 // hoy: reclamar un descalce ahi seria una alarma falsa
 // la linea sigue a los dos filtros: una linea que llega a noviembre debajo de
@@ -1364,6 +1371,84 @@ chk('la (i) llega a la cabecera de la tarjeta, no al cuerpo',
 chk('y las ocho la llevan en la pagina',
     (soloCuerpo(A.pagina(D)).match(/<span class="info"/g)||[]).length>=8,
     String((soloCuerpo(A.pagina(D)).match(/<span class="info"/g)||[]).length));
+
+console.log('\n— el pool dia por dia: clientes, retail y planta juntos —');
+chk('los dias compactados vuelven a ser dias',
+    JSON.stringify(A.diasDeArreglo([['2026-10-05',10,3,1,12]])[0])===
+      JSON.stringify({dia:'2026-10-05',apertura:10,entradas:3,salidas:1,cierre:12}),
+    JSON.stringify(A.diasDeArreglo([['2026-10-05',10,3,1,12]])[0]));
+chk('sin arreglo no revienta', A.diasDeArreglo(null).length===0);
+
+const DPOOL={planta_dias:[{cod:'A',nom:'SANTIAGO INSPECCION',dias:[
+                {dia:'2026-10-05',apertura:100,entradas:0,salidas:0,cierre:100},
+                {dia:'2026-10-06',apertura:100,entradas:20,salidas:0,cierre:120}]}],
+             clientes_dias:[['2026-09-30',1,0,0,1000],['2026-10-05',1000,0,0,900],['2026-10-06',900,0,0,950]],
+             retail_dias:[['2026-10-05',1,0,0,5000],['2026-10-06',5000,0,0,5100]]};
+const SP=A.serieDelPool(DPOOL);
+chk('las tres patas como tres estaciones',
+    SP.map(x=>x.cod).join(',')==='CLIENTES,RETAIL,PLANTA', SP.map(x=>x.cod).join(','));
+// LA PATA DE PLANTA ES EL AGREGADO de sus nueve estaciones, no una de ellas:
+// con dos estaciones, tomar la primera daria la mitad del stock de planta
+const DOSEST={planta_dias:[
+  {cod:'A',nom:'SANTIAGO INSPECCION',dias:[{dia:'2026-10-06',apertura:100,entradas:20,salidas:0,cierre:120}]},
+  {cod:'B',nom:'SANTIAGO PINTURA',dias:[{dia:'2026-10-06',apertura:7,entradas:0,salidas:0,cierre:7}]}],
+  clientes_dias:[['2026-10-06',1,0,0,900]]};
+const SP2=A.serieDelPool(DOSEST);
+chk('la de planta es el agregado de sus estaciones, no una sola',
+    SP2[1].cod==='PLANTA' && SP2[1].dias[0].cierre===127,
+    JSON.stringify(SP2[1].dias[0]));
+chk('una pata sin dias no entra como pata vacia',
+    A.serieDelPool({clientes_dias:[['2026-10-05',1,0,0,9]]}).map(x=>x.cod).join(',')==='CLIENTES');
+chk('sin nada no revienta', A.serieDelPool(null).length===0 && A.serieDelPool({}).length===0);
+
+// LOS MESES EN QUE LAS TRES TIENEN DATO, no la union: en septiembre solo hay
+// clientes, y dar el pool de septiembre contando la planta por su apertura
+// seria publicar un numero que nadie midio
+chk('solo los meses en que las tres tienen dato',
+    A.mesesComunes(SP).join(',')==='2026-10', A.mesesComunes(SP).join(','));
+// ordenados: el chip del mes mas nuevo tiene que quedar al final, que es el
+// que el cajon elige al abrirse
+chk('y vienen ordenados de mas viejo a mas nuevo',
+    A.mesesComunes([{cod:'X',dias:[{dia:'2026-11-02'},{dia:'2026-01-05'},{dia:'2026-06-09'}]}])
+      .join(',')==='2026-01,2026-06,2026-11',
+    A.mesesComunes([{cod:'X',dias:[{dia:'2026-11-02'},{dia:'2026-01-05'},{dia:'2026-06-09'}]}]).join(','));
+chk('septiembre queda fuera aunque clientes lo tenga',
+    A.mesesComunes(SP).indexOf('2026-09')<0);
+chk('con una sola pata, sus meses son los comunes',
+    A.mesesComunes([SP[0]]).join(',')==='2026-09,2026-10', A.mesesComunes([SP[0]]).join(','));
+chk('sin series no hay meses', A.mesesComunes([]).length===0 && A.mesesComunes(null).length===0);
+chk('una pata sin dias no cuenta para la interseccion',
+    A.mesesComunes(SP.concat([{cod:'X',dias:[]}])).join(',')==='2026-10');
+
+const CPO=A.composiciones(Object.assign({},D,{clientes_dias:DPOOL.clientes_dias,
+  retail_dias:DPOOL.retail_dias}),BS);
+chk('el cajon del pool va en grilla y con calendario',
+    CPO.pool.grilla===true && !!CPO.pool.cal, '');
+chk('cada pata lleva su codigo para repintarse por dia',
+    CPO.pool.filas.map(f=>f.cod).join(',')==='CLIENTES,RETAIL,PLANTA',
+    CPO.pool.filas.map(f=>f.cod).join(','));
+chk('y el calendario se declara como el del pool, no el de planta',
+    CPO.pool.serie==='pool', String(CPO.pool.serie));
+// ARRANCA SIN DIA ELEGIDO: su serie termina el ultimo mes cerrado y la cifra
+// de arriba es la de hoy; marcar un dia haria que digan numeros distintos
+chk('arranca sin dia elegido', CPO.pool.calSel===null, String(CPO.pool.calSel));
+chk('y el html no marca ninguna celda',
+    !/class="cd sel"/.test(A.desgloseHtml(CPO.pool)) &&
+    !/aria-pressed="true"/.test(A.desgloseHtml(CPO.pool)), '');
+chk('el calendario del pool se declara en el html',
+    /data-serie="pool"/.test(A.desgloseHtml(CPO.pool)), '');
+chk('y el de planta sigue siendo el de planta',
+    /data-serie="planta"/.test(A.desgloseHtml(A.composiciones(D,BS).planta)), '');
+// el navegador tiene que elegir la serie por el calendario, no adivinar
+const JSP=A.script([],'2026-10',{},{},{});
+chk('el navegador elige la serie segun data-serie',
+    JSP.indexOf('"pool" ? PR : PD') > 0 && JSP.indexOf('getAttribute("data-serie")') > 0,
+    (JSP.match(/getAttribute\("data-serie"\)[^']{0,40}/)||['(no esta)'])[0]);
+chk('y publica la serie del pool armada despues de DAT',
+    JSP.indexOf('var PR = serieDelPool') > JSP.indexOf('var DAT = '),
+    'PR@'+JSP.indexOf('var PR = serieDelPool')+' DAT@'+JSP.indexOf('var DAT = '));
+chk('con la serie de planta a cuestas, que DAT no trae',
+    /serieDelPool\(Object\.assign\(\{\}, DAT, \{ planta_dias: PD \}\)\)/.test(JSP), '');
 
 console.log('\n' + ok + ' ok, ' + fail + ' fallas');
 process.exit(fail ? 1 : 0);

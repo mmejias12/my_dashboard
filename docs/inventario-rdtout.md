@@ -365,6 +365,62 @@ La lectura de los tres años va **en lotes de 24 días en paralelo** (el proceso
 sigue siendo en orden de fecha, porque el dedupe es "gana el primero" y no puede
 depender de qué blob contestó antes).
 
+### Comparación de los tres años completos · 1-ene-2023 → 3-nov-2026
+
+```
+Días con blob en el cold : 1.378   (sin blob: 25)
+Filas agregadas          : 685.194
+Días iguales             : 953
+Días que no existían     : 67
+Días con diferencia      : 358
+Suma: transferencias +45.626 · retiros −640 · emisiones −540
+```
+
+**No hay un solo hueco del cold.** Los 25 días sin blob son domingos y feriados
+cuyo agregado guardado también está en cero. El cold cubre todo lo que el
+histórico vio, que era la condición para reconstruir.
+
+**Y cubre más: 67 días que el histórico nunca tuvo**, del 2 de enero al 18 de
+marzo de 2023 — `hist/` arranca el 20 de marzo de 2023 y el cold tiene desde el
+1 de enero. Reconstruir no sólo corrige: extiende la serie dos meses y medio
+hacia atrás. Eso mueve el total de 2023, así que el área tiene que saberlo antes
+de ver el gráfico.
+
+**Lo que hay que mirar antes de reconstruir son tres días, no 358.** En 355 el
+cold trae más, que es la deuda de confirmaciones tardías ya medida. En **tres
+trae menos**, y ahí reconstruir PIERDE dato:
+
+| día | concepto | cold | guardado | dif |
+|---|---|---|---|---|
+| 2024-02-13 | retiros | 3.408 | 4.048 | **−640** |
+| 2025-02-17 | emisiones | 4.055 | 4.595 | **−540** |
+| 2026-01-15 | transferencias | 4.797 | 4.819 | **−22** |
+
+Los dos grandes son exactamente un camión cada uno (540) y 640; es decir
+operaciones completas que el cold no tiene y el agregado sí. Eso **no** se
+explica por confirmaciones tardías: el día tiene blob, así que la alarma de
+huecos no lo ve. Son filas que la ventana del backfill perdió en su momento —
+el defecto `horaIngreso` vs `fechaRequerida` a nivel de fila.
+
+Por eso `--comparar` ahora los separa en su propio bloque, `*** EL COLD TRAE
+MENOS`, antes que nada: en una lista de 358 líneas eran invisibles.
+
+### El tamaño de la corrección, por período
+
+Los +45.626 de transferencias no están repartidos parejo, y la forma importa
+para saber qué se está corrigiendo:
+
+- **mar–jun 2023**: diferencias enormes, del 10% al 30% del día (hasta +1.039 el
+  27 de junio). Es el arranque de la serie, cuando el histórico se llenaba con
+  otra cadencia.
+- **jul–dic 2023**: cero diferencias.
+- **2024 y 2025**: ruido, +1 a +37 por día.
+- **2026**: banda densa de febrero a agosto, de decenas a cientos por día.
+
+`--comparar` ahora imprime una **tabla por mes y un total por año** en vez de
+358 líneas (con `--dias` se ven igual los días uno por uno). Ésa es la cifra que
+hay que llevarle al área.
+
 ### `--explicar`: por qué difiere UN día
 
 ```
@@ -427,10 +483,10 @@ doce llamadas al proveedor y pasa a ser lectura de blobs.
 
 ### Pruebas
 
-- `rollup-hist`: 59 comprobaciones con el cold y el blob de agregados doblados
+- `rollup-hist`: 65 comprobaciones con el cold y el blob de agregados doblados
   (la línea de comandos, los tres sabores de "el blob no existe", la alarma de
   huecos, el análisis por cortes y el orden del dedupe con lectura en paralelo),
-  19 mutaciones y las 19 muerden. Tres mutaciones resultaron equivalentes y se
+  23 mutaciones y las 23 muerden. Tres mutaciones resultaron equivalentes y se
   reemplazaron por otras observables, en vez de forzarles una prueba.
 - `consulta-transporte`: 27 comprobaciones, 8 mutaciones y las 8 muerden. Una de
   ellas descubrió un defecto de verdad: `Number(x) || def` convertía un `0`

@@ -41,23 +41,34 @@ function formato(roll) {
   const anioAct = parseInt(ultimo, 10);
   const desdeAnio = anioAct - 2;                       // últimos 3 años para el mes a mes
 
-  const emiAnual = anios.map(a => `${a}: ${milesCL(roll.anual[a].emisiones.total)}`).join(' · ');
-  const retAnual = anios.map(a => `${a}: ${milesCL(roll.anual[a].retiros.total)}`).join(' · ');
+  // 'devoluciones' y 'recogida' son números planos por bucket (ver rollup).
+  const anioNum = (a, k) => milesCL((roll.anual[a][k] && roll.anual[a][k].total != null) ? roll.anual[a][k].total : roll.anual[a][k]);
+  const mesNum  = (m, k) => milesCL((roll.mensual[m][k] && roll.mensual[m][k].total != null) ? roll.mensual[m][k].total : roll.mensual[m][k]);
+
+  const emiAnual = anios.map(a => `${a}: ${anioNum(a, 'emisiones')}`).join(' · ');
+  const retAnual = anios.map(a => `${a}: ${anioNum(a, 'retiros')}`).join(' · ');
+  const devAnual = anios.map(a => `${a}: ${anioNum(a, 'devoluciones')}`).join(' · ');
+  const recAnual = anios.map(a => `${a}: ${anioNum(a, 'recogida')}`).join(' · ');
   const pl = roll.anual[ultimo].emisiones;
   const plantaLinea = `Emisiones ${ultimo} por planta: Santiago ${milesCL(pl.santiago)}, Talca ${milesCL(pl.talca)}, Coquimbo ${milesCL(pl.coquimbo)}.`;
 
   const meses = Object.keys(roll.mensual || {})
     .filter(m => parseInt(m.slice(0, 4), 10) >= desdeAnio).sort();
-  const emiMes = meses.map(m => `${m} ${milesCL(roll.mensual[m].emisiones.total)}`).join(' · ');
-  const retMes = meses.map(m => `${m} ${milesCL(roll.mensual[m].retiros.total)}`).join(' · ');
+  const emiMes = meses.map(m => `${m} ${mesNum(m, 'emisiones')}`).join(' · ');
+  const retMes = meses.map(m => `${m} ${mesNum(m, 'retiros')}`).join(' · ');
+  const devMes = meses.map(m => `${m} ${mesNum(m, 'devoluciones')}`).join(' · ');
 
   return `[HISTÓRICO OPERACIONES · resumen precargado (${roll.desde}→${roll.hasta}; el año/mes en curso es parcial)]\n` +
     `Emisiones por año (pallets): ${emiAnual}.\n` +
     `Retiros por año: ${retAnual}.\n` +
+    `Devoluciones por año: ${devAnual}.\n` +
+    `Recogida por año: ${recAnual}.\n` +
     `${plantaLinea}\n` +
     `Emisiones por mes ${desdeAnio}–${anioAct}: ${emiMes}.\n` +
     `Retiros por mes ${desdeAnio}–${anioAct}: ${retMes}.\n` +
+    `Devoluciones por mes ${desdeAnio}–${anioAct}: ${devMes}.\n` +
     `Usa estos totales para comparaciones anuales/mensuales y análisis de tendencia SIN llamar herramientas. ` +
+    `Para TRANSFERENCIAS mes a mes usa el bloque de transferencias confirmadas (más abajo) o consultar_contraparte, no estos. ` +
     `Recurre a consultar_operacion solo para rangos puntuales que no estén aquí o para el detalle por cliente/bodega.`;
 }
 

@@ -405,6 +405,52 @@ el defecto `horaIngreso` vs `fechaRequerida` a nivel de fila.
 Por eso `--comparar` ahora los separa en su propio bloque, `*** EL COLD TRAE
 MENOS`, antes que nada: en una lista de 358 líneas eran invisibles.
 
+### Los tres días medidos · son filas que el cold no tiene
+
+`--explicar 2024-02-13` y `--explicar 2025-02-17`: en los dos, **ningún corte por
+fecha de confirmación reproduce lo guardado** y el valor del cold es plano en
+todos los cortes (3.408 y 4.055 en los ocho). O sea las filas no llegaron tarde:
+no están.
+
+Y están identificadas, cada una en una sola contraparte:
+
+- **2024-02-13 · retiros −640** · un retiro de WALMART desde la bodega
+  `ZWM08 WM RENTAPACK SANTIAGO` hacia REDTEC SANTIAGO. El cold tiene **0** en esa
+  bodega de origen; el agregado tiene 640.
+- **2025-02-17 · emisiones −540** · una emisión a `SOFTYS CHILE SPA`, bodega
+  destino `SOFTYS PLANTA PUENTE ALTO`. El cold tiene **0** ahí; el agregado 540.
+
+Es el defecto `horaIngreso` vs `fechaRequerida` a nivel de FILA: operaciones
+ingresadas fuera de la ventana con que se consultó ese día en su momento. Como
+el día tiene blob, la alarma de huecos —que mira días— no las ve.
+
+**Reparación:** correr `backfill-operaciones.js` para esos días puntuales, que hoy
+consulta con margen de entrada de 60 días. Si el origen todavía las tiene, el
+cold las recupera y la reconstrucción pasa a ser estrictamente aditiva.
+
+**Y si no las tiene**, la reconstrucción de esos días perdería dato. Para eso el
+modo que escribe acepta exclusiones explícitas:
+
+```
+node scripts/rollup-hist.js 2023-01-01 2026-11-03 --excluir=2024-02-13,2025-02-17
+```
+
+Esos días quedan como están y el resumen lo dice. Se hizo así a propósito, en vez
+de una regla automática del tipo "nunca bajar un número": esa regla congelaría
+cualquier error futuro sin que nadie se enterara.
+
+### Un hallazgo de paso · el desglose puede no cuadrar con su propio total
+
+En el 2025-02-17 los deltas de `bodegaDestino` sumaban −740 mientras el concepto
+difería en −540. Eso sólo puede pasar si un lado del desglose suma menos que el
+total del concepto, y `sumarDetalle` carga el mismo valor en los cuatro lados:
+son **filas con ese campo vacío**.
+
+`--explicar` ahora lo mide y lo dice (`cuadraturaDetalle`), para el cold y para lo
+guardado. Importa porque el total del concepto puede estar perfecto mientras el
+desglose por contraparte o bodega de ese día queda corto — y ése es el que
+alimenta `resumen/contrapartes.json` y las respuestas por cliente del asistente.
+
 ### El tamaño de la corrección, por período
 
 Los +45.626 de transferencias no están repartidos parejo, y la forma importa
@@ -483,10 +529,10 @@ doce llamadas al proveedor y pasa a ser lectura de blobs.
 
 ### Pruebas
 
-- `rollup-hist`: 65 comprobaciones con el cold y el blob de agregados doblados
+- `rollup-hist`: 73 comprobaciones con el cold y el blob de agregados doblados
   (la línea de comandos, los tres sabores de "el blob no existe", la alarma de
   huecos, el análisis por cortes y el orden del dedupe con lectura en paralelo),
-  23 mutaciones y las 23 muerden. Tres mutaciones resultaron equivalentes y se
+  27 mutaciones y las 27 muerden. Tres mutaciones resultaron equivalentes y se
   reemplazaron por otras observables, en vez de forzarles una prueba.
 - `consulta-transporte`: 27 comprobaciones, 8 mutaciones y las 8 muerden. Una de
   ellas descubrió un defecto de verdad: `Number(x) || def` convertía un `0`

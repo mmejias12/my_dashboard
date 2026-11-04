@@ -393,6 +393,26 @@ function controlesConPlanta(extra, planta) {
   return base.length ? base : null;
 }
 
+/** LA SERIE DIARIA DE UNA BODEGA DE AFUERA, compactada igual que la de planta.
+ *
+ *  stock-clientes.json y stock-retail.json ya la traen —303 y 302 dias— pero
+ *  se quedaba ahi: el tablero solo publicaba el nivel de hoy y el mensual.
+ *  Con esto el cockpit puede dibujar el mismo calendario de la planta para el
+ *  reparto del pool y contestar "¿cómo estaba el 5 de octubre?".
+ *
+ *  Va en arreglos y no en objetos por tamaño: son 605 dias entre las dos y el
+ *  json viaja entero adentro de la pagina. */
+function diasDeBodega(b) {
+  const ds = (b && Array.isArray(b.dias)) ? b.dias : [];
+  const out = [];
+  for (const x of ds) {
+    if (!x || !/^\d{4}-\d{2}-\d{2}$/.test(String(x.dia))) continue;
+    out.push([String(x.dia), Number(x.apertura) || 0, Number(x.entradas) || 0,
+              Number(x.salidas) || 0, Number(x.cierre) || 0]);
+  }
+  return out.length ? out : null;
+}
+
 function datos(bod, ret, cli, extra, planta) {
   const fl = clasificarPool(bod && bod.bodegas);
   const sr = cortarSocios(ret && ret.socios, 25);
@@ -472,6 +492,8 @@ function datos(bod, ret, cli, extra, planta) {
     // La distribucion diaria de planta. null cuando el paso no corrio: la
     // seccion no se dibuja y el resto del tablero sale igual.
     planta_dias: planta ? serieDePlanta(planta) : null,
+    clientes_dias: diasDeBodega(cli),
+    retail_dias: diasDeBodega(ret),
     planta_ancla: (planta && planta.ancla) || null,
     planta_meses: (planta && Array.isArray(planta.meses)) ? planta.meses : null,
     ventana: { nivel: String((bod && bod.generado) || '').slice(0, 10),
@@ -1599,7 +1621,7 @@ function main() {
 }
 
 module.exports = { esNumero, mil, conSigno, clasePos, pct, pct1, esc, sinBom,
-                   serieDePlanta, anclaCalza, cierraEnElAncla, relojes, avisoDeFuturo,
+                   serieDePlanta, diasDeBodega, anclaCalza, cierraEnElAncla, relojes, avisoDeFuturo,
                    controlesConPlanta,
                    plantaDeBodega, gruposDeSerie, etiquetaDeMes, mesesDeSerie,
                    diasDelMes, resumenDelMes, altoVisible, ejeDeDias, svgFlujoDia, svgNivelDia,

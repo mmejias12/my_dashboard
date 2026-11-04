@@ -260,6 +260,31 @@ function enTransito(lineas, hasta, conjunto) {
                               'salieron de la bodega y no tienen dia de llegada' : null };
 }
 
+/** EL TRANSITO DE CADA DIA, no solo el del ultimo cierre.
+ *
+ *  La tarjeta deja elegir un dia del calendario y ahi las tres filas tienen
+ *  que hablar de ESE dia: en planta, en transito y por fecha contable. Con un
+ *  solo numero —el del ultimo cierre— elegir el 29 de octubre mostraria el
+ *  stock del 29 al lado del transito de hoy, que es la clase de mezcla por la
+ *  que despues nadie le cree al tablero.
+ *
+ *  Un dia sin medicion va en null, no en cero: la diferencia entre "ese dia
+ *  no habia nada en el aire" y "ese dia no se puede saber" es justamente la
+ *  que la pagina tiene que poder decir. */
+function transitoPorDia(lineas, dias, conjunto) {
+  const vistos = new Set();
+  const out = [];
+  for (const d of (Array.isArray(dias) ? dias : [])) {
+    const dia = String(d == null ? '' : d).slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dia) || vistos.has(dia)) continue;
+    vistos.add(dia);
+    const t = enTransito(lineas, dia, conjunto);
+    out.push({ dia, pallets: t.medible ? t.pallets : null, lineas: t.medible ? t.lineas : 0 });
+  }
+  out.sort((a, b) => a.dia < b.dia ? -1 : a.dia > b.dia ? 1 : 0);
+  return out;
+}
+
 /*  CUANTAS LINEAS TRAEN CADA FECHA. Mientras la re-extraccion no pase por
  *  todos los meses va a haber blobs con las dos y blobs con una sola, y la
  *  pagina no puede mezclarlos sin decirlo. */
@@ -460,6 +485,7 @@ function payloadJson(p) {
                              motivo: x.transito.motivo || null, al: x.transitoAl || null }
                          : { medible: false, pallets: null, lineas: 0, sin_fecha: 0, detalle: [],
                              motivo: 'no se calculo', al: null },
+    transito_dias: Array.isArray(x.transitoDias) ? x.transitoDias : [],
     lectura: {
       ancla: x.anclaLeida || null,
       lineas: x.lineasGuardadas || null,
@@ -541,7 +567,7 @@ function veredicto(series, imposibles, cuad, ancla, aperturas, desfase, fecha, t
 
 module.exports = { bodegasDePlanta, movimientoDeBodega, marcarFirmes, cadenaDePlanta,
                    nivelesImposibles, aperturasImposibles, desfaseDeLectura,
-                   enTransito, coberturaDeFechas, fechaQueManda,
+                   enTransito, transitoPorDia, coberturaDeFechas, fechaQueManda,
                    leyDelPool, cuadraturaDelNeto, anclaAlDia, payloadJson, veredicto,
                    OPCIONES, BANDERAS };
 
@@ -699,6 +725,13 @@ async function main() {
   // camiones saliendo y el numero cambiaria cada vez que se mira.
   const transitoAl = diaFirme || fechaAncla;
   const tra = enTransito(lineas, transitoAl, conjunto);
+  /*  Y el de cada dia firme de la serie, para que el calendario de la tarjeta
+   *  pueda mostrar las tres filas del dia que elijan. El dia en curso queda
+   *  fuera por lo mismo que arriba: todavia hay camiones saliendo. */
+  const diasSerie = Array.from(new Set([].concat.apply([],
+    series.map(x => ((x && x.dias) || []).map(y => y && y.dia)))))
+    .filter(x => /^\d{4}-\d{2}-\d{2}$/.test(String(x || '')) && String(x) <= String(transitoAl));
+  const traDias = transitoPorDia(lineas, diasSerie, conjunto);
   const imp = nivelesImposibles(series);
   const ape = aperturasImposibles(series);
   const des = desfaseDeLectura(bod.generado, lineasGuardadas);
@@ -755,7 +788,7 @@ async function main() {
       ancla: anc, veredicto: v,
       indicador: nueve, fueraDelIndicador: resto, cierreFirme: diaFirme,
       aperturasImposibles: ape, lineasGuardadas, desfase: des,
-      fecha: fec, transito: tra, transitoAl,
+      fecha: fec, transito: tra, transitoAl, transitoDias: traDias,
       bodegas: series, cadena: cadenaDePlanta(lineas, conjunto).aristas,
     }), null, 1), 'utf8');
     console.log('\n  escrito: ' + salida);

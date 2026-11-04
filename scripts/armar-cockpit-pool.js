@@ -280,19 +280,44 @@ function calendarioDeMes(dias, mes) {
  *  mostraria el stock del 29 al lado del transito de hoy. Son dos dias
  *  distintos en la misma tabla y nadie lo notaria.
  *
- *  CON UN FILTRO DE PLANTA PUESTO NO SE MUESTRAN: el transito se mide sobre
- *  las nueve bodegas juntas, asi que repartirlo entre Santiago y Talca seria
- *  inventar. Se dice en vez de mostrar un numero que no corresponde. */
-function filasDelDia(dia, nivelDia, traDias, filtrado) {
+ *  CON UN FILTRO DE PLANTA PUESTO hablan de ESA planta: cada linea de
+ *  transito anota la bodega de REDTEC que soltó o recibió el pallet, y de ahi
+ *  sale el reparto. Antes la tabla se apagaba, porque el dato no existia. */
+function filasDelDia(dia, nivelDia, traDias, planta) {
   const c = (Array.isArray(nivelDia) ? nivelDia : []).find(x => x && x.dia === dia);
   if (!c) return null;
-  if (filtrado)
-    return { aun: 'el tránsito se mide sobre las nueve bodegas juntas, no se reparte por planta' };
   const t = (Array.isArray(traDias) ? traDias : []).find(x => x && x.dia === dia);
-  const tp = t && t.pallets != null ? Number(t.pallets) : null;
-  return [{ q: 'En planta', v: c.cierre, m: 'lo que hay en bodega' },
-          { q: 'En tránsito a cliente', v: tp, m: 'salió, el cliente todavía no lo recibe' },
-          { q: 'Por fecha contable', v: tp == null ? null : c.cierre + tp,
+  return trioDeTransito(c.cierre, transitoDePlanta(t, planta), planta);
+}
+
+/** SOLO EL PRIMER CARACTER EN MAYUSCULA. El nombre de la planta viene de SAP
+ *  en mayusculas ("SANTIAGO") y dentro de una frase se lee como un grito. */
+function capital(s) {
+  const u = String(s == null ? '' : s).trim();
+  return u ? u.charAt(0).toUpperCase() + u.slice(1).toLowerCase() : '';
+}
+
+/** LO QUE ESTA EN EL AIRE, de una planta o de todas.
+ *
+ *  Sirve igual para el total de hoy y para un dia del calendario: los dos
+ *  traen `pallets` y `por_planta`. Sin planta es el total; con planta es su
+ *  parte, y cero es una respuesta —esa planta no tiene nada en el aire—
+ *  distinta de null, que es "no se puede saber". */
+function transitoDePlanta(t, planta) {
+  if (!t || t.pallets == null) return null;
+  if (!planta) return Number(t.pallets) || 0;
+  const pp = t.por_planta;
+  if (!pp || typeof pp !== 'object') return null;
+  return Number(pp[planta]) || 0;
+}
+
+/** LAS TRES FILAS, el mismo molde para hoy y para un dia elegido. */
+function trioDeTransito(nivel, tp, planta) {
+  const p = planta ? capital(planta) : '';
+  return [{ q: p ? 'En ' + p : 'En planta', v: nivel, m: 'lo que hay en bodega' },
+          { q: 'En tránsito a cliente', v: tp,
+            m: 'salió' + (p ? ' de ' + p : '') + ', el cliente todavía no lo recibe' },
+          { q: 'Por fecha contable', v: tp == null ? null : nivel + tp,
             m: 'lo que cuadra con la cartola', pie: true }];
 }
 
@@ -925,23 +950,24 @@ function tarjetas(datos, bodegas, planta, periodo) {
    *  misterio porque esta nombrada. */
   const tra = d.planta_transito || null;
   const porCrea = (d.planta_fecha_serie || null) === 'CreaDate';
+  /*  UNA CORRIDA VIEJA NO TRAE EL REPARTO y hay que decirlo: mostrar el
+   *  transito de las nueve bajo un titulo que dice SANTIAGO lo convertiria en
+   *  el transito de Santiago, que es justo lo que no se sabe. */
+  const sinReparto = filtrado && tra && tra.medible && tra.por_planta == null;
   let trio = null;
   if (tra && !tra.medible)
     trio = { aun: tra.motivo || 'el tránsito todavía no se puede medir' };
-  else if (tra && porCrea && !filtrado && periodo && ultPer)
+  else if (sinReparto)
+    trio = { aun: 'esta corrida midió el tránsito sobre las nueve bodegas juntas; ' +
+                  'el reparto por planta sale al volver a correr el cierre' };
+  else if (tra && porCrea && periodo && ultPer)
     /*  Con periodo, las tres filas hablan del mismo dia que la cifra grande:
      *  el transito de hoy al lado del stock del 7 de octubre serian dos dias
      *  distintos en la misma tabla. */
     trio = filasDelDia(ultPer.dia, nivelDia, Array.isArray(d.planta_transito_dias)
-                                               ? d.planta_transito_dias : [], false);
-  else if (tra && porCrea && !filtrado)
-    trio = [{ q: 'En planta', v: nivelPla, m: 'lo que hay en bodega' },
-            { q: 'En tránsito a cliente', v: Number(tra.pallets) || 0,
-              m: 'salió, el cliente todavía no lo recibe' },
-            { q: 'Por fecha contable', v: nivelPla + (Number(tra.pallets) || 0),
-              m: 'lo que cuadra con la cartola', pie: true }];
-  else if (tra && porCrea && filtrado)
-    trio = { aun: 'el tránsito se mide sobre las nueve bodegas juntas, no se reparte por planta' };
+                                               ? d.planta_transito_dias : [], planta || null);
+  else if (tra && porCrea)
+    trio = trioDeTransito(nivelPla, transitoDePlanta(tra, planta || null), planta || null);
 
   t.push({ clave: 'planta', et: 'Planta · indicador',
            hint: filtrado ? mil(bs.length) + ' en ' + esc(planta) : 'nueve bodegas',
@@ -1800,7 +1826,7 @@ function composiciones(datos, bodegas) {
   C.planta.calUlt = ndPla.length ? ndPla[ndPla.length - 1].dia : null;
   C.planta.trio = (d.planta_transito && d.planta_transito.medible &&
                    (d.planta_fecha_serie || null) === 'CreaDate' && C.planta.calSel)
-    ? filasDelDia(C.planta.calSel, ndPla, C.planta.calTra, false) : null;
+    ? filasDelDia(C.planta.calSel, ndPla, C.planta.calTra, null) : null;
 
   const atribuido = (Number(cli.socios) || 0) + (Number(ret.socios) || 0);
   const bodega = (Number(cli.nivel) || 0) + (Number(ret.nivel) || 0);
@@ -2344,6 +2370,7 @@ function script(serie, mes0, desg, aper, datos) {
                diasDeArreglo, serieDelPool, mesesComunes, serieDeCalendario,
                chipsDeMesHtml, cabezalDeCalHtml,
                diaDeSemana, mesDelCalendario, calendarioDeMes, filasDelDia, pieDeDia,
+               capital, transitoDePlanta, trioDeTransito,
                notaDeDia, calendarioHtml, pintarDia, pintarMes, pintarPata,
                cierreDeBodegaEn, grillaBodegasHtml, infoHtml, queEs,
                serieDelPeriodo, tarjetas, tarjetaHtml];
@@ -2644,7 +2671,8 @@ module.exports = { ETAPAS, GLIFO, ORDEN_SALUD, HITOS, CSS,
                    etapaDeBodega, saludDeBodega, bodegasDelCockpit, matrizPlantaEtapa,
                    mesDeApertura, mesesDeBodega, ultimaSemana, miniSemana, miniNivel,
                    nivelDiarioDePlanta, diaDeSemana, mesDelCalendario, calendarioDeMes,
-                   filasDelDia, pieDeDia, notaDeDia, calendarioHtml, pintarDia, pintarMes,
+                   filasDelDia, pieDeDia, capital, transitoDePlanta, trioDeTransito,
+                   notaDeDia, calendarioHtml, pintarDia, pintarMes,
                    pintarPata, cierreDeBodegaEn, grillaBodegasHtml, infoHtml, queEs, QUE_ES,
                    DIA_CORTO, diasDeArreglo, serieDelPool, mesesComunes, serieDeCalendario,
                    chipsDeMesHtml, cabezalDeCalHtml,

@@ -18,6 +18,7 @@
 
 const { consultarOperacion } = require('../shared/consulta-historico.js');
 const { consultarStock, TOOL_SCHEMA: STOCK_TOOL } = require('../shared/consulta-stock.js');
+const { consultarStockMensual, TOOL_SCHEMA: STOCK_MENSUAL_TOOL } = require('../shared/consulta-stock-mensual.js');
 const { consultarCliente, TOOL_SCHEMA: CLIENTE_TOOL } = require('../shared/consulta-cliente.js');
 const finanzas = require('../shared/consulta-finanzas.js');
 const transporte = require('../shared/consulta-transporte.js');
@@ -137,7 +138,7 @@ const TOOLS = [{
     },
     required: ['desde', 'hasta']
   }
-}, STOCK_TOOL, CLIENTE_TOOL, contraparte.TOOL_SCHEMA];
+}, STOCK_TOOL, STOCK_MENSUAL_TOOL, CLIENTE_TOOL, contraparte.TOOL_SCHEMA];
 
 // Caché de prompts: añade una marca de caché a la ÚLTIMA herramienta. Anthropic
 // cachea todo el bloque de definiciones de tools (que no cambia entre mensajes),
@@ -273,6 +274,11 @@ module.exports = async function (context, req) {
             out = await consultarStock(bloque.input);
             context.log(`tool consultar_stock ${bloque.input.desde}..${bloque.input.hasta} ` +
                         `[${bloque.input.universo || 'ambos'}] (${Date.now() - t0}ms)`);
+          } else if (bloque.name === 'consultar_stock_mensual') {
+            const t0 = Date.now();
+            out = await consultarStockMensual(bloque.input);
+            context.log(`tool consultar_stock_mensual ${bloque.input.desde}..${bloque.input.hasta} ` +
+                        `[${bloque.input.universo || 'ambos'}] (${Date.now() - t0}ms, ${(out.meses || []).length} meses)`);
           } else if (bloque.name === 'consultar_cliente') {
             const t0 = Date.now();
             out = await consultarCliente(bloque.input, context);

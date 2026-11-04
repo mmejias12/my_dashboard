@@ -234,6 +234,21 @@ que `hist/` sale del dato que ya está en nuestro Blob.
 - `backfill.js` queda en el repo para la carga inicial histórica; `rollup-hist.js`
   también puede hacerla, y sin proveedor.
 
+**Un defecto que salió en la primera corrida real (4-nov).** `--comparar` murió
+con `Error: The specified blob does not exist.` El guard de `cache-dia.js`,
+`cold-operaciones.js` y `cache-ops.js` decide "no existe" mirando el TEXTO del
+error (`/BlobNotFound|ContainerNotFound/`), y el SDK de Azure manda ese mensaje
+en prosa, sin la palabra `BlobNotFound`: un día sin blob se escapaba como
+excepción. En producción no se nota porque TODOS los sitios de llamada envuelven
+con `.catch(() => null)` — lo que a su vez esconde algo peor: unas credenciales
+malas se ven exactamente igual que un día sin movimiento.
+
+`rollup-hist.js` ahora clasifica por código (`statusCode 404`, `e.code`,
+`e.details.errorCode`) **y** por texto, y distingue los dos casos: un día
+ausente se informa y se salta; un 403 o un corte de red se propaga nombrando el
+día. Vale revisar si conviene llevar el mismo criterio a esos tres módulos
+compartidos, que hoy dependen de que cada llamador se defienda solo.
+
 **Antes de confiar en el cambio, correrlo en seco.** Desde el repo, con
 `OS_STORAGE_CONN` cargada:
 
@@ -271,8 +286,9 @@ doce llamadas al proveedor y pasa a ser lectura de blobs.
 
 ### Pruebas
 
-- `rollup-hist`: 27 comprobaciones con el cold y el blob de agregados doblados
-  (incluida la línea de comandos), 7 mutaciones y las 7 muerden.
+- `rollup-hist`: 35 comprobaciones con el cold y el blob de agregados doblados
+  (incluidas la línea de comandos y los tres sabores de "el blob no existe"),
+  9 mutaciones y las 9 muerden.
 - `consulta-transporte`: 27 comprobaciones, 8 mutaciones y las 8 muerden. Una de
   ellas descubrió un defecto de verdad: `Number(x) || def` convertía un `0`
   explícito en el default, o sea el interruptor "apágalo" no apagaba nada. Ya

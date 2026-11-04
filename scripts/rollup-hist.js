@@ -122,6 +122,17 @@ function diferenciasDia(nuevo, viejo) {
   return d;
 }
 
+// ¿El agregado guardado de un día tiene algo? Sirve para la alarma de abajo.
+function tieneMovimiento(dia) {
+  if (!dia) return false;
+  return CAMPOS.some(c => tot(dia[c]) !== 0);
+}
+
+// Lo que decide el veredicto final de la comparación. Vive aparte para que la
+// frase que se lee en pantalla sea exactamente lo que se puede probar: un día
+// con diferencia O un hueco del cold obligan a revisar antes de conmutar.
+const hayQueRevisar = (r) => !!((r.distintos && r.distintos.length) || (r.huecos && r.huecos.length));
+
 async function comparar(desde, hasta, opts) {
   opts = opts || {};
   const r = await construir(desde, hasta, opts);
@@ -136,7 +147,23 @@ async function comparar(desde, hasta, opts) {
     const d = diferenciasDia(nuevo, viejo);
     (d.length ? distintos : iguales).push({ fecha: f, diferencias: d });
   }
-  return Object.assign({}, r, { fechas, iguales, distintos, nuevos });
+
+  // LA ALARMA QUE IMPORTA de los días sin blob en el cold. Un domingo sin
+  // movimiento no tiene blob y está perfecto; pero si el agregado guardado de
+  // ese día SÍ tiene movimiento, entonces al cold le falta un día que el
+  // histórico sí vio, y eso hay que resolverlo antes de que el cold sea la
+  // única fuente. La regla de no escribirlo protege el dato; esto lo denuncia.
+  const huecos = [], vacios = [];
+  for (const f of r.faltantes) {
+    if (f < desde || f > hasta) continue;
+    const viejo = await leerSuave(() => leer(cont, f), 'no se pudo leer el agregado guardado de ' + f);
+    if (tieneMovimiento(viejo)) {
+      const g = viejo || {};
+      huecos.push({ fecha: f, guardado: CAMPOS.reduce((o, c) => { const v = tot(g[c]); if (v) o[c] = v; return o; }, {}) });
+    } else vacios.push(f);
+  }
+
+  return Object.assign({}, r, { fechas, iguales, distintos, nuevos, huecos, vacios });
 }
 
 async function escribir(desde, hasta, opts) {
@@ -149,7 +176,7 @@ async function escribir(desde, hasta, opts) {
   return Object.assign({}, r, { fechas, escritos: fechas.length });
 }
 
-module.exports = { construir, diasAEscribir, diferenciasDia, comparar, escribir, noExiste, VENTANA_DIAS };
+module.exports = { construir, diasAEscribir, diferenciasDia, tieneMovimiento, hayQueRevisar, comparar, escribir, noExiste, VENTANA_DIAS };
 
 // ── CLI ─────────────────────────────────────────────────────────────────────
 if (require.main === module) (async () => {
@@ -183,9 +210,17 @@ if (require.main === module) (async () => {
                     '   dif ' + (x.dif > 0 ? '+' : '') + n(x.dif));
       }
     }
-    if (r.faltantes.length) console.log('\nSin blob en el cold (NO se tocan): ' + r.faltantes.join(' '));
-    console.log('\n' + (r.distintos.length ? 'HAY DIFERENCIAS: revisarlas antes de conmutar el paso 1.'
-                                           : 'Los agregados del cold reproducen lo guardado.'));
+    if (r.vacios.length) console.log('\nSin blob en el cold y sin movimiento guardado (normal): ' + r.vacios.join(' '));
+    if (r.huecos.length) {
+      console.log('\n*** HUECOS DEL COLD · días sin blob cuyo agregado guardado SÍ tiene movimiento:');
+      for (const h of r.huecos) console.log('    ' + h.fecha + '  ' +
+        Object.keys(h.guardado).map(k => k + ' ' + n(h.guardado[k])).join(' · '));
+      console.log('    Al cold le falta historia que el agregado sí vio: hay que rellenarlo');
+      console.log('    (backfill-operaciones.js para esos días) antes de que sea la única fuente.');
+    }
+    console.log('\n' + (hayQueRevisar(r)
+      ? 'HAY DIFERENCIAS: revisarlas antes de conmutar el paso 1.'
+      : 'Los agregados del cold reproducen lo guardado.'));
     process.exit(0);
   }
 

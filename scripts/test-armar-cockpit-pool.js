@@ -419,9 +419,25 @@ chk('una celda por estacion, en una sola grilla',
     String((DH.match(/class="bg" data-cod=/g)||[]).length));
 chk('con el total al pie de la grilla',
     /<div class="bgt"><span>Indicador de planta<\/span><b>7\.877<\/b><\/div>/.test(DH));
-chk('y el bloque de referencia sigue siendo tabla',
-    (DH.match(/<tr>/g)||[]).length===CO.planta.extra.filas.length+1,
+// LO QUE NO SUMA VA PLEGADO: ocupaba media pantalla entre el indicador y el
+// calendario, que es lo que si se viene a mirar
+chk('y el bloque de referencia va plegado',
+    /<details class="refp"><summary>/.test(DH) && !/<details class="refp" open/.test(DH));
+chk('con su total a la vista sin abrirlo',
+    /<summary><span>Fuera del indicador — no suma<\/span><b>4\.389<\/b><\/summary>/.test(DH),
+    (DH.match(/<summary>[^]*?<\/summary>/)||['(no esta)'])[0]);
+chk('y el detalle adentro, una fila por bodega',
+    (DH.match(/<tr>/g)||[]).length===CO.planta.extra.filas.length,
     String((DH.match(/<tr>/g)||[]).length));
+// un details de verdad: se abre con el teclado y lo anuncia un lector de
+// pantalla, cosa que un div con onclick no hace
+chk('es un details de verdad, no un div con onclick',
+    !/onclick/.test(DH) && /<\/details>/.test(DH));
+chk('y el titulo del bloque va escapado',
+    !/<x>/.test(A.desgloseHtml(A.desglose('k','T','1','','i',[{a:'a',v:1}],{a:'T',v:1},
+      { a:'<x>Fuera', filas:[{a:'m',v:1}], v:1 },null))),
+    (A.desgloseHtml(A.desglose('k','T','1','','i',[{a:'a',v:1}],{a:'T',v:1},
+      { a:'<x>Fuera', filas:[{a:'m',v:1}], v:1 },null)).match(/<summary>[^]*?<\/summary>/)||[''])[0]);
 chk('y el bloque que no suma va marcado', /class="desg ref"/.test(DH));
 // si no cuadra, el panel lo dice EN EL PANEL, no en silencio
 const DHMAL=A.desgloseHtml(A.desglose('x','T','20','','i',[{a:'a',v:4}],{a:'Total',v:20},null,null));

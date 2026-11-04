@@ -1053,6 +1053,17 @@ table.desg.ref tbody td{opacity:.8}
 .bgt{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:9px;
   padding-top:8px;border-top:1.5px solid var(--line2);font:600 12px Inter;color:var(--ink2)}
 .bgt b{font:700 16px "JetBrains Mono",ui-monospace,monospace;color:var(--ink)}
+details.refp{margin-top:14px;border-top:1px solid var(--line);padding-top:4px}
+details.refp>summary{display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  cursor:pointer;list-style:none;padding:7px 0;
+  font:700 10.5px Inter;letter-spacing:.5px;text-transform:uppercase;color:var(--ink2)}
+details.refp>summary::-webkit-details-marker{display:none}
+details.refp>summary span::after{content:" \\25B8";font-size:11px}
+details.refp[open]>summary span::after{content:" \\25BE"}
+details.refp>summary:hover{color:var(--ink)}
+details.refp>summary:focus-visible{outline:2px solid var(--pla);outline-offset:2px;border-radius:6px}
+details.refp>summary b{font:700 13px "JetBrains Mono",ui-monospace,monospace;color:var(--ink2)}
+details.refp table{margin-top:0}
 .cmeses{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 2px}
 .calen{margin-top:12px}
 .calen .cz{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:5px}
@@ -1654,10 +1665,22 @@ function desgloseHtml(c) {
       '<tr' + (r.pie ? ' class="pie"' : '') + '><td>' + esc(r.q) +
       '<div class="m">' + esc(r.m) + '</div></td><td class="num">' +
       (r.v == null ? '—' : mil(r.v)) + '</td></tr>').join('') + '</table>');
+  /*  LO QUE NO SUMA VA PLEGADO.
+   *
+   *  Son bodegas de referencia: merma, extraños y el transito de Coquimbo.
+   *  Ocupaban media pantalla entre el indicador y el calendario, que es lo
+   *  que si se viene a mirar. El TOTAL queda a la vista en el encabezado, asi
+   *  que plegarlo no esconde el numero: esconde el detalle, que es lo que se
+   *  abre cuando alguien pregunta "de donde salen esos 4.389".
+   *
+   *  Es un <details> de verdad y no un div con onclick: se abre con el
+   *  teclado, un lector de pantalla lo anuncia como lo que es, y sigue
+   *  funcionando con el javascript caido. */
   if (c.extra && c.extra.filas && c.extra.filas.length) {
-    H.push('<h5>' + esc(c.extra.a) + '</h5><table class="desg ref">');
-    H.push('<tbody>' + c.extra.filas.map(fila).join('') + '</tbody>');
-    H.push('<tfoot><tr><td>Suma</td><td class="num">' + mil(c.extra.v) + '</td></tr></tfoot></table>');
+    H.push('<details class="refp"><summary><span>' + esc(c.extra.a) + '</span>' +
+           '<b>' + mil(c.extra.v) + '</b></summary>' +
+           '<table class="desg ref"><tbody>' + c.extra.filas.map(fila).join('') +
+           '</tbody></table></details>');
   }
   if (c.nota) H.push('<p class="mut" style="margin:14px 0 0;max-width:62ch">' + esc(c.nota) + '</p>');
   /*  EL CALENDARIO VA AL FINAL DE TODO. Arriba esta "cuanto hay" —que es lo

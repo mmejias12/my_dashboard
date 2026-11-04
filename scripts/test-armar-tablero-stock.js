@@ -1245,5 +1245,25 @@ chk('datos() los deja en el json que leen las dos paginas',
     DP2.controles.filter(c=>c.estado==='no pasa').length===2,
     DP2.controles.map(c=>c.titulo).join(' | '));
 
+// LA SERIE DE TRANSITO VIAJA ENTERA. Con un solo numero —el del ultimo
+// cierre— el calendario de la tarjeta mostraria el stock del dia elegido al
+// lado del transito de hoy, que son dos dias distintos en la misma tabla.
+const PLTD={bodegas:[],indicador:0,fueraDelIndicador:0,transito:{medible:true,pallets:9},
+            transito_dias:[{dia:'2026-11-02',pallets:80,lineas:1},
+                           {dia:'2026-11-03',pallets:9,lineas:1}]};
+const DTD=A.datos(BOD,{socios:[],nivel:{},mensual:[],ventana:{}},
+                      {socios:[],nivel:{},mensual:[],ventana:{}},null,PLTD);
+chk('la serie de transito por dia llega al json',
+    Array.isArray(DTD.planta_transito_dias) && DTD.planta_transito_dias.length===2,
+    JSON.stringify(DTD.planta_transito_dias));
+chk('con el dia y los pallets de cada uno',
+    DTD.planta_transito_dias[0].dia==='2026-11-02' && DTD.planta_transito_dias[0].pallets===80);
+chk('y el numero suelto del ultimo cierre sigue estando',
+    DTD.planta_transito && DTD.planta_transito.pallets===9);
+chk('sin serie va en null, no en un arreglo vacio que parezca medido',
+    A.datos(BOD,{socios:[],nivel:{},mensual:[],ventana:{}},
+                {socios:[],nivel:{},mensual:[],ventana:{}},null,
+                {bodegas:[],transito:{medible:false}}).planta_transito_dias===null);
+
 console.log('\n' + ok + ' ok, ' + fail + ' fallas');
 process.exit(fail ? 1 : 0);

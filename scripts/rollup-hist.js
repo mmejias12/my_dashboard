@@ -22,6 +22,8 @@
 //  Uso:
 //    node scripts/rollup-hist.js 2026-10-01 2026-10-31 --comparar   (no escribe)
 //    node scripts/rollup-hist.js 2026-08-12 --explicar               (por qué difiere un día)
+//    node scripts/rollup-hist.js 2023-01-01 2026-11-03 --comparar     (resumen por mes)
+//    ... --comparar --dias                                            (y día por día)
 //    node scripts/rollup-hist.js 2026-10-01 2026-10-31
 //    node scripts/rollup-hist.js                       (ventana de 45 días → ayer)
 //
@@ -175,7 +177,23 @@ async function comparar(desde, hasta, opts) {
     } else vacios.push(f);
   }
 
-  return Object.assign({}, r, { fechas, iguales, distintos, nuevos, huecos, vacios });
+  // Días en que el cold trae MENOS que lo guardado. Son los ÚNICOS en que
+  // reconstruir desde el cold PIERDE dato, así que no pueden ir mezclados con
+  // los demás en una lista de 358 líneas: se separan y se nombran.
+  const alaBaja = distintos.filter(d => d.diferencias.some(x => x.dif < 0));
+
+  // Impacto por mes: es lo que hay que poder contarle al área antes de que vea
+  // un gráfico moverse.
+  const meses = {};
+  for (const d of distintos) {
+    const m = d.fecha.slice(0, 7);
+    const e = meses[m] || (meses[m] = { mes: m, dias: 0, conceptos: {} });
+    e.dias++;
+    for (const x of d.diferencias) e.conceptos[x.concepto] = (e.conceptos[x.concepto] || 0) + x.dif;
+  }
+
+  return Object.assign({}, r, { fechas, iguales, distintos, nuevos, huecos, vacios,
+                                alaBaja, meses: Object.keys(meses).sort().map(m => meses[m]) });
 }
 
 async function escribir(desde, hasta, opts) {
@@ -271,6 +289,7 @@ if (require.main === module) (async () => {
   const args = process.argv.slice(2);
   const soloComparar = args.includes('--comparar');
   const soloExplicar = args.includes('--explicar');
+  const verDias = args.includes('--dias');
   const libres = args.filter(a => !a.startsWith('--'));
   const hasta = esFecha(libres[1]) ? libres[1] : (esFecha(libres[0]) ? libres[0] : ayerCL());
   const desde = esFecha(libres[1]) ? libres[0]
@@ -330,7 +349,34 @@ if (require.main === module) (async () => {
       for (const d of r.distintos) for (const x of d.diferencias) suma[x.concepto] = (suma[x.concepto] || 0) + x.dif;
       console.log('\nSuma de las diferencias: ' + Object.keys(suma).map(c => c + ' ' + (suma[c] > 0 ? '+' : '') + n(suma[c])).join('  ·  '));
     }
-    for (const d of r.distintos) {
+
+    // Los días en que el cold trae MENOS van primero y aparte: son los únicos
+    // en que reconstruir pierde dato.
+    if (r.alaBaja.length) {
+      console.log('\n*** EL COLD TRAE MENOS en ' + r.alaBaja.length + ' día(s) · reconstruir ahí PIERDE dato:');
+      for (const d of r.alaBaja) for (const x of d.diferencias.filter(y => y.dif < 0))
+        console.log('    ' + d.fecha + '  ' + x.concepto.padEnd(16) + 'cold ' + n(x.nuevo).padStart(9) +
+                    '   guardado ' + n(x.guardado).padStart(9) + '   dif ' + n(x.dif));
+      console.log('    Revisar con --explicar y, si el origen todavía los tiene, rellenar');
+      console.log('    esos días con backfill-operaciones.js antes de reconstruir.');
+    }
+
+    // Tabla por mes: el impacto que hay que poder contar, sin leer 358 líneas.
+    if (r.meses.length > 1) {
+      const cols = [...new Set(r.meses.flatMap(m => Object.keys(m.conceptos)))].sort();
+      console.log('\nImpacto por mes' + (verDias ? '' : '   (--dias para ver día por día)'));
+      console.log('  mes       días  ' + cols.map(c => c.slice(0, 14).padStart(15)).join(''));
+      for (const m of r.meses) console.log('  ' + m.mes + '  ' + String(m.dias).padStart(4) + '  ' +
+        cols.map(c => (m.conceptos[c] === undefined ? '' : (m.conceptos[c] > 0 ? '+' : '') + n(m.conceptos[c])).padStart(15)).join(''));
+      const porAnio = {};
+      for (const m of r.meses) for (const c of Object.keys(m.conceptos))
+        (porAnio[m.mes.slice(0,4)] = porAnio[m.mes.slice(0,4)] || {})[c] = (porAnio[m.mes.slice(0,4)][c] || 0) + m.conceptos[c];
+      console.log('\n  por año');
+      for (const a of Object.keys(porAnio).sort()) console.log('  ' + a + '      ' +
+        Object.keys(porAnio[a]).sort().map(c => c + ' ' + (porAnio[a][c] > 0 ? '+' : '') + n(porAnio[a][c])).join('  ·  '));
+    }
+
+    if (verDias || r.meses.length <= 1) for (const d of r.distintos) {
       console.log('\n  ' + d.fecha);
       for (const x of d.diferencias) {
         console.log('    ' + x.concepto.padEnd(16) + 'cold ' + n(x.nuevo).padStart(9) +

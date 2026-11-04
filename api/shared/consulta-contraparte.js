@@ -154,19 +154,46 @@ async function porContraparte(concepto, entidad, win) {
   };
 }
 
-async function consultarContraparte({ concepto, entidad, meses, desde, hasta }, ctx) {
+// Arma la lista de entidades a consultar. Acepta un arreglo `entidades`, o un
+// `entidad` que puede traer VARIOS nombres separados por coma ("Walmart,
+// Cencosud, Tottus"). Devuelve nombres limpios y sin repetir.
+function listaEntidades(entidad, entidades) {
+  let arr = [];
+  if (Array.isArray(entidades)) arr = entidades;
+  else if (typeof entidades === 'string' && entidades.trim()) arr = entidades.split(',');
+  else if (typeof entidad === 'string') arr = entidad.split(',');
+  const vistos = new Set(), out = [];
+  for (const s of arr) {
+    const v = String(s || '').trim();
+    if (v && !vistos.has(v.toLowerCase())) { vistos.add(v.toLowerCase()); out.push(v); }
+  }
+  return out;
+}
+
+async function consultarContraparte({ concepto, entidad, entidades, meses, desde, hasta }, ctx) {
   const c = normConcepto(concepto);
   if (!c) throw new Error('concepto inválido: usa emisiones, retiros, transferencias o devoluciones');
-  if (!entidad || !String(entidad).trim()) throw new Error('falta la contraparte (entidad)');
+  const lista = listaEntidades(entidad, entidades);
+  if (!lista.length) throw new Error('falta la contraparte (entidad)');
   const win = { meses, desde, hasta };
+  const una = ent => (c === 'transferencias') ? porTransferencias(ent, win) : porContraparte(c, ent, win);
+
   try {
-    const out = (c === 'transferencias') ? await porTransferencias(entidad, win)
-                                         : await porContraparte(c, entidad, win);
-    if (ctx && ctx.log) ctx.log(`contraparte ${c} "${entidad}" ${out.desde_mes}..${out.hasta_mes}: ` +
-      (c === 'transferencias' ? `desp ${out.despachado} conf ${out.confirmado}` : `total ${out.total}`));
-    return out;
+    // Una sola entidad: respuesta igual que siempre (compatibilidad).
+    if (lista.length === 1) {
+      const out = await una(lista[0]);
+      if (ctx && ctx.log) ctx.log(`contraparte ${c} "${lista[0]}" ${out.desde_mes}..${out.hasta_mes}: ` +
+        (c === 'transferencias' ? `desp ${out.despachado} conf ${out.confirmado}` : `total ${out.total}`));
+      return out;
+    }
+    // Varias entidades: comparativa en UNA sola llamada (los índices ya están en
+    // memoria, así que son varias búsquedas baratas sobre el mismo blob).
+    const resultados = await Promise.all(lista.map(ent =>
+      una(ent).catch(e => ({ concepto: c, entidad: ent, encontrado: false, error: e.message }))));
+    if (ctx && ctx.log) ctx.log(`contraparte ${c} comparativa [${lista.join(' | ')}]`);
+    return { concepto: c, comparativa: true, entidades: lista, resultados };
   } catch (e) {
-    if (esNoExiste(e)) return { concepto: c, entidad, encontrado: false,
+    if (esNoExiste(e)) return { concepto: c, entidad: lista.join(', '), encontrado: false,
       mensaje: 'El índice aún no existe; corre el job "Datos diarios REDTEC OS" (Actions → Run workflow) para generarlo.' };
     throw e;
   }
@@ -184,16 +211,21 @@ const TOOL_SCHEMA = {
     '(dato exacto, con confirmaciones tardías), además de qué clientes le ' +
     'transfirieron. NO uses consultar_operacion para esto (se cuelga a rangos ' +
     'largos): esta herramienta ya tiene el dato agregado. Pasa el cliente/retail ' +
-    'en `entidad` (basta una parte del nombre, ej. "walmart"). Es dato operativo ' +
-    'de pallets, disponible para todos.',
+    'en `entidad` (basta una parte del nombre, ej. "walmart"). Para COMPARAR ' +
+    'VARIOS clientes/retails de una vez ("compara Walmart, Cencosud y Tottus"), ' +
+    'pásalos todos juntos separados por coma en `entidad` o como lista en ' +
+    '`entidades`: la respuesta trae `comparativa:true` y un `resultados[]` con ' +
+    'cada uno. NO los consultes uno por uno. Es dato operativo de pallets, ' +
+    'disponible para todos.',
   input_schema: {
     type: 'object',
     properties: {
-      concepto: { type: 'string', description: 'emisiones | retiros | transferencias | devoluciones' },
-      entidad:  { type: 'string', description: 'Cliente o retail (o parte del nombre), ej. "Walmart", "Cambiaso"' },
-      meses:    { type: 'integer', description: 'Cuántos meses hacia atrás (por defecto 12). Ignóralo si pasas desde/hasta.' },
-      desde:    { type: 'string', description: 'Opcional. Mes o fecha de inicio (YYYY-MM o YYYY-MM-DD).' },
-      hasta:    { type: 'string', description: 'Opcional. Mes o fecha de fin (YYYY-MM o YYYY-MM-DD).' }
+      concepto:  { type: 'string', description: 'emisiones | retiros | transferencias | devoluciones' },
+      entidad:   { type: 'string', description: 'Cliente o retail (o parte del nombre), ej. "Walmart". Para comparar varios, sepáralos con coma: "Walmart, Cencosud, Tottus".' },
+      entidades: { type: 'array', items: { type: 'string' }, description: 'Alternativa a `entidad` para comparar varios: lista de clientes/retails. Ej. ["Walmart","Cencosud"].' },
+      meses:     { type: 'integer', description: 'Cuántos meses hacia atrás (por defecto 12). Ignóralo si pasas desde/hasta.' },
+      desde:     { type: 'string', description: 'Opcional. Mes o fecha de inicio (YYYY-MM o YYYY-MM-DD).' },
+      hasta:     { type: 'string', description: 'Opcional. Mes o fecha de fin (YYYY-MM o YYYY-MM-DD).' }
     },
     required: ['concepto', 'entidad']
   }

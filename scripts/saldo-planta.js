@@ -734,8 +734,8 @@ async function main() {
     console.log('  planta por fecha de documento = planta por fecha de creacion + ' + mil(tra.pallets));
     if (tra.sinFecha) console.log('  ' + mil(tra.sinFecha) + ' linea(s) sin fecha de documento utilizable');
     if (tra.detalle && tra.detalle.length) {
-      console.log('  de donde sale y a donde va  (la bodega de destino, no el cliente:');
-      console.log('   el socio vive en la ubicacion y esa no viene en esta linea)');
+      console.log('  De donde sale y a donde va. La bodega de destino NO es el cliente:');
+      console.log('  el socio vive en la ubicacion, y la ubicacion no viene en esta linea.');
       for (const x of tra.detalle)
         console.log('     ' + String(x.desde || '—').padEnd(11) + '→ ' + String(x.hacia || '—').padEnd(11) +
                     mil(x.cantidad).padStart(9) + '   doc ' + (x.num == null ? x.doc : x.num) +

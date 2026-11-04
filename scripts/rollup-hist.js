@@ -84,19 +84,30 @@ async function construir(desde, hasta, opts) {
   let filas = 0, repetidas = 0;
   const vistos = new Set();   // nroPedido ya contado: el cold no deduplica entre días
 
-  for (const f of cold.rangoDias(desde, hasta)) {
-    const arr = await leerSuave(() => leerDia(container, f), 'no se pudo leer el cold de ' + f);
-    if (!arr) { faltantes.push(f); continue; }
-    conBlob.push(f);
-    const nuevas = [];
-    for (const o of arr) {
-      const id = String((o && o.nroPedido) || '');
-      if (id && vistos.has(id)) { repetidas++; continue; }
-      if (id) vistos.add(id);
-      nuevas.push(o);
+  // Lectura EN PARALELO por lotes, igual que cold.leerRango: tres años de
+  // historia leídos día a día en serie son miles de viajes de ida y vuelta.
+  // Pero el PROCESO es en orden de fecha a propósito: el dedupe es "gana el
+  // primero", así que procesar en orden de llegada haría que el resultado
+  // dependiera de qué blob contestó antes.
+  const LOTE = Math.max(1, Number(opts.lote) || 24);
+  const fechas = cold.rangoDias(desde, hasta);
+  for (let i = 0; i < fechas.length; i += LOTE) {
+    const grupo = fechas.slice(i, i + LOTE);
+    const leidos = await Promise.all(grupo.map(f =>
+      leerSuave(() => leerDia(container, f), 'no se pudo leer el cold de ' + f).then(arr => ({ f, arr }))));
+    for (const { f, arr } of leidos) {
+      if (!arr) { faltantes.push(f); continue; }
+      conBlob.push(f);
+      const nuevas = [];
+      for (const o of arr) {
+        const id = String((o && o.nroPedido) || '');
+        if (id && vistos.has(id)) { repetidas++; continue; }
+        if (id) vistos.add(id);
+        nuevas.push(o);
+      }
+      filas += nuevas.length;
+      mov.agregarPorDiaEn(nuevas, porDia);
     }
-    filas += nuevas.length;
-    mov.agregarPorDiaEn(nuevas, porDia);
   }
   return { porDia, conBlob, faltantes, filas, repetidas };
 }

@@ -1,17 +1,26 @@
 name: Datos diarios REDTEC OS
 
 # Mantiene frescas las bases del asistente cada madrugada, sin intervención:
-#   1) Backfill pallet  · ventana de 45 días (cubre confirmaciones tardías de
-#      transferencias, cuya ventana de gracia es de 40 días) hasta ayer.
-#   2) Backfill stock/pool · últimos días; idempotente, salta los ya válidos.
-#   3) Rollup histórico · regenera resumen/operaciones.json con los días nuevos,
-#      para que el asistente compare años/meses al instante.
+#   1) Operaciones del pool · Redlink → cold store (redtec-os-operaciones).
+#   2) Agregados diarios · cold store → hist/YYYY-MM-DD.json, sin preguntarle
+#      nada a nadie: el dato ya está en nuestro Blob.
+#   3) Backfill stock/pool · últimos días; idempotente, salta los ya válidos.
+#   4) Rollups · resumen/operaciones.json, contrapartes, diario y transferencias.
 #
-# Los tres escriben DIRECTO a Azure Blob (storage redtecos); NO tocan el repo.
+# Todos escriben DIRECTO a Azure Blob (storage redtecos); NO tocan el repo.
+#
+# OPS_ORIGEN SE DECLARA ACÁ A PROPÓSITO. Está cargado en las Application
+# Settings de la Static Web App, y el runner de Actions es OTRO entorno: sin
+# esta línea origenActivo() devuelve 'rdt' y los pasos que pasan por el
+# interruptor (hoy el rollup de transferencias) siguen leyendo del proveedor
+# que se da de baja, aunque el portal ya lea de Redlink.
 #
 # Secrets que deben existir en el repo (Settings → Secrets and variables → Actions):
-#   OS_STORAGE_CONN  · cadena de conexión del storage redtecos
-#   REDTEC_API_KEY   · llave de RDTOut (obligatoria para el stock)
+#   OS_STORAGE_CONN        · cadena de conexión del storage redtecos
+#   REDLINK_USER / _PASS / _CLIENT_SECRET · credenciales del portal (Keycloak)
+#   REDTEC_API_KEY         · llave de RDTOut; sólo la usa el paso de stock/pool,
+#                            que es la última dependencia del proveedor viejo
+#                            en esta corrida (pendiente: pasarlo a SAP)
 
 on:
   schedule:
@@ -56,6 +65,12 @@ jobs:
     env:
       OS_STORAGE_CONN: ${{ secrets.OS_STORAGE_CONN }}
       REDTEC_API_KEY: ${{ secrets.REDTEC_API_KEY }}
+      # El interruptor y las credenciales, para TODO el job: cualquier paso que
+      # pase por consultarOps lee de Redlink, igual que el portal.
+      OPS_ORIGEN: redlink
+      REDLINK_USER:          ${{ secrets.REDLINK_USER }}
+      REDLINK_PASS:          ${{ secrets.REDLINK_PASS }}
+      REDLINK_CLIENT_SECRET: ${{ secrets.REDLINK_CLIENT_SECRET }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -92,10 +107,12 @@ jobs:
           echo "opsDesde=${IN_DESDE:-$D45}" >> "$GITHUB_OUTPUT"
           echo "opsHasta=${IN_HASTA:-$AYER}" >> "$GITHUB_OUTPUT"
 
-      - name: 1) Backfill pallet (ventana 45 días → ayer)
-        if: ${{ inputs.solo_operaciones != true }}
-        run: node backfill/backfill.js ${{ steps.f.outputs.desde45 }} ${{ steps.f.outputs.ayer }}
-
+      # ANTES acá corría backfill/backfill.js, que pedía las MISMAS filas al API
+      # del proveedor (apirdt1) para armar los agregados. Ahora los agregados se
+      # derivan del cold store en el paso 2c, después de que el 2b lo llena
+      # desde Redlink: una sola fuente para toda la corrida. backfill.js sigue
+      # en el repo para la carga inicial histórica, y rollup-hist.js también
+      # puede hacerla sin el proveedor.
       - name: 2) Backfill stock / pool (últimos días → ayer)
         if: ${{ inputs.solo_operaciones != true }}
         run: node backfill/backfill-stock.js ${{ steps.f.outputs.desde10 }}
@@ -110,6 +127,15 @@ jobs:
           REDLINK_PASS:          ${{ secrets.REDLINK_PASS }}
           REDLINK_CLIENT_SECRET: ${{ secrets.REDLINK_CLIENT_SECRET }}
         run: node backfill/backfill-operaciones.js ${{ steps.f.outputs.opsDesde }} ${{ steps.f.outputs.opsHasta }}
+
+      # Agregados diarios DESDE EL COLD STORE que acaba de escribir el 2b: los
+      # dos almacenes se archivan por la misma clave de día (fechaRequerida) y
+      # el agregador es el mismo de siempre (movimientos.js), así que hist/ sale
+      # del dato que ya tenemos. VA DESPUÉS DEL 2b, no antes: si corriera primero
+      # agregaría el cold de ayer. Un día sin blob en el cold NO se escribe.
+      - name: 2c) Agregados diarios (cold → hist/)
+        if: ${{ inputs.solo_operaciones != true }}
+        run: node scripts/rollup-hist.js ${{ steps.f.outputs.desde45 }} ${{ steps.f.outputs.ayer }}
 
       - name: 3) Rollup histórico (resumen/operaciones.json)
         if: ${{ inputs.solo_operaciones != true }}
@@ -134,9 +160,11 @@ jobs:
         run: node scripts/rollup-diario.js ${{ steps.f.outputs.ayer }}
 
       # Índice de transferencias: despachado vs confirmado, etapas y el par
-      # cliente origen → retail destino. Lee RDTOut DIRECTO y no los blobs
-      # diarios: ésos se congelan a los 45 días y pierden las confirmaciones
-      # tardías (medido: 3.374 pallets sólo en Walmart a 12 meses).
+      # cliente origen → retail destino. Consulta el ORIGEN EN VIVO (hoy Redlink
+      # por OPS_ORIGEN) y no los blobs diarios: ésos se congelan a los 45 días y
+      # pierden las confirmaciones tardías (medido: 3.374 pallets sólo en Walmart
+      # a 12 meses). Era el otro paso que seguía leyendo del proveedor viejo
+      # porque el runner no tenía el interruptor.
       - name: 3d) Rollup de transferencias (resumen/transferencias.json)
         if: ${{ inputs.solo_operaciones != true }}
         run: node scripts/rollup-transferencias.js

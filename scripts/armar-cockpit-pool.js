@@ -359,6 +359,41 @@ function mesesComunes(series) {
   return out;
 }
 
+/** LA SERIE QUE ALIMENTA EL CALENDARIO: las tres patas juntas, o una sola.
+ *
+ *  Con una pata elegida el calendario deja de ser el total del pool y pasa a
+ *  ser el comportamiento de esa bodega, que es lo que se quiere mirar cuando
+ *  la pregunta es "¿cómo se movió retail en octubre?". Y con una sola pata se
+ *  abren SUS meses: clientes y retail tienen desde enero, la planta desde
+ *  octubre, y el total solo los meses en que las tres coinciden. */
+function serieDeCalendario(todas, pata) {
+  const ss = (Array.isArray(todas) ? todas : []).filter(Boolean);
+  if (!pata) return ss;
+  const una = ss.filter(x => x && String(x.cod) === String(pata));
+  return una.length ? una : ss;
+}
+
+/*  Los chips de mes se arman en UN solo lugar: el servidor los dibuja con el
+ *  desglose y el navegador los rehace al cambiar de pata. Dos copias del
+ *  mismo html terminan con un chip marcado de un lado y de otro no. */
+function chipsDeMesHtml(meses, mes) {
+  const ms = (Array.isArray(meses) ? meses : []).filter(Boolean);
+  if (ms.length < 2) return '';
+  return '<div class="cmeses">' + ms.map(m =>
+    '<button type="button" class="chip' + (m === mes ? ' on' : '') +
+    '" data-pm="' + esc(m) + '">' + esc(etiquetaDeMes(m) || m) + '</button>').join('') + '</div>';
+}
+
+/*  EL CABEZAL DEL CALENDARIO: qué pata se está mirando y en qué mes.
+ *
+ *  El navegador lo rehace entero cada vez que se cambia de pata, asi que el
+ *  rotulo y los chips salen de la misma funcion que usa el servidor. */
+function cabezalDeCalHtml(meses, mes, nom) {
+  const n = String(nom == null ? '' : nom).trim();
+  return (n ? '<span class="cpat">Solo <b>' + esc(n) + '</b></span>' : '') +
+         chipsDeMesHtml(meses, mes);
+}
+
 /*  QUE MUESTRA CADA CIFRA Y COMO SE CALCULA.
  *
  *  "¿Qué estoy viendo acá?" es la primera pregunta frente a cualquier tarjeta
@@ -442,18 +477,32 @@ function cierreDeBodegaEn(bodega, dia) {
  *  media mas de una pantalla y para comparar dos estaciones habia que
  *  recordar el numero mientras se bajaba. En grilla entran las nueve de una
  *  mirada, que es como se usa: "donde esta el stock hoy". */
-function grillaBodegasHtml(filas, total) {
+function grillaBodegasHtml(filas, total, elegibles, sel) {
   const fs = (Array.isArray(filas) ? filas : []).filter(Boolean);
   if (!fs.length) return '';
   const H = ['<div class="bgr">'];
-  for (const f of fs)
-    H.push('<div class="bg"' + (f.cod ? ' data-cod="' + esc(f.cod) + '"' : '') + '>' +
+  for (const f of fs) {
+    /*  ELEGIBLE = boton de verdad. Una celda que cambia el calendario de
+     *  abajo tiene que poder tocarse con el teclado y anunciarse como lo que
+     *  es; un div con onclick no hace ninguna de las dos. */
+    const et = elegibles && f.cod ? 'button' : 'div';
+    H.push('<' + et + (et === 'button' ? ' type="button"' : '') +
+           ' class="bg' + (elegibles && f.cod ? ' eleg' : '') +
+           (sel && f.cod === sel ? ' sel' : '') + '"' +
+           (f.cod ? ' data-cod="' + esc(f.cod) + '"' : '') +
+           (elegibles && f.cod ? ' data-pata="' + esc(f.cod) + '" data-hoy="' + (Number(f.v) || 0) + '"' +
+             ' aria-pressed="' + (sel && f.cod === sel ? 'true' : 'false') + '"' : '') + '>' +
            '<span class="bgn">' + esc(f.a) + '</span>' +
            '<span class="bgc">' + esc(f.b || '') + '</span>' +
-           '<b>' + (f.v == null ? '—' : mil(f.v)) + '</b></div>');
+           '<b>' + (f.v == null ? '—' : mil(f.v)) + '</b></' + et + '>');
+  }
   H.push('</div>');
   if (total != null)
-    H.push('<div class="bgt"><span>' + esc((total && total.a) || 'Total') + '</span>' +
+    /*  El total lleva el saldo de HOY del cajon completo: al soltar la pata
+     *  elegida hay que volver a el, y la celda que lo tenia ya se deselecciono. */
+    H.push('<div class="bgt"' +
+           (elegibles ? ' data-hoy="' + (Number(total && total.v) || 0) + '"' : '') +
+           '><span>' + esc((total && total.a) || 'Total') + '</span>' +
            '<b>' + mil((total && total.v) || 0) + '</b></div>');
   return H.join('');
 }
@@ -462,9 +511,14 @@ function grillaBodegasHtml(filas, total) {
  *  la cifra grande es de ese dia y cual es el saldo de hoy. Sin esto, elegir
  *  el 29 de octubre deja la tarjeta mostrando 15.045 bajo un titulo que se
  *  lee como el stock de ahora. */
-function notaDeDia(dia, hoy, ultimo) {
+function notaDeDia(dia, hoy, ultimo, nom) {
   if (!dia || !ultimo || dia === ultimo) return '';
-  return 'Cierre del ' + dia + '. Hoy SAP tiene ' + mil(Number(hoy) || 0) + '.';
+  /*  CON UNA PATA ELEGIDA la frase tiene que decir de quien habla: el numero
+   *  grande de arriba es el pool y este es el de la pata, asi que "hoy SAP
+   *  tiene 579.030" sin el rotulo se lee como si el pool fueran 579 mil. */
+  const n = String(nom == null ? '' : nom).trim();
+  return (n ? n + ' · ' : '') + 'Cierre del ' + dia + '. Hoy SAP tiene ' +
+         mil(Number(hoy) || 0) + '.';
 }
 
 /*  EL CALENDARIO DIBUJADO. Cada celda lleva sus numeros en atributos: asi el
@@ -480,6 +534,8 @@ function calendarioHtml(cal, o) {
   const H = ['<div class="calen" data-tope="' + (Number(tope) || 0) + '"' +
              ' data-hoy="' + (Number(op.hoy) || 0) + '"' +
              ' data-serie="' + esc(op.serie || 'planta') + '"' +
+             ' data-pata="' + esc(op.pata || '') + '"' +
+             ' data-nom="' + esc(op.nom || '') + '"' +
              ' data-ult="' + esc(op.ultimo || '') + '">',
              '<div class="cz"><b>' + esc(etiquetaDeMes(cal.mes) || cal.mes) + '</b>' +
              '<span>clic en un día</span></div>',
@@ -502,7 +558,7 @@ function calendarioHtml(cal, o) {
   H.push('</div>');
   const celSel = [].concat.apply([], cal.semanas).filter(x => x && x.dia === sel)[0] || null;
   H.push('<div class="cpie">' + pieDeDia(celSel) + '</div>');
-  H.push('<div class="cdia">' + esc(notaDeDia(sel, op.hoy, op.ultimo)) + '</div>');
+  H.push('<div class="cdia">' + esc(notaDeDia(sel, op.hoy, op.ultimo, op.nom)) + '</div>');
   H.push('</div>');
   return H.join('');
 }
@@ -537,12 +593,39 @@ function pintarDia(card, dia, serie) {
   // Vacio es "ese dia no se puede medir", que NO es cero pallets en el aire.
   const tp = crudo === '' || crudo == null ? null : Number(crudo);
 
+  /*  LAS ESTACIONES PRIMERO, que es la pregunta que trae a alguien a hacer
+   *  clic en un dia: no "cuanto habia" sino "donde estaba". Van antes que la
+   *  cifra grande porque con una pata elegida la cifra sale de esta suma. */
+  const celdasBod = card.querySelectorAll('.bg[data-cod]');
+  let sumaG = null;
+  if (celdasBod.length && Array.isArray(serie)) {
+    sumaG = 0;
+    for (let i = 0; i < celdasBod.length; i++) {
+      const cod = celdasBod[i].getAttribute('data-cod');
+      const b = serie.filter(x => x && String(x.cod) === cod)[0];
+      const v = cierreDeBodegaEn(b, dia);
+      const num = celdasBod[i].querySelector('b');
+      if (num) num.textContent = v == null ? '—' : mil(v);
+      sumaG += Number(v) || 0;
+    }
+    const pieG = card.querySelector('.bgt b');
+    if (pieG) pieG.textContent = mil(sumaG);
+  }
+  /*  LA CIFRA GRANDE SIGUE SIENDO LA DEL ENCABEZADO.
+   *
+   *  Con una pata elegida el calendario muestra SOLO esa pata, asi que su
+   *  cierre no es el del cajon: poner ahi los 17 mil de retail bajo el titulo
+   *  "Reparto del pool" seria decir que el pool son 17 mil. La suma de la
+   *  grilla —las tres patas a ese dia— si es el total, y es la que va. Sin
+   *  pata elegida las dos coinciden, porque el calendario es esa misma suma. */
+  const pata = cal.getAttribute('data-pata') || '';
+  const grande = pata && sumaG != null ? sumaG : cie;
   const kv = card.querySelector('.kv');
-  if (kv) kv.innerHTML = mil(cie) + '<small>pallets</small>';
+  if (kv) kv.innerHTML = mil(grande) + '<small>pallets</small>';
   const barra = card.querySelector('.bullet .fill');
   const tope = Number(cal.getAttribute('data-tope')) || 0;
   if (barra)
-    barra.style.width = (tope > 0 ? Math.max(0, Math.min(100, cie / tope * 100)) : 0).toFixed(2) + '%';
+    barra.style.width = (tope > 0 ? Math.max(0, Math.min(100, grande / tope * 100)) : 0).toFixed(2) + '%';
 
   const nums = card.querySelectorAll('table.trio td.num');
   if (nums.length === 3) {
@@ -550,29 +633,14 @@ function pintarDia(card, dia, serie) {
     nums[1].textContent = tp == null ? '—' : mil(tp);
     nums[2].textContent = tp == null ? '—' : mil(cie + tp);
   }
-  /*  Y LAS NUEVE ESTACIONES, que es la pregunta que trae a alguien a hacer
-   *  clic en un dia: no "cuanto habia" sino "donde estaba". */
-  const celdasBod = card.querySelectorAll('.bg[data-cod]');
-  if (celdasBod.length && Array.isArray(serie)) {
-    let suma = 0;
-    for (let i = 0; i < celdasBod.length; i++) {
-      const cod = celdasBod[i].getAttribute('data-cod');
-      const b = serie.filter(x => x && String(x.cod) === cod)[0];
-      const v = cierreDeBodegaEn(b, dia);
-      const num = celdasBod[i].querySelector('b');
-      if (num) num.textContent = v == null ? '—' : mil(v);
-      suma += Number(v) || 0;
-    }
-    const pieG = card.querySelector('.bgt b');
-    if (pieG) pieG.textContent = mil(suma);
-  }
   const pie = cal.querySelector('.cpie');
   if (pie) pie.innerHTML = pieDeDia({ dia: dia, num: Number(String(dia).slice(8)), cierre: cie,
                                       entradas: ent, salidas: sld, apertura: ape });
   const nota = cal.querySelector('.cdia');
   if (nota)
     nota.textContent = notaDeDia(dia, Number(cal.getAttribute('data-hoy')) || 0,
-                                 cal.getAttribute('data-ult') || '');
+                                 cal.getAttribute('data-ult') || '',
+                                 cal.getAttribute('data-nom') || '');
   return true;
 }
 
@@ -588,17 +656,82 @@ function pintarMes(cont, mes, serie, traDias, hoy, ultimo) {
   if (!cont || !cont.querySelector) return false;
   const viejo = cont.querySelector('.calen');
   if (!viejo) return false;
-  const nd = nivelDiarioDePlanta(Array.isArray(serie) ? serie : []);
+  /*  QUE PATA ESTA PUESTA lo dice el calendario, no el que llama: cambiar de
+   *  mes no tiene por que soltar la pata elegida. Y al reves, rehacer el
+   *  calendario sin copiarle data-serie dejaba el cajon del pool repintando
+   *  con las nueve estaciones de la planta, o sea tres guiones. */
+  const pata = viejo.getAttribute('data-pata') || '';
+  const nd = nivelDiarioDePlanta(serieDeCalendario(Array.isArray(serie) ? serie : [], pata || null));
   const cal = calendarioDeMes(nd, mes);
   if (!cal) return false;
   const cels = [].concat.apply([], cal.semanas).filter(Boolean);
   const sel = cels.length ? cels[cels.length - 1].dia : null;
   const tope = Number(viejo.getAttribute('data-tope')) || 0;
-  viejo.outerHTML = calendarioHtml(cal, { sel, tope, tra: traDias, hoy, ultimo });
+  /*  Con pata puesta el "hoy" que importa es el de ESA pata, y el calendario
+   *  que se esta reemplazando ya lo trae escrito. */
+  const hoy2 = pata ? (Number(viejo.getAttribute('data-hoy')) || 0) : hoy;
+  viejo.outerHTML = calendarioHtml(cal, { sel, tope, tra: traDias, hoy: hoy2, ultimo, pata,
+                                          nom: viejo.getAttribute('data-nom') || '',
+                                          serie: viejo.getAttribute('data-serie') || 'planta' });
   const chips = cont.querySelectorAll('[data-pm]');
   for (let i = 0; i < chips.length; i++)
     chips[i].classList.toggle('on', chips[i].getAttribute('data-pm') === mes);
+  /*  La grilla se repinta con la serie COMPLETA: es el selector de pata, asi
+   *  que tiene que seguir mostrando las tres y no solo la elegida. */
   return pintarDia(cont, sel, serie);
+}
+
+/*  ELEGIR UNA PATA: el calendario de abajo pasa a ser el de esa bodega.
+ *
+ *  CORRE SOLO EN EL NAVEGADOR —se publica con toString()—. Volver a tocar la
+ *  pata elegida devuelve el total: es el mismo boton, asi que no hace falta
+ *  un "quitar filtro" aparte que haya que descubrir.
+ *
+ *  Los meses se rehacen porque son OTROS: clientes y retail tienen serie
+ *  desde enero y la planta desde octubre, mientras el total solo puede
+ *  ofrecer los meses en que las tres coinciden. Dejar los chips del total
+ *  mostraria enero para una pata que si tiene enero, pero escondido. */
+function pintarPata(cont, cod, todas, traDias) {
+  if (!cont || !cont.querySelector) return false;
+  const viejo = cont.querySelector('.calen');
+  const caja = cont.querySelector('.cmesesw');
+  if (!viejo || !caja) return false;
+  const act = viejo.getAttribute('data-pata') || '';
+  const pata = cod && String(cod) !== act ? String(cod) : '';
+  const ss = serieDeCalendario(Array.isArray(todas) ? todas : [], pata || null);
+  const meses = mesesComunes(ss);
+  if (!meses.length) return false;
+  const mes = meses[meses.length - 1];
+  const cal = calendarioDeMes(nivelDiarioDePlanta(ss), mes);
+  if (!cal) return false;
+  /*  La celda elegida queda marcada y las otras se sueltan. De ahi salen
+   *  tambien el rotulo y el saldo de hoy de esa pata, que ya vienen escritos
+   *  en la celda: no hay una segunda copia del dato. */
+  const cels = cont.querySelectorAll('.bg[data-pata]');
+  let nom = '', hoy = null;
+  for (let i = 0; i < cels.length; i++) {
+    const on = pata !== '' && cels[i].getAttribute('data-pata') === pata;
+    cels[i].classList.toggle('sel', on);
+    cels[i].setAttribute('aria-pressed', on ? 'true' : 'false');
+    if (!on) continue;
+    hoy = Number(cels[i].getAttribute('data-hoy')) || 0;
+    const r = cels[i].querySelector('.bgn');
+    nom = r ? r.textContent : pata;
+  }
+  if (hoy == null) {
+    const pie = cont.querySelector('.bgt');
+    hoy = pie ? Number(pie.getAttribute('data-hoy')) || 0 : 0;
+  }
+  const dias = [].concat.apply([], cal.semanas).filter(Boolean);
+  const sel = dias.length ? dias[dias.length - 1].dia : null;
+  /*  Sin pata no hay celda marcada, asi que `nom` quedo vacio y el rotulo se
+   *  va solo: no hace falta borrarlo aparte. */
+  caja.innerHTML = cabezalDeCalHtml(meses, mes, nom);
+  viejo.outerHTML = calendarioHtml(cal, { sel, tra: traDias, hoy, pata, nom,
+                                          tope: Number(viejo.getAttribute('data-tope')) || 0,
+                                          ultimo: viejo.getAttribute('data-ult') || '',
+                                          serie: viejo.getAttribute('data-serie') || 'planta' });
+  return pintarDia(cont, sel, todas);
 }
 
 /*  LA MATRIZ PLANTA x ETAPA.
@@ -1203,6 +1336,20 @@ table.desg.ref tbody td{opacity:.8}
 .bgt{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:9px;
   padding-top:8px;border-top:1.5px solid var(--line2);font:600 12px Inter;color:var(--ink2)}
 .bgt b{font:700 16px "JetBrains Mono",ui-monospace,monospace;color:var(--ink)}
+/*  La celda ELEGIBLE se tiene que notar tocable, y la elegida quedarse
+    marcada: si no, el calendario de abajo cambia y nada dice por que. */
+.bg.eleg{cursor:pointer;text-align:left;font:inherit;color:inherit;width:100%}
+/*  El hover NO pisa a la elegida: ".bg.eleg:hover" tiene mas peso que
+    ".bg.sel", asi que sin el :not() pasar el mouse por encima de la celda
+    elegida la dejaba viendose como si no lo estuviera —y justo despues de
+    hacerle clic el mouse esta encima. */
+.bg.eleg:hover:not(.sel){border-color:var(--line2);background:var(--card)}
+.bg.eleg:focus-visible{outline:2px solid var(--pla);outline-offset:2px}
+.bg.sel{border-color:var(--pla);background:color-mix(in srgb,var(--pla) 14%,var(--card2))}
+.cmesesw{display:flex;align-items:baseline;flex-wrap:wrap;gap:0 10px}
+.cpat{display:inline-flex;align-items:baseline;gap:4px;margin:6px 0 2px;
+  font:600 11px Inter;color:var(--ink2)}
+.cpat b{font:700 11px Inter;color:var(--ink)}
 /*  La (i) se asoma con el mouse y con el teclado. El globo va ANCLADO A LA
     DERECHA porque la tarjeta recorta lo que se sale (.card lleva
     overflow:hidden) y asi queda siempre adentro. */
@@ -1605,9 +1752,15 @@ function composiciones(datos, bodegas) {
   C.pool.calSel = null;
   C.pool.calHoy = Number(d.pool) || 0;
   C.pool.calUlt = String(d.generado || '').slice(0, 10) || null;
+  /*  LAS TRES PATAS SON ELEGIBLES: clic en una y el calendario de abajo pasa
+   *  a ser el de esa bodega, con SUS meses. El total arranca sin pata. */
+  C.pool.patas = true;
+  C.pool.pata = null;
+  C.pool.pataNom = '';
   C.pool.infoCal = 'Solo los meses en que las tres patas tienen serie diaria: clientes y retail ' +
     'llegan hasta el último mes cerrado y la planta arranca en octubre. Elegir un día cambia la ' +
-    'cifra de arriba y las tres patas al cierre de ESE día.';
+    'cifra de arriba y las tres patas al cierre de ESE día. Un clic en Clientes, Retail o Planta ' +
+    'REDTEC deja el calendario con esa pata sola y abre sus propios meses; otro clic vuelve al total.';
 
   /*  La serie cruda por codigo: bodegasDelCockpit resume los dias en un numero
    *  —cuantos hay— y aca hacen falta los dias mismos para la mini-serie. */
@@ -1840,7 +1993,7 @@ function desgloseHtml(c) {
   if (c.intro) H.push('<p class="mut" style="margin:10px 0 0;max-width:62ch">' + esc(c.intro) + '</p>');
   if (c.filas.length && c.grilla) {
     H.push('<h5>Se compone de' + infoHtml(c.infoCompone) + '</h5>' +
-           grillaBodegasHtml(c.filas, c.total));
+           grillaBodegasHtml(c.filas, c.total, !!c.patas, c.pata || null));
   } else if (c.filas.length) {
     H.push('<h5>Se compone de</h5><table class="desg">');
     H.push('<tbody>' + c.filas.map(fila).join('') + '</tbody>');
@@ -1880,12 +2033,10 @@ function desgloseHtml(c) {
    *  que se viene a buscar—; esto es "como se llego", y se mira despues. */
   if (c.cal) {
     H.push('<h5>Cierre día por día' + infoHtml(c.infoCal) + '</h5>');
-    if (c.meses && c.meses.length > 1)
-      H.push('<div class="cmeses">' + c.meses.map(m =>
-        '<button type="button" class="chip' + (m === c.mes ? ' on' : '') +
-        '" data-pm="' + esc(m) + '">' + esc(etiquetaDeMes(m) || m) + '</button>').join('') + '</div>');
+    H.push('<div class="cmesesw">' + cabezalDeCalHtml(c.meses, c.mes, c.pataNom || '') + '</div>');
     H.push(calendarioHtml(c.cal, { sel: c.calSel, tope: (c.total && c.total.v) || c.calHoy,
                                    tra: c.calTra, hoy: c.calHoy, ultimo: c.calUlt,
+                                   pata: c.pata || '', nom: c.pataNom || '',
                                    serie: c.serie || 'planta' }));
   }
   return H.join('');
@@ -2190,9 +2341,10 @@ function script(serie, mes0, desg, aper, datos) {
                etapaDeBodega, plantaDeBodega, saludDeBodega, bodegasDelCockpit,
                matrizPlantaEtapa, matrizHtml, filaCartera, listaHtml, chipEstado,
                titular, contarSalud, nivelDiarioDePlanta, ultimaSemana,
-               diasDeArreglo, serieDelPool, mesesComunes,
+               diasDeArreglo, serieDelPool, mesesComunes, serieDeCalendario,
+               chipsDeMesHtml, cabezalDeCalHtml,
                diaDeSemana, mesDelCalendario, calendarioDeMes, filasDelDia, pieDeDia,
-               notaDeDia, calendarioHtml, pintarDia, pintarMes,
+               notaDeDia, calendarioHtml, pintarDia, pintarMes, pintarPata,
                cierreDeBodegaEn, grillaBodegasHtml, infoHtml, queEs,
                serieDelPeriodo, tarjetas, tarjetaHtml];
   const cuerpo = 'var MESES = ' + jsonSeguro(MESES) + ';\n' +
@@ -2394,13 +2546,22 @@ function script(serie, mes0, desg, aper, datos) {
     '      }',
     '      var cd = el.closest(".cd[data-dia]");',
     '      if (cd) { pintarDia($("#dbody"), cd.getAttribute("data-dia"), serieDe(cd)); return true; }',
+    // La celda de la grilla elige la pata y va ANTES del [data-cod] que lleva
+    // la misma celda: si no, CLIENTES se tomaria por un codigo de bodega y
+    // abriria un cajon que no existe.
+    '      var bp = el.closest(".bg[data-pata]");',
+    // Sin transito: es un dato de la planta y el calendario del pool no lo
+    // muestra, asi que inyectarlo al elegir una pata lo haria aparecer solo
+    // despues del clic.
+    '      if (bp) { pintarPata($("#dbody"), bp.getAttribute("data-pata"), serieDe(bp), null);',
+    '               return true; }',
     // La (i) vive DENTRO de la tarjeta, que es un [data-kpi]: sin esto, pasar
     // a leerla con el teclado y apretar Enter abriria el cajon encima.
     '      if (el.closest(".info")) return true;',
     '      var pm = el.closest("[data-pm]");',
     '      if (pm) { var g = desgDe(pm);',
     '                pintarMes($("#dbody"), pm.getAttribute("data-pm"), serieDe(pm),',
-    '                          DAT.planta_transito_dias, g && g.calHoy, g && g.calUlt);',
+    '                          g && g.calTra, g && g.calHoy, g && g.calUlt);',
     '                return true; }',
     // El chip de mes vive DENTRO del cajon: va primero, si no lo atrapa el
     // [data-cod] de la fila que lo abrio y el cajon se redibuja en su mes.
@@ -2484,8 +2645,9 @@ module.exports = { ETAPAS, GLIFO, ORDEN_SALUD, HITOS, CSS,
                    mesDeApertura, mesesDeBodega, ultimaSemana, miniSemana, miniNivel,
                    nivelDiarioDePlanta, diaDeSemana, mesDelCalendario, calendarioDeMes,
                    filasDelDia, pieDeDia, notaDeDia, calendarioHtml, pintarDia, pintarMes,
-                   cierreDeBodegaEn, grillaBodegasHtml, infoHtml, queEs, QUE_ES, DIA_CORTO,
-                   diasDeArreglo, serieDelPool, mesesComunes,
+                   pintarPata, cierreDeBodegaEn, grillaBodegasHtml, infoHtml, queEs, QUE_ES,
+                   DIA_CORTO, diasDeArreglo, serieDelPool, mesesComunes, serieDeCalendario,
+                   chipsDeMesHtml, cabezalDeCalHtml,
                    titular, tarjetas, decisiones, diasHasta, hitos,
                    desglose, composiciones, desgloseHtml, porRecorrido,
                    recortar, chipEstado, tarjetaHtml, matrizHtml, filaCartera, listaHtml,

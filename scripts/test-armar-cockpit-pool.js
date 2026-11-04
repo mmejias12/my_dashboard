@@ -1450,5 +1450,118 @@ chk('y publica la serie del pool armada despues de DAT',
 chk('con la serie de planta a cuestas, que DAT no trae',
     /serieDelPool\(Object\.assign\(\{\}, DAT, \{ planta_dias: PD \}\)\)/.test(JSP), '');
 
+// ============================================================
+// ELEGIR UNA PATA: el calendario de abajo pasa a ser el de esa bodega
+// ============================================================
+chk('sin pata, el calendario es el de las tres',
+    A.serieDeCalendario(SP,null).map(x=>x.cod).join(',')==='CLIENTES,RETAIL,PLANTA',
+    A.serieDeCalendario(SP,null).map(x=>x.cod).join(','));
+chk('con pata, solo esa',
+    A.serieDeCalendario(SP,'RETAIL').map(x=>x.cod).join(',')==='RETAIL',
+    A.serieDeCalendario(SP,'RETAIL').map(x=>x.cod).join(','));
+// UNA PATA QUE NO ESTA NO DEJA EL CALENDARIO EN BLANCO: si el codigo no
+// existe —un data-pata viejo, un cajon de otra cifra— vuelve al total, que
+// es un calendario de verdad, en vez de una grilla vacia sin explicacion
+chk('una pata que no existe vuelve al total',
+    A.serieDeCalendario(SP,'NOEXISTE').length===3, '');
+chk('sin series no revienta',
+    A.serieDeCalendario(null,'RETAIL').length===0 && A.serieDeCalendario(null,null).length===0);
+// Y LOS MESES SON OTROS: retail tiene octubre y clientes septiembre y
+// octubre, mientras el total solo puede ofrecer octubre
+chk('con pata se abren SUS meses, no los comunes',
+    A.mesesComunes(A.serieDeCalendario(SP,'CLIENTES')).join(',')==='2026-09,2026-10',
+    A.mesesComunes(A.serieDeCalendario(SP,'CLIENTES')).join(','));
+
+// UN SOLO MES NO LLEVA CHIPS: no hay nada que elegir y la fila de un chip
+// solo se lee como si faltaran los otros
+chk('con un mes no hay chips', A.chipsDeMesHtml(['2026-10'],'2026-10')==='',
+    A.chipsDeMesHtml(['2026-10'],'2026-10'));
+chk('sin meses tampoco', A.chipsDeMesHtml([],null)==='' && A.chipsDeMesHtml(null,null)==='');
+const CHP=A.chipsDeMesHtml(['2026-09','2026-10'],'2026-10');
+chk('marca el mes activo', (CHP.match(/class="chip on"/g)||[]).length===1, CHP);
+chk('y cada chip lleva su mes', /data-pm="2026-09"/.test(CHP) && /data-pm="2026-10"/.test(CHP), CHP);
+
+chk('el cabezal sin pata son solo los chips',
+    A.cabezalDeCalHtml(['2026-09','2026-10'],'2026-10','')===CHP, A.cabezalDeCalHtml(['2026-09','2026-10'],'2026-10',''));
+const CABP=A.cabezalDeCalHtml(['2026-09','2026-10'],'2026-10','Retail');
+chk('con pata dice cual se esta mirando',
+    /<span class="cpat">Solo <b>Retail<\/b><\/span>/.test(CABP), CABP);
+chk('y los chips siguen ahi', CABP.indexOf(CHP)>0, CABP);
+// con un solo mes queda el rotulo solo: sin el, elegir retail no se nota
+chk('con un mes queda el rotulo solo',
+    A.cabezalDeCalHtml(['2026-10'],'2026-10','Retail')==='<span class="cpat">Solo <b>Retail</b></span>',
+    A.cabezalDeCalHtml(['2026-10'],'2026-10','Retail'));
+chk('el nombre se escapa', /&lt;b&gt;/.test(A.cabezalDeCalHtml(['2026-10'],'2026-10','<b>')),
+    A.cabezalDeCalHtml(['2026-10'],'2026-10','<b>'));
+
+const HPOO=A.desgloseHtml(CPO.pool);
+chk('el cajon del pool declara sus patas elegibles', CPO.pool.patas===true, String(CPO.pool.patas));
+chk('y arranca sin ninguna elegida', CPO.pool.pata===null && CPO.pool.pataNom==='', '');
+// BOTON DE VERDAD, no un div con onclick: una celda que cambia el calendario
+// de abajo tiene que poder tocarse con el teclado y anunciar si esta puesta
+chk('las tres patas son botones',
+    (HPOO.match(/<button type="button" class="bg eleg"/g)||[]).length===3,
+    String((HPOO.match(/<button type="button" class="bg eleg"/g)||[]).length));
+chk('cada una lleva su codigo de pata',
+    /data-pata="CLIENTES"/.test(HPOO) && /data-pata="RETAIL"/.test(HPOO) &&
+    /data-pata="PLANTA"/.test(HPOO), '');
+chk('y se anuncia como no puesta',
+    (HPOO.match(/aria-pressed="false"/g)||[]).length>=3, '');
+// EL SALDO DE HOY DE CADA PATA VIAJA EN LA CELDA: al elegirla, el pie del
+// calendario dice "hoy SAP tiene", y ese numero es de la pata, no del pool
+const cliHoy2=CPO.pool.filas.filter(f=>f.cod==='CLIENTES')[0].v;
+chk('cada celda trae el saldo de hoy de su pata',
+    HPOO.indexOf('data-pata="CLIENTES" data-hoy="'+cliHoy2+'"')>0,
+    (HPOO.match(/data-pata="CLIENTES" data-hoy="[^"]*"/)||['(no esta)'])[0]);
+// Y EL TOTAL TAMBIEN: al soltar la pata hay que volver al "hoy" del pool, y
+// la celda que lo tenia ya quedo deselecionada
+chk('el pie de la grilla trae el saldo de hoy del pool',
+    HPOO.indexOf('<div class="bgt" data-hoy="'+CPO.pool.total.v+'"')>0,
+    (HPOO.match(/<div class="bgt"[^>]*>/)||['(no esta)'])[0]);
+// LA GRILLA DE PLANTA NO ES ELEGIBLE: sus nueve estaciones no tienen serie
+// diaria propia publicada en el cajon, asi que un clic no tendria nada que
+// mostrar
+const HPLL=A.desgloseHtml(A.composiciones(D,BS).planta);
+chk('la grilla de planta no es elegible',
+    HPLL.indexOf('bg eleg')<0 && HPLL.indexOf('data-pata=')===HPLL.indexOf('data-pata=""'), '');
+chk('el calendario arranca sin pata', /<div class="calen"[^>]*data-pata=""/.test(HPOO),
+    (HPOO.match(/<div class="calen"[^>]*>/)||['(no esta)'])[0]);
+chk('y el cabezal va en su propia caja, que el navegador rehace',
+    /<div class="cmesesw">/.test(HPOO), '');
+
+chk('el navegador tiene con que elegir la pata',
+    JSP.indexOf('function pintarPata')>0 && JSP.indexOf('function serieDeCalendario')>0 &&
+    JSP.indexOf('function cabezalDeCalHtml')>0, '');
+// EL ORDEN IMPORTA: la celda lleva data-cod Y data-pata, y data-cod abre el
+// cajon de una bodega. CLIENTES no es una bodega del cockpit, asi que si el
+// [data-cod] gana el clic abre un cajon que no existe
+chk('la pata se atrapa antes que el codigo de bodega',
+    JSP.indexOf('.bg[data-pata]') > 0 &&
+    JSP.indexOf('.bg[data-pata]') < JSP.indexOf('el.closest("[data-cod]")'),
+    'pata@'+JSP.indexOf('.bg[data-pata]')+' cod@'+JSP.indexOf('el.closest("[data-cod]")'));
+// EL TRANSITO SALE DEL CAJON, no de los datos a secas: es un dato de planta y
+// el calendario del pool no lo muestra, asi que inyectarlo al cambiar de mes
+// lo haria aparecer solo despues del clic
+chk('el mes se repinta con el transito del cajon que esta abierto',
+    JSP.indexOf('g && g.calTra')>0 && JSP.indexOf('DAT.planta_transito_dias')<0, '');
+chk('y el cajon de planta lo lleva', Array.isArray(A.composiciones(D,BS).planta.calTra), '');
+chk('el del pool no', !A.composiciones(D,BS).pool.calTra, '');
+
+// LA NOTA DEL DIA DICE DE QUE PATA HABLA: el numero grande de arriba es el
+// pool y el "hoy SAP tiene" es el de la pata, asi que sin el rotulo se leen
+// como el mismo numero
+chk('sin pata la nota es la de siempre',
+    A.notaDeDia('2026-10-14',808843,'2026-11-02')==='Cierre del 2026-10-14. Hoy SAP tiene 808.843.',
+    A.notaDeDia('2026-10-14',808843,'2026-11-02'));
+chk('con pata la nota dice cual',
+    A.notaDeDia('2026-10-14',579030,'2026-11-02','Retail')===
+      'Retail · Cierre del 2026-10-14. Hoy SAP tiene 579.030.',
+    A.notaDeDia('2026-10-14',579030,'2026-11-02','Retail'));
+chk('en el ultimo dia no hay nota, con pata o sin ella',
+    A.notaDeDia('2026-11-02',1,'2026-11-02','Retail')==='' &&
+    A.notaDeDia('2026-11-02',1,'2026-11-02')==='');
+chk('el calendario publica la pata y su nombre para repintar la nota',
+    /data-pata=""/.test(HPOO) && /data-nom=""/.test(HPOO), '');
+
 console.log('\n' + ok + ' ok, ' + fail + ' fallas');
 process.exit(fail ? 1 : 0);

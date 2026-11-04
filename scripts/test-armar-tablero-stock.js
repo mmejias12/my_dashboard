@@ -1248,9 +1248,12 @@ chk('datos() los deja en el json que leen las dos paginas',
 // LA SERIE DE TRANSITO VIAJA ENTERA. Con un solo numero —el del ultimo
 // cierre— el calendario de la tarjeta mostraria el stock del dia elegido al
 // lado del transito de hoy, que son dos dias distintos en la misma tabla.
-const PLTD={bodegas:[],indicador:0,fueraDelIndicador:0,transito:{medible:true,pallets:9},
-            transito_dias:[{dia:'2026-11-02',pallets:80,lineas:1},
-                           {dia:'2026-11-03',pallets:9,lineas:1}]};
+const PLTD={bodegas:[],indicador:0,fueraDelIndicador:0,
+            transito:{medible:true,pallets:9,por_planta:{SANTIAGO:6,TALCA:3}},
+            transito_dias:[{dia:'2026-11-02',pallets:80,lineas:1,
+                            por_planta:{SANTIAGO:50,TALCA:30}},
+                           {dia:'2026-11-03',pallets:9,lineas:1,
+                            por_planta:{SANTIAGO:6,TALCA:3}}]};
 const DTD=A.datos(BOD,{socios:[],nivel:{},mensual:[],ventana:{}},
                       {socios:[],nivel:{},mensual:[],ventana:{}},null,PLTD);
 chk('la serie de transito por dia llega al json',
@@ -1260,6 +1263,15 @@ chk('con el dia y los pallets de cada uno',
     DTD.planta_transito_dias[0].dia==='2026-11-02' && DTD.planta_transito_dias[0].pallets===80);
 chk('y el numero suelto del ultimo cierre sigue estando',
     DTD.planta_transito && DTD.planta_transito.pallets===9);
+// EL REPARTO POR PLANTA TIENE QUE SOBREVIVIR EL TRASPASO: es lo unico que le
+// permite al filtro de Santiago mostrar el transito de Santiago en vez de
+// apagarse. Se copia el objeto entero, asi que esto cuida que nadie lo
+// recorte campo por campo mas adelante.
+chk('el reparto por planta llega entero, en el total y en cada dia',
+    DTD.planta_transito.por_planta.SANTIAGO===6 &&
+    DTD.planta_transito_dias[0].por_planta.TALCA===30,
+    JSON.stringify(DTD.planta_transito.por_planta)+' / '+
+    JSON.stringify(DTD.planta_transito_dias[0].por_planta));
 chk('sin serie va en null, no en un arreglo vacio que parezca medido',
     A.datos(BOD,{socios:[],nivel:{},mensual:[],ventana:{}},
                 {socios:[],nivel:{},mensual:[],ventana:{}},null,

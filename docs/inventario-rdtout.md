@@ -287,9 +287,56 @@ y +28 pallets en un día de 879 es una tarde de confirmaciones, no un descalce d
 fuente. Con el paso 2c corriendo detrás del 2b, los dos quedan en el mismo
 instante.
 
-Cómo confirmarlo sin fe: correr `--comparar` sobre un rango que termine antes de
-la ventana de 40 días —por ejemplo `2026-08-01 2026-09-15`— y esperar cero
-diferencias.
+### Segunda comparación · 1-ago → 15-sep · la hipótesis de frescura NO alcanza
+
+Esa corrida devolvió **12 días con diferencia, todos en `transferencias` y todos
+con el cold por encima**: del 1 al 14 de agosto (los días con movimiento), con
+deltas de +24 a +263. Y del 15 de agosto al 15 de septiembre, **cero
+diferencias**. 46 días, los 46 con blob en el cold.
+
+El corte es exacto y vale escribirlo, porque es la pista: el agregado de un día
+X se reescribe mientras X cae dentro de la ventana de 45 días de la corrida
+diaria, o sea su ÚLTIMA escritura fue alrededor de X+45.
+
+- 14 de agosto + 45 = **28 de septiembre** → difiere
+- 15 de agosto + 45 = **29 de septiembre** → calza
+
+O sea: los días cuyo agregado dejó de reescribirse ANTES del 28-29 de septiembre
+difieren, y los que todavía se reescribieron después calzan. Eso descarta "el
+cold está más fresco por la intradía" como explicación completa —sería un
+gradiente, no un corte— y apunta a que todo lo escrito desde fines de septiembre
+coincide con lo que el cold dice hoy.
+
+Quedan dos lecturas posibles y son distintas: (a) son confirmaciones tardías que
+llegaron después de la última escritura del agregado, y entonces el cold está
+más completo; (b) algo cambió a fines de septiembre en cómo se cuenta el
+concepto, y entonces hay dos varas midiendo lo mismo. Adivinar cuál es sale
+gratis y vale cero, así que el script ahora lo mide.
+
+### `--explicar`: por qué difiere UN día
+
+```
+node scripts/rollup-hist.js 2026-08-12 --explicar
+```
+
+Toma un día y responde tres cosas con el dato:
+
+1. **en qué concepto** está el delta;
+2. **si el agregado guardado se reproduce** filtrando las filas por
+   `fechaConfirmacion` hasta cierto corte. Prueba +0, +7, +15, +30, +40, +45,
+   +60 y +90 días. **Si el corte de +45 reproduce el número guardado, la
+   explicación está cerrada**: lo que le sobra al cold son confirmaciones que
+   llegaron después de la última escritura del agregado, y el cold está más
+   completo, no distinto. Si ningún corte calza, la diferencia no son
+   confirmaciones tardías y hay que mirar el punto 3;
+3. **en qué contrapartes y bodegas** está el delta, usando el desglose que el
+   propio agregado ya guarda (`detalle`), con los dos números y la diferencia.
+
+Las filas sin `fechaConfirmacion` se cuentan en todos los cortes: ya estaban
+cuando el agregado se escribió, no son información nueva.
+
+`--comparar` además imprime ahora la **suma de las diferencias** por concepto,
+para ver el tamaño del asunto antes de entrar en los días uno por uno.
 
 **El día sin blob era un feriado.** El 19 de septiembre de 2026 fue sábado y día
 de las Glorias del Ejército; el 18 sí tiene blob. La regla de no escribir ese día
@@ -328,9 +375,11 @@ doce llamadas al proveedor y pasa a ser lectura de blobs.
 
 ### Pruebas
 
-- `rollup-hist`: 43 comprobaciones con el cold y el blob de agregados doblados
-  (la línea de comandos, los tres sabores de "el blob no existe" y la alarma de
-  huecos), 13 mutaciones y las 13 muerden.
+- `rollup-hist`: 54 comprobaciones con el cold y el blob de agregados doblados
+  (la línea de comandos, los tres sabores de "el blob no existe", la alarma de
+  huecos y el análisis por cortes), 17 mutaciones y las 17 muerden. Dos
+  mutaciones resultaron equivalentes y se reemplazaron por otras observables, en
+  vez de forzarles una prueba.
 - `consulta-transporte`: 27 comprobaciones, 8 mutaciones y las 8 muerden. Una de
   ellas descubrió un defecto de verdad: `Number(x) || def` convertía un `0`
   explícito en el default, o sea el interruptor "apágalo" no apagaba nada. Ya

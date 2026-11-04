@@ -1,0 +1,13 @@
+{
+  "_que_es": "Dias cuyo agregado hist/ NO se reconstruye desde el cold store, porque el cold trae MENOS que lo guardado y reescribirlos perderia dato. scripts/rollup-hist.js lee este archivo y los salta solo, ademas de los que se pasen por --excluir. Para forzar la reconstruccion de uno hay que sacarlo de aca o correr con --ignorar-vedados, a proposito: es una decision, no un descuido.",
+  "dias": [
+    {
+      "fecha": "2024-02-13",
+      "concepto": "retiros",
+      "falta_en_el_cold": 640,
+      "motivo": "Un retiro de WALMART desde la bodega ZWM08 WM RENTAPACK SANTIAGO hacia REDTEC SANTIAGO. El cold tiene 0 en esa bodega de origen y el agregado 640. No es confirmacion tardia: ningun corte por fechaConfirmacion reproduce lo guardado y el valor del cold es plano en los ocho cortes. Se volvio a pedir el dia a Redlink con 60 y con 365 dias de margen de entrada y las dos corridas devolvieron EXACTAMENTE lo mismo (723 filas, 17 rescatadas), asi que el margen no era el limite: la fila no esta en el origen (BP 433). O sea hist/2024-02-13.json es el UNICO lugar donde esos 640 sobreviven.",
+      "medido": "2026-11-04",
+      "pendiente_opcional": "Queda una hipotesis sin probar y poco probable: que ese retiro este registrado bajo otro BP. Los otros 1.388 pallets de Walmart del mismo dia si vienen del 433. Se probaria con REDLINK_BP=<otro> en una corrida puntual."
+    }
+  ]
+}

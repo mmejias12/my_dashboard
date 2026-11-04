@@ -428,8 +428,21 @@ el día tiene blob, la alarma de huecos —que mira días— no las ve.
 consulta con margen de entrada de 60 días. Si el origen todavía las tiene, el
 cold las recupera y la reconstrucción pasa a ser estrictamente aditiva.
 
-**Y si no las tiene**, la reconstrucción de esos días perdería dato. Para eso el
-modo que escribe acepta exclusiones explícitas:
+Eso está automatizado en **`backfill/reparar-dias-cold.ps1`**, que por cada día
+respalda el blob, se lo vuelve a pedir a Redlink, muestra el diagnóstico y decide
+por código de salida (`rollup-hist.js <día> --veredicto`: 0 el cold ya no viene
+corto, 3 sigue corto, 4 sin blob). Con `-Reconstruir` reescribe los que quedaron
+OK y deja intactos los que no.
+
+El respaldo no es decorativo: `backfill-operaciones.js` reescribe el blob del día
+**completo**, así que si Redlink hoy devolviera menos filas que las que el blob ya
+tiene, la reparación dejaría el día peor que antes. `backfill/respaldo-cold.js`
+copia el día a `respaldo/<fecha>-<sello>.json` en el mismo contenedor, bajo un
+prefijo que `cold-operaciones.js` no lee. No tiene `--restaurar` a propósito: una
+restauración a ciegas es justo lo que no conviene tener a mano.
+
+**Y si el origen no las tiene**, la reconstrucción de esos días perdería dato. Para
+eso el modo que escribe acepta exclusiones explícitas:
 
 ```
 node scripts/rollup-hist.js 2023-01-01 2026-11-03 --excluir=2024-02-13,2025-02-17
@@ -466,6 +479,42 @@ para saber qué se está corrigiendo:
 `--comparar` ahora imprime una **tabla por mes y un total por año** en vez de
 358 líneas (con `--dias` se ven igual los días uno por uno). Ésa es la cifra que
 hay que llevarle al área.
+
+### Reconstruido · 4-nov-2026
+
+```
+Días con blob en el cold : 1378
+Filas agregadas          : 685.195
+Días escritos            : 1376  (2023-01-02 → 2026-11-03)
+Excluidos (quedaron como estaban) : 2024-02-13 2025-02-17
+```
+
+Cuadra: 1.376 escritos + 2 excluidos = 1.378 días con blob. Las 685.195 filas son
+una más que en la comparación de hace un rato — el intradía corre cada dos horas
+y reescribió un día reciente entremedio.
+
+**Los rollups de abajo se corrigen solos en la próxima corrida nocturna.** No hay
+que forzar nada: `rollup-operaciones.js` y `rollup-contrapartes.js` barren
+`INICIO → ayer` completo en cada corrida, y `rollup-diario.js` reconstruye el día
+a día desde `hist/` siempre — lo único que tiene ventana es el re-fechado de los
+RETIROS, y ése lee el cold store, no `hist/`, así que la reconstrucción no lo
+afecta. (Si alguna vez hace falta forzarlo: `rollup-diario.js <fecha> --todo`.)
+
+**Pero los 2 meses y medio nuevos NO van a aparecer.** Los tres rollups que leen
+`hist/` tienen la fecha de arranque escrita en el código:
+
+```
+scripts/rollup-operaciones.js:22   const INICIO = '2023-03-20';
+scripts/rollup-contrapartes.js:63  const INICIO = '2023-03-20';
+scripts/rollup-diario.js:70        const INICIO = '2023-03-20';
+scripts/rollup-transferencias.js:47 const INICIO = '2023-01-01';   ← éste ya arranca en enero
+```
+
+Era correcto cuando `hist/` empezaba el 20 de marzo; ahora empieza el 2 de enero.
+Mientras no se mueva, los 67 días nuevos quedan escritos en el almacén pero
+invisibles en las vistas — no molestan, simplemente no se usan. Moverlo a
+`2023-01-01` es una línea en tres archivos y alinea los cuatro rollups, pero
+cambia el total de 2023 que el área ya vio: es decisión, no limpieza.
 
 ### `--explicar`: por qué difiere UN día
 
@@ -529,10 +578,18 @@ doce llamadas al proveedor y pasa a ser lectura de blobs.
 
 ### Pruebas
 
-- `rollup-hist`: 73 comprobaciones con el cold y el blob de agregados doblados
+- `respaldo-cold`: 13 comprobaciones con el contenedor doblado (incluida una que
+  exige que el respaldo NO caiga bajo el prefijo que lee el cold), 6 mutaciones y
+  las 6 muerden.
+- `reparar-dias-cold.ps1`: revisado estáticamente (llaves, paréntesis y comillas
+  balanceadas, `[CmdletBinding()]` como primera sentencia, el código de salida de
+  las cinco llamadas a node atendido, y la forma de los argumentos contrastada
+  contra el `process.argv` real de los tres scripts). **No se pudo ejecutar**: no
+  hay PowerShell en el entorno donde se escribió.
+- `rollup-hist`: 80 comprobaciones con el cold y el blob de agregados doblados
   (la línea de comandos, los tres sabores de "el blob no existe", la alarma de
   huecos, el análisis por cortes y el orden del dedupe con lectura en paralelo),
-  27 mutaciones y las 27 muerden. Tres mutaciones resultaron equivalentes y se
+  29 mutaciones y las 29 muerden. Tres mutaciones resultaron equivalentes y se
   reemplazaron por otras observables, en vez de forzarles una prueba.
 - `consulta-transporte`: 27 comprobaciones, 8 mutaciones y las 8 muerden. Una de
   ellas descubrió un defecto de verdad: `Number(x) || def` convertía un `0`

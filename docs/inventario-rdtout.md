@@ -311,7 +311,59 @@ Quedan dos lecturas posibles y son distintas: (a) son confirmaciones tardías qu
 llegaron después de la última escritura del agregado, y entonces el cold está
 más completo; (b) algo cambió a fines de septiembre en cómo se cuenta el
 concepto, y entonces hay dos varas midiendo lo mismo. Adivinar cuál es sale
-gratis y vale cero, así que el script ahora lo mide.
+gratis y vale cero, así que se midió — y resultó la (a), ver más abajo.
+
+### Medido el 12 de agosto: son confirmaciones tardías · lectura (a)
+
+```
+transferencias  cold 4.078   guardado 3.815   dif +263
+  hasta 2026-09-21 (+40d)   3.762   727 filas
+  hasta 2026-09-26 (+45d)   3.815   732 filas   ← calza
+  hasta 2026-10-11 (+60d)   4.078   746 filas
+  hasta 2026-11-10 (+90d)   4.078   746 filas
+```
+
+El corte de +45 días reproduce **exactamente** el número guardado, y el de +60
+ya da el total. O sea: 14 filas con 263 pallets, requeridas el 12 de agosto, se
+confirmaron entre el 27 de septiembre y el 11 de octubre — después de que el
+agregado de ese día dejara de reescribirse. **El agregado guardado no está
+midiendo distinto: está incompleto.**
+
+El desglose lo confirma por otro lado: el delta se concentra en destinos de
+región, que son justamente los que tardan en confirmarse —Chillán +108, Temuco
++24, Rancagua +30, Valparaíso +14, La Pintana +30— y en el origen son tres
+plantas con despacho a retail (Cleaner Lampa +139, Ballerina Maipú +96, Demaria
++28). No es un cambio de criterio repartido por todas partes: son cargas
+puntuales que se cerraron tarde.
+
+Y eso explica el corte del 28-29 de septiembre sin necesidad de ninguna otra
+hipótesis: ese lote de confirmaciones atrasadas aterrizó entre fines de
+septiembre y comienzos de octubre, así que los días desde el 15 de agosto
+todavía estaban dentro de la ventana de 45 días y lo capturaron, y los del 1 al
+14 ya habían salido y se quedaron sin él.
+
+**Conclusión: reemplazar el paso 1 por el 2c no sólo saca al proveedor de la
+corrida, también corrige el histórico.** Las diferencias no son un riesgo a
+mitigar, son la deuda que el reemplazo paga.
+
+Lo que falta antes de dejarlo escribir es una sola cosa, y es la que la alarma de
+huecos contesta: **que el cold tenga toda la historia**. La comparación sobre
+todo el período, que no escribe nada, lo dice:
+
+```
+node scripts/rollup-hist.js 2023-01-01 2026-11-03 --comparar
+```
+
+Interesa el bloque `*** HUECOS DEL COLD`. Si está vacío, el cold cubre todo lo
+que el agregado vio y conviene **reconstruir toda la historia de una vez**
+(el mismo comando sin `--comparar`), porque el efecto de arriba no es exclusivo
+de agosto: cualquier día que haya salido de la ventana antes de que llegaran sus
+confirmaciones tardías está corto por la misma razón. Si hay huecos, primero se
+rellenan con `backfill-operaciones.js` para esos días.
+
+La lectura de los tres años va **en lotes de 24 días en paralelo** (el proceso
+sigue siendo en orden de fecha, porque el dedupe es "gana el primero" y no puede
+depender de qué blob contestó antes).
 
 ### `--explicar`: por qué difiere UN día
 
@@ -375,11 +427,11 @@ doce llamadas al proveedor y pasa a ser lectura de blobs.
 
 ### Pruebas
 
-- `rollup-hist`: 54 comprobaciones con el cold y el blob de agregados doblados
+- `rollup-hist`: 59 comprobaciones con el cold y el blob de agregados doblados
   (la línea de comandos, los tres sabores de "el blob no existe", la alarma de
-  huecos y el análisis por cortes), 17 mutaciones y las 17 muerden. Dos
-  mutaciones resultaron equivalentes y se reemplazaron por otras observables, en
-  vez de forzarles una prueba.
+  huecos, el análisis por cortes y el orden del dedupe con lectura en paralelo),
+  19 mutaciones y las 19 muerden. Tres mutaciones resultaron equivalentes y se
+  reemplazaron por otras observables, en vez de forzarles una prueba.
 - `consulta-transporte`: 27 comprobaciones, 8 mutaciones y las 8 muerden. Una de
   ellas descubrió un defecto de verdad: `Number(x) || def` convertía un `0`
   explícito en el default, o sea el interruptor "apágalo" no apagaba nada. Ya

@@ -261,6 +261,48 @@ transparente. Si hay diferencias, las lista por día y concepto con los dos
 números: ésa es la conversación que hay que tener antes de dejar que el paso 2c
 escriba, y la razón de que el modo comparación exista.
 
+### Primera comparación real · 1-sep → 31-oct, corrida el 4-nov
+
+```
+Días con blob en el cold : 60   (sin blob: 1)
+Filas agregadas          : 36.081
+Días iguales             : 59
+Días con diferencia      : 1
+  2026-10-30   transferencias  cold 879   guardado 851   dif +28
+Sin blob en el cold      : 2026-09-19
+```
+
+**59 de 60 días idénticos**, incluido todo septiembre. Los dos orígenes
+reproducen lo mismo en el dato cerrado, que es lo que había que establecer.
+
+**El día que difiere es el esperado, y el concepto también.** El 30 de octubre
+es el único día reciente del rango (5 días) y `transferencias` es el único
+concepto que sigue moviéndose después: la ventana de gracia de confirmaciones
+tardías es de 40 días (`mov.VENTANA_TRANSFER_DIAS`), y `cache-dia.js` marca
+`transferencias_provisional` justamente para eso. Encima, los dos almacenes no
+se refrescan al mismo ritmo: `operaciones-intradia.yml` reescribe el **cold** 8
+veces al día, mientras `hist/` sólo se reescribe en las 3 corridas de la
+madrugada. O sea el cold está estructuralmente más fresco en los días recientes,
+y +28 pallets en un día de 879 es una tarde de confirmaciones, no un descalce de
+fuente. Con el paso 2c corriendo detrás del 2b, los dos quedan en el mismo
+instante.
+
+Cómo confirmarlo sin fe: correr `--comparar` sobre un rango que termine antes de
+la ventana de 40 días —por ejemplo `2026-08-01 2026-09-15`— y esperar cero
+diferencias.
+
+**El día sin blob era un feriado.** El 19 de septiembre de 2026 fue sábado y día
+de las Glorias del Ejército; el 18 sí tiene blob. La regla de no escribir ese día
+lo protegió. Pero la pregunta buena no estaba contestada: *¿el cold no tiene
+blob porque no hubo movimiento, o porque le falta el día?* Así que `--comparar`
+ahora lo distingue:
+
+- **sin blob y sin movimiento guardado** → normal, se lista y nada más;
+- **sin blob pero el agregado guardado SÍ tiene movimiento** → `*** HUECOS DEL
+  COLD`, con los números de lo que había, porque eso es historia que el cold no
+  vio y hay que rellenarla con `backfill-operaciones.js` antes de que el cold sea
+  la única fuente. Un hueco pesa igual que una diferencia en el veredicto final.
+
 ### Galaxia TRANSPORTE del chat · al frío y al interruptor
 
 `api/shared/consulta-transporte.js` ya no arma la URL de RDTOut ni lleva la
@@ -286,9 +328,9 @@ doce llamadas al proveedor y pasa a ser lectura de blobs.
 
 ### Pruebas
 
-- `rollup-hist`: 35 comprobaciones con el cold y el blob de agregados doblados
-  (incluidas la línea de comandos y los tres sabores de "el blob no existe"),
-  9 mutaciones y las 9 muerden.
+- `rollup-hist`: 43 comprobaciones con el cold y el blob de agregados doblados
+  (la línea de comandos, los tres sabores de "el blob no existe" y la alarma de
+  huecos), 13 mutaciones y las 13 muerden.
 - `consulta-transporte`: 27 comprobaciones, 8 mutaciones y las 8 muerden. Una de
   ellas descubrió un defecto de verdad: `Number(x) || def` convertía un `0`
   explícito en el default, o sea el interruptor "apágalo" no apagaba nada. Ya

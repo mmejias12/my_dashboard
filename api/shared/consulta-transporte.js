@@ -2,10 +2,11 @@
 //  shared/consulta-transporte.js  ·  Galaxia TRANSPORTE (pagos a transportistas)
 //
 //  Réplica EXACTA del motor del dashboard "Transportes · Pagos" (front): calcula
-//  cuánto le paga REDTEC a cada transportista por los viajes de un rango. Toma los
-//  viajes de RDTOut (mismo endpoint OpsXRangoFechas que usa el dashboard, con el
-//  mismo contrato fechaInicial/fechaFinal para traer patente/observación) y, por
-//  cada viaje: patente → capacidad (252/540) y razón social; la operación define
+//  cuánto le paga REDTEC a cada transportista por los viajes de un rango. Los viajes
+//  salen del ALMACÉN FRÍO de operaciones más la cola viva por el interruptor
+//  OPS_ORIGEN (ver traerViajes); las filas llegan en el contrato RDT, con patente,
+//  chofer y observación. Por cada viaje: patente → capacidad (252/540) y razón
+//  social; la operación define
 //  la bodega tarifable; se busca su tarifa por pallet (t252/t540) y se multiplica
 //  por los pallets confirmados. Agrega por transportista, patente, zona y línea.
 //
@@ -17,74 +18,102 @@
 //  actualizarlas aquí también para que el asistente y el dashboard coincidan.
 // ============================================================================
 
-const OPS_HOST = process.env.OS_OPS_HOST || 'https://apirdt1.azurewebsites.net';
-const OPS_PATH = process.env.OS_TRANSP_PATH || '/api/RDTOut/OpsXRangoFechas';
-const RDT_KEY  = process.env.REDTEC_API_KEY || 'm2s_live_ORA0CGEE3oowJ7gc2xYNqTOWmbYS8kMdD-l7hlAxvmE';
-const IVA      = 0.19;
+const ops  = require('./ops-fetch.js');        // por objeto → testeable
+const cold = require('./cold-operaciones.js');
+const IVA  = 0.19;
 
-// Rangos largos (ej. 12 meses) en UNA sola llamada a RDTOut se cuelgan: la
-// respuesta es enorme y la petición nunca vuelve. Por eso partimos el rango en
-// trozos mensuales, los traemos en paralelo (acotado) y con timeout por trozo.
-const FETCH_TIMEOUT_MS = 30000;   // corta un trozo que no responde, en vez de colgarse
-const MAX_CHUNK_DIAS   = 31;      // tamaño de cada trozo
-const CONCURRENCIA     = 4;       // trozos simultáneos (gentil con RDTOut)
+// ── DE DÓNDE SALEN LOS VIAJES ───────────────────────────────────────────────
+// Antes este módulo armaba a mano la URL de RDTOut con la llave escrita acá, así
+// que conmutar OPS_ORIGEN movía las vistas y dejaba esta galaxia leyendo del
+// proveedor que se da de baja. Ahora: almacén frío (redtec-os-operaciones, que
+// la Action llena directo de Redlink) para los días cerrados + cola viva por
+// consultarOps para lo de hoy. Un rango de doce meses deja de ser doce llamadas
+// al proveedor y pasa a ser lectura de blobs.
+//
+// EL MARGEN NO ES DECORATIVO: el frío se archiva por fechaRequerida y acá se
+// factura por fechaConfirmacion. Un viaje requerido el 28 de septiembre y
+// confirmado el 2 de octubre vive en el blob de septiembre, así que pedir sólo
+// [desde..hasta] lo perdería. Se leen MARGEN_DIAS días a cada lado y el recorte
+// por fechaConfirmacion lo hace viajesDelRango, como siempre.
+// OJO con `Number(x) || def`: un 0 explícito es falsy y se convertiría en el
+// default, o sea el interruptor "apágalo" no apagaría nada. Se parsea y se
+// valida.
+const entero = (v, def) => { const n = Number(v); return (v !== undefined && v !== '' && Number.isFinite(n) && n >= 0) ? n : def; };
+const MARGEN_DIAS = entero(process.env.TRANSP_MARGEN_DIAS, 45);
+const VIVO_DIAS   = entero(process.env.TRANSP_VIVO_DIAS, 1);
+const VIVO_MS     = Math.max(5000, entero(process.env.TRANSP_VIVO_MS, 12000));
+// Sin almacén frío no se puede cubrir un rango largo en vivo sin pasarse del
+// corte de 45 s de Static Web Apps: se falla diciendo por qué.
+const SIN_FRIO_MAX_DIAS = Math.max(1, entero(process.env.TRANSP_SIN_FRIO_MAX_DIAS, 62));
 
 const addDias = (iso, n) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
-
-// Parte [desde,hasta] en trozos contiguos de <= MAX_CHUNK_DIAS días.
-function trozos(desde, hasta) {
-  const out = [];
-  let ini = desde;
-  while (ini <= hasta) {
-    let fin = addDias(ini, MAX_CHUNK_DIAS - 1);
-    if (fin > hasta) fin = hasta;
-    out.push({ desde: ini, hasta: fin });
-    ini = addDias(fin, 1);
-  }
-  return out;
+const diasEntre = (a, b) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 86400000) + 1;
+function hoyCL() {
+  return process.env.TRANSP_HOY || new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago',
+    year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
 
-// Una llamada a RDTOut con timeout (aborta si no responde).
-async function fetchViajes(desde, hasta) {
-  const url = `${OPS_HOST}${OPS_PATH}?fechaInicial=${encodeURIComponent(desde)}&fechaFinal=${encodeURIComponent(hasta)}`;
-  const ctrl = new AbortController();
-  const to = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const r = await fetch(url, { headers: { Accept: 'application/json', 'X-Api-Key': RDT_KEY }, signal: ctrl.signal });
-    if (!r.ok) {
-      const cuerpo = await r.text().catch(() => '');
-      throw new Error(`RDTOut ${r.status} (${desde}..${hasta}) ${cuerpo.slice(0, 120)}`);
+// Devuelve { filas, fuente }. 'fuente' viaja a la respuesta: el que lee el
+// número tiene que poder saber de dónde salió.
+async function traerViajes(desde, hasta, opts) {
+  opts = opts || {};
+  const container = opts.container !== undefined ? opts.container
+                  : (cold.hayStorage() ? cold.getContainer() : null);
+  const leerRango = opts.leerRango  || ((c, d, h) => cold.leerRango(c, d, h, { sinRl: true }));
+  const consultar = opts.consultarOps || ((d, h, o) => ops.consultarOps(d, h, o));
+  const origen    = opts.origen || (opts.origenActivo || ops.origenActivo)();
+  const hoy       = opts.hoy || hoyCL();
+
+  let frio = null, errorFrio = '';
+  if (container) {
+    try { frio = await leerRango(container, addDias(desde, -MARGEN_DIAS), addDias(hasta, MARGEN_DIAS)); }
+    catch (e) { errorFrio = e.message; }
+  }
+  const frioSirvio = !!(frio && !frio.sin_storage && frio.dias > 0);
+
+  // Cola viva: sólo si el rango toca los últimos VIVO_DIAS días. Un rango
+  // histórico no le pide nada a nadie.
+  let vivo = [], errorVivo = '';
+  const pideVivo = VIVO_DIAS > 0 && hasta >= addDias(hoy, -VIVO_DIAS);
+  if (pideVivo) {
+    const piso = addDias(hasta, -VIVO_DIAS);
+    const vd = piso > desde ? piso : desde;
+    try { vivo = await consultar(vd, hasta, { presupuestoMs: VIVO_MS }) || []; }
+    catch (e) { errorVivo = e.message; }
+  }
+
+  if (!frioSirvio) {
+    // Sin frío utilizable, el rango completo tendría que salir en vivo.
+    const largo = diasEntre(desde, hasta);
+    if (largo > SIN_FRIO_MAX_DIAS) {
+      throw new Error('sin almacén frío no se puede cubrir un rango de ' + largo +
+        ' días (tope ' + SIN_FRIO_MAX_DIAS + '). Detalle: ' +
+        (errorFrio || (frio && frio.sin_storage ? 'falta OS_STORAGE_CONN' : 'el frío no tenía ningún día')));
     }
-    const data = await r.json();
-    return Array.isArray(data) ? data : (data.items || data.data || [data]);
-  } catch (e) {
-    if (e.name === 'AbortError') throw new Error(`RDTOut timeout (${desde}..${hasta})`);
-    throw e;
-  } finally { clearTimeout(to); }
-}
-
-// Trae los viajes crudos del rango. Corto = una llamada; largo = trozos
-// mensuales en paralelo. En multi-trozo se filtra cada trozo por su propia
-// ventana (fechaConfirmacion) para no duplicar viajes en los bordes.
-async function traerViajes(desde, hasta) {
-  const ts = trozos(desde, hasta);
-  if (ts.length <= 1) return fetchViajes(desde, hasta);
-
-  const out = [];
-  for (let i = 0; i < ts.length; i += CONCURRENCIA) {
-    const lote = ts.slice(i, i + CONCURRENCIA);
-    const res = await Promise.all(lote.map(t => fetchViajes(t.desde, t.hasta).then(rows => ({ t, rows }))));
-    for (const { t, rows } of res) {
-      const t0 = Date.parse(t.desde + 'T00:00:00Z');
-      const t1 = Date.parse(t.hasta + 'T23:59:59Z');
-      for (const raw of rows) {
-        const f = raw.fechaConfirmacion || raw.fechaDespacho || raw.horaIngreso;
-        const ft = f ? Date.parse(f) : NaN;
-        if (!isNaN(ft) && ft >= t0 && ft <= t1) out.push(raw);   // cada viaje en un solo trozo
-      }
+    if (!pideVivo || errorVivo) {
+      try { vivo = await consultar(desde, hasta, { presupuestoMs: VIVO_MS * 2 }) || []; errorVivo = ''; }
+      catch (e) { throw new Error('sin frío y el origen en vivo falló: ' + e.message); }
     }
   }
-  return out;
+
+  // Mezcla con dedupe por nroPedido, lo vivo primero (mismo criterio que /api/ops).
+  const porId = new Map(), sueltas = [];
+  for (const o of vivo.concat(frioSirvio ? frio.ops : [])) {
+    const id = String((o && o.nroPedido) || '');
+    if (!id) { sueltas.push(o); continue; }
+    if (!porId.has(id)) porId.set(id, o);
+  }
+  const filas = [...porId.values()].concat(sueltas);
+
+  return { filas, fuente: {
+    origen: origen,
+    frio_dias: frioSirvio ? frio.dias : 0,
+    frio_margen_dias: MARGEN_DIAS,
+    vivo_filas: vivo.length,
+    vivo_dias: pideVivo ? VIVO_DIAS : 0,
+    error_frio: errorFrio || undefined,
+    error_vivo: errorVivo || undefined
+  } };
 }
 
 const CAMIONES = {
@@ -230,28 +259,31 @@ function acopiar(mapa, clave, base, v){
 }
 
 // Procesa el rango: devuelve viajes facturables (con patente) dentro del rango real.
-async function viajesDelRango(desde, hasta){
-  const crudos = await traerViajes(desde, hasta);
-  const proc = crudos.map(procesarViaje).filter(v => v.patente && v.patente.trim().length);
+async function viajesDelRango(desde, hasta, opts){
+  const { filas, fuente } = await traerViajes(desde, hasta, opts);
+  const proc = filas.map(procesarViaje).filter(v => v.patente && v.patente.trim().length);
   // El API puede expandir a semanas ISO completas: recortamos por la MISMA fecha
   // (fechaConfirmacion) que usa la prefactura, para coincidir con el dashboard.
   const t0 = new Date(desde + 'T00:00:00').getTime();
   const t1 = new Date(hasta + 'T23:59:59').getTime();
-  return proc.filter(v => {
+  const dentro = proc.filter(v => {
     if(!v.fechaConfirmacion) return false;
     const t = new Date(v.fechaConfirmacion).getTime();
     return !isNaN(t) && t >= t0 && t <= t1;
   });
+  dentro.fuente = fuente;   // se cuelga del arreglo para no cambiar la firma
+  return dentro;
 }
 
 // ── Herramienta: consultar_transporte ───────────────────────────────────────
-async function consultarTransporte({ desde, hasta, entidad, cliente, operacion }, ctx){
+async function consultarTransporte({ desde, hasta, entidad, cliente, operacion }, ctx, opts){
   if(!reISO.test(desde||'') || !reISO.test(hasta||'')) throw new Error('fechas inválidas: YYYY-MM-DD');
   const hoy = hoyIso();
   if(hasta > hoy) hasta = hoy;
   if(desde > hasta) throw new Error('desde > hasta');
 
-  let viajes = await viajesDelRango(desde, hasta);
+  let viajes = await viajesDelRango(desde, hasta, opts);
+  const fuente = viajes.fuente;
 
   // Filtro opcional por transportista / patente / chofer.
   const term = entidad ? normalize(entidad) : null;
@@ -302,7 +334,8 @@ async function consultarTransporte({ desde, hasta, entidad, cliente, operacion }
     por_cliente: termCli ? ordSuma(porCliente) : ordSuma(porCliente).slice(0, 20),
     por_zona: ordSuma(porZona).slice(0, 20),
     por_clase: ordSuma(porClase),
-    sin_tarifa: { viajes: sinTarifa.length, muestra: sinTarifa.slice(0, 10) }
+    sin_tarifa: { viajes: sinTarifa.length, muestra: sinTarifa.slice(0, 10) },
+    fuente: fuente
   };
   // Detalle por camión: completo si se filtró por entidad, si no el top 20.
   out.por_patente = term ? ordSuma(porPatente) : ordSuma(porPatente).slice(0, 20);
@@ -389,4 +422,4 @@ const TOOL_SCHEMA = {
   }
 };
 
-module.exports = { consultarTransporte, resumenPeriodo, formatoContextoTransporte, procesarViaje, TOOL_SCHEMA };
+module.exports = { consultarTransporte, resumenPeriodo, formatoContextoTransporte, procesarViaje, traerViajes, viajesDelRango, TOOL_SCHEMA };

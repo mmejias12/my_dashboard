@@ -21,6 +21,7 @@
 //
 //  Uso:
 //    node scripts/rollup-hist.js 2026-10-01 2026-10-31 --comparar   (no escribe)
+//    node scripts/rollup-hist.js 2026-08-12 --explicar               (por qué difiere un día)
 //    node scripts/rollup-hist.js 2026-10-01 2026-10-31
 //    node scripts/rollup-hist.js                       (ventana de 45 días → ayer)
 //
@@ -176,12 +177,89 @@ async function escribir(desde, hasta, opts) {
   return Object.assign({}, r, { fechas, escritos: fechas.length });
 }
 
-module.exports = { construir, diasAEscribir, diferenciasDia, tieneMovimiento, hayQueRevisar, comparar, escribir, noExiste, VENTANA_DIAS };
+// ── ¿POR QUÉ difiere un día? ────────────────────────────────────────────────
+// Una diferencia sin explicación no se puede aprobar ni descartar. Esto toma UN
+// día y responde tres cosas con el dato, no con una hipótesis:
+//   1. en qué concepto está el delta;
+//   2. en qué contrapartes y bodegas está (el detalle que el agregado ya guarda);
+//   3. si el agregado guardado se reproduce filtrando las filas por
+//      fechaConfirmacion hasta cierto corte — o sea si lo que le sobra al cold
+//      son confirmaciones que llegaron DESPUÉS de la última escritura del
+//      agregado. El agregado de un día se reescribe mientras cae dentro de la
+//      ventana de la corrida diaria, así que su última escritura fue en
+//      fecha+VENTANA_DIAS; si ese corte reproduce el número guardado, la
+//      explicación está cerrada.
+const LADOS = ['clienteOrigen', 'clienteDestino', 'bodegaOrigen', 'bodegaDestino'];
+
+function deltaDetalle(nuevo, viejo, concepto) {
+  const dn = (nuevo.detalle && nuevo.detalle[concepto]) || {};
+  const dv = (viejo && viejo.detalle && viejo.detalle[concepto]) || {};
+  const out = {};
+  for (const lado of LADOS) {
+    const a = dn[lado] || {}, b = dv[lado] || {};
+    const filas = [];
+    for (const k of new Set(Object.keys(a).concat(Object.keys(b)))) {
+      const d = (Number(a[k]) || 0) - (Number(b[k]) || 0);
+      if (d) filas.push({ nombre: k, cold: Number(a[k]) || 0, guardado: Number(b[k]) || 0, dif: d });
+    }
+    if (filas.length) out[lado] = filas.sort((x, y) => Math.abs(y.dif) - Math.abs(x.dif));
+  }
+  return out;
+}
+
+// Agrega las filas de UN día tomando sólo las confirmadas hasta el corte.
+// Las filas sin fechaConfirmacion se cuentan siempre: ya estaban cuando el
+// agregado se escribió, no son información nueva.
+function agregarHasta(filas, fecha, corte) {
+  const usables = corte === null ? filas : filas.filter(o => {
+    const fc = String((o && o.fechaConfirmacion) || '').slice(0, 10);
+    return !fc || fc <= corte;
+  });
+  const porDia = mov.agregarPorDiaEn(usables, {});
+  return { acc: porDia[fecha] || mov.nuevoAcc(), filas: usables.length };
+}
+
+async function explicar(fecha, opts) {
+  opts = opts || {};
+  const container = opts.container !== undefined ? opts.container : cold.getContainer();
+  const leerDia   = opts.leerDia || ((c, f) => cold.leerDia(c, f, { sinRl: true }));
+  const cont      = opts.contenedorHist !== undefined ? opts.contenedorHist : cache.getContainer();
+  const leer      = opts.leerHist || ((c, f) => cache.leerDia(c, f));
+  if (!container) throw new Error('sin cold store: falta OS_STORAGE_CONN');
+
+  const filas = await leerSuave(() => leerDia(container, fecha), 'no se pudo leer el cold de ' + fecha);
+  if (!filas) return { fecha, sin_cold: true };
+  const viejo = await leerSuave(() => leer(cont, fecha), 'no se pudo leer el agregado guardado de ' + fecha);
+  const nuevo = mov.paraCache(agregarHasta(filas, fecha, null).acc);
+
+  const dif = diferenciasDia(nuevo, viejo);
+  const concepto = dif.length ? dif.sort((a, b) => Math.abs(b.dif) - Math.abs(a.dif))[0].concepto : null;
+
+  // Cortes a probar, en días desde la fecha del día. VENTANA_DIAS es el que
+  // corresponde a la última escritura del agregado.
+  const dias = [0, 7, 15, 30, 40, VENTANA_DIAS, 60, 90];
+  const cortes = dias.map(n => {
+    const r = agregarHasta(filas, fecha, sumarDias(fecha, n));
+    const a = mov.paraCache(r.acc);
+    return { dias: n, corte: sumarDias(fecha, n), filas: r.filas,
+             valor: concepto ? tot(a[concepto]) : null };
+  });
+  const guardado = concepto ? tot(viejo ? viejo[concepto] : 0) : null;
+  const calza = cortes.filter(c => c.valor === guardado).map(c => c.dias);
+
+  return { fecha, concepto, guardado, total_cold: concepto ? tot(nuevo[concepto]) : null,
+           filas_cold: filas.length, diferencias: dif, cortes, calza,
+           detalle: concepto ? deltaDetalle(nuevo, viejo, concepto) : {} };
+}
+
+module.exports = { construir, diasAEscribir, diferenciasDia, tieneMovimiento, hayQueRevisar,
+                   comparar, escribir, explicar, agregarHasta, deltaDetalle, noExiste, VENTANA_DIAS };
 
 // ── CLI ─────────────────────────────────────────────────────────────────────
 if (require.main === module) (async () => {
   const args = process.argv.slice(2);
   const soloComparar = args.includes('--comparar');
+  const soloExplicar = args.includes('--explicar');
   const libres = args.filter(a => !a.startsWith('--'));
   const hasta = esFecha(libres[1]) ? libres[1] : (esFecha(libres[0]) ? libres[0] : ayerCL());
   const desde = esFecha(libres[1]) ? libres[0]
@@ -192,6 +270,40 @@ if (require.main === module) (async () => {
   if (!process.env.OS_STORAGE_CONN) { console.error('Falta OS_STORAGE_CONN'); process.exit(1); }
 
   const n = x => Number(x).toLocaleString('es-CL');
+
+  if (soloExplicar) {
+    const dia = esFecha(libres[0]) ? libres[0] : hasta;
+    console.log('EXPLICAR  ' + dia + '\n');
+    const r = await explicar(dia);
+    if (r.sin_cold) { console.log('El cold no tiene blob de ese día.'); process.exit(0); }
+    console.log('Filas en el cold: ' + n(r.filas_cold));
+    if (!r.diferencias.length) { console.log('\nNo hay diferencia con el agregado guardado.'); process.exit(0); }
+    console.log('\nDiferencias por concepto:');
+    for (const d of r.diferencias) console.log('  ' + d.concepto.padEnd(16) + 'cold ' + n(d.nuevo).padStart(9) +
+      '   guardado ' + n(d.guardado).padStart(9) + '   dif ' + (d.dif > 0 ? '+' : '') + n(d.dif));
+
+    console.log('\n¿Se reproduce el guardado cortando por fecha de confirmación?  (' + r.concepto + ', guardado ' + n(r.guardado) + ')');
+    for (const c of r.cortes) console.log('  hasta ' + c.corte + ' (+' + String(c.dias).padStart(2) + 'd)  ' +
+      n(c.valor).padStart(9) + '   ' + n(c.filas).padStart(6) + ' filas' + (c.valor === r.guardado ? '   ← calza' : ''));
+    console.log(r.calza.length
+      ? '\nCALZA con el corte de +' + r.calza.join(' / +') + ' días: lo que le sobra al cold son\n' +
+        'confirmaciones que llegaron después de esa fecha, o sea después de la última\n' +
+        'escritura del agregado. El cold está más completo, no distinto.'
+      : '\nNINGÚN corte por fecha de confirmación reproduce el guardado: la diferencia NO\n' +
+        'se explica por confirmaciones tardías. Hay que mirar el detalle de abajo.');
+
+    const lados = Object.keys(r.detalle);
+    if (lados.length) {
+      console.log('\nDónde está el delta de ' + r.concepto + ':');
+      for (const lado of lados) {
+        console.log('  ' + lado);
+        for (const f of r.detalle[lado].slice(0, 8))
+          console.log('    ' + String(f.nombre).slice(0, 44).padEnd(46) + 'cold ' + n(f.cold).padStart(8) +
+                      '  guardado ' + n(f.guardado).padStart(8) + '  dif ' + (f.dif > 0 ? '+' : '') + n(f.dif));
+      }
+    }
+    process.exit(0);
+  }
   console.log((soloComparar ? 'COMPARAR (no escribe)' : 'RECONSTRUIR') + '  ' + desde + ' .. ' + hasta +
               '\nFuente: ' + cold.CONTAINER + '  →  destino: ' + cache.CONTAINER + '\n');
 
@@ -202,6 +314,11 @@ if (require.main === module) (async () => {
     console.log('Días iguales             : ' + r.iguales.length);
     console.log('Días que no existían     : ' + r.nuevos.length + (r.nuevos.length ? '  → ' + r.nuevos.join(' ') : ''));
     console.log('Días con diferencia      : ' + r.distintos.length);
+    if (r.distintos.length) {
+      const suma = {};
+      for (const d of r.distintos) for (const x of d.diferencias) suma[x.concepto] = (suma[x.concepto] || 0) + x.dif;
+      console.log('\nSuma de las diferencias: ' + Object.keys(suma).map(c => c + ' ' + (suma[c] > 0 ? '+' : '') + n(suma[c])).join('  ·  '));
+    }
     for (const d of r.distintos) {
       console.log('\n  ' + d.fecha);
       for (const x of d.diferencias) {

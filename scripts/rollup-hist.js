@@ -24,6 +24,10 @@
 //    node scripts/rollup-hist.js 2026-08-12 --explicar               (por qué difiere un día)
 //    node scripts/rollup-hist.js 2023-01-01 2026-11-03 --comparar     (resumen por mes)
 //    ... --excluir=2024-02-13,2025-02-17   (reconstruye todo menos esos días)
+//
+//  Además de --excluir, NUNCA reconstruye los días listados en
+//  scripts/dias-sin-reconstruir.json (con su motivo medido). Para forzarlos:
+//  --ignorar-vedados, que lo dice en pantalla.
 //    node scripts/rollup-hist.js 2024-02-13 --veredicto   (código de salida:
 //        0 el cold no viene corto · 3 sigue corto · 4 sin blob)
 //    ... --comparar --dias                                            (y día por día)
@@ -35,6 +39,8 @@
 // ============================================================================
 'use strict';
 
+const fs    = require('fs');
+const path  = require('path');
 const cold  = require('../api/shared/cold-operaciones.js');
 const cache = require('../api/shared/cache-dia.js');
 const mov   = require('../api/shared/movimientos.js');
@@ -199,6 +205,26 @@ async function comparar(desde, hasta, opts) {
                                 alaBaja, meses: Object.keys(meses).sort().map(m => meses[m]) });
 }
 
+// ── Días que NO se reconstruyen, por decisión escrita ───────────────────────
+// Viven en scripts/dias-sin-reconstruir.json con su motivo medido. Se leen acá
+// en vez de depender de que alguien recuerde pasar --excluir: una exclusión que
+// hay que acordarse de repetir es una exclusión que algún día no se repite.
+// Si el archivo no está, no pasa nada: la lista queda vacía.
+const VEDADOS_ARCHIVO = path.join(__dirname, 'dias-sin-reconstruir.json');
+
+function diasVedados(opts) {
+  opts = opts || {};
+  if (opts.vedados !== undefined) return new Map((opts.vedados || []).map(d => [d.fecha, d]));
+  let crudo;
+  try { crudo = fs.readFileSync(opts.archivo || VEDADOS_ARCHIVO, 'utf8'); }
+  catch (e) { return new Map(); }
+  let j;
+  try { j = JSON.parse(crudo); }
+  catch (e) { throw new Error('dias-sin-reconstruir.json no es JSON válido: ' + e.message); }
+  const arr = Array.isArray(j) ? j : (j && Array.isArray(j.dias) ? j.dias : []);
+  return new Map(arr.filter(d => d && /^\d{4}-\d{2}-\d{2}$/.test(d.fecha)).map(d => [d.fecha, d]));
+}
+
 async function escribir(desde, hasta, opts) {
   opts = opts || {};
   const r = await construir(desde, hasta, opts);
@@ -207,12 +233,15 @@ async function escribir(desde, hasta, opts) {
   // Días que NO se tocan, por decisión explícita: los que ya sabemos que el
   // cold trae cortos. Mejor dejarlos como están y decirlo, que taparlos con una
   // regla automática del tipo "nunca bajar", que congelaría cualquier error.
+  const vedados = opts.ignorarVedados ? new Map() : diasVedados(opts);
   const excluidos = new Set((opts.excluir || []).filter(Boolean));
+  for (const f of vedados.keys()) excluidos.add(f);
   const todas = diasAEscribir(r.porDia, r.conBlob, desde, hasta);
   const fechas = todas.filter(f => !excluidos.has(f));
   const saltados = todas.filter(f => excluidos.has(f));
   for (const f of fechas) await guardar(cont, f, r.porDia[f]);
-  return Object.assign({}, r, { fechas, escritos: fechas.length, saltados });
+  return Object.assign({}, r, { fechas, escritos: fechas.length, saltados,
+                               vedados: [...vedados.values()] });
 }
 
 // ── ¿POR QUÉ difiere un día? ────────────────────────────────────────────────
@@ -324,7 +353,7 @@ function veredicto(r) {
 
 module.exports = { construir, diasAEscribir, diferenciasDia, tieneMovimiento, hayQueRevisar,
                    comparar, escribir, explicar, agregarHasta, deltaDetalle, cuadraturaDetalle,
-                   veredicto, noExiste, VENTANA_DIAS };
+                   veredicto, diasVedados, noExiste, VENTANA_DIAS, VEDADOS_ARCHIVO };
 
 // ── CLI ─────────────────────────────────────────────────────────────────────
 if (require.main === module) (async () => {
@@ -333,6 +362,7 @@ if (require.main === module) (async () => {
   const soloExplicar = args.includes('--explicar');
   const verDias = args.includes('--dias');
   const soloVeredicto = args.includes('--veredicto');
+  const ignorarVedados = args.includes('--ignorar-vedados');
   const argExcluir = args.find(a => a.startsWith('--excluir='));
   const excluir = argExcluir ? argExcluir.slice('--excluir='.length).split(',').map(x => x.trim()).filter(esFecha) : [];
   const libres = args.filter(a => !a.startsWith('--'));
@@ -462,8 +492,18 @@ if (require.main === module) (async () => {
     process.exit(0);
   }
 
-  if (excluir.length) console.log('Días excluidos a mano    : ' + excluir.join(' ') + '\n');
-  const r = await escribir(desde, hasta, { excluir });
+  if (excluir.length) console.log('Días excluidos a mano    : ' + excluir.join(' '));
+  const vedadosCLI = ignorarVedados ? new Map() : diasVedados({});
+  if (vedadosCLI.size) {
+    console.log('Días vedados por registro : ' + [...vedadosCLI.keys()].join(' ') +
+                '   (scripts/dias-sin-reconstruir.json)');
+    for (const d of vedadosCLI.values())
+      console.log('    ' + d.fecha + (d.concepto ? '  ' + d.concepto : '') +
+                  (d.falta_en_el_cold ? '  falta ' + n(d.falta_en_el_cold) + ' en el cold' : ''));
+  }
+  if (ignorarVedados) console.log('*** --ignorar-vedados: el registro de días vedados se IGNORA en esta corrida');
+  console.log('');
+  const r = await escribir(desde, hasta, { excluir, ignorarVedados });
   console.log('Días con blob en el cold : ' + r.conBlob.length);
   console.log('Filas agregadas          : ' + n(r.filas) + (r.repetidas ? '   (repetidas descartadas: ' + n(r.repetidas) + ')' : ''));
   console.log('Días escritos            : ' + r.escritos + (r.escritos ? '  (' + r.fechas[0] + ' → ' + r.fechas[r.fechas.length - 1] + ')' : ''));

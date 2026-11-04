@@ -306,6 +306,59 @@ function pieDeDia(c) {
          '</b> · salen <b>' + mil(c.salidas) + '</b> · cierra <b>' + mil(c.cierre) + '</b>';
 }
 
+/*  EL POOL DIA POR DIA: clientes, retail y planta en el mismo calendario.
+ *
+ *  Las tres series ya existian por separado —stock-clientes.json y
+ *  stock-retail.json traen 303 y 302 dias— pero el tablero solo publicaba el
+ *  nivel de hoy. Con las tres juntas se contesta "¿cómo estaba el pool el 5
+ *  de octubre, y cuánto tenía cada pata?", que es la misma pregunta que ya
+ *  contesta la planta. */
+
+/** Los dias compactados vuelven a ser dias. Mismo formato que rehidratar(),
+ *  pero para una bodega sola. */
+function diasDeArreglo(arr) {
+  return (Array.isArray(arr) ? arr : []).map(x => ({
+    dia: x[0], apertura: Number(x[1]) || 0, entradas: Number(x[2]) || 0,
+    salidas: Number(x[3]) || 0, cierre: Number(x[4]) || 0 }));
+}
+
+/** Las tres patas como si fueran tres estaciones, para poder reusar el mismo
+ *  arrastre, el mismo calendario y el mismo repintado que usa la planta. */
+function serieDelPool(d) {
+  const x = d || {};
+  const pla = nivelDiarioDePlanta(Array.isArray(x.planta_dias) ? x.planta_dias : []);
+  const out = [];
+  const cli = diasDeArreglo(x.clientes_dias), ret = diasDeArreglo(x.retail_dias);
+  if (cli.length) out.push({ cod: 'CLIENTES', nom: 'Clientes', dias: cli });
+  if (ret.length) out.push({ cod: 'RETAIL', nom: 'Retail', dias: ret });
+  if (pla.length) out.push({ cod: 'PLANTA', nom: 'Planta REDTEC', dias: pla });
+  return out;
+}
+
+/** LOS MESES EN QUE LAS TRES TIENEN DATO, no la union.
+ *
+ *  Clientes y retail llegan hasta el ultimo mes cerrado y la planta arranca
+ *  en octubre. En un mes donde falta una, el arrastre la daria por su valor
+ *  de apertura y el total del pool de enero incluiria un numero de planta que
+ *  no se midio en enero. Un mes de menos es mejor que un total inventado. */
+function mesesComunes(series) {
+  const ss = (Array.isArray(series) ? series : []).filter(b => b && Array.isArray(b.dias) && b.dias.length);
+  if (!ss.length) return [];
+  const cuenta = {};
+  for (const b of ss) {
+    const suyos = {};
+    for (const x of b.dias) {
+      const m = String((x && x.dia) || '').slice(0, 7);
+      if (/^\d{4}-\d{2}$/.test(m)) suyos[m] = true;
+    }
+    for (const m in suyos) cuenta[m] = (cuenta[m] || 0) + 1;
+  }
+  const out = [];
+  for (const m in cuenta) if (cuenta[m] === ss.length) out.push(m);
+  out.sort();
+  return out;
+}
+
 /*  QUE MUESTRA CADA CIFRA Y COMO SE CALCULA.
  *
  *  "¿Qué estoy viendo acá?" es la primera pregunta frente a cualquier tarjeta
@@ -426,6 +479,7 @@ function calendarioHtml(cal, o) {
   };
   const H = ['<div class="calen" data-tope="' + (Number(tope) || 0) + '"' +
              ' data-hoy="' + (Number(op.hoy) || 0) + '"' +
+             ' data-serie="' + esc(op.serie || 'planta') + '"' +
              ' data-ult="' + esc(op.ultimo || '') + '">',
              '<div class="cz"><b>' + esc(etiquetaDeMes(cal.mes) || cal.mes) + '</b>' +
              '<span>clic en un día</span></div>',
@@ -700,6 +754,12 @@ function tarjetas(datos, bodegas, planta, periodo) {
    *  sus vecinas, con la fila entera descuadrada y un hueco negro al lado.
    *  Vive en el cajon de detalle, que es ancho. Aca queda la barrita, que
    *  cabe, y las tres filas, que son el dato nuevo. */
+  /*  LA CIFRA SIGUE AL PERIODO. Con un dia elegido arriba, la tarjeta mostraba
+   *  el saldo de hoy y la linea de abajo decia "cierra en 9.370 al 07-10": la
+   *  misma tarjeta contando dos dias distintos. Adentro del cajon el
+   *  calendario ya se movia; afuera no, y esa es la contradiccion. */
+  const ultPer = nivelDia.length ? nivelDia[nivelDia.length - 1] : null;
+  const kvPla = periodo && ultPer ? ultPer.cierre : nivelPla;
   const semPla = ultimaSemana({ dias: nivelDia }, 7);
   let semRot = null;
   if (semPla.length) {
@@ -735,6 +795,12 @@ function tarjetas(datos, bodegas, planta, periodo) {
   let trio = null;
   if (tra && !tra.medible)
     trio = { aun: tra.motivo || 'el tránsito todavía no se puede medir' };
+  else if (tra && porCrea && !filtrado && periodo && ultPer)
+    /*  Con periodo, las tres filas hablan del mismo dia que la cifra grande:
+     *  el transito de hoy al lado del stock del 7 de octubre serian dos dias
+     *  distintos en la misma tabla. */
+    trio = filasDelDia(ultPer.dia, nivelDia, Array.isArray(d.planta_transito_dias)
+                                               ? d.planta_transito_dias : [], false);
   else if (tra && porCrea && !filtrado)
     trio = [{ q: 'En planta', v: nivelPla, m: 'lo que hay en bodega' },
             { q: 'En tránsito a cliente', v: Number(tra.pallets) || 0,
@@ -746,8 +812,8 @@ function tarjetas(datos, bodegas, planta, periodo) {
 
   t.push({ clave: 'planta', et: 'Planta · indicador',
            hint: filtrado ? mil(bs.length) + ' en ' + esc(planta) : 'nueve bodegas',
-           kv: mil(nivelPla), u: 'pallets', ambito: 'planta',
-           bullet: { v: nivelPla, tope: sapPla, marca: sapPla },
+           kv: mil(kvPla), u: 'pallets', ambito: 'planta',
+           bullet: { v: kvPla, tope: sapPla, marca: sapPla },
            ks: fueraPla
                  ? '<b>' + mil(fueraPla) + '</b> más en merma, extraños y tránsito ' +
                    '<span class="mut">— referencial, no suman</span>'
@@ -757,9 +823,9 @@ function tarjetas(datos, bodegas, planta, periodo) {
            /*  EL AVISO DEL PERIODO VA EN LA (i) Y NO EN UN PARRAFO. Ocupaba
             *  cuatro lineas en una tarjeta donde el espacio es lo que falta,
             *  y es una aclaracion: se lee una vez y despues estorba. */
-           info: queEs('planta', periodo
-             ? 'Ojo con el período: este saldo es la lectura de hoy en SAP, no la del período. ' +
-               'Un saldo no se filtra por fecha; lo que cambia con el período es el movimiento.'
+           info: queEs('planta', periodo && ultPer
+             ? 'Con un período puesto, la cifra es el cierre del ' + ultPer.dia +
+               '; hoy SAP tiene ' + mil(nivelPla) + '.'
              : null),
            nota: null,
            chip: null });
@@ -1153,7 +1219,10 @@ table.desg.ref tbody td{opacity:.8}
   box-shadow:var(--glow);opacity:0;visibility:hidden;transform:translateY(-3px);
   transition:opacity .13s ease,transform .13s ease,visibility .13s}
 .info:hover .tip,.info:focus .tip,.info:focus-within .tip{opacity:1;visibility:visible;transform:none}
-#dbody .info .tip{width:340px}
+/*  EN EL CAJON la (i) va pegada a la izquierda del titulo, asi que el globo
+    tiene que abrirse hacia la DERECHA: anclado a la derecha como en las
+    tarjetas, se salia por el borde izquierdo y se comia el texto. */
+#dbody .info .tip{width:340px;left:-2px;right:auto}
 details.refp{margin-top:14px;border-top:1px solid var(--line);padding-top:4px}
 details.refp>summary{display:flex;align-items:baseline;justify-content:space-between;gap:10px;
   cursor:pointer;list-style:none;padding:7px 0;
@@ -1190,7 +1259,7 @@ details.refp table{margin-top:0}
 .calen .cpie{margin-top:7px;padding:6px 8px;border-radius:8px;background:var(--card2);
   border:1px solid var(--line);color:var(--ink2);font-size:10.5px;line-height:1.5}
 .calen .cdia{margin-top:6px;font-size:10.5px;line-height:1.5;color:var(--ink2)}
-.calen .cdia:empty{display:none}
+.calen .cdia:empty,.calen .cpie:empty{display:none}
 .calen .cpie b{color:var(--ink);font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10px}
 .mtx{display:grid;gap:5px;margin-top:4px;overflow-x:auto}
 .mtx .hd{font:700 10px Inter;letter-spacing:.5px;text-transform:uppercase;color:var(--ink3);
@@ -1513,12 +1582,32 @@ function composiciones(datos, bodegas) {
 
   C.pool = desglose('pool', 'Reparto del pool', mil(d.pool), 'pallets',
     QUE_ES.pool.que,
-    [{ a: 'Clientes', b: 'BODEGA CLIENTES', v: Number(cli.nivel) || 0 },
-     { a: 'Retail', b: 'BODEGA RETAILERS', v: Number(ret.nivel) || 0 },
-     { a: 'Planta REDTEC', b: 'las nueve bodegas del indicador', v: Number(pla.nivel) || 0 }],
+    [{ a: 'Clientes', b: 'BODEGA CLIENTES', cod: 'CLIENTES', v: Number(cli.nivel) || 0 },
+     { a: 'Retail', b: 'BODEGA RETAILERS', cod: 'RETAIL', v: Number(ret.nivel) || 0 },
+     { a: 'Planta REDTEC', b: 'las nueve del indicador', cod: 'PLANTA', v: Number(pla.nivel) || 0 }],
     { a: 'Pool', v: Number(d.pool) || 0 }, bloqueFuera,
     'Contándolos, SAP tiene ' + mil(d.pool_sap) + ' en bodega. No son pallet perdido: están en ' +
     'bodegas de SAP que no participan del recorrido, así que sumarlos infla el pool.');
+  /*  EL MISMO CALENDARIO QUE LA PLANTA, para las tres patas juntas. Solo los
+   *  meses en que las tres tienen dato: ver mesesComunes. */
+  const serPool = serieDelPool(d);
+  C.pool.grilla = true;
+  C.pool.meses = mesesComunes(serPool);
+  C.pool.mes = C.pool.meses.length ? C.pool.meses[C.pool.meses.length - 1] : null;
+  C.pool.serie = 'pool';
+  const ndPool = nivelDiarioDePlanta(serPool);
+  C.pool.cal = calendarioDeMes(ndPool, C.pool.mes);
+  /*  ARRANCA SIN DIA ELEGIDO. La serie de clientes y retail termina en el
+   *  ultimo mes cerrado y la cifra de arriba es la de hoy: marcar el 31 de
+   *  octubre dejaria la celda elegida diciendo un numero y el encabezado
+   *  otro. Sin seleccion no hay contradiccion, y al elegir un dia se mueve
+   *  todo junto. */
+  C.pool.calSel = null;
+  C.pool.calHoy = Number(d.pool) || 0;
+  C.pool.calUlt = String(d.generado || '').slice(0, 10) || null;
+  C.pool.infoCal = 'Solo los meses en que las tres patas tienen serie diaria: clientes y retail ' +
+    'llegan hasta el último mes cerrado y la planta arranca en octubre. Elegir un día cambia la ' +
+    'cifra de arriba y las tres patas al cierre de ESE día.';
 
   /*  La serie cruda por codigo: bodegasDelCockpit resume los dias en un numero
    *  —cuantos hay— y aca hacen falta los dias mismos para la mini-serie. */
@@ -1796,7 +1885,8 @@ function desgloseHtml(c) {
         '<button type="button" class="chip' + (m === c.mes ? ' on' : '') +
         '" data-pm="' + esc(m) + '">' + esc(etiquetaDeMes(m) || m) + '</button>').join('') + '</div>');
     H.push(calendarioHtml(c.cal, { sel: c.calSel, tope: (c.total && c.total.v) || c.calHoy,
-                                   tra: c.calTra, hoy: c.calHoy, ultimo: c.calUlt }));
+                                   tra: c.calTra, hoy: c.calHoy, ultimo: c.calUlt,
+                                   serie: c.serie || 'planta' }));
   }
   return H.join('');
 }
@@ -2100,6 +2190,7 @@ function script(serie, mes0, desg, aper, datos) {
                etapaDeBodega, plantaDeBodega, saludDeBodega, bodegasDelCockpit,
                matrizPlantaEtapa, matrizHtml, filaCartera, listaHtml, chipEstado,
                titular, contarSalud, nivelDiarioDePlanta, ultimaSemana,
+               diasDeArreglo, serieDelPool, mesesComunes,
                diaDeSemana, mesDelCalendario, calendarioDeMes, filasDelDia, pieDeDia,
                notaDeDia, calendarioHtml, pintarDia, pintarMes,
                cierreDeBodegaEn, grillaBodegasHtml, infoHtml, queEs,
@@ -2116,6 +2207,10 @@ function script(serie, mes0, desg, aper, datos) {
     'var MES0 = ' + jsonSeguro(mes0) + ';\n' +
     'var APER = ' + jsonSeguro(aper || {}) + ';\n' +
     'var DAT = ' + jsonSeguro(datos || {}) + ';\n' +
+    /*  DESPUES de DAT y con la serie de planta a cuestas: DAT viaja sin ella
+     *  —va comprimida aparte en PD— y armar PR antes dejaba una lista vacia,
+     *  que en la pantalla se veia como tres guiones al elegir un dia. */
+    'var PR = serieDelPool(Object.assign({}, DAT, { planta_dias: PD }));\n' +
     'var DESG = ' + jsonSeguro(desg || {}) + ';\n' + [
     '(function () {',
     '  function $(s, r) { return (r || document).querySelector(s); }',
@@ -2286,15 +2381,27 @@ function script(serie, mes0, desg, aper, datos) {
     // La celda del calendario y el chip de mes van PRIMERO: viven dentro del
     // cajon, que esta colgado de un [data-kpi], asi que sin esto un clic en un
     // dia lo volveria a abrir desde cero y perderia el dia elegido.
+    // Que serie repinta el calendario que se toco: la planta son nueve
+    // estaciones y el pool son las tres patas. El calendario lo dice en
+    // data-serie, asi que no hay que adivinar cual cajon esta abierto.
+    '      function serieDe(el2) {',
+    '        var c = el2.closest(".calen") || $("#dbody .calen");',
+    '        return (c && c.getAttribute("data-serie")) === "pool" ? PR : PD;',
+    '      }',
+    '      function desgDe(el2) {',
+    '        var c = el2.closest(".calen") || $("#dbody .calen");',
+    '        return (c && c.getAttribute("data-serie")) === "pool" ? DESG.pool : DESG.planta;',
+    '      }',
     '      var cd = el.closest(".cd[data-dia]");',
-    '      if (cd) { pintarDia($("#dbody"), cd.getAttribute("data-dia"), PD); return true; }',
+    '      if (cd) { pintarDia($("#dbody"), cd.getAttribute("data-dia"), serieDe(cd)); return true; }',
     // La (i) vive DENTRO de la tarjeta, que es un [data-kpi]: sin esto, pasar
     // a leerla con el teclado y apretar Enter abriria el cajon encima.
     '      if (el.closest(".info")) return true;',
     '      var pm = el.closest("[data-pm]");',
-    '      if (pm) { pintarMes($("#dbody"), pm.getAttribute("data-pm"), PD,',
-    '                          DAT.planta_transito_dias, DESG.planta && DESG.planta.calHoy,',
-    '                          DESG.planta && DESG.planta.calUlt); return true; }',
+    '      if (pm) { var g = desgDe(pm);',
+    '                pintarMes($("#dbody"), pm.getAttribute("data-pm"), serieDe(pm),',
+    '                          DAT.planta_transito_dias, g && g.calHoy, g && g.calUlt);',
+    '                return true; }',
     // El chip de mes vive DENTRO del cajon: va primero, si no lo atrapa el
     // [data-cod] de la fila que lo abrio y el cajon se redibuja en su mes.
     '      var m = el.closest("[data-dm]");',
@@ -2378,6 +2485,7 @@ module.exports = { ETAPAS, GLIFO, ORDEN_SALUD, HITOS, CSS,
                    nivelDiarioDePlanta, diaDeSemana, mesDelCalendario, calendarioDeMes,
                    filasDelDia, pieDeDia, notaDeDia, calendarioHtml, pintarDia, pintarMes,
                    cierreDeBodegaEn, grillaBodegasHtml, infoHtml, queEs, QUE_ES, DIA_CORTO,
+                   diasDeArreglo, serieDelPool, mesesComunes,
                    titular, tarjetas, decisiones, diasHasta, hitos,
                    desglose, composiciones, desgloseHtml, porRecorrido,
                    recortar, chipEstado, tarjetaHtml, matrizHtml, filaCartera, listaHtml,

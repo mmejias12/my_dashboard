@@ -23,6 +23,7 @@
 //    node scripts/rollup-hist.js 2026-10-01 2026-10-31 --comparar   (no escribe)
 //    node scripts/rollup-hist.js 2026-08-12 --explicar               (por qué difiere un día)
 //    node scripts/rollup-hist.js 2023-01-01 2026-11-03 --comparar     (resumen por mes)
+//    ... --excluir=2024-02-13,2025-02-17   (reconstruye todo menos esos días)
 //    ... --comparar --dias                                            (y día por día)
 //    node scripts/rollup-hist.js 2026-10-01 2026-10-31
 //    node scripts/rollup-hist.js                       (ventana de 45 días → ayer)
@@ -201,9 +202,15 @@ async function escribir(desde, hasta, opts) {
   const r = await construir(desde, hasta, opts);
   const cont = opts.contenedorHist !== undefined ? opts.contenedorHist : cache.getContainer();
   const guardar = opts.guardarDia || ((c, f, acc) => cache.guardarDia(c, f, acc));
-  const fechas = diasAEscribir(r.porDia, r.conBlob, desde, hasta);
+  // Días que NO se tocan, por decisión explícita: los que ya sabemos que el
+  // cold trae cortos. Mejor dejarlos como están y decirlo, que taparlos con una
+  // regla automática del tipo "nunca bajar", que congelaría cualquier error.
+  const excluidos = new Set((opts.excluir || []).filter(Boolean));
+  const todas = diasAEscribir(r.porDia, r.conBlob, desde, hasta);
+  const fechas = todas.filter(f => !excluidos.has(f));
+  const saltados = todas.filter(f => excluidos.has(f));
   for (const f of fechas) await guardar(cont, f, r.porDia[f]);
-  return Object.assign({}, r, { fechas, escritos: fechas.length });
+  return Object.assign({}, r, { fechas, escritos: fechas.length, saltados });
 }
 
 // ── ¿POR QUÉ difiere un día? ────────────────────────────────────────────────
@@ -248,6 +255,21 @@ function agregarHasta(filas, fecha, corte) {
   return { acc: porDia[fecha] || mov.nuevoAcc(), filas: usables.length };
 }
 
+// Cada lado del detalle (clienteOrigen, clienteDestino, bodegaOrigen,
+// bodegaDestino) debería sumar el total del concepto: sumarDetalle carga el
+// mismo valor en los cuatro. Si un lado suma MENOS, hay filas con ese campo
+// vacío — el total del concepto está bien, pero el desglose por contraparte o
+// bodega de ese día está corto, y ése es el que alimenta
+// resumen/contrapartes.json y las respuestas por cliente del asistente.
+function cuadraturaDetalle(dia, concepto) {
+  const total = tot(dia && dia[concepto]);
+  const d = (dia && dia.detalle && dia.detalle[concepto]) || {};
+  return LADOS.map(lado => {
+    const suma = Object.keys(d[lado] || {}).reduce((a, k) => a + (Number(d[lado][k]) || 0), 0);
+    return { lado, suma, total, falta: total - suma };
+  });
+}
+
 async function explicar(fecha, opts) {
   opts = opts || {};
   const container = opts.container !== undefined ? opts.container : cold.getContainer();
@@ -278,11 +300,14 @@ async function explicar(fecha, opts) {
 
   return { fecha, concepto, guardado, total_cold: concepto ? tot(nuevo[concepto]) : null,
            filas_cold: filas.length, diferencias: dif, cortes, calza,
-           detalle: concepto ? deltaDetalle(nuevo, viejo, concepto) : {} };
+           detalle: concepto ? deltaDetalle(nuevo, viejo, concepto) : {},
+           cuadratura: concepto ? { cold: cuadraturaDetalle(nuevo, concepto),
+                                    guardado: cuadraturaDetalle(viejo, concepto) } : null };
 }
 
 module.exports = { construir, diasAEscribir, diferenciasDia, tieneMovimiento, hayQueRevisar,
-                   comparar, escribir, explicar, agregarHasta, deltaDetalle, noExiste, VENTANA_DIAS };
+                   comparar, escribir, explicar, agregarHasta, deltaDetalle, cuadraturaDetalle,
+                   noExiste, VENTANA_DIAS };
 
 // ── CLI ─────────────────────────────────────────────────────────────────────
 if (require.main === module) (async () => {
@@ -290,6 +315,8 @@ if (require.main === module) (async () => {
   const soloComparar = args.includes('--comparar');
   const soloExplicar = args.includes('--explicar');
   const verDias = args.includes('--dias');
+  const argExcluir = args.find(a => a.startsWith('--excluir='));
+  const excluir = argExcluir ? argExcluir.slice('--excluir='.length).split(',').map(x => x.trim()).filter(esFecha) : [];
   const libres = args.filter(a => !a.startsWith('--'));
   const hasta = esFecha(libres[1]) ? libres[1] : (esFecha(libres[0]) ? libres[0] : ayerCL());
   const desde = esFecha(libres[1]) ? libres[0]
@@ -321,6 +348,18 @@ if (require.main === module) (async () => {
         'escritura del agregado. El cold está más completo, no distinto.'
       : '\nNINGÚN corte por fecha de confirmación reproduce el guardado: la diferencia NO\n' +
         'se explica por confirmaciones tardías. Hay que mirar el detalle de abajo.');
+
+    const malos = (r.cuadratura ? r.cuadratura.cold.concat(r.cuadratura.guardado) : []).filter(x => x.falta);
+    if (malos.length) {
+      console.log('\n¿El desglose cuadra con el total de ' + r.concepto + '?');
+      for (const lado of ['cold', 'guardado'])
+        for (const x of r.cuadratura[lado].filter(y => y.falta))
+          console.log('    ' + lado.padEnd(9) + x.lado.padEnd(15) + 'suma ' + n(x.suma).padStart(9) +
+                      '   total ' + n(x.total).padStart(9) + '   falta ' + n(x.falta));
+      console.log('    Un lado que suma menos que el total son filas con ESE CAMPO VACÍO: el');
+      console.log('    total del concepto está bien, pero el desglose por contraparte o bodega');
+      console.log('    de ese día queda corto (y es el que alimenta resumen/contrapartes.json).');
+    }
 
     const lados = Object.keys(r.detalle);
     if (lados.length) {
@@ -398,10 +437,12 @@ if (require.main === module) (async () => {
     process.exit(0);
   }
 
-  const r = await escribir(desde, hasta);
+  if (excluir.length) console.log('Días excluidos a mano    : ' + excluir.join(' ') + '\n');
+  const r = await escribir(desde, hasta, { excluir });
   console.log('Días con blob en el cold : ' + r.conBlob.length);
   console.log('Filas agregadas          : ' + n(r.filas) + (r.repetidas ? '   (repetidas descartadas: ' + n(r.repetidas) + ')' : ''));
   console.log('Días escritos            : ' + r.escritos + (r.escritos ? '  (' + r.fechas[0] + ' → ' + r.fechas[r.fechas.length - 1] + ')' : ''));
   if (r.faltantes.length) console.log('Sin blob en el cold (NO se escribieron): ' + r.faltantes.join(' '));
+  if (r.saltados.length) console.log('Excluidos (quedaron como estaban)     : ' + r.saltados.join(' '));
   console.log('\n✓ Agregados reconstruidos sin consultar al proveedor');
 })().catch(e => { console.error('\nError: ' + e.message); process.exit(1); });

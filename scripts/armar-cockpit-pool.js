@@ -306,6 +306,50 @@ function pieDeDia(c) {
          '</b> · salen <b>' + mil(c.salidas) + '</b> · cierra <b>' + mil(c.cierre) + '</b>';
 }
 
+/** EL CIERRE DE UNA ESTACION EN UN DIA CUALQUIERA.
+ *
+ *  Se arrastra con la MISMA regla que nivelDiarioDePlanta: una estacion que
+ *  no se movio ese dia no vale cero, vale lo mismo del dia anterior; y antes
+ *  de su primer dia vale su apertura. Sin eso, elegir un dia en el calendario
+ *  dejaria en cero a las estaciones quietas y la grilla no sumaria el
+ *  indicador de ese dia. */
+function cierreDeBodegaEn(bodega, dia) {
+  const ds = (bodega && Array.isArray(bodega.dias)) ? bodega.dias : [];
+  const d = String(dia == null ? '' : dia).slice(0, 10);
+  if (!ds.length || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
+  let mejor = null, val = null, primero = null;
+  for (const x of ds) {
+    if (!x || !/^\d{4}-\d{2}-\d{2}$/.test(String(x.dia))) continue;
+    if (primero == null || String(x.dia) < primero.dia) primero = { dia: String(x.dia), x };
+    if (String(x.dia) > d) continue;
+    if (mejor == null || String(x.dia) > mejor) { mejor = String(x.dia); val = Number(x.cierre) || 0; }
+  }
+  if (val != null) return val;
+  return primero ? (Number(primero.x.apertura) || 0) : null;
+}
+
+/*  LAS NUEVE EN UNA SOLA GRILLA.
+ *
+ *  Antes eran nueve filas, cada una con su mini-serie y su rotulo: el panel
+ *  media mas de una pantalla y para comparar dos estaciones habia que
+ *  recordar el numero mientras se bajaba. En grilla entran las nueve de una
+ *  mirada, que es como se usa: "donde esta el stock hoy". */
+function grillaBodegasHtml(filas, total) {
+  const fs = (Array.isArray(filas) ? filas : []).filter(Boolean);
+  if (!fs.length) return '';
+  const H = ['<div class="bgr">'];
+  for (const f of fs)
+    H.push('<div class="bg"' + (f.cod ? ' data-cod="' + esc(f.cod) + '"' : '') + '>' +
+           '<span class="bgn">' + esc(f.a) + '</span>' +
+           '<span class="bgc">' + esc(f.b || '') + '</span>' +
+           '<b>' + (f.v == null ? '—' : mil(f.v)) + '</b></div>');
+  H.push('</div>');
+  if (total != null)
+    H.push('<div class="bgt"><span>' + esc((total && total.a) || 'Total') + '</span>' +
+           '<b>' + mil((total && total.v) || 0) + '</b></div>');
+  return H.join('');
+}
+
 /** Lo que hay que decir cuando el dia elegido NO es el cierre vigente: que
  *  la cifra grande es de ese dia y cual es el saldo de hoy. Sin esto, elegir
  *  el 29 de octubre deja la tarjeta mostrando 15.045 bajo un titulo que se
@@ -365,7 +409,7 @@ function calendarioHtml(cal, o) {
  *  Y CAMBIA EL ROTULO cuando el dia elegido no es el ultimo: una tarjeta que
  *  dice "Planta · indicador" mostrando el cierre del 29 de octubre se lee
  *  como el stock de hoy. */
-function pintarDia(card, dia) {
+function pintarDia(card, dia, serie) {
   if (!card || !card.querySelector) return false;
   const cal = card.querySelector('.calen');
   if (!cal) return false;
@@ -397,6 +441,22 @@ function pintarDia(card, dia) {
     nums[1].textContent = tp == null ? '—' : mil(tp);
     nums[2].textContent = tp == null ? '—' : mil(cie + tp);
   }
+  /*  Y LAS NUEVE ESTACIONES, que es la pregunta que trae a alguien a hacer
+   *  clic en un dia: no "cuanto habia" sino "donde estaba". */
+  const celdasBod = card.querySelectorAll('.bg[data-cod]');
+  if (celdasBod.length && Array.isArray(serie)) {
+    let suma = 0;
+    for (let i = 0; i < celdasBod.length; i++) {
+      const cod = celdasBod[i].getAttribute('data-cod');
+      const b = serie.filter(x => x && String(x.cod) === cod)[0];
+      const v = cierreDeBodegaEn(b, dia);
+      const num = celdasBod[i].querySelector('b');
+      if (num) num.textContent = v == null ? '—' : mil(v);
+      suma += Number(v) || 0;
+    }
+    const pieG = card.querySelector('.bgt b');
+    if (pieG) pieG.textContent = mil(suma);
+  }
   const pie = cal.querySelector('.cpie');
   if (pie) pie.innerHTML = pieDeDia({ dia: dia, num: Number(String(dia).slice(8)), cierre: cie,
                                       entradas: ent, salidas: sld, apertura: ape });
@@ -405,6 +465,31 @@ function pintarDia(card, dia) {
     nota.textContent = notaDeDia(dia, Number(cal.getAttribute('data-hoy')) || 0,
                                  cal.getAttribute('data-ult') || '');
   return true;
+}
+
+/*  CAMBIAR EL MES DEL CALENDARIO DEL CAJON.
+ *
+ *  El cajon se arma una vez en el servidor y no se rehace al filtrar, asi que
+ *  el calendario trae sus propios chips de mes: sin ellos solo se podria
+ *  mirar el mes mas nuevo, que a principio de mes son dos dias.
+ *
+ *  Se RECALCULA con las mismas funciones del servidor en vez de dibujar los
+ *  doce meses de antemano y esconder once. */
+function pintarMes(cont, mes, serie, traDias, hoy, ultimo) {
+  if (!cont || !cont.querySelector) return false;
+  const viejo = cont.querySelector('.calen');
+  if (!viejo) return false;
+  const nd = nivelDiarioDePlanta(Array.isArray(serie) ? serie : []);
+  const cal = calendarioDeMes(nd, mes);
+  if (!cal) return false;
+  const cels = [].concat.apply([], cal.semanas).filter(Boolean);
+  const sel = cels.length ? cels[cels.length - 1].dia : null;
+  const tope = Number(viejo.getAttribute('data-tope')) || 0;
+  viejo.outerHTML = calendarioHtml(cal, { sel, tope, tra: traDias, hoy, ultimo });
+  const chips = cont.querySelectorAll('[data-pm]');
+  for (let i = 0; i < chips.length; i++)
+    chips[i].classList.toggle('on', chips[i].getAttribute('data-pm') === mes);
+  return pintarDia(cont, sel, serie);
 }
 
 /*  LA MATRIZ PLANTA x ETAPA.
@@ -544,20 +629,23 @@ function tarjetas(datos, bodegas, planta, periodo) {
   // El ultimo dia de la serie ENTERA, no el del periodo: es contra ese que se
   // dice si el dia elegido es el cierre vigente o uno del pasado.
   const ultimoDia = nivelTodo.length ? nivelTodo[nivelTodo.length - 1].dia : null;
-  /*  EL CALENDARIO DEL MES EN VEZ DE LA BARRITA. La barrita mostraba la forma
-   *  de la semana y escondia sus numeros detras del mouse, uno por uno. */
-  const cal = calendarioDeMes(nivelDia, mesDelCalendario(nivelDia, periodo));
-  const celdas = cal ? [].concat.apply([], cal.semanas).filter(Boolean) : [];
-  const calSel = celdas.length ? celdas[celdas.length - 1].dia : null;
-  const traDias = Array.isArray(d.planta_transito_dias) ? d.planta_transito_dias : [];
+  /*  EL CALENDARIO NO CABE EN LA TARJETA. Un mes son cinco filas de seis
+   *  celdas y la tarjeta mide 343px: quedaba de 751px de alto contra 128 de
+   *  sus vecinas, con la fila entera descuadrada y un hueco negro al lado.
+   *  Vive en el cajon de detalle, que es ancho. Aca queda la barrita, que
+   *  cabe, y las tres filas, que son el dato nuevo. */
+  const semPla = ultimaSemana({ dias: nivelDia }, 7);
   let semRot = null;
-  if (celdas.length) {
-    const fin = celdas[celdas.length - 1];
+  if (semPla.length) {
+    let lo = Infinity, hi = -Infinity;
+    for (const x of semPla) { if (x.cierre < lo) lo = x.cierre; if (x.cierre > hi) hi = x.cierre; }
+    const fin = semPla[semPla.length - 1];
     /*  Con un periodo puesto la serie NO tiene por que cerrar en el saldo de
      *  hoy: cierra donde termina ese periodo. Reclamar un descalce ahi seria
      *  una alarma falsa, asi que el rotulo cambia en vez de acusar. */
     const calza = fin.cierre === nivelPla;
-    semRot = mil(celdas.length) + ' días con movimiento · ' +
+    semRot = 'nivel del ' + esc(semPla[0].dia) + ' al ' + esc(fin.dia) +
+      '<br>entre <b>' + mil(lo) + '</b> y <b>' + mil(hi) + '</b> · ' +
       (periodo ? 'cierra en <b>' + mil(fin.cierre) + '</b> al ' + esc(fin.dia)
        : calza ? 'cierra en <b>' + mil(fin.cierre) + '</b>, el mismo saldo que SAP'
                : '<span class="malo">la serie cierra en ' + mil(fin.cierre) + ' y SAP dice ' +
@@ -581,28 +669,28 @@ function tarjetas(datos, bodegas, planta, periodo) {
   let trio = null;
   if (tra && !tra.medible)
     trio = { aun: tra.motivo || 'el tránsito todavía no se puede medir' };
-  else if (tra && porCrea && calSel)
-    trio = filasDelDia(calSel, nivelDia, traDias, filtrado);
+  else if (tra && porCrea && !filtrado)
+    trio = [{ q: 'En planta', v: nivelPla, m: 'lo que hay en bodega' },
+            { q: 'En tránsito a cliente', v: Number(tra.pallets) || 0,
+              m: 'salió, el cliente todavía no lo recibe' },
+            { q: 'Por fecha contable', v: nivelPla + (Number(tra.pallets) || 0),
+              m: 'lo que cuadra con la cartola', pie: true }];
+  else if (tra && porCrea && filtrado)
+    trio = { aun: 'el tránsito se mide sobre las nueve bodegas juntas, no se reparte por planta' };
 
-  /*  LA CIFRA GRANDE SIGUE AL DIA ELEGIDO. Mostrar el saldo de hoy arriba y
-   *  el cierre del 29 de octubre en las tres filas de abajo es la misma
-   *  tarjeta contando dos dias distintos. */
-  const kvPla = celdas.length ? celdas[celdas.length - 1].cierre : nivelPla;
   t.push({ clave: 'planta', et: 'Planta · indicador',
            hint: filtrado ? mil(bs.length) + ' en ' + esc(planta) : 'nueve bodegas',
-           kv: mil(kvPla), u: 'pallets', ambito: 'planta',
-           bullet: { v: kvPla, tope: sapPla, marca: sapPla },
+           kv: mil(nivelPla), u: 'pallets', ambito: 'planta',
+           bullet: { v: nivelPla, tope: sapPla, marca: sapPla },
            ks: fueraPla
                  ? '<b>' + mil(fueraPla) + '</b> más en merma, extraños y tránsito ' +
                    '<span class="mut">— referencial, no suman</span>'
                  : '<span class="mut">sin bodegas de referencia fuera del indicador' +
                    (filtrado ? ' en ' + esc(planta) : '') + '</span>',
-           cal, calSel, calTra: traDias, calHoy: nivelPla, calUlt: ultimoDia,
-           semRot, trio,
-           /*  La nota del dia vive DENTRO del calendario y la escribe notaDeDia:
-            *  antes aca decia "este saldo es la lectura de hoy en SAP", y con
-            *  la cifra siguiendo al dia elegido eso paso a ser falso. */
-           nota: null,
+           sem: semPla, semTipo: 'nivel', semRot, trio,
+           nota: periodo ? 'Este saldo es la lectura de hoy en SAP, no el del período: ' +
+                           'un saldo no se filtra por fecha. Lo que cambia con el período es el ' +
+                           'movimiento — la línea de abajo y los días en negativo.' : null,
            chip: null });
 
   t.push({ clave: 'atribucion', et: 'Atribución por socio', hint: 'socios / bodega', ambito: 'global', kv: pct1(atrib, (Number(cli.nivel) || 0) + (Number(ret.nivel) || 0)), u: '',
@@ -954,6 +1042,18 @@ table.desg.ref tbody td{opacity:.8}
 .barra i{display:block;height:100%;border-radius:999px}
 
 /* matriz planta x etapa */
+/*  Las nueve en una sola grilla: antes eran nueve filas con mini-serie cada
+    una y el panel media mas de una pantalla. */
+.bgr{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-top:8px}
+.bg{border:1px solid var(--line);background:var(--card2);border-radius:10px;padding:9px 11px;
+  display:flex;flex-direction:column;gap:1px}
+.bg .bgn{font:600 11.5px/1.3 Inter;color:var(--ink)}
+.bg .bgc{font-size:9.5px;color:var(--ink2)}
+.bg b{font:700 17px/1.2 "JetBrains Mono",ui-monospace,monospace;color:var(--ink);margin-top:3px}
+.bgt{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:9px;
+  padding-top:8px;border-top:1.5px solid var(--line2);font:600 12px Inter;color:var(--ink2)}
+.bgt b{font:700 16px "JetBrains Mono",ui-monospace,monospace;color:var(--ink)}
+.cmeses{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 2px}
 .calen{margin-top:12px}
 .calen .cz{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:5px}
 .calen .cz b{font:700 10.5px Inter;letter-spacing:.4px;text-transform:uppercase;color:var(--ink2)}
@@ -1180,11 +1280,7 @@ function tarjetaHtml(t, i) {
     H.push('<div class="nota-periodo">En tránsito a cliente: ' + esc(t.trio.aun) + '</div>');
   }
   if (t.nota) H.push('<div class="nota-periodo">' + esc(t.nota) + '</div>');
-  if (t.cal)
-    H.push(calendarioHtml(t.cal, { sel: t.calSel, tope: t.bullet && t.bullet.tope,
-                                   tra: t.calTra, hoy: t.calHoy, ultimo: t.calUlt }) +
-           (t.semRot ? '<div class="sem"><span class="m">' + t.semRot + '</span></div>' : ''));
-  else if (t.sem && t.sem.length)
+  if (t.sem && t.sem.length)
     H.push('<div class="sem">' +
            (t.semTipo === 'nivel' ? miniNivel(t.sem) : miniSemana(t.sem)) +
            (t.semRot ? '<span class="m">' + t.semRot + '</span>' : '') + '</div>');
@@ -1319,12 +1415,31 @@ function composiciones(datos, bodegas) {
     'Las nueve estaciones del recorrido del pallet, en el orden en que lo atraviesan. ' +
     'La definición de cuáles cuentan es de negocio, no de SAP: está declarada en el código.',
     porRecorrido(bs).map(x => ({ a: x.nom, b: x.cod + ' · ' + x.etapa.charAt(0) + x.etapa.slice(1).toLowerCase(),
-                                 v: x.nivel, sem: ultimaSemana(crudas[x.cod], 7) })),
+                                 cod: x.cod, v: x.nivel })),
     { a: 'Indicador de planta', v: Number(pla.nivel) || 0 }, bloqueFuera,
     'Una estación en cero no es un dato que falte: es una estación vacía, y eso es información. ' +
-    'La mini-serie de cada fila son sus últimos siete días de cierre, y cada una está en su ' +
-    'propia escala: sirve para ver la forma de la semana, no para comparar una estación con otra. ' +
-    'No todas terminan el mismo día, porque cada una llega hasta donde SAP le registró movimiento.');
+    'El calendario de abajo deja elegir cualquier día: al hacerlo, la cifra de arriba y las nueve ' +
+    'estaciones pasan a mostrar su cierre de ESE día, no el de hoy.');
+  /*  LA GRILLA Y EL CALENDARIO VAN EN EL CAJON Y NO EN LA TARJETA. Un mes son
+   *  cinco filas de seis celdas: en una tarjeta de 343px quedaba de 751px de
+   *  alto contra 128 de sus vecinas. Aca hay ancho de sobra. */
+  C.planta.grilla = true;
+  const ndPla = nivelDiarioDePlanta(Array.isArray(d.planta_dias) ? d.planta_dias : []);
+  C.planta.meses = [];
+  for (const x of ndPla) {
+    const m = String(x.dia).slice(0, 7);
+    if (C.planta.meses.indexOf(m) < 0) C.planta.meses.push(m);
+  }
+  C.planta.mes = C.planta.meses.length ? C.planta.meses[C.planta.meses.length - 1] : null;
+  C.planta.cal = calendarioDeMes(ndPla, C.planta.mes);
+  const celPla = C.planta.cal ? [].concat.apply([], C.planta.cal.semanas).filter(Boolean) : [];
+  C.planta.calSel = celPla.length ? celPla[celPla.length - 1].dia : null;
+  C.planta.calTra = Array.isArray(d.planta_transito_dias) ? d.planta_transito_dias : [];
+  C.planta.calHoy = Number(pla.nivel) || 0;
+  C.planta.calUlt = ndPla.length ? ndPla[ndPla.length - 1].dia : null;
+  C.planta.trio = (d.planta_transito && d.planta_transito.medible &&
+                   (d.planta_fecha_serie || null) === 'CreaDate' && C.planta.calSel)
+    ? filasDelDia(C.planta.calSel, ndPla, C.planta.calTra, false) : null;
 
   const atribuido = (Number(cli.socios) || 0) + (Number(ret.socios) || 0);
   const bodega = (Number(cli.nivel) || 0) + (Number(ret.nivel) || 0);
@@ -1520,24 +1635,42 @@ function desgloseHtml(c) {
   H.push('<div class="kv" style="margin-top:6px">' + c.kv +
          (c.u ? '<small>' + esc(c.u) + '</small>' : '') + '</div>');
   if (c.intro) H.push('<p class="mut" style="margin:10px 0 0;max-width:62ch">' + esc(c.intro) + '</p>');
-  if (c.filas.length) {
+  if (c.filas.length && c.grilla) {
+    H.push('<h5>Se compone de</h5>' + grillaBodegasHtml(c.filas, c.total));
+  } else if (c.filas.length) {
     H.push('<h5>Se compone de</h5><table class="desg">');
     H.push('<tbody>' + c.filas.map(fila).join('') + '</tbody>');
     if (c.total)
       H.push('<tfoot><tr><td>' + esc(c.total.a) + '</td><td class="num">' + mil(c.total.v) +
              '</td></tr></tfoot>');
     H.push('</table>');
-    if (c.total && !c.cuadra)
-      H.push('<p class="malo" style="font-weight:600;margin:10px 0 0">Las filas suman ' +
-             mil(c.suma) + ' y el total declarado es ' + mil(c.total.v) + ': ' +
-             conSigno(c.descuadre) + ' de diferencia.</p>');
   }
+  if (c.filas.length && c.total && !c.cuadra)
+    H.push('<p class="malo" style="font-weight:600;margin:10px 0 0">Las filas suman ' +
+           mil(c.suma) + ' y el total declarado es ' + mil(c.total.v) + ': ' +
+           conSigno(c.descuadre) + ' de diferencia.</p>');
+  if (c.trio && Array.isArray(c.trio))
+    H.push('<table class="trio">' + c.trio.map(r =>
+      '<tr' + (r.pie ? ' class="pie"' : '') + '><td>' + esc(r.q) +
+      '<div class="m">' + esc(r.m) + '</div></td><td class="num">' +
+      (r.v == null ? '—' : mil(r.v)) + '</td></tr>').join('') + '</table>');
   if (c.extra && c.extra.filas && c.extra.filas.length) {
     H.push('<h5>' + esc(c.extra.a) + '</h5><table class="desg ref">');
     H.push('<tbody>' + c.extra.filas.map(fila).join('') + '</tbody>');
     H.push('<tfoot><tr><td>Suma</td><td class="num">' + mil(c.extra.v) + '</td></tr></tfoot></table>');
   }
   if (c.nota) H.push('<p class="mut" style="margin:14px 0 0;max-width:62ch">' + esc(c.nota) + '</p>');
+  /*  EL CALENDARIO VA AL FINAL DE TODO. Arriba esta "cuanto hay" —que es lo
+   *  que se viene a buscar—; esto es "como se llego", y se mira despues. */
+  if (c.cal) {
+    H.push('<h5>Cierre día por día</h5>');
+    if (c.meses && c.meses.length > 1)
+      H.push('<div class="cmeses">' + c.meses.map(m =>
+        '<button type="button" class="chip' + (m === c.mes ? ' on' : '') +
+        '" data-pm="' + esc(m) + '">' + esc(etiquetaDeMes(m) || m) + '</button>').join('') + '</div>');
+    H.push(calendarioHtml(c.cal, { sel: c.calSel, tope: (c.total && c.total.v) || c.calHoy,
+                                   tra: c.calTra, hoy: c.calHoy, ultimo: c.calUlt }));
+  }
   return H.join('');
 }
 
@@ -1841,7 +1974,8 @@ function script(serie, mes0, desg, aper, datos) {
                matrizPlantaEtapa, matrizHtml, filaCartera, listaHtml, chipEstado,
                titular, contarSalud, nivelDiarioDePlanta, ultimaSemana,
                diaDeSemana, mesDelCalendario, calendarioDeMes, filasDelDia, pieDeDia,
-               notaDeDia, calendarioHtml, pintarDia,
+               notaDeDia, calendarioHtml, pintarDia, pintarMes,
+               cierreDeBodegaEn, grillaBodegasHtml,
                serieDelPeriodo, tarjetas, tarjetaHtml];
   const cuerpo = 'var MESES = ' + jsonSeguro(MESES) + ';\n' +
     'var ETAPAS = ' + jsonSeguro(ETAPAS) + ';\n' +
@@ -2021,10 +2155,15 @@ function script(serie, mes0, desg, aper, datos) {
     '      $("#dxc").focus();',
     '    }',
     '    function desde(el) {',
-    // La celda del calendario va PRIMERO: la tarjeta de planta lleva
-    // [data-kpi], asi que sin esto un clic en un dia abriria el cajon.
+    // La celda del calendario y el chip de mes van PRIMERO: viven dentro del
+    // cajon, que esta colgado de un [data-kpi], asi que sin esto un clic en un
+    // dia lo volveria a abrir desde cero y perderia el dia elegido.
     '      var cd = el.closest(".cd[data-dia]");',
-    '      if (cd) { pintarDia(cd.closest(".card"), cd.getAttribute("data-dia")); return true; }',
+    '      if (cd) { pintarDia($("#dbody"), cd.getAttribute("data-dia"), PD); return true; }',
+    '      var pm = el.closest("[data-pm]");',
+    '      if (pm) { pintarMes($("#dbody"), pm.getAttribute("data-pm"), PD,',
+    '                          DAT.planta_transito_dias, DESG.planta && DESG.planta.calHoy,',
+    '                          DESG.planta && DESG.planta.calUlt); return true; }',
     // El chip de mes vive DENTRO del cajon: va primero, si no lo atrapa el
     // [data-cod] de la fila que lo abrio y el cajon se redibuja en su mes.
     '      var m = el.closest("[data-dm]");',
@@ -2106,7 +2245,8 @@ module.exports = { ETAPAS, GLIFO, ORDEN_SALUD, HITOS, CSS,
                    etapaDeBodega, saludDeBodega, bodegasDelCockpit, matrizPlantaEtapa,
                    mesDeApertura, mesesDeBodega, ultimaSemana, miniSemana, miniNivel,
                    nivelDiarioDePlanta, diaDeSemana, mesDelCalendario, calendarioDeMes,
-                   filasDelDia, pieDeDia, notaDeDia, calendarioHtml, pintarDia, DIA_CORTO,
+                   filasDelDia, pieDeDia, notaDeDia, calendarioHtml, pintarDia, pintarMes,
+                   cierreDeBodegaEn, grillaBodegasHtml, DIA_CORTO,
                    titular, tarjetas, decisiones, diasHasta, hitos,
                    desglose, composiciones, desgloseHtml, porRecorrido,
                    recortar, chipEstado, tarjetaHtml, matrizHtml, filaCartera, listaHtml,

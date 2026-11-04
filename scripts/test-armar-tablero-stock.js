@@ -1265,5 +1265,33 @@ chk('sin serie va en null, no en un arreglo vacio que parezca medido',
                 {socios:[],nivel:{},mensual:[],ventana:{}},null,
                 {bodegas:[],transito:{medible:false}}).planta_transito_dias===null);
 
+console.log('\n— la serie diaria de clientes y retail viaja al tablero —');
+// Ya existia en stock-clientes.json y stock-retail.json —303 y 302 dias— pero
+// se quedaba ahi: el tablero publicaba el nivel de hoy y nada mas.
+const BD={dias:[{dia:'2026-10-05',apertura:100,entradas:30,salidas:10,cierre:120},
+                {dia:'2026-10-06',apertura:120,entradas:0,salidas:20,cierre:100}]};
+const DB=A.diasDeBodega(BD);
+chk('un arreglo por dia', DB.length===2, String(DB.length));
+// EL ORDEN DE LOS CAMPOS ES EL CONTRATO: el cockpit los vuelve a armar por
+// posicion, asi que cambiarlo intercambia apertura con cierre en silencio
+chk('en el orden dia, apertura, entradas, salidas, cierre',
+    DB[0].join('|')==='2026-10-05|100|30|10|120', DB[0].join('|'));
+chk('y el segundo abre donde cerro el primero', DB[1][1]===DB[0][4], DB[1][1]+' vs '+DB[0][4]);
+chk('una fecha ilegible no entra',
+    A.diasDeBodega({dias:[{dia:'05-10-2026',cierre:9},{dia:'2026-10-05',cierre:1}]}).length===1);
+// null y no un arreglo vacio: el cockpit distingue "no hay serie" de "serie
+// de cero dias", y con [] dibujaria un calendario vacio
+chk('sin dias devuelve null, no un arreglo vacio',
+    A.diasDeBodega({dias:[]})===null && A.diasDeBodega(null)===null);
+const DBD=A.datos(BOD,{socios:[],nivel:{},mensual:[],ventana:{},dias:BD.dias},
+                     {socios:[],nivel:{},mensual:[],ventana:{},dias:BD.dias},null,null);
+chk('datos() publica las dos series',
+    Array.isArray(DBD.clientes_dias) && DBD.clientes_dias.length===2 &&
+    Array.isArray(DBD.retail_dias) && DBD.retail_dias.length===2,
+    JSON.stringify([DBD.clientes_dias&&DBD.clientes_dias.length, DBD.retail_dias&&DBD.retail_dias.length]));
+chk('y sin ellas van en null, no en arreglo vacio',
+    A.datos(BOD,{socios:[],nivel:{},mensual:[],ventana:{}},
+                {socios:[],nivel:{},mensual:[],ventana:{}},null,null).clientes_dias===null);
+
 console.log('\n' + ok + ' ok, ' + fail + ' fallas');
 process.exit(fail ? 1 : 0);

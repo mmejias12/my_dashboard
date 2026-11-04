@@ -306,6 +306,61 @@ function pieDeDia(c) {
          '</b> · salen <b>' + mil(c.salidas) + '</b> · cierra <b>' + mil(c.cierre) + '</b>';
 }
 
+/*  QUE MUESTRA CADA CIFRA Y COMO SE CALCULA.
+ *
+ *  "¿Qué estoy viendo acá?" es la primera pregunta frente a cualquier tarjeta
+ *  y hasta ahora habia que abrir el cajon para contestarla. Vive en UN solo
+ *  lugar: el cajon usa `que` de intro y la (i) de la tarjeta muestra las dos
+ *  juntas. Dos textos separados para lo mismo terminan diciendo cosas
+ *  distintas en cuanto alguien corrige uno. */
+const QUE_ES = {
+  pool: { que: 'El pallet rojo que está rotando, repartido en las tres patas. Cada pata es una ' +
+               'bodega de SAP y su saldo lo dicta SAP, no un cálculo nuestro.',
+          como: 'Se lee el saldo vivo de las tres bodegas y se suman.' },
+  planta: { que: 'Las nueve estaciones del recorrido del pallet, en el orden en que lo atraviesan. ' +
+                 'La definición de cuáles cuentan es de negocio, no de SAP: está declarada en el código.',
+            como: 'Suma del saldo vivo de esas nueve bodegas. Merma, extraños y Coquimbo quedan fuera.' },
+  atribucion: { que: 'De lo que hay en las dos bodegas de afuera, cuánto se puede decir de quién es. ' +
+                     'El total lo dicta la bodega; la ubicación sólo lo reparte.',
+                como: 'Suma de los socios dividida por el saldo de clientes más retail.' },
+  residuo: { que: 'Saldo de bodega menos la suma de los socios. No es pallet perdido ni un error de ' +
+                  'cálculo: SAP tiene ubicaciones que existen justamente para el pallet sin dueño ' +
+                  'identificado.',
+             como: 'Saldo de cada bodega menos lo que sus ubicaciones atribuyen a un socio.' },
+  anio: { que: 'Cuánto subió o bajó cada bodega, mes a mes. Un valor positivo es pallet que salió de ' +
+               'REDTEC hacia el socio; uno negativo es pallet que volvió.',
+          como: 'Diario de movimientos de inventario de SAP, agrupado por mes de fecha de documento.' },
+  negativos: { que: 'Días en que una estación cierra bajo cero. Es imposible —no hay media bodega de ' +
+                    'pallets en menos— y la causa está identificada: la fecha del documento en SAP.',
+               como: 'Se arrastra el nivel diario de cada estación y se cuentan los días bajo cero.' },
+  cobertura: { que: 'Cuántos documentos de SAP llegaron a nuestra extracción. Es el control que dice ' +
+                    'si falta algo.',
+               como: 'Documentos contados en SAP contra los de nuestra extracción, mes por mes.' },
+  controles: { que: 'Cada control con su resultado y la fecha en que se midió. Un control que no pasa ' +
+                    'no se esconde: se nombra.',
+               como: 'La corrida diaria los mide todos y guarda cuándo lo hizo.' },
+};
+
+/** Lo que dice la (i) de una tarjeta: qué muestra y cómo se calcula, que son
+ *  las dos preguntas que llegan juntas. `extra` agrega lo que depende de la
+ *  corrida, como el aviso de que un saldo no se filtra por fecha. */
+function queEs(clave, extra) {
+  const q = QUE_ES[String(clave)] || null;
+  if (!q) return String(extra || '');
+  return q.que + ' ' + q.como + (extra ? ' ' + extra : '');
+}
+
+/*  LA (i): el texto se asoma al pasar el mouse y tambien al llegar con el
+ *  teclado, porque la mitad de la gente que lo necesita no usa mouse. Va con
+ *  aria-label para que un lector de pantalla lo lea sin tener que abrirlo. */
+function infoHtml(texto) {
+  const t = String(texto == null ? '' : texto).trim();
+  if (!t) return '';
+  return '<span class="info" tabindex="0" role="note" aria-label="' + esc(t) + '">' +
+         '<span class="ii" aria-hidden="true">i</span>' +
+         '<span class="tip">' + esc(t) + '</span></span>';
+}
+
 /** EL CIERRE DE UNA ESTACION EN UN DIA CUALQUIERA.
  *
  *  Se arrastra con la MISMA regla que nivelDiarioDePlanta: una estacion que
@@ -589,10 +644,21 @@ function tarjetas(datos, bodegas, planta, periodo) {
   const fallan = ctrl.filter(c => c.estado === 'no pasa');
   const t = [];
 
+  const totPool = (Number(cli.nivel) || 0) + (Number(ret.nivel) || 0) + (Number(pla.nivel) || 0);
   t.push({ clave: 'pool', et: 'Reparto del pool', hint: 'cli / ret / planta', ambito: 'global', kv: mil(d.pool), u: 'pallets',
+           info: queEs('pool'),
            stack: [ { v: Number(cli.nivel) || 0, c: 'var(--cli)', nom: 'Clientes' },
                     { v: Number(ret.nivel) || 0, c: 'var(--ret)', nom: 'Retail' },
                     { v: Number(pla.nivel) || 0, c: 'var(--pla)', nom: 'Planta' } ],
+           /*  Las mismas tres filas que la tarjeta de planta. Antes esto era
+            *  una leyenda de una linea y la tarjeta quedaba a media altura al
+            *  lado de su vecina. */
+           trio: [{ q: 'Clientes', v: Number(cli.nivel) || 0,
+                    m: 'BODEGA CLIENTES · ' + pct1(cli.nivel, totPool) + ' del pool' },
+                  { q: 'Retail', v: Number(ret.nivel) || 0,
+                    m: 'BODEGA RETAILERS · ' + pct1(ret.nivel, totPool) + ' del pool' },
+                  { q: 'Planta REDTEC', v: Number(pla.nivel) || 0,
+                    m: 'las nueve del indicador · ' + pct1(pla.nivel, totPool) + ' del pool' }],
            ks: 'de <b>' + mil(d.pool_sap) + '</b> que SAP tiene en bodega · ' +
                mil(d.fuera_del_pool) + ' fuera del indicador no suman',
            chip: null });
@@ -688,29 +754,44 @@ function tarjetas(datos, bodegas, planta, periodo) {
                  : '<span class="mut">sin bodegas de referencia fuera del indicador' +
                    (filtrado ? ' en ' + esc(planta) : '') + '</span>',
            sem: semPla, semTipo: 'nivel', semRot, trio,
-           nota: periodo ? 'Este saldo es la lectura de hoy en SAP, no el del período: ' +
-                           'un saldo no se filtra por fecha. Lo que cambia con el período es el ' +
-                           'movimiento — la línea de abajo y los días en negativo.' : null,
+           /*  EL AVISO DEL PERIODO VA EN LA (i) Y NO EN UN PARRAFO. Ocupaba
+            *  cuatro lineas en una tarjeta donde el espacio es lo que falta,
+            *  y es una aclaracion: se lee una vez y despues estorba. */
+           info: queEs('planta', periodo
+             ? 'Ojo con el período: este saldo es la lectura de hoy en SAP, no la del período. ' +
+               'Un saldo no se filtra por fecha; lo que cambia con el período es el movimiento.'
+             : null),
+           nota: null,
            chip: null });
 
-  t.push({ clave: 'atribucion', et: 'Atribución por socio', hint: 'socios / bodega', ambito: 'global', kv: pct1(atrib, (Number(cli.nivel) || 0) + (Number(ret.nivel) || 0)), u: '',
-           ks: 'clientes <b>' + pct1(cli.socios, cli.nivel) + '</b> · retail <b>' + pct1(ret.socios, ret.nivel) + '</b>',
-           bullet: { v: atrib, tope: (Number(cli.nivel) || 0) + (Number(ret.nivel) || 0),
-                     marca: (Number(cli.nivel) || 0) + (Number(ret.nivel) || 0) },
+  const fuera2 = (Number(cli.nivel) || 0) + (Number(ret.nivel) || 0);
+  t.push({ clave: 'atribucion', et: 'Atribución por socio', hint: 'socios / bodega', ambito: 'global', kv: pct1(atrib, fuera2), u: '',
+           info: queEs('atribucion'),
+           trio: [{ q: 'Clientes', t: pct1(cli.socios, cli.nivel),
+                    m: mil(cli.socios) + ' de ' + mil(cli.nivel) + ' atribuidos' },
+                  { q: 'Retail', t: pct1(ret.socios, ret.nivel),
+                    m: mil(ret.socios) + ' de ' + mil(ret.nivel) + ' atribuidos' },
+                  { q: 'Sin atribuir', v: fuera2 - (Number(atrib) || 0),
+                    m: 'el resto de las dos bodegas', pie: true }],
+           bullet: { v: atrib, tope: fuera2, marca: fuera2 },
            chip: null });
 
   t.push({ clave: 'residuo', et: 'Sin ubicación', hint: 'bodega − socios', ambito: 'global', kv: mil(residuo), u: 'pallets',
-           ks: 'retail <b>' + mil(ret.residuo) + '</b> · clientes <b>' + mil(cli.residuo) + '</b>' +
-               '<br><span class="mut">ubicaciones que existen para el pallet sin dueño identificado</span>',
+           info: queEs('residuo'),
+           trio: [{ q: 'Retail', v: Number(ret.residuo) || 0, m: 'BODEGA RETAILERS' },
+                  { q: 'Clientes', v: Number(cli.residuo) || 0, m: 'BODEGA CLIENTES' },
+                  { q: 'Atribuido a un socio', v: Number(atrib) || 0,
+                    m: 'lo que sí tiene dueño identificado', pie: true }],
+           ks: '<span class="mut">ubicaciones que existen para el pallet sin dueño identificado</span>',
            chip: residuo > 0 ? { c: 'warn', t: pct1(residuo, d.pool) + ' del pool' } : null });
 
   const anio = (d && d.anio) || {};
-  t.push({ clave: 'anio', et: 'Movimiento del año', hint: 'neto salido', ambito: 'global', kv: conSigno((Number(anio.ret) || 0) + (Number(anio.cli) || 0)), u: 'pallets',
+  t.push({ clave: 'anio', et: 'Movimiento del año', hint: 'neto salido', ambito: 'global', info: queEs('anio'), kv: conSigno((Number(anio.ret) || 0) + (Number(anio.cli) || 0)), u: 'pallets',
            ks: 'retail <b>' + conSigno(anio.ret) + '</b> · clientes <b>' + conSigno(anio.cli) + '</b>' +
                '<br><span class="mut">positivo = pallet que salió de REDTEC</span>',
            chip: null });
 
-  t.push({ clave: 'negativos', et: 'Días en negativo', hint: 'cierre < 0', ambito: 'planta', kv: mil(neg), u: 'de ' + mil(dias),
+  t.push({ clave: 'negativos', et: 'Días en negativo', hint: 'cierre < 0', ambito: 'planta', info: queEs('negativos'), kv: mil(neg), u: 'de ' + mil(dias),
            ks: neg ? 'en <b>' + mil(bs.filter(x => x.salud.n).length) + '</b> de ' + mil(bs.length) +
                      ' estaciones<br><span class="mut">es la fecha del documento en SAP, no el cálculo</span>'
                    : 'ninguna estación cierra bajo cero',
@@ -718,13 +799,13 @@ function tarjetas(datos, bodegas, planta, periodo) {
            chip: neg ? { c: 'crit', t: pct1(neg, dias) + ' de los días' } : { c: 'good', t: 'sin negativos' } });
 
   const cob = ctrl.find(c => /cobertura/i.test(c.titulo || ''));
-  t.push({ clave: 'cobertura', et: 'Cobertura', hint: 'docs SAP vs nuestros', ambito: 'global', kv: cob ? '100' : '—', u: cob ? '%' : '',
+  t.push({ clave: 'cobertura', et: 'Cobertura', hint: 'docs SAP vs nuestros', ambito: 'global', info: queEs('cobertura'), kv: cob ? '100' : '—', u: cob ? '%' : '',
            ks: cob ? esc(recortar(cob.texto, 120))
                    : 'el control de cobertura no vino en esta corrida',
            chip: cob ? { c: 'good', t: 'medido el ' + esc(cob.medido || d.extra_medido || 's/f') }
                      : { c: 'nodata', t: 'sin dato' } });
 
-  t.push({ clave: 'controles', et: 'Controles', hint: 'pasan / total', ambito: 'global', kv: mil(ctrl.length - fallan.length), u: 'de ' + mil(ctrl.length),
+  t.push({ clave: 'controles', et: 'Controles', hint: 'pasan / total', ambito: 'global', info: queEs('controles'), kv: mil(ctrl.length - fallan.length), u: 'de ' + mil(ctrl.length),
            ks: fallan.length ? 'no pasan: <b>' + fallan.map(c => esc(c.titulo)).join('</b>, <b>') + '</b>'
                              : 'todos los controles pasan',
            bar: { v: ctrl.length - fallan.length, tope: ctrl.length || 1,
@@ -954,7 +1035,10 @@ table.trio{width:100%;border-collapse:collapse;margin-top:11px;font-size:12px}
 table.trio td{padding:6px 0;border-bottom:1px solid var(--line);vertical-align:top}
 table.trio td.num{text-align:right;white-space:nowrap;font-weight:600;
   font-family:"JetBrains Mono",ui-monospace,monospace}
-table.trio .m{color:var(--ink3);font-size:10px;margin-top:2px}
+/*  --ink2 y no --ink3: medido, --ink3 daba 2,74:1 en oscuro. Esta linea dejo
+    de ser decorativa cuando pasó a llevar el reparto ("26,9% del pool",
+    "211.957 de 217.635 atribuidos"), asi que tiene que leerse. */
+table.trio .m{color:var(--ink2);font-size:10px;margin-top:2px}
 table.trio tr.pie td{border-bottom:none;border-top:1.5px solid var(--line2);font-weight:700}
 table.trio tr.pie td.num{color:var(--ink)}
 .nota-periodo{margin-top:10px;padding:7px 9px;border-radius:8px;background:var(--card2);
@@ -1053,6 +1137,23 @@ table.desg.ref tbody td{opacity:.8}
 .bgt{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:9px;
   padding-top:8px;border-top:1.5px solid var(--line2);font:600 12px Inter;color:var(--ink2)}
 .bgt b{font:700 16px "JetBrains Mono",ui-monospace,monospace;color:var(--ink)}
+/*  La (i) se asoma con el mouse y con el teclado. El globo va ANCLADO A LA
+    DERECHA porque la tarjeta recorta lo que se sale (.card lleva
+    overflow:hidden) y asi queda siempre adentro. */
+.info{position:relative;display:inline-flex;align-items:center;margin-left:6px;flex:none;
+  cursor:help;vertical-align:middle}
+.info .ii{width:15px;height:15px;border-radius:50%;border:1px solid var(--line2);
+  display:grid;place-items:center;font:700 10px/1 Inter;color:var(--ink2);background:var(--card2)}
+.info:hover .ii,.info:focus .ii{color:var(--ink);border-color:var(--ink2)}
+.info:focus{outline:none}
+.info:focus-visible .ii{outline:2px solid var(--pla);outline-offset:2px}
+.info .tip{position:absolute;top:calc(100% + 7px);right:-2px;width:270px;z-index:7;
+  background:var(--card2);border:1px solid var(--line2);border-radius:10px;padding:9px 11px;
+  color:var(--ink2);font:400 10.5px/1.5 Inter;text-align:left;text-transform:none;letter-spacing:0;
+  box-shadow:var(--glow);opacity:0;visibility:hidden;transform:translateY(-3px);
+  transition:opacity .13s ease,transform .13s ease,visibility .13s}
+.info:hover .tip,.info:focus .tip,.info:focus-within .tip{opacity:1;visibility:visible;transform:none}
+#dbody .info .tip{width:340px}
 details.refp{margin-top:14px;border-top:1px solid var(--line);padding-top:4px}
 details.refp>summary{display:flex;align-items:baseline;justify-content:space-between;gap:10px;
   cursor:pointer;list-style:none;padding:7px 0;
@@ -1256,16 +1357,20 @@ function tarjetaHtml(t, i) {
              (t.clave ? ' data-kpi="' + esc(t.clave) + '" role="button" tabindex="0"' +
                         ' aria-label="Ver cómo se compone: ' + esc(t.et) + '"' : '') +
              ' style="animation-delay:' + (i * 45) + 'ms">'];
-  H.push('<div class="ct"><h4>' + esc(t.et) + '</h4><span class="hint">' + esc(t.hint) + '</span></div>');
+  H.push('<div class="ct"><h4>' + esc(t.et) + '</h4><span class="hint">' + esc(t.hint) + '</span>' +
+         infoHtml(t.info) + '</div>');
   if (t.clave) H.push('<span class="abrir" aria-hidden="true">↗</span>');
   H.push('<div class="kv">' + t.kv + (t.u ? '<small>' + esc(t.u) + '</small>' : '') + '</div>');
   if (t.stack) {
     const tot = t.stack.reduce((a, s) => a + s.v, 0) || 1;
     H.push('<div class="stack">' + t.stack.map(s =>
       '<i style="width:' + ((s.v / tot) * 100).toFixed(2) + '%;background:' + s.c + '"></i>').join('') + '</div>');
-    H.push('<div class="legend">' + t.stack.map(s =>
-      '<span><i class="sw" style="background:' + s.c + '"></i>' + esc(s.nom) + ' <b>' + mil(s.v) + '</b> · ' +
-      pct1(s.v, tot) + '</span>').join('') + '</div>');
+    /*  Con la tabla de tres filas abajo, la leyenda diria lo mismo dos veces
+     *  en la misma tarjeta. Se dibuja solo cuando no hay tabla. */
+    if (!t.trio)
+      H.push('<div class="legend">' + t.stack.map(s =>
+        '<span><i class="sw" style="background:' + s.c + '"></i>' + esc(s.nom) + ' <b>' + mil(s.v) + '</b> · ' +
+        pct1(s.v, tot) + '</span>').join('') + '</div>');
   }
   if (t.bullet) {
     const tope = Number(t.bullet.tope) || 1;
@@ -1285,7 +1390,7 @@ function tarjetaHtml(t, i) {
     H.push('<table class="trio">' + t.trio.map(r =>
       '<tr' + (r.pie ? ' class="pie"' : '') + '><td>' + esc(r.q) +
       '<div class="m">' + esc(r.m) + '</div></td><td class="num">' +
-      (r.v == null ? '—' : mil(r.v)) + '</td></tr>').join('') +
+      (r.t != null ? esc(r.t) : r.v == null ? '—' : mil(r.v)) + '</td></tr>').join('') +
       '</table>');
   } else if (t.trio && t.trio.aun) {
     H.push('<div class="nota-periodo">En tránsito a cliente: ' + esc(t.trio.aun) + '</div>');
@@ -1407,8 +1512,7 @@ function composiciones(datos, bodegas) {
   const C = {};
 
   C.pool = desglose('pool', 'Reparto del pool', mil(d.pool), 'pallets',
-    'El pallet rojo que está rotando, repartido en las tres patas. Cada pata es una bodega de SAP ' +
-    'y su saldo lo dicta SAP, no un cálculo nuestro.',
+    QUE_ES.pool.que,
     [{ a: 'Clientes', b: 'BODEGA CLIENTES', v: Number(cli.nivel) || 0 },
      { a: 'Retail', b: 'BODEGA RETAILERS', v: Number(ret.nivel) || 0 },
      { a: 'Planta REDTEC', b: 'las nueve bodegas del indicador', v: Number(pla.nivel) || 0 }],
@@ -1423,14 +1527,18 @@ function composiciones(datos, bodegas) {
     if (x && x.cod != null) crudas[String(x.cod)] = x;
 
   C.planta = desglose('planta', 'Planta · indicador', mil(pla.nivel), 'pallets',
-    'Las nueve estaciones del recorrido del pallet, en el orden en que lo atraviesan. ' +
-    'La definición de cuáles cuentan es de negocio, no de SAP: está declarada en el código.',
+    QUE_ES.planta.que,
     porRecorrido(bs).map(x => ({ a: x.nom, b: x.cod + ' · ' + x.etapa.charAt(0) + x.etapa.slice(1).toLowerCase(),
                                  cod: x.cod, v: x.nivel })),
     { a: 'Indicador de planta', v: Number(pla.nivel) || 0 }, bloqueFuera,
-    'Una estación en cero no es un dato que falte: es una estación vacía, y eso es información. ' +
-    'El calendario de abajo deja elegir cualquier día: al hacerlo, la cifra de arriba y las nueve ' +
-    'estaciones pasan a mostrar su cierre de ESE día, no el de hoy.');
+    null);
+  /*  LA GLOSA PARTIDA EN DOS, cada mitad al lado de lo que explica: una habla
+   *  de las estaciones y la otra del calendario. Juntas en un parrafo abajo
+   *  ocupaban cuatro lineas y ninguna de las dos quedaba cerca de su tema. */
+  C.planta.infoCompone = 'Una estación en cero no es un dato que falte: es una estación vacía, y ' +
+    'eso es información.';
+  C.planta.infoCal = 'Elegir cualquier día cambia la cifra de arriba y las nueve estaciones al ' +
+    'cierre de ESE día, no el de hoy.';
   /*  LA GRILLA Y EL CALENDARIO VAN EN EL CAJON Y NO EN LA TARJETA. Un mes son
    *  cinco filas de seis celdas: en una tarjeta de 343px quedaba de 751px de
    *  alto contra 128 de sus vecinas. Aca hay ancho de sobra. */
@@ -1455,8 +1563,7 @@ function composiciones(datos, bodegas) {
   const atribuido = (Number(cli.socios) || 0) + (Number(ret.socios) || 0);
   const bodega = (Number(cli.nivel) || 0) + (Number(ret.nivel) || 0);
   C.atribucion = desglose('atribucion', 'Atribución por socio', pct1(atribuido, bodega), '',
-    'De lo que hay en las dos bodegas de afuera, cuánto se puede decir de quién es. ' +
-    'El total lo dicta la bodega; la ubicación sólo lo reparte.',
+    QUE_ES.atribucion.que,
     [{ a: 'Clientes · atribuido', b: mil(cli.n) + ' socios con saldo', v: Number(cli.socios) || 0 },
      { a: 'Retail · atribuido', b: mil(ret.n) + ' socios con saldo', v: Number(ret.socios) || 0 }],
     { a: 'Atribuido a un socio', v: atribuido },
@@ -1470,8 +1577,7 @@ function composiciones(datos, bodegas) {
   const residuo = (Number(cli.residuo) || 0) + (Number(ret.residuo) || 0);
   const det = Array.isArray(d.residuo_detalle) ? d.residuo_detalle : [];
   C.residuo = desglose('residuo', 'Sin ubicación', mil(residuo), 'pallets',
-    'Saldo de bodega menos la suma de los socios. No es pallet perdido ni un error de cálculo: ' +
-    'SAP tiene ubicaciones que existen justamente para el pallet sin dueño identificado.',
+    QUE_ES.residuo.que,
     [{ a: 'Retail', b: 'BODEGA RETAILERS', v: Number(ret.residuo) || 0 },
      { a: 'Clientes', b: 'BODEGA CLIENTES', v: Number(cli.residuo) || 0 }],
     { a: 'Sin ubicación', v: residuo },
@@ -1487,8 +1593,7 @@ function composiciones(datos, bodegas) {
   const meses = Array.isArray(d.meses) ? d.meses : [];
   const anio = (Number(d.anio && d.anio.ret) || 0) + (Number(d.anio && d.anio.cli) || 0);
   C.anio = desglose('anio', 'Movimiento del año', conSigno(anio), 'pallets',
-    'Cuánto subió o bajó cada bodega, mes a mes. Un valor positivo es pallet que salió de REDTEC ' +
-    'hacia el socio; uno negativo es pallet que volvió.',
+    QUE_ES.anio.que,
     meses.map(m => ({ a: esc(m.etiqueta), b: 'retail ' + conSigno(m.ret) + ' · clientes ' + conSigno(m.cli),
                       v: (Number(m.ret) || 0) + (Number(m.cli) || 0) })),
     { a: 'Neto del año', v: anio }, null,
@@ -1500,8 +1605,7 @@ function composiciones(datos, bodegas) {
   const dias = bs.reduce((a, x) => a + x.dias, 0);
   const neg = bs.reduce((a, x) => a + x.salud.n, 0);
   C.negativos = desglose('negativos', 'Días en negativo', mil(neg), 'de ' + mil(dias),
-    'Días en que una estación cierra bajo cero. Es imposible —no hay media bodega de pallets en ' +
-    'menos— y la causa está identificada: la fecha del documento en SAP.',
+    QUE_ES.negativos.que,
     conNeg.map(x => ({ a: x.nom, b: x.cod + ' · de ' + mil(x.dias) + ' días medidos · peor el ' +
                           (x.peor ? x.peor.dia : '—') + ' en ' + mil(x.peor ? x.peor.cierre : 0),
                        v: x.salud.n })),
@@ -1515,7 +1619,7 @@ function composiciones(datos, bodegas) {
 
   const cob = ctrl.find(c => /cobertura/i.test(c.titulo || ''));
   C.cobertura = desglose('cobertura', 'Cobertura', cob ? '100' : '—', cob ? '%' : '',
-    'Cuántos documentos de SAP llegaron a nuestra extracción. Es el control que dice si falta algo.',
+    QUE_ES.cobertura.que,
     cob ? [{ a: String(cob.titulo), b: String(cob.texto || ''), v: null }] : [],
     null, null,
     cob ? 'Medido el ' + esc(String(cob.medido || d.extra_medido || 's/f')) + '.'
@@ -1524,8 +1628,7 @@ function composiciones(datos, bodegas) {
 
   C.controles = desglose('controles', 'Controles', mil(ctrl.length - ctrl.filter(c => c.estado === 'no pasa').length),
     'de ' + mil(ctrl.length),
-    'Cada control con su resultado y la fecha en que se midió. Un control que no pasa no se ' +
-    'esconde: se nombra.',
+    QUE_ES.controles.que,
     ctrl.slice().sort((a, x) => (a.estado === 'no pasa' ? 0 : 1) - (x.estado === 'no pasa' ? 0 : 1))
         .map(c => ({ a: String(c.titulo) + (c.estado === 'no pasa' ? ' · NO PASA' : ''),
                      b: String(c.texto || ''), v: null,
@@ -1647,7 +1750,8 @@ function desgloseHtml(c) {
          (c.u ? '<small>' + esc(c.u) + '</small>' : '') + '</div>');
   if (c.intro) H.push('<p class="mut" style="margin:10px 0 0;max-width:62ch">' + esc(c.intro) + '</p>');
   if (c.filas.length && c.grilla) {
-    H.push('<h5>Se compone de</h5>' + grillaBodegasHtml(c.filas, c.total));
+    H.push('<h5>Se compone de' + infoHtml(c.infoCompone) + '</h5>' +
+           grillaBodegasHtml(c.filas, c.total));
   } else if (c.filas.length) {
     H.push('<h5>Se compone de</h5><table class="desg">');
     H.push('<tbody>' + c.filas.map(fila).join('') + '</tbody>');
@@ -1686,7 +1790,7 @@ function desgloseHtml(c) {
   /*  EL CALENDARIO VA AL FINAL DE TODO. Arriba esta "cuanto hay" —que es lo
    *  que se viene a buscar—; esto es "como se llego", y se mira despues. */
   if (c.cal) {
-    H.push('<h5>Cierre día por día</h5>');
+    H.push('<h5>Cierre día por día' + infoHtml(c.infoCal) + '</h5>');
     if (c.meses && c.meses.length > 1)
       H.push('<div class="cmeses">' + c.meses.map(m =>
         '<button type="button" class="chip' + (m === c.mes ? ' on' : '') +
@@ -1998,11 +2102,12 @@ function script(serie, mes0, desg, aper, datos) {
                titular, contarSalud, nivelDiarioDePlanta, ultimaSemana,
                diaDeSemana, mesDelCalendario, calendarioDeMes, filasDelDia, pieDeDia,
                notaDeDia, calendarioHtml, pintarDia, pintarMes,
-               cierreDeBodegaEn, grillaBodegasHtml,
+               cierreDeBodegaEn, grillaBodegasHtml, infoHtml, queEs,
                serieDelPeriodo, tarjetas, tarjetaHtml];
   const cuerpo = 'var MESES = ' + jsonSeguro(MESES) + ';\n' +
     'var ETAPAS = ' + jsonSeguro(ETAPAS) + ';\n' +
     'var DIA_CORTO = ' + jsonSeguro(DIA_CORTO) + ';\n' +
+    'var QUE_ES = ' + jsonSeguro(QUE_ES) + ';\n' +
     'var ORDEN_SALUD = ' + jsonSeguro(ORDEN_SALUD) + ';\n' +
     'var GLIFO = ' + jsonSeguro(GLIFO) + ';\n' +
     'var NOMBRE_SALUD = ' + jsonSeguro(NOMBRE_SALUD) + ';\n' +
@@ -2183,6 +2288,9 @@ function script(serie, mes0, desg, aper, datos) {
     // dia lo volveria a abrir desde cero y perderia el dia elegido.
     '      var cd = el.closest(".cd[data-dia]");',
     '      if (cd) { pintarDia($("#dbody"), cd.getAttribute("data-dia"), PD); return true; }',
+    // La (i) vive DENTRO de la tarjeta, que es un [data-kpi]: sin esto, pasar
+    // a leerla con el teclado y apretar Enter abriria el cajon encima.
+    '      if (el.closest(".info")) return true;',
     '      var pm = el.closest("[data-pm]");',
     '      if (pm) { pintarMes($("#dbody"), pm.getAttribute("data-pm"), PD,',
     '                          DAT.planta_transito_dias, DESG.planta && DESG.planta.calHoy,',
@@ -2269,7 +2377,7 @@ module.exports = { ETAPAS, GLIFO, ORDEN_SALUD, HITOS, CSS,
                    mesDeApertura, mesesDeBodega, ultimaSemana, miniSemana, miniNivel,
                    nivelDiarioDePlanta, diaDeSemana, mesDelCalendario, calendarioDeMes,
                    filasDelDia, pieDeDia, notaDeDia, calendarioHtml, pintarDia, pintarMes,
-                   cierreDeBodegaEn, grillaBodegasHtml, DIA_CORTO,
+                   cierreDeBodegaEn, grillaBodegasHtml, infoHtml, queEs, QUE_ES, DIA_CORTO,
                    titular, tarjetas, decisiones, diasHasta, hitos,
                    desglose, composiciones, desgloseHtml, porRecorrido,
                    recortar, chipEstado, tarjetaHtml, matrizHtml, filaCartera, listaHtml,

@@ -186,7 +186,14 @@ chk('sin control de cobertura la tarjeta lo dice', SINCOB[6].kv==='—' && SINCO
     SINCOB[6].kv+' '+JSON.stringify(SINCOB[6].chip));
 // el residuo son las DOS patas: mostrar solo el de retail esconde 1.467
 chk('el residuo suma las dos patas', TJ[3].kv==='33.482', TJ[3].kv);
-chk('y nombra cada una', /retail <b>32\.015<\/b>/.test(TJ[3].ks) && /clientes <b>1\.467<\/b>/.test(TJ[3].ks), TJ[3].ks);
+// y lo nombra en la tabla de tres filas, no en una linea de texto suelta
+chk('y nombra cada una en sus tres filas',
+    TJ[3].trio[0].q==='Retail' && TJ[3].trio[0].v===32015 &&
+    TJ[3].trio[1].q==='Clientes' && TJ[3].trio[1].v===1467,
+    JSON.stringify(TJ[3].trio.map(r=>r.q+':'+r.v)));
+chk('con el atribuido al pie, que es lo que SI tiene dueño',
+    TJ[3].trio[2].pie===true && TJ[3].trio[2].v===TJ[2].bullet.v,
+    TJ[3].trio[2].v+' vs '+TJ[2].bullet.v);
 chk('sin datos no revienta', A.tarjetas(null,null).length===8);
 
 console.log('\n— lo que hay que decidir sale del dato —');
@@ -630,18 +637,33 @@ chk('trae el calendario del mes que declara',
 chk('y el dia elegido es el ultimo de ese mes',
     CP.planta.calSel===[].concat.apply([],CP.planta.cal.semanas).filter(Boolean).pop().dia,
     CP.planta.calSel);
-chk('la nota manda a usar el calendario, no a comparar mini-series',
-    /calendario de abajo/.test(CP.planta.nota), CP.planta.nota.slice(0,60));
+// LA GLOSA PARTIDA EN DOS, cada mitad al lado de lo que explica
+chk('la glosa de las estaciones va junto a la grilla',
+    /estación vacía/.test(CP.planta.infoCompone), CP.planta.infoCompone);
+chk('y la del calendario junto al calendario',
+    /cierre de ESE día/.test(CP.planta.infoCal), CP.planta.infoCal);
+chk('y ya no hay parrafo largo abajo', CP.planta.nota===null, String(CP.planta.nota));
 const HP=A.desgloseHtml(CP.planta);
 chk('el html dibuja la grilla y el calendario', /class="bgr"/.test(HP) && /class="calen"/.test(HP));
 // ARRIBA "cuanto hay", ABAJO "como se llego": el calendario va al final de
 // todo, despues del bloque de referencia y de la nota
-const iNota=HP.indexOf(esc0(CP.planta.nota.slice(0,20)));
-chk('y el calendario va al final, despues de todo lo demas',
-    iNota > 0 && HP.indexOf('class="desg ref"') > 0 &&
-    HP.indexOf('class="calen"') > HP.indexOf('class="desg ref"') &&
-    HP.indexOf('class="calen"') > iNota,
-    'calen@'+HP.indexOf('class="calen"')+' ref@'+HP.indexOf('class="desg ref"')+' nota@'+iNota);
+// la nota del desglose se sigue dibujando donde corresponde: el pool tiene
+// una y es donde dice que SAP cuenta mas de lo que rota
+chk('la nota del desglose llega al html',
+    /Contándolos, SAP tiene/.test(A.desgloseHtml(CO.pool)),
+    (A.desgloseHtml(CO.pool).match(/Contándolos[^<]{0,40}/)||['(no esta)'])[0]);
+chk('y va despues del bloque de referencia, no antes',
+    A.desgloseHtml(CO.pool).indexOf('Contándolos') >
+      A.desgloseHtml(CO.pool).indexOf('class="desg ref"'), '');
+chk('y el calendario va al final, despues del bloque de referencia',
+    HP.indexOf('class="desg ref"') > 0 &&
+    HP.indexOf('class="calen"') > HP.indexOf('class="desg ref"'),
+    'calen@'+HP.indexOf('class="calen"')+' ref@'+HP.indexOf('class="desg ref"'));
+// cada (i) al lado de SU titulo, no las dos juntas al final
+chk('la (i) de las estaciones va en el titulo de la grilla',
+    HP.indexOf('Se compone de<span class="info"') > 0, '');
+chk('y la del calendario en el titulo del calendario',
+    HP.indexOf('Cierre día por día<span class="info"') > 0, '');
 chk('con el titulo que dice que es', /Cierre día por día/.test(HP));
 chk('un desglose sin calendario no dibuja uno vacio', !/class="calen"/.test(A.desgloseHtml(CP.anio)));
 chk('y ninguno dibuja mini-series por fila', !/class="sem"/.test(HP));
@@ -998,10 +1020,15 @@ const TJPER=A.tarjetas(D,A.bodegasDelCockpit(OCT),undefined,'2026-10');
 const plPER=TJPER.find(x=>x.clave==='planta');
 chk('con periodo el indicador sigue siendo la lectura de hoy',
     plPER.kv===A.tarjetas(D,TODAS).find(x=>x.clave==='planta').kv, plPER.kv);
-chk('y la tarjeta avisa que un saldo no se filtra por fecha',
-    /no se filtra por fecha/.test(plPER.nota||''), String(plPER.nota));
-chk('sin periodo no aparece esa nota',
-    !A.tarjetas(D,TODAS).find(x=>x.clave==='planta').nota);
+// EL AVISO VA EN LA (i) Y NO EN UN PARRAFO: ocupaba cuatro lineas en la
+// tarjeta donde el espacio es justo lo que falta
+chk('y la tarjeta avisa, dentro de la (i), que un saldo no se filtra por fecha',
+    /no se filtra por fecha/.test(plPER.info||'') && plPER.nota===null, String(plPER.nota));
+chk('y el aviso llega al html dentro del globo',
+    /class="tip">[^<]*no se filtra por fecha/.test(A.tarjetaHtml(plPER)), '');
+chk('sin periodo la (i) no lleva ese aviso',
+    !/no se filtra por fecha/.test(
+      A.tarjetas(D,TODAS).find(x=>x.clave==='planta').info||''));
 // con periodo la serie cierra donde termina el periodo, no en el saldo de
 // hoy: reclamar un descalce ahi seria una alarma falsa
 // la linea sigue a los dos filtros: una linea que llega a noviembre debajo de
@@ -1088,10 +1115,26 @@ chk('y su explicacion tambien', /&lt;i&gt;m&lt;\/i&gt;/.test(SUCTRIO), SUCTRIO.s
 chk('no se cuela ningun tag crudo de la fila',
     SUCTRIO.indexOf('<b>q</b>')<0 && SUCTRIO.indexOf('<i>m</i>')<0);
 chk('sin trio el html no deja una tabla vacia',
-    !/<table class="trio">/.test(A.tarjetaHtml(A.tarjetas(D,TODAS)[0],0)));
-chk('y llega a la pagina cuando hay dato',
-    /<table class="trio">/.test(soloCuerpo(A.pagina(CONTRA))));
-chk('pero no con el dato de hoy', !/<table class="trio">/.test(soloCuerpo(A.pagina(D))));
+    !/<table class="trio">/.test(A.tarjetaHtml({clave:'x',et:'x',hint:'x',kv:'1'},0)));
+// las tres filas de PLANTA solo salen cuando el transito se puede medir
+const htmlPla=d2=>A.tarjetaHtml(A.tarjetas(d2,TODAS).find(x=>x.clave==='planta'),0);
+chk('las tres filas de planta llegan cuando hay dato',
+    /<table class="trio">/.test(htmlPla(CONTRA)));
+chk('pero no con el dato de hoy', !/<table class="trio">/.test(htmlPla(D)));
+// y las otras tres tarjetas SI las traen siempre: son su composicion
+chk('el reparto del pool trae sus tres patas',
+    A.tarjetas(D,TODAS).find(x=>x.clave==='pool').trio.map(r=>r.q).join(',')
+      ==='Clientes,Retail,Planta REDTEC',
+    A.tarjetas(D,TODAS).find(x=>x.clave==='pool').trio.map(r=>r.q).join(','));
+chk('y con la leyenda del stack apagada, para no decirlo dos veces',
+    !/class="legend"/.test(A.tarjetaHtml(A.tarjetas(D,TODAS).find(x=>x.clave==='pool'),0)));
+chk('atribucion muestra el porcentaje de cada bodega',
+    A.tarjetas(D,TODAS).find(x=>x.clave==='atribucion').trio
+      .slice(0,2).every(r=>/%/.test(r.t||'')),
+    JSON.stringify(A.tarjetas(D,TODAS).find(x=>x.clave==='atribucion').trio.map(r=>r.t)));
+chk('y el html escribe ese texto, no un numero',
+    /<td class="num">[\d,]+%<\/td>/.test(
+      A.tarjetaHtml(A.tarjetas(D,TODAS).find(x=>x.clave==='atribucion'),0)), '');
 
 console.log('\n— el calendario: el numero escrito, no la forma de la barrita —');
 // La barrita mostraba la forma de la semana y escondia sus numeros detras del
@@ -1273,6 +1316,54 @@ chk('sin filas no dibuja nada', A.grillaBodegasHtml([],null)==='' && A.grillaBod
 chk('un valor ausente es un guion, no un cero',
     /<b>—<\/b>/.test(A.grillaBodegasHtml([{a:'x',cod:'y',v:null}],null)));
 chk('el nombre va escapado', !/<script>/.test(A.grillaBodegasHtml([{a:'<script>',cod:'z',v:1}],null)));
+
+console.log('\n— la (i): que muestra esta cifra y como se calcula —');
+// Es la primera pregunta frente a cualquier tarjeta y hasta ahora habia que
+// abrir el cajon para contestarla.
+chk('las ocho tarjetas traen su (i)',
+    A.tarjetas(D,BS).every(t=>t.info && t.info.length>40),
+    A.tarjetas(D,BS).filter(t=>!t.info).map(t=>t.clave).join(',')||'todas');
+chk('y dice las dos cosas: que es y como se calcula',
+    A.queEs('pool')===A.QUE_ES.pool.que+' '+A.QUE_ES.pool.como, A.queEs('pool'));
+// UNA SOLA FUENTE: el cajon usa el mismo texto de intro, asi que no pueden
+// decir cosas distintas despues de que alguien corrija uno
+chk('el intro del cajon sale de la misma tabla',
+    A.composiciones(D,BS).pool.intro===A.QUE_ES.pool.que,
+    A.composiciones(D,BS).pool.intro.slice(0,40));
+chk('y eso vale para las ocho',
+    ['pool','planta','atribucion','residuo','anio','negativos','cobertura','controles']
+      .every(k=>A.composiciones(D,BS)[k].intro===A.QUE_ES[k].que),
+    ['pool','planta','atribucion','residuo','anio','negativos','cobertura','controles']
+      .filter(k=>A.composiciones(D,BS)[k].intro!==A.QUE_ES[k].que).join(','));
+chk('una clave que no esta no inventa texto', A.queEs('noexiste')==='');
+chk('pero sigue mostrando lo que se le pase aparte',
+    A.queEs('noexiste','ojo con esto')==='ojo con esto');
+chk('y lo de aparte se agrega al final, no reemplaza',
+    /como se calcula.*$/.test('x') || A.queEs('pool','extra').endsWith(' extra'),
+    A.queEs('pool','extra').slice(-30));
+
+const IH=A.infoHtml('texto <b>con</b> tags');
+chk('la (i) es alcanzable con el teclado', /tabindex="0"/.test(IH));
+chk('y un lector de pantalla la lee sin abrirla', /aria-label="texto &lt;b&gt;con&lt;\/b&gt; tags"/.test(IH));
+chk('el texto va escapado también adentro del globo',
+    /<span class="tip">texto &lt;b&gt;con&lt;\/b&gt; tags<\/span>/.test(IH), IH);
+chk('no se cuela ningun tag crudo', IH.indexOf('<b>con</b>')<0);
+chk('sin texto no dibuja una (i) vacia', A.infoHtml('')==='' && A.infoHtml(null)==='' && A.infoHtml('   ')==='');
+// EL CLIC EN LA (i) NO TIENE QUE ABRIR EL CAJON: vive dentro de la tarjeta,
+// que es un [data-kpi]. El guardia va en el despachador publicado y tiene que
+// ir ANTES de la busqueda del kpi, o el cajon gana.
+const JSC=A.script([],'2026-10',{},{},{});
+chk('el despachador atiende la (i) antes que el kpi',
+    JSC.indexOf('el.closest(".info")') > 0 &&
+    JSC.indexOf('el.closest(".info")') < JSC.indexOf('el.closest("[data-kpi]")'),
+    'info@'+JSC.indexOf('el.closest(".info")')+' kpi@'+JSC.indexOf('el.closest("[data-kpi]")'));
+chk('y corta ahi, sin seguir buscando', /closest\(".info"\)\) return true;/.test(JSC), '');
+chk('la (i) llega a la cabecera de la tarjeta, no al cuerpo',
+    /<span class="hint">[^<]*<\/span><span class="info"/.test(
+      A.tarjetaHtml(A.tarjetas(D,BS)[0],0)), '');
+chk('y las ocho la llevan en la pagina',
+    (soloCuerpo(A.pagina(D)).match(/<span class="info"/g)||[]).length>=8,
+    String((soloCuerpo(A.pagina(D)).match(/<span class="info"/g)||[]).length));
 
 console.log('\n' + ok + ' ok, ' + fail + ' fallas');
 process.exit(fail ? 1 : 0);

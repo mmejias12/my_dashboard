@@ -531,5 +531,87 @@ chk('la serie llega al json que lee la pagina',
 chk('y sin serie va un arreglo vacio, no undefined',
     Array.isArray(S.payloadJson({ series:[] }).transito_dias));
 
+// ============================================================
+// EL TRANSITO REPARTIDO POR PLANTA
+// ============================================================
+console.log('\n— a que planta se le anota el pallet que esta en el aire —');
+// El codigo de bodega lleva el recinto (RT13, RT07) pero esa correspondencia
+// no esta declarada en ninguna parte: la planta sale del NOMBRE
+const NOM=new Map([['RT13-105','SANTIAGO DISPONIBLE'],['RT13-100','SANTIAGO INSPECCION'],
+                   ['RT07-125','TALCA DISPONIBLE'],['RT13-266','SANTIAGO MERMA']]);
+chk('la planta sale del nombre, no del codigo',
+    S.plantaDeCodigo('RT13-105',NOM)==='SANTIAGO' && S.plantaDeCodigo('RT07-125',NOM)==='TALCA',
+    S.plantaDeCodigo('RT13-105',NOM)+'/'+S.plantaDeCodigo('RT07-125',NOM));
+// SIN NOMBRE NO SE ADIVINA: devolver "RT13-105" como planta inventaria una
+// planta que no existe y el filtro no la ofreceria nunca
+chk('sin nombre no se inventa una planta',
+    S.plantaDeCodigo('RT13-105',null)==='SIN PLANTA' &&
+    S.plantaDeCodigo('RT99-999',NOM)==='SIN PLANTA',
+    S.plantaDeCodigo('RT13-105',null));
+chk('y tambien acepta un objeto plano',
+    S.plantaDeCodigo('RT07-125',{'RT07-125':'TALCA DISPONIBLE'})==='TALCA');
+
+const NUE2=new Set(['RT13-105','RT13-100','RT07-125','RT13-266']);
+const LP=[
+  l('RT13-105','CLIENTES',80,'2026-11-02','2026-11-03'),   // Santiago, sale
+  l('RT07-125','RETAIL',  30,'2026-11-02','2026-11-03'),   // Talca, sale
+  l('CLIENTES','RT13-100',10,'2026-11-02','2026-11-03'),   // Santiago, entra: resta
+  l('RT13-105','RT07-125',99,'2026-11-02','2026-11-03'),   // interna: no cuenta
+];
+const TP=S.enTransito(LP,'2026-11-02',NUE2,NOM);
+chk('cada planta lleva su parte',
+    TP.porPlanta.SANTIAGO===70 && TP.porPlanta.TALCA===30,
+    JSON.stringify(TP.porPlanta));
+// LA PARTICION ES EXACTA: cada linea contada tiene un solo extremo adentro,
+// asi que si la suma no diera el total habria pallets anotados dos veces o
+// ninguna, y el filtro mostraria un numero que no existe
+chk('y la suma de las plantas es el total',
+    Object.keys(TP.porPlanta).reduce((a,k)=>a+TP.porPlanta[k],0)===TP.pallets,
+    JSON.stringify(TP.porPlanta)+' vs '+TP.pallets);
+// SE ANOTA AL EXTREMO DE ADENTRO: la linea que entra viene DE clientes, que
+// no tiene planta; la bodega de REDTEC que la recibe es la que la cuenta
+chk('la que entra se le anota a la bodega que la recibe',
+    S.enTransito([l('CLIENTES','RT07-125',10,'2026-11-02','2026-11-03')],'2026-11-02',NUE2,NOM)
+      .porPlanta.TALCA===-10, '');
+chk('una interna no le suma a ninguna planta',
+    Object.keys(S.enTransito([l('RT13-105','RT07-125',99,'2026-11-02','2026-11-03')],
+      '2026-11-02',NUE2,NOM).porPlanta).length===0, '');
+// una bodega de REDTEC que no esta entre las nueve igual tiene planta: el
+// filtro de Santiago la alcanza aunque no sume al indicador
+chk('merma tambien se anota a su planta',
+    S.enTransito([l('RT13-266','CLIENTES',7,'2026-11-02','2026-11-03')],'2026-11-02',NUE2,NOM)
+      .porPlanta.SANTIAGO===7, '');
+chk('sin el mapa de nombres todo cae en SIN PLANTA',
+    S.enTransito(LP,'2026-11-02',NUE2)['porPlanta']['SIN PLANTA']===100,
+    JSON.stringify(S.enTransito(LP,'2026-11-02',NUE2).porPlanta));
+// NO MEDIBLE NO ES CERO: sin reparto va en null, para que la pagina pueda
+// decir "no se puede saber" en vez de "esa planta no tiene nada en el aire"
+chk('cuando no se puede medir, el reparto va en null',
+    S.enTransito(LP,'el lunes',NUE2,NOM).porPlanta===null &&
+    S.enTransito(LP.map(x=>({...x,CreaDate:null})),'2026-11-02',NUE2,NOM).porPlanta===null, '');
+chk('el detalle dice a que planta se anoto cada linea',
+    TP.detalle.filter(x=>x.desde==='RT07-125')[0].planta==='TALCA',
+    JSON.stringify(TP.detalle.map(x=>x.desde+':'+x.planta)));
+
+// Y DIA POR DIA, no solo al ultimo cierre: con un dia elegido y el filtro en
+// Santiago, las tres filas tienen que hablar de Santiago ESE dia
+const TDP=S.transitoPorDia(LP,['2026-11-01','2026-11-02','2026-11-03'],NUE2,NOM);
+chk('el reparto viaja en cada dia',
+    TDP[1].por_planta.SANTIAGO===70 && TDP[1].por_planta.TALCA===30,
+    JSON.stringify(TDP[1]));
+chk('un dia sin nada en el aire reparte vacio, no null',
+    TDP[2].pallets===0 && TDP[2].por_planta && Object.keys(TDP[2].por_planta).length===0,
+    JSON.stringify(TDP[2]));
+chk('y un dia que no se puede medir va en null',
+    S.transitoPorDia(LP.map(x=>({...x,CreaDate:null})),['2026-11-02'],NUE2,NOM)[0].por_planta===null,
+    JSON.stringify(S.transitoPorDia(LP.map(x=>({...x,CreaDate:null})),['2026-11-02'],NUE2,NOM)[0]));
+
+const PJP=S.payloadJson({ series:[], transito:TP, transitoAl:'2026-11-02', transitoDias:TDP });
+chk('el reparto sale publicado como por_planta',
+    PJP.transito.por_planta.SANTIAGO===70 && PJP.transito_dias[1].por_planta.TALCA===30,
+    JSON.stringify(PJP.transito.por_planta));
+chk('y sin transito queda en null, no en un objeto vacio',
+    S.payloadJson({ series:[] }).transito.por_planta===null, '');
+
 console.log('\n'+ok+' ok, '+fail+' fallas\n');
 process.exit(fail?1:0);

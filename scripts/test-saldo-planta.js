@@ -434,5 +434,67 @@ chk('con su motivo', /falta re-extraer/.test(PJN.transito.motivo));
 chk('y sin transito tampoco finge un cero',
     S.payloadJson({}).transito.pallets===null && S.payloadJson({}).transito.medible===false);
 
+console.log('\n— y de donde sale y a donde va: 540 en el aire no se puede perseguir —');
+const lx=(de,a,q,c,d,n)=>({desde:de,hacia:a,cantidad:q,CreaDate:c,DocDate:d,DocEntry:n,DocNum:n+900000});
+const LD=[
+  lx('RT13-105','CLIENTES',540,'2026-11-02','2026-11-04',35058202),
+  lx('RT13-100','RT13-105', 40,'2026-11-02','2026-11-03',35058203),   // interna
+  lx('CLIENTES','RT13-100', 10,'2026-11-02','2026-11-03',35058204),   // entra
+  lx('RT13-105','CLIENTES', 80,'2026-11-02','2026-11-03',35058205),
+];
+const TD=S.enTransito(LD,'2026-11-02',NUE);
+chk('hay una fila de detalle por cada linea contada',
+    TD.detalle.length===TD.lineas && TD.lineas===3, JSON.stringify(TD.detalle.map(x=>x.doc)));
+chk('con las dos bodegas, el documento y las dos fechas',
+    TD.detalle[0].desde==='RT13-105' && TD.detalle[0].hacia==='CLIENTES' &&
+    TD.detalle[0].doc===35058202 && TD.detalle[0].num===35958202 &&
+    TD.detalle[0].crea==='2026-11-02' && TD.detalle[0].llega==='2026-11-04',
+    JSON.stringify(TD.detalle[0]));
+// las grandes primero: son las que explican el numero
+chk('ordenado de mayor a menor', TD.detalle.map(x=>Math.abs(x.cantidad)).join(',')==='540,80,10',
+    TD.detalle.map(x=>x.cantidad).join(','));
+// la que ENTRA viene con signo negativo, igual que como suma al total
+chk('la que entra a planta va negativa',
+    TD.detalle.find(x=>x.doc===35058204).cantidad===-10);
+// y el orden mira el TAMANO, no el signo: 300 que vienen entrando pesan mas
+// que 20 que salen, y el que lee quiere ver primero el movimiento grande
+chk('ordena por tamano, no por signo',
+    S.enTransito([lx('RT13-105','CLIENTES',20,'2026-11-02','2026-11-04',11),
+                  lx('CLIENTES','RT13-100',300,'2026-11-02','2026-11-04',12)],
+                 '2026-11-02',NUE).detalle[0].cantidad===-300);
+chk('y el detalle suma lo mismo que el total',
+    TD.detalle.reduce((a,x)=>a+x.cantidad,0)===TD.pallets, String(TD.pallets));
+// lo que no cuenta tampoco aparece: un detalle con lineas que no suman al
+// numero manda a buscar documentos que no tienen nada que ver
+chk('la interna no esta en el detalle', !TD.detalle.some(x=>x.doc===35058203));
+chk('una linea entre dos bodegas ajenas tampoco',
+    S.enTransito([lx('CLIENTES','RETAIL',40,'2026-11-02','2026-11-03',1)],'2026-11-02',NUE).detalle.length===0);
+chk('una ya fechada tampoco',
+    S.enTransito([lx('RT13-105','CLIENTES',5,'2026-11-01','2026-11-01',2)],'2026-11-02',NUE).detalle.length===0);
+// DOS CORRIDAS DEL MISMO DATO TIENEN QUE IMPRIMIR IGUAL
+const EMP=[lx('RT13-105','CLIENTES',80,'2026-11-02','2026-11-04',35058300),
+           lx('RT13-105','CLIENTES',80,'2026-11-02','2026-11-04',35058299)];
+chk('el empate se rompe por DocEntry, no por el orden de llegada',
+    [1,2,3].every(()=>S.enTransito(EMP,'2026-11-02',NUE).detalle.map(x=>x.doc).join(',')
+                       ==='35058299,35058300'),
+    S.enTransito(EMP,'2026-11-02',NUE).detalle.map(x=>x.doc).join(','));
+// el detalle viaja hasta la pagina dentro de datos-stock.json: con tope
+const MUCHAS=[];
+for (let i=0;i<25;i++) MUCHAS.push(lx('RT13-105','CLIENTES',i+1,'2026-11-02','2026-11-04',40000000+i));
+const TCAP=S.enTransito(MUCHAS,'2026-11-02',NUE);
+chk('el detalle tiene tope de 10', TCAP.detalle.length===10, String(TCAP.detalle.length));
+chk('pero el conteo de lineas las cuenta todas', TCAP.lineas===25, String(TCAP.lineas));
+chk('y el total tambien', TCAP.pallets===325, String(TCAP.pallets));
+chk('el tope deja las mas grandes, no las primeras', TCAP.detalle[0].cantidad===25);
+// sin fecha de creacion no hay transito y tampoco detalle que sugiera que si
+chk('si no se puede medir no hay detalle',
+    !(S.enTransito(LD.map(x=>({...x,CreaDate:null})),'2026-11-02',NUE).detalle||[]).length);
+const PJD=S.payloadJson({ series:[], transito:TD, transitoAl:'2026-11-02' });
+chk('y el detalle llega al json que lee la pagina',
+    PJD.transito.detalle.length===3 && PJD.transito.detalle[0].cantidad===540,
+    JSON.stringify(PJD.transito.detalle[0]));
+chk('sin transito el json trae un detalle vacio, no undefined',
+    Array.isArray(S.payloadJson({ series:[] }).transito.detalle));
+
 console.log('\n'+ok+' ok, '+fail+' fallas\n');
 process.exit(fail?1:0);

@@ -203,7 +203,15 @@ function fechaQueManda(cobertura, pedida) {
  *  anuncia por su cuenta. */
 const TOPE_DETALLE = 10;
 
-function enTransito(lineas, hasta, conjunto) {
+/** LA PLANTA DE UNA BODEGA, por su nombre de SAP. El codigo lleva el recinto
+ *  (RT13, RT07) pero esa correspondencia no esta declarada en ninguna parte;
+ *  el nombre si la dice. Sin nombre no se adivina: va a SIN PLANTA. */
+function plantaDeCodigo(cod, nombres) {
+  const n = (nombres && (nombres.get ? nombres.get(cod) : nombres[cod])) || '';
+  return n ? A.plantaDeBodega(n) : 'SIN PLANTA';
+}
+
+function enTransito(lineas, hasta, conjunto, nombres) {
   const dia = x => { const t = String(x == null ? '' : x).slice(0, 10);
                      return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : null; };
   const corte = dia(hasta);
@@ -212,17 +220,17 @@ function enTransito(lineas, hasta, conjunto) {
   let conCrea = 0;
   for (const l of ls) if (l && dia(l.CreaDate)) conCrea++;
   if (!corte)
-    return { medible: false, pallets: null, lineas: 0, conCrea,
+    return { medible: false, pallets: null, lineas: 0, conCrea, porPlanta: null,
              motivo: 'no se puede medir el transito: la fecha de corte no es una fecha' };
   // El dato viejo no trae fecha de creacion. Mientras no se re-extraiga, el
   // transito no se puede saber, y la pagina tiene que decirlo en vez de
   // publicar un cero que se leeria como "no hay nada en el aire".
   if (!conCrea)
-    return { medible: false, pallets: null, lineas: 0, conCrea: 0,
+    return { medible: false, pallets: null, lineas: 0, conCrea: 0, porPlanta: null,
              motivo: 'ninguna linea trae fecha de creacion: el transito no se puede medir ' +
                      'hasta que se re-extraiga guardandola' };
   let pallets = 0, n = 0, sinFecha = 0;
-  const det = [];
+  const det = [], porPlanta = {};
   for (const l of ls) {
     if (!l) continue;
     const c = dia(l.CreaDate), d = dia(l.DocDate);
@@ -238,6 +246,16 @@ function enTransito(lineas, hasta, conjunto) {
     const q = sale ? (Number(l.cantidad) || 0) : -(Number(l.cantidad) || 0);
     pallets += q;
     n++;
+    /*  A QUE PLANTA SE LE ANOTA.
+     *
+     *  A la del extremo que esta DENTRO del conjunto, que es la bodega de
+     *  REDTEC que soltó o recibió el pallet: el otro extremo es clientes o
+     *  retail y no tiene planta. Cada linea contada tiene exactamente un
+     *  extremo adentro —las internas y las ajenas ya se descartaron arriba—,
+     *  asi que el reparto es una particion: la suma de las plantas da el
+     *  total, siempre. */
+    const plan = plantaDeCodigo(sale ? l.desde : l.hacia, nombres);
+    porPlanta[plan] = (porPlanta[plan] || 0) + q;
     // DE DONDE SALE Y A DONDE VA. "540 pallets en el aire" no se puede
     // perseguir; "540 de RT13-105 a CLIENTES, documento 695061, creado el 3 y
     // fechado el 4" se busca en SAP en diez segundos. El numero sin esto
@@ -248,13 +266,13 @@ function enTransito(lineas, hasta, conjunto) {
     // se puede decir sin inventar.
     det.push({ doc: l.DocEntry == null ? null : l.DocEntry,
                num: l.DocNum == null ? null : l.DocNum,
-               desde: l.desde || null, hacia: l.hacia || null,
+               desde: l.desde || null, hacia: l.hacia || null, planta: plan,
                cantidad: q, crea: c, llega: d });
   }
   // Las mas grandes primero, que son las que explican el numero; el empate se
   // rompe por DocEntry para que dos corridas del mismo dato impriman igual.
   det.sort((x, y) => (Math.abs(y.cantidad) - Math.abs(x.cantidad)) || (Number(x.doc) - Number(y.doc)));
-  return { medible: true, pallets, lineas: n, conCrea, sinFecha,
+  return { medible: true, pallets, lineas: n, conCrea, sinFecha, porPlanta,
            detalle: det.slice(0, TOPE_DETALLE),
            motivo: sinFecha ? sinFecha + ' linea(s) creadas sin fecha de documento utilizable: ' +
                               'salieron de la bodega y no tienen dia de llegada' : null };
@@ -271,15 +289,19 @@ function enTransito(lineas, hasta, conjunto) {
  *  Un dia sin medicion va en null, no en cero: la diferencia entre "ese dia
  *  no habia nada en el aire" y "ese dia no se puede saber" es justamente la
  *  que la pagina tiene que poder decir. */
-function transitoPorDia(lineas, dias, conjunto) {
+function transitoPorDia(lineas, dias, conjunto, nombres) {
   const vistos = new Set();
   const out = [];
   for (const d of (Array.isArray(dias) ? dias : [])) {
     const dia = String(d == null ? '' : d).slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dia) || vistos.has(dia)) continue;
     vistos.add(dia);
-    const t = enTransito(lineas, dia, conjunto);
-    out.push({ dia, pallets: t.medible ? t.pallets : null, lineas: t.medible ? t.lineas : 0 });
+    const t = enTransito(lineas, dia, conjunto, nombres);
+    /*  El reparto por planta va DIA POR DIA y no solo en el total: con un dia
+     *  elegido en el calendario y el filtro en SANTIAGO, las tres filas tienen
+     *  que hablar de Santiago ESE dia. */
+    out.push({ dia, pallets: t.medible ? t.pallets : null, lineas: t.medible ? t.lineas : 0,
+               por_planta: t.medible ? t.porPlanta : null });
   }
   out.sort((a, b) => a.dia < b.dia ? -1 : a.dia > b.dia ? 1 : 0);
   return out;
@@ -481,10 +503,11 @@ function payloadJson(p) {
     transito: x.transito ? { medible: !!x.transito.medible, pallets: x.transito.pallets,
                              lineas: x.transito.lineas || 0,
                              sin_fecha: x.transito.sinFecha || 0,
+                             por_planta: x.transito.porPlanta || null,
                              detalle: x.transito.detalle || [],
                              motivo: x.transito.motivo || null, al: x.transitoAl || null }
                          : { medible: false, pallets: null, lineas: 0, sin_fecha: 0, detalle: [],
-                             motivo: 'no se calculo', al: null },
+                             por_planta: null, motivo: 'no se calculo', al: null },
     transito_dias: Array.isArray(x.transitoDias) ? x.transitoDias : [],
     lectura: {
       ancla: x.anclaLeida || null,
@@ -567,7 +590,7 @@ function veredicto(series, imposibles, cuad, ancla, aperturas, desfase, fecha, t
 
 module.exports = { bodegasDePlanta, movimientoDeBodega, marcarFirmes, cadenaDePlanta,
                    nivelesImposibles, aperturasImposibles, desfaseDeLectura,
-                   enTransito, transitoPorDia, coberturaDeFechas, fechaQueManda,
+                   enTransito, transitoPorDia, plantaDeCodigo, coberturaDeFechas, fechaQueManda,
                    leyDelPool, cuadraturaDelNeto, anclaAlDia, payloadJson, veredicto,
                    OPCIONES, BANDERAS };
 
@@ -630,6 +653,9 @@ async function main() {
   console.log('  total: ' + mil(lineas.length) + ' lineas de bodega\n');
 
   const conjunto = new Set(planta.map(x => x.whs));
+  /*  El codigo no dice la planta y el nombre si: este mapa es lo unico que
+   *  permite anotarle el transito a Santiago o a Talca. */
+  const nombres = new Map(planta.map(x => [x.whs, x.nombre]));
   const cob = coberturaDeFechas(lineas);
   const fec = fechaQueManda(cob, opcion('fecha', null));
   console.log('  fechas por linea: ' + mil(cob.conDoc) + ' con documento · ' + mil(cob.conCrea) +
@@ -724,14 +750,14 @@ async function main() {
   // El transito se mide al ultimo dia FIRME: el dia en curso todavia tiene
   // camiones saliendo y el numero cambiaria cada vez que se mira.
   const transitoAl = diaFirme || fechaAncla;
-  const tra = enTransito(lineas, transitoAl, conjunto);
+  const tra = enTransito(lineas, transitoAl, conjunto, nombres);
   /*  Y el de cada dia firme de la serie, para que el calendario de la tarjeta
    *  pueda mostrar las tres filas del dia que elijan. El dia en curso queda
    *  fuera por lo mismo que arriba: todavia hay camiones saliendo. */
   const diasSerie = Array.from(new Set([].concat.apply([],
     series.map(x => ((x && x.dias) || []).map(y => y && y.dia)))))
     .filter(x => /^\d{4}-\d{2}-\d{2}$/.test(String(x || '')) && String(x) <= String(transitoAl));
-  const traDias = transitoPorDia(lineas, diasSerie, conjunto);
+  const traDias = transitoPorDia(lineas, diasSerie, conjunto, nombres);
   const imp = nivelesImposibles(series);
   const ape = aperturasImposibles(series);
   const des = desfaseDeLectura(bod.generado, lineasGuardadas);
@@ -765,12 +791,16 @@ async function main() {
     console.log('  al cierre del ' + transitoAl + ':  ' + mil(tra.pallets) + ' pallets en ' +
                 mil(tra.lineas) + ' linea(s)');
     console.log('  planta por fecha de documento = planta por fecha de creacion + ' + mil(tra.pallets));
+    const pls = Object.keys(tra.porPlanta || {}).sort();
+    if (pls.length)
+      console.log('  por planta:  ' + pls.map(p => p + ' ' + mil(tra.porPlanta[p])).join('  ·  '));
     if (tra.sinFecha) console.log('  ' + mil(tra.sinFecha) + ' linea(s) sin fecha de documento utilizable');
     if (tra.detalle && tra.detalle.length) {
       console.log('  De donde sale y a donde va. La bodega de destino NO es el cliente:');
       console.log('  el socio vive en la ubicacion, y la ubicacion no viene en esta linea.');
       for (const x of tra.detalle)
         console.log('     ' + String(x.desde || '—').padEnd(11) + '→ ' + String(x.hacia || '—').padEnd(11) +
+                    String(x.planta || '—').padEnd(11) +
                     mil(x.cantidad).padStart(9) + '   doc ' + (x.num == null ? x.doc : x.num) +
                     '   creado ' + x.crea + ' · llega ' + x.llega);
       if (tra.lineas > tra.detalle.length)

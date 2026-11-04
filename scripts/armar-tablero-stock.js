@@ -452,6 +452,9 @@ function datos(bod, ret, cli, extra, planta) {
      *  Mientras no sea medible va en null, nunca en cero. */
     planta_fecha_serie: (planta && planta.fecha_serie) || null,
     planta_transito: (planta && planta.transito) || null,
+    /*  El transito de CADA dia firme: sin esto, elegir un dia del calendario
+     *  mostraria su stock al lado del transito de hoy. */
+    planta_transito_dias: (planta && planta.transito_dias) || null,
     aviso_nota: (extra && typeof extra.aviso_nota === 'string' && extra.aviso_nota.trim())
                   ? extra.aviso_nota.trim() : null,
     residuo_detalle: (extra && Array.isArray(extra.residuo_detalle))

@@ -53,6 +53,52 @@ var retencion = require('./retencion.json');
 // venga -- lo traduce redlink-fetch --, asi que agregar() no se toca.
 var ops = require('../shared/ops-fetch.js');
 
+// DE DONDE SALEN LAS FILAS: frio primero, vivo solo la cola
+//
+// La pantalla pide 115 dias (95 atras, porque la retencion del retail llega a
+// ~83, y 20 adelante). Con RDTOut esa ventana salia rapido; contra Redlink, que
+// consulta por horaIngreso y por tramos, medimos 45,1 s -- y el corte de las
+// Functions de Static Web Apps son 45 s, o sea pasar era suerte y cuando no
+// pasaba la proyeccion moria con 502.
+//
+// Mismo patron que api/ops y shared/guias-fetch: los dias CERRADOS salen del
+// blob (redtec-os-operaciones, un archivo por dia, instantaneo) y solo los
+// ultimos dias se piden en vivo. Medido el 4-nov sobre la ventana real:
+// vivo 45,4 s / 55.878 filas contra frio+vivo 7,9 s / 55.912 filas. El frio
+// ademas trae MAS, porque el backfill escribe con 60 dias de margen de entrada
+// y rescata lo que la ventana viva pierde por el filtro de horaIngreso.
+//
+// Si el frio no esta configurado, no tiene dias, o cualquier cosa falla, se
+// cae al camino de siempre: nunca se devuelve una proyeccion a medias.
+var cold = require('../shared/cold-operaciones.js');
+
+// OJO con `Number(x) || def`: convierte un 0 explicito en el default, o sea el
+// interruptor "apagalo" no apaga. Mismo defecto que ya mordio en
+// consulta-transporte. Por eso se parsea y se valida.
+function entero(v, def, min) {
+  var n = parseInt(v, 10);
+  if (!isFinite(n) || isNaN(n)) return def;
+  return n < min ? min : n;
+}
+var COLD_ON        = String(process.env.OPS_COLD || '').toLowerCase() === 'operaciones';
+var COLD_LIVE_DIAS = entero(process.env.CAL_COLD_LIVE_DIAS, 2, 1);
+var CAL_BUDGET_MS  = entero(process.env.CAL_BUDGET_MS, 25000, 1000);
+
+// Ultima lectura: la declara la respuesta para que la vista no tenga que
+// adivinar de donde salio el numero.
+var ultimaFuente = null;
+
+function hoyIsoCL() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());
+}
+function sumaIso(iso, n) {
+  var d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
 // Factor de retorno del estimado calendario: % de lo DESPACHADO que
 // históricamente vuelve como retiro. Calibrado mes a mes contra inventario
 // físico por el encargado de área. Si cambia, ajustar solo esta línea.
@@ -118,10 +164,72 @@ function addDays(d, days) {
 }
 
 // ─── Llamada al API M3Link ───────────────────────────────────────────────
-function fetchM3(fechaInicio, fechaFin) {
+async function fetchM3(fechaInicio, fechaFin, log) {
   // Se conserva el nombre para no tocar el punto de llamada ni nada mas del
   // archivo: lo unico que cambia es de donde salen las filas.
-  return ops.consultarOps(fechaInicio, fechaFin);
+  if (COLD_ON && cold.hayStorage()) {
+    try {
+      var r = await desdeFrio(fechaInicio, fechaFin);
+      if (r) { ultimaFuente = r.fuente; return r.filas; }
+      if (log) log('calendario: el frio no tenia dias, se consulta en vivo');
+    } catch (e) {
+      if (log) log('calendario: el frio fallo, se cae a vivo: ' + (e && e.message));
+    }
+  }
+  var filas = await ops.consultarOps(fechaInicio, fechaFin);
+  ultimaFuente = { modo: 'vivo', origen: ops.origenActivo(), filas: filas.length };
+  return filas;
+}
+
+// Frio para los dias cerrados + cola viva para los ultimos. Devuelve null si el
+// frio no sirvio ningun dia: eso no es "un dia sin movimiento", es el almacen
+// sin responder, y servir una proyeccion vacia es peor que una lenta.
+async function desdeFrio(fDesde, fHasta) {
+  var hoy = hoyIsoCL();
+  var rc = await cold.leerRango(cold.getContainer(), fDesde, fHasta, { sinRl: true });
+  if (rc.sin_storage || !rc.dias) return null;
+
+  // La cola viva va de hoy-(N-1) a hoy, recortada al rango pedido. No se pide
+  // futuro: el blob ya cubre los dias agendados que existan.
+  var vivoDesde = sumaIso(hoy, -(COLD_LIVE_DIAS - 1));
+  if (vivoDesde < fDesde) vivoDesde = fDesde;
+  var vivoHasta = fHasta < hoy ? fHasta : hoy;
+  var vivas = [], vivoError = null;
+  if (vivoHasta >= vivoDesde) {
+    try {
+      vivas = await ops.consultarOps(vivoDesde, vivoHasta, { presupuestoMs: CAL_BUDGET_MS });
+    } catch (e) {
+      // El frio ya cubre el rango; sin la cola viva lo de HOY puede ir atrasado,
+      // pero eso es mucho mejor que no devolver proyeccion. Queda declarado.
+      vivoError = (e && e.message) ? String(e.message).slice(0, 120) : 'error';
+      vivas = [];
+    }
+  }
+
+  // Dedupe por nroPedido, MISMO criterio que cold.dedup y que el camino frio de
+  // api/ops. Lo vivo va primero para que gane: trae el estado mas fresco.
+  var vistos = Object.create(null), todas = [];
+  var fuentes = [vivas, rc.ops];
+  for (var i = 0; i < fuentes.length; i++) {
+    var arr = fuentes[i];
+    for (var j = 0; j < arr.length; j++) {
+      var o = arr[j];
+      var k = (o && o.nroPedido != null) ? String(o.nroPedido) : null;
+      if (k === null) { todas.push(o); continue; }
+      if (vistos[k]) continue;
+      vistos[k] = 1;
+      todas.push(o);
+    }
+  }
+  return {
+    filas: todas,
+    fuente: {
+      modo: 'frio+vivo', origen: ops.origenActivo(),
+      frio: { dias: rc.dias, filas: rc.ops.length, contenedor: cold.CONTAINER },
+      vivo: { desde: vivoDesde, hasta: vivoHasta, filas: vivas.length, error: vivoError },
+      filas: todas.length
+    }
+  };
 }
 
 // ─── Agregación ──────────────────────────────────────────────────────────
@@ -501,7 +609,7 @@ module.exports = async function (context, req) {
 
   try {
     context.log('Llamando M3Link:', fechaInicio, 'a', fechaFin);
-    var raw = await fetchM3(fechaInicio, fechaFin);
+    var raw = await fetchM3(fechaInicio, fechaFin, context.log);
     var items = Array.isArray(raw) ? raw : (raw && raw.data) ? raw.data : [];
     context.log('Registros recibidos del API:', items.length);
 
@@ -534,7 +642,10 @@ module.exports = async function (context, req) {
           tablaRetencion: retencion.metadata,
           registrosCrudos: items.length,
           registrosProcesados: agg.resumen.totalTrf,
-          omitidos: agg.omitidos
+          omitidos: agg.omitidos,
+          // De donde salieron las filas de ESTA respuesta. No esta escrito a
+          // mano: si la cadena cambia, el dato cambia solo.
+          fuente: ultimaFuente
         },
         debug: debugInfo,
         calendario:    agg.calendario,

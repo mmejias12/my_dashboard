@@ -35,6 +35,30 @@ const mov   = require('../api/shared/movimientos.js');
 
 const VENTANA_DIAS = 45;
 
+// ── "no existe" vs "no pude leer" ───────────────────────────────────────────
+// El guard de cache-dia.js y cold-operaciones.js mira el TEXTO del error, y el
+// SDK de Azure manda "The specified blob does not exist." sin la palabra
+// BlobNotFound: así, un día sin blob se escapaba como excepción y cortaba la
+// corrida (medido el 4-nov-2026 en la primera comparación real). Acá se
+// clasifica por código Y por texto, y se distingue un día ausente de un
+// problema para leer: unas credenciales malas NO pueden parecerse a un día sin
+// movimiento, porque entonces el rollup escribiría ceros con toda confianza.
+function noExiste(e) {
+  if (!e) return false;
+  const cod = String((e && e.code) || (e && e.details && e.details.errorCode) || '');
+  if (e.statusCode === 404 || cod === 'BlobNotFound' || cod === 'ContainerNotFound') return true;
+  return /BlobNotFound|ContainerNotFound|does not exist|no existe/i.test(String(e.message || ''));
+}
+// Devuelve null si el blob no está; vuelve a lanzar, con contexto, si el
+// problema es otro.
+async function leerSuave(fn, que) {
+  try { return await fn(); }
+  catch (e) {
+    if (noExiste(e)) return null;
+    throw new Error(que + ' · ' + (e && e.message ? e.message.split('\n')[0] : String(e)));
+  }
+}
+
 function iso(d) { return d.toISOString().slice(0, 10); }
 function sumarDias(fecha, n) {
   const d = new Date(fecha + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return iso(d);
@@ -60,7 +84,7 @@ async function construir(desde, hasta, opts) {
   const vistos = new Set();   // nroPedido ya contado: el cold no deduplica entre días
 
   for (const f of cold.rangoDias(desde, hasta)) {
-    const arr = await leerDia(container, f);
+    const arr = await leerSuave(() => leerDia(container, f), 'no se pudo leer el cold de ' + f);
     if (!arr) { faltantes.push(f); continue; }
     conBlob.push(f);
     const nuevas = [];
@@ -107,7 +131,7 @@ async function comparar(desde, hasta, opts) {
   const iguales = [], distintos = [], nuevos = [];
   for (const f of fechas) {
     const nuevo = mov.paraCache(r.porDia[f]);
-    const viejo = await leer(cont, f);
+    const viejo = await leerSuave(() => leer(cont, f), 'no se pudo leer el agregado guardado de ' + f);
     if (!viejo) { nuevos.push(f); continue; }
     const d = diferenciasDia(nuevo, viejo);
     (d.length ? distintos : iguales).push({ fecha: f, diferencias: d });
@@ -125,7 +149,7 @@ async function escribir(desde, hasta, opts) {
   return Object.assign({}, r, { fechas, escritos: fechas.length });
 }
 
-module.exports = { construir, diasAEscribir, diferenciasDia, comparar, escribir, VENTANA_DIAS };
+module.exports = { construir, diasAEscribir, diferenciasDia, comparar, escribir, noExiste, VENTANA_DIAS };
 
 // ── CLI ─────────────────────────────────────────────────────────────────────
 if (require.main === module) (async () => {

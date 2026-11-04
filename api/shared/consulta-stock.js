@@ -48,7 +48,7 @@ async function consultarStock(args) {
 
 const TOOL_SCHEMA = {
   name: 'consultar_stock',
-  description: 'Stock del pool de pallets ROJOS (existencias en poder de clientes y/o retail) para una fecha o un rango. Devuelve saldoFinal (= STOCK al cierre del rango), saldoInicial (apertura), variacion (saldoFinal - saldoInicial) y el desglose de flujos. Para el STOCK ACTUAL usa el último día cerrado (ayer): desde = hasta = ayer. Todo día pasado es definitivo. universo: "clientes", "retail" o "ambos" (default ambos).',
+  description: 'Stock del pool de pallets ROJOS (existencias en poder de clientes y/o retail) para una fecha o un rango. Devuelve saldoFinal (= STOCK al cierre del rango), saldoInicial (apertura), variacion (saldoFinal - saldoInicial) y el desglose de flujos. Para el STOCK ACTUAL usa el último día cerrado (ayer): desde = hasta = ayer. Todo día pasado es definitivo. Para el saldo "mes a mes" / cierre de cada mes de un rango de varios meses NO uses esta mes por mes: usa consultar_stock_mensual (trae toda la serie en una llamada). universo: "clientes", "retail" o "ambos" (default ambos).',
   input_schema: {
     type: 'object',
     properties: {

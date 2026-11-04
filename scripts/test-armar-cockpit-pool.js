@@ -915,6 +915,7 @@ chk('y con todo lo demas intacto', FLACO.pool===1 && !!FLACO.bodegas && !!FLACO.
 console.log('\n— el filtro de planta recalcula lo que es de planta —');
 const TODAS=A.bodegasDelCockpit(SERIE);
 const SGO=TODAS.filter(b=>b.planta==='SANTIAGO');
+const TALP=TODAS.filter(b=>b.planta==='TALCA');
 const TITSGO=A.titular(D,SGO,'SANTIAGO');
 chk('el titular nombra la planta', /SANTIAGO/.test(TITSGO.frase), TITSGO.frase);
 // con un filtro puesto el pool NO puede seguir en el titular: 803.459 al lado
@@ -1086,11 +1087,42 @@ chk('salen las tres filas', Array.isArray(TPL.trio) && TPL.trio.length===3,
     JSON.stringify(TPL.trio&&TPL.trio.length));
 chk('la primera es lo que hay en bodega', TPL.trio[0].v===7877, String(TPL.trio[0].v));
 chk('la segunda es lo que va en el camion', TPL.trio[1].v===80, String(TPL.trio[1].v));
-// con un filtro de planta puesto no se reparte el transito: se dice
+// UNA CORRIDA VIEJA NO TRAE EL REPARTO: mostrar el transito de las nueve bajo
+// un titulo que dice SANTIAGO lo convertiria en el transito de Santiago, que
+// es justo lo que no se sabe
 const TPLF=A.tarjetas(CONTRA,SGO,'SANTIAGO').find(x=>x.clave==='planta');
-chk('con filtro de planta el transito no se reparte, se declara',
-    !!(TPLF.trio && TPLF.trio.aun && /nueve bodegas juntas/.test(TPLF.trio.aun)),
+chk('sin reparto en el dato, con filtro se declara en vez de mostrar el total',
+    !!(TPLF.trio && TPLF.trio.aun && /volver a correr el cierre/.test(TPLF.trio.aun)),
     JSON.stringify(TPLF.trio));
+// CON EL REPARTO, las tres filas hablan de esa planta
+const CONREP=Object.assign({},CONTRA,{
+  planta_transito:{medible:true,pallets:80,lineas:2,sin_fecha:0,motivo:null,al:'2026-10-30',
+                   por_planta:{SANTIAGO:50,TALCA:30}},
+  planta_transito_dias:[{dia:'2026-10-03',pallets:80,lineas:2,
+                         por_planta:{SANTIAGO:50,TALCA:30}}]});
+const TSGO=A.tarjetas(CONREP,SGO,'SANTIAGO').find(x=>x.clave==='planta');
+chk('con filtro salen las tres filas de esa planta',
+    Array.isArray(TSGO.trio) && TSGO.trio[1].v===50, JSON.stringify(TSGO.trio));
+chk('la primera es el indicador de ESA planta, no el de las nueve',
+    TSGO.trio[0].v===SGO.reduce((a,x)=>a+x.nivel,0) && TSGO.trio[0].v!==TPL.trio[0].v,
+    TSGO.trio[0].v+' vs nueve '+TPL.trio[0].v);
+chk('y la tercera sigue siendo la suma de las dos',
+    TSGO.trio[2].v===TSGO.trio[0].v+TSGO.trio[1].v, TSGO.trio.map(r=>r.v).join(' + '));
+chk('el rotulo dice de que planta habla',
+    TSGO.trio[0].q==='En Santiago' && /salió de Santiago/.test(TSGO.trio[1].m),
+    TSGO.trio[0].q+' | '+TSGO.trio[1].m);
+// LA SUMA DE LAS PLANTAS ES EL TOTAL: si no diera, el filtro mostraria pallets
+// que no existen o escondería los que sí
+chk('Santiago y Talca suman lo mismo que las nueve juntas',
+    TSGO.trio[1].v + A.tarjetas(CONREP,TALP,'TALCA').find(x=>x.clave==='planta').trio[1].v ===
+      A.tarjetas(CONREP,TODAS).find(x=>x.clave==='planta').trio[1].v,
+    String(TSGO.trio[1].v));
+// y sin filtro el total no cambia por tener reparto
+chk('sin filtro sigue siendo el total', 
+    A.tarjetas(CONREP,TODAS).find(x=>x.clave==='planta').trio[1].v===80);
+chk('una planta sin nada en el aire da cero, no un hueco',
+    A.tarjetas(Object.assign({},CONREP,{planta_transito:Object.assign({},CONREP.planta_transito,
+      {por_planta:{SANTIAGO:80}})}),TALP,'TALCA').find(x=>x.clave==='planta').trio[1].v===0, '');
 // la de abajo TIENE que ser la suma: si no, las tres filas enredan mas
 chk('y la tercera es exactamente la suma de las dos',
     TPL.trio[2].v===TPL.trio[0].v+TPL.trio[1].v, TPL.trio.map(r=>r.v).join(' + '));
@@ -1285,26 +1317,56 @@ chk('la suma de las estaciones en un dia ES el cierre agregado de ese dia',
 console.log('\n— las tres filas de UN dia —');
 const NDF=[{dia:'2026-10-29',cierre:15045,entradas:1,salidas:1,apertura:15045},
            {dia:'2026-10-30',cierre:14139,entradas:1,salidas:1,apertura:14139}];
-const TRF=[{dia:'2026-10-29',pallets:540,lineas:1}];
-const F1=A.filasDelDia('2026-10-29',NDF,TRF,false);
+const TRF=[{dia:'2026-10-29',pallets:540,lineas:1,
+            por_planta:{SANTIAGO:400,TALCA:140}}];
+const F1=A.filasDelDia('2026-10-29',NDF,TRF,null);
 chk('la primera es el cierre de ESE dia', F1[0].v===15045, String(F1[0].v));
 chk('la segunda, el transito de ESE dia', F1[1].v===540, String(F1[1].v));
 chk('y la tercera la suma', F1[2].v===15585 && F1[2].pie===true, String(F1[2].v));
 // un dia que la serie de transito no cubre va en NULL: un cero ahi afirmaria
 // que no habia nada en el aire, y lo que pasa es que no se midio
-const F2=A.filasDelDia('2026-10-30',NDF,TRF,false);
+const F2=A.filasDelDia('2026-10-30',NDF,TRF,null);
 chk('un dia sin medicion de transito va en null, no en cero',
     F2[1].v===null && F2[2].v===null, JSON.stringify(F2.map(r=>r.v)));
 chk('pero el cierre del dia si esta', F2[0].v===14139, String(F2[0].v));
-// CON UN FILTRO DE PLANTA NO SE REPARTE: el transito se mide sobre las nueve
-// bodegas juntas, repartirlo entre Santiago y Talca seria inventar
-const F3=A.filasDelDia('2026-10-29',NDF,TRF,true);
-chk('con filtro de planta no se muestran las tres filas',
-    !Array.isArray(F3) && !!F3.aun, JSON.stringify(F3));
-chk('y se dice por que', /nueve bodegas juntas/.test(F3.aun), F3.aun);
+// CON UN FILTRO DE PLANTA HABLAN DE ESA PLANTA: cada linea de transito anota
+// la bodega de REDTEC que soltó el pallet, asi que el reparto es un dato y no
+// una proporcion inventada
+const F3=A.filasDelDia('2026-10-29',NDF,TRF,'SANTIAGO');
+chk('con filtro, el transito es el de esa planta', F3[1].v===400, JSON.stringify(F3[1]));
+chk('y la suma usa ese transito', F3[2].v===15445, String(F3[2].v));
+chk('el rotulo dice de que planta habla',
+    F3[0].q==='En Santiago' && /salió de Santiago/.test(F3[1].m),
+    F3[0].q+' | '+F3[1].m);
+// CERO NO ES NULL: una planta sin nada en el aire ese dia es una respuesta;
+// "no se puede saber" es otra cosa y se ve distinto en la tarjeta
+chk('una planta sin transito ese dia da cero, no null',
+    A.filasDelDia('2026-10-29',NDF,TRF,'COQUIMBO')[1].v===0,
+    JSON.stringify(A.filasDelDia('2026-10-29',NDF,TRF,'COQUIMBO')[1]));
+// DATO VIEJO: el dia trae el total pero no el reparto. Mostrar el total bajo
+// un titulo que dice SANTIAGO lo convertiria en el transito de Santiago
+chk('sin reparto en el dato, con planta no se inventa un numero',
+    A.filasDelDia('2026-10-29',NDF,[{dia:'2026-10-29',pallets:540}],'SANTIAGO')[1].v===null,
+    JSON.stringify(A.filasDelDia('2026-10-29',NDF,[{dia:'2026-10-29',pallets:540}],'SANTIAGO')[1]));
+chk('pero sin planta el total sigue saliendo',
+    A.filasDelDia('2026-10-29',NDF,[{dia:'2026-10-29',pallets:540}],null)[1].v===540);
 chk('un dia que no esta en la serie no devuelve filas',
-    A.filasDelDia('2026-01-01',NDF,TRF,false)===null);
-chk('sin serie tampoco', A.filasDelDia('2026-10-29',null,TRF,false)===null);
+    A.filasDelDia('2026-01-01',NDF,TRF,null)===null);
+chk('sin serie tampoco', A.filasDelDia('2026-10-29',null,TRF,null)===null);
+
+// las piezas sueltas
+chk('capital deja el nombre de planta legible',
+    A.capital('SANTIAGO')==='Santiago' && A.capital('')==='' && A.capital(null)==='',
+    A.capital('SANTIAGO'));
+chk('sin planta, el transito es el total',
+    A.transitoDePlanta({pallets:540,por_planta:{SANTIAGO:400}},null)===540);
+chk('con planta, su parte', A.transitoDePlanta({pallets:540,por_planta:{TALCA:140}},'TALCA')===140);
+chk('una planta que no aparece tiene cero en el aire',
+    A.transitoDePlanta({pallets:540,por_planta:{TALCA:140}},'SANTIAGO')===0);
+chk('sin medicion, null con planta y sin ella',
+    A.transitoDePlanta({pallets:null,por_planta:null},'TALCA')===null &&
+    A.transitoDePlanta({pallets:null},null)===null &&
+    A.transitoDePlanta(null,'TALCA')===null);
 
 console.log('\n— las nueve en una sola grilla —');
 const GF=[{a:'Santiago Inspección',b:'RT13-100 · Inspeccion',cod:'RT13-100',v:2961},

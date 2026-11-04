@@ -152,7 +152,7 @@ function nivelDiarioDePlanta(serie) {
   if (!bs.length) return [];
   const fecha = x => /^\d{4}-\d{2}-\d{2}$/.test(x);
   const vistos = {}, calendario = [];
-  const nivel = {}, porDia = {};
+  const nivel = {}, porDia = {}, entr = {}, sal = {};
   for (const b of bs) {
     const cod = String(b.cod);
     const ord = b.dias.filter(x => x && fecha(String(x.dia)))
@@ -163,6 +163,8 @@ function nivelDiarioDePlanta(serie) {
     for (const x of ord) {
       const dia = String(x.dia);
       porDia[cod][dia] = Number(x.cierre) || 0;
+      entr[dia] = (entr[dia] || 0) + (Number(x.entradas) || 0);
+      sal[dia] = (sal[dia] || 0) + (Number(x.salidas) || 0);
       if (!vistos[dia]) { vistos[dia] = true; calendario.push(dia); }
     }
   }
@@ -172,7 +174,12 @@ function nivelDiarioDePlanta(serie) {
     for (const cod in porDia) if (porDia[cod][dia] != null) nivel[cod] = porDia[cod][dia];
     let total = 0;
     for (const cod in nivel) total += nivel[cod];
-    out.push({ dia, cierre: total });
+    /*  La apertura del agregado no se lleva aparte: sale de la identidad, que
+     *  se cumple exacta porque una estacion quieta aporta cero a los dos
+     *  movimientos y su nivel no cambia. Llevar un segundo acumulador seria
+     *  una segunda fuente para el mismo numero. */
+    const e = entr[dia] || 0, sa = sal[dia] || 0;
+    out.push({ dia, cierre: total, entradas: e, salidas: sa, apertura: total - e + sa });
   }
   return out;
 }
@@ -187,6 +194,217 @@ function ultimaSemana(bodega, n) {
   const cuantos = Number(n) > 0 ? Math.floor(Number(n)) : 7;
   return dias.slice(Math.max(0, dias.length - cuantos))
              .map(d => ({ dia: String(d.dia), cierre: Number(d.cierre) || 0 }));
+}
+
+/*  EL CALENDARIO DEL MES.
+ *
+ *  POR QUE REEMPLAZA A LA BARRITA. La barrita mostraba la forma de la semana
+ *  pero no sus numeros: para saber cuanto cerro el martes habia que pasar el
+ *  mouse por cada barra, una por una, y nadie hace eso en una reunion. Lo que
+ *  se pregunta frente a esta tarjeta no es "como viene la tendencia" sino
+ *  "cuanto habia el 29", y esa pregunta se contesta con el numero escrito.
+ *
+ *  SE PUEDE ELEGIR UN DIA y la tarjeta entera pasa a hablar de ese dia: el
+ *  numero grande, las tres filas y el pie. Un calendario que solo se mira
+ *  obligaria a abrir otra vista para leer el detalle del dia que llamo la
+ *  atencion, que es exactamente el viaje que esta tarjeta existe para evitar. */
+
+/** El dia de la semana, 0 = lunes. Se parsea en UTC a proposito: con el
+ *  constructor local, un ISO sin hora se interpreta como medianoche UTC y al
+ *  oeste de Greenwich getDay() devuelve el dia ANTERIOR. Esa es la clase de
+ *  error que corre el calendario entero una columna sin avisar. */
+function diaDeSemana(iso) {
+  const t = String(iso == null ? '' : iso).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return null;
+  const ms = Date.parse(t + 'T00:00:00Z');
+  if (!isFinite(ms)) return null;
+  return (new Date(ms).getUTCDay() + 6) % 7;
+}
+
+const DIA_CORTO = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];
+
+/** Que mes muestra el calendario: el del selector de periodo si hay uno, y
+ *  si no el mas reciente que tenga dias. Nunca un mes fijo: con --periodo en
+ *  octubre la tarjeta tiene que hablar de octubre. */
+function mesDelCalendario(dias, periodo) {
+  if (/^\d{4}-\d{2}$/.test(String(periodo == null ? '' : periodo))) return String(periodo);
+  let max = null;
+  for (const d of (Array.isArray(dias) ? dias : [])) {
+    const m = String((d && d.dia) || '').slice(0, 7);
+    if (/^\d{4}-\d{2}$/.test(m) && (max == null || m > max)) max = m;
+  }
+  return max;
+}
+
+/** La grilla del mes: una fila por semana con dias, una celda por dia habil.
+ *
+ *  LAS COLUMNAS SALEN DE LOS DIAS QUE HAY, no de un supuesto sobre la semana
+ *  laboral. En REDTEC se trabaja el sabado —octubre 2026 tiene cinco— y una
+ *  grilla de lunes a viernes los habria escondido sin decir que los escondia.
+ *  Las semanas sin ningun dia no se dibujan: una fila vacia se lee como una
+ *  semana sin movimiento y lo que pasa es que no existe en la serie. */
+function calendarioDeMes(dias, mes) {
+  const ms = /^\d{4}-\d{2}$/.test(String(mes == null ? '' : mes)) ? String(mes) : null;
+  if (!ms) return null;
+  const hay = (Array.isArray(dias) ? dias : [])
+    .filter(x => x && String(x.dia || '').slice(0, 7) === ms && diaDeSemana(x.dia) != null);
+  if (!hay.length) return null;
+  let cols = 5;
+  for (const x of hay) { const w = diaDeSemana(x.dia); if (w + 1 > cols) cols = w + 1; }
+  const porDia = {};
+  for (const x of hay) porDia[String(x.dia)] = x;
+  const ultimo = new Date(Date.UTC(Number(ms.slice(0, 4)), Number(ms.slice(5, 7)), 0)).getUTCDate();
+  const semanas = [];
+  let fila = [], usada = false;
+  const limpia = () => { fila = []; for (let i = 0; i < cols; i++) fila.push(null); usada = false; };
+  limpia();
+  for (let n = 1; n <= ultimo; n++) {
+    const iso = ms + '-' + (n < 10 ? '0' + n : String(n));
+    const w = diaDeSemana(iso);
+    if (w === 0 && usada) { semanas.push(fila); limpia(); }
+    if (w >= cols) continue;
+    const c = porDia[iso];
+    if (!c) continue;
+    fila[w] = { dia: iso, num: n, cierre: Number(c.cierre) || 0,
+                entradas: Number(c.entradas) || 0, salidas: Number(c.salidas) || 0,
+                apertura: Number(c.apertura) || 0 };
+    usada = true;
+  }
+  if (usada) semanas.push(fila);
+  return { mes: ms, cols, semanas };
+}
+
+/** Las tres filas de la tarjeta PARA UN DIA.
+ *
+ *  Con un solo transito —el del ultimo cierre— elegir el 29 de octubre
+ *  mostraria el stock del 29 al lado del transito de hoy. Son dos dias
+ *  distintos en la misma tabla y nadie lo notaria.
+ *
+ *  CON UN FILTRO DE PLANTA PUESTO NO SE MUESTRAN: el transito se mide sobre
+ *  las nueve bodegas juntas, asi que repartirlo entre Santiago y Talca seria
+ *  inventar. Se dice en vez de mostrar un numero que no corresponde. */
+function filasDelDia(dia, nivelDia, traDias, filtrado) {
+  const c = (Array.isArray(nivelDia) ? nivelDia : []).find(x => x && x.dia === dia);
+  if (!c) return null;
+  if (filtrado)
+    return { aun: 'el tránsito se mide sobre las nueve bodegas juntas, no se reparte por planta' };
+  const t = (Array.isArray(traDias) ? traDias : []).find(x => x && x.dia === dia);
+  const tp = t && t.pallets != null ? Number(t.pallets) : null;
+  return [{ q: 'En planta', v: c.cierre, m: 'lo que hay en bodega' },
+          { q: 'En tránsito a cliente', v: tp, m: 'salió, el cliente todavía no lo recibe' },
+          { q: 'Por fecha contable', v: tp == null ? null : c.cierre + tp,
+            m: 'lo que cuadra con la cartola', pie: true }];
+}
+
+/** El pie: como se compuso el cierre del dia elegido, con los cuatro numeros
+ *  escritos. Es la pregunta que trajo a alguien a hacer clic en ese dia. */
+function pieDeDia(c) {
+  if (!c) return '';
+  const w = diaDeSemana(c.dia);
+  return (w == null ? '' : DIA_CORTO[w] + ' ' + c.num + ' · ') +
+         'abre <b>' + mil(c.apertura) + '</b> · entran <b>' + mil(c.entradas) +
+         '</b> · salen <b>' + mil(c.salidas) + '</b> · cierra <b>' + mil(c.cierre) + '</b>';
+}
+
+/** Lo que hay que decir cuando el dia elegido NO es el cierre vigente: que
+ *  la cifra grande es de ese dia y cual es el saldo de hoy. Sin esto, elegir
+ *  el 29 de octubre deja la tarjeta mostrando 15.045 bajo un titulo que se
+ *  lee como el stock de ahora. */
+function notaDeDia(dia, hoy, ultimo) {
+  if (!dia || !ultimo || dia === ultimo) return '';
+  return 'Cierre del ' + dia + '. Hoy SAP tiene ' + mil(Number(hoy) || 0) + '.';
+}
+
+/*  EL CALENDARIO DIBUJADO. Cada celda lleva sus numeros en atributos: asi el
+ *  navegador repinta la tarjeta al elegir un dia leyendo del DOM, sin volver
+ *  a calcular nada y sin una segunda copia de la serie. */
+function calendarioHtml(cal, o) {
+  const op = o || {}, sel = op.sel, tope = op.tope, traDias = op.tra;
+  if (!cal || !cal.semanas || !cal.semanas.length) return '';
+  const tra = d => {
+    const t = (Array.isArray(traDias) ? traDias : []).find(x => x && x.dia === d);
+    return t && t.pallets != null ? String(Number(t.pallets)) : '';
+  };
+  const H = ['<div class="calen" data-tope="' + (Number(tope) || 0) + '"' +
+             ' data-hoy="' + (Number(op.hoy) || 0) + '"' +
+             ' data-ult="' + esc(op.ultimo || '') + '">',
+             '<div class="cz"><b>' + esc(etiquetaDeMes(cal.mes) || cal.mes) + '</b>' +
+             '<span>clic en un día</span></div>',
+             '<div class="cg" style="grid-template-columns:repeat(' + cal.cols + ',minmax(0,1fr))">'];
+  for (let i = 0; i < cal.cols; i++) H.push('<span class="ch">' + DIA_CORTO[i] + '</span>');
+  for (const sem of cal.semanas) {
+    for (const c of sem) {
+      if (!c) { H.push('<span class="cd vac" aria-hidden="true"></span>'); continue; }
+      H.push('<button type="button" class="cd' + (c.dia === sel ? ' sel' : '') +
+             (c.cierre < 0 ? ' neg' : '') + '" data-dia="' + esc(c.dia) +
+             '" data-ape="' + c.apertura + '" data-ent="' + c.entradas +
+             '" data-sal="' + c.salidas + '" data-cie="' + c.cierre +
+             '" data-tra="' + tra(c.dia) + '" aria-pressed="' + (c.dia === sel ? 'true' : 'false') +
+             '" aria-label="' + esc(c.dia) + ': cierra en ' + mil(c.cierre) + '">' +
+             '<span class="cn">' + c.num + '</span><b>' + mil(c.cierre) + '</b>' +
+             '<span class="ce">↑' + mil(c.entradas) + '</span>' +
+             '<span class="cs">↓' + mil(c.salidas) + '</span></button>');
+    }
+  }
+  H.push('</div>');
+  const celSel = [].concat.apply([], cal.semanas).filter(x => x && x.dia === sel)[0] || null;
+  H.push('<div class="cpie">' + pieDeDia(celSel) + '</div>');
+  H.push('<div class="cdia">' + esc(notaDeDia(sel, op.hoy, op.ultimo)) + '</div>');
+  H.push('</div>');
+  return H.join('');
+}
+
+/*  REPINTAR LA TARJETA CON EL DIA ELEGIDO.
+ *
+ *  CORRE SOLO EN EL NAVEGADOR —se publica con toString()— y por eso toca el
+ *  DOM en vez de devolver HTML. Lee los numeros de los atributos de la celda
+ *  y no de una segunda copia de la serie: la celda ya los trae escritos, asi
+ *  que no hay forma de que el calendario y el numero grande digan cosas
+ *  distintas, que es lo que pasa cuando el mismo dato se calcula dos veces.
+ *
+ *  Y CAMBIA EL ROTULO cuando el dia elegido no es el ultimo: una tarjeta que
+ *  dice "Planta · indicador" mostrando el cierre del 29 de octubre se lee
+ *  como el stock de hoy. */
+function pintarDia(card, dia) {
+  if (!card || !card.querySelector) return false;
+  const cal = card.querySelector('.calen');
+  if (!cal) return false;
+  const cels = cal.querySelectorAll('.cd[data-dia]');
+  let sel = null;
+  for (let i = 0; i < cels.length; i++) {
+    const on = cels[i].getAttribute('data-dia') === dia;
+    cels[i].classList.toggle('sel', on);
+    cels[i].setAttribute('aria-pressed', on ? 'true' : 'false');
+    if (on) sel = cels[i];
+  }
+  if (!sel) return false;
+  const n = a => Number(sel.getAttribute(a)) || 0;
+  const cie = n('data-cie'), ent = n('data-ent'), sld = n('data-sal'), ape = n('data-ape');
+  const crudo = sel.getAttribute('data-tra');
+  // Vacio es "ese dia no se puede medir", que NO es cero pallets en el aire.
+  const tp = crudo === '' || crudo == null ? null : Number(crudo);
+
+  const kv = card.querySelector('.kv');
+  if (kv) kv.innerHTML = mil(cie) + '<small>pallets</small>';
+  const barra = card.querySelector('.bullet .fill');
+  const tope = Number(cal.getAttribute('data-tope')) || 0;
+  if (barra)
+    barra.style.width = (tope > 0 ? Math.max(0, Math.min(100, cie / tope * 100)) : 0).toFixed(2) + '%';
+
+  const nums = card.querySelectorAll('table.trio td.num');
+  if (nums.length === 3) {
+    nums[0].textContent = mil(cie);
+    nums[1].textContent = tp == null ? '—' : mil(tp);
+    nums[2].textContent = tp == null ? '—' : mil(cie + tp);
+  }
+  const pie = cal.querySelector('.cpie');
+  if (pie) pie.innerHTML = pieDeDia({ dia: dia, num: Number(String(dia).slice(8)), cierre: cie,
+                                      entradas: ent, salidas: sld, apertura: ape });
+  const nota = cal.querySelector('.cdia');
+  if (nota)
+    nota.textContent = notaDeDia(dia, Number(cal.getAttribute('data-hoy')) || 0,
+                                 cal.getAttribute('data-ult') || '');
+  return true;
 }
 
 /*  LA MATRIZ PLANTA x ETAPA.
@@ -318,22 +536,28 @@ function tarjetas(datos, bodegas, planta, periodo) {
    *  desploma: en noviembre, con cuatro de nueve estaciones con documento,
    *  daba 1.637 en vez de 13.607. El nivel de una estacion quieta no es cero,
    *  es el mismo del dia anterior. */
-  const nivelDia = nivelDiarioDePlanta(
+  const nivelTodo = nivelDiarioDePlanta(
     (Array.isArray(d.planta_dias) ? d.planta_dias : [])
-      .filter(x => !planta || plantaDeBodega(x && x.nom) === planta))
+      .filter(x => !planta || plantaDeBodega(x && x.nom) === planta));
+  const nivelDia = nivelTodo
     .filter(x => !periodo || String(x.dia).slice(0, String(periodo).length) === String(periodo));
-  const semPla = ultimaSemana({ dias: nivelDia }, 7);
+  // El ultimo dia de la serie ENTERA, no el del periodo: es contra ese que se
+  // dice si el dia elegido es el cierre vigente o uno del pasado.
+  const ultimoDia = nivelTodo.length ? nivelTodo[nivelTodo.length - 1].dia : null;
+  /*  EL CALENDARIO DEL MES EN VEZ DE LA BARRITA. La barrita mostraba la forma
+   *  de la semana y escondia sus numeros detras del mouse, uno por uno. */
+  const cal = calendarioDeMes(nivelDia, mesDelCalendario(nivelDia, periodo));
+  const celdas = cal ? [].concat.apply([], cal.semanas).filter(Boolean) : [];
+  const calSel = celdas.length ? celdas[celdas.length - 1].dia : null;
+  const traDias = Array.isArray(d.planta_transito_dias) ? d.planta_transito_dias : [];
   let semRot = null;
-  if (semPla.length) {
-    let lo = Infinity, hi = -Infinity;
-    for (const x of semPla) { if (x.cierre < lo) lo = x.cierre; if (x.cierre > hi) hi = x.cierre; }
-    const fin = semPla[semPla.length - 1];
+  if (celdas.length) {
+    const fin = celdas[celdas.length - 1];
     /*  Con un periodo puesto la serie NO tiene por que cerrar en el saldo de
      *  hoy: cierra donde termina ese periodo. Reclamar un descalce ahi seria
      *  una alarma falsa, asi que el rotulo cambia en vez de acusar. */
     const calza = fin.cierre === nivelPla;
-    semRot = 'nivel del ' + esc(semPla[0].dia) + ' al ' + esc(fin.dia) +
-      '<br>entre <b>' + mil(lo) + '</b> y <b>' + mil(hi) + '</b> · ' +
+    semRot = mil(celdas.length) + ' días con movimiento · ' +
       (periodo ? 'cierra en <b>' + mil(fin.cierre) + '</b> al ' + esc(fin.dia)
        : calza ? 'cierra en <b>' + mil(fin.cierre) + '</b>, el mismo saldo que SAP'
                : '<span class="malo">la serie cierra en ' + mil(fin.cierre) + ' y SAP dice ' +
@@ -355,28 +579,30 @@ function tarjetas(datos, bodegas, planta, periodo) {
   const tra = d.planta_transito || null;
   const porCrea = (d.planta_fecha_serie || null) === 'CreaDate';
   let trio = null;
-  if (tra && tra.medible && porCrea)
-    trio = [{ q: 'En planta', v: nivelPla, m: 'lo que hay en bodega' },
-            { q: 'En tránsito a cliente', v: Number(tra.pallets) || 0,
-              m: 'salió, el cliente todavía no lo recibe' },
-            { q: 'Por fecha contable', v: nivelPla + (Number(tra.pallets) || 0),
-              m: 'lo que cuadra con la cartola', pie: true }];
-  else if (tra && !tra.medible)
+  if (tra && !tra.medible)
     trio = { aun: tra.motivo || 'el tránsito todavía no se puede medir' };
+  else if (tra && porCrea && calSel)
+    trio = filasDelDia(calSel, nivelDia, traDias, filtrado);
 
+  /*  LA CIFRA GRANDE SIGUE AL DIA ELEGIDO. Mostrar el saldo de hoy arriba y
+   *  el cierre del 29 de octubre en las tres filas de abajo es la misma
+   *  tarjeta contando dos dias distintos. */
+  const kvPla = celdas.length ? celdas[celdas.length - 1].cierre : nivelPla;
   t.push({ clave: 'planta', et: 'Planta · indicador',
            hint: filtrado ? mil(bs.length) + ' en ' + esc(planta) : 'nueve bodegas',
-           kv: mil(nivelPla), u: 'pallets', ambito: 'planta',
-           bullet: { v: nivelPla, tope: sapPla, marca: sapPla },
+           kv: mil(kvPla), u: 'pallets', ambito: 'planta',
+           bullet: { v: kvPla, tope: sapPla, marca: sapPla },
            ks: fueraPla
                  ? '<b>' + mil(fueraPla) + '</b> más en merma, extraños y tránsito ' +
                    '<span class="mut">— referencial, no suman</span>'
                  : '<span class="mut">sin bodegas de referencia fuera del indicador' +
                    (filtrado ? ' en ' + esc(planta) : '') + '</span>',
-           sem: semPla, semTipo: 'nivel', semRot, trio,
-           nota: periodo ? 'Este saldo es la lectura de hoy en SAP, no el del período: ' +
-                           'un saldo no se filtra por fecha. Lo que cambia con el período es el ' +
-                           'movimiento — la línea de abajo y los días en negativo.' : null,
+           cal, calSel, calTra: traDias, calHoy: nivelPla, calUlt: ultimoDia,
+           semRot, trio,
+           /*  La nota del dia vive DENTRO del calendario y la escribe notaDeDia:
+            *  antes aca decia "este saldo es la lectura de hoy en SAP", y con
+            *  la cifra siguiendo al dia elegido eso paso a ser falso. */
+           nota: null,
            chip: null });
 
   t.push({ clave: 'atribucion', et: 'Atribución por socio', hint: 'socios / bodega', ambito: 'global', kv: pct1(atrib, (Number(cli.nivel) || 0) + (Number(ret.nivel) || 0)), u: '',
@@ -675,7 +901,11 @@ table.trio tr.pie td.num{color:var(--ink)}
 .bandh h3{margin:0;font:600 13.5px Inter,sans-serif;letter-spacing:.1px}
 .bandh span{color:var(--ink3);font-size:11.5px}
 .grid{display:grid;gap:12px}
-.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+/*  align-items:start y no el estirado por defecto: la tarjeta de planta mide
+    lo que mide su calendario —un mes son cinco filas— y con el estirado las
+    otras tres de la fila crecian con ella, dejando 350px de caja vacia cada
+    una. Que cada tarjeta mida lo suyo. */
+.g4{grid-template-columns:repeat(4,minmax(0,1fr));align-items:start}
 .g3{grid-template-columns:repeat(3,minmax(0,1fr))}
 .g64{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 15px;
@@ -724,6 +954,32 @@ table.desg.ref tbody td{opacity:.8}
 .barra i{display:block;height:100%;border-radius:999px}
 
 /* matriz planta x etapa */
+.calen{margin-top:12px}
+.calen .cz{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:5px}
+.calen .cz b{font:700 10.5px Inter;letter-spacing:.4px;text-transform:uppercase;color:var(--ink2)}
+.calen .cz span{font-size:10px;color:var(--ink2)}
+.calen .cg{display:grid;gap:3px}
+.calen .ch{font:700 9px Inter;letter-spacing:.4px;text-transform:uppercase;color:var(--ink2);
+  text-align:center;padding-bottom:1px}
+/*  La celda es un boton de verdad y no un div con onclick: asi entra en el
+    orden de tabulacion, responde al Enter y un lector de pantalla la anuncia
+    con su dia y su cierre sin que haya que describirla aparte. */
+.cd{border:1px solid var(--line);background:var(--card2);border-radius:8px;padding:4px 1px 5px;
+  display:flex;flex-direction:column;align-items:center;cursor:pointer;color:inherit;
+  font:inherit;text-align:center;min-height:52px;transition:border-color .12s,background .12s}
+.cd:hover{border-color:var(--line2)}
+.cd:focus-visible{outline:2px solid var(--pla);outline-offset:1px}
+.cd.sel{border-color:var(--pla);background:color-mix(in srgb,var(--pla) 15%,var(--card2))}
+.cd.vac{border-color:transparent;background:transparent;cursor:default;min-height:0;padding:0}
+.cd .cn{font:600 9px/1.2 Inter;color:var(--ink2)}
+.cd b{font:700 12px/1.3 "JetBrains Mono",ui-monospace,monospace;color:var(--ink)}
+.cd.neg b{color:var(--crit)}
+.cd .ce,.cd .cs{font:500 8.5px/1.25 "JetBrains Mono",ui-monospace,monospace;color:var(--ink2)}
+.calen .cpie{margin-top:7px;padding:6px 8px;border-radius:8px;background:var(--card2);
+  border:1px solid var(--line);color:var(--ink2);font-size:10.5px;line-height:1.5}
+.calen .cdia{margin-top:6px;font-size:10.5px;line-height:1.5;color:var(--ink2)}
+.calen .cdia:empty{display:none}
+.calen .cpie b{color:var(--ink);font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10px}
 .mtx{display:grid;gap:5px;margin-top:4px;overflow-x:auto}
 .mtx .hd{font:700 10px Inter;letter-spacing:.5px;text-transform:uppercase;color:var(--ink3);
   display:flex;align-items:center;justify-content:center;text-align:center;padding:4px 2px}
@@ -917,13 +1173,18 @@ function tarjetaHtml(t, i) {
   if (t.trio && Array.isArray(t.trio)) {
     H.push('<table class="trio">' + t.trio.map(r =>
       '<tr' + (r.pie ? ' class="pie"' : '') + '><td>' + esc(r.q) +
-      '<div class="m">' + esc(r.m) + '</div></td><td class="num">' + mil(r.v) + '</td></tr>').join('') +
+      '<div class="m">' + esc(r.m) + '</div></td><td class="num">' +
+      (r.v == null ? '—' : mil(r.v)) + '</td></tr>').join('') +
       '</table>');
   } else if (t.trio && t.trio.aun) {
     H.push('<div class="nota-periodo">En tránsito a cliente: ' + esc(t.trio.aun) + '</div>');
   }
   if (t.nota) H.push('<div class="nota-periodo">' + esc(t.nota) + '</div>');
-  if (t.sem && t.sem.length)
+  if (t.cal)
+    H.push(calendarioHtml(t.cal, { sel: t.calSel, tope: t.bullet && t.bullet.tope,
+                                   tra: t.calTra, hoy: t.calHoy, ultimo: t.calUlt }) +
+           (t.semRot ? '<div class="sem"><span class="m">' + t.semRot + '</span></div>' : ''));
+  else if (t.sem && t.sem.length)
     H.push('<div class="sem">' +
            (t.semTipo === 'nivel' ? miniNivel(t.sem) : miniSemana(t.sem)) +
            (t.semRot ? '<span class="m">' + t.semRot + '</span>' : '') + '</div>');
@@ -1579,9 +1840,12 @@ function script(serie, mes0, desg, aper, datos) {
                etapaDeBodega, plantaDeBodega, saludDeBodega, bodegasDelCockpit,
                matrizPlantaEtapa, matrizHtml, filaCartera, listaHtml, chipEstado,
                titular, contarSalud, nivelDiarioDePlanta, ultimaSemana,
+               diaDeSemana, mesDelCalendario, calendarioDeMes, filasDelDia, pieDeDia,
+               notaDeDia, calendarioHtml, pintarDia,
                serieDelPeriodo, tarjetas, tarjetaHtml];
   const cuerpo = 'var MESES = ' + jsonSeguro(MESES) + ';\n' +
     'var ETAPAS = ' + jsonSeguro(ETAPAS) + ';\n' +
+    'var DIA_CORTO = ' + jsonSeguro(DIA_CORTO) + ';\n' +
     'var ORDEN_SALUD = ' + jsonSeguro(ORDEN_SALUD) + ';\n' +
     'var GLIFO = ' + jsonSeguro(GLIFO) + ';\n' +
     'var NOMBRE_SALUD = ' + jsonSeguro(NOMBRE_SALUD) + ';\n' +
@@ -1757,6 +2021,10 @@ function script(serie, mes0, desg, aper, datos) {
     '      $("#dxc").focus();',
     '    }',
     '    function desde(el) {',
+    // La celda del calendario va PRIMERO: la tarjeta de planta lleva
+    // [data-kpi], asi que sin esto un clic en un dia abriria el cajon.
+    '      var cd = el.closest(".cd[data-dia]");',
+    '      if (cd) { pintarDia(cd.closest(".card"), cd.getAttribute("data-dia")); return true; }',
     // El chip de mes vive DENTRO del cajon: va primero, si no lo atrapa el
     // [data-cod] de la fila que lo abrio y el cajon se redibuja en su mes.
     '      var m = el.closest("[data-dm]");',
@@ -1837,7 +2105,8 @@ function main() {
 module.exports = { ETAPAS, GLIFO, ORDEN_SALUD, HITOS, CSS,
                    etapaDeBodega, saludDeBodega, bodegasDelCockpit, matrizPlantaEtapa,
                    mesDeApertura, mesesDeBodega, ultimaSemana, miniSemana, miniNivel,
-                   nivelDiarioDePlanta,
+                   nivelDiarioDePlanta, diaDeSemana, mesDelCalendario, calendarioDeMes,
+                   filasDelDia, pieDeDia, notaDeDia, calendarioHtml, pintarDia, DIA_CORTO,
                    titular, tarjetas, decisiones, diasHasta, hitos,
                    desglose, composiciones, desgloseHtml, porRecorrido,
                    recortar, chipEstado, tarjetaHtml, matrizHtml, filaCartera, listaHtml,

@@ -496,5 +496,40 @@ chk('y el detalle llega al json que lee la pagina',
 chk('sin transito el json trae un detalle vacio, no undefined',
     Array.isArray(S.payloadJson({ series:[] }).transito.detalle));
 
+console.log('\n— el transito de CADA dia, no solo el del ultimo cierre —');
+// El calendario de la tarjeta deja elegir un dia: sin una serie, elegir el 29
+// de octubre mostraria el stock del 29 al lado del transito de hoy.
+const LS=[lx('RT13-105','CLIENTES',80,'2026-11-02','2026-11-04',1),
+          lx('RT13-105','CLIENTES',30,'2026-11-03','2026-11-04',2)];
+const TPD=S.transitoPorDia(LS,['2026-11-02','2026-11-03','2026-11-04'],NUE);
+chk('un renglon por dia pedido', TPD.length===3, String(TPD.length));
+chk('el 02 tiene en el aire solo la primera', TPD[0].pallets===80, String(TPD[0].pallets));
+chk('el 03 ya tiene las dos', TPD[1].pallets===110, String(TPD[1].pallets));
+chk('y el 04, cuando llegan, cero', TPD[2].pallets===0, String(TPD[2].pallets));
+chk('cada renglon dice cuantas lineas lo componen',
+    TPD[0].lineas===1 && TPD[1].lineas===2 && TPD[2].lineas===0,
+    TPD.map(x=>x.lineas).join(','));
+chk('viene ordenado por dia aunque se pidan desordenados',
+    S.transitoPorDia(LS,['2026-11-04','2026-11-02'],NUE).map(x=>x.dia).join(',')
+      ==='2026-11-02,2026-11-04');
+chk('un dia repetido sale una sola vez',
+    S.transitoPorDia(LS,['2026-11-02','2026-11-02'],NUE).length===1);
+chk('una fecha que no es fecha no entra',
+    S.transitoPorDia(LS,['el lunes','2026-11-02'],NUE).map(x=>x.dia).join(',')==='2026-11-02');
+// SIN FECHA DE CREACION NO SE PUEDE MEDIR, y eso no es cero pallets en el aire
+chk('sin fecha de creacion el dia va en null, no en cero',
+    S.transitoPorDia(LS.map(x=>({...x,CreaDate:null})),['2026-11-02'],NUE)[0].pallets===null);
+chk('sin dias devuelve vacio', S.transitoPorDia(LS,[],NUE).length===0);
+chk('sin nada no revienta', S.transitoPorDia(null,null,NUE).length===0);
+// y el dia por dia tiene que dar lo MISMO que la medicion suelta de ese dia
+chk('coincide con enTransito para el mismo dia',
+    S.transitoPorDia(LS,['2026-11-03'],NUE)[0].pallets===S.enTransito(LS,'2026-11-03',NUE).pallets);
+const PJTD=S.payloadJson({ series:[], transitoDias:TPD });
+chk('la serie llega al json que lee la pagina',
+    PJTD.transito_dias.length===3 && PJTD.transito_dias[1].pallets===110,
+    JSON.stringify(PJTD.transito_dias[1]));
+chk('y sin serie va un arreglo vacio, no undefined',
+    Array.isArray(S.payloadJson({ series:[] }).transito_dias));
+
 console.log('\n'+ok+' ok, '+fail+' fallas\n');
 process.exit(fail?1:0);

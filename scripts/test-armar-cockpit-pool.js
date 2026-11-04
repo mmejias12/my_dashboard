@@ -154,13 +154,24 @@ chk('que no es la que encabeza el orden del cockpit',
 const TU=A.titular(D, A.bodegasDelCockpit([PAR[1],PAR[0]].map(b=>b)));
 chk('el par no depende del orden de entrada', /peor -900 en RT13-100$/.test(TU.cola), TU.cola);
 
+// la ultima celda con dato del calendario de una tarjeta
+const ULT=t=>{const c=t&&t.cal; if(!c) return null;
+  const cs=[].concat.apply([],c.semanas).filter(Boolean); return cs[cs.length-1]||null;};
+
 console.log('\n— las tarjetas —');
 const TJ=A.tarjetas(D,BS);
 chk('ocho tarjetas', TJ.length===8, String(TJ.length));
 chk('la primera reparte el pool en tres', TJ[0].stack.length===3 &&
     TJ[0].stack.reduce((a,s)=>a+s.v,0)===803459, String(TJ[0].stack.reduce((a,s)=>a+s.v,0)));
 chk('y declara el total de SAP', /807\.848/.test(TJ[0].ks), TJ[0].ks);
-chk('planta muestra el indicador, no lo que SAP tiene', TJ[1].kv==='7.877', TJ[1].kv);
+// LA CIFRA GRANDE SIGUE AL DIA DEL CALENDARIO. El fixture SERIE no cuadra
+// consigo mismo —su serie termina en 125 y declara un nivel de 7.877— y eso
+// se conserva a proposito: la tarjeta tiene que publicar lo que dice la serie
+// que dibuja y cantar la diferencia, no poner el saldo de SAP encima de un
+// calendario que dice otra cosa.
+chk('planta muestra el cierre del dia elegido', TJ[1].kv==='125', TJ[1].kv);
+chk('y canta que ese cierre no es el saldo de SAP',
+    /SAP dice 7\.877/.test(TJ[1].semRot), TJ[1].semRot);
 chk('y dice que lo de fuera no suma', /no suman/.test(TJ[1].ks));
 chk('los dias en negativo salen de la serie', TJ[5].kv==='3' && /de 9/.test(TJ[5].u), TJ[5].kv+' '+TJ[5].u);
 chk('con chip critico cuando los hay', TJ[5].chip.c==='crit', JSON.stringify(TJ[5].chip));
@@ -354,7 +365,7 @@ chk('cada tarjeta declara la clave de su desglose',
     A.tarjetas(D,BS).map(t=>t.clave).join(',')===Object.keys(CO).join(','),
     A.tarjetas(D,BS).map(t=>t.clave).join(','));
 chk('y el numero del desglose es el de la tarjeta',
-    A.tarjetas(D,BS).every(t=>CO[t.clave].kv===t.kv),
+    A.tarjetas(D,BS).filter(t=>t.clave!=='planta').every(t=>CO[t.clave].kv===t.kv),
     A.tarjetas(D,BS).map(t=>t.clave+':'+t.kv+'/'+CO[t.clave].kv).join(' '));
 
 chk('el pool se compone de las tres patas', CO.pool.filas.length===3 && CO.pool.total.v===803459);
@@ -676,6 +687,24 @@ chk('el arrastre no depende del orden en que vengan los dias',
     A.nivelDiarioDePlanta(DESORD).map(x=>x.dia+':'+x.cierre).join(',')
       ==='2026-10-01:25,2026-10-02:55,2026-10-04:95',
     A.nivelDiarioDePlanta(DESORD).map(x=>x.dia+':'+x.cierre).join(','));
+// EL AGREGADO TAMBIEN LLEVA EL MOVIMIENTO, que es lo que el calendario
+// escribe debajo del cierre de cada dia.
+const NDM=A.nivelDiarioDePlanta([
+  {cod:'A',nom:'SANTIAGO INSPECCION',dias:[{dia:'2026-10-01',apertura:100,entradas:30,salidas:10,cierre:120},
+                                           {dia:'2026-10-02',apertura:120,entradas:0,salidas:20,cierre:100}]},
+  {cod:'B',nom:'SANTIAGO PINTURA',dias:[{dia:'2026-10-01',apertura:5,entradas:7,salidas:2,cierre:10}]}]);
+chk('el dia trae las entradas de todas las estaciones que se movieron',
+    NDM[0].entradas===37 && NDM[0].salidas===12, JSON.stringify(NDM[0]));
+// la apertura sale de la identidad y tiene que ser el cierre del dia anterior:
+// llevar un segundo acumulador seria una segunda fuente para el mismo numero
+chk('y la apertura cierra la identidad cierre = apertura + entradas - salidas',
+    NDM.every(x=>x.cierre===x.apertura+x.entradas-x.salidas),
+    NDM.map(x=>x.apertura+'+'+x.entradas+'-'+x.salidas+'='+x.cierre).join(' '));
+chk('que es exactamente el cierre del dia anterior',
+    NDM[1].apertura===NDM[0].cierre, NDM[1].apertura+' vs '+NDM[0].cierre);
+chk('una estacion quieta no aporta movimiento, solo su nivel',
+    NDM[1].entradas===0 && NDM[1].salidas===20 && NDM[1].cierre===110,
+    JSON.stringify(NDM[1]));
 chk('una fecha ilegible no entra al calendario',
     A.nivelDiarioDePlanta([{cod:'A',dias:[{dia:'ayer',apertura:0,cierre:5},
       dia('2026-10-02',0,5,0,5)]}]).length===1);
@@ -715,18 +744,25 @@ chk('la fecha va escapada en el title',
 
 console.log('\n— la tarjeta de planta publica su semana —');
 const TJP=A.tarjetas(D,BS).find(x=>x.clave==='planta');
-chk('la tarjeta trae la semana del nivel', Array.isArray(TJP.sem) && TJP.sem.length>0,
-    String(TJP.sem&&TJP.sem.length));
-chk('y la marca como nivel, no como cierres de estacion', TJP.semTipo==='nivel', TJP.semTipo);
-chk('el rotulo declara la banda de la semana', /entre <b>/.test(TJP.semRot), TJP.semRot);
+chk('la tarjeta trae el calendario del mes', !!(TJP.cal && TJP.cal.semanas.length), '');
+chk('y el dia elegido por defecto es el ultimo que tiene',
+    TJP.calSel===ULT(TJP).dia, TJP.calSel);
+chk('el rotulo cuenta cuantos dias con movimiento hay',
+    /días con movimiento/.test(TJP.semRot), TJP.semRot);
 // el numero de la tarjeta y el ultimo de la linea tienen que ser el mismo,
 // y cuando lo son la tarjeta lo dice en vez de dejarlo a la fe del que mira
 const TJC=A.tarjetas(COHD,A.bodegasDelCockpit(COHS)).find(x=>x.clave==='planta');
 chk('con un dato que cuadra, declara que el cierre es el saldo de SAP',
     /el mismo saldo que SAP/.test(TJC.semRot), TJC.semRot);
-chk('y el ultimo punto de la linea ES el numero que la tarjeta publica',
-    TJC.sem[TJC.sem.length-1].cierre===COHD.bodegas.PLANTA.nivel,
-    TJC.sem[TJC.sem.length-1].cierre+' vs '+TJC.kv);
+chk('y la ultima celda del calendario ES el numero que la tarjeta publica',
+    ULT(TJC).cierre===COHD.bodegas.PLANTA.nivel &&
+    TJC.kv===String(ULT(TJC).cierre).replace(/\B(?=(\d{3})+(?!\d))/g,'.'),
+    ULT(TJC).cierre+' vs '+TJC.kv);
+// con el dato coherente y sin periodo, el dia por defecto es el cierre
+// vigente: ahi la tarjeta y su desglose vuelven a ser el mismo numero
+chk('con dato coherente, planta tambien cuadra con su desglose',
+    A.composiciones(COHD,A.bodegasDelCockpit(COHS)).planta.kv===TJC.kv,
+    A.composiciones(COHD,A.bodegasDelCockpit(COHS)).planta.kv+' vs '+TJC.kv);
 // y cuando NO cuadra —el fixture SERIE no cuadra consigo mismo— la tarjeta
 // tiene que decirlo, no dibujar la linea y callarse
 chk('si la linea no cierra en el saldo de SAP, la tarjeta lo declara',
@@ -734,20 +770,22 @@ chk('si la linea no cierra en el saldo de SAP, la tarjeta lo declara',
 chk('nombrando los dos numeros y la diferencia',
     /la serie cierra en 125 y SAP dice 7\.877: -7\.752 de diferencia/.test(TJP.semRot),
     TJP.semRot);
-chk('las otras tarjetas no se llenan de mini-series',
-    A.tarjetas(D,BS).filter(x=>x.sem&&x.sem.length).length===1,
-    String(A.tarjetas(D,BS).filter(x=>x.sem&&x.sem.length).length));
-chk('y sin serie de planta la tarjeta no dibuja una linea vacia',
-    (x=>!x.semRot&&(!x.sem||!x.sem.length))(
+chk('solo planta trae calendario, las otras no se llenan de mini-series',
+    A.tarjetas(D,BS).filter(x=>x.cal||(x.sem&&x.sem.length)).length===1,
+    String(A.tarjetas(D,BS).filter(x=>x.cal||(x.sem&&x.sem.length)).length));
+chk('y sin serie de planta la tarjeta no dibuja un calendario vacio',
+    (x=>!x.semRot&&!x.cal&&(!x.sem||!x.sem.length))(
       A.tarjetas(Object.assign({},D,{planta_dias:[]}),BS).find(y=>y.clave==='planta')));
 
 const PGS=A.pagina(D);
-chk('la linea llega dibujada a la pagina, no a medias',
-    /<svg class="mini nivel"/.test(PGS) && /class="mnu"/.test(PGS));
-chk('con el rotulo al lado', /nivel del 2026-10-01 al /.test(PGS), '');
+chk('el calendario llega dibujado a la pagina, no a medias',
+    /<div class="calen"/.test(PGS) && /class="cd[ "]/.test(PGS) && /data-dia="2026-10-/.test(PGS));
+chk('con los cuatro numeros de cada dia en sus atributos',
+    /data-ape="\d+" data-ent="\d+" data-sal="\d+" data-cie="-?\d+"/.test(PGS), '');
+chk('y el rotulo al lado', /días con movimiento/.test(PGS), '');
 chk('y una sola vez: es la tarjeta de planta, no todas',
-    (soloCuerpo(PGS).match(/<svg class="mini nivel"/g)||[]).length===1,
-    String((soloCuerpo(PGS).match(/<svg class="mini nivel"/g)||[]).length));
+    (soloCuerpo(PGS).match(/<div class="calen"/g)||[]).length===1,
+    String((soloCuerpo(PGS).match(/<div class="calen"/g)||[]).length));
 
 console.log('\n— el javascript publicado COMPILA —');
 // Se arma como un arreglo de strings, asi que nada lo revisa hasta que alguien
@@ -817,22 +855,25 @@ chk('la cola cuenta solo los dias de esa planta',
     /de 5 días/.test(TITSGO.cola), TITSGO.cola);
 const TJSGO=A.tarjetas(D,SGO,'SANTIAGO');
 const plS=TJSGO.find(x=>x.clave==='planta');
-chk('el indicador es la suma de las estaciones de esa planta',
-    plS.kv===A.mil?undefined:plS.kv==='7.558', plS.kv);
+// el indicador de SAP de esa planta sigue siendo el suyo —viaja en calHoy y
+// es con el que se compara el dia elegido—, y la cifra grande es el cierre
+// del dia que muestra el calendario
+chk('el indicador de SAP es la suma de las estaciones de esa planta',
+    plS.calHoy===7558, String(plS.calHoy));
+chk('y la cifra grande es el cierre del dia elegido de esa planta',
+    plS.kv===String(ULT(plS).cierre), plS.kv+' vs '+ULT(plS).cierre);
 chk('y el referencial son las bodegas fuera del indicador DE ESA PLANTA',
     /4\.164/.test(plS.ks), plS.ks.replace(/<[^>]+>/g,''));
 // la mini-serie de la tarjeta tambien se recorta: si arrastrara las nueve
 // estaciones con el titulo SANTIAGO, la linea diria una cosa y el numero otra
 const soloSgo=SERIE.filter(x=>/^SANTIAGO/.test(x.nom));
 const esperada=A.nivelDiarioDePlanta(soloSgo);
-chk('la semana de la tarjeta se arrastra solo con las estaciones de esa planta',
-    plS.sem[plS.sem.length-1].cierre===esperada[esperada.length-1].cierre,
-    plS.sem[plS.sem.length-1].cierre+' vs '+esperada[esperada.length-1].cierre);
-chk('y no es la misma que la general',
-    plS.sem[plS.sem.length-1].cierre!==
-      A.tarjetas(D,TODAS).find(x=>x.clave==='planta').sem.slice(-1)[0].cierre,
-    plS.sem[plS.sem.length-1].cierre+' vs '+
-      A.tarjetas(D,TODAS).find(x=>x.clave==='planta').sem.slice(-1)[0].cierre);
+chk('el calendario de la tarjeta se arrastra solo con las estaciones de esa planta',
+    ULT(plS).cierre===esperada[esperada.length-1].cierre,
+    ULT(plS).cierre+' vs '+esperada[esperada.length-1].cierre);
+chk('y no es el mismo que el general',
+    ULT(plS).cierre!==ULT(A.tarjetas(D,TODAS).find(x=>x.clave==='planta')).cierre,
+    ULT(plS).cierre+' vs '+ULT(A.tarjetas(D,TODAS).find(x=>x.clave==='planta')).cierre);
 const TJTAL=A.tarjetas(D,TODAS.filter(b=>b.planta==='TALCA'),'TALCA');
 chk('una planta sin bodegas de referencia lo dice, no muestra las de otra',
     /sin bodegas de referencia/.test(TJTAL.find(x=>x.clave==='planta').ks),
@@ -906,12 +947,29 @@ chk('la estacion sin movimiento en el periodo queda sin dato, no sana',
 // EL SALDO NO SE FILTRA POR FECHA, y la tarjeta tiene que decirlo
 const TJPER=A.tarjetas(D,A.bodegasDelCockpit(OCT),undefined,'2026-10');
 const plPER=TJPER.find(x=>x.clave==='planta');
-chk('con periodo el indicador sigue siendo la lectura de hoy',
-    plPER.kv===A.tarjetas(D,TODAS).find(x=>x.clave==='planta').kv, plPER.kv);
-chk('y la tarjeta avisa que un saldo no se filtra por fecha',
-    /no se filtra por fecha/.test(plPER.nota||''), String(plPER.nota));
-chk('sin periodo no aparece esa nota',
-    !A.tarjetas(D,TODAS).find(x=>x.clave==='planta').nota);
+chk('con periodo la cifra es el cierre del ultimo dia DEL PERIODO',
+    plPER.kv===String(ULT(plPER).cierre) && /^2026-10-/.test(ULT(plPER).dia),
+    plPER.kv+' al '+ULT(plPER).dia);
+// En este fixture la serie ENTERA es de octubre, asi que el ultimo dia del
+// periodo tambien es el cierre vigente y no hay nada que aclarar.
+chk('y si ese dia es el cierre vigente, no hay nota que poner',
+    plPER.calSel===plPER.calUlt && /<div class="cdia"><\/div>/.test(A.tarjetaHtml(plPER)),
+    plPER.calSel+' vs '+plPER.calUlt);
+// con dos meses, elegir el viejo SI tiene que decir de que dia habla: si no,
+// 15.045 bajo el titulo se lee como el stock de ahora
+const DOSM=[{cod:'RT13-100',nom:'SANTIAGO INSPECCION',nivel:50,dias:[
+  {dia:'2026-10-30',apertura:10,entradas:5,salidas:0,cierre:15},
+  {dia:'2026-11-03',apertura:15,entradas:35,salidas:0,cierre:50}]}];
+const DM=Object.assign({},D,{planta_dias:DOSM,bodegas:Object.assign({},D.bodegas,
+  {PLANTA:{nivel:50,fuera:0,bodegas:[]}})});
+const dmOct=A.tarjetas(DM,A.bodegasDelCockpit(DOSM),undefined,'2026-10').find(x=>x.clave==='planta');
+const dmNov=A.tarjetas(DM,A.bodegasDelCockpit(DOSM),undefined,'2026-11').find(x=>x.clave==='planta');
+chk('con el mes viejo elegido, la tarjeta dice de que dia es y cuanto tiene SAP hoy',
+    /Cierre del 2026-10-30\. Hoy SAP tiene 50\./.test(A.tarjetaHtml(dmOct)),
+    (A.tarjetaHtml(dmOct).match(/Cierre del [^<]*/)||['(sin nota)'])[0]);
+chk('y la cifra grande es la de ese dia, no la de hoy', dmOct.kv==='15', dmOct.kv);
+chk('con el mes vigente no aparece la nota',
+    /<div class="cdia"><\/div>/.test(A.tarjetaHtml(dmNov)) && dmNov.kv==='50', dmNov.kv);
 // con periodo la serie cierra donde termina el periodo, no en el saldo de
 // hoy: reclamar un descalce ahi seria una alarma falsa
 // la linea sigue a los dos filtros: una linea que llega a noviembre debajo de
@@ -930,16 +988,19 @@ const TJQ=A.tarjetas(Object.assign({},D,{planta_dias:QUIETA}),
                      A.bodegasDelCockpit(A.serieDelPeriodo(QUIETA,'2026-11')),
                      undefined,'2026-11');
 chk('la estacion sin movimiento en el periodo sigue aportando su nivel',
-    TJQ.find(x=>x.clave==='planta').sem.slice(-1)[0].cierre===1007,
-    String(TJQ.find(x=>x.clave==='planta').sem.slice(-1)[0].cierre));
-chk('la semana de la tarjeta tambien se recorta al periodo',
-    plPER.sem.every(x=>x.dia.slice(0,7)==='2026-10'),
-    plPER.sem.map(x=>x.dia).join(' '));
+    ULT(TJQ.find(x=>x.clave==='planta')).cierre===1007,
+    String(ULT(TJQ.find(x=>x.clave==='planta')).cierre));
+chk('el calendario de la tarjeta tambien se recorta al periodo',
+    [].concat.apply([],plPER.cal.semanas).filter(Boolean)
+      .every(x=>x.dia.slice(0,7)==='2026-10'),
+    plPER.cal.mes);
 const TJDIA=A.tarjetas(D,A.bodegasDelCockpit(A.serieDelPeriodo(SERIE,'2026-10-02')),
                        undefined,'2026-10-02');
-chk('y con un dia elegido la linea es ese dia',
-    TJDIA.find(x=>x.clave==='planta').sem.map(x=>x.dia).join(',')==='2026-10-02',
-    TJDIA.find(x=>x.clave==='planta').sem.map(x=>x.dia).join(','));
+chk('y con un dia elegido el calendario trae ese dia solo',
+    [].concat.apply([],TJDIA.find(x=>x.clave==='planta').cal.semanas)
+      .filter(Boolean).map(x=>x.dia).join(',')==='2026-10-02',
+    [].concat.apply([],TJDIA.find(x=>x.clave==='planta').cal.semanas)
+      .filter(Boolean).map(x=>x.dia).join(','));
 chk('con periodo no se acusa descalce contra el saldo de hoy',
     !/de diferencia/.test(plPER.semRot||''), plPER.semRot);
 chk('y dice a que fecha cierra', /cierra en <b>[\d.-]+<\/b> al 2026-10/.test(plPER.semRot||''),
@@ -954,13 +1015,32 @@ console.log('\n— las tres filas de la planta: en bodega, en el aire, contable 
 // En REDTEC el pallet sale de la bodega cuando se CREA el documento y la
 // emision se FECHA cuando el cliente la recibe. Las dos lecturas son
 // correctas y difieren exactamente en lo que va arriba del camion.
+// y las tres hablan del DIA ELEGIDO en el calendario, no una del dia y otra
+// de hoy: por eso el transito viaja como serie y no como un solo numero.
+const DIAFIN=ULT(A.tarjetas(D,TODAS).find(x=>x.clave==='planta')).dia;
 const CONTRA=Object.assign({},D,{planta_fecha_serie:'CreaDate',
-  planta_transito:{medible:true,pallets:80,lineas:2,sin_fecha:0,motivo:null,al:'2026-10-30'}});
+  planta_transito:{medible:true,pallets:80,lineas:2,sin_fecha:0,motivo:null,al:DIAFIN},
+  planta_transito_dias:[{dia:DIAFIN,pallets:80,lineas:2}]});
 const TPL=A.tarjetas(CONTRA,TODAS).find(x=>x.clave==='planta');
 chk('salen las tres filas', Array.isArray(TPL.trio) && TPL.trio.length===3,
     JSON.stringify(TPL.trio&&TPL.trio.length));
-chk('la primera es lo que hay en bodega', TPL.trio[0].v===7877, String(TPL.trio[0].v));
-chk('la segunda es lo que va en el camion', TPL.trio[1].v===80, String(TPL.trio[1].v));
+chk('la primera es lo que hay en bodega el dia elegido',
+    TPL.trio[0].v===ULT(TPL).cierre, TPL.trio[0].v+' vs '+ULT(TPL).cierre);
+chk('la segunda es lo que va en el camion ESE dia', TPL.trio[1].v===80, String(TPL.trio[1].v));
+// un dia que la serie de transito no cubre va en null y la pagina escribe un
+// guion: un cero ahi afirmaria que no habia nada en el aire
+const SINDIA=A.tarjetas(Object.assign({},CONTRA,{planta_transito_dias:[]}),TODAS)
+  .find(x=>x.clave==='planta');
+chk('un dia sin medicion de transito va en null, no en cero',
+    SINDIA.trio[1].v===null && SINDIA.trio[2].v===null, JSON.stringify(SINDIA.trio.map(r=>r.v)));
+chk('y la pagina lo escribe como guion',
+    (A.tarjetaHtml(SINDIA).match(/<td class="num">—<\/td>/g)||[]).length===2,
+    String((A.tarjetaHtml(SINDIA).match(/<td class="num">—<\/td>/g)||[]).length));
+// con un filtro de planta puesto no se reparte el transito: se dice
+const TPLF=A.tarjetas(CONTRA,SGO,'SANTIAGO').find(x=>x.clave==='planta');
+chk('con filtro de planta el transito no se reparte, se declara',
+    !!(TPLF.trio && TPLF.trio.aun && /nueve bodegas juntas/.test(TPLF.trio.aun)),
+    JSON.stringify(TPLF.trio));
 // la de abajo TIENE que ser la suma: si no, las tres filas enredan mas
 chk('y la tercera es exactamente la suma de las dos',
     TPL.trio[2].v===TPL.trio[0].v+TPL.trio[1].v, TPL.trio.map(r=>r.v).join(' + '));
@@ -996,6 +1076,103 @@ chk('sin trio el html no deja una tabla vacia',
 chk('y llega a la pagina cuando hay dato',
     /<table class="trio">/.test(soloCuerpo(A.pagina(CONTRA))));
 chk('pero no con el dato de hoy', !/<table class="trio">/.test(soloCuerpo(A.pagina(D))));
+
+console.log('\n— el calendario: el numero escrito, no la forma de la barrita —');
+// La barrita mostraba la forma de la semana y escondia sus numeros detras del
+// mouse, uno por uno. Lo que se pregunta frente a la tarjeta es "cuanto habia
+// el 29", y eso se contesta con el numero escrito.
+chk('el lunes es el cero', A.diaDeSemana('2026-10-05')===0, String(A.diaDeSemana('2026-10-05')));
+chk('y el domingo el seis', A.diaDeSemana('2026-10-04')===6, String(A.diaDeSemana('2026-10-04')));
+chk('el sabado es el cinco', A.diaDeSemana('2026-10-03')===5, String(A.diaDeSemana('2026-10-03')));
+// SE PARSEA EN UTC: con el constructor local, al oeste de Greenwich un ISO
+// sin hora cae el dia ANTERIOR y el calendario entero se corre una columna
+chk('un ISO sin hora no se corre de dia en Santiago',
+    A.diaDeSemana('2026-01-01')===3, String(A.diaDeSemana('2026-01-01')));
+chk('una fecha que no es fecha no se inventa',
+    A.diaDeSemana('05-10-2026')===null && A.diaDeSemana('')===null && A.diaDeSemana(null)===null);
+chk('una fecha con hora igual se lee', A.diaDeSemana('2026-10-05T13:00:00Z')===0);
+// ESTE ES EL UNICO CHEQUEO QUE NECESITA OTRA ZONA HORARIA: corriendo en UTC
+// el error no se ve, y el computador que arma la pagina esta en Santiago.
+// Con el constructor local, '2026-10-05' se interpreta como medianoche UTC y
+// getDay() devuelve el domingo: el calendario entero se corre una columna.
+chk('y sigue siendo lunes con el reloj de Santiago',
+    require('child_process').execFileSync(process.execPath,
+      ['-e', 'console.log(require(process.argv[1]).diaDeSemana("2026-10-05"))',
+       require('path').join(__dirname, 'armar-cockpit-pool.js')],
+      { env: Object.assign({}, process.env, { TZ: 'America/Santiago' }) }).toString().trim() === '0');
+
+chk('el mes del calendario es el del periodo si lo hay',
+    A.mesDelCalendario([{dia:'2026-11-03'}],'2026-10')==='2026-10');
+chk('y si no, el mas reciente que tenga dias',
+    A.mesDelCalendario([{dia:'2026-10-30'},{dia:'2026-11-03'}],'')==='2026-11');
+chk('un periodo de un dia no sirve de mes',
+    A.mesDelCalendario([{dia:'2026-10-30'}],'2026-10-30')==='2026-10');
+chk('sin dias no hay mes', A.mesDelCalendario([],'')===null);
+
+const CD=[{dia:'2026-10-01',cierre:100,entradas:10,salidas:5,apertura:95},
+          {dia:'2026-10-03',cierre:120,entradas:20,salidas:0,apertura:100},
+          {dia:'2026-10-05',cierre:90,entradas:0,salidas:30,apertura:120},
+          {dia:'2026-10-30',cierre:-7,entradas:1,salidas:98,apertura:84}];
+const CAL=A.calendarioDeMes(CD,'2026-10');
+// LAS COLUMNAS SALEN DE LOS DIAS QUE HAY: en REDTEC se trabaja el sabado
+// —octubre 2026 tiene cinco— y una grilla de lunes a viernes los habria
+// escondido sin decir que los escondia
+chk('con un sabado en los datos, la grilla llega hasta el sabado', CAL.cols===6, String(CAL.cols));
+chk('y sin sabados se queda en cinco columnas',
+    A.calendarioDeMes([{dia:'2026-10-01',cierre:1}],'2026-10').cols===5);
+chk('cada dia cae en su columna',
+    CAL.semanas[0][3].dia==='2026-10-01' && CAL.semanas[0][5].dia==='2026-10-03',
+    JSON.stringify(CAL.semanas[0].map(x=>x&&x.dia)));
+chk('la celda trae los cuatro numeros del dia',
+    CAL.semanas[0][3].cierre===100 && CAL.semanas[0][3].entradas===10 &&
+    CAL.semanas[0][3].salidas===5 && CAL.semanas[0][3].apertura===95 &&
+    CAL.semanas[0][3].num===1, JSON.stringify(CAL.semanas[0][3]));
+// una fila vacia se leeria como una semana sin movimiento, y lo que pasa es
+// que esa semana no existe en la serie
+chk('las semanas sin ningun dia no se dibujan', CAL.semanas.length===3, String(CAL.semanas.length));
+chk('y las que si, traen su dia', CAL.semanas[2].filter(Boolean).map(x=>x.dia).join(',')==='2026-10-30');
+chk('los dias de otro mes no entran',
+    [].concat.apply([],A.calendarioDeMes(CD.concat([{dia:'2026-11-02',cierre:1}]),'2026-10').semanas)
+      .filter(Boolean).every(x=>x.dia.slice(0,7)==='2026-10'));
+chk('un mes que no es mes no devuelve calendario',
+    A.calendarioDeMes(CD,'octubre')===null && A.calendarioDeMes(CD,null)===null);
+chk('un mes sin dias tampoco', A.calendarioDeMes(CD,'2026-09')===null);
+chk('sin dias no revienta', A.calendarioDeMes(null,'2026-10')===null);
+
+chk('el pie escribe la composicion del dia, los cuatro numeros',
+    /jue 1 · abre <b>95<\/b> · entran <b>10<\/b> · salen <b>5<\/b> · cierra <b>100<\/b>/
+      .test(A.pieDeDia(CAL.semanas[0][3])), A.pieDeDia(CAL.semanas[0][3]));
+chk('sin celda no escribe nada', A.pieDeDia(null)==='');
+
+chk('la nota aparece cuando el dia elegido NO es el vigente',
+    A.notaDeDia('2026-10-29',12178,'2026-11-03')==='Cierre del 2026-10-29. Hoy SAP tiene 12.178.',
+    A.notaDeDia('2026-10-29',12178,'2026-11-03'));
+chk('y no aparece cuando si lo es', A.notaDeDia('2026-11-03',12178,'2026-11-03')==='');
+chk('sin dia o sin vigente tampoco',
+    A.notaDeDia(null,1,'2026-11-03')==='' && A.notaDeDia('2026-10-29',1,null)==='');
+
+const CH=A.calendarioHtml(CAL,{sel:'2026-10-03',tope:200,hoy:50,ultimo:'2026-11-03',
+  tra:[{dia:'2026-10-03',pallets:40,lineas:1},{dia:'2026-10-01',pallets:null,lineas:0}]});
+chk('cada celda lleva sus cuatro numeros en atributos',
+    /data-dia="2026-10-01" data-ape="95" data-ent="10" data-sal="5" data-cie="100"/.test(CH), '');
+chk('y el transito de su dia', /data-dia="2026-10-03"[^>]*data-tra="40"/.test(CH), '');
+// vacio es "ese dia no se puede medir", que no es cero pallets en el aire
+chk('un dia sin medicion lleva el transito vacio, no en cero',
+    /data-dia="2026-10-01"[^>]*data-tra=""/.test(CH), '');
+chk('el dia elegido va marcado y anunciado',
+    /data-dia="2026-10-03"[^>]*aria-pressed="true"/.test(CH) &&
+    (CH.match(/aria-pressed="true"/g)||[]).length===1,
+    String((CH.match(/aria-pressed="true"/g)||[]).length));
+chk('y es un boton de verdad, no un div con onclick',
+    /<button type="button" class="cd/.test(CH) && !/onclick/.test(CH));
+chk('el cierre bajo cero va marcado aparte del color',
+    /class="cd neg"/.test(CH), (CH.match(/class="cd[^"]*"/g)||[]).join(' '));
+chk('el tope y el saldo de hoy viajan para repintar sin recalcular',
+    /data-tope="200"/.test(CH) && /data-hoy="50"/.test(CH) && /data-ult="2026-11-03"/.test(CH));
+chk('el pie trae el dia elegido, no el ultimo', /abre <b>100<\/b>/.test(CH), '');
+chk('y la nota, porque el elegido no es el vigente', /Cierre del 2026-10-03/.test(CH), '');
+chk('las columnas se nombran', /<span class="ch">sáb<\/span>/.test(CH));
+chk('sin calendario no dibuja nada', A.calendarioHtml(null,{})==='');
 
 console.log('\n' + ok + ' ok, ' + fail + ' fallas');
 process.exit(fail ? 1 : 0);

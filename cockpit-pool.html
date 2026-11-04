@@ -1071,17 +1071,11 @@ function calendarioDeMes(dias, mes) {
   if (usada) semanas.push(fila);
   return { mes: ms, cols, semanas };
 }
-function filasDelDia(dia, nivelDia, traDias, filtrado) {
+function filasDelDia(dia, nivelDia, traDias, planta) {
   const c = (Array.isArray(nivelDia) ? nivelDia : []).find(x => x && x.dia === dia);
   if (!c) return null;
-  if (filtrado)
-    return { aun: 'el tránsito se mide sobre las nueve bodegas juntas, no se reparte por planta' };
   const t = (Array.isArray(traDias) ? traDias : []).find(x => x && x.dia === dia);
-  const tp = t && t.pallets != null ? Number(t.pallets) : null;
-  return [{ q: 'En planta', v: c.cierre, m: 'lo que hay en bodega' },
-          { q: 'En tránsito a cliente', v: tp, m: 'salió, el cliente todavía no lo recibe' },
-          { q: 'Por fecha contable', v: tp == null ? null : c.cierre + tp,
-            m: 'lo que cuadra con la cartola', pie: true }];
+  return trioDeTransito(c.cierre, transitoDePlanta(t, planta), planta);
 }
 function pieDeDia(c) {
   if (!c) return '';
@@ -1089,6 +1083,25 @@ function pieDeDia(c) {
   return (w == null ? '' : DIA_CORTO[w] + ' ' + c.num + ' · ') +
          'abre <b>' + mil(c.apertura) + '</b> · entran <b>' + mil(c.entradas) +
          '</b> · salen <b>' + mil(c.salidas) + '</b> · cierra <b>' + mil(c.cierre) + '</b>';
+}
+function capital(s) {
+  const u = String(s == null ? '' : s).trim();
+  return u ? u.charAt(0).toUpperCase() + u.slice(1).toLowerCase() : '';
+}
+function transitoDePlanta(t, planta) {
+  if (!t || t.pallets == null) return null;
+  if (!planta) return Number(t.pallets) || 0;
+  const pp = t.por_planta;
+  if (!pp || typeof pp !== 'object') return null;
+  return Number(pp[planta]) || 0;
+}
+function trioDeTransito(nivel, tp, planta) {
+  const p = planta ? capital(planta) : '';
+  return [{ q: p ? 'En ' + p : 'En planta', v: nivel, m: 'lo que hay en bodega' },
+          { q: 'En tránsito a cliente', v: tp,
+            m: 'salió' + (p ? ' de ' + p : '') + ', el cliente todavía no lo recibe' },
+          { q: 'Por fecha contable', v: tp == null ? null : nivel + tp,
+            m: 'lo que cuadra con la cartola', pie: true }];
 }
 function notaDeDia(dia, hoy, ultimo, nom) {
   if (!dia || !ultimo || dia === ultimo) return '';
@@ -1445,23 +1458,24 @@ function tarjetas(datos, bodegas, planta, periodo) {
    *  misterio porque esta nombrada. */
   const tra = d.planta_transito || null;
   const porCrea = (d.planta_fecha_serie || null) === 'CreaDate';
+  /*  UNA CORRIDA VIEJA NO TRAE EL REPARTO y hay que decirlo: mostrar el
+   *  transito de las nueve bajo un titulo que dice SANTIAGO lo convertiria en
+   *  el transito de Santiago, que es justo lo que no se sabe. */
+  const sinReparto = filtrado && tra && tra.medible && tra.por_planta == null;
   let trio = null;
   if (tra && !tra.medible)
     trio = { aun: tra.motivo || 'el tránsito todavía no se puede medir' };
-  else if (tra && porCrea && !filtrado && periodo && ultPer)
+  else if (sinReparto)
+    trio = { aun: 'esta corrida midió el tránsito sobre las nueve bodegas juntas; ' +
+                  'el reparto por planta sale al volver a correr el cierre' };
+  else if (tra && porCrea && periodo && ultPer)
     /*  Con periodo, las tres filas hablan del mismo dia que la cifra grande:
      *  el transito de hoy al lado del stock del 7 de octubre serian dos dias
      *  distintos en la misma tabla. */
     trio = filasDelDia(ultPer.dia, nivelDia, Array.isArray(d.planta_transito_dias)
-                                               ? d.planta_transito_dias : [], false);
-  else if (tra && porCrea && !filtrado)
-    trio = [{ q: 'En planta', v: nivelPla, m: 'lo que hay en bodega' },
-            { q: 'En tránsito a cliente', v: Number(tra.pallets) || 0,
-              m: 'salió, el cliente todavía no lo recibe' },
-            { q: 'Por fecha contable', v: nivelPla + (Number(tra.pallets) || 0),
-              m: 'lo que cuadra con la cartola', pie: true }];
-  else if (tra && porCrea && filtrado)
-    trio = { aun: 'el tránsito se mide sobre las nueve bodegas juntas, no se reparte por planta' };
+                                               ? d.planta_transito_dias : [], planta || null);
+  else if (tra && porCrea)
+    trio = trioDeTransito(nivelPla, transitoDePlanta(tra, planta || null), planta || null);
 
   t.push({ clave: 'planta', et: 'Planta · indicador',
            hint: filtrado ? mil(bs.length) + ' en ' + esc(planta) : 'nueve bodegas',

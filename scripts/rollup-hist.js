@@ -24,6 +24,8 @@
 //    node scripts/rollup-hist.js 2026-08-12 --explicar               (por qué difiere un día)
 //    node scripts/rollup-hist.js 2023-01-01 2026-11-03 --comparar     (resumen por mes)
 //    ... --excluir=2024-02-13,2025-02-17   (reconstruye todo menos esos días)
+//    node scripts/rollup-hist.js 2024-02-13 --veredicto   (código de salida:
+//        0 el cold no viene corto · 3 sigue corto · 4 sin blob)
 //    ... --comparar --dias                                            (y día por día)
 //    node scripts/rollup-hist.js 2026-10-01 2026-10-31
 //    node scripts/rollup-hist.js                       (ventana de 45 días → ayer)
@@ -305,9 +307,24 @@ async function explicar(fecha, opts) {
                                     guardado: cuadraturaDetalle(viejo, concepto) } : null };
 }
 
+// ── Veredicto de UN día, para que un script pueda decidir ───────────────────
+// Devuelve el código de salida y la razón. Se usa con --veredicto: 0 = el cold
+// no viene corto, se puede reconstruir ese día; 3 = sigue corto, NO tocarlo;
+// 4 = el cold no tiene blob de ese día.
+function veredicto(r) {
+  if (!r || r.sin_cold) return { codigo: 4, mensaje: 'sin blob en el cold' };
+  const baja = (r.diferencias || []).filter(x => x.dif < 0);
+  if (baja.length) return { codigo: 3,
+    mensaje: 'el cold sigue corto: ' + baja.map(x => x.concepto + ' ' + x.dif).join(' · ') };
+  const alza = (r.diferencias || []).filter(x => x.dif > 0);
+  return { codigo: 0, mensaje: alza.length
+    ? 'el cold está completo (y trae más: ' + alza.map(x => x.concepto + ' +' + x.dif).join(' · ') + ')'
+    : 'el cold coincide con lo guardado' };
+}
+
 module.exports = { construir, diasAEscribir, diferenciasDia, tieneMovimiento, hayQueRevisar,
                    comparar, escribir, explicar, agregarHasta, deltaDetalle, cuadraturaDetalle,
-                   noExiste, VENTANA_DIAS };
+                   veredicto, noExiste, VENTANA_DIAS };
 
 // ── CLI ─────────────────────────────────────────────────────────────────────
 if (require.main === module) (async () => {
@@ -315,6 +332,7 @@ if (require.main === module) (async () => {
   const soloComparar = args.includes('--comparar');
   const soloExplicar = args.includes('--explicar');
   const verDias = args.includes('--dias');
+  const soloVeredicto = args.includes('--veredicto');
   const argExcluir = args.find(a => a.startsWith('--excluir='));
   const excluir = argExcluir ? argExcluir.slice('--excluir='.length).split(',').map(x => x.trim()).filter(esFecha) : [];
   const libres = args.filter(a => !a.startsWith('--'));
@@ -327,6 +345,13 @@ if (require.main === module) (async () => {
   if (!process.env.OS_STORAGE_CONN) { console.error('Falta OS_STORAGE_CONN'); process.exit(1); }
 
   const n = x => Number(x).toLocaleString('es-CL');
+
+  if (soloVeredicto) {
+    const dia = esFecha(libres[0]) ? libres[0] : hasta;
+    const v = veredicto(await explicar(dia));
+    console.log(dia + ': ' + v.mensaje);
+    process.exit(v.codigo);
+  }
 
   if (soloExplicar) {
     const dia = esFecha(libres[0]) ? libres[0] : hasta;

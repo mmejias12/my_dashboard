@@ -197,6 +197,12 @@ function fechaQueManda(cobertura, pedida) {
  *  SIN LAS DOS FECHAS NO SE PUEDE MEDIR, y eso se dice: devolver cero cuando
  *  no se sabe es peor que no devolver nada, porque un cero se publica como si
  *  significara "no hay nada en el aire". */
+/*  CUANTAS LINEAS DEL TRANSITO SE GUARDAN. El detalle viaja hasta la pagina
+ *  dentro de datos-stock.json, asi que no puede crecer sin tope. Diez alcanzan
+ *  para explicar el numero: van ordenadas de mayor a menor y el resto se
+ *  anuncia por su cuenta. */
+const TOPE_DETALLE = 10;
+
 function enTransito(lineas, hasta, conjunto) {
   const dia = x => { const t = String(x == null ? '' : x).slice(0, 10);
                      return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : null; };
@@ -216,6 +222,7 @@ function enTransito(lineas, hasta, conjunto) {
              motivo: 'ninguna linea trae fecha de creacion: el transito no se puede medir ' +
                      'hasta que se re-extraiga guardandola' };
   let pallets = 0, n = 0, sinFecha = 0;
+  const det = [];
   for (const l of ls) {
     if (!l) continue;
     const c = dia(l.CreaDate), d = dia(l.DocDate);
@@ -228,10 +235,27 @@ function enTransito(lineas, hasta, conjunto) {
     if (!(c <= corte && d > corte)) continue;
     const sale = dentro(l.desde), entra = dentro(l.hacia);
     if (sale === entra) continue;              // interna o ajena: no mueve el total
-    pallets += sale ? (Number(l.cantidad) || 0) : -(Number(l.cantidad) || 0);
+    const q = sale ? (Number(l.cantidad) || 0) : -(Number(l.cantidad) || 0);
+    pallets += q;
     n++;
+    // DE DONDE SALE Y A DONDE VA. "540 pallets en el aire" no se puede
+    // perseguir; "540 de RT13-105 a CLIENTES, documento 695061, creado el 3 y
+    // fechado el 4" se busca en SAP en diez segundos. El numero sin esto
+    // obliga a creerle o a ignorarlo, que son las dos malas opciones.
+    //
+    // LA BODEGA DE DESTINO NO ES EL CLIENTE: el socio vive en la ubicacion
+    // (el bin), que esta en binmov y no en esta linea. Hasta aca llega lo que
+    // se puede decir sin inventar.
+    det.push({ doc: l.DocEntry == null ? null : l.DocEntry,
+               num: l.DocNum == null ? null : l.DocNum,
+               desde: l.desde || null, hacia: l.hacia || null,
+               cantidad: q, crea: c, llega: d });
   }
+  // Las mas grandes primero, que son las que explican el numero; el empate se
+  // rompe por DocEntry para que dos corridas del mismo dato impriman igual.
+  det.sort((x, y) => (Math.abs(y.cantidad) - Math.abs(x.cantidad)) || (Number(x.doc) - Number(y.doc)));
   return { medible: true, pallets, lineas: n, conCrea, sinFecha,
+           detalle: det.slice(0, TOPE_DETALLE),
            motivo: sinFecha ? sinFecha + ' linea(s) creadas sin fecha de documento utilizable: ' +
                               'salieron de la bodega y no tienen dia de llegada' : null };
 }
@@ -432,8 +456,9 @@ function payloadJson(p) {
     transito: x.transito ? { medible: !!x.transito.medible, pallets: x.transito.pallets,
                              lineas: x.transito.lineas || 0,
                              sin_fecha: x.transito.sinFecha || 0,
+                             detalle: x.transito.detalle || [],
                              motivo: x.transito.motivo || null, al: x.transitoAl || null }
-                         : { medible: false, pallets: null, lineas: 0, sin_fecha: 0,
+                         : { medible: false, pallets: null, lineas: 0, sin_fecha: 0, detalle: [],
                              motivo: 'no se calculo', al: null },
     lectura: {
       ancla: x.anclaLeida || null,
@@ -708,6 +733,16 @@ async function main() {
                 mil(tra.lineas) + ' linea(s)');
     console.log('  planta por fecha de documento = planta por fecha de creacion + ' + mil(tra.pallets));
     if (tra.sinFecha) console.log('  ' + mil(tra.sinFecha) + ' linea(s) sin fecha de documento utilizable');
+    if (tra.detalle && tra.detalle.length) {
+      console.log('  de donde sale y a donde va  (la bodega de destino, no el cliente:');
+      console.log('   el socio vive en la ubicacion y esa no viene en esta linea)');
+      for (const x of tra.detalle)
+        console.log('     ' + String(x.desde || '—').padEnd(11) + '→ ' + String(x.hacia || '—').padEnd(11) +
+                    mil(x.cantidad).padStart(9) + '   doc ' + (x.num == null ? x.doc : x.num) +
+                    '   creado ' + x.crea + ' · llega ' + x.llega);
+      if (tra.lineas > tra.detalle.length)
+        console.log('     (y ' + mil(tra.lineas - tra.detalle.length) + ' linea(s) mas)');
+    }
   }
 
   console.log('\n── VEREDICTO ' + '─'.repeat(61));

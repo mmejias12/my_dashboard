@@ -78,6 +78,22 @@ function Paso([string]$n, [string]$que) { Write-Host "`n[$n] $que" }
 # tareas necesita un codigo, no una excepcion bonita.
 function Muere([string]$que) { [Console]::Error.WriteLine("ERROR: $que"); exit 1 }
 
+# La lista de meses de un extremo al otro, los dos incluidos: '2026-08' y
+# '2026-11' dan '2026-08,2026-09,2026-10,2026-11'. La usan el paso 3 y el 4,
+# que piden ventanas distintas sobre la misma idea.
+# Cultura INVARIANTE a proposito: ParseExact con la del equipo depende de como
+# este configurado, y esto tiene que dar igual en la maquina de cualquiera.
+# Si $desde queda adelante de $hasta la lista sale vacia, y de eso se hace
+# cargo quien llama.
+function ListaDeMeses([string]$desde, [string]$hasta) {
+  $inv = [Globalization.CultureInfo]::InvariantCulture
+  $out = @()
+  $cur = [datetime]::ParseExact("$desde-01", 'yyyy-MM-dd', $inv)
+  $fin = [datetime]::ParseExact("$hasta-01", 'yyyy-MM-dd', $inv)
+  while ($cur -le $fin) { $out += $cur.ToString('yyyy-MM', $inv); $cur = $cur.AddMonths(1) }
+  return ($out -join ',')
+}
+
 Write-Host "── cierre diario $hoy ────────────────────────────────"
 
 # 1 · los documentos nuevos. VENTANA DE TRES DIAS, no el mes entero: medido el
@@ -105,13 +121,23 @@ node backfill/sonda-oinm-bodega.js --salida="$dir/bodegas-hoy.json"
 if ($LASTEXITCODE -ne 0) { Muere 'fallo la sonda de bodegas' }
 
 # 3 · el nivel por socio de cada bodega
-Paso '3/8' 'calculando el nivel por socio'
-node scripts/saldo-pool.js --bodega=RETAIL `
+#     EL MES EN CURSO VA ADENTRO DE LA VENTANA. saldo-pool compara el nivel que
+#     calcula contra el saldo vivo de SAP, que es de HOY, y el propio script
+#     exige que el ancla caiga dentro de lo que se midio: si la cobertura
+#     termina el 31 del mes pasado, los dias del medio no los suma nadie y el
+#     resultado sale con la brecha declarada. Esa brecha crecia 24 h por dia
+#     desde el 4 de cada mes, que es cuando la ventana de tres dias del paso 1
+#     deja de tocar el mes anterior. Medido el 2026-11-05: 36,9 h con tope 24.
+#     Enero es el piso porque la semilla es el cierre 2025; un mes sin blob
+#     saldo-pool lo tolera y lo declara, asi que la lista puede ir adelantada.
+$mesesPool = ListaDeMeses '2026-01' $mes
+Paso '3/8' "calculando el nivel por socio (2026-01..$mes)"
+node scripts/saldo-pool.js --bodega=RETAIL --meses="$mesesPool" `
   --semilla=backfill/s0-semilla-retail-2025-12-31.json `
   --bodegas="$dir/bodegas-hoy.json" --json="$dir/stock-retail.json"
 if ($LASTEXITCODE -ne 0) { Muere 'fallo RETAIL' }
 
-node scripts/saldo-pool.js --bodega=CLIENTES `
+node scripts/saldo-pool.js --bodega=CLIENTES --meses="$mesesPool" `
   --semilla=backfill/s0-semilla-2025-12-31.json `
   --bodegas="$dir/bodegas-hoy.json" --json="$dir/stock-clientes.json"
 if ($LASTEXITCODE -ne 0) { Muere 'fallo CLIENTES' }
@@ -143,15 +169,7 @@ if ($LASTEXITCODE -ne 0) { Muere 'fallo CLIENTES' }
 $mesDesde = '2026-08'
 $mesPrev  = (Get-Date -Day 1).AddDays(-1).ToString('yyyy-MM')
 
-# La lista de $mesDesde a $mes, los dos incluidos. Cultura invariante a
-# proposito: ParseExact con la del equipo depende de como este configurado, y
-# esto tiene que dar igual en la maquina de cualquiera.
-$inv   = [Globalization.CultureInfo]::InvariantCulture
-$meses = @()
-$cur   = [datetime]::ParseExact("$mesDesde-01", 'yyyy-MM-dd', $inv)
-$fin   = [datetime]::ParseExact("$mes-01",      'yyyy-MM-dd', $inv)
-while ($cur -le $fin) { $meses += $cur.ToString('yyyy-MM', $inv); $cur = $cur.AddMonths(1) }
-$lista = $meses -join ','
+$lista = ListaDeMeses $mesDesde $mes
 
 Paso '4/8' "calculando la distribucion diaria de planta ($mesDesde..$mes)"
 node scripts/saldo-planta.js --meses="$lista" --json="$dir/planta.json"

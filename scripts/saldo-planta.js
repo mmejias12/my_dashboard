@@ -372,22 +372,62 @@ function aperturasImposibles(series) {
  *  Las lineas MAS NUEVAS que el ancla es la direccion peligrosa —hay
  *  movimiento en las lineas que el saldo todavia no tiene— pero al reves
  *  tambien corre la serie, asi que se miden las dos. */
-function desfaseDeLectura(anclaLeida, lineasGuardadas, topeSegundos) {
+function desfaseDeLectura(anclaLeida, lineasGuardadas, topeSegundos, mes) {
   const t = x => { const d = new Date(String(x || '')); return isNaN(d.getTime()) ? null : d.getTime(); };
   const a = t(anclaLeida), l = t(lineasGuardadas);
   const tope = Number(topeSegundos) > 0 ? Number(topeSegundos) : 60;
+  /*  QUE BLOB SE COMPARO, escrito en el mensaje: sin esto la frase dice
+   *  "las lineas" y nadie puede saber cuales de los cuatro meses. */
+  const cual = /^\d{4}-\d{2}$/.test(String(mes || '')) ? ' (lineasbod/' + mes + '.json)' : '';
   if (a === null || l === null)
-    return { ok: null, segundos: null, tope,
+    return { ok: null, segundos: null, tope, mes: mes || null,
              motivo: 'no se puede medir el desfase: falta la marca de tiempo de ' +
-                     (a === null ? 'el ancla' : 'las lineas') };
+                     (a === null ? 'el ancla' : 'las lineas' + cual) };
   const seg = Math.round((a - l) / 1000);
-  if (Math.abs(seg) <= tope) return { ok: true, segundos: seg, tope, motivo: null };
-  return { ok: false, segundos: seg, tope,
+  if (Math.abs(seg) <= tope) return { ok: true, segundos: seg, tope, mes: mes || null, motivo: null };
+  return { ok: false, segundos: seg, tope, mes: mes || null,
            motivo: seg > 0
-             ? 'el ancla se leyo ' + seg + ' s DESPUES que las lineas: un documento posteado en ese ' +
-               'rato esta en el saldo y no en las lineas, y la diferencia se va entera a la apertura'
-             : 'las lineas se guardaron ' + (-seg) + ' s DESPUES que el ancla: traen movimiento que el ' +
-               'saldo todavia no tenia, y esa diferencia se va entera a la apertura' };
+             ? 'el ancla se leyo ' + seg + ' s DESPUES que las lineas' + cual + ': un documento posteado ' +
+               'en ese rato esta en el saldo y no en las lineas, y la diferencia se va entera a la apertura'
+             : 'las lineas' + cual + ' se guardaron ' + (-seg) + ' s DESPUES que el ancla: traen ' +
+               'movimiento que el saldo todavia no tenia, y esa diferencia se va entera a la apertura' };
+}
+
+/** CUAL BLOB MANDA PARA MEDIR EL DESFASE: el del MES MAS NUEVO, no el que se
+ *  escribio ultimo.
+ *
+ *  Lo que el desfase persigue es un documento que entre a SAP entre que se
+ *  leyeron las lineas y se leyo el saldo. Un documento nuevo nace HOY, asi que
+ *  cae en el blob del mes mas nuevo: ese es el unico que tiene que estar en
+ *  hora con el ancla. Tomar el escrito mas tarde hacia que reextraer agosto
+ *  —un mes cerrado, donde ya no nace nada— disparara la alarma con 25 horas de
+ *  desfase. Medido el 2026-11-05: con el ancla vieja y con el ancla fresca las
+ *  tres aperturas negativas dieron identicas al pallet, o sea que la alarma no
+ *  estaba describiendo ningun error.
+ *
+ *  LO RETROACTIVO NO LO CUBRE ESTO y no puede: un documento con fecha vieja
+ *  posteado hoy no tiene ventana que lo acote, pasa cuando pasa. Eso lo
+ *  persigue comparar-cierres.js contra la copia del dia anterior. */
+function blobQueManda(blobs) {
+  let mejor = null;
+  for (const b of (Array.isArray(blobs) ? blobs : [])) {
+    if (!b || !/^\d{4}-\d{2}$/.test(String(b.mes))) continue;
+    if (!mejor || String(b.mes) > String(mejor.mes)) mejor = b;
+  }
+  return mejor ? { mes: String(mejor.mes), guardado: mejor.guardado || null } : null;
+}
+
+/** ELEGIR EL BLOB Y MEDIR EL DESFASE, en una sola pieza.
+ *
+ *  Las dos cosas van juntas o no van: medir el desfase contra un blob y
+ *  nombrar otro en el mensaje es peor que no nombrarlo. Vive aca y no suelto
+ *  en main() para que esta union se pueda probar — main() necesita SAP y el
+ *  storage, asi que nada de lo que viva ahi tiene prueba. */
+function lecturaDeLaVentana(anclaGenerado, blobs, topeSegundos) {
+  const manda = blobQueManda(blobs);
+  return { manda,
+           desfase: desfaseDeLectura(anclaGenerado, manda && manda.guardado, topeSegundos,
+                                     manda && manda.mes) };
 }
 
 /*  LA LEY DEL POOL, en su forma correcta.
@@ -590,7 +630,8 @@ function veredicto(series, imposibles, cuad, ancla, aperturas, desfase, fecha, t
 
 module.exports = { bodegasDePlanta, movimientoDeBodega, marcarFirmes, cadenaDePlanta,
                    nivelesImposibles, aperturasImposibles, desfaseDeLectura,
-                   enTransito, transitoPorDia, plantaDeCodigo, coberturaDeFechas, fechaQueManda,
+                   enTransito, transitoPorDia, plantaDeCodigo, blobQueManda, lecturaDeLaVentana,
+                   coberturaDeFechas, fechaQueManda,
                    leyDelPool, cuadraturaDelNeto, anclaAlDia, payloadJson, veredicto,
                    OPCIONES, BANDERAS };
 
@@ -629,7 +670,8 @@ async function main() {
               planta.length + ' bodegas de planta');
   console.log('SOLO LEE. El cierre de cada dia es al TERMINO del dia; el del dia en curso va marcado.\n');
 
-  let lineas = [], lineasGuardadas = null;
+  let lineas = [];
+  const blobs = [];
   for (const mes of meses) {
     const nombre = 'lineasbod/' + mes + '.json';
     const b = cc.getBlobClient(nombre);
@@ -641,16 +683,17 @@ async function main() {
     }
     const j = JSON.parse((await b.downloadToBuffer()).toString('utf8'));
     const n = (j && j.lineas) || [];
-    // La marca del blob se imprimia y se perdia. Es la unica forma de saber
-    // cuanta ventana hubo entre leer las lineas y leer el ancla, asi que se
-    // guarda: manda la MAS NUEVA, que es la que mas cerca esta del ancla.
-    if (j && j._guardado && (!lineasGuardadas || String(j._guardado) > lineasGuardadas))
-      lineasGuardadas = String(j._guardado);
+    // La marca de cada blob se guarda; cual de todas manda lo decide
+    // blobQueManda, que toma la del mes mas nuevo y no la escrita mas tarde.
+    blobs.push({ mes, guardado: (j && j._guardado) ? String(j._guardado) : null });
     console.log('  ' + nombre + ': ' + mil(n.length) + ' lineas   ·  extraido ' +
                 String(j._guardado || '?').slice(0, 16).replace('T', ' '));
     lineas = lineas.concat(n);
   }
   console.log('  total: ' + mil(lineas.length) + ' lineas de bodega\n');
+  const lec = lecturaDeLaVentana(bod.generado, blobs);
+  const manda = lec.manda;
+  const lineasGuardadas = manda ? manda.guardado : null;
 
   const conjunto = new Set(planta.map(x => x.whs));
   /*  El codigo no dice la planta y el nombre si: este mapa es lo unico que
@@ -760,7 +803,7 @@ async function main() {
   const traDias = transitoPorDia(lineas, diasSerie, conjunto, nombres);
   const imp = nivelesImposibles(series);
   const ape = aperturasImposibles(series);
-  const des = desfaseDeLectura(bod.generado, lineasGuardadas);
+  const des = lec.desfase;
   const v = veredicto(series, imp, cuad, anc, ape, des, fec, tra);
 
   console.log('\n── LA LEY DEL POOL ' + '─'.repeat(55));
@@ -774,7 +817,8 @@ async function main() {
 
   console.log('\n── LA LECTURA ' + '─'.repeat(60));
   console.log('  ancla leida  ' + (bod.generado || '?'));
-  console.log('  lineas desde ' + (lineasGuardadas || '?'));
+  console.log('  lineas desde ' + (lineasGuardadas || '?') +
+              (manda && manda.mes ? '   ·  lineasbod/' + manda.mes + '.json, el mes mas nuevo' : ''));
   console.log('  desfase      ' + (des.segundos == null ? 'no medible' :
     des.segundos + ' s' + (des.ok ? '  (dentro del tope de ' + des.tope + ' s)' : '  ← FUERA DE TOPE')));
   console.log('\n── LA APERTURA DE LA VENTANA ' + '─'.repeat(45));

@@ -671,3 +671,110 @@ interruptor: hay que reemplazar el cuadre con la extracción propia de SAP. Ése
 es el punto 3 y es un trabajo de equivalencia de datos, no de código: antes de
 cambiar la fuente hay que demostrar que el cuadre de SAP da lo mismo que el del
 proveedor, como se hizo con el tablero de stock contra Datawalt.
+
+---
+
+## Punto 3 · el cuadre de rojos · arrancado el 5-nov-2026
+
+### HALLAZGO que cambia la forma del punto 3
+
+El cuadre de rojos llega hoy por **dos caminos que nadie conectó**:
+
+| camino | quién | a dónde pega |
+|---|---|---|
+| en vivo | `api/stock-clientes-proxy`, `api/stock-retail-proxy` | `apirdt1` directo, cada vez que alguien abre una de las tres vistas |
+| congelado | `api/shared/stock-dia.js` | `redtec-os-stock/stock/YYYY-MM-DD.json`, un blob por día |
+
+Los dos proxies **no usan `stock-fetch.js` ni `stock-dia.js`**: cada uno trae su
+propio `https.request` de 70 líneas con la llave en duro como valor por defecto.
+Verificado con `grep -rl` sobre el repo: de `stock-dia` cuelgan `consulta-stock.js`
+(el chat) y `backfill-stock.js`, y los proxies no aparecen.
+
+Y `backfill-stock.js` viene congelando la respuesta del proveedor **desde el
+2023-03-20**, con regla de *freeze*: un día ya válido no se vuelve a pedir nunca.
+
+**Consecuencia:** para todo día ya cerrado, el dato del proveedor YA ES NUESTRO.
+Lo que se cae el día de la baja no es la historia — es el día nuevo. El punto 3
+se parte en dos trabajos de tamaño muy distinto:
+
+- **3a · las tres vistas.** Apuntar los dos proxies al blob (`stock-dia.leerRango`)
+  en vez de a `apirdt1`. No necesita SAP, ni accesos nuevos, ni credenciales
+  nuevas. Lo único que hay que probar antes es que **sumar los días guardados dé
+  lo mismo que pedirle el rango al proveedor** — `leerRango` arma el resumen por
+  su cuenta (saldoInicial del primer día, saldoFinal del último, flujos sumados)
+  y eso puede no ser lo que el proveedor hace con el rango.
+- **3b · el día nuevo.** Ahí sí entra SAP, y ahí está el trabajo de verdad: el
+  desglose por concepto. Más la restricción estructural ya medida — el Service
+  Layer de SAP no contesta desde un runner de GitHub (filtro por IP), así que el
+  paso 2 de la corrida diaria no puede quedarse en Actions: se muda a la máquina
+  de REDTEC (como `cierre-diario.ps1`) o a una Function de Azure.
+
+### `scripts/comparar-cuadre.js` · la medición que decide 3a
+
+No escribe nada. Para cada universo y cada rango de una batería, pide el rango al
+proveedor y lo compara campo por campo contra lo que sale del blob.
+
+```
+node scripts/comparar-cuadre.js                       # batería por defecto
+node scripts/comparar-cuadre.js 2026-01-01 2026-03-31 # un rango puntual
+node scripts/comparar-cuadre.js --solo-nuestro        # sin tocar al proveedor
+node scripts/comparar-cuadre.js --universo=retail
+```
+
+Pide `OS_STORAGE_CONN` siempre y `REDTEC_API_KEY` sólo si no se pasa
+`--solo-nuestro`; si falta una, para y dice **cuál**, nunca su valor.
+
+La batería tiene cinco rangos elegidos para que cada uno pueda fallar por una
+razón distinta: una semana (el caso real de las vistas), un mes calendario, un
+rango que **cruza** el cambio de mes (donde un cierre mal fechado se nota), un
+trimestre y el tope de 180 días que declara `stock-fetch.js`.
+
+Veredictos: `0 calza` · `1 sólo difieren los totales` (leerRango no los suma, es
+cañería conocida) · `2 huecos` (al blob le faltan días del rango, y eso explica
+la diferencia sin que sea defecto del método) · `3 difiere` · `4 sin dato`.
+
+### Dos trampas que el script mide a propósito
+
+1. **El cuadre del proveedor no cuadra consigo mismo.** En su cierre 2025 de
+   retail las líneas suman 529.990 y declara 532.584; y declara variación +1.342
+   cuando sus entradas menos salidas dan −1.252. La misma brecha de 2.594 en los
+   dos lugares. Por eso el script corre la identidad del cuadre sobre **cada lado
+   por separado**: es la única forma de saber si una diferencia la pusimos
+   nosotros o venía de origen. Hay una prueba que usa esos números reales y
+   exige que la brecha salga 2.594.
+2. **Los signos de CLIENTES son hipótesis, no dato.** Los de retail están
+   verificados y documentados en `stock-fetch.js`. Los de clientes los deduje de
+   que los nombres están escritos desde la vereda de clientes — por eso
+   `salidaPalletReconfirmar` SUMA en retail: lo que sale de clientes entra a
+   retail. El script declara la hipótesis, la marca como tal en pantalla y la
+   contrasta contra cada rango en vez de darla por buena.
+
+Una prueba exige además que los conceptos con signo sean **exactamente** los de
+`FLUJOS` en `stock-fetch.js`: si alguien agrega un flujo y no le da signo, la
+identidad quedaría corta en silencio.
+
+Pruebas: 17 comprobaciones y 13 mutaciones, todas muerden.
+
+### DECIDIDO el 5-nov-2026 · el INICIO de los rollups se queda
+
+`INICIO = '2023-03-20'` sigue como está en `rollup-operaciones.js:22`,
+`rollup-contrapartes.js:63` y `rollup-diario.js:70`. Los 67 días de enero a marzo
+de 2023 que la reconstrucción recuperó quedan guardados en `hist/` pero fuera de
+los tableros. Decisión de Mauro: no mover un total que el área ya vio. Si alguna
+vez se necesitan, están y basta con bajar esas tres constantes.
+
+### La corrida diaria con el workflow nuevo · verificada el 5-nov-2026
+
+Corrida **#127**, programada, commit `16312ba` sobre `main`, **Success**, 9m 26s.
+La anterior (#126, del 4-nov, antes del cambio) tardó 3m 1s: el salto es
+consistente con el paso 2c haciendo el rollup del cold sobre 45 días. Los pasos
+uno por uno no se pudieron mirar — el panel de navegador está sin sesión en
+GitHub y los logs piden iniciarla.
+
+**De paso, algo que conviene saber:** el cron declara tres corridas diarias
+(`13 6,9,11 * * *` UTC) pero en Actions aparece **una sola por día**, entre las
+09:06 y las 12:43 de Chile. Las horas calzan con la ranura de las 11:13 UTC
+corrida entre 7 minutos y 3 h 20 min; las de las 06:13 y 09:13 casi nunca
+producen corrida. En la práctica el job es diario, no tres veces al día. No
+rompe nada —la ventana de 45 días cubre de sobra— pero si alguien cuenta con un
+refresco de la mañana, no lo hay.

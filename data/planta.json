@@ -1,8 +1,8 @@
 {
  "_que_es": "Stock de planta por bodega y por dia. El cierre de cada dia es al termino del dia; el del dia en curso va con firme:false porque todavia le pueden entrar movimientos.",
  "_ojo": null,
- "generado": "2026-11-04T13:31:30.961Z",
- "ancla": "2026-11-04T03:34:31.015Z",
+ "generado": "2026-11-05T12:24:09.798Z",
+ "ancla": "2026-11-05T12:23:27.445Z",
  "meses": [
   "2026-10",
   "2026-11"
@@ -10,16 +10,22 @@
  "ancla_al_dia": true,
  "veredicto": {
   "nivel": "revisar",
-  "texto": "1 bodega(s) con nivel NEGATIVO en algun dia: RT07-126 (-40 el 2026-10-19). No es un error del calculo: SAP tiene esos dias en negativo y la causa es la FECHA del documento —la salida de mercancias queda fechada antes que el traspaso que la alimenta—. Se arregla en SAP, no aca.  2 bodega(s) ABREN LA VENTANA EN NEGATIVO: RT13-100 (-1.388 el 2026-10-01), RT07-126 (-40 el 2026-10-14). Esto NO es la fecha del documento: la apertura no se mide, se despeja como saldo vivo menos el movimiento de la ventana, asi que es el residuo donde cae toda diferencia entre el saldo y las lineas. Que sea negativa significa que la serie de RT13-100 esta corrida por al menos 1.388 pallets, y con ella todos sus dias. Se arregla midiendo la apertura, no en SAP."
+  "texto": "2 bodega(s) con nivel NEGATIVO en algun dia: RT07-125 (-70 el 2026-10-02), RT07-126 (-40 el 2026-10-19). No es un error del calculo: SAP tiene esos dias en negativo y la causa es la FECHA del documento —la salida de mercancias queda fechada antes que el traspaso que la alimenta—. Se arregla en SAP, no aca.  3 bodega(s) ABREN LA VENTANA EN NEGATIVO: RT13-100 (-1.388 el 2026-10-01), RT07-125 (-43 el 2026-10-01), RT07-126 (-40 el 2026-10-14). Esto NO es la fecha del documento: la apertura no se mide, se despeja como saldo vivo menos el movimiento de la ventana, asi que es el residuo donde cae toda diferencia entre el saldo y las lineas. Que sea negativa significa que la serie de RT13-100 esta corrida por al menos 1.388 pallets, y con ella todos sus dias. Se arregla midiendo la apertura, no en SAP."
  },
- "indicador": 12178,
+ "indicador": 11189,
  "fueraDelIndicador": 4389,
- "cierreFirme": "2026-11-03",
+ "cierreFirme": "2026-11-04",
  "aperturas_imposibles": [
   {
    "whs": "RT13-100",
    "nombre": "SANTIAGO INSPECCION",
    "apertura": -1388,
+   "dia": "2026-10-01"
+  },
+  {
+   "whs": "RT07-125",
+   "nombre": "TALCA DISPONIBLE",
+   "apertura": -43,
    "dia": "2026-10-01"
   },
   {
@@ -33,169 +39,249 @@
  "fecha_serie_porque": null,
  "transito": {
   "medible": true,
-  "pallets": 540,
-  "lineas": 1,
+  "pallets": 0,
+  "lineas": 0,
   "sin_fecha": 0,
-  "detalle": [
-   {
-    "doc": 35252088,
-    "num": 702244,
-    "desde": "RT13-105",
-    "hacia": "CLIENTES",
-    "cantidad": 540,
-    "crea": "2026-11-03",
-    "llega": "2026-11-04"
-   }
-  ],
+  "por_planta": {},
+  "detalle": [],
   "motivo": null,
-  "al": "2026-11-03"
+  "al": "2026-11-04"
  },
  "transito_dias": [
   {
    "dia": "2026-10-01",
    "pallets": 1080,
-   "lineas": 2
+   "lineas": 2,
+   "por_planta": {
+    "SANTIAGO": 1080
+   }
   },
   {
    "dia": "2026-10-02",
    "pallets": 540,
-   "lineas": 1
+   "lineas": 1,
+   "por_planta": {
+    "SANTIAGO": 540
+   }
   },
   {
    "dia": "2026-10-03",
    "pallets": 540,
-   "lineas": 1
+   "lineas": 1,
+   "por_planta": {
+    "SANTIAGO": 540
+   }
   },
   {
    "dia": "2026-10-05",
    "pallets": 540,
-   "lineas": 1
+   "lineas": 1,
+   "por_planta": {
+    "SANTIAGO": 540
+   }
   },
   {
    "dia": "2026-10-06",
    "pallets": 1080,
-   "lineas": 2
+   "lineas": 2,
+   "por_planta": {
+    "SANTIAGO": 1080
+   }
   },
   {
    "dia": "2026-10-07",
    "pallets": 1620,
-   "lineas": 3
+   "lineas": 3,
+   "por_planta": {
+    "TALCA": 540,
+    "SANTIAGO": 1080
+   }
   },
   {
    "dia": "2026-10-08",
    "pallets": 1080,
-   "lineas": 2
+   "lineas": 2,
+   "por_planta": {
+    "SANTIAGO": 1080
+   }
   },
   {
    "dia": "2026-10-09",
    "pallets": 792,
-   "lineas": 2
+   "lineas": 2,
+   "por_planta": {
+    "TALCA": 252,
+    "SANTIAGO": 540
+   }
   },
   {
    "dia": "2026-10-10",
    "pallets": 792,
-   "lineas": 2
+   "lineas": 2,
+   "por_planta": {
+    "TALCA": 252,
+    "SANTIAGO": 540
+   }
   },
   {
    "dia": "2026-10-13",
    "pallets": 252,
-   "lineas": 1
+   "lineas": 1,
+   "por_planta": {
+    "TALCA": 252
+   }
   },
   {
    "dia": "2026-10-14",
    "pallets": 1296,
-   "lineas": 3
+   "lineas": 3,
+   "por_planta": {
+    "TALCA": 504,
+    "SANTIAGO": 792
+   }
   },
   {
    "dia": "2026-10-15",
    "pallets": 540,
-   "lineas": 1
+   "lineas": 1,
+   "por_planta": {
+    "SANTIAGO": 540
+   }
   },
   {
    "dia": "2026-10-16",
    "pallets": 540,
-   "lineas": 1
+   "lineas": 1,
+   "por_planta": {
+    "SANTIAGO": 540
+   }
   },
   {
    "dia": "2026-10-17",
    "pallets": 540,
-   "lineas": 1
+   "lineas": 1,
+   "por_planta": {
+    "SANTIAGO": 540
+   }
   },
   {
    "dia": "2026-10-19",
    "pallets": 252,
-   "lineas": 1
+   "lineas": 1,
+   "por_planta": {
+    "SANTIAGO": 252
+   }
   },
   {
    "dia": "2026-10-20",
    "pallets": 1080,
-   "lineas": 2
+   "lineas": 2,
+   "por_planta": {
+    "SANTIAGO": 540,
+    "TALCA": 540
+   }
   },
   {
    "dia": "2026-10-21",
    "pallets": 252,
-   "lineas": 1
+   "lineas": 1,
+   "por_planta": {
+    "SANTIAGO": 252
+   }
   },
   {
    "dia": "2026-10-22",
    "pallets": 540,
-   "lineas": 1
+   "lineas": 1,
+   "por_planta": {
+    "SANTIAGO": 540
+   }
   },
   {
    "dia": "2026-10-23",
    "pallets": 540,
-   "lineas": 1
+   "lineas": 1,
+   "por_planta": {
+    "SANTIAGO": 540
+   }
   },
   {
    "dia": "2026-10-24",
    "pallets": 540,
-   "lineas": 1
+   "lineas": 1,
+   "por_planta": {
+    "SANTIAGO": 540
+   }
   },
   {
    "dia": "2026-10-26",
    "pallets": 0,
-   "lineas": 0
+   "lineas": 0,
+   "por_planta": {}
   },
   {
    "dia": "2026-10-27",
    "pallets": 792,
-   "lineas": 2
+   "lineas": 2,
+   "por_planta": {
+    "SANTIAGO": 792
+   }
   },
   {
    "dia": "2026-10-28",
    "pallets": 252,
-   "lineas": 1
+   "lineas": 1,
+   "por_planta": {
+    "SANTIAGO": 252
+   }
   },
   {
    "dia": "2026-10-29",
    "pallets": 540,
-   "lineas": 1
+   "lineas": 1,
+   "por_planta": {
+    "SANTIAGO": 540
+   }
   },
   {
    "dia": "2026-10-30",
    "pallets": 0,
-   "lineas": 0
+   "lineas": 0,
+   "por_planta": {}
   },
   {
    "dia": "2026-10-31",
    "pallets": 0,
-   "lineas": 0
+   "lineas": 0,
+   "por_planta": {}
   },
   {
    "dia": "2026-11-02",
    "pallets": 2,
-   "lineas": 1
+   "lineas": 1,
+   "por_planta": {
+    "SANTIAGO": 2
+   }
   },
   {
    "dia": "2026-11-03",
    "pallets": 540,
-   "lineas": 1
+   "lineas": 1,
+   "por_planta": {
+    "SANTIAGO": 540
+   }
+  },
+  {
+   "dia": "2026-11-04",
+   "pallets": 0,
+   "lineas": 0,
+   "por_planta": {}
   }
  ],
  "lectura": {
-  "ancla": "2026-11-04T03:34:31.015Z",
-  "lineas": "2026-11-04T03:34:26.640Z",
-  "desfase_s": 4,
+  "ancla": "2026-11-05T12:23:27.445Z",
+  "lineas": "2026-11-05T12:23:24.071Z",
+  "desfase_s": 3,
   "ok": true
  },
  "bodegas": [
@@ -203,7 +289,7 @@
    "whs": "RT13-105",
    "nombre": "SANTIAGO DISPONIBLE",
    "indicador": true,
-   "nivel": 4595,
+   "nivel": 3020,
    "dias": [
     {
      "dia": "2026-10-01",
@@ -411,14 +497,39 @@
      "neto": 1165,
      "apertura": 3430,
      "firme": true
+    },
+    {
+     "dia": "2026-11-04",
+     "cierre": 4352,
+     "entradas": 3255,
+     "salidas": 3498,
+     "neto": -243,
+     "apertura": 4595,
+     "firme": true
+    },
+    {
+     "dia": "2026-11-05",
+     "cierre": 3020,
+     "entradas": 0,
+     "salidas": 1332,
+     "neto": -1332,
+     "apertura": 4352,
+     "firme": false
     }
    ]
+  },
+  {
+   "whs": "RT13-266",
+   "nombre": "SANTIAGO MERMA",
+   "indicador": false,
+   "nivel": 2620,
+   "dias": []
   },
   {
    "whs": "RT13-100",
    "nombre": "SANTIAGO INSPECCION",
    "indicador": true,
-   "nivel": 2961,
+   "nivel": 2319,
    "dias": [
     {
      "dia": "2026-10-01",
@@ -671,261 +782,23 @@
      "neto": -1670,
      "apertura": 4631,
      "firme": true
-    }
-   ]
-  },
-  {
-   "whs": "RT13-266",
-   "nombre": "SANTIAGO MERMA",
-   "indicador": false,
-   "nivel": 2620,
-   "dias": []
-  },
-  {
-   "whs": "RT13-102",
-   "nombre": "SANTIAGO REPARACION",
-   "indicador": true,
-   "nivel": 1853,
-   "dias": [
-    {
-     "dia": "2026-10-01",
-     "cierre": 943,
-     "entradas": 276,
-     "salidas": 2539,
-     "neto": -2263,
-     "apertura": 3206,
-     "firme": true
     },
     {
-     "dia": "2026-10-02",
-     "cierre": 1997,
-     "entradas": 2083,
-     "salidas": 1029,
-     "neto": 1054,
-     "apertura": 943,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-05",
-     "cierre": 1076,
-     "entradas": 1781,
-     "salidas": 2702,
-     "neto": -921,
-     "apertura": 1997,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-06",
-     "cierre": 3057,
-     "entradas": 2981,
-     "salidas": 1000,
-     "neto": 1981,
-     "apertura": 1076,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-07",
-     "cierre": 924,
-     "entradas": 2327,
-     "salidas": 4460,
-     "neto": -2133,
-     "apertura": 3057,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-08",
-     "cierre": 475,
-     "entradas": 1481,
-     "salidas": 1930,
-     "neto": -449,
-     "apertura": 924,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-09",
-     "cierre": 462,
-     "entradas": 735,
-     "salidas": 748,
-     "neto": -13,
-     "apertura": 475,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-10",
-     "cierre": 1424,
-     "entradas": 962,
-     "salidas": 0,
-     "neto": 962,
-     "apertura": 462,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-13",
-     "cierre": 812,
-     "entradas": 3164,
-     "salidas": 3776,
-     "neto": -612,
-     "apertura": 1424,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-14",
-     "cierre": 1,
-     "entradas": 2737,
-     "salidas": 3548,
-     "neto": -811,
-     "apertura": 812,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-15",
-     "cierre": 1128,
-     "entradas": 2473,
-     "salidas": 1346,
-     "neto": 1127,
-     "apertura": 1,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-16",
-     "cierre": 661,
-     "entradas": 1562,
-     "salidas": 2029,
-     "neto": -467,
-     "apertura": 1128,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-17",
-     "cierre": 2814,
-     "entradas": 2153,
-     "salidas": 0,
-     "neto": 2153,
-     "apertura": 661,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-19",
-     "cierre": 3238,
-     "entradas": 3369,
-     "salidas": 2945,
-     "neto": 424,
-     "apertura": 2814,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-20",
-     "cierre": 2928,
-     "entradas": 1893,
-     "salidas": 2203,
-     "neto": -310,
-     "apertura": 3238,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-21",
-     "cierre": 2223,
-     "entradas": 2145,
-     "salidas": 2850,
-     "neto": -705,
-     "apertura": 2928,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-22",
-     "cierre": 1259,
-     "entradas": 2350,
-     "salidas": 3314,
-     "neto": -964,
-     "apertura": 2223,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-23",
-     "cierre": 1711,
-     "entradas": 1103,
-     "salidas": 651,
-     "neto": 452,
-     "apertura": 1259,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-26",
-     "cierre": 1156,
-     "entradas": 2047,
-     "salidas": 2602,
-     "neto": -555,
-     "apertura": 1711,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-27",
-     "cierre": 1529,
-     "entradas": 1873,
-     "salidas": 1500,
-     "neto": 373,
-     "apertura": 1156,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-28",
-     "cierre": 1875,
-     "entradas": 3221,
-     "salidas": 2875,
-     "neto": 346,
-     "apertura": 1529,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-29",
-     "cierre": 2861,
-     "entradas": 2204,
-     "salidas": 1218,
-     "neto": 986,
-     "apertura": 1875,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-30",
-     "cierre": 2697,
-     "entradas": 1523,
-     "salidas": 1687,
-     "neto": -164,
-     "apertura": 2861,
-     "firme": true
-    },
-    {
-     "dia": "2026-11-02",
-     "cierre": 1575,
-     "entradas": 2808,
-     "salidas": 3930,
-     "neto": -1122,
-     "apertura": 2697,
-     "firme": true
-    },
-    {
-     "dia": "2026-11-03",
-     "cierre": 1853,
-     "entradas": 2440,
-     "salidas": 2162,
-     "neto": 278,
-     "apertura": 1575,
+     "dia": "2026-11-04",
+     "cierre": 2319,
+     "entradas": 3370,
+     "salidas": 4012,
+     "neto": -642,
+     "apertura": 2961,
      "firme": true
     }
    ]
-  },
-  {
-   "whs": "RT13-109",
-   "nombre": "SANTIAGO EXTRANOS",
-   "indicador": false,
-   "nivel": 1544,
-   "dias": []
   },
   {
    "whs": "RT13-103",
    "nombre": "SANTIAGO PINTURA",
    "indicador": true,
-   "nivel": 944,
+   "nivel": 2272,
    "dias": [
     {
      "dia": "2026-10-01",
@@ -1151,6 +1024,640 @@
      "neto": -535,
      "apertura": 1479,
      "firme": true
+    },
+    {
+     "dia": "2026-11-04",
+     "cierre": 2272,
+     "entradas": 4583,
+     "salidas": 3255,
+     "neto": 1328,
+     "apertura": 944,
+     "firme": true
+    }
+   ]
+  },
+  {
+   "whs": "RT13-109",
+   "nombre": "SANTIAGO EXTRANOS",
+   "indicador": false,
+   "nivel": 1544,
+   "dias": []
+  },
+  {
+   "whs": "RT13-102",
+   "nombre": "SANTIAGO REPARACION",
+   "indicador": true,
+   "nivel": 1282,
+   "dias": [
+    {
+     "dia": "2026-10-01",
+     "cierre": 943,
+     "entradas": 276,
+     "salidas": 2539,
+     "neto": -2263,
+     "apertura": 3206,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-02",
+     "cierre": 1997,
+     "entradas": 2083,
+     "salidas": 1029,
+     "neto": 1054,
+     "apertura": 943,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-05",
+     "cierre": 1076,
+     "entradas": 1781,
+     "salidas": 2702,
+     "neto": -921,
+     "apertura": 1997,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-06",
+     "cierre": 3057,
+     "entradas": 2981,
+     "salidas": 1000,
+     "neto": 1981,
+     "apertura": 1076,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-07",
+     "cierre": 924,
+     "entradas": 2327,
+     "salidas": 4460,
+     "neto": -2133,
+     "apertura": 3057,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-08",
+     "cierre": 475,
+     "entradas": 1481,
+     "salidas": 1930,
+     "neto": -449,
+     "apertura": 924,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-09",
+     "cierre": 462,
+     "entradas": 735,
+     "salidas": 748,
+     "neto": -13,
+     "apertura": 475,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-10",
+     "cierre": 1424,
+     "entradas": 962,
+     "salidas": 0,
+     "neto": 962,
+     "apertura": 462,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-13",
+     "cierre": 812,
+     "entradas": 3164,
+     "salidas": 3776,
+     "neto": -612,
+     "apertura": 1424,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-14",
+     "cierre": 1,
+     "entradas": 2737,
+     "salidas": 3548,
+     "neto": -811,
+     "apertura": 812,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-15",
+     "cierre": 1128,
+     "entradas": 2473,
+     "salidas": 1346,
+     "neto": 1127,
+     "apertura": 1,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-16",
+     "cierre": 661,
+     "entradas": 1562,
+     "salidas": 2029,
+     "neto": -467,
+     "apertura": 1128,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-17",
+     "cierre": 2814,
+     "entradas": 2153,
+     "salidas": 0,
+     "neto": 2153,
+     "apertura": 661,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-19",
+     "cierre": 3238,
+     "entradas": 3369,
+     "salidas": 2945,
+     "neto": 424,
+     "apertura": 2814,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-20",
+     "cierre": 2928,
+     "entradas": 1893,
+     "salidas": 2203,
+     "neto": -310,
+     "apertura": 3238,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-21",
+     "cierre": 2223,
+     "entradas": 2145,
+     "salidas": 2850,
+     "neto": -705,
+     "apertura": 2928,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-22",
+     "cierre": 1259,
+     "entradas": 2350,
+     "salidas": 3314,
+     "neto": -964,
+     "apertura": 2223,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-23",
+     "cierre": 1711,
+     "entradas": 1103,
+     "salidas": 651,
+     "neto": 452,
+     "apertura": 1259,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-26",
+     "cierre": 1156,
+     "entradas": 2047,
+     "salidas": 2602,
+     "neto": -555,
+     "apertura": 1711,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-27",
+     "cierre": 1529,
+     "entradas": 1873,
+     "salidas": 1500,
+     "neto": 373,
+     "apertura": 1156,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-28",
+     "cierre": 1875,
+     "entradas": 3221,
+     "salidas": 2875,
+     "neto": 346,
+     "apertura": 1529,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-29",
+     "cierre": 2861,
+     "entradas": 2204,
+     "salidas": 1218,
+     "neto": 986,
+     "apertura": 1875,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-30",
+     "cierre": 2697,
+     "entradas": 1523,
+     "salidas": 1687,
+     "neto": -164,
+     "apertura": 2861,
+     "firme": true
+    },
+    {
+     "dia": "2026-11-02",
+     "cierre": 1575,
+     "entradas": 2808,
+     "salidas": 3930,
+     "neto": -1122,
+     "apertura": 2697,
+     "firme": true
+    },
+    {
+     "dia": "2026-11-03",
+     "cierre": 1853,
+     "entradas": 2440,
+     "salidas": 2162,
+     "neto": 278,
+     "apertura": 1575,
+     "firme": true
+    },
+    {
+     "dia": "2026-11-04",
+     "cierre": 1282,
+     "entradas": 2005,
+     "salidas": 2576,
+     "neto": -571,
+     "apertura": 1853,
+     "firme": true
+    }
+   ]
+  },
+  {
+   "whs": "RT07-125",
+   "nombre": "TALCA DISPONIBLE",
+   "indicador": true,
+   "nivel": 770,
+   "dias": [
+    {
+     "dia": "2026-10-01",
+     "cierre": -24,
+     "entradas": 1183,
+     "salidas": 1164,
+     "neto": 19,
+     "apertura": -43,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-02",
+     "cierre": -70,
+     "entradas": 494,
+     "salidas": 540,
+     "neto": -46,
+     "apertura": -24,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-05",
+     "cierre": 119,
+     "entradas": 1165,
+     "salidas": 976,
+     "neto": 189,
+     "apertura": -70,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-06",
+     "cierre": 123,
+     "entradas": 436,
+     "salidas": 432,
+     "neto": 4,
+     "apertura": 119,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-07",
+     "cierre": 843,
+     "entradas": 1788,
+     "salidas": 1068,
+     "neto": 720,
+     "apertura": 123,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-08",
+     "cierre": 411,
+     "entradas": 60,
+     "salidas": 492,
+     "neto": -432,
+     "apertura": 843,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-09",
+     "cierre": 741,
+     "entradas": 1000,
+     "salidas": 670,
+     "neto": 330,
+     "apertura": 411,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-13",
+     "cierre": -38,
+     "entradas": 541,
+     "salidas": 1320,
+     "neto": -779,
+     "apertura": 741,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-14",
+     "cierre": -34,
+     "entradas": 910,
+     "salidas": 906,
+     "neto": 4,
+     "apertura": -38,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-15",
+     "cierre": 241,
+     "entradas": 945,
+     "salidas": 670,
+     "neto": 275,
+     "apertura": -34,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-16",
+     "cierre": 689,
+     "entradas": 854,
+     "salidas": 406,
+     "neto": 448,
+     "apertura": 241,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-19",
+     "cierre": 331,
+     "entradas": 0,
+     "salidas": 358,
+     "neto": -358,
+     "apertura": 689,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-20",
+     "cierre": -46,
+     "entradas": 1691,
+     "salidas": 2068,
+     "neto": -377,
+     "apertura": 331,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-21",
+     "cierre": 161,
+     "entradas": 1018,
+     "salidas": 811,
+     "neto": 207,
+     "apertura": -46,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-22",
+     "cierre": -19,
+     "entradas": 808,
+     "salidas": 988,
+     "neto": -180,
+     "apertura": 161,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-23",
+     "cierre": 479,
+     "entradas": 1000,
+     "salidas": 502,
+     "neto": 498,
+     "apertura": -19,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-26",
+     "cierre": 533,
+     "entradas": 1000,
+     "salidas": 946,
+     "neto": 54,
+     "apertura": 479,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-27",
+     "cierre": 373,
+     "entradas": 894,
+     "salidas": 1054,
+     "neto": -160,
+     "apertura": 533,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-28",
+     "cierre": 163,
+     "entradas": 930,
+     "salidas": 1140,
+     "neto": -210,
+     "apertura": 373,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-29",
+     "cierre": 173,
+     "entradas": 354,
+     "salidas": 344,
+     "neto": 10,
+     "apertura": 163,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-30",
+     "cierre": 239,
+     "entradas": 690,
+     "salidas": 624,
+     "neto": 66,
+     "apertura": 173,
+     "firme": true
+    },
+    {
+     "dia": "2026-11-02",
+     "cierre": 1101,
+     "entradas": 1868,
+     "salidas": 1006,
+     "neto": 862,
+     "apertura": 239,
+     "firme": true
+    },
+    {
+     "dia": "2026-11-03",
+     "cierre": 139,
+     "entradas": 0,
+     "salidas": 962,
+     "neto": -962,
+     "apertura": 1101,
+     "firme": true
+    },
+    {
+     "dia": "2026-11-04",
+     "cierre": -11,
+     "entradas": 1000,
+     "salidas": 1150,
+     "neto": -150,
+     "apertura": 139,
+     "firme": true
+    },
+    {
+     "dia": "2026-11-05",
+     "cierre": 770,
+     "entradas": 973,
+     "salidas": 192,
+     "neto": 781,
+     "apertura": -11,
+     "firme": false
+    }
+   ]
+  },
+  {
+   "whs": "RT04-160",
+   "nombre": "COQUIMBO TRANSITO",
+   "indicador": false,
+   "nivel": 225,
+   "dias": [
+    {
+     "dia": "2026-10-02",
+     "cierre": 225,
+     "entradas": 686,
+     "salidas": 686,
+     "neto": 0,
+     "apertura": 225,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-05",
+     "cierre": 225,
+     "entradas": 210,
+     "salidas": 210,
+     "neto": 0,
+     "apertura": 225,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-07",
+     "cierre": 225,
+     "entradas": 280,
+     "salidas": 280,
+     "neto": 0,
+     "apertura": 225,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-09",
+     "cierre": 225,
+     "entradas": 336,
+     "salidas": 336,
+     "neto": 0,
+     "apertura": 225,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-13",
+     "cierre": 225,
+     "entradas": 196,
+     "salidas": 196,
+     "neto": 0,
+     "apertura": 225,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-14",
+     "cierre": 225,
+     "entradas": 336,
+     "salidas": 336,
+     "neto": 0,
+     "apertura": 225,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-16",
+     "cierre": 225,
+     "entradas": 266,
+     "salidas": 266,
+     "neto": 0,
+     "apertura": 225,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-19",
+     "cierre": 225,
+     "entradas": 140,
+     "salidas": 140,
+     "neto": 0,
+     "apertura": 225,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-21",
+     "cierre": 225,
+     "entradas": 336,
+     "salidas": 336,
+     "neto": 0,
+     "apertura": 225,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-23",
+     "cierre": 225,
+     "entradas": 364,
+     "salidas": 364,
+     "neto": 0,
+     "apertura": 225,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-26",
+     "cierre": 225,
+     "entradas": 266,
+     "salidas": 266,
+     "neto": 0,
+     "apertura": 225,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-28",
+     "cierre": 225,
+     "entradas": 168,
+     "salidas": 168,
+     "neto": 0,
+     "apertura": 225,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-30",
+     "cierre": 225,
+     "entradas": 280,
+     "salidas": 280,
+     "neto": 0,
+     "apertura": 225,
+     "firme": true
+    },
+    {
+     "dia": "2026-11-02",
+     "cierre": 225,
+     "entradas": 126,
+     "salidas": 126,
+     "neto": 0,
+     "apertura": 225,
+     "firme": true
+    },
+    {
+     "dia": "2026-11-04",
+     "cierre": 225,
+     "entradas": 266,
+     "salidas": 266,
+     "neto": 0,
+     "apertura": 225,
+     "firme": true
     }
    ]
   },
@@ -1158,7 +1665,7 @@
    "whs": "RT07-120",
    "nombre": "TALCA INSPECCION",
    "indicador": true,
-   "nivel": 847,
+   "nivel": 2,
    "dias": [
     {
      "dia": "2026-10-01",
@@ -1366,570 +1873,24 @@
      "neto": 427,
      "apertura": 420,
      "firme": true
-    }
-   ]
-  },
-  {
-   "whs": "RT07-123",
-   "nombre": "TALCA PINTURA",
-   "indicador": true,
-   "nivel": 588,
-   "dias": [
+    },
     {
-     "dia": "2026-10-01",
-     "cierre": 0,
-     "entradas": 961,
-     "salidas": 1183,
-     "neto": -222,
-     "apertura": 222,
+     "dia": "2026-11-04",
+     "cierre": 371,
+     "entradas": 371,
+     "salidas": 847,
+     "neto": -476,
+     "apertura": 847,
      "firme": true
     },
     {
-     "dia": "2026-10-02",
-     "cierre": 196,
-     "entradas": 489,
-     "salidas": 293,
-     "neto": 196,
-     "apertura": 0,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-05",
-     "cierre": 0,
-     "entradas": 969,
-     "salidas": 1165,
-     "neto": -196,
-     "apertura": 196,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-06",
-     "cierre": 332,
-     "entradas": 768,
-     "salidas": 436,
-     "neto": 332,
-     "apertura": 0,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-07",
-     "cierre": 9,
-     "entradas": 1465,
-     "salidas": 1788,
-     "neto": -323,
-     "apertura": 332,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-08",
-     "cierre": 212,
-     "entradas": 203,
-     "salidas": 0,
-     "neto": 203,
-     "apertura": 9,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-09",
-     "cierre": 232,
-     "entradas": 1020,
-     "salidas": 1000,
-     "neto": 20,
-     "apertura": 212,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-13",
-     "cierre": 207,
-     "entradas": 516,
-     "salidas": 541,
-     "neto": -25,
-     "apertura": 232,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-14",
-     "cierre": 302,
-     "entradas": 1005,
-     "salidas": 910,
-     "neto": 95,
-     "apertura": 207,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-15",
-     "cierre": 193,
-     "entradas": 836,
-     "salidas": 945,
-     "neto": -109,
-     "apertura": 302,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-16",
-     "cierre": 161,
-     "entradas": 822,
-     "salidas": 854,
-     "neto": -32,
-     "apertura": 193,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-19",
-     "cierre": 280,
-     "entradas": 119,
-     "salidas": 0,
-     "neto": 119,
-     "apertura": 161,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-20",
-     "cierre": 0,
-     "entradas": 1411,
-     "salidas": 1691,
-     "neto": -280,
-     "apertura": 280,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-21",
-     "cierre": 0,
-     "entradas": 1018,
-     "salidas": 1018,
-     "neto": 0,
-     "apertura": 0,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-22",
-     "cierre": 361,
-     "entradas": 1169,
-     "salidas": 808,
-     "neto": 361,
-     "apertura": 0,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-23",
-     "cierre": 262,
-     "entradas": 901,
-     "salidas": 1000,
-     "neto": -99,
-     "apertura": 361,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-26",
-     "cierre": 394,
-     "entradas": 1132,
-     "salidas": 1000,
-     "neto": 132,
-     "apertura": 262,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-27",
-     "cierre": 0,
-     "entradas": 500,
-     "salidas": 894,
-     "neto": -394,
-     "apertura": 394,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-28",
-     "cierre": 0,
-     "entradas": 930,
-     "salidas": 930,
-     "neto": 0,
-     "apertura": 0,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-29",
-     "cierre": 64,
-     "entradas": 418,
-     "salidas": 354,
-     "neto": 64,
-     "apertura": 0,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-30",
-     "cierre": 0,
-     "entradas": 626,
-     "salidas": 690,
-     "neto": -64,
-     "apertura": 64,
-     "firme": true
-    },
-    {
-     "dia": "2026-11-02",
-     "cierre": 0,
-     "entradas": 432,
-     "salidas": 432,
-     "neto": 0,
-     "apertura": 0,
-     "firme": true
-    },
-    {
-     "dia": "2026-11-03",
-     "cierre": 588,
-     "entradas": 588,
-     "salidas": 0,
-     "neto": 588,
-     "apertura": 0,
-     "firme": true
-    }
-   ]
-  },
-  {
-   "whs": "RT04-160",
-   "nombre": "COQUIMBO TRANSITO",
-   "indicador": false,
-   "nivel": 225,
-   "dias": [
-    {
-     "dia": "2026-10-02",
-     "cierre": 225,
-     "entradas": 686,
-     "salidas": 686,
-     "neto": 0,
-     "apertura": 225,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-05",
-     "cierre": 225,
-     "entradas": 210,
-     "salidas": 210,
-     "neto": 0,
-     "apertura": 225,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-07",
-     "cierre": 225,
-     "entradas": 280,
-     "salidas": 280,
-     "neto": 0,
-     "apertura": 225,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-09",
-     "cierre": 225,
-     "entradas": 336,
-     "salidas": 336,
-     "neto": 0,
-     "apertura": 225,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-13",
-     "cierre": 225,
-     "entradas": 196,
-     "salidas": 196,
-     "neto": 0,
-     "apertura": 225,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-14",
-     "cierre": 225,
-     "entradas": 336,
-     "salidas": 336,
-     "neto": 0,
-     "apertura": 225,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-16",
-     "cierre": 225,
-     "entradas": 266,
-     "salidas": 266,
-     "neto": 0,
-     "apertura": 225,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-19",
-     "cierre": 225,
-     "entradas": 140,
-     "salidas": 140,
-     "neto": 0,
-     "apertura": 225,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-21",
-     "cierre": 225,
-     "entradas": 336,
-     "salidas": 336,
-     "neto": 0,
-     "apertura": 225,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-23",
-     "cierre": 225,
-     "entradas": 364,
-     "salidas": 364,
-     "neto": 0,
-     "apertura": 225,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-26",
-     "cierre": 225,
-     "entradas": 266,
-     "salidas": 266,
-     "neto": 0,
-     "apertura": 225,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-28",
-     "cierre": 225,
-     "entradas": 168,
-     "salidas": 168,
-     "neto": 0,
-     "apertura": 225,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-30",
-     "cierre": 225,
-     "entradas": 280,
-     "salidas": 280,
-     "neto": 0,
-     "apertura": 225,
-     "firme": true
-    },
-    {
-     "dia": "2026-11-02",
-     "cierre": 225,
-     "entradas": 126,
-     "salidas": 126,
-     "neto": 0,
-     "apertura": 225,
-     "firme": true
-    }
-   ]
-  },
-  {
-   "whs": "RT07-125",
-   "nombre": "TALCA DISPONIBLE",
-   "indicador": true,
-   "nivel": 219,
-   "dias": [
-    {
-     "dia": "2026-10-01",
-     "cierre": 56,
-     "entradas": 1183,
-     "salidas": 1164,
-     "neto": 19,
-     "apertura": 37,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-02",
-     "cierre": 10,
-     "entradas": 494,
-     "salidas": 540,
-     "neto": -46,
-     "apertura": 56,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-05",
-     "cierre": 199,
-     "entradas": 1165,
-     "salidas": 976,
-     "neto": 189,
-     "apertura": 10,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-06",
-     "cierre": 203,
-     "entradas": 436,
-     "salidas": 432,
-     "neto": 4,
-     "apertura": 199,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-07",
-     "cierre": 923,
-     "entradas": 1788,
-     "salidas": 1068,
-     "neto": 720,
-     "apertura": 203,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-08",
-     "cierre": 491,
-     "entradas": 60,
-     "salidas": 492,
-     "neto": -432,
-     "apertura": 923,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-09",
-     "cierre": 821,
-     "entradas": 1000,
-     "salidas": 670,
-     "neto": 330,
-     "apertura": 491,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-13",
-     "cierre": 42,
-     "entradas": 541,
-     "salidas": 1320,
-     "neto": -779,
-     "apertura": 821,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-14",
-     "cierre": 46,
-     "entradas": 910,
-     "salidas": 906,
-     "neto": 4,
-     "apertura": 42,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-15",
-     "cierre": 321,
-     "entradas": 945,
-     "salidas": 670,
-     "neto": 275,
-     "apertura": 46,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-16",
-     "cierre": 769,
-     "entradas": 854,
-     "salidas": 406,
-     "neto": 448,
-     "apertura": 321,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-19",
-     "cierre": 411,
+     "dia": "2026-11-05",
+     "cierre": 2,
      "entradas": 0,
-     "salidas": 358,
-     "neto": -358,
-     "apertura": 769,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-20",
-     "cierre": 34,
-     "entradas": 1691,
-     "salidas": 2068,
-     "neto": -377,
-     "apertura": 411,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-21",
-     "cierre": 241,
-     "entradas": 1018,
-     "salidas": 811,
-     "neto": 207,
-     "apertura": 34,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-22",
-     "cierre": 61,
-     "entradas": 808,
-     "salidas": 988,
-     "neto": -180,
-     "apertura": 241,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-23",
-     "cierre": 559,
-     "entradas": 1000,
-     "salidas": 502,
-     "neto": 498,
-     "apertura": 61,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-26",
-     "cierre": 613,
-     "entradas": 1000,
-     "salidas": 946,
-     "neto": 54,
-     "apertura": 559,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-27",
-     "cierre": 453,
-     "entradas": 894,
-     "salidas": 1054,
-     "neto": -160,
-     "apertura": 613,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-28",
-     "cierre": 243,
-     "entradas": 930,
-     "salidas": 1140,
-     "neto": -210,
-     "apertura": 453,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-29",
-     "cierre": 253,
-     "entradas": 354,
-     "salidas": 344,
-     "neto": 10,
-     "apertura": 243,
-     "firme": true
-    },
-    {
-     "dia": "2026-10-30",
-     "cierre": 319,
-     "entradas": 690,
-     "salidas": 624,
-     "neto": 66,
-     "apertura": 253,
-     "firme": true
-    },
-    {
-     "dia": "2026-11-02",
-     "cierre": 1181,
-     "entradas": 1868,
-     "salidas": 1006,
-     "neto": 862,
-     "apertura": 319,
-     "firme": true
-    },
-    {
-     "dia": "2026-11-03",
-     "cierre": 219,
-     "entradas": 0,
-     "salidas": 962,
-     "neto": -962,
-     "apertura": 1181,
-     "firme": true
+     "salidas": 369,
+     "neto": -369,
+     "apertura": 371,
+     "firme": false
     }
    ]
   },
@@ -1937,7 +1898,7 @@
    "whs": "RT07-122",
    "nombre": "TALCA REPARACION",
    "indicador": true,
-   "nivel": 171,
+   "nivel": 0,
    "dias": [
     {
      "dia": "2026-10-01",
@@ -2145,6 +2106,257 @@
      "neto": -168,
      "apertura": 339,
      "firme": true
+    },
+    {
+     "dia": "2026-11-04",
+     "cierre": 263,
+     "entradas": 566,
+     "salidas": 474,
+     "neto": 92,
+     "apertura": 171,
+     "firme": true
+    },
+    {
+     "dia": "2026-11-05",
+     "cierre": 0,
+     "entradas": 369,
+     "salidas": 632,
+     "neto": -263,
+     "apertura": 263,
+     "firme": false
+    }
+   ]
+  },
+  {
+   "whs": "RT07-123",
+   "nombre": "TALCA PINTURA",
+   "indicador": true,
+   "nivel": 0,
+   "dias": [
+    {
+     "dia": "2026-10-01",
+     "cierre": 0,
+     "entradas": 961,
+     "salidas": 1183,
+     "neto": -222,
+     "apertura": 222,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-02",
+     "cierre": 196,
+     "entradas": 489,
+     "salidas": 293,
+     "neto": 196,
+     "apertura": 0,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-05",
+     "cierre": 0,
+     "entradas": 969,
+     "salidas": 1165,
+     "neto": -196,
+     "apertura": 196,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-06",
+     "cierre": 332,
+     "entradas": 768,
+     "salidas": 436,
+     "neto": 332,
+     "apertura": 0,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-07",
+     "cierre": 9,
+     "entradas": 1465,
+     "salidas": 1788,
+     "neto": -323,
+     "apertura": 332,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-08",
+     "cierre": 212,
+     "entradas": 203,
+     "salidas": 0,
+     "neto": 203,
+     "apertura": 9,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-09",
+     "cierre": 232,
+     "entradas": 1020,
+     "salidas": 1000,
+     "neto": 20,
+     "apertura": 212,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-13",
+     "cierre": 207,
+     "entradas": 516,
+     "salidas": 541,
+     "neto": -25,
+     "apertura": 232,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-14",
+     "cierre": 302,
+     "entradas": 1005,
+     "salidas": 910,
+     "neto": 95,
+     "apertura": 207,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-15",
+     "cierre": 193,
+     "entradas": 836,
+     "salidas": 945,
+     "neto": -109,
+     "apertura": 302,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-16",
+     "cierre": 161,
+     "entradas": 822,
+     "salidas": 854,
+     "neto": -32,
+     "apertura": 193,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-19",
+     "cierre": 280,
+     "entradas": 119,
+     "salidas": 0,
+     "neto": 119,
+     "apertura": 161,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-20",
+     "cierre": 0,
+     "entradas": 1411,
+     "salidas": 1691,
+     "neto": -280,
+     "apertura": 280,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-21",
+     "cierre": 0,
+     "entradas": 1018,
+     "salidas": 1018,
+     "neto": 0,
+     "apertura": 0,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-22",
+     "cierre": 361,
+     "entradas": 1169,
+     "salidas": 808,
+     "neto": 361,
+     "apertura": 0,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-23",
+     "cierre": 262,
+     "entradas": 901,
+     "salidas": 1000,
+     "neto": -99,
+     "apertura": 361,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-26",
+     "cierre": 394,
+     "entradas": 1132,
+     "salidas": 1000,
+     "neto": 132,
+     "apertura": 262,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-27",
+     "cierre": 0,
+     "entradas": 500,
+     "salidas": 894,
+     "neto": -394,
+     "apertura": 394,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-28",
+     "cierre": 0,
+     "entradas": 930,
+     "salidas": 930,
+     "neto": 0,
+     "apertura": 0,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-29",
+     "cierre": 64,
+     "entradas": 418,
+     "salidas": 354,
+     "neto": 64,
+     "apertura": 0,
+     "firme": true
+    },
+    {
+     "dia": "2026-10-30",
+     "cierre": 0,
+     "entradas": 626,
+     "salidas": 690,
+     "neto": -64,
+     "apertura": 64,
+     "firme": true
+    },
+    {
+     "dia": "2026-11-02",
+     "cierre": 0,
+     "entradas": 432,
+     "salidas": 432,
+     "neto": 0,
+     "apertura": 0,
+     "firme": true
+    },
+    {
+     "dia": "2026-11-03",
+     "cierre": 588,
+     "entradas": 588,
+     "salidas": 0,
+     "neto": 588,
+     "apertura": 0,
+     "firme": true
+    },
+    {
+     "dia": "2026-11-04",
+     "cierre": 341,
+     "entradas": 753,
+     "salidas": 1000,
+     "neto": -247,
+     "apertura": 588,
+     "firme": true
+    },
+    {
+     "dia": "2026-11-05",
+     "cierre": 0,
+     "entradas": 632,
+     "salidas": 973,
+     "neto": -341,
+     "apertura": 341,
+     "firme": false
     }
    ]
   },
@@ -2225,85 +2437,85 @@
    "tipo": "sale",
    "desde": "RT13-105",
    "hacia": "CLIENTES",
-   "lineas": 320,
-   "cantidad": 115423
+   "lineas": 333,
+   "cantidad": 120253
   },
   {
    "tipo": "adentro",
    "desde": "RT13-103",
    "hacia": "RT13-105",
-   "lineas": 60,
-   "cantidad": 107917
+   "lineas": 61,
+   "cantidad": 111172
   },
   {
    "tipo": "sale",
    "desde": "RT13-100",
    "hacia": null,
-   "lineas": 347,
-   "cantidad": 99519
+   "lineas": 362,
+   "cantidad": 103531
   },
   {
    "tipo": "entra",
    "desde": "RETAIL",
    "hacia": "RT13-100",
-   "lineas": 334,
-   "cantidad": 97532
+   "lineas": 346,
+   "cantidad": 100662
   },
   {
    "tipo": "entra",
    "desde": null,
    "hacia": "RT13-103",
-   "lineas": 362,
-   "cantidad": 54670
+   "lineas": 377,
+   "cantidad": 56677
   },
   {
    "tipo": "adentro",
    "desde": "RT13-102",
    "hacia": "RT13-103",
-   "lineas": 51,
-   "cantidad": 52053
+   "lineas": 53,
+   "cantidad": 54629
   },
   {
    "tipo": "entra",
    "desde": null,
    "hacia": "RT13-102",
-   "lineas": 352,
-   "cantidad": 50095
+   "lineas": 367,
+   "cantidad": 52100
   },
   {
    "tipo": "sale",
    "desde": "RT07-125",
    "hacia": "CLIENTES",
-   "lineas": 98,
-   "cantidad": 19224
+   "lineas": 104,
+   "cantidad": 20566
   },
   {
    "tipo": "adentro",
    "desde": "RT07-123",
    "hacia": "RT07-125",
-   "lineas": 27,
-   "cantidad": 17932
+   "lineas": 29,
+   "cantidad": 19905
   },
   {
    "tipo": "sale",
    "desde": "RT07-120",
    "hacia": null,
-   "lineas": 65,
-   "cantidad": 17248
+   "lineas": 69,
+   "cantidad": 18464
   },
   {
    "tipo": "adentro",
    "desde": "RT07-122",
    "hacia": "RT07-123",
-   "lineas": 28,
-   "cantidad": 14053
+   "lineas": 30,
+   "cantidad": 15159
   },
   {
    "tipo": "entra",
    "desde": null,
    "hacia": "RT07-122",
-   "lineas": 64,
-   "cantidad": 13216
+   "lineas": 68,
+   "cantidad": 14151
   },
   {
    "tipo": "entra",
@@ -2316,15 +2528,15 @@
    "tipo": "entra",
    "desde": "CLIENTES",
    "hacia": "RT07-120",
-   "lineas": 37,
-   "cantidad": 8349
+   "lineas": 38,
+   "cantidad": 8718
   },
   {
    "tipo": "entra",
    "desde": "CLIENTES",
    "hacia": "RT13-100",
-   "lineas": 29,
-   "cantidad": 5969
+   "lineas": 30,
+   "cantidad": 6209
   },
   {
    "tipo": "entra",
@@ -2337,22 +2549,22 @@
    "tipo": "entra",
    "desde": null,
    "hacia": "RT07-123",
-   "lineas": 34,
-   "cantidad": 4022
+   "lineas": 35,
+   "cantidad": 4301
   },
   {
    "tipo": "entra",
    "desde": "RETAIL",
    "hacia": "RT04-160",
-   "lineas": 15,
-   "cantidad": 3990
+   "lineas": 16,
+   "cantidad": 4256
   },
   {
    "tipo": "sale",
    "desde": "RT04-160",
    "hacia": "CLIENTES",
-   "lineas": 15,
-   "cantidad": 3990
+   "lineas": 16,
+   "cantidad": 4256
   },
   {
    "tipo": "adentro",
@@ -2456,8 +2668,8 @@
    "tipo": "entra",
    "desde": null,
    "hacia": "RT07-120",
-   "lineas": 7,
-   "cantidad": 10
+   "lineas": 8,
+   "cantidad": 12
   },
   {
    "tipo": "adentro",

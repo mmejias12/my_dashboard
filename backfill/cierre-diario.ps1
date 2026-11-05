@@ -1,5 +1,15 @@
-# ============================================================================
+﻿# ============================================================================
 #  backfill/cierre-diario.ps1  ·  M3DATA · el cierre del dia, todos los dias
+#
+#  ESTE ARCHIVO EMPIEZA CON BOM UTF-8 Y TIENE QUE SEGUIR ASI. powershell.exe
+#  (Windows PowerShell 5.1, el que corre en el Programador de tareas) lee un
+#  .ps1 sin BOM como CP-1252. Ahi cada "─" se vuelve tres bytes, y uno de
+#  ellos es una comilla tipografica que PowerShell acepta como delimitador de
+#  cadena. La linea del banner trae 34 rayas DENTRO de comillas: por ser par
+#  la cadena cerraba igual y el script parseaba de pura suerte, imprimiendo
+#  basura. Una raya mas o una menos y el cierre deja de correr, con un error
+#  que apunta a cualquier otra linea. Si el editor ofrece "UTF-8 sin BOM",
+#  no lo uses aca.
 #
 #  POR QUE ESTE ARCHIVO Y NO UN WORKFLOW DE GITHUB. Medido el 25-10-2026:
 #  el Service Layer de SAP NO contesta desde un runner de GitHub. Tres rutas,
@@ -111,20 +121,51 @@ if ($LASTEXITCODE -ne 0) { Muere 'fallo CLIENTES' }
 #     asi que si el ancla fuera mas vieja que las lineas toda la serie quedaria
 #     corrida. Aca el orden lo garantiza y el aviso de "ancla corrida" no puede
 #     aparecer.
-#     EL MES ANTERIOR Y EL ACTUAL, no la ventana de extraccion. $mesIni es la
-#     ventana de TRES DIAS del paso 1 y casi siempre vale lo mismo que $mes:
-#     usarla aca dejaria la vista con solo el mes en curso, y el dia 1 con un
-#     solo dia. El mes anterior da contexto siempre.
+#     TODOS LOS MESES QUE TENGAN BLOB, no la ventana de extraccion ni los dos
+#     ultimos. $mesIni es la ventana de TRES DIAS del paso 1 y casi siempre
+#     vale lo mismo que $mes: usarla aca dejaria la vista con solo el mes en
+#     curso, y el dia 1 con un solo dia.
+#     POR QUE MIENTRAS MAS LARGA, MEJOR. La apertura del primer dia no se mide:
+#     se despeja, y es el residuo donde cae toda diferencia entre el saldo vivo
+#     y las lineas. Empujar ese primer dia hacia atras deja mejor calculados
+#     los meses de adelante. Medido el 2026-11-05: con la ventana empezando en
+#     octubre, RT13-100 SANTIAGO INSPECCION abria en -1.388; agregando agosto y
+#     septiembre, en -91, y los negativos de RT13-102 y RT13-103 desaparecieron.
+#     $mesDesde SE DECLARA A MANO porque el blob vive en el storage y este
+#     script no tiene con que listarlo. Al extraer un mes mas viejo con
+#     backfill-sap-bin.js, se corre esta fecha hacia atras y nada mas.
+#     EL COSTO: saldo-planta se baja el blob de cada mes, unos 3,8 MB. Con el
+#     anio completo son ~45 MB por corrida, asi que este paso se va a demorar
+#     mas que antes. Es descarga y aritmetica, no peticiones a SAP.
 #     NO MATA LA CORRIDA. Si falla, el tablero se arma igual sin esa seccion:
 #     armar-tablero-stock trata planta.json como entrada opcional. Una seccion
 #     nueva no puede dejar a gerencia sin el tablero.
-$mesPrev = (Get-Date -Day 1).AddDays(-1).ToString('yyyy-MM')
-Paso '4/8' "calculando la distribucion diaria de planta ($mesPrev..$mes)"
-node scripts/saldo-planta.js --meses="$mesPrev,$mes" --json="$dir/planta.json"
+$mesDesde = '2026-08'
+$mesPrev  = (Get-Date -Day 1).AddDays(-1).ToString('yyyy-MM')
+
+# La lista de $mesDesde a $mes, los dos incluidos. Cultura invariante a
+# proposito: ParseExact con la del equipo depende de como este configurado, y
+# esto tiene que dar igual en la maquina de cualquiera.
+$inv   = [Globalization.CultureInfo]::InvariantCulture
+$meses = @()
+$cur   = [datetime]::ParseExact("$mesDesde-01", 'yyyy-MM-dd', $inv)
+$fin   = [datetime]::ParseExact("$mes-01",      'yyyy-MM-dd', $inv)
+while ($cur -le $fin) { $meses += $cur.ToString('yyyy-MM', $inv); $cur = $cur.AddMonths(1) }
+$lista = $meses -join ','
+
+Paso '4/8' "calculando la distribucion diaria de planta ($mesDesde..$mes)"
+node scripts/saldo-planta.js --meses="$lista" --json="$dir/planta.json"
 if ($LASTEXITCODE -ne 0) {
-  # El mes anterior puede no tener blob lineasbod/ todavia: se reintenta con
-  # el mes en curso solo, que es mejor que quedarse sin la seccion.
-  Write-Warning "no se pudo con $mesPrev (falta su blob de lineas?): se reintenta solo con $mes"
+  # Falta el blob de algun mes viejo —o $mesDesde quedo adelantado al mes en
+  # curso y la lista salio vacia—. Antes de rendirse se prueba la ventana corta
+  # de siempre: son dos meses, pero son mejor que ninguno.
+  Write-Warning "no se pudo con $lista (falta el blob de algun mes?): se reintenta con $mesPrev,$mes"
+  node scripts/saldo-planta.js --meses="$mesPrev,$mes" --json="$dir/planta.json"
+}
+if ($LASTEXITCODE -ne 0) {
+  # Y el mes anterior puede no tener blob todavia: queda el mes en curso solo,
+  # que es mejor que quedarse sin la seccion.
+  Write-Warning "tampoco con $mesPrev (falta su blob de lineas?): se reintenta solo con $mes"
   node scripts/saldo-planta.js --meses="$mes" --json="$dir/planta.json"
 }
 if ($LASTEXITCODE -ne 0) {

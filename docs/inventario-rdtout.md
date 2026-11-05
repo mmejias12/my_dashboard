@@ -778,3 +778,73 @@ corrida entre 7 minutos y 3 h 20 min; las de las 06:13 y 09:13 casi nunca
 producen corrida. En la práctica el job es diario, no tres veces al día. No
 rompe nada —la ventana de 45 días cubre de sobra— pero si alguien cuenta con un
 refresco de la mañana, no lo hay.
+
+### La llave manda el orden · 5-nov-2026
+
+Mauro avisó algo que reordena el punto 3: **`REDTEC_API_KEY` es la llave del
+proveedor que se está dando de baja**. Lo urgente entonces no era comparar, sino
+dos cosas que sólo se podían hacer con la llave viva.
+
+**Lo primero, y resuelto: qué le falta al almacén congelado.** Un día que no
+quedó congelado sólo se recupera pidiéndoselo al proveedor; el día que la llave
+muera, ese hueco es permanente. Encontrarlos no pide la llave, sólo
+`OS_STORAGE_CONN`:
+
+```
+node scripts/comparar-cuadre.js --huecos
+```
+
+**MEDIDO el 5-nov-2026 · 2023-03-20 → 2026-11-04 · 1.326 días:**
+
+| | |
+|---|---|
+| blobs en `redtec-os-stock/stock/` | 1.326 |
+| días sin blob | **0** |
+| días con `clientes` en null | **0** |
+| días con `retail` en null | **0** |
+
+**El almacén cubre el rango entero. La baja del proveedor no se lleva nada de la
+historia del cuadre.** Eso cierra la pregunta: lo que se cae es el día nuevo, y
+nada más.
+
+#### El hueco que no se ve, y por qué `--huecos` abre cada blob
+
+`stock-dia.obtenerDia` graba el día si contestó **al menos uno** de los dos
+universos. Si el proveedor falla sólo para retail, queda un blob con `clientes`
+bueno y `retail` en null. Y `backfill-stock.js` salta todo día donde
+`diaValido()` da true — que da true **con un solo universo**. O sea: un día a
+medias queda congelado así para siempre y no se auto-sana nunca.
+
+Una llave que empieza a fallar de a ratos no deja huecos visibles: deja medios
+días, en silencio. Por eso `--huecos` abre cada blob en vez de mirar sólo si
+existe, y por eso el comando de relleno de esos días lleva `--forzar` en una
+lista aparte. Sin `--forzar` el freeze los salta y el comando queda con cara de
+arreglado sin haber hecho nada. (Ese defecto estuvo en la primera versión del
+script y lo cazó una mutación, no una lectura.)
+
+Hoy no hay ninguno, pero el control queda: conviene correr `--huecos` de nuevo
+justo antes de la baja, por si la llave falla de a ratos en el camino.
+
+#### Lo segundo: congelar la evidencia antes de la baja
+
+Después de la baja no hay con qué comparar — el proveedor no contesta y la
+equivalencia ya no se puede volver a revisar ni mostrar a nadie. La captura es
+la única forma de que sobreviva:
+
+```
+node scripts/comparar-cuadre.js --meses=24 --capturar=captura-cuadre.json
+node scripts/comparar-cuadre.js --desde-captura=captura-cuadre.json
+```
+
+`--meses=N` arma un rango por mes calendario (el mes en curso recortado a hoy,
+nunca hacia el futuro; un mes entra holgado en el tope de 180 días). Se usa en
+vez de la batería de cinco muestras porque las vistas piden rangos cualesquiera
+y cinco muestras prueban poco sobre eso.
+
+#### Urgente aparte, por la misma razón
+
+La llave está escrita en duro como valor por defecto en 11 archivos, los dos
+proxies de stock incluidos: `process.env.REDTEC_API_KEY || '<literal>'`. Si la
+**rotan** antes de darla de baja, el `||` se come la variable buena y esos
+archivos siguen usando la vieja, fallando sin decir por qué. Está registrado
+desde la auditoría de sep-2026; con la baja encima hay que sacarlo.

@@ -44,7 +44,40 @@ const MUTACIONES = {
   H12: { que: 'un valor no numerico pasa como numero',
          de: 'const n = Number(v); return Number.isFinite(n) ? n : 0;', a: 'const n = Number(v); return n;' },
   H13: { que: 'los signos de clientes se presentan como verificados',
-         de: '    verificado: false,', a: '    verificado: true,' }
+         de: '    verificado: false,', a: '    verificado: true,' },
+  H14: { que: 'dos dias con uno de por medio se juntan en un solo tramo',
+         de: 'if (ultimo && diasEntre(ultimo.hasta, f) === 2) ultimo.hasta = f;',
+         a: 'if (ultimo && diasEntre(ultimo.hasta, f) <= 3) ultimo.hasta = f;' },
+  H15: { que: 'el hueco parcial deja de contarse: solo se mira si el blob existe',
+         de: "    parciales[u] = todas.filter(f => hay.has(f) && !((contenido || {})[f] || {})[u]);",
+         a: '    parciales[u] = [];' },
+  H16: { que: 'el relleno ignora los huecos parciales',
+         de: '  UNIVERSOS.forEach(u => (h.parciales[u] || []).forEach(f => juntas.add(f)));',
+         a: '  ;' },
+  H23: { que: 'un rango sin dato en el almacen se cuenta como que la identidad cierra',
+         de: "    cuadran: conIdentidad.filter(r => r.identidadNuestro.cuadra).length,",
+         a: '    cuadran: resultados.length,' },
+  H24: { que: 'la brecha del rango que no cierra no se informa',
+         de: "      .map(r => ({ universo: r.universo, nombre: r.nombre, brecha: r.identidadNuestro.brecha })),",
+         a: '      .map(r => ({ universo: r.universo, nombre: r.nombre })),' },
+  H25: { que: 'los rangos que no cierran se mezclan con los que si',
+         de: "    noCuadran: conIdentidad.filter(r => !r.identidadNuestro.cuadra)",
+         a: '    noCuadran: conIdentidad.filter(r => r.identidadNuestro.cuadra)' },
+  H21: { que: 'el mes en curso se pide hasta fin de mes, o sea hacia el futuro',
+         de: 'const hasta = iso(fin) > hoy ? hoy : iso(fin);', a: 'const hasta = iso(fin);' },
+  H22: { que: 'la bateria por meses sale del mas nuevo al mas viejo',
+         de: '  for (let i = n - 1; i >= 0; i--) {', a: '  for (let i = 0; i < n; i++) {' },
+  H19: { que: 'el dia a medias se rellena sin --forzar, o sea no se rellena',
+         de: "    out.push('node backfill/backfill-stock.js ' + t.desde + ' ' + t.hasta + ' --forzar' +",
+         a: "    out.push('node backfill/backfill-stock.js ' + t.desde + ' ' + t.hasta + '' +" },
+  H20: { que: 'los dias sanos se arrastran al comando con --forzar',
+         de: '  tramos(h.sinBlob).forEach(function (t) {', a: '  tramos([]).forEach(function (t) {' },
+  H18: { que: 'un campo ausente de los dos lados se le achaca a uno solo',
+         de: "      falta: (!enP && !enN) ? 'los dos' : (!enP ? 'proveedor' : (!enN ? 'nuestro' : null))",
+         a: "      falta: !enP ? 'proveedor' : (!enN ? 'nuestro' : null)" },
+  H17: { que: 'una fecha se saca de cualquier numero del nombre',
+         de: "  const m = String(nombre || '').match(/(\\d{4}-\\d{2}-\\d{2})/);",
+         a: "  const m = String(nombre || '').match(/(\\d+)/);" }
 };
 
 /* ── Datos de prueba ───────────────────────────────────────────────────────
@@ -142,6 +175,8 @@ prueba('T07 un campo que no viene no es un cero', (M) => {
   igual(f.falta, 'nuestro', 'tiene que decir de que lado falta');
   const g = M.comparar({ saldoFinal: 1 }, { retiros: 9 }, 'retail').find(x => x.campo === 'retiros');
   igual(g.falta, 'proveedor', 'y al reves tambien');
+  const h = M.comparar({ saldoFinal: 1 }, { saldoFinal: 1 }, 'retail').find(x => x.campo === 'retiros');
+  igual(h.falta, 'los dos', 'si no viene de ninguno hay que decir eso, no culpar a uno');
 });
 
 prueba('T08 veredicto: calza cuando todo lo comparable es identico', (M) => {
@@ -195,6 +230,116 @@ prueba('T14 la bateria por defecto cubre los casos que pueden fallar distinto', 
   const tope = r.find(x => x.nombre === 'tope del proveedor');
   igual(M.diasEntre(tope.desde, tope.hasta), M.MAX_DIAS_PROVEEDOR,
     'el rango tope tiene que medir exactamente el tope que declara stock-fetch');
+});
+
+prueba('T25 sin proveedor igual hay veredicto: la identidad del cuadre', (M) => {
+  const cierra  = { identidadNuestro: { cuadra: true,  brecha: 0 },    universo: 'retail', nombre: '2026-10' };
+  const noCierra= { identidadNuestro: { cuadra: false, brecha: -640 }, universo: 'retail', nombre: '2026-09' };
+  const sinDato = { identidadNuestro: null, universo: 'clientes', nombre: '2026-08' };
+
+  const r = M.resumenSoloNuestro([cierra, noCierra, sinDato]);
+  igual(r.total, 3, 'tres rangos pedidos');
+  igual(r.medidos, 2, 'solo dos se pudieron medir');
+  igual(r.cuadran, 1, 'uno cierra');
+  igual(r.noCuadran, [{ universo: 'retail', nombre: '2026-09', brecha: -640 }],
+    'el que no cierra se nombra con su brecha, para saber por cuanto');
+  igual(r.sinDato, ['clientes · 2026-08'], 'y el que no tiene dato se dice aparte, no se cuenta como que cierra');
+});
+
+prueba('T26 un rango sin dato en el almacen no se cuenta como que cierra', (M) => {
+  const r = M.resumenSoloNuestro([{ identidadNuestro: null, universo: 'retail', nombre: 'x' }]);
+  igual(r.cuadran, 0, 'cero, no uno');
+  igual(r.medidos, 0, 'no se midio nada');
+  igual(r.noCuadran, [], 'tampoco es un fallo: es ausencia de dato');
+});
+
+prueba('T23 la bateria por meses cubre meses calendario completos y recorta el actual', (M) => {
+  const r = M.rangosDeMeses('2026-11-05', 4);
+  igual(r.map(x => x.nombre), ['2026-08', '2026-09', '2026-10', '2026-11'],
+    'del mas viejo al mas nuevo');
+  igual(r[0], { nombre: '2026-08', desde: '2026-08-01', hasta: '2026-08-31' }, 'agosto entero');
+  igual(r[1], { nombre: '2026-09', desde: '2026-09-01', hasta: '2026-09-30' }, 'septiembre tiene 30');
+  igual(r[3], { nombre: '2026-11', desde: '2026-11-01', hasta: '2026-11-05' },
+    'el mes en curso se recorta a hoy, no se pide el futuro');
+  r.forEach(x => cierto(M.diasEntre(x.desde, x.hasta) <= M.MAX_DIAS_PROVEEDOR,
+    'un mes tiene que entrar en el tope del proveedor: ' + x.nombre));
+});
+
+prueba('T24 la bateria por meses cruza el cambio de anio y el anio bisiesto', (M) => {
+  const r = M.rangosDeMeses('2024-03-10', 4);
+  igual(r.map(x => x.nombre), ['2023-12', '2024-01', '2024-02', '2024-03'],
+    'retrocede de anio sin saltarse diciembre');
+  igual(r[0].hasta, '2023-12-31', 'diciembre entero');
+  igual(r[2], { nombre: '2024-02', desde: '2024-02-01', hasta: '2024-02-29' },
+    'febrero de 2024 tiene 29, no 28');
+});
+
+prueba('T18 las fechas salen del nombre del blob, no de una convencion repetida', (M) => {
+  igual(M.fechaDeNombre('stock/2026-03-04.json'), '2026-03-04', 'nombre normal');
+  igual(M.fechaDeNombre('stock/'), null, 'sin fecha no inventa una');
+  igual(M.fechaDeNombre(null), null, 'nulo');
+  igual(M.fechasDeNombres(['stock/2026-01-02.json', 'stock/2026-01-01.json', 'stock/2026-01-02.json', 'basura']),
+    ['2026-01-01', '2026-01-02'], 'unicas y ordenadas');
+});
+
+prueba('T19 las fechas sueltas se agrupan en tramos continuos', (M) => {
+  igual(M.tramos([]), [], 'nada');
+  igual(M.tramos(['2026-01-05']), [{ desde: '2026-01-05', hasta: '2026-01-05' }], 'una sola');
+  igual(M.tramos(['2026-01-01', '2026-01-02', '2026-01-03']),
+    [{ desde: '2026-01-01', hasta: '2026-01-03' }], 'tres seguidos son UN tramo');
+  igual(M.tramos(['2026-01-03', '2026-01-01', '2026-01-02']),
+    [{ desde: '2026-01-01', hasta: '2026-01-03' }], 'desordenadas pero continuas: un tramo');
+  igual(M.tramos(['2026-01-01', '2026-01-03']),
+    [{ desde: '2026-01-01', hasta: '2026-01-01' }, { desde: '2026-01-03', hasta: '2026-01-03' }],
+    'con un dia de por medio son DOS tramos');
+  igual(M.tramos(['2026-02-28', '2026-03-01']),
+    [{ desde: '2026-02-28', hasta: '2026-03-01' }], 'el cambio de mes no corta el tramo');
+});
+
+prueba('T20 un dia con un universo en null es un hueco, aunque el blob exista', (M) => {
+  const h = M.huecos('2026-01-01', '2026-01-04',
+    ['2026-01-01', '2026-01-02', '2026-01-04'],
+    { '2026-01-01': { clientes: true, retail: true },
+      '2026-01-02': { clientes: true, retail: false },   // RDTOut fallo para retail
+      '2026-01-04': { clientes: true, retail: true } });
+  igual(h.dias, 4, 'el rango tiene cuatro dias');
+  igual(h.sinBlob, ['2026-01-03'], 'el dia que no existe');
+  igual(h.parciales.retail, ['2026-01-02'], 'el parcial cuenta como hueco de retail');
+  igual(h.parciales.clientes, [], 'clientes esta completo en los dias que existen');
+});
+
+prueba('T21 el dia a medias se rellena con --forzar y el que falta sin el', (M) => {
+  const h = M.huecos('2026-01-01', '2026-01-05',
+    ['2026-01-01', '2026-01-03', '2026-01-04', '2026-01-05'],
+    { '2026-01-01': { clientes: true, retail: true },
+      '2026-01-03': { clientes: false, retail: true },   // a medias
+      '2026-01-04': { clientes: true, retail: true },
+      '2026-01-05': { clientes: true, retail: true } });
+  const cmd = M.comandosParaRellenar(h);
+  igual(cmd.length, 2, 'son dos comandos distintos, no uno: ' + JSON.stringify(cmd));
+
+  /* Se mira SOLO lo que se ejecuta, no el comentario: el propio comentario
+     nombra --forzar para explicar por que va, y una prueba que mire la linea
+     entera se deja enganar por su propia explicacion. */
+  const ejecutable = (c) => c.split('#')[0];
+
+  const sinBlob = cmd.find(c => /2026-01-02 2026-01-02/.test(c));
+  cierto(sinBlob, 'falta el comando del dia sin blob');
+  cierto(!/--forzar/.test(ejecutable(sinBlob)),
+    'el dia sin blob no necesita --forzar: diaValido ya da false');
+
+  const parcial = cmd.find(c => /2026-01-03 2026-01-03/.test(c));
+  cierto(parcial, 'falta el comando del dia a medias');
+  cierto(/--forzar/.test(ejecutable(parcial)),
+    'SIN --forzar el freeze salta el dia a medias (diaValido da true con un solo universo) ' +
+    'y el hueco queda abierto con cara de arreglado: ' + parcial);
+});
+
+prueba('T22 sin huecos no hay nada que rellenar', (M) => {
+  const h = M.huecos('2026-01-01', '2026-01-02', ['2026-01-01', '2026-01-02'],
+    { '2026-01-01': { clientes: true, retail: true }, '2026-01-02': { clientes: true, retail: true } });
+  igual(h.sinBlob, [], 'sin dias faltantes');
+  igual(M.comandosParaRellenar(h), [], 'y por lo tanto ningun comando');
 });
 
 prueba('T17 el tope de dias es el que declara stock-fetch, no uno inventado', (M) => {

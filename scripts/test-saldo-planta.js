@@ -272,6 +272,78 @@ chk('y lo dice', /no se puede medir/.test(DES('2026-11-02T16:34:46Z',null).motiv
 chk('una fecha ilegible es lo mismo que no tenerla',
     DES('2026-11-02T16:34:46Z','el martes').ok===null);
 chk('sin ancla tampoco', DES(null,'2026-11-02T16:32:00Z').ok===null);
+// DE QUE BLOB HABLA. "las lineas se guardaron 89.634 s despues" con cuatro
+// meses leidos no deja saber cual de los cuatro, y la respuesta cambia todo:
+// el mes en curso es un problema, un mes cerrado reextraido no lo es
+chk('el mensaje dice que blob se comparo',
+    /lineasbod\/2026-11\.json/.test(
+      S.desfaseDeLectura('2026-11-02T16:34:46Z','2026-11-02T16:32:00Z',null,'2026-11').motivo),
+    S.desfaseDeLectura('2026-11-02T16:34:46Z','2026-11-02T16:32:00Z',null,'2026-11').motivo);
+chk('y lo deja en el resultado para el json',
+    S.desfaseDeLectura('2026-11-02T16:34:46Z','2026-11-02T16:34:41Z',null,'2026-11').mes==='2026-11');
+chk('sin mes el mensaje queda como estaba',
+    !/lineasbod/.test(DES('2026-11-02T16:34:46Z','2026-11-02T16:32:00Z').motivo) &&
+    DES('2026-11-02T16:34:46Z','2026-11-02T16:32:00Z').mes===null);
+chk('un mes mal escrito no ensucia el mensaje',
+    !/lineasbod/.test(S.desfaseDeLectura('2026-11-02T16:34:46Z','2026-11-02T16:32:00Z',null,'noviembre').motivo));
+
+// ============================================================
+// CUAL BLOB MANDA PARA MEDIR EL DESFASE
+// ============================================================
+console.log('\n— cual de los blobs se compara contra el ancla —');
+// EL DEL MES MAS NUEVO, no el escrito mas tarde. Reextraer agosto el 5 de
+// noviembre lo deja como el blob mas reciente, pero agosto esta cerrado: ahi
+// ya no nace ningun documento, asi que su hora de escritura no dice nada
+// sobre si el saldo y las lineas estan en hora
+const BL=[{mes:'2026-08',guardado:'2026-11-05T04:28:25Z'},
+          {mes:'2026-09',guardado:'2026-11-05T01:13:00Z'},
+          {mes:'2026-10',guardado:'2026-11-04T03:16:00Z'},
+          {mes:'2026-11',guardado:'2026-11-04T03:34:31Z'}];
+chk('manda el mes mas nuevo, no el escrito mas tarde',
+    S.blobQueManda(BL).mes==='2026-11' && S.blobQueManda(BL).guardado==='2026-11-04T03:34:31Z',
+    JSON.stringify(S.blobQueManda(BL)));
+// el caso real del 2026-11-05: con la regla vieja daba 89.634 s de alarma y
+// las aperturas eran identicas con el ancla fresca; con esta da 57 s
+chk('con la regla nueva ese mismo dia no hay alarma',
+    S.desfaseDeLectura('2026-11-04T03:34:31Z',S.blobQueManda(BL).guardado).ok===true,
+    String(S.desfaseDeLectura('2026-11-04T03:34:31Z',S.blobQueManda(BL).guardado).segundos));
+chk('y con la regla vieja si la habia',
+    S.desfaseDeLectura('2026-11-04T03:34:31Z','2026-11-05T04:28:25Z').ok===false);
+chk('el orden en que se leyeron no importa',
+    S.blobQueManda(BL.slice().reverse()).mes==='2026-11');
+chk('con un solo mes, ese manda', S.blobQueManda([BL[1]]).mes==='2026-09');
+// un blob del mes en curso SIN marca no puede caer al de agosto: eso diria
+// "en hora" apoyandose en un mes que no mide nada
+chk('si el mes que manda no trae marca, no se cae al de otro mes',
+    S.blobQueManda([BL[0],{mes:'2026-11',guardado:null}]).mes==='2026-11' &&
+    S.blobQueManda([BL[0],{mes:'2026-11',guardado:null}]).guardado===null,
+    JSON.stringify(S.blobQueManda([BL[0],{mes:'2026-11',guardado:null}])));
+chk('y entonces el desfase dice que no se puede medir',
+    S.desfaseDeLectura('2026-11-04T03:34:31Z',null,null,'2026-11').ok===null);
+chk('un mes mal escrito no se elige',
+    S.blobQueManda([{mes:'octubre',guardado:'2026-11-05T00:00:00Z'},BL[2]]).mes==='2026-10');
+chk('sin blobs no revienta',
+    S.blobQueManda([])===null && S.blobQueManda(null)===null &&
+    S.blobQueManda([null,{}])===null);
+chk('el anio pesa mas que el mes',
+    S.blobQueManda([{mes:'2027-01',guardado:'a'},{mes:'2026-12',guardado:'b'}]).mes==='2027-01');
+
+// ELEGIR EL BLOB Y MEDIRLO VAN JUNTOS: medir contra uno y nombrar otro en el
+// mensaje seria peor que no nombrar ninguno
+const LEC=S.lecturaDeLaVentana('2026-11-04T03:34:31Z',BL);
+chk('mide contra el blob que eligio', LEC.manda.mes==='2026-11' && LEC.desfase.ok===true,
+    JSON.stringify(LEC.manda)+' '+LEC.desfase.segundos+' s');
+chk('y el mensaje habla de ESE blob, no de otro',
+    LEC.desfase.mes==='2026-11', String(LEC.desfase.mes));
+const LEC2=S.lecturaDeLaVentana('2026-11-05T12:00:00Z',BL);
+chk('con el ancla de un dia despues si hay alarma, y nombra el mes',
+    LEC2.desfase.ok===false && /lineasbod\/2026-11\.json/.test(LEC2.desfase.motivo),
+    LEC2.desfase.motivo);
+chk('el tope se puede mover tambien por aca',
+    S.lecturaDeLaVentana('2026-11-05T12:00:00Z',BL,200000).desfase.ok===true);
+chk('sin blobs dice que no se puede medir, no que esta bien',
+    S.lecturaDeLaVentana('2026-11-04T03:34:31Z',[]).desfase.ok===null &&
+    S.lecturaDeLaVentana('2026-11-04T03:34:31Z',[]).manda===null);
 
 console.log('\n— el veredicto separa los dos negativos —');
 const VAP=S.veredicto(SERAP,[],{cuadra:true},{ok:true},AP,{ok:true});

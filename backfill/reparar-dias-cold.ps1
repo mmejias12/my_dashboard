@@ -1,5 +1,11 @@
-# ============================================================================
+﻿# ============================================================================
 #  backfill/reparar-dias-cold.ps1  ·  Los dos días que el cold trae cortos
+#
+#  ESTE ARCHIVO EMPIEZA CON BOM UTF-8 Y TIENE QUE SEGUIR ASI. Sin BOM,
+#  powershell.exe 5.1 lo lee como CP-1252 y cada "─" mete una comilla
+#  tipografica que PowerShell toma como delimitador de cadena. Hoy todas las
+#  rayas de este archivo viven en comentarios, donde no hacen dano: el BOM
+#  esta para que eso deje de ser una condicion que hay que recordar.
 #
 #  QUE RESUELVE. La reconstruccion de los agregados desde el cold store
 #  (scripts/rollup-hist.js) corrigio 1.376 dias y dejo DOS afuera a proposito,

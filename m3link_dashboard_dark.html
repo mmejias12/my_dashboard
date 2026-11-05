@@ -923,6 +923,7 @@
 
     <div class="s-hdr" onclick="tog('g-operaciones',this)" data-cat="cat" data-tip="Operaciones"><i class="ti ti-forklift s-leading"></i> Operaciones <i class="ti ti-chevron-right s-chevron"></i></div>
     <div class="s-sub" id="g-operaciones" style="max-height:0">
+      <a href="gestion-operacional.html" class="s-item"><i class="ti ti-file-description"></i> Gestión Operacional <span class="soon-tag">piloto</span></a>
       <a href="Stock Plantas Respaldo - Copia.html" class="s-item"><i class="ti ti-building-warehouse"></i> Stock Plantas Respaldo</a>
     </div>
 
@@ -3137,7 +3138,16 @@ document.addEventListener('click', function(e){
   // solo paginas .html se abren como pestaña
   if(!/\.html?$/i.test(resolved.pathname)) return;
   e.preventDefault(); e.stopPropagation();
-  var label=(a.textContent||'').replace(/\s+/g,' ').replace(/[↔]|próx\.?/gi,'').trim();
+  /* El rotulo de la pestaña es el nombre de la pagina. Las pastillas del menu
+     (↔, "nuevo", "piloto", "próx.") son marcas de la barra lateral, no parte del
+     nombre: se descuentan por su elemento en vez de parchar palabra por palabra,
+     que era lo que dejaba pasar "Cockpit del Pool nuevo". */
+  var label='';
+  Array.prototype.forEach.call(a.childNodes, function(n){
+    if(n.nodeType===1 && n.classList && (n.classList.contains('soon-tag') || n.classList.contains('dup-tag'))) return;
+    label += n.textContent || '';
+  });
+  label = label.replace(/\s+/g,' ').trim();
   try{ if(typeof logUso==='function') logUso(label, ''); }catch(e){}
   TABS.open(href, label);
 }, true);

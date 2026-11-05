@@ -1,0 +1,241 @@
+{
+  "_que_es": "Definicion de los formularios de Gestion Operacional (inventario y consumos) que se rescataron de la pagina V2 de Enrique y se adaptaron al patron del m3link. La vista gestion-operacional.html NO trae campos escritos en el codigo: los lee de aca, para que corregir una etiqueta o sacar un campo sea editar una linea de este archivo y no tocar HTML.",
+  "_de_donde_salio": "La pagina de Enrique es un front generico: pide la definicion a /api/v2/bootstrap y sus campos NO estan en el HTML. Esta lista se reconstruyo de tres fuentes: (1) la estructura real de su codigo (areas -> secciones -> campos por tipo de pallet, con field_role input/calculated y data_type integer/decimal); (2) los indicadores que si aparecen en su codigo, en DASHBOARD_METRICS; (3) la lista de cambios que pidio Mauro el 5-nov-2026, ya aplicada.",
+  "_por_confirmar": [
+    "Las etiquetas marcadas con \"inferido\": true son las que NO pude verificar contra la pagina de Enrique, porque su definicion vive en el backend. Hay que confirmarlas con el o pegando la respuesta de /api/v2/bootstrap.",
+    "Faltan por confirmar los campos de Bodega Pintura y Planta Talca: Mauro no los menciono en la lista de cambios y de su codigo solo se sabe el tema (pintados, disponibilizacion, litros de pintura / inventario, inspeccion y produccion)."
+  ],
+  "_cambios_aplicados_5nov": [
+    "Resultados inspeccion REDTEC y RT: el total no puede ser superado por la suma de los tres campos que lo distribuyen (regla 'no superar', avisa y no deja enviar).",
+    "Inventario RT (Blancos): se saco Pallets extranos y Pallets disponibilizados.",
+    "Resultados inspeccion RT (Blancos): Pallets extranos inspeccion pasa a Pallet doble piso.",
+    "Resultados inspeccion RT (Blancos): Pallets buenos pasa a 'Pallets buenos (por pintar)' y Pallets malos a 'Pallets malos (por reparar)'.",
+    "Inventario y produccion, Planta 1 y Planta 2, REDTEC y RT: se sacaron Pallets disponibilizados, Dotacion y Total reparados.",
+    "Inventario y produccion RT (Blancos), Planta 1 y Planta 2: Pallets extranos pasa a Pallet doble piso.",
+    "Inventario Despacho Transporte, REDTEC y RT: se saco Pallets disponibilizados.",
+    "Consumos y rendimientos: 'Produccion consolidada por operador' pasa a 'Fabricacion por operador'."
+  ],
+
+  "centros": [
+    { "id": "santiago", "nombre": "Santiago" },
+    { "id": "talca", "nombre": "Talca" }
+  ],
+
+  "inventario": [
+    {
+      "area": "patio-norte",
+      "centro": "santiago",
+      "nombre": "Patio Norte",
+      "rotulo": "INVENTARIO E INSPECCIÓN",
+      "resumen": "Stock, lavado y resultados de inspección REDTEC y RT.",
+      "secciones": [
+        {
+          "nombre": "Inventario REDTEC",
+          "pallet": "REDTEC",
+          "campos": [
+            { "clave": "stock_inicial", "etiqueta": "Stock inicial", "tipo": "entero", "inferido": true },
+            { "clave": "lavados", "etiqueta": "Pallets lavados", "tipo": "entero", "inferido": true },
+            { "clave": "por_inspeccionar", "etiqueta": "Pallets por inspeccionar", "tipo": "entero", "inferido": true }
+          ]
+        },
+        {
+          "nombre": "Inventario RT (Blancos)",
+          "pallet": "RT",
+          "campos": [
+            { "clave": "stock_inicial", "etiqueta": "Stock inicial", "tipo": "entero", "inferido": true },
+            { "clave": "lavados", "etiqueta": "Pallets lavados", "tipo": "entero", "inferido": true },
+            { "clave": "por_inspeccionar", "etiqueta": "Pallets por inspeccionar", "tipo": "entero", "inferido": true }
+          ]
+        },
+        {
+          "nombre": "Resultados inspección REDTEC",
+          "pallet": "REDTEC",
+          "total": "inspeccionados",
+          "distribuyen": ["buenos", "malos", "extranos"],
+          "campos": [
+            { "clave": "inspeccionados", "etiqueta": "Pallets inspeccionados", "tipo": "entero", "rol": "total" },
+            { "clave": "buenos", "etiqueta": "Pallets buenos", "tipo": "entero" },
+            { "clave": "malos", "etiqueta": "Pallets malos", "tipo": "entero" },
+            { "clave": "extranos", "etiqueta": "Pallets extraños", "tipo": "entero" }
+          ]
+        },
+        {
+          "nombre": "Resultados inspección RT (Blancos)",
+          "pallet": "RT",
+          "total": "inspeccionados",
+          "distribuyen": ["buenos", "malos", "doble_piso"],
+          "campos": [
+            { "clave": "inspeccionados", "etiqueta": "Pallets inspeccionados", "tipo": "entero", "rol": "total" },
+            { "clave": "buenos", "etiqueta": "Pallets buenos (por pintar)", "tipo": "entero" },
+            { "clave": "malos", "etiqueta": "Pallets malos (por reparar)", "tipo": "entero" },
+            { "clave": "doble_piso", "etiqueta": "Pallet doble piso", "tipo": "entero" }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "planta-1",
+      "centro": "santiago",
+      "nombre": "Planta 1",
+      "rotulo": "INVENTARIO · PLANTA 1",
+      "resumen": "Inventario y reparación de Planta 1.",
+      "secciones": [
+        {
+          "nombre": "Inventario y producción REDTEC",
+          "pallet": "REDTEC",
+          "campos": [
+            { "clave": "por_reparar", "etiqueta": "Pallets por reparar", "tipo": "entero" },
+            { "clave": "reparados", "etiqueta": "Pallets reparados", "tipo": "entero" },
+            { "clave": "por_pintar", "etiqueta": "Pallets por pintar", "tipo": "entero" }
+          ]
+        },
+        {
+          "nombre": "Inventario y producción RT (Blancos)",
+          "pallet": "RT",
+          "campos": [
+            { "clave": "por_reparar", "etiqueta": "Pallets por reparar", "tipo": "entero" },
+            { "clave": "reparados", "etiqueta": "Pallets reparados", "tipo": "entero" },
+            { "clave": "por_pintar", "etiqueta": "Pallets por pintar", "tipo": "entero" },
+            { "clave": "doble_piso", "etiqueta": "Pallet doble piso", "tipo": "entero" }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "planta-2",
+      "centro": "santiago",
+      "nombre": "Planta 2",
+      "rotulo": "INVENTARIO · PLANTA 2",
+      "resumen": "Inventario y reparación de Planta 2.",
+      "secciones": [
+        {
+          "nombre": "Inventario y producción REDTEC",
+          "pallet": "REDTEC",
+          "campos": [
+            { "clave": "por_reparar", "etiqueta": "Pallets por reparar", "tipo": "entero" },
+            { "clave": "reparados", "etiqueta": "Pallets reparados", "tipo": "entero" },
+            { "clave": "por_pintar", "etiqueta": "Pallets por pintar", "tipo": "entero" }
+          ]
+        },
+        {
+          "nombre": "Inventario y producción RT (Blancos)",
+          "pallet": "RT",
+          "campos": [
+            { "clave": "por_reparar", "etiqueta": "Pallets por reparar", "tipo": "entero" },
+            { "clave": "reparados", "etiqueta": "Pallets reparados", "tipo": "entero" },
+            { "clave": "por_pintar", "etiqueta": "Pallets por pintar", "tipo": "entero" },
+            { "clave": "doble_piso", "etiqueta": "Pallet doble piso", "tipo": "entero" }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "bodega-pintura",
+      "centro": "santiago",
+      "nombre": "Bodega Pintura",
+      "rotulo": "INVENTARIO · BODEGA PINTURA",
+      "resumen": "Pintados y litros de pintura utilizados.",
+      "porConfirmar": true,
+      "secciones": [
+        {
+          "nombre": "Pintura REDTEC",
+          "pallet": "REDTEC",
+          "campos": [
+            { "clave": "pintados", "etiqueta": "Pallets pintados", "tipo": "entero" },
+            { "clave": "litros_pintura", "etiqueta": "Litros de pintura", "tipo": "decimal" }
+          ]
+        },
+        {
+          "nombre": "Pintura RT (Blancos)",
+          "pallet": "RT",
+          "campos": [
+            { "clave": "pintados", "etiqueta": "Pallets pintados", "tipo": "entero" },
+            { "clave": "litros_pintura", "etiqueta": "Litros de pintura", "tipo": "decimal" }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "despacho-transporte",
+      "centro": "santiago",
+      "nombre": "Despacho Transporte",
+      "rotulo": "INVENTARIO · DESPACHO TRANSPORTE",
+      "resumen": "Pallets disponibles y por reparar en zona de despacho.",
+      "secciones": [
+        {
+          "nombre": "Inventario REDTEC",
+          "pallet": "REDTEC",
+          "campos": [
+            { "clave": "disponibles", "etiqueta": "Pallets disponibles", "tipo": "entero" },
+            { "clave": "por_reparar", "etiqueta": "Pallets por reparar", "tipo": "entero" }
+          ]
+        },
+        {
+          "nombre": "Inventario RT (Blancos)",
+          "pallet": "RT",
+          "campos": [
+            { "clave": "disponibles", "etiqueta": "Pallets disponibles", "tipo": "entero" },
+            { "clave": "por_reparar", "etiqueta": "Pallets por reparar", "tipo": "entero" }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "planta-talca",
+      "centro": "talca",
+      "nombre": "Planta Talca",
+      "rotulo": "INVENTARIO · PLANTA TALCA",
+      "resumen": "Inventario, inspección y producción de Talca.",
+      "porConfirmar": true,
+      "secciones": [
+        {
+          "nombre": "Inventario y producción REDTEC",
+          "pallet": "REDTEC",
+          "campos": [
+            { "clave": "por_reparar", "etiqueta": "Pallets por reparar", "tipo": "entero" },
+            { "clave": "reparados", "etiqueta": "Pallets reparados", "tipo": "entero" },
+            { "clave": "por_pintar", "etiqueta": "Pallets por pintar", "tipo": "entero" }
+          ]
+        },
+        {
+          "nombre": "Resultados inspección REDTEC",
+          "pallet": "REDTEC",
+          "total": "inspeccionados",
+          "distribuyen": ["buenos", "malos", "extranos"],
+          "campos": [
+            { "clave": "inspeccionados", "etiqueta": "Pallets inspeccionados", "tipo": "entero", "rol": "total" },
+            { "clave": "buenos", "etiqueta": "Pallets buenos", "tipo": "entero" },
+            { "clave": "malos", "etiqueta": "Pallets malos", "tipo": "entero" },
+            { "clave": "extranos", "etiqueta": "Pallets extraños", "tipo": "entero" }
+          ]
+        }
+      ]
+    }
+  ],
+
+  "consumos": [
+    {
+      "formulario": "fabricacion-operador",
+      "nombre": "Fabricación por operador",
+      "rotulo": "CONSUMOS Y RENDIMIENTOS",
+      "resumen": "Lo fabricado por cada operador en el turno, con los materiales que consumió.",
+      "pallet": "REDTEC",
+      "areas": ["planta-1", "planta-2", "planta-talca"],
+      "porConfirmar": true,
+      "identificacion": ["fecha", "supervisor", "centro", "area", "operador"],
+      "secciones": [
+        {
+          "nombre": "Fabricación del turno",
+          "campos": [
+            { "clave": "fabricados", "etiqueta": "Pallets fabricados", "tipo": "entero", "inferido": true },
+            { "clave": "rechazados", "etiqueta": "Pallets rechazados", "tipo": "entero", "inferido": true }
+          ]
+        }
+      ],
+      "materiales": [
+        { "clave": "madera", "etiqueta": "Madera", "categoria": "madera", "unidades": ["unidades"] },
+        { "clave": "clavos", "etiqueta": "Clavos", "categoria": "clavos", "unidades": ["unidades", "rollos"], "porRollo": 3000, "inferido": true }
+      ]
+    }
+  ]
+}

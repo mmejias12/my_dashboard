@@ -633,12 +633,17 @@ var SEM_CLS={ preliminar:'rojo', confirmado:'verde', cambiado:'ambar' };
    grande del semáforo los suma —y debe sumarlos, porque es lo programado del
    día— pero visualmente da a entender que todo eso es carga de Santiago.
    Acá se separa. Para sumar otra bodega virtual basta agregar su zona.     */
+// Se identifica por RECINTO, no por zona logistica. La zona dice donde queda
+// el local; la bodega virtual es a donde van sus pallets, y no es lo mismo: en
+// zona Coquimbo hay dos recintos y solo uno pasa por la bodega virtual. El otro
+// (CENCOCAL COQUIMBO) lo retira un transporte externo, asi que no corresponde
+// contarlo aqui aunque comparta zona. Para sumar otro recinto, su clave.
 var BODEGAS_VIRTUALES = {
-  'REDTEC SANTIAGO': { corto:'Stgo', zonas:['Coquimbo'], etiqueta:'Coquimbo virtual' }
+  'REDTEC SANTIAGO': { corto:'Stgo', claves:['ZUN08'], etiqueta:'Coquimbo virtual' }
 };
 function desgloseVirtual(planta, totalPlanta){
   var cfg=BODEGAS_VIRTUALES[planta];
-  if(!cfg || !cfg.zonas || !cfg.zonas.length) return null;
+  if(!cfg || !cfg.claves || !cfg.claves.length) return null;
   var filas=(window.REG||[]).filter(function(r){ return (r.planta||'')===planta; });
   if(!filas.length) return null;
   // El número grande lo calcula el servidor. Si lo que hay en pantalla no suma
@@ -646,7 +651,9 @@ function desgloseVirtual(planta, totalPlanta){
   // más de lo que aclara.
   var suma=filas.reduce(function(s,r){ return s+Number(r.cantidad||0); },0);
   if(suma!==Number(totalPlanta)) return null;
-  var virt=filas.filter(function(r){ return cfg.zonas.indexOf(r.zona||'')>=0; });
+  var virt=filas.filter(function(r){
+    return cfg.claves.indexOf(String(r.clave||'').toUpperCase())>=0;
+  });
   var pv=virt.reduce(function(s,r){ return s+Number(r.cantidad||0); },0);
   if(!pv) return null;
   return { corto:cfg.corto, etiqueta:cfg.etiqueta,

@@ -43,6 +43,15 @@ const MUTACIONES = {
          a: '  const porObs = [];' },
   H11: { que: 'una operacion pendiente se cuenta como que la regla calzo',
          de: '    calza: yaConfirmada ? r.aConfirmar === confirmada : null,', a: '    calza: true,' },
+  H26: { que: 'del campo se toma solo la primera cita y se ignoran las demas',
+         de: "  const m = String(v || '').match(/\\d{8}/g) || [];",
+         a: "  const m = (String(v || '').match(/\\d{8}/) || []).slice(0, 1);" },
+  H27: { que: 'se extraen tambien numeros que no tienen largo de cita',
+         de: "  const m = String(v || '').match(/\\d{8}/g) || [];",
+         a: "  const m = String(v || '').match(/\\d+/g) || [];" },
+  H28: { que: 'una transferencia con dos citas se da por informada solo con la primera',
+         de: '  const informada = (o) => citasDeTexto(o.nroCita).some(c => hay.has(c));',
+         a: '  const informada = (o) => hay.has(citasDeTexto(o.nroCita)[0]);' },
   H25: { que: 'cualquier numero pasa como cita de Walmart',
          de: "function citaDeWalmart(c) { return /^\\d{8}$/.test(String(c || '').trim()); }",
          a: "function citaDeWalmart(c) { return /^\\d+$/.test(String(c || '').trim()); }" },
@@ -408,6 +417,17 @@ prueba('T25 el cruce inverso separa "no informada" de "sin cita nuestra"', (M) =
     'sin cita no se puede ni buscar: es un problema de dato nuestro, no de Walmart, ' +
     'y mezclarlo con lo anterior da un numero que no se puede accionar');
   igual(r.candidatas, 3, 'las tres son candidatas');
+
+  /* Una transferencia que cubre DOS citas se informa con que venga cualquiera
+     de las dos. Mirar solo la primera la manda al correo sin motivo. */
+  const dos = [{ nroPedido: 9, nroCita: '42713735 - 42716539', bodegaDestinoStr: 'ZWM01',
+                 fechaDespacho: '2026-11-05', cantidadDespachada: 12 }];
+  igual(M.cruceInverso(dos, ['42716539'], '2026-11-04', '2026-11-05').informadas.map(o => o.nroPedido), [9],
+    'Walmart informo la SEGUNDA de sus dos citas: igual esta informada');
+  igual(M.cruceInverso(dos, ['42713735'], '2026-11-04', '2026-11-05').informadas.map(o => o.nroPedido), [9],
+    'y con la primera tambien');
+  igual(M.cruceInverso(dos, ['99999999'], '2026-11-04', '2026-11-05').noInformadas.map(o => o.nroPedido), [9],
+    'con ninguna de las dos, ahi si va al correo');
 });
 
 prueba('T24 una bodega que no es de Walmart no entra al cruce inverso', (M) => {
@@ -432,6 +452,36 @@ prueba('T26 una cita que no tiene forma de cita de Walmart se detecta', (M) => {
   cierto(!M.citaDeWalmart(''), 'vacia');
   cierto(!M.citaDeWalmart('427434241'), 'nueve digitos tampoco');
   cierto(!M.citaDeWalmart('4274342A'), 'con letras menos');
+});
+
+prueba('T27 del campo de cita se extraen TODAS las citas que traiga', (M) => {
+  // Los cuatro primeros salieron del dato real el 6-nov.
+  igual(M.citasDeTexto('42704805-42710381'), ['42704805', '42710381'], 'dos citas pegadas con guion');
+  igual(M.citasDeTexto('42713735 - 42716539'), ['42713735', '42716539'], 'dos con espacios');
+  igual(M.citasDeTexto('42710724.'), ['42710724'], 'una con un punto pegado');
+  igual(M.citasDeTexto('42723068 - 42723070'), ['42723068', '42723070'], 'otro par');
+
+  igual(M.citasDeTexto('42750687'), ['42750687'], 'el caso normal');
+  igual(M.citasDeTexto('5994-5992-6004'), [], 'numeros cortos: no hay ninguna cita adentro');
+  igual(M.citasDeTexto('1'), [], 'ni acá');
+  igual(M.citasDeTexto(''), [], 'vacio');
+  igual(M.citasDeTexto('42750687 42750687'), ['42750687'], 'la misma repetida cuenta una vez');
+});
+
+prueba('T28 una operacion con dos citas se encuentra por cualquiera de las dos', (M) => {
+  const ops = [{ nroPedido: 7, nroCita: '42713735 - 42716539', observacion: '' }];
+  const idx = M.indexar(ops);
+  igual(idx.multiples, 1, 'se cuenta que trae mas de una');
+  igual(M.clasificar({ cita: '42713735' }, idx).estado, 'exacta', 'por la primera');
+  igual(M.clasificar({ cita: '42716539' }, idx).estado, 'exacta', 'y por la segunda');
+  igual(M.clasificar({ cita: '42716539' }, idx).ops[0].nroPedido, 7, 'y es la misma operacion');
+});
+
+prueba('T29 un campo del que no se puede extraer nada se cuenta aparte', (M) => {
+  const idx = M.indexar([{ nroPedido: 1, nroCita: '5994-5992-6004', observacion: '' },
+                         { nroPedido: 2, nroCita: '', observacion: '' }]);
+  igual(idx.sinExtraer, 1, 'el campo con texto pero sin cita adentro se cuenta; el vacio no');
+  igual(idx.porCita.size, 0, 'y no queda indexado bajo nada');
 });
 
 /* ── Corredor ─────────────────────────────────────────────────────────────── */

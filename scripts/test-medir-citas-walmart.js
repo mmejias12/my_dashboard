@@ -43,6 +43,11 @@ const MUTACIONES = {
          a: '  const porObs = [];' },
   H11: { que: 'una operacion pendiente se cuenta como que la regla calzo',
          de: '    calza: yaConfirmada ? r.aConfirmar === confirmada : null,', a: '    calza: true,' },
+  H13: { que: 'cualquier texto pasa como cadena de conexion',
+         de: "  return /(^|;)\\s*(DefaultEndpointsProtocol|AccountName|BlobEndpoint|SharedAccessSignature)\\s*=/i.test(String(v));",
+         a: '  return true;' },
+  H14: { que: 'alcanza con que la variable no este vacia',
+         de: "  if (!v || !String(v).trim()) return false;", a: '  return !!v;' },
   H12: { que: 'las filas sin cita entran igual al cruce',
          de: "    if (!f || f[idx.cita] === null || f[idx.cita] === undefined || f[idx.cita] === '') continue;",
          a: '    if (!f) continue;' }
@@ -263,6 +268,20 @@ prueba('T16 el rango de dias del cold se arma inclusivo y corrido', (M) => {
   igual(M.corrido('2026-11-05', -20), '2026-10-16', 'veinte dias atras');
   igual(M.corrido('2026-11-05', 20), '2026-11-25', 'veinte adelante');
   igual(M.corrido('2026-03-01', -1), '2026-02-28', 'cruzando el mes');
+});
+
+prueba('T17 una cadena de conexion que no lo es se detecta antes de llamar a Azure', (M) => {
+  cierto(M.pintaDeConexion('DefaultEndpointsProtocol=https;AccountName=redtecos;AccountKey=abc==;EndpointSuffix=core.windows.net'),
+    'una cadena de verdad tiene que pasar');
+  cierto(M.pintaDeConexion('BlobEndpoint=https://x.blob.core.windows.net/;SharedAccessSignature=sv=2022'),
+    'la variante con SAS tambien');
+  cierto(!M.pintaDeConexion(''), 'vacia no');
+  cierto(!M.pintaDeConexion(undefined), 'ausente no');
+  cierto(!M.pintaDeConexion('   '), 'solo espacios no');
+  cierto(!M.pintaDeConexion('<la misma que usaste para --huecos>'),
+    'ESTE es el caso real: un placeholder pegado tal cual. Sin esta prueba el SDK ' +
+    'muere con "Invalid URL" y nadie entiende que la variable trae basura');
+  cierto(!M.pintaDeConexion('redtecos'), 'el nombre de la cuenta suelto tampoco es una cadena');
 });
 
 /* ── Corredor ─────────────────────────────────────────────────────────────── */

@@ -521,6 +521,19 @@ prueba('T31 solo son dias "cerrados" aquellos cuyo dia de recepcion tambien se r
   igual(M.diasCerrados([], 1), [], 'sin reportes no hay dias cerrados');
 });
 
+prueba('T32 cuando aceptado y despachado son iguales, el caso se cuenta UNA vez', (M) => {
+  /* Bug real del 6-nov: con 270 casos de diferencia cero el reporte decia
+     "lo aceptado en 270, lo despachado en 270, otra cosa en -270". Un conteo
+     negativo es imposible y le quita credibilidad a todo el resto. */
+  const r = M.reglaCantidad(24, 24);
+  igual(r.aConfirmar, 24, 'con diferencia cero se confirma 24');
+  igual([r.diferencia, r.porInformar], [0, 0], 'y no queda nada abierto');
+  // El contraste tiene que decir que calza, no clasificarlo dos veces.
+  const c = M.contrastar({ canje: 24 }, { cantidadDespachada: 24, cantidadConfirmada: 24,
+                                          etapaOperacion: 'Transferencia Confirmada' });
+  igual([c.laRegla, c.loReal, c.calza], [24, 24, true], 'un caso, un veredicto');
+});
+
 /* ── Corredor ─────────────────────────────────────────────────────────────── */
 function cargar(mutar) {
   let src = fs.readFileSync(ORIGEN, 'utf8');

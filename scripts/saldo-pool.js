@@ -102,11 +102,29 @@ function deltaDiario(filas, mapa, deBodega) {
 function nivelDeSocio(s0, deltaPorDia, dias) {
   let nivel = Number(s0) || 0;
   let min = nivel, minDia = (dias && dias[0]) || null;
-  for (const d of (dias || [])) {
+  /*  EL CIERRE DE CADA MES, que hasta ahora se recorria y se botaba.
+   *
+   *  La pregunta "cuanto tiene este cliente" ya se contestaba con el nivel de
+   *  hoy; "como llego a tener eso" no se podia contestar en ninguna parte,
+   *  porque el unico rastro del recorrido era el minimo. Doce puntos alcanzan:
+   *  la serie diaria por socio son trescientos y pico por cada uno de los 142,
+   *  y nadie le pregunta a un tablero que hizo un cliente un martes.
+   *
+   *  Se guarda el nivel del ULTIMO dia de cada mes, no el neto del mes: lo que
+   *  se quiere ver es el saldo, no el movimiento. El mes en curso entra con el
+   *  ultimo dia que haya, que es parcial y por eso es el saldo de hoy. */
+  const meses = [];
+  const ds = Array.isArray(dias) ? dias : [];
+  for (let i = 0; i < ds.length; i++) {
+    const d = ds[i];
     nivel += (deltaPorDia && deltaPorDia.get(d)) || 0;
     if (nivel < min) { min = nivel; minDia = d; }
+    const m = String(d).slice(0, 7);
+    if (i === ds.length - 1 || String(ds[i + 1]).slice(0, 7) !== m)
+      meses.push({ mes: m, cierre: nivel });
   }
-  return { s0: Number(s0) || 0, nivel, min, minDia, cambio: nivel - (Number(s0) || 0) };
+  return { s0: Number(s0) || 0, nivel, min, minDia, meses,
+           cambio: nivel - (Number(s0) || 0) };
 }
 
 /** El nivel de todos los socios de la semilla, mas los que tienen movimiento
@@ -481,7 +499,8 @@ function salidaJson(o) {
              atribuido: cu.cubierto == null ? null : cu.cubierto },
     socios: (b.niveles || []).map(x => ({
       cod: x.cod, nom: (b.nombre ? b.nombre(x.cod) : null), partida: x.s0, nivel: x.nivel,
-      cambio: x.cambio, minimo: x.min, minimoDia: x.minDia, enSemilla: !!x.enSemilla })),
+      cambio: x.cambio, minimo: x.min, minimoDia: x.minDia, enSemilla: !!x.enSemilla,
+      meses: x.meses || [] })),
     mensual: b.mensual || [],
     dias: b.dias || [],
     sinSocio: b.sinSocio || null,

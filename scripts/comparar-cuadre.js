@@ -45,6 +45,7 @@
 //  Uso (desde la raiz del repo):
 //    node scripts/comparar-cuadre.js --huecos              # PRIMERO: que falta
 //    node scripts/comparar-cuadre.js --solo-nuestro --meses=24   # SIN la llave
+//    node scripts/comparar-cuadre.js --solo-nuestro --meses=24 --de-donde
 //    node scripts/comparar-cuadre.js --meses=24 --capturar=captura-cuadre.json
 //    node scripts/comparar-cuadre.js --capturar=captura-cuadre.json
 //    node scripts/comparar-cuadre.js --desde-captura=captura-cuadre.json
@@ -277,6 +278,68 @@ function comandosParaRellenar(h) {
   return out;
 }
 
+/* ── De donde sale la brecha de un rango ───────────────────────────────────
+   Si la identidad de un mes no cierra, la brecha viene de UNA de dos partes, y
+   la cuenta las separa exacto. Con si(d)/sf(d) el saldo inicial y final que el
+   proveedor dejo escrito en el blob del dia d:
+
+     brecha del dia  g(d) = sf(d) - si(d) - (entradas(d) - salidas(d))
+                            el dia no cierra consigo mismo
+     costura         c(d) = si(d+1) - sf(d)
+                            el dia cierra en un numero y el siguiente ABRE EN OTRO
+
+   Y entonces, por algebra y sin suponer nada:
+
+     brecha del rango = Σ costuras + Σ brechas de dia
+
+   (Σ(sf-si) telescopea a sf(ultimo) - si(primero) menos las costuras.)
+
+   Esto importa porque las dos cosas significan cosas distintas: dias que no
+   cierran es aritmetica mala del proveedor dentro del dia; costuras es que su
+   serie salta entre un dia y el siguiente. Sumar dias no inventa ninguna de
+   las dos: las arrastra.                                                     */
+function descomponer(universo, serie) {
+  const dias = [], costuras = [];
+  (serie || []).forEach(function (d, i) {
+    const id = identidad(universo, d);
+    if (id && id.brecha !== 0) dias.push({ fecha: d.fecha, brecha: id.brecha });
+    const sig = serie[i + 1];
+    if (sig) {
+      const salto = num(sig.saldoInicial) - num(d.saldoFinal);
+      if (salto !== 0) costuras.push({ fecha: d.fecha, sigue: sig.fecha, salto: salto,
+                                       cierra: num(d.saldoFinal), abre: num(sig.saldoInicial) });
+    }
+  });
+  const sumaDias = dias.reduce((a, x) => a + x.brecha, 0);
+  const sumaCosturas = costuras.reduce((a, x) => a + x.salto, 0);
+  return { dias, costuras, sumaDias, sumaCosturas, total: sumaDias + sumaCosturas };
+}
+
+function pintarDescomposicion(universo, nombre, d, brechaDelRango) {
+  const l = [''];
+  l.push('── ' + universo.toUpperCase() + ' · ' + nombre + ' · de donde sale la brecha');
+  l.push('   brecha del rango      : ' + miles(brechaDelRango));
+  l.push('   de costuras           : ' + miles(d.sumaCosturas) + '  (' + d.costuras.length + ' dia(s) que cierran en un numero y el siguiente abre en otro)');
+  l.push('   de dias que no cierran: ' + miles(d.sumaDias) + '  (' + d.dias.length + ' dia(s))');
+  const cuadra = d.total === brechaDelRango;
+  l.push('   ' + (cuadra ? 'la descomposicion cuadra con la brecha del rango'
+                         : '*** LA DESCOMPOSICION NO CUADRA (' + miles(d.total) + ' contra ' + miles(brechaDelRango) + '): hay un defecto en esta cuenta'));
+  if (d.costuras.length) {
+    l.push('');
+    l.push('   COSTURAS:');
+    d.costuras.slice(0, 20).forEach(x => l.push('     ' + x.fecha + ' cierra en ' + miles(x.cierra) +
+      ' y el ' + x.sigue + ' abre en ' + miles(x.abre) + '   salto ' + miles(x.salto)));
+    if (d.costuras.length > 20) l.push('     ... y ' + (d.costuras.length - 20) + ' mas');
+  }
+  if (d.dias.length) {
+    l.push('');
+    l.push('   DIAS QUE NO CIERRAN CONSIGO MISMOS:');
+    d.dias.slice(0, 20).forEach(x => l.push('     ' + x.fecha + '   por ' + miles(x.brecha)));
+    if (d.dias.length > 20) l.push('     ... y ' + (d.dias.length - 20) + ' mas');
+  }
+  return l.join('\n');
+}
+
 /* ── El resumen cuando NO se consulta al proveedor ─────────────────────────
    Sin el proveedor no hay nada contra que comparar, pero NO es que no se pueda
    verificar nada. El resumen de un rango mezcla dos cosas de origen distinto:
@@ -457,6 +520,7 @@ async function main() {
 
   const hoy = new Date().toISOString().slice(0, 10);
   const meses = Number((args.find(a => a.startsWith('--meses=')) || '').split('=')[1]) || 0;
+  const detallar = args.includes('--de-donde');
   const rangos = posic.length >= 2
     ? [{ nombre: 'a pedido', desde: posic[0], hasta: posic[1] }]
     : (meses > 0 ? rangosDeMeses(hoy, meses) : rangosPorDefecto(hoy));
@@ -485,11 +549,20 @@ async function main() {
         fila.identidadProveedor = provee ? identidad(universo, provee) : null;
         fila.identidadNuestro = nuestro ? identidad(universo, nuestro) : null;
         fila.veredicto = veredicto(fila.filas, fila.faltantes, !!provee);
+        /* Si la identidad no cierra, la brecha se descompone en el acto: decir
+           "no cuadra" y no decir de donde sale obliga a otra corrida. */
+        if (fila.identidadNuestro && !fila.identidadNuestro.cuadra) {
+          fila.descomposicion = descomponer(universo, nuestroTodo.serie);
+        }
       } catch (e) {
         fila.error = e.message;
         fila.veredicto = { codigo: 4, texto: 'error' };
       }
       console.log(pintarRango(fila));
+      if (fila.descomposicion && detallar) {
+        console.log(pintarDescomposicion(universo, fila.nombre, fila.descomposicion,
+                                         fila.identidadNuestro.brecha));
+      }
       resultados.push(fila);
     }
   }
@@ -522,8 +595,13 @@ async function main() {
     if (res.noCuadran.length) {
       console.log('\n  NO CIERRAN:');
       res.noCuadran.forEach(x => console.log('    ' + x.universo + ' · ' + x.nombre + ' · por ' + miles(x.brecha)));
-      console.log('\n  Sumar los dias NO reproduce la contabilidad del proveedor en esos');
-      console.log('  rangos. Antes de apuntar los proxies al blob hay que entender por que.');
+      console.log('\n  OJO CON LEER ESTO AL REVES. Que la identidad no cierre NO quiere decir');
+      console.log('  que sumar dias este mal: el saldo inicial y el final son numeros del');
+      console.log('  proveedor y los flujos tambien; si no cierran, es que su contabilidad');
+      console.log('  no cierra. Medido: las brechas de retail en 2025 suman EXACTO los 2.594');
+      console.log('  que M2LINK declara mal en su propio cierre anual. Sumar dias reproduce');
+      console.log('  su contabilidad, defecto incluido, y ademas dice en que mes nace.');
+      console.log('  Corre con --de-donde para separar costuras de dias que no cierran.');
     } else if (res.medidos) {
       console.log('\n  En todos los rangos medidos, el saldo final que el proveedor dejo');
       console.log('  congelado coincide con el que sale del inicial mas los flujos que');
@@ -548,7 +626,7 @@ async function main() {
 }
 
 module.exports = { SIGNOS, UNIVERSOS, MAX_DIAS_PROVEEDOR, identidad, camposDe, comparar,
-                   veredicto, resumenSoloNuestro, rangosPorDefecto, rangosDeMeses, diasEntre, num,
+                   veredicto, resumenSoloNuestro, descomponer, rangosPorDefecto, rangosDeMeses, diasEntre, num,
                    fechaDeNombre, fechasDeNombres, tramos, huecos, comandosParaRellenar };
 
 if (require.main === module) main().catch(e => { console.error(e); process.exit(1); });

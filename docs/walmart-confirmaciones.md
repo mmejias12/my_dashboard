@@ -162,3 +162,68 @@ aparte de uno que no es de Walmart: son cosas distintas.
 
 Pruebas: `scripts/test-medir-citas-walmart.js` — 32 comprobaciones y 30 mutaciones,
 todas muerden.
+
+---
+
+## La escritura en Redlink: qué dice el contrato y qué dice el servidor
+
+**La afirmación de Marcelo** — que el endpoint de lectura sirve también para
+escritura — es cierta en la forma: es el mismo host y la misma autenticación.
+Lectura `GET /api/FormHeader/historico/{BP}`, escritura `POST /api/FormHeader`.
+Pero *crear* no es *confirmar*, y ahí es donde el contrato entregado se queda corto.
+
+### Lo que dice la documentación que nos entregaron
+
+`Api Holux/_LEER_PRIMER_REDTEC_API.pdf`, primera línea:
+
+> «Se proporcionará **sólo la creación** de documentos, método POST».
+
+La colección de Postman (`PORTAL MMESIAS.postman_collection.json`) y la planilla
+`API Portal Redtec.xlsx` cubren exactamente eso y nada más: seis `formId` sobre
+`POST /api/FormHeader` — 1 Emisión, 2 Devolución, 3 Retiro, 4 Traspaso,
+5 Relocaliza, 6 Transferencia — más los maestros de sólo lectura
+(`/api/Bodega/*`, `/api/Servicio/*`, `/api/BusinessPartner/*`, `/api/Documento`,
+`/api/Camion/*`, `/api/Chofer/*`). No hay ninguna operación de confirmación.
+El `.rar` «Api escritura» es una copia de esa misma carpeta: no agrega nada.
+
+### Lo que dice el servidor
+
+El servidor expone más de lo que está documentado. Preguntando por `OPTIONS`
+(método que por definición no modifica nada, sin credenciales), el encabezado
+`Allow` de cada ruta:
+
+| Ruta | Métodos |
+|---|---|
+| `/api/FormHeader` | **GET, PATCH, POST, PUT** |
+| `/api/FormHeader/{id}` | DELETE, GET |
+| `/api/FormHeader/historico/{BP}` | GET |
+| `/api/Form`, `/api/FormDdetalle`, `/api/Transporte`, `/api/Item`, `/api/Bodega`, `/api/BusinessPartner`, `/api/Camion`, `/api/Chofer`, `/api/Documento`, `/api/Servicio` | GET, POST, PUT |
+
+El dato está en la asimetría: **todos los controladores son CRUD parejos
+(GET/POST/PUT en la colección, DELETE/GET en el `{id}`), y `FormHeader` es el
+único que además tiene `PATCH`**. Un `PATCH` es una modificación parcial de un
+documento que ya existe — exactamente la forma que tendría «confirmar esta
+transferencia». No es prueba, es el único candidato que hay.
+
+`apidemo.portalredtec.cl` expone la misma superficie, `PATCH` incluido. Es decir
+que el contrato se puede probar en DEMO, contra el usuario genérico de pruebas,
+sin tocar producción.
+
+Lo que **no** se puede averiguar desde afuera es el cuerpo del `PATCH`: qué
+campos espera, si confirma el encabezado o los detalles, y si acepta la cantidad.
+No se probó ningún método que escriba: todas las consultas fueron `GET` y `OPTIONS`.
+
+### Lo que falta, por orden de costo
+
+1. **Preguntarle a Marcelo por el contrato del `PATCH /api/FormHeader`.** Él es la
+   fuente; el PDF que nos pasaron acota a propósito el alcance a la creación, así
+   que esto es ampliar un alcance, no descubrir un secreto.
+2. **Mirar una confirmación real.** El portal marca esas confirmaciones con el
+   usuario `M2LinkSystem`: M2LINK ya llama a algo. Observar una confirmación
+   hecha a mano en el portal muestra el cuerpo exacto.
+3. **Probar en DEMO**, una vez conocido el contrato, antes de cualquier cosa en
+   productivo.
+
+Hasta que uno de los tres cierre, el proyecto Walmart tiene todo menos el último
+paso: el cruce está medido y validado (97,1% de acierto de la regla sobre 342
+casos), y lo único que falta es el verbo que escribe la confirmación.

@@ -49,6 +49,9 @@ const MUTACIONES = {
   H27: { que: 'se extraen tambien numeros que no tienen largo de cita',
          de: "  const m = String(v || '').match(/\\d{8}/g) || [];",
          a: "  const m = String(v || '').match(/\\d+/g) || [];" },
+  H29: { que: 'se comparan tambien dias que Walmart nunca reporto',
+         de: '    for (let i = 0; i <= margen; i++) if (rep.has(corrido(f, i))) return true;\n    return false;',
+         a: '    return true;' },
   H28: { que: 'una transferencia con dos citas se da por informada solo con la primera',
          de: '  const informada = (o) => citasDeTexto(o.nroCita).some(c => hay.has(c));',
          a: '  const informada = (o) => hay.has(citasDeTexto(o.nroCita)[0]);' },
@@ -396,7 +399,7 @@ prueba('T23 el cruce al reves encuentra lo nuestro que Walmart no informo', (M) 
     { nroPedido: 4, nroCita: '42750688', bodegaDestinoStr: 'CENCOSUD LO ESPEJO',          fechaDespacho: '2026-11-05', cantidadDespachada: 9 },
     { nroPedido: 5, nroCita: '42750689', bodegaDestinoStr: 'ZWM01 CD WM LO AGUIRRE SECO', fechaDespacho: '2026-09-01', cantidadDespachada: 5 }
   ];
-  const r = M.cruceInverso(ops, ['42750687'], '2026-11-02', '2026-11-05');
+  const r = M.cruceInverso(ops, ['42750687'], ['2026-11-05'], 3);
   igual(r.candidatas, 3,
     'solo las ZWM dentro de la ventana: el pedido 4 va a otro retail y el 5 se despacho en septiembre');
   igual(r.informadas.concat(r.noInformadas).concat(r.sinCita).map(o => o.nroPedido).sort(), [1, 2, 3],
@@ -409,7 +412,7 @@ prueba('T25 el cruce inverso separa "no informada" de "sin cita nuestra"', (M) =
     { nroPedido: 2, nroCita: '99999999', bodegaDestinoStr: 'ZWM11', fechaDespacho: '2026-11-05', cantidadDespachada: 20 },
     { nroPedido: 3, nroCita: '',         bodegaDestinoStr: 'ZWM02', fechaDespacho: '2026-11-05', cantidadDespachada: 7 }
   ];
-  const r = M.cruceInverso(ops, ['42750687'], '2026-11-04', '2026-11-05');
+  const r = M.cruceInverso(ops, ['42750687'], ['2026-11-05'], 1);
   igual(r.informadas.map(o => o.nroPedido), [1], 'Walmart la informo');
   igual(r.noInformadas.map(o => o.nroPedido), [2],
     'tiene cita y Walmart no la mando: ESTE es el caso que va al correo al cliente');
@@ -422,12 +425,32 @@ prueba('T25 el cruce inverso separa "no informada" de "sin cita nuestra"', (M) =
      de las dos. Mirar solo la primera la manda al correo sin motivo. */
   const dos = [{ nroPedido: 9, nroCita: '42713735 - 42716539', bodegaDestinoStr: 'ZWM01',
                  fechaDespacho: '2026-11-05', cantidadDespachada: 12 }];
-  igual(M.cruceInverso(dos, ['42716539'], '2026-11-04', '2026-11-05').informadas.map(o => o.nroPedido), [9],
+  igual(M.cruceInverso(dos, ['42716539'], ['2026-11-05'], 1).informadas.map(o => o.nroPedido), [9],
     'Walmart informo la SEGUNDA de sus dos citas: igual esta informada');
-  igual(M.cruceInverso(dos, ['42713735'], '2026-11-04', '2026-11-05').informadas.map(o => o.nroPedido), [9],
+  igual(M.cruceInverso(dos, ['42713735'], ['2026-11-05'], 1).informadas.map(o => o.nroPedido), [9],
     'y con la primera tambien');
-  igual(M.cruceInverso(dos, ['99999999'], '2026-11-04', '2026-11-05').noInformadas.map(o => o.nroPedido), [9],
+  igual(M.cruceInverso(dos, ['99999999'], ['2026-11-05'], 1).noInformadas.map(o => o.nroPedido), [9],
     'con ninguna de las dos, ahi si va al correo');
+});
+
+prueba('T30 un dia que Walmart NO reporto no entra al cruce inverso', (M) => {
+  /* El caso real: los 8 reportes cubren 23,26,27,28,30,31-oct y 1 y 5-nov.
+     Faltan el 24, 25 y 29. Lo despachado esos dias NO se puede comparar
+     contra nada, y contarlo como "no informado" seria inventar un reclamo. */
+  const ops = [
+    { nroPedido: 1, nroCita: '11111111', bodegaDestinoStr: 'ZWM01', fechaDespacho: '2026-10-28', cantidadDespachada: 5 },
+    { nroPedido: 2, nroCita: '22222222', bodegaDestinoStr: 'ZWM01', fechaDespacho: '2026-10-29', cantidadDespachada: 5 },
+    { nroPedido: 3, nroCita: '33333333', bodegaDestinoStr: 'ZWM01', fechaDespacho: '2026-10-24', cantidadDespachada: 5 }
+  ];
+  const reportados = ['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-30'];
+  const r = M.cruceInverso(ops, [], reportados, 0);
+  igual(r.candidatas, 1, 'solo la del 28, que si fue reportado');
+  igual(r.noInformadas.map(o => o.nroPedido), [1], 'y es la unica que puede ir al correo');
+
+  // Con un dia de desfase, la del 29 entra: pudo recibirse el 30, que si se reporto.
+  const c = M.cruceInverso(ops, [], reportados, 1);
+  igual(c.candidatas, 2, 'con desfase de 1 entra tambien la del 29 (se pudo recibir el 30)');
+  igual(c.noInformadas.map(o => o.nroPedido).sort(), [1, 2], 'las dos comparables');
 });
 
 prueba('T24 una bodega que no es de Walmart no entra al cruce inverso', (M) => {

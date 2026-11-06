@@ -160,13 +160,15 @@ if ($LASTEXITCODE -ne 0) { Muere 'fallo CLIENTES' }
 #     $mesDesde SE DECLARA A MANO porque el blob vive en el storage y este
 #     script no tiene con que listarlo. Al extraer un mes mas viejo con
 #     backfill-sap-bin.js, se corre esta fecha hacia atras y nada mas.
-#     EL COSTO: saldo-planta se baja el blob de cada mes, unos 3,8 MB. Con el
-#     anio completo son ~45 MB por corrida, asi que este paso se va a demorar
-#     mas que antes. Es descarga y aritmetica, no peticiones a SAP.
+#     EL COSTO: saldo-planta se baja el blob de cada mes, unos 3,9 MB. Con los
+#     once meses son ~43 MB por corrida, asi que este paso se demora mas que
+#     antes. Es descarga y aritmetica, no peticiones a SAP.
 #     NO MATA LA CORRIDA. Si falla, el tablero se arma igual sin esa seccion:
 #     armar-tablero-stock trata planta.json como entrada opcional. Una seccion
 #     nueva no puede dejar a gerencia sin el tablero.
-$mesDesde = '2026-08'
+#     2026-01 desde el 2026-11-06: la tanda de enero a julio entro completa,
+#     136.489 documentos sin un solo fallido, asi que lineasbod/ cubre el anio.
+$mesDesde = '2026-01'
 $mesPrev  = (Get-Date -Day 1).AddDays(-1).ToString('yyyy-MM')
 
 $lista = ListaDeMeses $mesDesde $mes

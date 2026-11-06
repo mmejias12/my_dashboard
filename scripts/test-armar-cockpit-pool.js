@@ -1665,10 +1665,41 @@ chk('sin socios no revienta',
 chk('un nivel ilegible se lee como cero y sale de la lista',
     A.mayoresDePata([{cod:'A',nom:'A',nivel:'x'}],10).top.length===0);
 
+// LO QUE DICE LA BODEGA CONTRA LO QUE SUMAN LOS SOCIOS. La diferencia son las
+// ubicaciones que no identifican a nadie: en clientes es medio por ciento, y
+// ese numero cae entre dos cierres diarios de la misma semana, asi que sin
+// rotulo se lee como el saldo de otro dia
+const MPB=A.mayoresDePata(SOCP,10,12000);
+chk('la bodega y el residuo viajan', MPB.bodega===12000 && MPB.residuo===12000-10555,
+    MPB.bodega+'/'+MPB.residuo);
+chk('sin saldo de bodega no se inventa un residuo',
+    MP.bodega===0 && MP.residuo===0, MP.bodega+'/'+MP.residuo);
+chk('una bodega menor que los socios no da residuo negativo',
+    A.mayoresDePata(SOCP,10,9000).residuo===0, String(A.mayoresDePata(SOCP,10,9000).residuo));
+chk('una bodega ilegible se lee como que no hay',
+    A.mayoresDePata(SOCP,10,'x').bodega===0 && A.mayoresDePata(SOCP,10,-5).residuo===0);
+// UN SALDO NEGATIVO NO ES UN SALDO: tiene que quedar en cero, no viajar en
+// negativo hasta el sumario y escribir "10.555 de -5"
+chk('una bodega en negativo no se muestra',
+    A.mayoresDePata(SOCP,10,-5).bodega===0 &&
+    !/<i>/.test(A.sociosHtml(A.mayoresDePata(SOCP,10,-5),'x','')),
+    String(A.mayoresDePata(SOCP,10,-5).bodega));
+const HSB=A.sociosHtml(MPB,'Quién tiene estos pallets','una nota');
+chk('el sumario dice de cuanto es esa suma',
+    /<b>10\.555<i>\u00a0de 12\.000<\/i><\/b>/.test(HSB),
+    (HSB.match(/<summary>[\s\S]{0,110}/)||[''])[0]);
+chk('y la nota explica la diferencia, con el numero',
+    /Hay <b>1\.445<\/b> más en la bodega que ninguna ubicación atribuye a un socio/.test(HSB),
+    (HSB.match(/<p class="mut">[\s\S]{0,170}/)||[''])[0]);
+
 const HSP=A.sociosHtml(MP,'Quién tiene estos pallets','una nota');
 // VA PLEGADO: el cajon ya tiene la cifra, la grilla y el calendario
 chk('va plegado, no abierto', /<details class="socp"><summary>/.test(HSP) &&
     !/<details class="socp" open/.test(HSP), '');
+// SIN RESIDUO NO SE ENSUCIA EL SUMARIO: "10.555 de 10.555" seria ruido
+chk('sin diferencia, el sumario va limpio y la nota no la menciona',
+    !/<i>/.test(HSP) && !/más en la bodega/.test(HSP),
+    (HSP.match(/<summary>[\s\S]{0,90}/)||[''])[0]);
 chk('el sumario trae el rotulo y el total de la pata',
     // 100x(1+..+14) = 10.500 de los catorce, mas 55 del que no tiene partida
     /Quién tiene estos pallets<\/span><b>10\.555<\/b>/.test(HSP),
@@ -1736,6 +1767,14 @@ chk('el cajon del pool arma las dos patas',
     !!CSOC.pool.socios.CLIENTES && !!CSOC.pool.socios.RETAIL, '');
 // CADA PATA CON SUS SOCIOS: cruzarlas pondria los clientes bajo el rotulo de
 // retail y nadie lo notaria mirando la pantalla
+// EL CAJON TIENE QUE PASARLE EL SALDO DE **SU** BODEGA A CADA PATA
+chk('cada pata lleva el saldo de su propia bodega',
+    CSOC.pool.socios.CLIENTES.bodega===D.bodegas.CLIENTES.nivel &&
+    CSOC.pool.socios.RETAIL.bodega===D.bodegas.RETAIL.nivel,
+    CSOC.pool.socios.CLIENTES.bodega + '/' + CSOC.pool.socios.RETAIL.bodega);
+// Y NO CRUZADAS: con el saldo del vecino la diferencia saldria al reves
+chk('no se cruzan los saldos de bodega',
+    CSOC.pool.socios.CLIENTES.bodega!==CSOC.pool.socios.RETAIL.bodega, '');
 chk('cada pata trae los suyos, no los del vecino',
     CSOC.pool.socios.CLIENTES.top[0].cod==='C1' && CSOC.pool.socios.RETAIL.top[0].cod==='R1',
     CSOC.pool.socios.CLIENTES.top[0].cod + '/' + CSOC.pool.socios.RETAIL.top[0].cod);

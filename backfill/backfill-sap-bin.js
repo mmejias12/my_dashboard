@@ -51,6 +51,14 @@
 //        socios de arriendo.
 //    node backfill/backfill-sap-bin.js 2026-09 2026-10
 //    node backfill/backfill-sap-bin.js 2026-09 2026-09 --conc=8 --forzar
+//    node backfill/backfill-sap-bin.js 2026-01 2026-07 --conc=8 --forzar
+//        La tanda larga. Un mes que pierda documentos NO se guarda y la
+//        corrida termina con codigo distinto de cero, para que la cadena
+//        diaria se corte en vez de publicar una serie corrida.
+//    ... --fallidos=16
+//        Acepta hasta 16 documentos perdidos, los guarda declarados en el
+//        blob y sigue. Para cuando SAP no entrega un documento nunca y
+//        bloquear el cierre para siempre es peor que publicarlo declarado.
 // ============================================================================
 'use strict';
 
@@ -61,7 +69,7 @@ const SB = require('./sonda-sap-bin.js');         // que coleccion es "de ubicac
 const CONT = process.env.OS_SAP_CONTAINER || 'redtec-os-sap';
 const args = process.argv.slice(2);
 const OPCIONES = ['entidad', 'fecha', 'item', 'bodega', 'clientes', 'conc', 'pausa', 'pagina', 'tope',
-                  'prefijo', 'desde'];
+                  'prefijo', 'desde', 'fallidos'];
 const BANDERAS = ['maestro', 'forzar', 'crudo'];
 const opcion = (n, d) => {
   const a = args.find(x => x.startsWith('--' + n + '='));
@@ -79,6 +87,7 @@ const CONC = Math.max(1, Math.min(32, parseInt(opcion('conc', '8'), 10) || 8));
 const PAUSA = Math.max(0, parseInt(opcion('pausa', '120'), 10) || 0);
 const FORZAR = flag('forzar');
 const VENTANA = opcion('desde', null);   // ventana incremental: YYYY-MM-DD
+const TOLERA = Math.max(0, parseInt(opcion('fallidos', '0'), 10) || 0);
 
 const mil = n => Number(n).toLocaleString('es-CL');
 
@@ -474,8 +483,40 @@ function atribuir(filas, mapa) {
   return { con, sin };
 }
 
+/** QUE HACER CON LOS DOCUMENTOS QUE NO SE PUDIERON LEER.
+ *
+ *  Un documento que falla NO es un documento sin movimiento: es un movimiento
+ *  que no sabemos cual es. Y como el nivel de planta se calcula hacia atras
+ *  desde el saldo vivo, lo que falte corre toda la historia anterior a ese
+ *  dia. En silencio, ademas: el blob de lineas no guardaba esto y nadie aguas
+ *  abajo lo miraba.
+ *
+ *  NO ES TEORICO. El 2026-11-04 se perdieron 8 documentos por un tropiezo de
+ *  DNS y el 2026-11-05 otros 16; esos 16 corrian la serie de TALCA INSPECCION
+ *  en 422 pallets —abria la ventana en -544 y al recuperarlos abrio en -122—.
+ *  Las dos veces lo pillamos de casualidad mirando la consola.
+ *
+ *  POR ESO FALLA CERRADO, pero con escotilla. Un documento que SAP no entregue
+ *  nunca dejaria la cadena diaria muerta para siempre, y eso es peor que un
+ *  dato declarado: --fallidos=<n> acepta hasta n, los deja escritos en el blob
+ *  y sigue. Tolerar es decision de quien corre, no del programa —la misma
+ *  regla que --desfase en saldo-pool. */
+function veredictoDeFallidos(perdidos, tolera) {
+  const n = Math.max(0, Number(perdidos) || 0);
+  const t = Math.max(0, Number(tolera) || 0);
+  if (!n) return { ok: true, tolerado: false, perdidos: 0, tope: t, texto: null };
+  if (n <= t)
+    return { ok: true, tolerado: true, perdidos: n, tope: t,
+             texto: n + ' documento(s) no se pudieron leer y --fallidos=' + t + ' los acepta. ' +
+                    'El blob queda incompleto y lo declara: lo que falte corre la serie hacia atras.' };
+  return { ok: false, tolerado: false, perdidos: n, tope: t,
+           texto: n + ' documento(s) no se pudieron leer. Un documento que falta no es un documento ' +
+                  'sin movimiento: es un movimiento que no sabemos cual es, y corre la serie hacia ' +
+                  'atras. El mes NO se guarda, asi que el blob que ya estaba queda intacto.' };
+}
+
 module.exports = { corteDeVentana, partirEntries, fusionarFilas, deltaDeAsignacion, filasDeDocumento,
-                   fechaDeCreacion,
+                   fechaDeCreacion, veredictoDeFallidos,
                    lineasDeDocumento, ventanaUsable, CAMPO_DESDE, CAMPO_HACIA, PREFIJO_LINEAS, ENTIDADES, entidadesExtra, comoSeLee,
                    urlLista, urlPorClave,
                    saldoPorBin, atribuir, controlDePuntas, resumenDeLineas, entidadesSinLineas, urlSociosPorPrefijo,
@@ -789,9 +830,24 @@ async function main() {
   console.log('Meses: ' + lista.join(', ') + '   ·  item ' + ITEM + '   ·  concurrencia ' + CONC + '\n');
 
   let totFilas = 0, totDocs = 0, totFall = 0, totRaros = 0;
+  const sinGuardar = [];
   for (const mes of lista) {
     const res = await unMes(ses, raiz, cc, mes);
     if (!res) continue;
+    /*  EL MES QUE PERDIO DOCUMENTOS NO SE ESCRIBE.
+     *
+     *  Sin --desde el blob se reemplaza entero, asi que guardar una corrida
+     *  incompleta cambia data buena por data corrida. Enero a julio hoy estan
+     *  limpios y alimentan retail y clientes: una tanda larga que tropiece no
+     *  puede dejarlos peor de como estaban. */
+    const vf = veredictoDeFallidos(res.fallidos.length, TOLERA);
+    if (!vf.ok) {
+      console.error('\n  ' + res.mes + ' · NO SE GUARDA: ' + vf.texto);
+      totDocs += res.docs; totFall += res.fallidos.length; totRaros += res.raros.length;
+      sinGuardar.push(res.mes);
+      continue;
+    }
+    if (vf.tolerado) console.log('  ' + res.mes + ' · TOLERADO: ' + vf.texto);
     const sb = saldoPorBin(res.filas);
     const cp = controlDePuntas(res.filas);
     const payload = {
@@ -821,6 +877,13 @@ async function main() {
       _confirmado: 'backfill/sonda-planta-lineas.js contra SAP el 2026-10-27',
       _item: ITEM, _docs: res.docs, _lineas: (res.lineas || []).length,
       _entidades: ENTIDADES.map(e => e.entidad).join(', '),
+      /*  LO QUE NO SE PUDO LEER, ESCRITO EN EL BLOB. binmov ya lo traia y
+       *  saldo-pool lo muestra en su tabla mes a mes; aca faltaba, y por eso
+       *  un mes incompleto podia atravesar toda la cadena sin que nadie lo
+       *  dijera. Con --fallidos=<n> esto viene con contenido: es la unica
+       *  forma de que saldo-planta sepa que esa serie esta corrida. */
+      _fallidos: res.fallidos,
+      _tipos_desconocidos: res.raros.length,
       _por_tipo: (res.lineas || []).reduce((a, l) => {
         const k = (l && l.tipo) || 'sin tipo'; a[k] = (a[k] || 0) + 1; return a; }, {}),
       _guardado: new Date().toISOString(),
@@ -864,6 +927,13 @@ async function main() {
               (totFall ? ' · ' + totFall + ' FALLIDOS' : ' · sin fallidos') +
               (totRaros ? ' · ' + totRaros + ' asignaciones con tipo desconocido' : ''));
   if (totRaros) console.log('Un BinActionType que no es batToWarehouse ni batFromWarehouse NO se interpreta:\nqueda contado y fuera de las filas, para que no entre un signo inventado al saldo.');
+  if (sinGuardar.length) {
+    console.error('\nNO SE GUARDO: ' + sinGuardar.join(', ') + '. Repite esos meses.');
+    console.error('Los blobs que ya estaban quedaron intactos.');
+    console.error('Si SAP no entrega esos documentos nunca, --fallidos=' + totFall + ' los acepta y');
+    console.error('los deja declarados en el blob, para que aguas abajo se sepa que la serie corre.');
+    process.exitCode = 1;
+  }
 }
 
 if (require.main === module) {

@@ -53,9 +53,11 @@ const MUTACIONES = {
   H22: { que: 'el cruce inverso toma tambien bodegas que no son de Walmart',
          de: "const esWalmart = (op) => /^\\s*ZWM/i.test(String((op && op.bodegaDestinoStr) || ''));",
          a: 'const esWalmart = (op) => true;' },
-  H23: { que: 'una transferencia sin cita no cuenta como no informada',
-         de: '  const sinInformar = candidatas.filter(o => !hay.has(norm(o.nroCita)) || !norm(o.nroCita));',
-         a: '  const sinInformar = candidatas.filter(o => norm(o.nroCita) && !hay.has(norm(o.nroCita)));' },
+  H23: { que: 'las que no tienen cita se cuentan como no informadas por Walmart',
+         de: '  const sinCita = candidatas.filter(o => !norm(o.nroCita));', a: '  const sinCita = [];' },
+  H24: { que: 'una transferencia que Walmart SI informo igual va al correo',
+         de: '    noInformadas: conCita.filter(o => !hay.has(norm(o.nroCita)))',
+         a: '    noInformadas: conCita' },
   H17: { que: 'cualquier nombre de cuenta se acepta',
          de: "  return typeof nombre === 'string' && /^[a-z0-9]{3,24}$/.test(nombre);",
          a: "  return typeof nombre === 'string';" },
@@ -383,9 +385,26 @@ prueba('T23 el cruce al reves encuentra lo nuestro que Walmart no informo', (M) 
     { nroPedido: 5, nroCita: '42750689', bodegaDestinoStr: 'ZWM01 CD WM LO AGUIRRE SECO', fechaDespacho: '2026-09-01', cantidadDespachada: 5 }
   ];
   const r = M.cruceInverso(ops, ['42750687'], '2026-11-02', '2026-11-05');
-  igual(r.candidatas, 3, 'solo las ZWM dentro de la ventana: el pedido 4 no es Walmart y el 5 es viejo');
-  igual(r.sinInformar.map(o => o.nroPedido).sort(), [2, 3],
-    'la 1 si la informo Walmart; la 2 tiene cita que Walmart no mando y la 3 no tiene cita');
+  igual(r.candidatas, 3,
+    'solo las ZWM dentro de la ventana: el pedido 4 va a otro retail y el 5 se despacho en septiembre');
+  igual(r.informadas.concat(r.noInformadas).concat(r.sinCita).map(o => o.nroPedido).sort(), [1, 2, 3],
+    'y las tres candidatas quedan clasificadas, ninguna se pierde por el camino');
+});
+
+prueba('T25 el cruce inverso separa "no informada" de "sin cita nuestra"', (M) => {
+  const ops = [
+    { nroPedido: 1, nroCita: '42750687', bodegaDestinoStr: 'ZWM01', fechaDespacho: '2026-11-05', cantidadDespachada: 3 },
+    { nroPedido: 2, nroCita: '99999999', bodegaDestinoStr: 'ZWM11', fechaDespacho: '2026-11-05', cantidadDespachada: 20 },
+    { nroPedido: 3, nroCita: '',         bodegaDestinoStr: 'ZWM02', fechaDespacho: '2026-11-05', cantidadDespachada: 7 }
+  ];
+  const r = M.cruceInverso(ops, ['42750687'], '2026-11-04', '2026-11-05');
+  igual(r.informadas.map(o => o.nroPedido), [1], 'Walmart la informo');
+  igual(r.noInformadas.map(o => o.nroPedido), [2],
+    'tiene cita y Walmart no la mando: ESTE es el caso que va al correo al cliente');
+  igual(r.sinCita.map(o => o.nroPedido), [3],
+    'sin cita no se puede ni buscar: es un problema de dato nuestro, no de Walmart, ' +
+    'y mezclarlo con lo anterior da un numero que no se puede accionar');
+  igual(r.candidatas, 3, 'las tres son candidatas');
 });
 
 prueba('T24 una bodega que no es de Walmart no entra al cruce inverso', (M) => {

@@ -272,9 +272,17 @@ function cortarSocios(socios, cuantos) {
                  nom: String(s.nom == null ? '' : s.nom),
                  nivel: Number(s.nivel) || 0,
                  ini: Number(s.partida) || 0,
-                 cambio: (Number(s.nivel) || 0) - (Number(s.partida) || 0) }))
+                 cambio: (Number(s.nivel) || 0) - (Number(s.partida) || 0),
+                 /*  UN SOCIO QUE NO ESTA EN LA SEMILLA arranca en cero, asi que
+                  *  su nivel es una cota inferior y no un saldo. Mientras solo
+                  *  se mostraban los 25 mas grandes daba lo mismo —caen todos
+                  *  en la cola—; mostrandolos a todos hay que marcarlos, o la
+                  *  tabla publica un numero incompleto como si fuera firme. */
+                 sinPartida: s.enSemilla === false }))
     .sort((a, b) => b.nivel - a.nivel || (a.cod < b.cod ? -1 : 1));
-  const n = Math.max(0, Number(cuantos) || 0);
+  // Sin tope se devuelven TODOS: la pregunta "cuanto tiene este cliente" no se
+  // puede contestar con los 25 mas grandes.
+  const n = Number(cuantos) > 0 ? Number(cuantos) : vivos.length;
   const top = vivos.slice(0, n), cola = vivos.slice(n);
   // Un nivel negativo es imposible: nadie puede tener menos de cero pallets.
   // Los de la COLA se nombran, porque ahi quedan escondidos dentro de una
@@ -451,8 +459,8 @@ function diasDeBodega(b) {
 
 function datos(bod, ret, cli, extra, planta) {
   const fl = clasificarPool(bod && bod.bodegas);
-  const sr = cortarSocios(ret && ret.socios, 25);
-  const sc = cortarSocios(cli && cli.socios, 25);
+  const sr = cortarSocios(ret && ret.socios);
+  const sc = cortarSocios(cli && cli.socios);
   const gr = porGrupo(ret && ret.socios, GRUPOS);
   const meses = mesesPareados(ret && ret.mensual, cli && cli.mensual);
   const nr = (ret && ret.nivel) || {}, nc = (cli && cli.nivel) || {};
@@ -1199,6 +1207,23 @@ th{text-align:left;font:600 11px/1 var(--f-tit);text-transform:uppercase;letter-
 td{padding:6px 10px 6px 0;border-bottom:1px solid var(--linea);vertical-align:middle}
 tr:last-child td{border-bottom:none}
 .cod{font:400 12px var(--f-cod);color:var(--tinta3);white-space:nowrap}
+/*  SESENTA FILAS NO PUEDEN EMPUJAR LA PAGINA. Las dos tablas van lado a lado;
+    sin tope la seccion medía mas de dos pantallas y todo lo que viene despues
+    quedaba enterrado. Con tope se recorre la tabla, no el tablero. */
+.panel .scroll{max-height:440px;overflow-y:auto}
+.panel .scroll thead th{position:sticky;top:0;background:var(--panel);z-index:1}
+/*  EL BORDE DEL CAMPO VA CON --tinta3 Y NO CON --linea, que es el borde de
+    las cajas quietas. Contra el panel, --linea da 1,25:1 en oscuro: el campo
+    desaparecia. Un control donde se escribe necesita 3:1 contra lo que tiene
+    al lado, y --tinta3 da 4,2 en oscuro y 3,9 en claro. */
+.busca{width:100%;margin:10px 0 2px;padding:8px 10px;min-height:40px;font:400 14px var(--f-txt);
+  color:var(--tinta);background:var(--bg);border:1px solid var(--tinta3);border-radius:6px}
+.busca:focus-visible{outline:2px solid var(--tinta2);outline-offset:1px}
+/*  "cota" = su nivel es un piso, no un saldo: el socio no esta en la semilla,
+    asi que arranca en cero y lo que se ve es solo lo que se movio este año. */
+.cota{display:inline-block;margin-left:6px;padding:1px 5px;border-radius:4px;
+  border:1px solid var(--linea);font:600 9.5px/1.5 var(--f-tit);letter-spacing:.06em;
+  text-transform:uppercase;color:var(--tinta2);vertical-align:1px;cursor:help}
 /* .cod lleva nowrap porque es para RUT y codigos de bodega en tablas. Un
    nombre de campo largo necesita poder cortarse o se lleva la pagina de lado. */
 .campo{font:400 12px var(--f-cod);color:var(--tinta2);overflow-wrap:anywhere}
@@ -1270,18 +1295,37 @@ function tablaDePlanta(filas) {
 }
 
 function filaSocio(s) {
-  return '<tr><td class="cod">' + esc(s.cod) + '</td><td class="nom">' + esc(s.nom) + '</td>' +
+  /*  data-b lleva RUT y nombre en minusculas para que el buscador compare una
+   *  sola vez contra un string ya armado, en vez de leer dos celdas por tecla. */
+  return '<tr data-b="' + esc((String(s.cod) + ' ' + String(s.nom)).toLowerCase()) + '">' +
+         '<td class="cod">' + esc(s.cod) + '</td>' +
+         '<td class="nom">' + esc(s.nom) +
+         (s.sinPartida ? '<span class="cota" title="Sin saldo de partida al 31-12-2025: ' +
+                         'arranca en cero, asi que este nivel es un piso y no un saldo">cota</span>' : '') +
+         '</td>' +
          '<td class="num">' + mil(s.nivel) + '</td>' +
          '<td class="num ' + clasePos(s.cambio) + '">' + conSigno(s.cambio) + '</td></tr>';
 }
 
 function tablaSocios(titulo, clase, corte, resto, nota) {
-  return '<div class="panel">\n      <h3>' + esc(titulo) + '</h3>\n' +
+  /*  CON SESENTA FILAS HACE FALTA BUSCAR. La pregunta que trae a alguien aca
+   *  es "cuanto tiene ESTE cliente", y resolverla bajando con la rueda por una
+   *  lista ordenada por tamaño es peor que no tenerla. Sin javascript el campo
+   *  no aparece y la tabla sale completa igual. */
+  const buscador = corte.length > 12
+    ? '      <input type="search" class="busca" data-busca="' + esc(clase) + '" hidden ' +
+      'placeholder="Buscar por RUT o nombre…" aria-label="Buscar socio">\n'
+    : '';
+  return '<div class="panel">\n      <h3>' + esc(titulo) + '</h3>\n' + buscador +
     '      <div class="scroll"><table class="' + clase + '">\n' +
     '        <thead><tr><th>RUT</th><th>Socio</th><th class="num">Nivel</th><th class="num">Año</th></tr></thead>\n' +
     '        <tbody>' + corte.map(filaSocio).join('') + '</tbody>\n      </table></div>\n' +
-    '      <p class="sub">Los otros ' + mil(resto.n) + ' socios suman <b>' + mil(resto.nivel) + '</b>.' +
-    (nota ? ' ' + esc(nota) : '') + '</p>\n    </div>';
+    '      <p class="sub" data-vacio="' + esc(clase) + '" hidden>Ningún socio con ese texto.</p>\n' +
+    (resto && resto.n
+      ? '      <p class="sub">Los otros ' + mil(resto.n) + ' socios suman <b>' + mil(resto.nivel) + '</b>.' +
+        (nota ? ' ' + esc(nota) : '') + '</p>\n'
+      : (nota ? '      <p class="sub">' + esc(nota) + '</p>\n' : '')) +
+    '    </div>';
 }
 
 function notaImposibles(resto) {
@@ -1395,10 +1439,10 @@ function pagina(d) {
 
   // ── quien tiene los pallets ──
   H.push('<section>\n  <h2>Quién tiene los pallets</h2>\n  <div class="dos" style="margin-top:14px">\n    ');
-  H.push(tablaSocios('Retail · top ' + d.retail.length + ' de ' + mil(b.RETAIL.n) + ' con saldo',
+  H.push(tablaSocios('Retail · los ' + mil(d.retail.length) + ' con saldo',
                      't-r', d.retail, d.retail_resto, notaImposibles(d.retail_resto)));
   H.push('\n    ');
-  H.push(tablaSocios('Clientes · top ' + d.clientes.length + ' de ' + mil(b.CLIENTES.n) + ' con saldo',
+  H.push(tablaSocios('Clientes · los ' + mil(d.clientes.length) + ' con saldo',
                      't-c', d.clientes, d.clientes_resto, notaImposibles(d.clientes_resto)));
   H.push('\n  </div>\n</section>\n');
 
@@ -1570,6 +1614,29 @@ function pagina(d) {
     '    c.setAttribute("data-nivel", a.nivel);',
     '    c.hidden = false;',
     '  } catch (e) { /* sin aviso es mejor que sin pagina */ }',
+    '})();',
+    /*  EL BUSCADOR DE SOCIOS. El campo sale hidden del servidor y solo se
+     *  muestra aca: sin javascript un campo que no filtra nada es peor que no
+     *  tenerlo, y la tabla completa ya esta en el html. */
+    '(function () {',
+    '  try {',
+    '    var campos = document.querySelectorAll("input[data-busca]");',
+    '    for (var i = 0; i < campos.length; i++) (function (campo) {',
+    '      var clase = campo.getAttribute("data-busca");',
+    '      var tabla = document.querySelector("table." + clase);',
+    '      var vacio = document.querySelector("[data-vacio=\'" + clase + "\']");',
+    '      if (!tabla) return;',
+    '      campo.hidden = false;',
+    '      campo.addEventListener("input", function () {',
+    '        var q = campo.value.trim().toLowerCase(), filas = tabla.tBodies[0].rows, hay = 0;',
+    '        for (var j = 0; j < filas.length; j++) {',
+    '          var ok = !q || (filas[j].getAttribute("data-b") || "").indexOf(q) >= 0;',
+    '          filas[j].hidden = !ok; if (ok) hay++;',
+    '        }',
+    '        if (vacio) vacio.hidden = hay > 0;',
+    '      });',
+    '    })(campos[i]);',
+    '  } catch (e) { /* la tabla completa ya esta dibujada */ }',
     '})();',
   ].join('\n') + jsDePlanta(d)) + '\n<\/script>');
   H.push('</div>\n</body>\n</html>\n');

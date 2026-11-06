@@ -1625,5 +1625,147 @@ chk('en el ultimo dia no hay nota, con pata o sin ella',
 chk('el calendario publica la pata y su nombre para repintar la nota',
     /data-pata=""/.test(HPOO) && /data-nom=""/.test(HPOO), '');
 
+// ============================================================
+// QUIEN TIENE EL PALLET DE CADA PATA
+// ============================================================
+console.log('\n— los mayores de clientes y retail, con su año —');
+const MSER=n=>[{mes:'2026-10',cierre:Math.round(n*0.8)},{mes:'2026-11',cierre:n}];
+const SOCP=[];
+for(let i=1;i<=14;i++) SOCP.push({cod:'C'+i,nom:'SOCIO '+i,nivel:100*i,cambio:i,meses:MSER(100*i)});
+SOCP.push({cod:'CZ',nom:'EN CERO',nivel:0,cambio:0,meses:[]});
+SOCP.push({cod:'CX',nom:'SIN PARTIDA',nivel:55,cambio:55,sinPartida:true,meses:MSER(55)});
+const MP=A.mayoresDePata(SOCP,10);
+chk('toma los 10 mayores', MP.top.length===10, String(MP.top.length));
+chk('ordenados de mayor a menor', MP.top[0].nivel===1400 && MP.top[9].nivel===500,
+    MP.top.map(x=>x.nivel).join(','));
+chk('el que esta en cero no cuenta: no tiene pallets',
+    MP.conSaldo===15 && MP.top.every(x=>x.nivel!==0), String(MP.conSaldo));
+chk('el resto se cuenta y se suma, no se pierde',
+    MP.resto.n===5 && MP.resto.nivel===400+300+200+100+55,
+    JSON.stringify(MP.resto));
+chk('el total es el de la pata entera, no el de los diez',
+    MP.total===MP.top.reduce((a,x)=>a+x.nivel,0)+MP.resto.nivel, String(MP.total));
+chk('cada uno lleva su serie', MP.top[0].meses.length===2, JSON.stringify(MP.top[0].meses));
+chk('y la marca de cota viaja',
+    A.mayoresDePata([SOCP[15]],10).top[0].cota===true &&
+    A.mayoresDePata([SOCP[0]],10).top[0].cota===false, '');
+chk('sin tope salen todos', A.mayoresDePata(SOCP).top.length===15);
+chk('tope cero es lo mismo que sin tope', A.mayoresDePata(SOCP,0).top.length===15,
+    String(A.mayoresDePata(SOCP,0).top.length));
+// EMPATADOS SE ORDENAN POR CODIGO, no por el orden en que vinieron: si no, el
+// corte de los diez cambia de corrida en corrida con los mismos datos
+chk('empatados, manda el codigo y no el azar',
+    A.mayoresDePata([{cod:'B',nom:'B',nivel:50},{cod:'A',nom:'A',nivel:50}],10)
+     .top.map(x=>x.cod).join(',')==='A,B',
+    A.mayoresDePata([{cod:'B',nom:'B',nivel:50},{cod:'A',nom:'A',nivel:50}],10)
+     .top.map(x=>x.cod).join(','));
+chk('sin socios no revienta',
+    A.mayoresDePata(null,10).top.length===0 && A.mayoresDePata([],10).total===0 &&
+    A.mayoresDePata([null,{}],10).top.length===0);
+chk('un nivel ilegible se lee como cero y sale de la lista',
+    A.mayoresDePata([{cod:'A',nom:'A',nivel:'x'}],10).top.length===0);
+
+const HSP=A.sociosHtml(MP,'Quién tiene estos pallets','una nota');
+// VA PLEGADO: el cajon ya tiene la cifra, la grilla y el calendario
+chk('va plegado, no abierto', /<details class="socp"><summary>/.test(HSP) &&
+    !/<details class="socp" open/.test(HSP), '');
+chk('el sumario trae el rotulo y el total de la pata',
+    // 100x(1+..+14) = 10.500 de los catorce, mas 55 del que no tiene partida
+    /Quién tiene estos pallets<\/span><b>10\.555<\/b>/.test(HSP),
+    (HSP.match(/<summary>[\s\S]{0,90}/)||[''])[0]);
+chk('una fila por socio', (HSP.match(/<tr>/g)||[]).length===10, String((HSP.match(/<tr>/g)||[]).length));
+chk('con su mini-serie dibujada', (HSP.match(/<svg/g)||[]).length===10,
+    String((HSP.match(/<svg/g)||[]).length));
+// EL ROTULO ACCESIBLE DICE DE QUIEN ES Y EN QUE UNIDAD: la funcion nacio para
+// las estaciones de planta y diria "nivel de la planta ... en dias" en una
+// tabla donde ninguna fila lo es
+chk('la mini-serie dice de quien es y que son meses',
+    /aria-label="nivel de SOCIO 14 en 2 meses, del 2026-10 al 2026-11/.test(HSP),
+    (HSP.match(/aria-label="[^"]{0,64}/)||[''])[0]);
+chk('y la de la planta sigue diciendo lo suyo',
+    /aria-label="nivel de la planta en 3 días/.test(
+      A.miniNivel([{dia:'2026-01-01',cierre:1},{dia:'2026-01-02',cierre:2},
+                   {dia:'2026-01-03',cierre:3}])),
+    (A.miniNivel([{dia:'2026-01-01',cierre:1},{dia:'2026-01-02',cierre:2},
+                  {dia:'2026-01-03',cierre:3}]).match(/aria-label="[^"]{0,48}/)||[''])[0]);
+chk('el rotulo se escapa',
+    /aria-label="nivel de &lt;b&gt; en 1 meses/.test(
+      A.miniNivel([{dia:'2026-01',cierre:1}],{que:'nivel de <b>',uni:'meses'})), '');
+// LA SERIE TERMINA EN EL NUMERO DE AL LADO: si el ultimo punto no es el nivel,
+// el dibujo y la cifra dicen cosas distintas en la misma fila
+chk('el ultimo punto de la serie es el nivel que se muestra',
+    MP.top.every(x => !x.meses.length || x.meses[x.meses.length-1].cierre === x.nivel),
+    MP.top.map(x=>x.nivel+'/'+(x.meses.slice(-1)[0]||{}).cierre).join(' '));
+chk('el RUT va bajo el nombre', /<div class="m">C14<\/div>/.test(HSP), '');
+chk('la nota dice cuantos quedan y lo que se le pase',
+    /Los otros 5 suman/.test(HSP) && /una nota/.test(HSP),
+    (HSP.match(/<p class="mut">[\s\S]{0,80}/)||[''])[0]);
+// UN JSON ANTERIOR A ESTE CAMBIO NO TRAE `meses`: si se publica la pagina
+// antes de volver a correr el cierre, el bloque tiene que salir igual con los
+// nombres y las cifras, y la celda de la serie vacia. Medido en el navegador:
+// 10 filas, 0 svg, 0 errores, 0 de desborde
+const HVJ=A.sociosHtml(A.mayoresDePata(
+  [{cod:'A',nom:'UNO',nivel:30,cambio:7},{cod:'B',nom:'DOS',nivel:20,cambio:-7}],10),'x','n');
+chk('un json viejo sin meses dibuja las filas igual, sin serie',
+    (HVJ.match(/<tr>/g)||[]).length===2 && !/<svg/.test(HVJ) &&
+    (HVJ.match(/<td class="mser"><\/td>/g)||[]).length===2 && /UNO/.test(HVJ) && /30/.test(HVJ),
+    HVJ.slice(HVJ.indexOf('<tr>'), HVJ.indexOf('<tr>')+140));
+chk('sin resto no se inventa la frase',
+    !/Los otros/.test(A.sociosHtml(A.mayoresDePata(SOCP.slice(0,3),10),'x','n')), '');
+chk('sin socios no dibuja nada',
+    A.sociosHtml(A.mayoresDePata([],10),'x','n')==='' && A.sociosHtml(null,'x','n')==='', '');
+// EL QUE DEVOLVIO PALLET VA EN ROJO Y EL QUE NO SE MOVIO EN GRIS: el signo
+// solo no basta, el color es lo que se lee de lejos
+const HCM=A.sociosHtml(A.mayoresDePata(
+  [{cod:'S',nom:'SUBE',nivel:30,cambio:7,meses:[]},
+   {cod:'B',nom:'BAJA',nivel:20,cambio:-7,meses:[]},
+   {cod:'Q',nom:'QUIETO',nivel:10,cambio:0,meses:[]}],10),'x','');
+chk('el que subio va en verde y el que bajo en rojo',
+    /class="num bien">\+7</.test(HCM) && /class="num malo">-7</.test(HCM),
+    (HCM.match(/class="num [a-z]+">[^<]*/g)||[]).join(' | '));
+chk('el que no se movio no se pinta',
+    /class="num m">/.test(HCM) && !/class="num bien">0/.test(HCM), '');
+chk('el nombre se escapa',
+    /&lt;b&gt;/.test(A.sociosHtml(A.mayoresDePata([{cod:'A',nom:'<b>',nivel:9,meses:[]}],10),'x','')), '');
+
+// EN EL CAJON: los dos bloques van escondidos y el navegador muestra el que toca
+const CSOC=A.composiciones(Object.assign({},D,{
+  clientes:[{cod:'C1',nom:'UNO',nivel:900,cambio:5,meses:MSER(900)}],
+  retail:[{cod:'R1',nom:'DOS',nivel:800,cambio:-5,meses:MSER(800)}]}),BS);
+chk('el cajon del pool arma las dos patas',
+    !!CSOC.pool.socios.CLIENTES && !!CSOC.pool.socios.RETAIL, '');
+// CADA PATA CON SUS SOCIOS: cruzarlas pondria los clientes bajo el rotulo de
+// retail y nadie lo notaria mirando la pantalla
+chk('cada pata trae los suyos, no los del vecino',
+    CSOC.pool.socios.CLIENTES.top[0].cod==='C1' && CSOC.pool.socios.RETAIL.top[0].cod==='R1',
+    CSOC.pool.socios.CLIENTES.top[0].cod + '/' + CSOC.pool.socios.RETAIL.top[0].cod);
+// EL CAJON CORTA EN DIEZ: son unos 8 KB en la pagina; sin corte se van los 59
+const CTOP=A.composiciones(Object.assign({},D,{clientes:SOCP,retail:SOCP}),BS);
+chk('el cajon corta en diez aunque haya mas',
+    CTOP.pool.socios.CLIENTES.top.length===10 && CTOP.pool.socios.RETAIL.top.length===10,
+    String(CTOP.pool.socios.CLIENTES.top.length));
+chk('pero la nota cuenta a todos los que tienen saldo',
+    CTOP.pool.socios.CLIENTES.conSaldo===15 &&
+    /El detalle de los 15 con saldo/.test(CTOP.pool.sociosNota.CLIENTES),
+    CTOP.pool.sociosNota.CLIENTES);
+const HC=A.desgloseHtml(CSOC.pool);
+chk('los dos bloques salen en el html, escondidos',
+    (HC.match(/data-socios="(CLIENTES|RETAIL)" hidden/g)||[]).length===2,
+    String((HC.match(/data-socios=/g)||[]).length));
+// LA SALVEDAD DE RETAIL VA PEGADA AL NUMERO, o alguien lee el porcentaje del
+// mayor como exacto
+chk('retail declara que su partida esta incompleta',
+    /partida de retail al 31-12-2025 está incompleta/.test(HC), '');
+chk('y clientes no arrastra esa advertencia',
+    !/incompleta/.test(HC.slice(HC.indexOf('data-socios="CLIENTES"'),
+                               HC.indexOf('data-socios="RETAIL"'))), '');
+chk('las dos mandan al tablero por el detalle',
+    (HC.match(/está en el tablero/g)||[]).length===2, '');
+// el navegador necesita la funcion publicada
+chk('el navegador tiene con que dibujar y con que mostrar',
+    JSP.indexOf('function mayoresDePata')>0 && JSP.indexOf('function sociosHtml')>0 &&
+    JSP.indexOf('[data-socios]')>0, '');
+chk('y la planta no arma listas de socios', !A.composiciones(D,BS).planta.socios, '');
+
 console.log('\n' + ok + ' ok, ' + fail + ' fallas');
 process.exit(fail ? 1 : 0);

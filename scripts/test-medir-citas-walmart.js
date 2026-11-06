@@ -43,6 +43,9 @@ const MUTACIONES = {
          a: '  const porObs = [];' },
   H11: { que: 'una operacion pendiente se cuenta como que la regla calzo',
          de: '    calza: yaConfirmada ? r.aConfirmar === confirmada : null,', a: '    calza: true,' },
+  H25: { que: 'cualquier numero pasa como cita de Walmart',
+         de: "function citaDeWalmart(c) { return /^\\d{8}$/.test(String(c || '').trim()); }",
+         a: "function citaDeWalmart(c) { return /^\\d+$/.test(String(c || '').trim()); }" },
   H19: { que: 'una fecha de confirmacion basta para darla por confirmada',
          de: "  return n > 0 && !/^\\s*pendiente/i.test(etapa);", a: '  return true;' },
   H20: { que: 'una etapa pendiente con cantidad se cuenta como confirmada',
@@ -416,6 +419,19 @@ prueba('T24 una bodega que no es de Walmart no entra al cruce inverso', (M) => {
   igual(M.fechaDeOp({ fechaDespacho: '2026-11-05T10:00:00', fechaRequerida: '2026-11-04' }), '2026-11-05',
     'manda el despacho, que es cuando salio');
   igual(M.fechaDeOp({ fechaRequerida: '2026-11-04' }), '2026-11-04', 'y si no hay despacho, la requerida');
+});
+
+prueba('T26 una cita que no tiene forma de cita de Walmart se detecta', (M) => {
+  cierto(M.citaDeWalmart('42743424'), 'ocho digitos: una cita de verdad');
+  cierto(M.citaDeWalmart(' 42749532 '), 'con espacios tambien');
+
+  // Los tres salieron del dato real el 6-nov, en transferencias a Walmart.
+  cierto(!M.citaDeWalmart('123456'), 'relleno tipeado a mano');
+  cierto(!M.citaDeWalmart('654321'), 'otro relleno');
+  cierto(!M.citaDeWalmart('1378358'), 'siete digitos: no es una cita de Walmart');
+  cierto(!M.citaDeWalmart(''), 'vacia');
+  cierto(!M.citaDeWalmart('427434241'), 'nueve digitos tampoco');
+  cierto(!M.citaDeWalmart('4274342A'), 'con letras menos');
 });
 
 /* ── Corredor ─────────────────────────────────────────────────────────────── */

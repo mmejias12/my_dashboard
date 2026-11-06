@@ -387,17 +387,26 @@ function controlesConPlanta(extra, planta) {
    *  serie corrida con cara de serie completa. */
   const lf = p.lineas_fallidas || null;
   if (lf && (Number(lf.total) > 0 || (Array.isArray(lf.sin_dato) && lf.sin_dato.length))) {
+    /*  Las dos mitades son independientes: puede haber documentos perdidos, o
+     *  meses de los que no se sabe, o las dos. La frase se arma con las que
+     *  hay —sin esto, con solo la segunda la oracion arrancaba con "Y". */
     const porMes = (Array.isArray(lf.por_mes) ? lf.por_mes : [])
       .map(x => esc(String(x && x.mes)) + ' (' + mil(Number(x && x.n) || 0) + ')').join(', ');
+    const sinDato = (Array.isArray(lf.sin_dato) ? lf.sin_dato : []).map(x => esc(String(x)));
+    const lista = sinDato.length > 1
+      ? sinDato.slice(0, -1).join(', ') + ' y ' + sinDato[sinDato.length - 1]
+      : sinDato.join('');
+    const hayTotal = Number(lf.total) > 0;
     base.push({
       titulo: 'Documentos que la extracción no pudo leer', estado: 'no pasa', medido: dia,
-      texto: (Number(lf.total) > 0
+      texto: (hayTotal
                 ? mil(Number(lf.total)) + ' documento(s) de bodega no se pudieron leer' +
                   (porMes ? ' (' + porMes + ')' : '') + '. '
                 : '') +
-             (Array.isArray(lf.sin_dato) && lf.sin_dato.length
-                ? 'Y ' + esc(lf.sin_dato.join(', ')) + ' se extrajo antes de que esto se guardara, ' +
-                  'así que de esos meses no se sabe. '
+             (sinDato.length
+                ? (hayTotal ? 'Y de ' : 'De ') + lista + ' no se sabe: ' +
+                  (sinDato.length > 1 ? 'se extrajeron' : 'se extrajo') +
+                  ' antes de que la extracción empezara a guardar esto. '
                 : '') +
              'Un documento que falta no es un documento sin movimiento: es un movimiento que no ' +
              'sabemos cuál es, y como el nivel se calcula hacia atrás desde el saldo vivo, lo que ' +

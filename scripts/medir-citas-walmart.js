@@ -255,13 +255,41 @@ function fechasEntre(desde, hasta) {
 }
 const corrido = (fecha, n) => { const d = new Date(fecha + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
 
-async function leerCold(desde, hasta) {
+/* "No existe" se reconoce por CODIGO, nunca por el texto del mensaje: el SDK
+   de Azure manda la prosa "The specified blob does not exist." sin la palabra
+   BlobNotFound, y un guard por texto deja pasar un 403 como si fuera un dia
+   vacio. Es la misma regla que ya aplica rollup-hist.js.                    */
+function noExiste(e) {
+  if (!e) return false;
+  const cod = String((e && e.code) || (e && e.details && e.details.errorCode) || '');
+  if (e.statusCode === 404 || cod === 'BlobNotFound' || cod === 'ContainerNotFound') return true;
+  return /BlobNotFound|ContainerNotFound|does not exist|no existe/i.test(String(e.message || ''));
+}
+
+async function leerCold(desde, hasta, contenedor) {
   const { BlobServiceClient } = require('@azure/storage-blob');
-  const cont = BlobServiceClient.fromConnectionString(process.env.OS_STORAGE_CONN)
-    .getContainerClient('redtec-os-operaciones');
+  const svc = BlobServiceClient.fromConnectionString(process.env.OS_STORAGE_CONN);
+  const cont = svc.getContainerClient(contenedor);
+
+  /* ANTES de recorrer 41 dias, preguntar si el contenedor siquiera esta. Sin
+     esto, un nombre equivocado se ve EXACTAMENTE igual que un almacen vacio,
+     y el veredicto sale con toda confianza midiendo nada. */
+  let existe;
+  try { existe = await cont.exists(); }
+  catch (e) { throw new Error('No se pudo consultar el contenedor "' + contenedor + '": ' + e.message); }
+  if (!existe) {
+    let otros = [];
+    try { for await (const c of svc.listContainers()) otros.push(c.name); }
+    catch (e) { otros = null; }
+    throw new Error('El contenedor "' + contenedor + '" NO existe en esta cuenta de storage.\n' +
+      '  Contenedores que SI hay: ' + (otros ? (otros.length ? otros.join(', ') : '(ninguno)')
+                                             : '(no se pudieron listar con estas credenciales)') + '\n' +
+      '  Si el cold store vive en otro, pasalo con --contenedor=<nombre>.');
+  }
+
   const dias = fechasEntre(desde, hasta);
   const ops = [];
-  let conBlob = 0;
+  let conBlob = 0, ausentes = 0;
   const LOTE = 12;
   for (let i = 0; i < dias.length; i += LOTE) {
     const grupo = dias.slice(i, i + LOTE);
@@ -270,13 +298,18 @@ async function leerCold(desde, hasta) {
         const buf = await cont.getBlockBlobClient('operaciones/' + f + '.json').downloadToBuffer();
         const o = JSON.parse(buf.toString('utf8'));
         return (o && o.operaciones) || [];
-      } catch (e) { return null; }
+      } catch (e) {
+        // Ausente es un dato. Cualquier otra cosa es una falla y se grita:
+        // tragarla es convertir un 403 en "ese dia no tuvo movimiento".
+        if (noExiste(e)) return null;
+        throw new Error('Fallo leyendo ' + contenedor + '/operaciones/' + f + '.json · ' + e.message);
+      }
     }));
-    partes.forEach(function (p) { if (p) { conBlob++; p.forEach(x => { delete x._rl; ops.push(x); }); } });
+    partes.forEach(function (p) { if (p) { conBlob++; p.forEach(x => { delete x._rl; ops.push(x); }); } else ausentes++; });
     process.stdout.write('  leidos ' + Math.min(i + LOTE, dias.length) + '/' + dias.length + ' dias\r');
   }
   console.log('  leidos ' + dias.length + '/' + dias.length + ' dias   ');
-  return { ops, dias: dias.length, conBlob };
+  return { ops, dias: dias.length, conBlob, ausentes, contenedor };
 }
 
 /* ── Credenciales ─────────────────────────────────────────────────────────
@@ -315,6 +348,9 @@ async function main() {
   const args = process.argv.slice(2);
   const archivo = args.find(a => a.indexOf('--') !== 0);
   const dias = Number((args.find(a => a.startsWith('--dias=')) || '').split('=')[1]) || 20;
+  // Mismo default y misma variable que usa la produccion (backfill-operaciones).
+  const contenedor = (args.find(a => a.startsWith('--contenedor=')) || '').split('=')[1]
+    || process.env.OS_OPS_CONTAINER || 'redtec-os-operaciones';
   const detalle = args.includes('--detalle');
   if (!archivo) { console.error('Falta el archivo. Uso: node scripts/medir-citas-walmart.js <Reporte-RedTec.xlsx>'); process.exit(1); }
   exigirConexion();
@@ -327,10 +363,24 @@ async function main() {
   console.log('  reporte : ' + archivo);
   console.log('  filas   : ' + wm.length + ' · citas distintas: ' + new Set(wm.map(f => f.cita)).size);
   console.log('  recibido: ' + fechas[0] + ' .. ' + fechas[fechas.length - 1]);
-  console.log('  cold    : ' + desde + ' .. ' + hasta + ' (+-' + dias + ' dias)');
+  console.log('  cold    : ' + contenedor + ' · ' + desde + ' .. ' + hasta + ' (+-' + dias + ' dias)');
 
-  const { ops, dias: nDias, conBlob } = await leerCold(desde, hasta);
+  const { ops, dias: nDias, conBlob } = await leerCold(desde, hasta, contenedor);
   console.log('  operaciones leidas: ' + miles(ops.length) + ' en ' + conBlob + ' de ' + nDias + ' dias con blob');
+
+  /* Sin nada leido NO hay veredicto. Decir "0% de cobertura" cuando no se
+     leyo una sola operacion no es un hallazgo: es un error de plomeria con
+     cara de medicion, y manda a buscar el problema al lado equivocado. */
+  if (!ops.length) {
+    console.error('\nNO SE LEYO NI UNA OPERACION del cold store, asi que no hay nada contra que cruzar.');
+    console.error('  Esto NO quiere decir que la cita no sirva: quiere decir que no se midio.');
+    console.error('  El contenedor "' + contenedor + '" existe pero no tiene blobs en ' + desde + '..' + hasta + '.');
+    console.error('  Que mirar, en orden:');
+    console.error('   1. que el rango tenga dias ya escritos por la corrida nocturna');
+    console.error('   2. si el cold store vive en otro contenedor: --contenedor=<nombre>');
+    console.error('   3. si la cuenta de storage es la del m3link y no otra');
+    process.exit(2);
+  }
 
   const conCita = ops.filter(o => norm(o.nroCita)).length;
   console.log('  de esas, con nroCita: ' + miles(conCita) + ' (' + (ops.length ? (conCita / ops.length * 100).toFixed(1) : 0) + '%)');
@@ -417,6 +467,6 @@ async function main() {
 
 module.exports = { entradasZip, leerSharedStrings, leerHoja, columnaANumero, serialAFecha,
                    leerXlsx, filasWalmart, reglaCantidad, indexar, clasificar, contrastar,
-                   fechasEntre, corrido, COLUMNAS, pintaDeConexion };
+                   fechasEntre, corrido, COLUMNAS, pintaDeConexion, noExiste };
 
 if (require.main === module) main().catch(e => { console.error(e); process.exit(1); });

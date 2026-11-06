@@ -317,13 +317,22 @@ function fechaDeOp(op) {
    negocio (el cliente tiene que ir a reclamarle al retail); una SIN cita no
    se puede ni buscar, y es un problema de dato nuestro. Sumarlas da un
    numero grande que no se puede accionar. */
-function cruceInverso(ops, citasWM, desde, hasta) {
+/* La ventana NO es un rango de fechas: es el conjunto de DIAS QUE WALMART
+   REPORTO. Con un rango, los dias que faltan en la serie (el 24, el 25 y el
+   29 de octubre, por ejemplo) hacen aparecer como "no informado" todo lo de
+   esos dias, que es falso: no hay reporte con que compararlos.
+   Una transferencia despachada el dia D se puede recibir hasta D+lag, asi que
+   es comparable si CUALQUIERA de esos dias fue reportado.                   */
+function cruceInverso(ops, citasWM, diasReportados, lag) {
+  const rep = new Set(diasReportados || []);
+  const margen = Math.max(0, Number(lag) || 0);
   const hay = new Set(citasWM);
-  const candidatas = ops.filter(function (o) {
-    if (!esWalmart(o)) return false;
-    const f = fechaDeOp(o);
-    return f >= desde && f <= hasta;
-  });
+  const comparable = function (f) {
+    if (!f) return false;
+    for (let i = 0; i <= margen; i++) if (rep.has(corrido(f, i))) return true;
+    return false;
+  };
+  const candidatas = ops.filter(o => esWalmart(o) && comparable(fechaDeOp(o)));
   const sinCita = candidatas.filter(o => !citasDeTexto(o.nroCita).length);
   const conCita = candidatas.filter(o => citasDeTexto(o.nroCita).length);
   // Informada si CUALQUIERA de sus citas aparece en el reporte: una
@@ -470,13 +479,21 @@ async function main() {
      validar la regla. Con UN archivo del dia no hay nada confirmado todavia y
      los bordes de la ventana se comen el resultado. Una carpeta vale por
      todos los .xlsx que tenga adentro. */
-  const archivos = [];
+  const archivos = [], saltados = [];
   rutas.forEach(function (r) {
     let st = null;
     try { st = fs.statSync(r); } catch (e) { console.error('No existe: ' + r); process.exit(1); }
     if (st.isDirectory()) {
+      /* Una carpeta de trabajo tiene de todo. Los .xlsx que no traen las
+         columnas de Walmart se SALTAN nombrandolos, en vez de reventar la
+         corrida: apuntar a una carpeta es pedir que filtre. Un archivo
+         pasado a mano, en cambio, falla fuerte: si lo nombraste, lo esperabas. */
       fs.readdirSync(r).filter(n => /\.xlsx$/i.test(n) && n.indexOf('~$') !== 0)
-        .sort().forEach(n => archivos.push(require('path').join(r, n)));
+        .sort().forEach(function (n) {
+          const ruta = require('path').join(r, n);
+          try { filasWalmart(leerXlsx(fs.readFileSync(ruta))); archivos.push(ruta); }
+          catch (e) { saltados.push(n); }
+        });
     } else archivos.push(r);
   });
   const archivo = archivos[0];
@@ -505,6 +522,7 @@ async function main() {
   console.log('MEDIR CITAS WALMART · no escribe nada');
   console.log('  reportes: ' + archivos.length + (archivos.length === 1 ? ' · ' + require('path').basename(archivo)
     : ' archivos: ' + archivos.map(a => require('path').basename(a)).join(', ')));
+  if (saltados.length) console.log('  saltados (no son reportes de Walmart): ' + saltados.join(', '));
   console.log('  filas   : ' + wm.length + ' · citas distintas: ' + new Set(wm.map(f => f.cita)).size);
   const diasReportados = Array.from(new Set(fechas)).sort();
   console.log('  recibido: ' + fechas[0] + ' .. ' + fechas[fechas.length - 1] +
@@ -608,35 +626,25 @@ async function main() {
   /* El cruce al reves: lo que alimentaria el correo al cliente. */
   const invDias = Number((process.argv.find(a => a.startsWith('--inverso-dias=')) || '').split('=')[1]);
   const vDias = Number.isFinite(invDias) ? invDias : 1;
-  const invDesde = corrido(fechas[0], -vDias), invHasta = fechas[fechas.length - 1];
-  /* Con varios dias reportados seguidos, el interior de la ventana SI es
-     comparable: lo unico sucio son los bordes. Se avisa cuando el periodo
-     tiene huecos, porque un dia sin reportar hace parecer "no informado"
-     todo lo de ese dia. */
-  const esperados = Math.round((new Date(invHasta) - new Date(diasReportados[0])) / 86400000) + 1;
-  if (diasReportados.length > 1 && diasReportados.length < esperados) {
-    console.log('\n  OJO: el periodo va del ' + diasReportados[0] + ' al ' + invHasta + ' (' + esperados +
-      ' dias) pero sólo hay ' + diasReportados.length + ' reportados.');
-    console.log('  Los ' + (esperados - diasReportados.length) + ' dias que faltan van a aparecer como "no informados"' +
-      ' y no lo son.');
-  }
-  const inv = cruceInverso(ops, citas.map(c => c.cita), invDesde, invHasta);
+  const inv = cruceInverso(ops, citas.map(c => c.cita), diasReportados, vDias);
   const pal = (a) => miles(a.reduce((x, o) => x + (Number(o.cantidadDespachada) || 0), 0));
 
   console.log('\nEL CRUCE AL REVES  (lo que iria en el correo al cliente)');
-  console.log('  transferencias nuestras a bodegas ZWM despachadas ' + invDesde + '..' + invHasta + ': ' + inv.candidatas);
+  console.log('  se comparan solo los ' + diasReportados.length + ' dias que Walmart reporto, mas ' + vDias +
+    ' dia(s) de desfase:');
+  console.log('    ' + diasReportados.join(' '));
+  console.log('  transferencias nuestras a bodegas ZWM en esos dias: ' + inv.candidatas);
   console.log('    informadas por Walmart        ' + String(inv.informadas.length).padStart(4));
   console.log('    CON cita, Walmart no informo  ' + String(inv.noInformadas.length).padStart(4) +
               '  (' + pal(inv.noInformadas) + ' pallets)  <- esto va al correo');
   console.log('    SIN cita en nuestro dato      ' + String(inv.sinCita.length).padStart(4) +
               '  (' + pal(inv.sinCita) + ' pallets)  <- no es de Walmart, es nuestro');
-  console.log('');
-  console.log('  OJO AL LEER ESTO. El reporte cubre ' + (fechas[0] === invHasta ? 'UN dia' : 'pocos dias') +
-              ' de recepciones y acá se');
-  console.log('  comparan ' + (vDias + 1) + ' dias de despachos nuestros. Una despachada hoy puede');
-  console.log('  recibirse mañana y salir en el reporte de mañana: con UN solo archivo el');
-  console.log('  cruce al reves NO se puede cerrar. Para medirlo de verdad hacen falta');
-  console.log('  varios reportes seguidos y comparar el periodo completo. Ventana con --inverso-dias=N');
+  if (diasReportados.length === 1) {
+    console.log('');
+    console.log('  OJO: con UN solo dia reportado esto no cierra. Una despachada ese dia puede');
+    console.log('  recibirse al siguiente y salir en el reporte de mañana. Hacen falta varios');
+    console.log('  dias seguidos. El desfase se mueve con --inverso-dias=N');
+  }
   if (inv.noInformadas.length && detalle) {
     console.log('\n  CON cita y sin informar, las primeras 15:');
     inv.noInformadas.slice(0, 15).forEach(o => console.log('    ped ' + String(o.nroPedido).padEnd(9) +

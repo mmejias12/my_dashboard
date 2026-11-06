@@ -1326,7 +1326,26 @@ const CS=A.controlesConPlanta({controles:[]},
   {generado:'2026-11-05', lineas_fallidas:{total:0, por_mes:[], sin_dato:['2026-01','2026-02']}});
 const unoS=CS.filter(c=>/no pudo leer/.test(c.titulo))[0];
 chk('los meses de los que no se sabe tambien levantan control', !!unoS, '');
-chk('y se nombran', /2026-01, 2026-02/.test(unoS.texto) && /no se sabe/.test(unoS.texto), unoS.texto);
+chk('y se nombran, en castellano', /De 2026-01 y 2026-02 no se sabe/.test(unoS.texto), unoS.texto);
+// SIN DOCUMENTOS PERDIDOS la frase no puede arrancar con "Y": asi salio el
+// primer dia que el control se levanto de verdad, el 2026-11-06
+chk('y la frase no arranca con una conjuncion suelta',
+    !/^Y /.test(unoS.texto) && /^De /.test(unoS.texto), unoS.texto.slice(0,40));
+chk('con las dos mitades, la segunda se enlaza',
+    /Y de 2026-01 no se sabe/.test(
+      A.controlesConPlanta({controles:[]},
+        {generado:'2026-11-05', lineas_fallidas:{total:5,por_mes:[{mes:'2026-11',n:5}],sin_dato:['2026-01']}})
+        .filter(c=>/no pudo leer/.test(c.titulo))[0].texto), '');
+chk('un solo mes va en singular',
+    /se extrajo antes/.test(
+      A.controlesConPlanta({controles:[]},
+        {generado:'2026-11-05', lineas_fallidas:{total:0,por_mes:[],sin_dato:['2026-10']}})
+        .filter(c=>/no pudo leer/.test(c.titulo))[0].texto), '');
+chk('y tres meses en plural y con la y final',
+    /De 2026-08, 2026-09 y 2026-10 no se sabe: se extrajeron/.test(
+      A.controlesConPlanta({controles:[]},
+        {generado:'2026-11-05', lineas_fallidas:{total:0,por_mes:[],sin_dato:['2026-08','2026-09','2026-10']}})
+        .filter(c=>/no pudo leer/.test(c.titulo))[0].texto), '');
 // con un control de base, para que el resultado no sea null por estar vacio
 chk('sin perdidos, ese control no existe',
     A.controlesConPlanta({controles:[{titulo:'Cobertura'}]},{generado:'2026-11-05'})

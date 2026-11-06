@@ -43,6 +43,12 @@ const MUTACIONES = {
          a: '  const porObs = [];' },
   H11: { que: 'una operacion pendiente se cuenta como que la regla calzo',
          de: '    calza: yaConfirmada ? r.aConfirmar === confirmada : null,', a: '    calza: true,' },
+  H17: { que: 'cualquier nombre de cuenta se acepta',
+         de: "  return typeof nombre === 'string' && /^[a-z0-9]{3,24}$/.test(nombre);",
+         a: "  return typeof nombre === 'string';" },
+  H18: { que: 'el nombre de cuenta se busca tambien dentro de la clave',
+         de: "  const m = String(v || '').match(/(^|;)\\s*AccountName\\s*=\\s*([^;]*)/i);",
+         a: "  const m = String(v || '').match(/AccountName\\s*=\\s*(.*)/i) && [0,0,String(v).split('AccountName=')[1]||''];" },
   H15: { que: 'un 403 de credenciales se trata como un dia sin blob',
          de: '  if (e.statusCode === 404 || cod === ', a: '  if (true || e.statusCode === 404 || cod === ' },
   H16: { que: '"no existe" se decide solo por el texto del mensaje',
@@ -301,6 +307,29 @@ prueba('T18 "no existe" se reconoce por codigo, no por el texto del mensaje', (M
     'en "ese dia no tuvo movimiento", que es el defecto que ya nos mordio antes');
   cierto(!M.noExiste({ statusCode: 500, message: 'Internal error' }), 'un 500 tampoco');
   cierto(!M.noExiste(null), 'sin error no hay ausencia');
+});
+
+prueba('T19 el nombre de la cuenta se extrae de la cadena sin tocar la clave', (M) => {
+  igual(M.cuentaDe('DefaultEndpointsProtocol=https;AccountName=redtecos;AccountKey=SECRETA==;EndpointSuffix=core.windows.net'),
+    'redtecos', 'sale el AccountName');
+  igual(M.cuentaDe('BlobEndpoint=https://redtecos.blob.core.windows.net/;SharedAccessSignature=sv=2022'),
+    'redtecos', 'y de la variante con BlobEndpoint');
+  igual(M.cuentaDe('hola'), null, 'si no hay cuenta, null');
+});
+
+prueba('T20 una cuenta imposible se descarta sin salir a la red', (M) => {
+  cierto(M.cuentaValida('redtecos'), 'un nombre normal');
+  cierto(M.cuentaValida('abc'), 'el minimo son 3');
+  cierto(M.cuentaValida('a'.repeat(24)), 'el maximo son 24');
+
+  cierto(!M.cuentaValida('os_storage_conn'),
+    'ESTE es el caso real: el guion bajo es imposible en Azure, asi que es detectable ' +
+    'antes de gastar un DNS que va a fallar con ENOTFOUND y no decir por que');
+  cierto(!M.cuentaValida('REDTECOS'), 'las mayusculas no se admiten');
+  cierto(!M.cuentaValida('redtec.os'), 'el punto tampoco');
+  cierto(!M.cuentaValida('ab'), 'menos de 3');
+  cierto(!M.cuentaValida('a'.repeat(25)), 'mas de 24');
+  cierto(!M.cuentaValida('...'), 'un placeholder de ejemplo');
 });
 
 /* ── Corredor ─────────────────────────────────────────────────────────────── */

@@ -49,6 +49,9 @@ const MUTACIONES = {
   H27: { que: 'se extraen tambien numeros que no tienen largo de cita',
          de: "  const m = String(v || '').match(/\\d{8}/g) || [];",
          a: "  const m = String(v || '').match(/\\d+/g) || [];" },
+  H30: { que: 'un dia se da por cerrado aunque falte el reporte del dia de recepcion',
+         de: '    for (let i = 0; i <= margen; i++) if (!rep.has(corrido(d, i))) return false;\n    return true;',
+         a: '    return true;' },
   H29: { que: 'se comparan tambien dias que Walmart nunca reporto',
          de: '    for (let i = 0; i <= margen; i++) if (rep.has(corrido(f, i))) return true;\n    return false;',
          a: '    return true;' },
@@ -505,6 +508,17 @@ prueba('T29 un campo del que no se puede extraer nada se cuenta aparte', (M) => 
                          { nroPedido: 2, nroCita: '', observacion: '' }]);
   igual(idx.sinExtraer, 1, 'el campo con texto pero sin cita adentro se cuenta; el vacio no');
   igual(idx.porCita.size, 0, 'y no queda indexado bajo nada');
+});
+
+prueba('T31 solo son dias "cerrados" aquellos cuyo dia de recepcion tambien se reporto', (M) => {
+  // Los 8 reportes reales: 23, 26, 27, 28, 30, 31-oct, 1 y 5-nov.
+  const rep = ['2026-10-23', '2026-10-26', '2026-10-27', '2026-10-28',
+               '2026-10-30', '2026-10-31', '2026-11-01', '2026-11-05'];
+  igual(M.diasCerrados(rep, 0), rep, 'sin desfase, todo dia reportado es cerrado');
+  igual(M.diasCerrados(rep, 1), ['2026-10-26', '2026-10-27', '2026-10-30', '2026-10-31'],
+    'con un dia de desfase solo sirven aquellos cuyo dia siguiente TAMBIEN se reporto: ' +
+    'el 23 no (falta el 24), el 28 no (falta el 29), el 1 no (falta el 2), el 5 no (falta el 6)');
+  igual(M.diasCerrados([], 1), [], 'sin reportes no hay dias cerrados');
 });
 
 /* ── Corredor ─────────────────────────────────────────────────────────────── */

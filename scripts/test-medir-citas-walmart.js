@@ -43,6 +43,11 @@ const MUTACIONES = {
          a: '  const porObs = [];' },
   H11: { que: 'una operacion pendiente se cuenta como que la regla calzo',
          de: '    calza: yaConfirmada ? r.aConfirmar === confirmada : null,', a: '    calza: true,' },
+  H15: { que: 'un 403 de credenciales se trata como un dia sin blob',
+         de: '  if (e.statusCode === 404 || cod === ', a: '  if (true || e.statusCode === 404 || cod === ' },
+  H16: { que: '"no existe" se decide solo por el texto del mensaje',
+         de: "  if (e.statusCode === 404 || cod === 'BlobNotFound' || cod === 'ContainerNotFound') return true;",
+         a: '  ;' },
   H13: { que: 'cualquier texto pasa como cadena de conexion',
          de: "  return /(^|;)\\s*(DefaultEndpointsProtocol|AccountName|BlobEndpoint|SharedAccessSignature)\\s*=/i.test(String(v));",
          a: '  return true;' },
@@ -282,6 +287,20 @@ prueba('T17 una cadena de conexion que no lo es se detecta antes de llamar a Azu
     'ESTE es el caso real: un placeholder pegado tal cual. Sin esta prueba el SDK ' +
     'muere con "Invalid URL" y nadie entiende que la variable trae basura');
   cierto(!M.pintaDeConexion('redtecos'), 'el nombre de la cuenta suelto tampoco es una cadena');
+});
+
+prueba('T18 "no existe" se reconoce por codigo, no por el texto del mensaje', (M) => {
+  cierto(M.noExiste({ statusCode: 404 }), 'un 404 es ausencia');
+  cierto(M.noExiste({ code: 'BlobNotFound' }), 'por code');
+  cierto(M.noExiste({ details: { errorCode: 'ContainerNotFound' } }), 'por details.errorCode');
+  cierto(M.noExiste({ message: 'The specified blob does not exist.' }),
+    'asi manda Azure el mensaje: en prosa y sin la palabra BlobNotFound');
+
+  cierto(!M.noExiste({ statusCode: 403, code: 'AuthorizationFailure', message: 'Server failed to authenticate' }),
+    'UN 403 NO ES AUSENCIA. Tratarlo como dia vacio convierte una credencial mala ' +
+    'en "ese dia no tuvo movimiento", que es el defecto que ya nos mordio antes');
+  cierto(!M.noExiste({ statusCode: 500, message: 'Internal error' }), 'un 500 tampoco');
+  cierto(!M.noExiste(null), 'sin error no hay ausencia');
 });
 
 /* ── Corredor ─────────────────────────────────────────────────────────────── */

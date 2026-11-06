@@ -39,9 +39,10 @@
 const P = require('./saldo-pool.js');                          // cierreDelDia, sinBom
 const A = require('./armar-tablero-stock.js');                 // NUEVE: una regla, un lugar
 const L = require('../backfill/sonda-planta-lineas.js');       // netoPorBodega, leyDeDosPuntas
+const X = require('../backfill/backfill-sap-bin.js');          // veredictoDeFallidos: una politica, un lugar
 
 const args = process.argv.slice(2);
-const OPCIONES = ['meses', 'bodegas', 'json', 'tope', 'contraste', 'fecha'];
+const OPCIONES = ['meses', 'bodegas', 'json', 'tope', 'contraste', 'fecha', 'fallidos'];
 const BANDERAS = ['cadena'];
 const opcion = (n, d) => { const p = '--' + n + '='; for (const a of args) if (a.indexOf(p) === 0) return a.slice(p.length); return d; };
 const bandera = n => args.indexOf('--' + n) >= 0;
@@ -417,6 +418,28 @@ function blobQueManda(blobs) {
   return mejor ? { mes: String(mejor.mes), guardado: mejor.guardado || null } : null;
 }
 
+/** LO QUE LA EXTRACCION NO PUDO LEER, sumado sobre los meses que se van a usar.
+ *
+ *  El extractor ya escribe _fallidos en cada blob; aca se leen, porque un mes
+ *  incompleto no se nota: la serie igual cierra en el saldo vivo —se calcula
+ *  hacia atras desde ahi— y lo que falta se va entero a los dias anteriores.
+ *  Un blob viejo, de antes de que esto se guardara, no trae el campo: eso NO
+ *  es cero perdidos, es "no se sabe", y va aparte para no publicarlo como si
+ *  estuviera limpio. */
+function fallidosDeBlobs(blobs) {
+  const porMes = [], sinDato = [];
+  let total = 0;
+  for (const b of (Array.isArray(blobs) ? blobs : [])) {
+    if (!b || !/^\d{4}-\d{2}$/.test(String(b.mes))) continue;
+    if (b.fallidos == null) { sinDato.push(String(b.mes)); continue; }
+    const n = Array.isArray(b.fallidos) ? b.fallidos.length : Math.max(0, Number(b.fallidos) || 0);
+    if (n) { porMes.push({ mes: String(b.mes), n }); total += n; }
+  }
+  porMes.sort((x, y) => x.mes < y.mes ? -1 : x.mes > y.mes ? 1 : 0);
+  sinDato.sort();
+  return { total, porMes, sinDato };
+}
+
 /** ELEGIR EL BLOB Y MEDIR EL DESFASE, en una sola pieza.
  *
  *  Las dos cosas van juntas o no van: medir el desfase contra un blob y
@@ -549,6 +572,15 @@ function payloadJson(p) {
                          : { medible: false, pallets: null, lineas: 0, sin_fecha: 0, detalle: [],
                              por_planta: null, motivo: 'no se calculo', al: null },
     transito_dias: Array.isArray(x.transitoDias) ? x.transitoDias : [],
+    /*  LO QUE FALTO, publicado. Solo llega aca si quien corrio lo acepto con
+     *  --fallidos: el tablero lo levanta como control para que la pagina diga
+     *  que esa serie esta corrida, en vez de mostrarla como si estuviera
+     *  completa. */
+    lineas_fallidas: (x.fallidos && (x.fallidos.total || (x.fallidos.sinDato || []).length))
+      ? { total: Number(x.fallidos.total) || 0,
+          por_mes: x.fallidos.porMes || [],
+          sin_dato: x.fallidos.sinDato || [] }
+      : null,
     lectura: {
       ancla: x.anclaLeida || null,
       lineas: x.lineasGuardadas || null,
@@ -631,7 +663,7 @@ function veredicto(series, imposibles, cuad, ancla, aperturas, desfase, fecha, t
 module.exports = { bodegasDePlanta, movimientoDeBodega, marcarFirmes, cadenaDePlanta,
                    nivelesImposibles, aperturasImposibles, desfaseDeLectura,
                    enTransito, transitoPorDia, plantaDeCodigo, blobQueManda, lecturaDeLaVentana,
-                   coberturaDeFechas, fechaQueManda,
+                   fallidosDeBlobs, coberturaDeFechas, fechaQueManda,
                    leyDelPool, cuadraturaDelNeto, anclaAlDia, payloadJson, veredicto,
                    OPCIONES, BANDERAS };
 
@@ -685,7 +717,8 @@ async function main() {
     const n = (j && j.lineas) || [];
     // La marca de cada blob se guarda; cual de todas manda lo decide
     // blobQueManda, que toma la del mes mas nuevo y no la escrita mas tarde.
-    blobs.push({ mes, guardado: (j && j._guardado) ? String(j._guardado) : null });
+    blobs.push({ mes, guardado: (j && j._guardado) ? String(j._guardado) : null,
+                 fallidos: (j && j._fallidos !== undefined) ? j._fallidos : null });
     console.log('  ' + nombre + ': ' + mil(n.length) + ' lineas   ·  extraido ' +
                 String(j._guardado || '?').slice(0, 16).replace('T', ' '));
     lineas = lineas.concat(n);
@@ -821,6 +854,21 @@ async function main() {
               (manda && manda.mes ? '   ·  lineasbod/' + manda.mes + '.json, el mes mas nuevo' : ''));
   console.log('  desfase      ' + (des.segundos == null ? 'no medible' :
     des.segundos + ' s' + (des.ok ? '  (dentro del tope de ' + des.tope + ' s)' : '  ← FUERA DE TOPE')));
+  /*  LO QUE FALTO EN LA EXTRACCION, antes de la apertura y por una razon: una
+   *  apertura negativa con un mes incompleto adentro no se puede interpretar.
+   *  Primero hay que saber si la serie esta completa. */
+  const fal = fallidosDeBlobs(blobs);
+  const vfal = X.veredictoDeFallidos(fal.total, Math.max(0, parseInt(opcion('fallidos', '0'), 10) || 0));
+  if (fal.total || fal.sinDato.length) {
+    console.log('\n── LO QUE LA EXTRACCION NO PUDO LEER ' + '─'.repeat(37));
+    for (const x of fal.porMes)
+      console.log('  lineasbod/' + x.mes + '.json: ' + mil(x.n) + ' documento(s) perdidos');
+    if (fal.sinDato.length)
+      console.log('  sin el dato (blob anterior al guardia): ' + fal.sinDato.join(', ') +
+                  '   ← no es cero perdidos, es que no se sabe');
+    if (fal.total) console.log('  ' + vfal.texto);
+  }
+
   console.log('\n── LA APERTURA DE LA VENTANA ' + '─'.repeat(45));
   console.log('  La apertura no se mide: se despeja. Una negativa dice que la serie esta corrida.');
   if (!ape.length) console.log('  las ' + series.length + ' bodegas abren en positivo');
@@ -856,12 +904,25 @@ async function main() {
   console.log('  ' + v.texto);
 
   const salida = opcion('json', null);
+  /*  NO SE PUBLICA UNA SERIE CORRIDA. El mes incompleto no se nota aguas
+   *  abajo —cierra igual en el saldo vivo— asi que el unico lugar donde se
+   *  puede frenar es aca. Con --fallidos=<n> se acepta y se publica
+   *  declarado, para que un documento que SAP no entregue nunca no deje la
+   *  cadena diaria muerta para siempre. */
+  if (salida && !vfal.ok) {
+    console.error('\n  NO SE ESCRIBE ' + salida + ': ' + vfal.texto);
+    console.error('  Repite esos meses con backfill/backfill-sap-bin.js, o acepta el hueco con');
+    console.error('  --fallidos=' + fal.total + ' y queda declarado en el tablero.');
+    process.exitCode = 1;
+    console.log('');
+    return;
+  }
   if (salida) {
     fs.writeFileSync(salida, JSON.stringify(payloadJson({
       generado: new Date().toISOString(), anclaLeida: bod.generado || null, meses,
       ancla: anc, veredicto: v,
       indicador: nueve, fueraDelIndicador: resto, cierreFirme: diaFirme,
-      aperturasImposibles: ape, lineasGuardadas, desfase: des,
+      aperturasImposibles: ape, lineasGuardadas, desfase: des, fallidos: fal,
       fecha: fec, transito: tra, transitoAl, transitoDias: traDias,
       bodegas: series, cadena: cadenaDePlanta(lineas, conjunto).aristas,
     }), null, 1), 'utf8');

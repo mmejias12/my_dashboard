@@ -1363,5 +1363,54 @@ chk('un por_mes roto no lo revienta',
       {generado:'2026-11-05', lineas_fallidas:{total:5,por_mes:null,sin_dato:null}})
       .filter(c=>/no pudo leer/.test(c.titulo))[0], '');
 
+// ============================================================
+// TODOS LOS SOCIOS, NO LOS 25 MAS GRANDES
+// ============================================================
+console.log('\n— el stock de cada cliente —');
+const SOCT=[];
+for (let i=1;i<=40;i++) SOCT.push({cod:'C'+i, nom:'SOCIO '+i, partida:100*i, nivel:10*i, enSemilla:true});
+SOCT.push({cod:'C0', nom:'EN CERO', partida:0, nivel:0, enSemilla:true});
+SOCT.push({cod:'CX', nom:'SIN PARTIDA', partida:0, nivel:77, enSemilla:false});
+const CST=A.cortarSocios(SOCT);
+// La pregunta "cuanto tiene ESTE cliente" no se puede contestar con un top
+chk('sin tope salen todos los que tienen saldo', CST.top.length===41, String(CST.top.length));
+chk('y no queda cola que explicar', CST.resto.n===0 && CST.resto.nivel===0, JSON.stringify(CST.resto));
+chk('el que esta en cero sigue fuera: no tiene pallets', 
+    CST.top.every(x=>x.nivel!==0) && CST.conSaldo===41);
+chk('ordenados de mayor a menor', CST.top[0].nivel===400, String(CST.top[0].nivel));
+// EL TOPE SIGUE EXISTIENDO para quien lo quiera
+chk('con tope sigue recortando', A.cortarSocios(SOCT,5).top.length===5 &&
+    A.cortarSocios(SOCT,5).resto.n===36, JSON.stringify(A.cortarSocios(SOCT,5).resto.n));
+// UN SOCIO SIN PARTIDA arranca en cero: su nivel es un piso, no un saldo.
+// Con los 25 mas grandes caia en la cola y daba lo mismo; mostrandolos a
+// todos, publicarlo sin marca seria publicar un numero incompleto como firme
+chk('el que no esta en la semilla queda marcado',
+    CST.top.filter(x=>x.cod==='CX')[0].sinPartida===true,
+    JSON.stringify(CST.top.filter(x=>x.cod==='CX')[0]));
+chk('y el que si esta, no', CST.top.filter(x=>x.cod==='C1')[0].sinPartida===false);
+chk('sin el campo tampoco se inventa la marca',
+    A.cortarSocios([{cod:'A',nom:'A',partida:1,nivel:5}]).top[0].sinPartida===false);
+
+const HST=A.tablaSocios('Clientes · los 41 con saldo','t-c',CST.top,CST.resto,null);
+chk('el html trae una fila por socio', (HST.match(/<tr data-b=/g)||[]).length===41,
+    String((HST.match(/<tr data-b=/g)||[]).length));
+chk('con la marca donde corresponde', (HST.match(/class="cota"/g)||[]).length===1,
+    String((HST.match(/class="cota"/g)||[]).length));
+// LA LINEA DE "LOS OTROS N" NO PUEDE DECIR CERO: sin cola, no hay nada que
+// explicar y la frase sobra
+chk('sin cola no se dibuja la linea de los otros', !/Los otros/.test(HST), '');
+chk('con cola si', /Los otros 36 socios/.test(
+    A.tablaSocios('x','t-c',A.cortarSocios(SOCT,5).top,A.cortarSocios(SOCT,5).resto,null)), '');
+// EL BUSCADOR sale escondido del servidor: sin javascript un campo que no
+// filtra es peor que no tenerlo, y la tabla completa ya esta en el html
+chk('con muchas filas viene el buscador, escondido', /<input type="search" class="busca"/.test(HST) &&
+    /data-busca="t-c" hidden/.test(HST), '');
+chk('con pocas filas no hace falta',
+    !/busca/.test(A.tablaSocios('x','t-c',CST.top.slice(0,8),{n:0,nivel:0},null)), '');
+chk('cada fila trae RUT y nombre en minuscula para buscar',
+    /data-b="c1 socio 1"/.test(HST), (HST.match(/data-b="[^"]*"/)||[''])[0]);
+chk('y el aviso de sin resultados existe y arranca oculto',
+    /data-vacio="t-c" hidden/.test(HST), '');
+
 console.log('\n' + ok + ' ok, ' + fail + ' fallas');
 process.exit(fail ? 1 : 0);

@@ -405,10 +405,34 @@ function pintarRango(r) {
 
 /* ── Corrida ──────────────────────────────────────────────────────────────── */
 
-function exigir(nombre) {
-  if (!process.env[nombre]) {
+/* No basta con que la variable EXISTA. Dos cosas que pasan de verdad:
+   pegar el texto de ejemplo entre < > en vez del valor, y cargar algo que no
+   es una cadena de conexion. Las dos mueren despues, lejos, con un error del
+   SDK que no nombra la causa. Se atajan acá, y el diagnostico da el LARGO y
+   nunca el valor.                                                          */
+function pintaDeConexion(v) {
+  if (!v || !String(v).trim()) return false;
+  return /(^|;)\s*(DefaultEndpointsProtocol|AccountName|BlobEndpoint|SharedAccessSignature)\s*=/i.test(String(v));
+}
+
+function exigir(nombre, pinta) {
+  const v = process.env[nombre];
+  if (!v || !String(v).trim()) {
     console.error('Falta la variable de entorno ' + nombre + '. En esta misma consola:');
-    console.error('  $env:' + nombre + '="<valor>"');
+    console.error('  $env:' + nombre + '="<el valor real>"');
+    process.exit(1);
+  }
+  if (/^<[^>]*>$/.test(String(v).trim())) {
+    console.error(nombre + ' trae un texto de EJEMPLO entre < >, no el valor real.');
+    console.error('  largo: ' + String(v).length + ' caracteres · el valor no se imprime, a proposito');
+    process.exit(1);
+  }
+  if (pinta && !pinta(v)) {
+    console.error(nombre + ' esta cargada pero no parece una cadena de conexion de Azure.');
+    console.error('  largo: ' + String(v).length + ' caracteres' +
+      (String(v) !== String(v).trim() ? '  ·  OJO: trae espacios en los bordes' : ''));
+    console.error('  (el valor no se imprime, a proposito)');
+    console.error('  Una cadena valida arranca con DefaultEndpointsProtocol= o BlobEndpoint=.');
     process.exit(1);
   }
 }
@@ -504,7 +528,7 @@ async function main() {
     process.exit(malos ? 1 : 0);
   }
 
-  exigir('OS_STORAGE_CONN');
+  exigir('OS_STORAGE_CONN', pintaDeConexion);
 
   if (args.includes('--huecos')) {
     const hoy = new Date(); hoy.setDate(hoy.getDate() - 1);
@@ -627,6 +651,7 @@ async function main() {
 
 module.exports = { SIGNOS, UNIVERSOS, MAX_DIAS_PROVEEDOR, identidad, camposDe, comparar,
                    veredicto, resumenSoloNuestro, descomponer, rangosPorDefecto, rangosDeMeses, diasEntre, num,
+                   pintaDeConexion,
                    fechaDeNombre, fechasDeNombres, tramos, huecos, comandosParaRellenar };
 
 if (require.main === module) main().catch(e => { console.error(e); process.exit(1); });

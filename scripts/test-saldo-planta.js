@@ -685,5 +685,84 @@ chk('el reparto sale publicado como por_planta',
 chk('y sin transito queda en null, no en un objeto vacio',
     S.payloadJson({ series:[] }).transito.por_planta===null, '');
 
+// ============================================================
+// LO QUE LA EXTRACCION NO PUDO LEER
+// ============================================================
+console.log('\n— los documentos perdidos de cada blob —');
+const BF=[{mes:'2026-08',guardado:'a',fallidos:[]},
+          {mes:'2026-09',guardado:'b',fallidos:[{DocEntry:1},{DocEntry:2}]},
+          {mes:'2026-10',guardado:'c',fallidos:[]},
+          {mes:'2026-11',guardado:'d',fallidos:[{DocEntry:3}]}];
+chk('suma los perdidos de todos los meses', S.fallidosDeBlobs(BF).total===3,
+    String(S.fallidosDeBlobs(BF).total));
+chk('y dice de que mes es cada uno',
+    S.fallidosDeBlobs(BF).porMes.map(x=>x.mes+':'+x.n).join(',')==='2026-09:2,2026-11:1',
+    JSON.stringify(S.fallidosDeBlobs(BF).porMes));
+chk('un mes limpio no ensucia la lista',
+    S.fallidosDeBlobs(BF).porMes.every(x=>x.n>0));
+chk('todo limpio da cero y lista vacia',
+    S.fallidosDeBlobs([{mes:'2026-10',fallidos:[]}]).total===0 &&
+    S.fallidosDeBlobs([{mes:'2026-10',fallidos:[]}]).porMes.length===0);
+// UN BLOB VIEJO NO TRAE EL CAMPO, y eso NO es cero perdidos: es que no se
+// sabe. Publicarlo como limpio seria exactamente el error que esto persigue
+chk('sin el campo va aparte, no como cero',
+    S.fallidosDeBlobs([{mes:'2026-01'},{mes:'2026-02',fallidos:null}]).sinDato.join(',')==='2026-01,2026-02',
+    JSON.stringify(S.fallidosDeBlobs([{mes:'2026-01'},{mes:'2026-02',fallidos:null}])));
+chk('y no suma al total',
+    S.fallidosDeBlobs([{mes:'2026-01'}]).total===0);
+chk('un numero suelto tambien se entiende',
+    S.fallidosDeBlobs([{mes:'2026-10',fallidos:16}]).total===16);
+chk('los meses salen ordenados',
+    S.fallidosDeBlobs([{mes:'2026-11',fallidos:[1]},{mes:'2026-08',fallidos:[1]}])
+      .porMes.map(x=>x.mes).join(',')==='2026-08,2026-11');
+chk('un mes mal escrito se ignora',
+    S.fallidosDeBlobs([{mes:'octubre',fallidos:[1,2]}]).total===0);
+chk('sin blobs no revienta',
+    S.fallidosDeBlobs([]).total===0 && S.fallidosDeBlobs(null).total===0 &&
+    S.fallidosDeBlobs([null,{}]).total===0);
+
+// LA POLITICA ES UNA SOLA Y VIVE EN EL EXTRACTOR: si aca hubiera una copia,
+// un dia una acepta y la otra rechaza el mismo numero
+const XB=require('../backfill/backfill-sap-bin.js');
+chk('la decision la toma la misma funcion que el extractor',
+    typeof XB.veredictoDeFallidos==='function' &&
+    XB.veredictoDeFallidos(3,0).ok===false && XB.veredictoDeFallidos(3,3).ok===true);
+const SRC=require('fs').readFileSync(require('path').join(__dirname,'saldo-planta.js'),'utf8');
+chk('y saldo-planta la importa en vez de copiarla',
+    /require\('\.\.\/backfill\/backfill-sap-bin\.js'\)/.test(SRC) &&
+    /X\.veredictoDeFallidos/.test(SRC), '');
+// OJO: esto mira la FORMA del codigo, no su conducta. La escritura vive en
+// main(), que necesita SAP y el storage. Se exige que el guardia EXISTA —un
+// indexOf de -1 pasaria la comparacion de orden sin guardia ninguno— y que
+// vaya antes de escribir.
+const iG = SRC.indexOf('if (salida && !vfal.ok)');
+const iW = SRC.indexOf('fs.writeFileSync(salida');
+chk('el guardia existe y va antes de escribir el json',
+    iG > 0 && iW > 0 && iG < iW, 'guardia@' + iG + ' escribe@' + iW);
+chk('y corta de verdad, no solo avisa',
+    SRC.indexOf('process.exitCode = 1', iG) > iG &&
+    SRC.indexOf('return;', iG) > SRC.indexOf('process.exitCode = 1', iG) &&
+    SRC.indexOf('return;', iG) < iW,
+    'exit@' + SRC.indexOf('process.exitCode = 1', iG) + ' return@' + SRC.indexOf('return;', iG));
+chk('y la corrida termina con codigo distinto de cero',
+    /process\.exitCode = 1/.test(SRC), '');
+chk('--fallidos es una opcion declarada', S.OPCIONES.indexOf('fallidos')>=0, S.OPCIONES.join(','));
+
+// LO TOLERADO SE PUBLICA DECLARADO: si se acepta el hueco, la pagina tiene
+// que poder decir que esa serie esta corrida
+const PJF=S.payloadJson({ series:[], fallidos:{total:3,porMes:[{mes:'2026-09',n:3}],sinDato:['2026-01']} });
+chk('el payload lleva lo que falto',
+    PJF.lineas_fallidas.total===3 && PJF.lineas_fallidas.por_mes[0].mes==='2026-09',
+    JSON.stringify(PJF.lineas_fallidas));
+chk('y los meses de los que no se sabe',
+    PJF.lineas_fallidas.sin_dato.join(',')==='2026-01');
+chk('sin nada que declarar va en null, no en un objeto en cero',
+    S.payloadJson({ series:[], fallidos:{total:0,porMes:[],sinDato:[]} }).lineas_fallidas===null &&
+    S.payloadJson({ series:[] }).lineas_fallidas===null);
+// solo los meses sin dato tambien es algo que decir
+chk('solo meses sin dato igual se declara',
+    S.payloadJson({ series:[], fallidos:{total:0,porMes:[],sinDato:['2026-01']} })
+      .lineas_fallidas.sin_dato.join(',')==='2026-01');
+
 console.log('\n'+ok+' ok, '+fail+' fallas\n');
 process.exit(fail?1:0);

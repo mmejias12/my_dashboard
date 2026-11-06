@@ -479,7 +479,7 @@ async function main() {
      validar la regla. Con UN archivo del dia no hay nada confirmado todavia y
      los bordes de la ventana se comen el resultado. Una carpeta vale por
      todos los .xlsx que tenga adentro. */
-  const archivos = [], saltados = [];
+  const archivos = [], saltados = [], ilegibles = [];
   rutas.forEach(function (r) {
     let st = null;
     try { st = fs.statSync(r); } catch (e) { console.error('No existe: ' + r); process.exit(1); }
@@ -491,7 +491,13 @@ async function main() {
       fs.readdirSync(r).filter(n => /\.xlsx$/i.test(n) && n.indexOf('~$') !== 0)
         .sort().forEach(function (n) {
           const ruta = require('path').join(r, n);
-          try { filasWalmart(leerXlsx(fs.readFileSync(ruta))); archivos.push(ruta); }
+          /* No poder LEER un archivo y que el archivo no sea de Walmart son
+             cosas distintas. Meterlas en el mismo catch hace desaparecer un
+             .xlsx roto, o un symlink colgado, con cara de "no era de Walmart". */
+          let buf = null;
+          try { buf = fs.readFileSync(ruta); }
+          catch (e) { ilegibles.push(n + '  (' + (e.code || e.message) + ')'); return; }
+          try { filasWalmart(leerXlsx(buf)); archivos.push(ruta); }
           catch (e) { saltados.push(n); }
         });
     } else archivos.push(r);
@@ -523,6 +529,10 @@ async function main() {
   console.log('  reportes: ' + archivos.length + (archivos.length === 1 ? ' · ' + require('path').basename(archivo)
     : ' archivos: ' + archivos.map(a => require('path').basename(a)).join(', ')));
   if (saltados.length) console.log('  saltados (no son reportes de Walmart): ' + saltados.join(', '));
+  if (ilegibles.length) {
+    console.error('  *** NO SE PUDIERON LEER, y deberian: ' + ilegibles.join(' · '));
+    console.error('      (un symlink colgado o un archivo que OneDrive no bajo todavia)');
+  }
   console.log('  filas   : ' + wm.length + ' · citas distintas: ' + new Set(wm.map(f => f.cita)).size);
   const diasReportados = Array.from(new Set(fechas)).sort();
   console.log('  recibido: ' + fechas[0] + ' .. ' + fechas[fechas.length - 1] +

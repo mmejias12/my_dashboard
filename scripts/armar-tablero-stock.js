@@ -288,7 +288,13 @@ function cortarSocios(socios, cuantos) {
                   *  se mostraban los 25 mas grandes daba lo mismo —caen todos
                   *  en la cola—; mostrandolos a todos hay que marcarlos, o la
                   *  tabla publica un numero incompleto como si fuera firme. */
-                 sinPartida: s.enSemilla === false }))
+                 sinPartida: s.enSemilla === false,
+                 /*  EL CIERRE DE CADA MES. No llega a la pagina del tablero
+                  *  —filaSocio no lo mira— pero viaja en datos-stock.json
+                  *  para que el cockpit pueda dibujar la mini-serie de los
+                  *  mayores. Son once puntos por socio: 35 KB en el json y
+                  *  cero en las dos paginas. */
+                 meses: Array.isArray(s.meses) ? s.meses : [] }))
     .sort((a, b) => b.nivel - a.nivel || (a.cod < b.cod ? -1 : 1));
   // Sin tope se devuelven TODOS: la pregunta "cuanto tiene este cliente" no se
   // puede contestar con los 25 mas grandes.

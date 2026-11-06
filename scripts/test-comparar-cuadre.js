@@ -72,6 +72,9 @@ const MUTACIONES = {
   H25: { que: 'los rangos que no cierran se mezclan con los que si',
          de: "    noCuadran: conIdentidad.filter(r => !r.identidadNuestro.cuadra)",
          a: '    noCuadran: conIdentidad.filter(r => r.identidadNuestro.cuadra)' },
+  H29: { que: 'cualquier texto pasa como cadena de conexion',
+         de: "  return /(^|;)\\s*(DefaultEndpointsProtocol|AccountName|BlobEndpoint|SharedAccessSignature)\\s*=/i.test(String(v));",
+         a: '  return true;' },
   H21: { que: 'el mes en curso se pide hasta fin de mes, o sea hacia el futuro',
          de: 'const hasta = iso(fin) > hoy ? hoy : iso(fin);', a: 'const hasta = iso(fin);' },
   H22: { que: 'la bateria por meses sale del mas nuevo al mas viejo',
@@ -419,6 +422,15 @@ prueba('T16 un valor que no es numero vale cero', (M) => {
   igual(M.num('no soy un numero'), 0, 'texto');
   igual(M.num('12'), 12, 'texto numerico si vale');
   igual(M.num(0), 0, 'el cero explicito sigue siendo cero');
+});
+
+prueba('T29 una cadena de conexion que no lo es se detecta antes de llamar a Azure', (M) => {
+  cierto(M.pintaDeConexion('DefaultEndpointsProtocol=https;AccountName=redtecos;AccountKey=abc==;EndpointSuffix=core.windows.net'),
+    'una cadena de verdad tiene que pasar');
+  cierto(!M.pintaDeConexion('<la misma que usaste para --huecos>'),
+    'un placeholder pegado tal cual: pasa de verdad y hay que atajarlo');
+  cierto(!M.pintaDeConexion(''), 'vacia no');
+  cierto(!M.pintaDeConexion('   '), 'solo espacios no');
 });
 
 /* ── Corredor ─────────────────────────────────────────────────────────────── */

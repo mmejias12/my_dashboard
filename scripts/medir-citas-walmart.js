@@ -284,6 +284,13 @@ function contrastar(fila, op) {
    mañana, y marcarla como "no informada" seria una falsa alarma.          */
 const esWalmart = (op) => /^\s*ZWM/i.test(String((op && op.bodegaDestinoStr) || ''));
 
+/* MEDIDO el 6-nov: el campo de cita en Redlink es libre y hay gente tipeando
+   relleno — aparecieron "123456", "654321" y "1378358" en transferencias a
+   Walmart. Las citas de verdad son de OCHO digitos (42743424, 42749532...).
+   Una cita con otra forma no va a cruzar nunca, y no es culpa del cruce: es
+   un dato que hay que corregir en el origen. */
+function citaDeWalmart(c) { return /^\d{8}$/.test(String(c || '').trim()); }
+
 function fechaDeOp(op) {
   return String(op.fechaDespacho || op.fechaRequerida || '').slice(0, 10);
 }
@@ -438,23 +445,50 @@ const miles = (n) => Number(n || 0).toLocaleString('es-CL');
 
 async function main() {
   const args = process.argv.slice(2);
-  const archivo = args.find(a => a.indexOf('--') !== 0);
+  const rutas = args.filter(a => a.indexOf('--') !== 0);
+  /* Varios reportes de una: es la unica forma de cerrar el cruce al reves y de
+     validar la regla. Con UN archivo del dia no hay nada confirmado todavia y
+     los bordes de la ventana se comen el resultado. Una carpeta vale por
+     todos los .xlsx que tenga adentro. */
+  const archivos = [];
+  rutas.forEach(function (r) {
+    let st = null;
+    try { st = fs.statSync(r); } catch (e) { console.error('No existe: ' + r); process.exit(1); }
+    if (st.isDirectory()) {
+      fs.readdirSync(r).filter(n => /\.xlsx$/i.test(n) && n.indexOf('~$') !== 0)
+        .sort().forEach(n => archivos.push(require('path').join(r, n)));
+    } else archivos.push(r);
+  });
+  const archivo = archivos[0];
   const dias = Number((args.find(a => a.startsWith('--dias=')) || '').split('=')[1]) || 20;
   // Mismo default y misma variable que usa la produccion (backfill-operaciones).
   const contenedor = (args.find(a => a.startsWith('--contenedor=')) || '').split('=')[1]
     || process.env.OS_OPS_CONTAINER || 'redtec-os-operaciones';
   const detalle = args.includes('--detalle');
-  if (!archivo) { console.error('Falta el archivo. Uso: node scripts/medir-citas-walmart.js <Reporte-RedTec.xlsx>'); process.exit(1); }
+  if (!archivo) {
+    console.error('Falta el archivo. Uso:');
+    console.error('  node scripts/medir-citas-walmart.js <Reporte-RedTec.xlsx>');
+    console.error('  node scripts/medir-citas-walmart.js <uno.xlsx> <otro.xlsx> <otro.xlsx>');
+    console.error('  node scripts/medir-citas-walmart.js <carpeta con los .xlsx>');
+    process.exit(1);
+  }
   exigirConexion();
 
-  const wm = filasWalmart(leerXlsx(fs.readFileSync(archivo)));
+  const wm = [];
+  archivos.forEach(function (a) {
+    const f = filasWalmart(leerXlsx(fs.readFileSync(a)));
+    f.forEach(x => { x._archivo = require('path').basename(a); wm.push(x); });
+  });
   const fechas = wm.map(f => f.fecha).filter(Boolean).sort();
   const desde = corrido(fechas[0], -dias), hasta = corrido(fechas[fechas.length - 1], dias);
 
   console.log('MEDIR CITAS WALMART · no escribe nada');
-  console.log('  reporte : ' + archivo);
+  console.log('  reportes: ' + archivos.length + (archivos.length === 1 ? ' · ' + require('path').basename(archivo)
+    : ' archivos: ' + archivos.map(a => require('path').basename(a)).join(', ')));
   console.log('  filas   : ' + wm.length + ' · citas distintas: ' + new Set(wm.map(f => f.cita)).size);
-  console.log('  recibido: ' + fechas[0] + ' .. ' + fechas[fechas.length - 1]);
+  const diasReportados = Array.from(new Set(fechas)).sort();
+  console.log('  recibido: ' + fechas[0] + ' .. ' + fechas[fechas.length - 1] +
+    '  (' + diasReportados.length + ' dia(s) reportado(s))');
   console.log('  cold    : ' + contenedor + ' · ' + desde + ' .. ' + hasta + ' (+-' + dias + ' dias)');
 
   const { ops, dias: nDias, conBlob } = await leerCold(desde, hasta, contenedor);
@@ -484,6 +518,13 @@ async function main() {
   console.log('  de las que van a bodegas ZWM (' + miles(zwm.length) + '), con nroCita: ' +
     miles(zwmCita) + ' (' + (zwm.length ? (zwmCita / zwm.length * 100).toFixed(1) : 0) + '%)' +
     '   <- esta es la cobertura que importa');
+  const malaForma = zwm.filter(o => norm(o.nroCita) && !citaDeWalmart(o.nroCita));
+  if (malaForma.length) {
+    console.log('  de esas, con cita que NO tiene forma de cita de Walmart: ' + miles(malaForma.length) +
+      ' (' + (zwmCita ? (malaForma.length / zwmCita * 100).toFixed(1) : 0) + '%)');
+    const ejemplos = Array.from(new Set(malaForma.map(o => norm(o.nroCita)))).slice(0, 8);
+    console.log('    ejemplos: ' + ejemplos.join(', ') + '   <- tipeadas a mano, no van a cruzar nunca');
+  }
 
   const idx = indexar(ops);
   const citas = agruparPorCita(wm);
@@ -539,6 +580,17 @@ async function main() {
   const invDias = Number((process.argv.find(a => a.startsWith('--inverso-dias=')) || '').split('=')[1]);
   const vDias = Number.isFinite(invDias) ? invDias : 1;
   const invDesde = corrido(fechas[0], -vDias), invHasta = fechas[fechas.length - 1];
+  /* Con varios dias reportados seguidos, el interior de la ventana SI es
+     comparable: lo unico sucio son los bordes. Se avisa cuando el periodo
+     tiene huecos, porque un dia sin reportar hace parecer "no informado"
+     todo lo de ese dia. */
+  const esperados = Math.round((new Date(invHasta) - new Date(diasReportados[0])) / 86400000) + 1;
+  if (diasReportados.length > 1 && diasReportados.length < esperados) {
+    console.log('\n  OJO: el periodo va del ' + diasReportados[0] + ' al ' + invHasta + ' (' + esperados +
+      ' dias) pero sólo hay ' + diasReportados.length + ' reportados.');
+    console.log('  Los ' + (esperados - diasReportados.length) + ' dias que faltan van a aparecer como "no informados"' +
+      ' y no lo son.');
+  }
   const inv = cruceInverso(ops, citas.map(c => c.cita), invDesde, invHasta);
   const pal = (a) => miles(a.reduce((x, o) => x + (Number(o.cantidadDespachada) || 0), 0));
 
@@ -617,6 +669,6 @@ async function main() {
 module.exports = { entradasZip, leerSharedStrings, leerHoja, columnaANumero, serialAFecha,
                    leerXlsx, filasWalmart, reglaCantidad, indexar, clasificar, contrastar,
                    fechasEntre, corrido, COLUMNAS, pintaDeConexion, cuentaDe, cuentaValida, noExiste,
-                   estaConfirmada, agruparPorCita, esWalmart, fechaDeOp, cruceInverso };
+                   estaConfirmada, agruparPorCita, esWalmart, fechaDeOp, cruceInverso, citaDeWalmart };
 
 if (require.main === module) main().catch(e => { console.error(e); process.exit(1); });

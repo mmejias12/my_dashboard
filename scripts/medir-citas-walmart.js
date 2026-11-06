@@ -228,13 +228,19 @@ const norm = (v) => (v === null || v === undefined) ? '' : String(v).trim();
    exacto; se mide aparte para saber cuánto pesa. */
 function indexar(ops) {
   const porCita = new Map(), conObs = [];
+  let multiples = 0, sinExtraer = 0;
   ops.forEach(function (o) {
-    const c = norm(o.nroCita);
-    if (c) { if (!porCita.has(c)) porCita.set(c, []); porCita.get(c).push(o); }
+    const cs = citasDeTexto(o.nroCita);
+    if (cs.length > 1) multiples++;
+    if (!cs.length && norm(o.nroCita)) sinExtraer++;
+    cs.forEach(function (c) {
+      if (!porCita.has(c)) porCita.set(c, []);
+      porCita.get(c).push(o);
+    });
     const ob = norm(o.observacion);
     if (ob) conObs.push(o);
   });
-  return { porCita, conObs };
+  return { porCita, conObs, multiples, sinExtraer };
 }
 
 function clasificar(fila, idx) {
@@ -291,6 +297,17 @@ const esWalmart = (op) => /^\s*ZWM/i.test(String((op && op.bodegaDestinoStr) || 
    un dato que hay que corregir en el origen. */
 function citaDeWalmart(c) { return /^\d{8}$/.test(String(c || '').trim()); }
 
+/* MEDIDO el 6-nov: el campo no siempre trae UNA cita. Trae "42704805-42710381"
+   (dos), "42713735 - 42716539" (dos), "42710724." (una con punto pegado). Si
+   se busca el campo completo como si fuera una cita, esas no cruzan nunca —
+   y no es culpa del dato, es del indice. Se extraen TODAS las secuencias de
+   ocho digitos y la operacion queda indexada bajo cada una.
+   "5994-5992-6004" y "1" no dan ninguna: esas si son irrecuperables.        */
+function citasDeTexto(v) {
+  const m = String(v || '').match(/\d{8}/g) || [];
+  return Array.from(new Set(m));
+}
+
 function fechaDeOp(op) {
   return String(op.fechaDespacho || op.fechaRequerida || '').slice(0, 10);
 }
@@ -307,13 +324,16 @@ function cruceInverso(ops, citasWM, desde, hasta) {
     const f = fechaDeOp(o);
     return f >= desde && f <= hasta;
   });
-  const sinCita = candidatas.filter(o => !norm(o.nroCita));
-  const conCita = candidatas.filter(o => norm(o.nroCita));
+  const sinCita = candidatas.filter(o => !citasDeTexto(o.nroCita).length);
+  const conCita = candidatas.filter(o => citasDeTexto(o.nroCita).length);
+  // Informada si CUALQUIERA de sus citas aparece en el reporte: una
+  // transferencia que cubre dos citas se informa con que venga una.
+  const informada = (o) => citasDeTexto(o.nroCita).some(c => hay.has(c));
   return {
     candidatas: candidatas.length,
     sinCita: sinCita,
-    informadas: conCita.filter(o => hay.has(norm(o.nroCita))),
-    noInformadas: conCita.filter(o => !hay.has(norm(o.nroCita)))
+    informadas: conCita.filter(informada),
+    noInformadas: conCita.filter(o => !informada(o))
   };
 }
 
@@ -520,13 +540,22 @@ async function main() {
     '   <- esta es la cobertura que importa');
   const malaForma = zwm.filter(o => norm(o.nroCita) && !citaDeWalmart(o.nroCita));
   if (malaForma.length) {
-    console.log('  de esas, con cita que NO tiene forma de cita de Walmart: ' + miles(malaForma.length) +
+    const recuperables = malaForma.filter(o => citasDeTexto(o.nroCita).length);
+    const perdidas = malaForma.filter(o => !citasDeTexto(o.nroCita).length);
+    console.log('  de esas, con el campo de cita mal escrito: ' + miles(malaForma.length) +
       ' (' + (zwmCita ? (malaForma.length / zwmCita * 100).toFixed(1) : 0) + '%)');
-    const ejemplos = Array.from(new Set(malaForma.map(o => norm(o.nroCita)))).slice(0, 8);
-    console.log('    ejemplos: ' + ejemplos.join(', ') + '   <- tipeadas a mano, no van a cruzar nunca');
+    console.log('    recuperables (traen una o mas citas de 8 digitos adentro): ' + miles(recuperables.length));
+    if (recuperables.length) console.log('      ej: ' +
+      Array.from(new Set(recuperables.map(o => norm(o.nroCita)))).slice(0, 4).join('  |  '));
+    console.log('    irrecuperables (no hay ninguna cita adentro): ' + miles(perdidas.length));
+    if (perdidas.length) console.log('      ej: ' +
+      Array.from(new Set(perdidas.map(o => norm(o.nroCita)))).slice(0, 6).join('  |  ') +
+      '   <- estas hay que corregirlas en el origen');
   }
 
   const idx = indexar(ops);
+  if (idx.multiples) console.log('  operaciones cuyo campo de cita trae MAS DE UNA cita: ' + miles(idx.multiples) +
+    ' (quedan indexadas bajo cada una)');
   const citas = agruparPorCita(wm);
   const variasRecepciones = citas.filter(c => c.filas > 1);
   if (variasRecepciones.length) {
@@ -669,6 +698,7 @@ async function main() {
 module.exports = { entradasZip, leerSharedStrings, leerHoja, columnaANumero, serialAFecha,
                    leerXlsx, filasWalmart, reglaCantidad, indexar, clasificar, contrastar,
                    fechasEntre, corrido, COLUMNAS, pintaDeConexion, cuentaDe, cuentaValida, noExiste,
-                   estaConfirmada, agruparPorCita, esWalmart, fechaDeOp, cruceInverso, citaDeWalmart };
+                   estaConfirmada, agruparPorCita, esWalmart, fechaDeOp, cruceInverso, citaDeWalmart,
+                   citasDeTexto };
 
 if (require.main === module) main().catch(e => { console.error(e); process.exit(1); });

@@ -409,6 +409,59 @@ function chipsDeMesHtml(meses, mes) {
     '" data-pm="' + esc(m) + '">' + esc(etiquetaDeMes(m) || m) + '</button>').join('') + '</div>';
 }
 
+/** LOS QUE TIENEN EL PALLET DE UNA PATA, los mayores primero.
+ *
+ *  El numero de CLIENTES o de RETAIL es la suma de decenas de socios y hasta
+ *  ahora no habia forma de abrirlo acá: el reparto por socio vive en el
+ *  tablero. Esto NO repite esa lista —duplicar los 69 en dos paginas es
+ *  garantizar que algun dia digan cosas distintas—, muestra los mayores con
+ *  su recorrido del año y manda al tablero por el detalle.
+ *
+ *  Once puntos por socio, no trescientos: la pregunta que trae a alguien acá
+ *  es "cómo se movió Walmart este año", y eso son doce números. */
+function mayoresDePata(socios, cuantos) {
+  const ss = (Array.isArray(socios) ? socios : [])
+    .filter(s => { if (!s) return false;
+                   const v = Number(s.nivel);
+                   return Number.isFinite(v) && v !== 0; })
+    .sort((a, b) => (Number(b.nivel) || 0) - (Number(a.nivel) || 0) ||
+                    (String(a.cod) < String(b.cod) ? -1 : 1));
+  const n = Number(cuantos) > 0 ? Number(cuantos) : ss.length;
+  const top = ss.slice(0, n), cola = ss.slice(n);
+  return { top: top.map(x => ({ cod: String(x.cod == null ? '' : x.cod),
+                                nom: String(x.nom == null ? '' : x.nom),
+                                nivel: Number(x.nivel) || 0,
+                                cambio: Number(x.cambio) || 0,
+                                cota: !!x.sinPartida,
+                                meses: Array.isArray(x.meses) ? x.meses : [] })),
+           resto: { n: cola.length, nivel: cola.reduce((a, x) => a + (Number(x.nivel) || 0), 0) },
+           total: ss.reduce((a, x) => a + (Number(x.nivel) || 0), 0), conSaldo: ss.length };
+}
+
+/*  LOS MAYORES DIBUJADOS. Va plegado: el cajon ya tiene la cifra, la grilla,
+ *  el bloque de referencia y el calendario, y 10 filas mas lo convierten en
+ *  una pantalla de scroll para quien no vino a esto. */
+function sociosHtml(p, rotulo, nota) {
+  if (!p || !p.top || !p.top.length) return '';
+  const fila = s =>
+    '<tr><td>' + esc(s.nom) +
+    (s.cota ? '<span class="cotam" title="Sin saldo de partida al 31-12-2025: este nivel es un ' +
+              'piso, no un saldo">cota</span>' : '') +
+    '<div class="m">' + esc(s.cod) + '</div></td>' +
+    '<td class="mser">' +
+    miniNivel((s.meses || []).map(m => ({ dia: m.mes, cierre: m.cierre })),
+              { que: 'nivel de ' + s.nom, uni: 'meses' }) + '</td>' +
+    '<td class="num">' + mil(s.nivel) + '</td>' +
+    '<td class="num ' + (s.cambio > 0 ? 'bien' : s.cambio < 0 ? 'malo' : 'm') + '">' +
+    conSigno(s.cambio) + '</td></tr>';
+  return '<details class="socp"><summary><span>' + esc(rotulo) + '</span>' +
+         '<b>' + mil(p.total) + '</b></summary>' +
+         '<table class="socm"><tbody>' + p.top.map(fila).join('') + '</tbody></table>' +
+         '<p class="mut">' +
+         (p.resto.n ? 'Los otros ' + mil(p.resto.n) + ' suman <b>' + mil(p.resto.nivel) + '</b>. ' : '') +
+         esc(nota || '') + '</p></details>';
+}
+
 /*  EL CABEZAL DEL CALENDARIO: qué pata se está mirando y en qué mes.
  *
  *  El navegador lo rehace entero cada vez que se cambia de pata, asi que el
@@ -747,6 +800,13 @@ function pintarPata(cont, cod, todas, traDias) {
     const pie = cont.querySelector('.bgt');
     hoy = pie ? Number(pie.getAttribute('data-hoy')) || 0 : 0;
   }
+  /*  El bloque de socios de la pata elegida se muestra y el otro se guarda.
+   *  Sin pata —o con PLANTA, que se abre en sus nueve estaciones en la grilla
+   *  de arriba— no se muestra ninguno. */
+  const bloques = cont.querySelectorAll('[data-socios]');
+  for (let i = 0; i < bloques.length; i++)
+    bloques[i].hidden = bloques[i].getAttribute('data-socios') !== pata;
+
   const dias = [].concat.apply([], cal.semanas).filter(Boolean);
   const sel = dias.length ? dias[dias.length - 1].dia : null;
   /*  Sin pata no hay celda marcada, asi que `nom` quedo vacio y el rotulo se
@@ -1396,6 +1456,73 @@ table.desg.ref tbody td{opacity:.8}
     tiene que abrirse hacia la DERECHA: anclado a la derecha como en las
     tarjetas, se salia por el borde izquierdo y se comia el texto. */
 #dbody .info .tip{width:340px;left:-2px;right:auto}
+/*  QUIEN TIENE EL PALLET DE UNA PATA. Plegado por la misma razon que el
+    bloque de referencia: el cajon ya tiene la cifra, la grilla y el
+    calendario, y diez filas mas lo vuelven una pantalla de scroll para quien
+    no vino a esto. */
+.socw{margin-top:14px}
+details.socp{border-top:1px solid var(--line);padding-top:4px}
+details.socp>summary{display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  cursor:pointer;list-style:none;padding:6px 0;font:700 10.5px Inter;letter-spacing:.4px;
+  text-transform:uppercase;color:var(--ink2)}
+details.socp>summary::-webkit-details-marker{display:none}
+details.socp>summary span::after{content:" \\25B8";font-size:11px}
+details.socp[open]>summary span::after{content:" \\25BE"}
+details.socp>summary:hover{color:var(--ink)}
+details.socp>summary:focus-visible{outline:2px solid var(--pla);outline-offset:2px;border-radius:6px}
+details.socp>summary b{font:700 13px "JetBrains Mono",ui-monospace,monospace;color:var(--ink2)}
+/*  .drawer table lleva min-width:520px para que las tablas de dos columnas
+    del desglose no se aplasten. Esta tiene su propio reparto y ese piso la
+    sacaba 150px fuera del cajon en telefono: se lo saca. */
+/*  LA TABLA VA SOBRE BLANCO, no sobre el gris del cajon.
+    Medido en claro: --good sobre el gris del cajon (#eaedf3) da 4,28:1 y el
+    relleno de la mini-serie 2,95:1; los pisos son 4,5 y 3. Los mismos dos
+    colores sobre --card dan 4,76 y 3,46. Este bloque es lo primero que mete
+    cifras en verde y mini-series dentro del cajon, asi que el problema lo
+    trae el fondo, no la paleta: se le pone debajo la superficie para la que
+    esos colores fueron elegidos. */
+table.socm{width:100%;border-collapse:collapse;margin-top:6px;
+  background:var(--card);border:1px solid var(--line);border-radius:10px}
+table.socm td:first-child{padding-left:10px}
+table.socm td:last-child{padding-right:10px}
+table.socm tbody tr:last-child td{border-bottom:none}
+table.socm td{padding:5px 0;border-bottom:1px solid var(--line);vertical-align:middle;
+  font:600 12px Inter;color:var(--ink)}
+table.socm td.num{text-align:right;font:700 13px "JetBrains Mono",ui-monospace,monospace;
+  white-space:nowrap;padding-left:10px}
+table.socm td.num.bien{color:var(--good)}
+table.socm td.num.malo{color:var(--crit)}
+table.socm td.num.m{color:var(--ink2)}
+table.socm .m{font:400 9.5px "JetBrains Mono",ui-monospace,monospace;color:var(--ink2);
+  text-transform:none;letter-spacing:0;margin-top:1px}
+table.socm td.mser{width:126px;padding:2px 10px}
+table.socm td.mser svg{display:block}
+table.socm td:first-child{min-width:0;overflow-wrap:anywhere}
+/*  EN TELEFONO SE VA LA MINI-SERIE. Medido: la fila mide 520px y el cajon
+    370 a 420px de ancho, asi que la tabla sacaba 150px de scroll horizontal
+    —y el numero, que es lo que se viene a ver, quedaba fuera de pantalla—.
+    La serie es el "como llego"; el saldo es el "cuanto tiene". Si hay que
+    sacrificar uno de los dos en una pantalla chica, se sacrifica el primero. */
+/*  ".drawer table" va DESPUES en esta hoja y con la misma especificidad, asi
+    que gana: hay que subirle el peso al selector o el piso de 520px no se
+    quita. Medido: sin esto la tabla seguia en 520 dentro de un cajon de 370. */
+.drawer table.socm{min-width:0}
+@media (max-width:600px){
+  .drawer table.socm td.mser{display:none}
+  .drawer table.socm td.num{font-size:12px;padding-left:8px}
+  .drawer table.socm td{font-size:11.5px}
+}
+/*  LA NOTA DE ESTE BLOQUE VA UN TONO MAS FUERTE QUE EL RESTO DE LOS ".mut".
+    Medido: ".mut" es --ink3 y da 3,5:1 en claro y 2,8:1 en oscuro contra el
+    fondo del cajon; el piso de WCAG AA para texto de 13px es 4,5:1. En los
+    demas ".mut" el texto es un comentario; aca lleva una cifra (lo que suman
+    los otros) y la salvedad de que la partida de retail esta incompleta, que
+    es justamente lo que no puede quedar en gris claro. --ink2 mide 6,7 y 7,0. */
+details.socp p.mut{color:var(--ink2)}
+/*  "cota" = su nivel es un piso, no un saldo: el socio no esta en la semilla. */
+.cotam{display:inline-block;margin-left:6px;padding:1px 5px;border-radius:4px;
+  border:1px solid var(--line2);font:700 8.5px/1.5 Inter;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--ink2);vertical-align:1px;cursor:help}
 details.refp{margin-top:14px;border-top:1px solid var(--line);padding-top:4px}
 details.refp>summary{display:flex;align-items:baseline;justify-content:space-between;gap:10px;
   cursor:pointer;list-style:none;padding:7px 0;
@@ -1783,6 +1910,25 @@ function composiciones(datos, bodegas) {
   C.pool.patas = true;
   C.pool.pata = null;
   C.pool.pataNom = '';
+  /*  LOS DOS BLOQUES SE DIBUJAN SIEMPRE, escondidos, y el navegador muestra
+   *  el de la pata elegida. El cajon se rehace entero al abrirlo —abrirKpi
+   *  llama a desgloseHtml con DESG[clave]— asi que los dos tienen que estar
+   *  ahi; mostrar uno es cambiar un atributo, no ir a buscar datos.
+   *  Son 10 socios por pata con once puntos cada uno: unos 8 KB. */
+  C.pool.socios = {
+    CLIENTES: mayoresDePata(d.clientes, 10),
+    RETAIL: mayoresDePata(d.retail, 10),
+  };
+  C.pool.sociosNota = {
+    CLIENTES: 'El detalle de los ' + mil(C.pool.socios.CLIENTES.conSaldo || 0) +
+              ' con saldo está en el tablero de stock y flujos.',
+    /*  LA SALVEDAD DE RETAIL VA PEGADA AL NUMERO. La semilla del 31-12-2025
+     *  esta corta y ese hueco se reparte entre los retailers sin que sepamos
+     *  como: sin decirlo aca, alguien lee el porcentaje del mayor como exacto. */
+    RETAIL: 'La partida de retail al 31-12-2025 está incompleta, así que este reparto tiene un ' +
+            'margen que no sabemos repartir. El detalle de los ' +
+            mil(C.pool.socios.RETAIL.conSaldo || 0) + ' con saldo está en el tablero.',
+  };
   C.pool.infoCal = 'Solo los meses en que las tres patas tienen serie diaria: clientes y retail ' +
     'llegan hasta el último mes cerrado y la planta arranca en octubre. Elegir un día cambia la ' +
     'cifra de arriba y las tres patas al cierre de ESE día. Un clic en Clientes, Retail o Planta ' +
@@ -1967,7 +2113,7 @@ function miniSemana(dias) {
  *  ASI QUE LA BANDA ES LA DE LA SEMANA y va escrita al lado, con su minimo y
  *  su maximo: una linea sin su banda declarada puede exagerar cualquier cosa.
  *  El ultimo punto va marcado porque es el numero que la tarjeta publica.  */
-function miniNivel(dias) {
+function miniNivel(dias, rot) {
   const ds = (Array.isArray(dias) ? dias : []).filter(d => d && d.dia != null);
   if (!ds.length) return '';
   const An = 122, Al = 34, pad = 3.5;
@@ -1989,8 +2135,14 @@ function miniNivel(dias) {
     '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(d.cierre).toFixed(1) + '" r="' +
     (i === ds.length - 1 ? 3 : 1.9) + '" class="' + (i === ds.length - 1 ? 'mnu' : 'mnp') + '">' +
     '<title>' + esc(d.dia) + ': ' + mil(d.cierre) + '</title></circle>').join('');
+  /*  EL ROTULO ACCESIBLE DICE DE QUE ES LA SERIE. Nacio para las estaciones
+   *  de planta y decia "nivel de la planta" siempre; las filas de socios son
+   *  de un cliente y en meses, no en dias, y un lector de pantalla leia once
+   *  veces "nivel de la planta" en una tabla donde ninguna lo es. */
+  const que = (rot && rot.que) || 'nivel de la planta';
+  const uni = (rot && rot.uni) || 'días';
   return '<svg class="mini nivel" viewBox="0 0 ' + An + ' ' + Al + '" role="img" ' +
-         'aria-label="nivel de la planta en ' + ds.length + ' días, del ' + esc(ds[0].dia) +
+         'aria-label="' + esc(que) + ' en ' + ds.length + ' ' + esc(uni) + ', del ' + esc(ds[0].dia) +
          ' al ' + esc(ds[ds.length - 1].dia) + ', entre ' + mil(min) + ' y ' + mil(max) + '">' +
          '<path d="' + area + '" class="mna"/>' +
          '<polyline points="' + pts.join(' ') + '" class="mn"/>' + puntos + '</svg>';
@@ -2057,6 +2209,15 @@ function desgloseHtml(c) {
   if (c.nota) H.push('<p class="mut" style="margin:14px 0 0;max-width:62ch">' + esc(c.nota) + '</p>');
   /*  EL CALENDARIO VA AL FINAL DE TODO. Arriba esta "cuanto hay" —que es lo
    *  que se viene a buscar—; esto es "como se llego", y se mira despues. */
+  /*  QUIEN TIENE EL PALLET DE ESTA PATA. Van los dos, escondidos, y el
+   *  navegador muestra el de la pata elegida. */
+  if (c.socios) {
+    for (const k of ['CLIENTES', 'RETAIL']) {
+      const b = sociosHtml(c.socios[k], 'Quién tiene estos pallets',
+                           (c.sociosNota && c.sociosNota[k]) || '');
+      if (b) H.push('<div class="socw" data-socios="' + esc(k) + '" hidden>' + b + '</div>');
+    }
+  }
   if (c.cal) {
     H.push('<h5>Cierre día por día' + infoHtml(c.infoCal) + '</h5>');
     H.push('<div class="cmesesw">' + cabezalDeCalHtml(c.meses, c.mes, c.pataNom || '') + '</div>');
@@ -2368,7 +2529,7 @@ function script(serie, mes0, desg, aper, datos) {
                matrizPlantaEtapa, matrizHtml, filaCartera, listaHtml, chipEstado,
                titular, contarSalud, nivelDiarioDePlanta, ultimaSemana,
                diasDeArreglo, serieDelPool, mesesComunes, serieDeCalendario,
-               chipsDeMesHtml, cabezalDeCalHtml,
+               chipsDeMesHtml, cabezalDeCalHtml, mayoresDePata, sociosHtml,
                diaDeSemana, mesDelCalendario, calendarioDeMes, filasDelDia, pieDeDia,
                capital, transitoDePlanta, trioDeTransito,
                notaDeDia, calendarioHtml, pintarDia, pintarMes, pintarPata,
@@ -2675,7 +2836,7 @@ module.exports = { ETAPAS, GLIFO, ORDEN_SALUD, HITOS, CSS,
                    notaDeDia, calendarioHtml, pintarDia, pintarMes,
                    pintarPata, cierreDeBodegaEn, grillaBodegasHtml, infoHtml, queEs, QUE_ES,
                    DIA_CORTO, diasDeArreglo, serieDelPool, mesesComunes, serieDeCalendario,
-                   chipsDeMesHtml, cabezalDeCalHtml,
+                   chipsDeMesHtml, cabezalDeCalHtml, mayoresDePata, sociosHtml,
                    titular, tarjetas, decisiones, diasHasta, hitos,
                    desglose, composiciones, desgloseHtml, porRecorrido,
                    recortar, chipEstado, tarjetaHtml, matrizHtml, filaCartera, listaHtml,

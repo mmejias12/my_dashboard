@@ -419,7 +419,7 @@ function chipsDeMesHtml(meses, mes) {
  *
  *  Once puntos por socio, no trescientos: la pregunta que trae a alguien acá
  *  es "cómo se movió Walmart este año", y eso son doce números. */
-function mayoresDePata(socios, cuantos) {
+function mayoresDePata(socios, cuantos, bodega) {
   const ss = (Array.isArray(socios) ? socios : [])
     .filter(s => { if (!s) return false;
                    const v = Number(s.nivel);
@@ -428,6 +428,8 @@ function mayoresDePata(socios, cuantos) {
                     (String(a.cod) < String(b.cod) ? -1 : 1));
   const n = Number(cuantos) > 0 ? Number(cuantos) : ss.length;
   const top = ss.slice(0, n), cola = ss.slice(n);
+  const tot = ss.reduce((a, x) => a + (Number(x.nivel) || 0), 0);
+  const bod = Number(bodega) > 0 ? Number(bodega) : 0;
   return { top: top.map(x => ({ cod: String(x.cod == null ? '' : x.cod),
                                 nom: String(x.nom == null ? '' : x.nom),
                                 nivel: Number(x.nivel) || 0,
@@ -435,7 +437,13 @@ function mayoresDePata(socios, cuantos) {
                                 cota: !!x.sinPartida,
                                 meses: Array.isArray(x.meses) ? x.meses : [] })),
            resto: { n: cola.length, nivel: cola.reduce((a, x) => a + (Number(x.nivel) || 0), 0) },
-           total: ss.reduce((a, x) => a + (Number(x.nivel) || 0), 0), conSaldo: ss.length };
+           total: tot, conSaldo: ss.length,
+           /*  LO QUE DICE LA BODEGA, que NO es lo mismo que la suma de los
+            *  socios: la diferencia son las ubicaciones que no identifican a
+            *  nadie. En clientes son 1.038 de 218.517 —medio por ciento— y ese
+            *  numero cae justo entre dos cierres diarios de la misma semana,
+            *  asi que sin decirlo se lee como si fuera el saldo de otro dia. */
+           bodega: bod, residuo: bod > tot ? bod - tot : 0 };
 }
 
 /*  LOS MAYORES DIBUJADOS. Va plegado: el cajon ya tiene la cifra, la grilla,
@@ -454,11 +462,20 @@ function sociosHtml(p, rotulo, nota) {
     '<td class="num">' + mil(s.nivel) + '</td>' +
     '<td class="num ' + (s.cambio > 0 ? 'bien' : s.cambio < 0 ? 'malo' : 'm') + '">' +
     conSigno(s.cambio) + '</td></tr>';
+  /*  "217.479" SOLO SE LEE COMO UN SALDO MAS. Al lado, la celda de la pata
+   *  dice 218.517 y el calendario cierra en 218.517, asi que un numero
+   *  parecido y sin rotulo manda a buscar a que dia corresponde. "de 218.517"
+   *  lo vuelve una parte de un total en vez de un total distinto. */
+  const cifra = p.residuo
+    ? mil(p.total) + '<i>\u00a0de ' + mil(p.bodega) + '</i>'
+    : mil(p.total);
   return '<details class="socp"><summary><span>' + esc(rotulo) + '</span>' +
-         '<b>' + mil(p.total) + '</b></summary>' +
+         '<b>' + cifra + '</b></summary>' +
          '<table class="socm"><tbody>' + p.top.map(fila).join('') + '</tbody></table>' +
          '<p class="mut">' +
          (p.resto.n ? 'Los otros ' + mil(p.resto.n) + ' suman <b>' + mil(p.resto.nivel) + '</b>. ' : '') +
+         (p.residuo ? 'Hay <b>' + mil(p.residuo) + '</b> más en la bodega que ninguna ubicación ' +
+                      'atribuye a un socio. ' : '') +
          esc(nota || '') + '</p></details>';
 }
 
@@ -1470,7 +1487,21 @@ details.socp>summary span::after{content:" \\25B8";font-size:11px}
 details.socp[open]>summary span::after{content:" \\25BE"}
 details.socp>summary:hover{color:var(--ink)}
 details.socp>summary:focus-visible{outline:2px solid var(--pla);outline-offset:2px;border-radius:6px}
-details.socp>summary b{font:700 13px "JetBrains Mono",ui-monospace,monospace;color:var(--ink2)}
+details.socp>summary b{font:700 13px "JetBrains Mono",ui-monospace,monospace;color:var(--ink2);
+  white-space:nowrap}
+/*  "de 218.517" va mas suave y sin negrita: el numero del bloque es la suma de
+    los socios; el otro es el contexto que impide leerlo como un saldo suelto. */
+/*  "de" EN MINUSCULA: el sumario entero va en mayusculas por el rotulo, y
+    heredarlo deja "217.479 DE 218.517", que se lee como dos rotulos y no
+    como una parte de un total. */
+/*  --ink2 y no --ink3: medido, --ink3 a 13px da 3,5:1 en claro y 2,8:1 en
+    oscuro, bajo el piso de 4,5 de WCAG AA. La jerarquia la hace la negrita
+    —la cifra va en 700 y esto en 400—, no un gris que no se puede leer. */
+/*  LA SEPARACION VA EN EL TEXTO (un espacio duro), no solo en el margen: si
+    la hoja de estilo se pierde o la regla se rompe, "217.479de 218.517" queda
+    pegado y vuelve a leerse como un numero solo. */
+details.socp>summary b i{font-style:normal;font-weight:400;margin-left:2px;color:var(--ink2);
+  text-transform:none;letter-spacing:0}
 /*  .drawer table lleva min-width:520px para que las tablas de dos columnas
     del desglose no se aplasten. Esta tiene su propio reparto y ese piso la
     sacaba 150px fuera del cajon en telefono: se lo saca. */
@@ -1916,8 +1947,8 @@ function composiciones(datos, bodegas) {
    *  ahi; mostrar uno es cambiar un atributo, no ir a buscar datos.
    *  Son 10 socios por pata con once puntos cada uno: unos 8 KB. */
   C.pool.socios = {
-    CLIENTES: mayoresDePata(d.clientes, 10),
-    RETAIL: mayoresDePata(d.retail, 10),
+    CLIENTES: mayoresDePata(d.clientes, 10, cli.nivel),
+    RETAIL: mayoresDePata(d.retail, 10, ret.nivel),
   };
   C.pool.sociosNota = {
     CLIENTES: 'El detalle de los ' + mil(C.pool.socios.CLIENTES.conSaldo || 0) +

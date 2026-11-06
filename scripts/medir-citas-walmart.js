@@ -279,6 +279,35 @@ async function leerCold(desde, hasta) {
   return { ops, dias: dias.length, conBlob };
 }
 
+/* ── Credenciales ─────────────────────────────────────────────────────────
+   No basta con que la variable EXISTA. Si alguien pega un texto de ejemplo
+   —pasa, y ya pasó— la variable queda cargada con basura y el SDK de Azure
+   muere con un "Invalid URL" que no dice nada de lo que realmente ocurrio.
+   Acá se mira la PINTA de la cadena y se falla diciendo que pasa, sin
+   imprimir nunca el valor: del diagnostico sale el largo y nada mas.       */
+function pintaDeConexion(v) {
+  if (!v || !String(v).trim()) return false;
+  return /(^|;)\s*(DefaultEndpointsProtocol|AccountName|BlobEndpoint|SharedAccessSignature)\s*=/i.test(String(v));
+}
+
+function exigirConexion() {
+  const v = process.env.OS_STORAGE_CONN;
+  if (!v) {
+    console.error('Falta la variable de entorno OS_STORAGE_CONN. En esta misma consola:');
+    console.error('  $env:OS_STORAGE_CONN="<la cadena real del storage>"');
+    process.exit(1);
+  }
+  if (!pintaDeConexion(v)) {
+    console.error('OS_STORAGE_CONN esta cargada pero NO parece una cadena de conexion de Azure.');
+    console.error('  largo: ' + String(v).length + ' caracteres' +
+      (String(v) !== String(v).trim() ? '  ·  OJO: trae espacios en los bordes' : ''));
+    console.error('  (el valor no se imprime, a proposito)');
+    console.error('  Una cadena valida arranca con DefaultEndpointsProtocol= o BlobEndpoint=.');
+    console.error('  Si pegaste un texto de ejemplo entre < >, carga la cadena de verdad.');
+    process.exit(1);
+  }
+}
+
 /* ── Corrida ──────────────────────────────────────────────────────────────── */
 const miles = (n) => Number(n || 0).toLocaleString('es-CL');
 
@@ -288,11 +317,7 @@ async function main() {
   const dias = Number((args.find(a => a.startsWith('--dias=')) || '').split('=')[1]) || 20;
   const detalle = args.includes('--detalle');
   if (!archivo) { console.error('Falta el archivo. Uso: node scripts/medir-citas-walmart.js <Reporte-RedTec.xlsx>'); process.exit(1); }
-  if (!process.env.OS_STORAGE_CONN) {
-    console.error('Falta la variable de entorno OS_STORAGE_CONN. En esta misma consola:');
-    console.error('  $env:OS_STORAGE_CONN="<valor>"');
-    process.exit(1);
-  }
+  exigirConexion();
 
   const wm = filasWalmart(leerXlsx(fs.readFileSync(archivo)));
   const fechas = wm.map(f => f.fecha).filter(Boolean).sort();
@@ -392,6 +417,6 @@ async function main() {
 
 module.exports = { entradasZip, leerSharedStrings, leerHoja, columnaANumero, serialAFecha,
                    leerXlsx, filasWalmart, reglaCantidad, indexar, clasificar, contrastar,
-                   fechasEntre, corrido, COLUMNAS };
+                   fechasEntre, corrido, COLUMNAS, pintaDeConexion };
 
 if (require.main === module) main().catch(e => { console.error(e); process.exit(1); });

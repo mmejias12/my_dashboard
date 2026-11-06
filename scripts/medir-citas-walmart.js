@@ -193,6 +193,23 @@ function filasWalmart(matriz) {
   return out;
 }
 
+/* MEDIDO el 6-nov: una misma cita puede venir en VARIAS filas del reporte, una
+   por recepcion (la 42748849 de CMPC TISSUE vino en tres: 37 + 10 + 6). Del
+   lado de Redlink esa cita es UNA transferencia, asi que comparar fila por fila
+   compara 37 contra 53 y inventa una diferencia. Se agrupa antes de cruzar. */
+function agruparPorCita(filas) {
+  const m = new Map();
+  (filas || []).forEach(function (f) {
+    if (!m.has(f.cita)) m.set(f.cita, { cita: f.cita, filas: 0, recepciones: [], total: 0, malos: 0,
+                                        canje: 0, cliente: f.cliente, rut: f.rut, cd: f.cd, fecha: f.fecha });
+    const g = m.get(f.cita);
+    g.filas++; g.total += f.total; g.malos += f.malos; g.canje += f.canje;
+    if (f.recepcion) g.recepciones.push(f.recepcion);
+    if (f.fecha && (!g.fecha || f.fecha < g.fecha)) g.fecha = f.fecha;
+  });
+  return Array.from(m.values());
+}
+
 /* ── La regla de cantidades ────────────────────────────────────────────────
    Leída de la pantalla del módulo del proveedor, no inventada. Las positivas
    (Walmart aceptó MAS de lo despachado) se confirman por lo despachado: no se
@@ -232,10 +249,21 @@ function clasificar(fila, idx) {
 
 /* Contraste contra la verdad ya escrita. Sólo tiene sentido en operaciones ya
    confirmadas: en las pendientes no hay con qué comparar todavía. */
+/* MEDIDO el 6-nov: una operacion en etapa "Pendiente de Confirmacion" puede
+   traer fechaConfirmacion con cantidadConfirmada en 0. O sea esa fecha NO
+   prueba que este confirmada — parece ser la fecha prevista, no la del hecho.
+   Se exige cantidad > 0 Y que la etapa no diga "Pendiente": dos señales
+   independientes, porque con una sola ya nos equivocamos. */
+function estaConfirmada(op) {
+  const n = Number(op && op.cantidadConfirmada) || 0;
+  const etapa = String((op && op.etapaOperacion) || '');
+  return n > 0 && !/^\s*pendiente/i.test(etapa);
+}
+
 function contrastar(fila, op) {
   const r = reglaCantidad(op.cantidadDespachada, fila.canje);
   const confirmada = Number(op.cantidadConfirmada) || 0;
-  const yaConfirmada = !!op.fechaConfirmacion || confirmada > 0;
+  const yaConfirmada = estaConfirmada(op);
   return {
     yaConfirmada: yaConfirmada,
     laRegla: r.aConfirmar,
@@ -245,6 +273,30 @@ function contrastar(fila, op) {
     aceptadaWM: fila.canje,
     porInformar: r.porInformar
   };
+}
+
+/* ── El cruce AL REVES, que es lo que alimenta el correo al cliente ────────
+   La regla de Mails pide avisarle al cliente las transferencias suyas hacia
+   Walmart que Walmart NO informo: sin fila en el reporte no hay con que
+   confirmarlas, y el cliente tiene que ir a gestionarlo con el retail.
+   La ventana es mas angosta que la del cruce directo A PROPOSITO: una
+   transferencia despachada ayer todavia puede aparecer en el reporte de
+   mañana, y marcarla como "no informada" seria una falsa alarma.          */
+const esWalmart = (op) => /^\s*ZWM/i.test(String((op && op.bodegaDestinoStr) || ''));
+
+function fechaDeOp(op) {
+  return String(op.fechaDespacho || op.fechaRequerida || '').slice(0, 10);
+}
+
+function cruceInverso(ops, citasWM, desde, hasta) {
+  const hay = new Set(citasWM);
+  const candidatas = ops.filter(function (o) {
+    if (!esWalmart(o)) return false;
+    const f = fechaDeOp(o);
+    return f >= desde && f <= hasta;
+  });
+  const sinInformar = candidatas.filter(o => !hay.has(norm(o.nroCita)) || !norm(o.nroCita));
+  return { candidatas: candidatas.length, sinInformar: sinInformar };
 }
 
 /* ── Lectura del cold store ───────────────────────────────────────────────── */
@@ -415,7 +467,13 @@ async function main() {
   console.log('  de esas, con nroCita: ' + miles(conCita) + ' (' + (ops.length ? (conCita / ops.length * 100).toFixed(1) : 0) + '%)');
 
   const idx = indexar(ops);
-  const res = wm.map(function (f) {
+  const citas = agruparPorCita(wm);
+  const variasRecepciones = citas.filter(c => c.filas > 1);
+  if (variasRecepciones.length) {
+    console.log('  citas con mas de una recepcion: ' + variasRecepciones.length +
+      ' (se suman antes de cruzar; comparar fila por fila inventaria diferencias)');
+  }
+  const res = citas.map(function (f) {
     const c = clasificar(f, idx);
     const op = c.ops.length === 1 ? c.ops[0] : null;
     return { f, estado: c.estado, ops: c.ops, op, cmp: op ? contrastar(f, op) : null };
@@ -425,9 +483,9 @@ async function main() {
   res.forEach(r => { cuenta[r.estado] = (cuenta[r.estado] || 0) + 1; });
 
   console.log('\n' + '='.repeat(70));
-  console.log('COBERTURA DE LA LLAVE');
+  console.log('COBERTURA DE LA LLAVE  (sobre ' + citas.length + ' citas distintas)');
   ['exacta', 'por-observacion', 'duplicada', 'duplicada-observacion', 'sin-match'].forEach(function (k) {
-    if (cuenta[k]) console.log('  ' + k.padEnd(24) + String(cuenta[k]).padStart(4) + '  (' + (cuenta[k] / wm.length * 100).toFixed(0) + '%)');
+    if (cuenta[k]) console.log('  ' + k.padEnd(24) + String(cuenta[k]).padStart(4) + '  (' + (cuenta[k] / citas.length * 100).toFixed(0) + '%)');
   });
 
   const unicos = res.filter(r => r.op);
@@ -458,6 +516,25 @@ async function main() {
   console.log('  con diferencia a informar  ' + String(porInformar.length).padStart(4) +
               '  (' + miles(porInformar.reduce((a, r) => a + r.cmp.porInformar, 0)) + ' pallets)');
 
+  /* El cruce al reves: lo que alimentaria el correo al cliente. */
+  const invDias = Number((process.argv.find(a => a.startsWith('--inverso-dias=')) || '').split('=')[1]);
+  const vDias = Number.isFinite(invDias) ? invDias : 3;
+  const inv = cruceInverso(ops, citas.map(c => c.cita),
+                           corrido(fechas[0], -vDias), corrido(fechas[fechas.length - 1], 0));
+  console.log('\nEL CRUCE AL REVES  (lo que iria en el correo al cliente)');
+  console.log('  transferencias nuestras a bodegas ZWM en ' + corrido(fechas[0], -vDias) + '..' + fechas[fechas.length - 1] +
+              ': ' + inv.candidatas);
+  console.log('  de esas, SIN fila de Walmart: ' + inv.sinInformar.length +
+              ' (' + miles(inv.sinInformar.reduce((a, o) => a + (Number(o.cantidadDespachada) || 0), 0)) + ' pallets)');
+  console.log('  ventana de ' + vDias + ' dias hacia atras: angosta a proposito, una despachada ayer');
+  console.log('  todavia puede salir en el reporte de mañana. Se mueve con --inverso-dias=N');
+  if (inv.sinInformar.length && detalle) {
+    console.log('  las primeras 15:');
+    inv.sinInformar.slice(0, 15).forEach(o => console.log('    ped ' + String(o.nroPedido).padEnd(9) +
+      ' ' + fechaDeOp(o) + ' ' + String(o.clienteOrigenStr || '').slice(0, 30).padEnd(30) +
+      ' ' + String(o.cantidadDespachada).padStart(4) + ' pallets  ' + (o.bodegaDestinoStr || '')));
+  }
+
   if (detalle) {
     console.log('\nQUE OPERACIONES SON (las que matchearon)');
     const tipos = {}, bodegas = {}, etapas = {};
@@ -480,22 +557,31 @@ async function main() {
   }
 
   console.log('\n' + '='.repeat(70));
-  const cob = ((cuenta['exacta'] || 0) + (cuenta['por-observacion'] || 0)) / wm.length;
-  if (cob >= 0.95 && confirmados.length && calzan.length === confirmados.length) {
-    console.log('VEREDICTO: la cita sirve de llave y la regla reproduce lo ya confirmado.');
-    console.log('El reemplazo es mecanico; el trabajo esta en las bandejas de excepcion.');
-  } else if (cob < 0.8) {
-    console.log('VEREDICTO: la cita NO alcanza como llave (' + (cob * 100).toFixed(0) + '% de cobertura).');
-    console.log('El cruce ES el proyecto, no un detalle. Hay que entender que les falta.');
+  const cob = ((cuenta['exacta'] || 0) + (cuenta['por-observacion'] || 0)) / citas.length;
+  console.log('LO QUE SE MIDIO');
+  console.log('  la cita resuelve ' + (cob * 100).toFixed(0) + '% de las citas del reporte de forma directa');
+  console.log('  quedan ' + ((cuenta['sin-match'] || 0) + (cuenta['duplicada'] || 0) +
+    (cuenta['duplicada-observacion'] || 0)) + ' para bandeja de excepcion');
+
+  /* SIN OPERACIONES CONFIRMADAS NO HAY VEREDICTO SOBRE LA REGLA. Un archivo
+     del dia trae transferencias que todavia nadie confirmo: no hay verdad
+     escrita contra que contrastar, y decir que la regla "falla en 100%" seria
+     medir el reloj en vez de la hora. */
+  if (!confirmados.length) {
+    console.log('');
+    console.log('  LA REGLA NO SE PUDO CONTRASTAR: ninguna de las que matchearon esta');
+    console.log('  confirmada todavia (' + pendientes.length + ' pendientes). Un reporte del dia trae');
+    console.log('  transferencias recien despachadas, asi que no hay verdad escrita contra');
+    console.log('  que comparar. PARA VALIDAR LA REGLA HACE FALTA UN REPORTE VIEJO, de hace');
+    console.log('  una o dos semanas, cuyas transferencias el sistema ya haya confirmado.');
   } else {
-    console.log('VEREDICTO: cobertura ' + (cob * 100).toFixed(0) + '%' +
-      (confirmados.length ? ', la regla calza en ' + (calzan.length / confirmados.length * 100).toFixed(0) + '% de lo ya confirmado' : '') + '.');
-    console.log('Mirar arriba donde falla antes de decidir el alcance.');
+    console.log('  la regla reproduce lo confirmado en ' + calzan.length + ' de ' + confirmados.length);
   }
 }
 
 module.exports = { entradasZip, leerSharedStrings, leerHoja, columnaANumero, serialAFecha,
                    leerXlsx, filasWalmart, reglaCantidad, indexar, clasificar, contrastar,
-                   fechasEntre, corrido, COLUMNAS, pintaDeConexion, cuentaDe, cuentaValida, noExiste };
+                   fechasEntre, corrido, COLUMNAS, pintaDeConexion, cuentaDe, cuentaValida, noExiste,
+                   estaConfirmada, agruparPorCita, esWalmart, fechaDeOp, cruceInverso };
 
 if (require.main === module) main().catch(e => { console.error(e); process.exit(1); });

@@ -43,6 +43,16 @@ const OPCIONES = ['bodegas', 'retail', 'clientes', 'extra', 'planta', 'datos', '
 // EXTRAÑOS y los TRANSITO estan en el pool pero fuera del indicador, y esa
 // distincion no la trae SAP: es una decision de negocio y por eso esta
 // declarada aca y no deducida.
+//
+// TRES BODEGAS MAS APARECIERON y quedan AFUERA, preguntado y respondido el
+// 2026-11-06. Al extender la serie a todo el año salieron a la luz tres
+// bodegas de REDTEC que en octubre estaban en cero y por eso nadie habia
+// visto: RT09-140 TEMUCO INSPECCION (96 pallets de enero a agosto),
+// RT13-101 SANTIAGO LAVADO (261 de enero a febrero) y RT13-110 SANTIAGO
+// SALIDA PALLET REDTEC (2.626 que salieron el 26 de marzo). Enrique decidio
+// que por ahora no se contabilicen, porque no ejercen movimiento. Queda
+// escrito para que el dia que alguien las vea en la serie no reabra la
+// pregunta: ya se hizo.
 const NUEVE = new Set(['RT13-100', 'RT13-102', 'RT13-103', 'RT13-105',
                        'RT07-120', 'RT07-122', 'RT07-123', 'RT07-125', 'RT07-126']);
 

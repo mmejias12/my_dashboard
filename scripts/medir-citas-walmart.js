@@ -653,12 +653,21 @@ async function main() {
     const menos = grupo(r => r.cmp.aceptadaWM < r.cmp.despachada);
     const igual_ = grupo(r => r.cmp.aceptadaWM === r.cmp.despachada);
     const mas = grupo(r => r.cmp.aceptadaWM > r.cmp.despachada);
+    /* Cuando WM acepto IGUAL, "lo aceptado" y "lo despachado" son el MISMO
+       numero: contarlos por separado daba 270 y 270 sobre 270 casos, y un
+       resto negativo. Cada caso se clasifica una sola vez. */
     const comoQuedo = (arr) => {
-      const porAcept = arr.filter(r => r.cmp.loReal === r.cmp.aceptadaWM).length;
-      const porDesp = arr.filter(r => r.cmp.loReal === r.cmp.despachada).length;
-      const otro = arr.length - porAcept - porDesp;
-      return 'se confirmo lo aceptado en ' + porAcept + ', lo despachado en ' + porDesp +
-             (otro ? ', otra cosa en ' + otro : '');
+      let porAcept = 0, porDesp = 0, otro = 0;
+      arr.forEach(function (r) {
+        if (r.cmp.loReal === r.cmp.aceptadaWM) porAcept++;
+        else if (r.cmp.loReal === r.cmp.despachada) porDesp++;
+        else otro++;
+      });
+      const partes = [];
+      if (porAcept) partes.push('lo aceptado en ' + porAcept);
+      if (porDesp) partes.push('lo despachado en ' + porDesp);
+      if (otro) partes.push('otra cosa en ' + otro);
+      return 'se confirmo ' + (partes.length ? partes.join(', ') : 'nada');
     };
     console.log('\n  QUE PASO SEGUN EL SIGNO DE LA DIFERENCIA (sobre las ya confirmadas)');
     console.log('    WM acepto MENOS  ' + String(menos.length).padStart(4) + '   ' + (menos.length ? comoQuedo(menos) : ''));

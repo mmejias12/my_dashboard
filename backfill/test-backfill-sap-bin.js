@@ -542,5 +542,65 @@ chk('un documento sin fecha de creacion sigue extrayendose',
 chk('con CreaDate en null, que es lo que el tablero sabe declarar',
     FV.every(f => f.CreaDate === null), JSON.stringify(FV.map(f => f.CreaDate)));
 
+// ============================================================
+// EL GUARDIA DE DOCUMENTOS PERDIDOS
+// ============================================================
+console.log('\n— que hacer con los documentos que no se pudieron leer —');
+const VF=(n,t)=>B.veredictoDeFallidos(n,t);
+// CERO ES EL CASO NORMAL y no tiene que decir nada: una corrida limpia no
+// puede salir con un parrafo de advertencia
+chk('sin perdidos no pasa nada', VF(0,0).ok===true && VF(0,0).tolerado===false && VF(0,0).texto===null);
+// FALLA CERRADO: un documento que falta no es un documento sin movimiento,
+// es un movimiento que no sabemos cual es
+chk('uno solo ya corta la corrida', VF(1,0).ok===false, JSON.stringify(VF(1,0)));
+chk('y dice por que, no solo que fallo',
+    /no sabemos cual es/.test(VF(16,0).texto) && /NO se guarda/.test(VF(16,0).texto),
+    VF(16,0).texto);
+// EL BLOB VIEJO SOBREVIVE: sin --desde el extractor reemplaza el mes entero,
+// asi que guardar una corrida incompleta cambiaria data buena por data corrida
+chk('y promete que el blob anterior queda intacto',
+    /queda intacto/.test(VF(16,0).texto), VF(16,0).texto);
+// LA ESCOTILLA: un documento que SAP no entregue nunca no puede dejar la
+// cadena diaria muerta para siempre
+chk('con la escotilla justa, pasa', VF(16,16).ok===true && VF(16,16).tolerado===true,
+    JSON.stringify(VF(16,16)));
+chk('con la escotilla de sobra, tambien', VF(8,16).ok===true && VF(8,16).tolerado===true);
+chk('un pelo por encima del tope NO pasa', VF(17,16).ok===false, JSON.stringify(VF(17,16)));
+// TOLERADO NO ES LIMPIO: el que corre tiene que leer que el blob queda cojo
+chk('tolerar lo dice en voz alta',
+    /acepta/.test(VF(16,16).texto) && /incompleto/.test(VF(16,16).texto), VF(16,16).texto);
+chk('y nombra el tope que se uso', /--fallidos=16/.test(VF(16,16).texto), VF(16,16).texto);
+chk('el resultado lleva los numeros para quien quiera usarlos',
+    VF(16,16).perdidos===16 && VF(16,16).tope===16, JSON.stringify(VF(16,16)));
+// basura adentro no abre la puerta por accidente
+chk('un tope basura se lee como cero',
+    VF(1,'muchos').ok===false && VF(1,null).ok===false && VF(1,-5).ok===false);
+chk('un conteo basura se lee como cero', VF(null,0).ok===true && VF('x',0).ok===true);
+
+// LO QUE FALTO VIAJA EN EL BLOB DE LINEAS, que es lo que permite que
+// saldo-planta se entere. binmov ya lo traia; lineasbod no.
+const FUENTE2=require('fs').readFileSync(require('path').join(__dirname,'backfill-sap-bin.js'),'utf8');
+const bloqueL=FUENTE2.slice(FUENTE2.indexOf('PREFIJO_LINEAS + res.mes'),
+                           FUENTE2.indexOf('lineas: res.lineas || []'));
+chk('el blob de lineas declara los documentos perdidos',
+    /_fallidos: res\.fallidos/.test(bloqueL), '');
+chk('y los tipos que no supo interpretar',
+    /_tipos_desconocidos: res\.raros\.length/.test(bloqueL), '');
+// OJO: esto mira la FORMA del codigo, no su conducta. El bucle vive en main(),
+// que necesita SAP y el storage, asi que no hay como ejecutarlo en una prueba.
+// Por eso se exige que el guardia EXISTA —un indexOf de -1 pasaria la
+// comparacion de orden sin que el guardia este— y que vaya antes de escribir.
+const iGuardia = FUENTE2.indexOf('if (!vf.ok) {');
+const iEscribe = FUENTE2.indexOf("escribirJson(cc, 'binmov/'");
+chk('el guardia existe y va antes de escribir el mes',
+    iGuardia > 0 && iEscribe > 0 && iGuardia < iEscribe,
+    'guardia@' + iGuardia + ' escribe@' + iEscribe);
+chk('y lo que decide es el veredicto, no una condicion suelta',
+    /const vf = veredictoDeFallidos\(res\.fallidos\.length, TOLERA\);/.test(FUENTE2), '');
+chk('y la corrida termina con codigo distinto de cero',
+    /process\.exitCode = 1/.test(FUENTE2), '');
+chk('--fallidos es una opcion declarada, no un argumento suelto',
+    B.OPCIONES.indexOf('fallidos') >= 0, B.OPCIONES.join(','));
+
 console.log('\n'+ok+' ok, '+fail+' fallas\n');
 process.exit(fail?1:0);

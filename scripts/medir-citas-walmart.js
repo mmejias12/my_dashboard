@@ -288,6 +288,11 @@ function fechaDeOp(op) {
   return String(op.fechaDespacho || op.fechaRequerida || '').slice(0, 10);
 }
 
+/* DOS COSAS QUE NO SON LO MISMO, y juntarlas fue mi error en la primera
+   version: una transferencia CON cita que Walmart no informo es el caso de
+   negocio (el cliente tiene que ir a reclamarle al retail); una SIN cita no
+   se puede ni buscar, y es un problema de dato nuestro. Sumarlas da un
+   numero grande que no se puede accionar. */
 function cruceInverso(ops, citasWM, desde, hasta) {
   const hay = new Set(citasWM);
   const candidatas = ops.filter(function (o) {
@@ -295,8 +300,14 @@ function cruceInverso(ops, citasWM, desde, hasta) {
     const f = fechaDeOp(o);
     return f >= desde && f <= hasta;
   });
-  const sinInformar = candidatas.filter(o => !hay.has(norm(o.nroCita)) || !norm(o.nroCita));
-  return { candidatas: candidatas.length, sinInformar: sinInformar };
+  const sinCita = candidatas.filter(o => !norm(o.nroCita));
+  const conCita = candidatas.filter(o => norm(o.nroCita));
+  return {
+    candidatas: candidatas.length,
+    sinCita: sinCita,
+    informadas: conCita.filter(o => hay.has(norm(o.nroCita))),
+    noInformadas: conCita.filter(o => !hay.has(norm(o.nroCita)))
+  };
 }
 
 /* ── Lectura del cold store ───────────────────────────────────────────────── */
@@ -465,6 +476,14 @@ async function main() {
 
   const conCita = ops.filter(o => norm(o.nroCita)).length;
   console.log('  de esas, con nroCita: ' + miles(conCita) + ' (' + (ops.length ? (conCita / ops.length * 100).toFixed(1) : 0) + '%)');
+  /* Ese 16% global no dice nada: incluye emisiones, devoluciones y todo lo que
+     nunca tuvo cita. El numero que importa es la cobertura EN LAS DE WALMART,
+     que es donde la llave tiene que existir. */
+  const zwm = ops.filter(esWalmart);
+  const zwmCita = zwm.filter(o => norm(o.nroCita)).length;
+  console.log('  de las que van a bodegas ZWM (' + miles(zwm.length) + '), con nroCita: ' +
+    miles(zwmCita) + ' (' + (zwm.length ? (zwmCita / zwm.length * 100).toFixed(1) : 0) + '%)' +
+    '   <- esta es la cobertura que importa');
 
   const idx = indexar(ops);
   const citas = agruparPorCita(wm);
@@ -518,21 +537,37 @@ async function main() {
 
   /* El cruce al reves: lo que alimentaria el correo al cliente. */
   const invDias = Number((process.argv.find(a => a.startsWith('--inverso-dias=')) || '').split('=')[1]);
-  const vDias = Number.isFinite(invDias) ? invDias : 3;
-  const inv = cruceInverso(ops, citas.map(c => c.cita),
-                           corrido(fechas[0], -vDias), corrido(fechas[fechas.length - 1], 0));
+  const vDias = Number.isFinite(invDias) ? invDias : 1;
+  const invDesde = corrido(fechas[0], -vDias), invHasta = fechas[fechas.length - 1];
+  const inv = cruceInverso(ops, citas.map(c => c.cita), invDesde, invHasta);
+  const pal = (a) => miles(a.reduce((x, o) => x + (Number(o.cantidadDespachada) || 0), 0));
+
   console.log('\nEL CRUCE AL REVES  (lo que iria en el correo al cliente)');
-  console.log('  transferencias nuestras a bodegas ZWM en ' + corrido(fechas[0], -vDias) + '..' + fechas[fechas.length - 1] +
-              ': ' + inv.candidatas);
-  console.log('  de esas, SIN fila de Walmart: ' + inv.sinInformar.length +
-              ' (' + miles(inv.sinInformar.reduce((a, o) => a + (Number(o.cantidadDespachada) || 0), 0)) + ' pallets)');
-  console.log('  ventana de ' + vDias + ' dias hacia atras: angosta a proposito, una despachada ayer');
-  console.log('  todavia puede salir en el reporte de mañana. Se mueve con --inverso-dias=N');
-  if (inv.sinInformar.length && detalle) {
-    console.log('  las primeras 15:');
-    inv.sinInformar.slice(0, 15).forEach(o => console.log('    ped ' + String(o.nroPedido).padEnd(9) +
+  console.log('  transferencias nuestras a bodegas ZWM despachadas ' + invDesde + '..' + invHasta + ': ' + inv.candidatas);
+  console.log('    informadas por Walmart        ' + String(inv.informadas.length).padStart(4));
+  console.log('    CON cita, Walmart no informo  ' + String(inv.noInformadas.length).padStart(4) +
+              '  (' + pal(inv.noInformadas) + ' pallets)  <- esto va al correo');
+  console.log('    SIN cita en nuestro dato      ' + String(inv.sinCita.length).padStart(4) +
+              '  (' + pal(inv.sinCita) + ' pallets)  <- no es de Walmart, es nuestro');
+  console.log('');
+  console.log('  OJO AL LEER ESTO. El reporte cubre ' + (fechas[0] === invHasta ? 'UN dia' : 'pocos dias') +
+              ' de recepciones y acá se');
+  console.log('  comparan ' + (vDias + 1) + ' dias de despachos nuestros. Una despachada hoy puede');
+  console.log('  recibirse mañana y salir en el reporte de mañana: con UN solo archivo el');
+  console.log('  cruce al reves NO se puede cerrar. Para medirlo de verdad hacen falta');
+  console.log('  varios reportes seguidos y comparar el periodo completo. Ventana con --inverso-dias=N');
+  if (inv.noInformadas.length && detalle) {
+    console.log('\n  CON cita y sin informar, las primeras 15:');
+    inv.noInformadas.slice(0, 15).forEach(o => console.log('    ped ' + String(o.nroPedido).padEnd(9) +
+      ' ' + fechaDeOp(o) + ' cita ' + String(o.nroCita).padEnd(10) +
+      ' ' + String(o.clienteOrigenStr || '').slice(0, 28).padEnd(28) +
+      ' ' + String(o.cantidadDespachada).padStart(4) + ' pal  ' + (o.bodegaDestinoStr || '')));
+  }
+  if (inv.sinCita.length && detalle) {
+    console.log('\n  SIN cita, las primeras 10 (problema de dato nuestro, no de Walmart):');
+    inv.sinCita.slice(0, 10).forEach(o => console.log('    ped ' + String(o.nroPedido).padEnd(9) +
       ' ' + fechaDeOp(o) + ' ' + String(o.clienteOrigenStr || '').slice(0, 30).padEnd(30) +
-      ' ' + String(o.cantidadDespachada).padStart(4) + ' pallets  ' + (o.bodegaDestinoStr || '')));
+      ' ' + String(o.cantidadDespachada).padStart(4) + ' pal  ' + (o.bodegaDestinoStr || '')));
   }
 
   if (detalle) {

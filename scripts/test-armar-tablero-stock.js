@@ -1305,5 +1305,44 @@ chk('y sin ellas van en null, no en arreglo vacio',
     A.datos(BOD,{socios:[],nivel:{},mensual:[],ventana:{}},
                 {socios:[],nivel:{},mensual:[],ventana:{}},null,null).clientes_dias===null);
 
+// ============================================================
+// LA PAGINA DICE CUANDO LA SERIE ESTA CORRIDA
+// ============================================================
+console.log('\n— el control de documentos que la extraccion no pudo leer —');
+// Un mes incompleto NO se nota: la serie cierra igual en el saldo vivo, asi
+// que si la pagina no lo dice queda publicada una serie corrida con cara de
+// serie completa
+const CF=A.controlesConPlanta({controles:[]},
+  {generado:'2026-11-05', lineas_fallidas:{total:16, por_mes:[{mes:'2026-11',n:16}], sin_dato:[]}});
+const unoF=CF.filter(c=>/no pudo leer/.test(c.titulo))[0];
+chk('un mes con documentos perdidos levanta control', !!unoF && unoF.estado==='no pasa',
+    JSON.stringify(CF.map(c=>c.titulo)));
+chk('y dice cuantos y de que mes',
+    /16 documento/.test(unoF.texto) && /2026-11 \(16\)/.test(unoF.texto), unoF.texto);
+chk('y explica por que importa, no solo que paso',
+    /no sabemos cuál es/.test(unoF.texto) && /hacia atrás/.test(unoF.texto), unoF.texto);
+// UN BLOB VIEJO SIN EL CAMPO tambien hay que decirlo: no es cero perdidos
+const CS=A.controlesConPlanta({controles:[]},
+  {generado:'2026-11-05', lineas_fallidas:{total:0, por_mes:[], sin_dato:['2026-01','2026-02']}});
+const unoS=CS.filter(c=>/no pudo leer/.test(c.titulo))[0];
+chk('los meses de los que no se sabe tambien levantan control', !!unoS, '');
+chk('y se nombran', /2026-01, 2026-02/.test(unoS.texto) && /no se sabe/.test(unoS.texto), unoS.texto);
+// con un control de base, para que el resultado no sea null por estar vacio
+chk('sin perdidos, ese control no existe',
+    A.controlesConPlanta({controles:[{titulo:'Cobertura'}]},{generado:'2026-11-05'})
+      .filter(c=>/no pudo leer/.test(c.titulo)).length===0);
+chk('y con el campo en cero tampoco',
+    A.controlesConPlanta({controles:[{titulo:'Cobertura'}]},
+      {generado:'2026-11-05', lineas_fallidas:{total:0,por_mes:[],sin_dato:[]}})
+      .filter(c=>/no pudo leer/.test(c.titulo)).length===0);
+chk('no se come los controles que ya venian',
+    A.controlesConPlanta({controles:[{titulo:'Cobertura'}]},
+      {generado:'2026-11-05', lineas_fallidas:{total:1,por_mes:[{mes:'2026-11',n:1}],sin_dato:[]}})
+      .filter(c=>c.titulo==='Cobertura').length===1);
+chk('un por_mes roto no lo revienta',
+    !!A.controlesConPlanta({controles:[]},
+      {generado:'2026-11-05', lineas_fallidas:{total:5,por_mes:null,sin_dato:null}})
+      .filter(c=>/no pudo leer/.test(c.titulo))[0], '');
+
 console.log('\n' + ok + ' ok, ' + fail + ' fallas');
 process.exit(fail ? 1 : 0);

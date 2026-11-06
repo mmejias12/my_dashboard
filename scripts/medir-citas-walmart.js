@@ -323,6 +323,19 @@ function fechaDeOp(op) {
    esos dias, que es falso: no hay reporte con que compararlos.
    Una transferencia despachada el dia D se puede recibir hasta D+lag, asi que
    es comparable si CUALQUIERA de esos dias fue reportado.                   */
+/* Un despacho del dia D solo es comparable DE VERDAD si todos los dias en que
+   pudo recibirse (D..D+lag) fueron reportados. Si falta alguno, no se puede
+   saber si Walmart lo informo o si ese reporte no esta: contarlo como "no
+   informado" es inventar un reclamo. Esta funcion dice que dias cumplen. */
+function diasCerrados(diasReportados, lag) {
+  const rep = new Set(diasReportados || []);
+  const margen = Math.max(0, Number(lag) || 0);
+  return (diasReportados || []).filter(function (d) {
+    for (let i = 0; i <= margen; i++) if (!rep.has(corrido(d, i))) return false;
+    return true;
+  });
+}
+
 function cruceInverso(ops, citasWM, diasReportados, lag) {
   const rep = new Set(diasReportados || []);
   const margen = Math.max(0, Number(lag) || 0);
@@ -618,11 +631,45 @@ async function main() {
   if (fallan.length) {
     console.log('\n  DONDE LA REGLA NO REPRODUCE LO CONFIRMADO:');
     fallan.slice(0, 25).forEach(function (r) {
-      console.log('    cita ' + r.f.cita + ' · ped ' + r.op.nroPedido + ' · ' + (r.f.cliente || '').slice(0, 26).padEnd(26) +
+      console.log('    cita ' + r.f.cita + ' · ped ' + String(r.op.nroPedido).padEnd(8) + ' ' + (r.f.cliente || '').slice(0, 22).padEnd(22) +
         ' desp ' + String(r.cmp.despachada).padStart(4) + ' · WM ' + String(r.cmp.aceptadaWM).padStart(4) +
-        ' · regla ' + String(r.cmp.laRegla).padStart(4) + ' · real ' + String(r.cmp.loReal).padStart(4));
+        ' · regla ' + String(r.cmp.laRegla).padStart(4) + ' · real ' + String(r.cmp.loReal).padStart(4) +
+        ' · ' + String(r.op.etapaOperacion || '').padEnd(26) + ' conf x' + (r.op.confirmacionVeces === undefined ? '?' : r.op.confirmacionVeces));
     });
+    const reconf = fallan.filter(r => /reconfirm/i.test(String(r.op.etapaOperacion || '')) ||
+                                      Number(r.op.confirmacionVeces) > 1);
+    if (reconf.length) {
+      console.log('    de esas, ' + reconf.length + ' de ' + fallan.length + ' fueron RECONFIRMADAS: no es que la regla');
+      console.log('    falle, es que despues alguien volvio a confirmar por el total despachado.');
+    }
     if (fallan.length > 25) console.log('    ... y ' + (fallan.length - 25) + ' mas');
+  }
+
+  /* LA PREGUNTA DE NEGOCIO, contestada con dato en vez de con opinion: entre
+     las YA confirmadas, que paso cuando Walmart acepto menos y que paso
+     cuando acepto mas. Eso dice cual de los dos casos queda abierto. */
+  if (confirmados.length) {
+    const grupo = (f) => confirmados.filter(f);
+    const menos = grupo(r => r.cmp.aceptadaWM < r.cmp.despachada);
+    const igual_ = grupo(r => r.cmp.aceptadaWM === r.cmp.despachada);
+    const mas = grupo(r => r.cmp.aceptadaWM > r.cmp.despachada);
+    const comoQuedo = (arr) => {
+      const porAcept = arr.filter(r => r.cmp.loReal === r.cmp.aceptadaWM).length;
+      const porDesp = arr.filter(r => r.cmp.loReal === r.cmp.despachada).length;
+      const otro = arr.length - porAcept - porDesp;
+      return 'se confirmo lo aceptado en ' + porAcept + ', lo despachado en ' + porDesp +
+             (otro ? ', otra cosa en ' + otro : '');
+    };
+    console.log('\n  QUE PASO SEGUN EL SIGNO DE LA DIFERENCIA (sobre las ya confirmadas)');
+    console.log('    WM acepto MENOS  ' + String(menos.length).padStart(4) + '   ' + (menos.length ? comoQuedo(menos) : ''));
+    console.log('    WM acepto IGUAL  ' + String(igual_.length).padStart(4) + '   ' + (igual_.length ? comoQuedo(igual_) : ''));
+    console.log('    WM acepto MAS    ' + String(mas.length).padStart(4) + '   ' + (mas.length ? comoQuedo(mas) : ''));
+    if (mas.length) {
+      console.log('    las positivas, en detalle:');
+      mas.slice(0, 10).forEach(r => console.log('      cita ' + r.f.cita + ' ped ' + String(r.op.nroPedido).padEnd(8) +
+        ' desp ' + String(r.cmp.despachada).padStart(4) + ' · WM ' + String(r.cmp.aceptadaWM).padStart(4) +
+        ' · confirmado ' + String(r.cmp.loReal).padStart(4) + ' · ' + (r.op.etapaOperacion || '')));
+    }
   }
 
   const pendientes = unicos.filter(r => !r.cmp.yaConfirmada);
@@ -649,6 +696,23 @@ async function main() {
               '  (' + pal(inv.noInformadas) + ' pallets)  <- esto va al correo');
   console.log('    SIN cita en nuestro dato      ' + String(inv.sinCita.length).padStart(4) +
               '  (' + pal(inv.sinCita) + ' pallets)  <- no es de Walmart, es nuestro');
+  /* El numero de arriba todavia arrastra los bordes. Este es el limpio. */
+  const cerrados = diasCerrados(diasReportados, vDias);
+  if (cerrados.length && cerrados.length < diasReportados.length) {
+    const inv2 = cruceInverso(ops, citas.map(c => c.cita), cerrados, vDias);
+    console.log('');
+    console.log('  SOLO LOS DIAS CERRADOS (despacho y recepcion, los dos reportados): ' + cerrados.join(' '));
+    console.log('    transferencias en esos dias    ' + String(inv2.candidatas).padStart(4));
+    console.log('    informadas por Walmart         ' + String(inv2.informadas.length).padStart(4) +
+      (inv2.candidatas ? '  (' + (inv2.informadas.length / inv2.candidatas * 100).toFixed(0) + '%)' : ''));
+    console.log('    CON cita, Walmart no informo   ' + String(inv2.noInformadas.length).padStart(4) +
+      '  (' + pal(inv2.noInformadas) + ' pallets)');
+    console.log('    SIN cita en nuestro dato       ' + String(inv2.sinCita.length).padStart(4) +
+      '  (' + pal(inv2.sinCita) + ' pallets)');
+    console.log('    ESTE es el numero que se puede defender: en los otros dias falta el');
+    console.log('    reporte del dia de recepcion y no hay con que comparar.');
+  }
+
   if (diasReportados.length === 1) {
     console.log('');
     console.log('  OJO: con UN solo dia reportado esto no cierra. Una despachada ese dia puede');
@@ -717,6 +781,6 @@ module.exports = { entradasZip, leerSharedStrings, leerHoja, columnaANumero, ser
                    leerXlsx, filasWalmart, reglaCantidad, indexar, clasificar, contrastar,
                    fechasEntre, corrido, COLUMNAS, pintaDeConexion, cuentaDe, cuentaValida, noExiste,
                    estaConfirmada, agruparPorCita, esWalmart, fechaDeOp, cruceInverso, citaDeWalmart,
-                   citasDeTexto };
+                   citasDeTexto, diasCerrados };
 
 if (require.main === module) main().catch(e => { console.error(e); process.exit(1); });

@@ -47,6 +47,38 @@ chk('una semilla ilegible cuenta como cero',
     P.nivelDeSocio('x', null, dias).nivel === 0 && P.nivelDeSocio(null, null, dias).s0 === 0);
 chk('sin dias no se mueve', P.nivelDeSocio(100, new Map([['2026-01-03', 50]]), []).nivel === 100);
 
+// ── el cierre de cada mes, por socio ───────────────────────────────────────
+// Hasta ahora la serie por socio se recorria y se botaba: el unico rastro era
+// el minimo. Doce puntos contestan "como llego a tener eso" sin cargar los
+// trescientos dias de cada uno de los 142 socios.
+const DIASM = ['2026-01-05','2026-01-20','2026-02-10','2026-02-28','2026-03-15'];
+const MS = P.nivelDeSocio(100, new Map([['2026-01-05',50],['2026-02-10',-30],['2026-03-15',7]]), DIASM);
+chk('sale un punto por mes', MS.meses.length === 3, JSON.stringify(MS.meses));
+// SE GUARDA EL SALDO, NO EL MOVIMIENTO: lo que se quiere ver es cuanto tenia
+chk('y es el nivel al ULTIMO dia del mes, no el neto',
+    MS.meses.map(x => x.mes + ':' + x.cierre).join(',') === '2026-01:150,2026-02:120,2026-03:127',
+    MS.meses.map(x => x.mes + ':' + x.cierre).join(','));
+chk('el ultimo punto coincide con el nivel de hoy',
+    MS.meses[MS.meses.length - 1].cierre === MS.nivel, MS.nivel + '');
+// un mes sin movimiento igual tiene saldo: el socio no desaparece
+chk('un mes quieto arrastra el saldo anterior',
+    P.nivelDeSocio(80, new Map([['2026-01-05', 20]]), DIASM).meses
+      .map(x => x.cierre).join(',') === '100,100,100',
+    P.nivelDeSocio(80, new Map([['2026-01-05', 20]]), DIASM).meses.map(x => x.cierre).join(','));
+chk('sin movimiento en todo el año, la linea es plana en la partida',
+    P.nivelDeSocio(500, null, DIASM).meses.every(x => x.cierre === 500));
+chk('sin dias no hay meses, y es un arreglo vacio y no undefined',
+    Array.isArray(P.nivelDeSocio(100, null, []).meses) &&
+    P.nivelDeSocio(100, null, []).meses.length === 0);
+// el mes en curso entra con su ultimo dia, que es parcial: ES el saldo de hoy
+chk('el mes en curso entra aunque este a medias',
+    P.nivelDeSocio(0, new Map([['2026-03-15', 9]]), DIASM).meses.slice(-1)[0].mes === '2026-03');
+chk('los meses salen en orden',
+    MS.meses.map(x => x.mes).join(',') === '2026-01,2026-02,2026-03');
+// el minimo tiene que seguir saliendo igual que antes
+chk('el minimo no cambio', MS.min === 100 && MS.minDia === '2026-01-05',
+    MS.min + ' el ' + MS.minDia);
+
 // ── nivelesPool ────────────────────────────────────────────────────────────
 console.log('\n— el pool completo, y los socios que no estan en la semilla —');
 // la semilla viene en orden ALFABETICO y no por tamano: si el pool no se

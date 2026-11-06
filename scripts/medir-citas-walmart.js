@@ -323,11 +323,40 @@ function pintaDeConexion(v) {
   return /(^|;)\s*(DefaultEndpointsProtocol|AccountName|BlobEndpoint|SharedAccessSignature)\s*=/i.test(String(v));
 }
 
+/* El nombre de la cuenta NO es secreto: viaja en el host publico
+   <cuenta>.blob.core.windows.net. Se puede extraer y mostrar sin riesgo, y es
+   justo el dato que delata una cadena mal armada. La clave no se toca nunca. */
+function cuentaDe(v) {
+  const m = String(v || '').match(/(^|;)\s*AccountName\s*=\s*([^;]*)/i);
+  if (m) return m[2].trim();
+  const b = String(v || '').match(/(^|;)\s*BlobEndpoint\s*=\s*https?:\/\/([^.;/]+)/i);
+  return b ? b[2].trim() : null;
+}
+
+/* Regla de Azure, no preferencia mia: de 3 a 24 caracteres, SOLO minusculas y
+   digitos. Un guion bajo es imposible, asi que "os_storage_conn" se descarta
+   sin salir a la red y sin gastar un DNS que va a fallar igual. */
+function cuentaValida(nombre) {
+  return typeof nombre === 'string' && /^[a-z0-9]{3,24}$/.test(nombre);
+}
+
 function exigirConexion() {
   const v = process.env.OS_STORAGE_CONN;
   if (!v) {
     console.error('Falta la variable de entorno OS_STORAGE_CONN. En esta misma consola:');
     console.error('  $env:OS_STORAGE_CONN="<la cadena real del storage>"');
+    process.exit(1);
+  }
+  const cuenta = cuentaDe(v);
+  if (cuenta !== null && !cuentaValida(cuenta)) {
+    console.error('OS_STORAGE_CONN apunta a una cuenta de storage que NO PUEDE EXISTIR.');
+    console.error('  AccountName = "' + cuenta + '"   <-- eso no es un nombre de cuenta valido');
+    console.error('  (el nombre de cuenta no es secreto: va en el host publico. La clave no se imprime.)');
+    console.error('  Azure solo admite 3 a 24 caracteres, minusculas y digitos: ni guion bajo, ni');
+    console.error('  mayusculas, ni puntos. Parece que quedo el NOMBRE DE LA VARIABLE en su lugar.');
+    console.error('  La cadena se copia entera del portal:');
+    console.error('    Storage account > Claves de acceso > Cadena de conexion > Mostrar');
+    console.error('  y se pega completa, desde DefaultEndpointsProtocol hasta EndpointSuffix.');
     process.exit(1);
   }
   if (!pintaDeConexion(v)) {
@@ -467,6 +496,6 @@ async function main() {
 
 module.exports = { entradasZip, leerSharedStrings, leerHoja, columnaANumero, serialAFecha,
                    leerXlsx, filasWalmart, reglaCantidad, indexar, clasificar, contrastar,
-                   fechasEntre, corrido, COLUMNAS, pintaDeConexion, noExiste };
+                   fechasEntre, corrido, COLUMNAS, pintaDeConexion, cuentaDe, cuentaValida, noExiste };
 
 if (require.main === module) main().catch(e => { console.error(e); process.exit(1); });

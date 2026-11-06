@@ -377,6 +377,33 @@ function controlesConPlanta(extra, planta) {
              'ubicar en el tiempo, así que no entran en el número del tránsito.',
     });
   }
+  /*  UN MES INCOMPLETO NO SE NOTA SOLO.
+   *
+   *  La serie cierra igual en el saldo vivo —se calcula hacia atras desde
+   *  ahi— asi que un documento que la extraccion no pudo leer no descuadra
+   *  nada: corre los dias anteriores y se va callado. Esto solo llega hasta
+   *  aca cuando quien corrio el cierre lo acepto a proposito con --fallidos;
+   *  entonces la pagina tiene que decirlo, porque si no queda publicada una
+   *  serie corrida con cara de serie completa. */
+  const lf = p.lineas_fallidas || null;
+  if (lf && (Number(lf.total) > 0 || (Array.isArray(lf.sin_dato) && lf.sin_dato.length))) {
+    const porMes = (Array.isArray(lf.por_mes) ? lf.por_mes : [])
+      .map(x => esc(String(x && x.mes)) + ' (' + mil(Number(x && x.n) || 0) + ')').join(', ');
+    base.push({
+      titulo: 'Documentos que la extracción no pudo leer', estado: 'no pasa', medido: dia,
+      texto: (Number(lf.total) > 0
+                ? mil(Number(lf.total)) + ' documento(s) de bodega no se pudieron leer' +
+                  (porMes ? ' (' + porMes + ')' : '') + '. '
+                : '') +
+             (Array.isArray(lf.sin_dato) && lf.sin_dato.length
+                ? 'Y ' + esc(lf.sin_dato.join(', ')) + ' se extrajo antes de que esto se guardara, ' +
+                  'así que de esos meses no se sabe. '
+                : '') +
+             'Un documento que falta no es un documento sin movimiento: es un movimiento que no ' +
+             'sabemos cuál es, y como el nivel se calcula hacia atrás desde el saldo vivo, lo que ' +
+             'falte corre todos los días anteriores. Se arregla re-extrayendo esos meses.',
+    });
+  }
   const l = p.lectura || {};
   if (l.ok === false && l.desfase_s != null) {
     const seg = Number(l.desfase_s);

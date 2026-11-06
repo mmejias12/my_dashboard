@@ -54,6 +54,15 @@ const MUTACIONES = {
   H16: { que: 'el relleno ignora los huecos parciales',
          de: '  UNIVERSOS.forEach(u => (h.parciales[u] || []).forEach(f => juntas.add(f)));',
          a: '  ;' },
+  H26: { que: 'la costura se mide contra el dia equivocado',
+         de: '      const salto = num(sig.saldoInicial) - num(d.saldoFinal);',
+         a: '      const salto = num(sig.saldoFinal) - num(d.saldoFinal);' },
+  H27: { que: 'la descomposicion se queda solo con las costuras',
+         de: '  return { dias, costuras, sumaDias, sumaCosturas, total: sumaDias + sumaCosturas };',
+         a: '  return { dias, costuras, sumaDias, sumaCosturas, total: sumaCosturas };' },
+  H28: { que: 'un dia que no cierra se pasa por alto',
+         de: '    if (id && id.brecha !== 0) dias.push({ fecha: d.fecha, brecha: id.brecha });',
+         a: '    if (false) dias.push({ fecha: d.fecha, brecha: id.brecha });' },
   H23: { que: 'un rango sin dato en el almacen se cuenta como que la identidad cierra',
          de: "    cuadran: conIdentidad.filter(r => r.identidadNuestro.cuadra).length,",
          a: '    cuadran: resultados.length,' },
@@ -230,6 +239,50 @@ prueba('T14 la bateria por defecto cubre los casos que pueden fallar distinto', 
   const tope = r.find(x => x.nombre === 'tope del proveedor');
   igual(M.diasEntre(tope.desde, tope.hasta), M.MAX_DIAS_PROVEEDOR,
     'el rango tope tiene que medir exactamente el tope que declara stock-fetch');
+});
+
+/* Una serie de dias de retail hecha a mano, con UNA costura y UN dia que no
+   cierra, para que la descomposicion tenga algo que separar. */
+function dia(fecha, si, sf, ent, sal) {
+  return { fecha: fecha, saldoInicial: si, saldoFinal: sf,
+           transferencias: ent, salidaPalletReconfirmar: 0, otrasEntradas: 0,
+           entradaPalletReversa: 0, retiros: sal, otrasSalidas: 0, reubicacionSistema: 0 };
+}
+
+prueba('T27 la brecha de un rango se parte exacto en costuras y dias que no cierran', (M) => {
+  const serie = [
+    dia('2026-03-01', 1000, 1100, 100, 0),    // cierra bien
+    dia('2026-03-02', 1150, 1200,  50, 0),    // ABRE en 1150 y el anterior cerro en 1100 -> costura +50
+    dia('2026-03-03', 1200, 1260,  40, 0)     // declara 1260 pero 1200+40 = 1240 -> brecha de dia +20
+  ];
+  const d = M.descomponer('retail', serie);
+  igual(d.costuras.length, 1, 'una sola costura');
+  igual(d.costuras[0], { fecha: '2026-03-01', sigue: '2026-03-02', salto: 50, cierra: 1100, abre: 1150 },
+    'la costura dice en que numero cierra y en cual abre');
+  igual(d.sumaCosturas, 50, 'suma de costuras');
+  igual(d.dias, [{ fecha: '2026-03-03', brecha: 20 }], 'el dia que no cierra, con su brecha');
+  igual(d.sumaDias, 20, 'suma de dias');
+  igual(d.total, 70, 'las dos partes');
+
+  /* Y la parte que importa: el total de la descomposicion TIENE que ser la
+     brecha que da la identidad sobre el rango entero. Es algebra, no suerte. */
+  const resumen = { saldoInicial: serie[0].saldoInicial, saldoFinal: serie[serie.length - 1].saldoFinal };
+  ['transferencias','salidaPalletReconfirmar','otrasEntradas','entradaPalletReversa',
+   'retiros','otrasSalidas','reubicacionSistema'].forEach(function (k) {
+    resumen[k] = serie.reduce((a, x) => a + (x[k] || 0), 0);
+  });
+  igual(M.identidad('retail', resumen).brecha, d.total,
+    'la descomposicion tiene que dar exactamente la brecha del rango');
+});
+
+prueba('T28 una serie sana no tiene ni costuras ni dias abiertos', (M) => {
+  const d = M.descomponer('retail', [
+    dia('2026-03-01', 1000, 1100, 100, 0),
+    dia('2026-03-02', 1100, 1150,  50, 0)
+  ]);
+  igual(d.costuras, [], 'sin costuras');
+  igual(d.dias, [], 'sin dias abiertos');
+  igual(d.total, 0, 'y brecha cero');
 });
 
 prueba('T25 sin proveedor igual hay veredicto: la identidad del cuadre', (M) => {

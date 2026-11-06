@@ -43,6 +43,19 @@ const MUTACIONES = {
          a: '  const porObs = [];' },
   H11: { que: 'una operacion pendiente se cuenta como que la regla calzo',
          de: '    calza: yaConfirmada ? r.aConfirmar === confirmada : null,', a: '    calza: true,' },
+  H19: { que: 'una fecha de confirmacion basta para darla por confirmada',
+         de: "  return n > 0 && !/^\\s*pendiente/i.test(etapa);", a: '  return true;' },
+  H20: { que: 'una etapa pendiente con cantidad se cuenta como confirmada',
+         de: "  return n > 0 && !/^\\s*pendiente/i.test(etapa);", a: '  return n > 0;' },
+  H21: { que: 'las recepciones de una misma cita no se suman',
+         de: '    g.filas++; g.total += f.total; g.malos += f.malos; g.canje += f.canje;',
+         a: '    g.filas++; g.total = f.total; g.malos = f.malos; g.canje = f.canje;' },
+  H22: { que: 'el cruce inverso toma tambien bodegas que no son de Walmart',
+         de: "const esWalmart = (op) => /^\\s*ZWM/i.test(String((op && op.bodegaDestinoStr) || ''));",
+         a: 'const esWalmart = (op) => true;' },
+  H23: { que: 'una transferencia sin cita no cuenta como no informada',
+         de: '  const sinInformar = candidatas.filter(o => !hay.has(norm(o.nroCita)) || !norm(o.nroCita));',
+         a: '  const sinInformar = candidatas.filter(o => norm(o.nroCita) && !hay.has(norm(o.nroCita)));' },
   H17: { que: 'cualquier nombre de cuenta se acepta',
          de: "  return typeof nombre === 'string' && /^[a-z0-9]{3,24}$/.test(nombre);",
          a: "  return typeof nombre === 'string';" },
@@ -330,6 +343,60 @@ prueba('T20 una cuenta imposible se descarta sin salir a la red', (M) => {
   cierto(!M.cuentaValida('ab'), 'menos de 3');
   cierto(!M.cuentaValida('a'.repeat(25)), 'mas de 24');
   cierto(!M.cuentaValida('...'), 'un placeholder de ejemplo');
+});
+
+prueba('T21 una fecha de confirmacion NO alcanza para dar algo por confirmado', (M) => {
+  cierto(!M.estaConfirmada({ cantidadConfirmada: 0, etapaOperacion: 'Pendiente de Confirmación',
+                             fechaConfirmacion: '2026-11-06' }),
+    'MEDIDO el 6-nov: existe esa combinacion en el dato real. Si se cuenta como confirmada, ' +
+    'el contraste compara contra un cero y declara que la regla falla');
+  cierto(!M.estaConfirmada({ cantidadConfirmada: 24, etapaOperacion: 'Pendiente Adjuntar Respaldo' }),
+    'con cantidad pero etapa pendiente, tampoco');
+  cierto(M.estaConfirmada({ cantidadConfirmada: 24, etapaOperacion: 'Transferencia Confirmada' }),
+    'cantidad mas etapa confirmada: esa si');
+  cierto(!M.estaConfirmada({ cantidadConfirmada: 0, etapaOperacion: 'Transferencia Confirmada' }),
+    'confirmada en cero no es una confirmacion');
+});
+
+prueba('T22 varias recepciones de una misma cita se suman antes de cruzar', (M) => {
+  // Caso real: la cita 42748849 de CMPC TISSUE vino en tres filas.
+  const g = M.agruparPorCita([
+    { cita: '42748849', cliente: 'CMPC TISSUE SA', rut: '1-9', cd: '6009', fecha: '2026-11-05', total: 37, malos: 0, canje: 37, recepcion: '404073' },
+    { cita: '42748849', cliente: 'CMPC TISSUE SA', rut: '1-9', cd: '6009', fecha: '2026-11-05', total: 10, malos: 0, canje: 10, recepcion: '404074' },
+    { cita: '42748849', cliente: 'CMPC TISSUE SA', rut: '1-9', cd: '6009', fecha: '2026-11-05', total: 6, malos: 1, canje: 5, recepcion: '404075' },
+    { cita: '42750687', cliente: 'TUCAPEL', rut: '2-7', cd: '6009', fecha: '2026-11-05', total: 3, malos: 0, canje: 3, recepcion: '404426' }
+  ]);
+  igual(g.length, 2, 'dos citas distintas');
+  const c = g.find(x => x.cita === '42748849');
+  igual([c.filas, c.total, c.malos, c.canje], [3, 53, 1, 52],
+    'las tres recepciones se suman: del lado de Redlink esa cita es UNA transferencia, ' +
+    'y comparar 37 contra 53 inventaria una diferencia que no existe');
+  igual(c.recepciones.length, 3, 'se guardan los numeros de recepcion');
+});
+
+prueba('T23 el cruce al reves encuentra lo nuestro que Walmart no informo', (M) => {
+  const ops = [
+    { nroPedido: 1, nroCita: '42750687', bodegaDestinoStr: 'ZWM01 CD WM LO AGUIRRE SECO', fechaDespacho: '2026-11-05', cantidadDespachada: 3 },
+    { nroPedido: 2, nroCita: '99999999', bodegaDestinoStr: 'ZWM11 CD WM EL PEÑON',        fechaDespacho: '2026-11-05', cantidadDespachada: 20 },
+    { nroPedido: 3, nroCita: '',         bodegaDestinoStr: 'ZWM02 CD WM QUILICURA FRIO',  fechaDespacho: '2026-11-05', cantidadDespachada: 7 },
+    { nroPedido: 4, nroCita: '42750688', bodegaDestinoStr: 'CENCOSUD LO ESPEJO',          fechaDespacho: '2026-11-05', cantidadDespachada: 9 },
+    { nroPedido: 5, nroCita: '42750689', bodegaDestinoStr: 'ZWM01 CD WM LO AGUIRRE SECO', fechaDespacho: '2026-09-01', cantidadDespachada: 5 }
+  ];
+  const r = M.cruceInverso(ops, ['42750687'], '2026-11-02', '2026-11-05');
+  igual(r.candidatas, 3, 'solo las ZWM dentro de la ventana: el pedido 4 no es Walmart y el 5 es viejo');
+  igual(r.sinInformar.map(o => o.nroPedido).sort(), [2, 3],
+    'la 1 si la informo Walmart; la 2 tiene cita que Walmart no mando y la 3 no tiene cita');
+});
+
+prueba('T24 una bodega que no es de Walmart no entra al cruce inverso', (M) => {
+  cierto(M.esWalmart({ bodegaDestinoStr: 'ZWM08 WM RENTAPACK SANTIAGO' }), 'las ZWM si');
+  cierto(M.esWalmart({ bodegaDestinoStr: 'zwm01 minuscula' }), 'sin importar mayusculas');
+  cierto(!M.esWalmart({ bodegaDestinoStr: 'CENCOSUD LO ESPEJO' }), 'otro retail no');
+  cierto(!M.esWalmart({ bodegaDestinoStr: '' }), 'sin bodega no');
+  cierto(!M.esWalmart({}), 'sin el campo tampoco');
+  igual(M.fechaDeOp({ fechaDespacho: '2026-11-05T10:00:00', fechaRequerida: '2026-11-04' }), '2026-11-05',
+    'manda el despacho, que es cuando salio');
+  igual(M.fechaDeOp({ fechaRequerida: '2026-11-04' }), '2026-11-04', 'y si no hay despacho, la requerida');
 });
 
 /* ── Corredor ─────────────────────────────────────────────────────────────── */

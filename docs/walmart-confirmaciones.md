@@ -361,9 +361,19 @@ las filas de relleno que el servidor arrastra con la clave en cero. Con eso,
 **Avanzar de etapa.** Con `avanzaEtapa: true`, el servidor responde siempre
 `An error occurred while saving the entity changes`. No es validación —el
 cuerpo pasa— sino un fallo al escribir en la base, con la causa en una
-*inner exception* que no se expone. Probamos con y sin las filas de relleno,
-con y sin recepción: siempre el mismo error. Desde afuera no hay más que
-deducir: falta algo del estado del servidor que no se ve.
+*inner exception* que no se expone. Desde afuera no hay más que deducir: falta
+algo del estado del servidor que no se ve.
+
+Se probó, y falló igual, con todas estas variantes:
+
+- con y sin `recepcion`
+- con y sin las filas de relleno de `formDregistros`
+- con `fechaDespacho` llenada, que era la **única diferencia observable** entre
+  nuestro documento y los que el portal sí lista para confirmar (toda fila de
+  `/confirmar/emisiones` trae fecha de despacho; la nuestra la tenía en nulo)
+
+Tres cuerpos distintos, el mismo error exacto. La hipótesis de la fecha de
+despacho queda descartada.
 
 Entonces: **las cantidades se escriben, la confirmación no.**
 
@@ -385,10 +395,21 @@ Entonces: **las cantidades se escriben, la confirmación no.**
 > *"An error occurred while saving the entity changes"*. ¿Qué más espera el
 > comando `UpdateForm` para avanzar de etapa, y qué debería traer el cuerpo?
 
-Si eso no se responde, la alternativa no es seguir tanteando sino **mirar**:
-confirmar una transferencia a mano en el portal mientras se observa la red
-muestra el cuerpo exacto que manda la aplicación. Cinco minutos, sin tocar
-nada: uno confirma, el otro lee.
+### Dos callejones sin salida, para no recorrerlos de nuevo
+
+**Observar la red del portal no sirve.** El portal es **Blazor Server**
+(`_framework/blazor.server.js`, `/_blazor` por WebSocket): el navegador no
+llama a `api.portalredtec.cl`, manda los eventos de la interfaz al servidor y
+la confirmación se ejecuta allá adentro. Se confirmaron dos emisiones en DEMO
+mirando la red y no hay ningún `PATCH` que capturar, porque no existe del lado
+del cliente. Cualquier intento de "ver qué manda el portal" desde el navegador
+va a dar lo mismo.
+
+**La fecha de despacho no era.** Ver arriba.
+
+Lo que queda es preguntar. Y conviene decirle a Holux lo de Blazor Server,
+porque les señala dónde está la respuesta: el camino que usa su propia
+aplicación es interno, no pasa por la API pública.
 
 ### Cómo repetir todo esto
 
@@ -404,5 +425,182 @@ Las credenciales se cargan con `backfill\cargar-demo.ps1`, que las pide por
 pantalla y las deja sólo en esa ventana. El host está clavado a
 `apidemo.portalredtec.cl` y no hay bandera que lo cambie.
 
-Pruebas: `scripts/test-sonda-escritura-redlink.js` — 144 comprobaciones y 118
+Pruebas: `scripts/test-sonda-escritura-redlink.js` — 153 comprobaciones y 127
 mutaciones, todas muerden.
+
+Un detalle del orden de los candidatos que cuesta una corrida si se pierde: la
+sonda corta en el primer éxito, y el cuerpo que sólo guarda cantidades **siempre**
+tiene éxito. Por eso los que intentan avanzar van primero y ése queda al final.
+Si se reordena, tapa a los demás y la corrida no prueba nada nuevo.
+
+---
+
+## La máquina de etapas, y dónde actúa el módulo
+
+La tabla `FormMetapa` de la base declara las etapas por tipo de formulario, con
+una columna `Confirmar` que marca desde cuál se puede confirmar. Para
+`FormId 6` (Transferencia):
+
+| FormMetapaiD | Código | Nombre | Confirmar |
+|---|---|---|---|
+| 37 | `transferencia` | Transferencia | false |
+| 43 | `trans_anexos` | Pendiente Adjuntar Respaldo | false |
+| 42 | `trans_volver_atras` | Volver a Adjuntar Respaldo | false |
+| **44** | `trans_verifica` | **Pendiente de Confirmación** | **true** |
+| 46 | `trans_cerrar` | Transferencia Confirmada | false |
+| 49 | `trans_reconfirmar` | Transferencia Reconfirmada | false |
+| 48 | `trans_reversar` | Transferencia Reversada | false |
+| 47 | `trans_anula` | Transferencia Anulada | false |
+
+El circuito es `37 → 43 → 44 → 46`, con 42 como paso atrás. **El módulo de
+Walmart actúa sobre documentos en la etapa 44 y los lleva a 46.** No crea
+transferencias ni adjunta respaldos: para cuando llega el reporte diario, el
+cliente ya hizo todo eso.
+
+Tres de esas etapas explican conceptos que en `scripts/comparar-cuadre.js`
+habíamos deducido del comportamiento, sin saber que tenían nombre propio:
+`trans_reversar` es `entradaPalletReversa`, `trans_reconfirmar` es la
+reconfirmación que contamos en el reporte, y `trans_cerrar` es la confirmación.
+
+### Walmart es el único retail con transferencias
+
+De los **69 retails** del maestro, **uno solo** tiene `transferencia = true`:
+`16 · WALMART CHILE COMERCIAL S.A`. En Redlink la transferencia no es un
+movimiento genérico entre socios: es el circuito de Walmart. Eso explica que el
+módulo del M2LINK se llame "Confirmaciones Walmart" y no "Confirmaciones
+Retail".
+
+### El número que usa el área no es el id
+
+El encabezado trae `folio` — para nuestra transferencia de prueba, `4141181` —
+y **ése es el "Nro. Pedido" que muestra el portal**. El `formHeaderiD` (684030)
+es interno y no aparece en ninguna pantalla. Buscar por el id en el portal no
+encuentra nada; hay que buscar por folio.
+
+### Ids de DEMO para armar una transferencia como las de Walmart
+
+```
+cliente (bpId / bpOrigenId)   499   PRODUCTOS FERNANDEZ SA
+servicio (formulario 6)        28   Transferencias  (el único)
+bodega origen                1524   PF ANTOFAGASTA  (de las 35 del cliente)
+retail destino (bpDestinoId)   16   WALMART CHILE COMERCIAL S.A
+bodega destino                386   00001 EXPS PLAZA LYON  (de 338)
+documento                      14   Transferencia Timbrada
+usuario                        13   malfaro
+```
+
+Las bodegas de Walmart en DEMO se llaman `00001 EXPS…`, `00032 HIPER…`, con
+`codigoSap` tipo `WALMART-005`. **No confirman la regla `/^ZWM/`** que usa
+`medir-citas-walmart.js`: esa regla se sostiene por los datos de producción
+(`bodegaDestinoStr`), no por este maestro.
+
+### El estado del avance de etapa, caracterizado
+
+`avanzaEtapa: true` falló **siempre**, con el mismo error exacto
+(`An error occurred while saving the entity changes`), en todas estas
+combinaciones:
+
+- formulario 1 (Emisión) en etapa 2 "Por Confirmar"
+- formulario 6 (Transferencia) en etapa 43 "Pendiente Adjuntar Respaldo"
+- con y sin `recepcion`, con y sin `fechaDespacho`, con y sin las filas de
+  relleno de `formDregistros`
+
+Seis cuerpos, dos tipos de formulario, dos etapas, un único error. Si faltara
+un campo, en algún momento el mensaje habría cambiado. **Lectura, no hecho:**
+el avance de etapa por este endpoint parece no estar operativo en DEMO —
+posiblemente escribe en algo que el ambiente de pruebas no tiene configurado.
+Desde afuera no se distingue de un campo faltante, y es justo lo que responde
+quien tiene el log del servidor.
+
+Lo que sí quedó probado y es lo que el proyecto necesita: **`PATCH` escribe
+`despachado` y `recepcion` sin tocar nada más**. Esa es la mitad del trabajo, y
+la mitad difícil de averiguar.
+
+---
+
+## La entrega que funciona hoy, sin esperar a nadie
+
+Marcelo propuso el 9-nov el camino intermedio, y es el que está operativo:
+**el m3link produce el listado, el Excel que ya existe hace el ajuste en SAP.**
+No hace falta escribir en Redlink para que esto entregue valor.
+
+```
+m3link                                   proceso que ya existe
+──────                                   ─────────────────────
+medir-citas-walmart.js --listado=x.csv
+        ↓  folio ; cantRecibida
+verificar-listado-walmart.js  (Redlink en vivo, sólo lectura)
+        ↓  x-verificado.csv  +  x-verificado-revisar.csv
+                                      →  se pega en el Excel de confirmación
+                                      →  el Excel ejecuta el ajuste en SAP
+```
+
+El `folio` no es un número nuevo: es el `nroPedido` de nuestro contrato, que
+`redlink-fetch.js` traduce desde `reg.folio`. Es el mismo "Nro. Pedido" que
+muestra el portal — el `formHeaderiD` es interno y no aparece en ninguna
+pantalla.
+
+### Por qué la verificación no es opcional
+
+El listado sale del almacén frío, que es una foto diaria. Entre esa foto y el
+momento en que alguien pega el CSV pueden pasar días, y el módulo del proveedor
+sigue corriendo. Una transferencia confirmada dos veces dispara un **segundo
+ajuste de inventario en SAP**, y eso no se deshace.
+
+`verificar-listado-walmart.js` relee Redlink en vivo (GET, nunca escribe) y le
+pone veredicto a cada folio: sigue pendiente, ya fue confirmada, lo despachado
+cambió, no aparece en la ventana, o el folio cae en más de una operación. Sólo
+el primer caso sale al archivo.
+
+### Primera corrida real, 9-nov-2026
+
+Sobre los 8 reportes de Walmart del 23-oct al 5-nov:
+
+| | |
+|---|---|
+| citas del reporte | 566 |
+| la cita resuelve directo | 451 (80%) |
+| pendientes de confirmar, con match único | 111 |
+| listado propuesto | 104 |
+| **confirmables tras verificar en vivo** | **102** |
+| de esas, sin diferencia (no admiten discusión) | **94** |
+| con diferencia, a decidir | 8 |
+
+Dos ya habían sido confirmadas entre la foto y la verificación — una de ellas
+entre dos corridas con veinte minutos de diferencia. El proceso manual está
+andando, lento: **103 transferencias llevaban días pendientes.** Ése es el
+atraso que la automatización resuelve, y ahora está contado.
+
+De las 8 con diferencia, siete son de 1 a 4 pallets. La octava no:
+
+```
+folio 4146335   despachó 19 · Walmart aceptó 3 · quedan 16 por informar
+```
+
+Dieciséis de diferencia no es una recepción corta, es una carga rechazada o un
+dato malo. Esa necesita que alguien averigüe qué pasó, no una regla.
+
+### La pregunta de las diferencias, ahora con tamaño
+
+La contradicción que quedó abierta el 6-nov —las reglas dicen una cosa, la
+pantalla del módulo otra, y lo ya confirmado una tercera— **afecta a 8 de 102**.
+Sobre lo ya confirmado, en las diferencias negativas el proceso real confirmó lo
+aceptado en 33 casos y lo despachado en 10 (~23%), y 6 de esas 10 son PUNTO
+AZUL, lo que sugiere una regla por cliente que nadie documentó.
+
+Es una decisión chica y acotada, no un rediseño. Va a la reunión con números.
+
+### Cómo correrlo
+
+```
+node scripts\medir-citas-walmart.js <carpeta de reportes> --listado=confirmar.csv
+node scripts\verificar-listado-walmart.js --listado=confirmar.csv ^
+     --salida=confirmar-verificado.csv --sin-diferencia
+```
+
+La verificación usa las mismas Application Settings de producción que el m3link
+ya ocupa para leer (`REDLINK_CLIENT_SECRET`, `REDLINK_USER`, `REDLINK_PASS`).
+Tarda alrededor de 80 segundos: lee 45 días de histórico completo.
+
+Pruebas: `test-medir-citas-walmart.js` (44 y 41 mutaciones) y
+`test-verificar-listado-walmart.js` (31 y 28 mutaciones). Todas muerden.

@@ -237,6 +237,7 @@ tr.total td{border-top:1px solid var(--line);border-bottom:0;font-weight:600;col
       <div class="chead"><span class="eyebrow">Para ejecutar</span><h2>Folio y cantidad a confirmar</h2></div>
       <p>La cantidad es la regla del área: si Walmart recibió menos, se confirma lo recibido; si recibió más,
       se confirma lo despachado, porque no se puede confirmar más de lo que salió.</p>
+      <div class="resumen" id="resumen-conf"></div>
       <div class="acciones">
         <button id="btn-csv" disabled>Bajar CSV</button>
         <button id="btn-tsv" disabled>Copiar para Excel</button>
@@ -479,11 +480,11 @@ function conDif(valor, dif) {
 }
 
 var COLS_CONF = [{ t: 'Folio', mono: true }, { t: 'Cita', mono: true }, { t: 'Cliente', libre: true },
-                 { t: 'Despachado', n: true }, { t: 'Walmart', n: true }, { t: 'A confirmar', n: true },
-                 { t: 'Etapa' }, { t: 'Bodega' }];
+                 { t: 'Servicio' }, { t: 'Despachado', n: true }, { t: 'Walmart', n: true },
+                 { t: 'A confirmar', n: true }, { t: 'Etapa' }, { t: 'Bodega' }];
 var COLS_AVISAR = [{ t: 'Folio', mono: true }, { t: 'Cita', mono: true }, { t: 'Cliente', libre: true },
-                   { t: 'Despachado', n: true }, { t: 'Walmart', n: true }, { t: 'A informar', n: true },
-                   { t: 'Etapa' }];
+                   { t: 'Servicio' }, { t: 'Despachado', n: true }, { t: 'Walmart', n: true },
+                   { t: 'A informar', n: true }, { t: 'Etapa' }];
 var COLS_EXC = [{ t: 'Cita', mono: true }, { t: 'Folio', mono: true }, { t: 'Motivo', libre: true },
                 { t: 'Despachado', n: true }, { t: 'Walmart', n: true }, { t: 'Etapa' }];
 
@@ -508,16 +509,36 @@ function pintarTodo() {
   $('t-avisar').textContent = num(r.avisar.length);
   $('t-exc').textContent = num(r.excepciones.length);
 
+  // Subtotal por servicio: el circuito de Walmart llega por dos servicios
+  // distintos ("Transferencias" y "Trans Diferenciada") y conviene verlo
+  // separado antes de ejecutar.
+  var porServicio = {};
+  r.porConfirmar.forEach(function (f) {
+    var k = f.servicio || 'sin servicio';
+    if (!porServicio[k]) porServicio[k] = { n: 0, pallets: 0 };
+    porServicio[k].n++; porServicio[k].pallets += f.aConfirmar;
+  });
+  var cajaConf = $('resumen-conf');
+  cajaConf.textContent = '';
+  Object.keys(porServicio).sort(function (a, b) { return porServicio[b].n - porServicio[a].n || a.localeCompare(b); })
+    .forEach(function (k) {
+      var d = document.createElement('div'); d.className = 'f';
+      var n = document.createElement('b'); n.textContent = num(porServicio[k].n);
+      var t = document.createElement('span');
+      t.textContent = k + ' · ' + num(porServicio[k].pallets) + ' pallets';
+      d.appendChild(n); d.appendChild(t); cajaConf.appendChild(d);
+    });
+
   tabla($('tb-conf'), COLS_CONF, r.porConfirmar, function (f) {
-    return [f.folio, f.cita, f.clienteRedlink || f.cliente, num(f.despachada),
+    return [f.folio, f.cita, f.clienteRedlink || f.cliente, f.servicio, num(f.despachada),
             conDif(f.canjeWM, f.diferencia !== 0), num(f.aConfirmar),
             etiqueta(f.etapa, /pendiente\s+de\s+confirmaci/i.test(f.etapa) ? 'lista' : 'espera'),
             f.bodega];
   }, 'Nada por confirmar con este reporte y esta ventana.');
 
   tabla($('tb-avisar'), COLS_AVISAR, r.avisar, function (f) {
-    return [f.folio, f.cita, f.clienteRedlink || f.cliente, num(f.despachada), num(f.canjeWM),
-            num(f.porAvisar), etiqueta(f.etapa)];
+    return [f.folio, f.cita, f.clienteRedlink || f.cliente, f.servicio, num(f.despachada),
+            num(f.canjeWM), num(f.porAvisar), etiqueta(f.etapa)];
   }, 'Ninguna cita declara más pallets de los que salieron.');
 
   // Las familias que piden una mirada se marcan; las que simplemente no
@@ -586,9 +607,10 @@ $('btn-csv').addEventListener('click', function () {
 });
 $('btn-csv-avisar').addEventListener('click', function () {
   bajar('avisar-cliente-walmart-' + sello() + '.csv',
-    csvDe(['folio', 'cita', 'cliente', 'despachado', 'walmart', 'aInformar', 'etapa'],
+    csvDe(['folio', 'cita', 'cliente', 'servicio', 'despachado', 'walmart', 'aInformar', 'etapa'],
       S.r.avisar, function (f) {
-        return [f.folio, f.cita, f.clienteRedlink || f.cliente, f.despachada, f.canjeWM, f.porAvisar, f.etapa];
+        return [f.folio, f.cita, f.clienteRedlink || f.cliente, f.servicio, f.despachada,
+                f.canjeWM, f.porAvisar, f.etapa];
       }));
 });
 $('btn-csv-exc').addEventListener('click', function () {

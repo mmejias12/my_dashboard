@@ -295,6 +295,97 @@ function correr(S) {
     cierto(S.hablaDelRecurso('FormHeader 0 is not found'));
   });
 
+  /* ---- la identidad que sale del propio token ---------------------------- */
+
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64')
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const jwt = (o) => 'cabecera.' + b64(o) + '.firma';
+
+  prueba('T93 el token se pide con el scope minimo, no con los del portal', () => {
+    // Pedir usersiD/bpid/cardname devuelve invalid_scope y deja SIN token:
+    // esos scopes son del cliente portalredtecapp, no del de la API.
+    const fuente = require('fs').readFileSync(require('path').join(__dirname, 'sonda-escritura-redlink.js'), 'utf8');
+    cierto(/scope: 'openid'/.test(fuente), 'el scope tiene que quedar en openid');
+    falso(/scope: 'openid [a-z]/i.test(fuente), 'pedir de mas rompe el token entero');
+  });
+
+  prueba('T88 saca el usersiD del token, que es con lo que se firma', () => {
+    igual(S.identidadDeToken(jwt({ usersiD: 42, preferred_username: 'M3LinkSystem' })),
+      { usersiD: 42, preferred_username: 'M3LinkSystem' });
+  });
+  prueba('T89 NO muestra la firma ni los tiempos de sesión del token', () => {
+    const i = S.identidadDeToken(jwt({ usersiD: 42, exp: 1, iat: 2, jti: 'x', sid: 'y', at_hash: 'z' }));
+    igual(Object.keys(i), ['usersiD'], 'del token sale mucho mas de lo que hace falta mostrar');
+  });
+  prueba('T90 un token ilegible no revienta ni inventa identidad', () => {
+    igual(S.identidadDeToken('no-es-un-jwt'), null);
+    igual(S.identidadDeToken(''), null);
+    igual(S.identidadDeToken(null), null);
+    igual(S.identidadDeToken('a.no-es-base64-valido!!.c'), null);
+  });
+  prueba('T91 aguanta base64url con y sin relleno', () => {
+    const i = S.identidadDeToken(jwt({ usersiD: 7, name: 'ab' }));
+    igual(i.usersiD, 7);
+  });
+  prueba('T92 un token sin reclamos de identidad devuelve objeto vacío, no nulo', () => {
+    igual(S.identidadDeToken(jwt({ exp: 1 })), {}, 'vacio y nulo son cosas distintas: uno se leyo, el otro no');
+  });
+
+  /* ---- marcadores pegados en los argumentos ------------------------------ */
+
+  prueba('T83 un id con corchetes se ataja antes de salir a la red', () => {
+    const p = S.revisarArgs(S.leerArgs(['--confirmar=<el id>', '--cantidad=12']));
+    cierto(p.length >= 1, 'tiene que reclamar');
+    cierto(/marcador/.test(p.join(' ')), p.join(' '));
+    cierto(/--id/.test(p.join(' ')), 'y nombrar la bandera: ' + p.join(' '));
+  });
+  prueba('T84 un valor que no es número se nombra distinto de un marcador', () => {
+    const p = S.revisarArgs({ cantidad: 'doce' });
+    cierto(/tiene que ser un numero/.test(p[0]), p[0]);
+    falso(/marcador/.test(p[0]), 'no todo valor malo es un marcador pegado');
+  });
+  prueba('T85 los valores buenos no molestan', () => {
+    igual(S.revisarArgs(S.leerArgs(['--confirmar=684032', '--cantidad=12', '--usuario=13'])), []);
+    igual(S.revisarArgs({}), []);
+  });
+  prueba('T86 revisa TODAS las banderas numéricas, no sólo el id', () => {
+    const p = S.revisarArgs({ cliente: '<cliente>', bodegaOrigen: '<bodega>', documento: '<doc>' });
+    igual(p.length, 3, 'una corrida mal pegada suele traer varias: ' + JSON.stringify(p));
+  });
+  prueba('T87 una bandera vacía no se reclama', () => {
+    igual(S.revisarArgs({ cantidad: '', usuario: null, id: undefined }), []);
+  });
+
+  /* ---- diferencias entre instantáneas ------------------------------------ */
+
+  prueba('T74 encuentra el cambio de etapa en el encabezado y en el objeto', () => {
+    const a = { formMetapaId: 43, formMetapa: { nombre: 'Pendiente Adjuntar Respaldo' } };
+    const b = { formMetapaId: 44, formMetapa: { nombre: 'Pendiente de Confirmacion' } };
+    const d = S.diferencias(a, b).map(x => x.campo);
+    cierto(d.indexOf('formMetapaId') >= 0 && d.indexOf('formMetapa.nombre') >= 0, d.join(', '));
+  });
+  prueba('T75 entra a las líneas y nombra la posición', () => {
+    const a = { formDdetalles: [{ recepcion: null }] };
+    const b = { formDdetalles: [{ recepcion: 15 }] };
+    igual(S.diferencias(a, b), [{ campo: 'formDdetalles[0].recepcion', antes: null, despues: 15 }]);
+  });
+  prueba('T76 avisa cuando una colección cambia de tamaño', () => {
+    const d = S.diferencias({ formDregistros: [] }, { formDregistros: [{ formDdetalleiD: 1 }] });
+    cierto(d.some(x => x.campo === 'formDregistros[]'), JSON.stringify(d));
+  });
+  prueba('T77 un campo que APARECE es un cambio, no un silencio', () => {
+    const d = S.diferencias({}, { usuarioConfirmaId: 77 });
+    igual(d, [{ campo: 'usuarioConfirmaId', antes: undefined, despues: 77 }]);
+  });
+  prueba('T78 sin cambios no inventa diferencias', () => {
+    const doc = { a: 1, b: { c: 2 }, d: [{ e: 3 }] };
+    igual(S.diferencias(doc, JSON.parse(JSON.stringify(doc))), []);
+  });
+  prueba('T79 null, cero y ausente son tres cosas distintas', () => {
+    igual(S.diferencias({ x: null }, { x: 0 }).length, 1);
+    igual(S.diferencias({}, { x: null }).length, 1);
+  });
+
   /* ---- lo que el servidor dicta en sus errores --------------------------- */
 
   const ERR_VALIDA = '["No Tiene Lineas de detalles","Falta Cantidad a Despachar","Otro usuario Avanzo a etapa Siguiente. Favor Revizar"]';
@@ -706,6 +797,23 @@ function correr(S) {
     }
   });
 
+  prueba('T80 con --usuario el cuerpo firma a nombre de quien ejecuta', () => {
+    // MEDIDO: el portal sobrescribe usuarioIngresoId con el usuario que actua.
+    // Devolver el que ya tenia el documento dejaria la firma a nombre de quien
+    // no hizo nada, y la traza es lo unico que queda despues.
+    igual(S.cuerposCandidatos(DOC, 15, '6')[0].cuerpo.usuarioIngresoId, 6);
+    for (const c of S.cuerposCandidatos(DOC, 15, '6')) igual(c.cuerpo.usuarioIngresoId, 6, c.nombre + ':');
+  });
+  prueba('T81 sin --usuario queda el del documento, no se inventa', () => {
+    igual(S.cuerposCandidatos(DOC, 15)[0].cuerpo.usuarioIngresoId, DOC.usuarioIngresoId);
+  });
+  prueba('T82 un usuario inválido no pisa el del documento', () => {
+    ['0', '-3', 'x', '', null].forEach(function (v) {
+      igual(S.cuerposCandidatos(DOC, 15, v)[0].cuerpo.usuarioIngresoId, DOC.usuarioIngresoId,
+        'con ' + JSON.stringify(v) + ' no se puede firmar');
+    });
+  });
+
   prueba('T49 el eco conserva los escalares del encabezado', () => {
     const c = S.cuerposCandidatos(DOC, 15)[0].cuerpo;
     igual(c.bpId, 499);
@@ -982,6 +1090,23 @@ const MUTACIONES = [
   ['M127 la advertencia sale siempre, avance o no',    /if \(!sirven\.some\(x => x\.c && x\.c\.avanza\)\) \{/, 'if (true) {'],
   ['M128 las banderas del maestro se esconden',        /const banderas = campos\.filter\(k => typeof prim\[k\] === 'boolean'\);/, 'const banderas = [];'],
   ['M129 cualquier campo pasa por bandera',            /campos\.filter\(k => typeof prim\[k\] === 'boolean'\)/, 'campos.filter(k => true)'],
+  ['M130 el diff no entra a los objetos',              /\} else if \(esObj\(a\) \|\| esObj\(b\)\) \{\n      out\.push\.apply\(out, diferencias\(a \|\| \{\}, b \|\| \{\}, ruta\)\);/, '} else if (false) {\n      out.push.apply(out, diferencias(a || {}, b || {}, ruta));'],
+  ['M131 el diff no entra a las listas',               /if \(Array\.isArray\(a\) \|\| Array\.isArray\(b\)\) \{/, 'if (false) {'],
+  ['M132 el diff no avisa el cambio de tamaño',        /if \(la\.length !== lb\.length\) out\.push\(\{ campo: ruta \+ '\[\]'/, "if (false) out.push({ campo: ruta + '[]'"],
+  ['M133 el diff sólo mira las claves del antes',      /Object\.keys\(Object\.assign\(\{\}, antes \|\| \{\}, despues \|\| \{\}\)\)/, 'Object.keys(antes || {})'],
+  ['M134 el diff confunde null con cero',              /\} else if \(JSON\.stringify\(a\) !== JSON\.stringify\(b\)\) \{\n      out\.push\(\{ campo: ruta, antes: a, despues: b \}\);/, '} else if (a != b) {\n      out.push({ campo: ruta, antes: a, despues: b });'],
+  ['M135 el cuerpo no firma a nombre de quien ejecuta', /const u = parseInt\(o\.usuario, 10\);\n  if \(Number\.isFinite\(u\) && u > 0\) cuerpo\.usuarioIngresoId = u;/, 'const u = parseInt(o.usuario, 10);'],
+  ['M136 un usuario invalido igual pisa la firma',     /if \(Number\.isFinite\(u\) && u > 0\) cuerpo\.usuarioIngresoId = u;/, 'cuerpo.usuarioIngresoId = u;'],
+  ['M137 el usuario no llega a los candidatos',        /Object\.assign\(\{ cantidad: cantidad, usuario: usuario \}, o\)/, 'Object.assign({ cantidad: cantidad }, o)'],
+  ['M138 los marcadores pegados pasan',                /if \(\/\[<>\]\/\.test\(t\)\) problemas\.push/, 'if (false) problemas.push'],
+  ['M139 cualquier texto pasa por numero',             /else if \(!\/\^-\?\\d\+\$\/\.test\(t\)\) problemas\.push/, 'else if (false) problemas.push'],
+  ['M140 solo revisa una bandera',                     /for \(const k of Object\.keys\(NUMERICOS\)\) \{/, 'for (const k of Object.keys(NUMERICOS).slice(0,1)) {'],
+  ['M141 el mensaje no nombra la bandera',             /problemas\.push\(NUMERICOS\[k\] \+ '=' \+ t \+ '  <- eso es un marcador, no un valor'\)/, "problemas.push('valor invalido')"],
+  ['M142 una bandera vacia se reclama',                /if \(v === null \|\| v === undefined \|\| v === ''\) continue;/, ''],
+  ['M143 no lee el payload del token',                 /const txt = Buffer\.from\(partes\[1\]\.replace/, 'const txt = Buffer.from(partes[0].replace'],
+  ['M144 muestra todos los reclamos del token',        /RECLAMOS_UTILES\.forEach\(function \(k\) \{ if \(c\[k\] !== undefined\) out\[k\] = c\[k\]; \}\);/, 'Object.keys(c).forEach(function (k) { out[k] = c[k]; });'],
+  ['M145 un token ilegible devuelve objeto en vez de nulo', /if \(!c\) return null;/, 'if (!c) return {};'],
+  ['M146 el usersiD no esta entre los reclamos utiles', /const RECLAMOS_UTILES = \['usersiD',/, "const RECLAMOS_UTILES = ['zzz',"],
   ['M30 el Allow no se normaliza a mayúsculas',        /\.map\(s => s\.trim\(\)\.toUpperCase\(\)\)/, '.map(s => s.trim())'],
   ['M31 el Allow no se ordena',                        /\.filter\(Boolean\)\.sort\(\)/, '.filter(Boolean)'],
   ['M32 --si queda prendido siempre',                  /else if \(x === '--si'\) a\.si = true;/, "a.si = true;"],

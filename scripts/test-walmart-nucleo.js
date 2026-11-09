@@ -575,6 +575,48 @@ async function correr(N) {
     igual([r.porConfirmar.length, r.excepciones.length, r.avisar.length, r.citas], [0, 0, 0, 0]);
   });
 
+  /* ---- el resumen de excepciones ----------------------------------------- */
+
+  await prueba('T61b toda excepcion lleva una clave estable, no solo el texto', () => {
+    // El texto trae datos adentro ("cae en 2 operaciones"): agrupar por texto
+    // parte la misma familia en varias. La clave es lo que se puede contar.
+    const r = N.cruzar(FILAS, OPS);
+    r.excepciones.forEach(e => cierto(e.clave && e.clave.length > 3, 'excepcion sin clave: ' + e.motivo));
+    const claves = r.excepciones.map(e => e.clave).sort();
+    igual(claves, ['anulada', 'no-transferencia', 'sin-match', 'ya-confirmada']);
+  });
+  await prueba('T61c toda clave tiene su nombre en castellano', () => {
+    Object.keys(N.FAMILIAS).forEach(k => cierto(N.FAMILIAS[k] && N.FAMILIAS[k].length > 5, 'falta el texto de ' + k));
+    igual(N.FAMILIAS['ya-confirmada'], 'ya confirmadas');
+  });
+  await prueba('T61d el resumen cuenta por familia, de mayor a menor', () => {
+    const r = N.cruzar(FILAS, OPS);
+    const res = N.resumenMotivos(r.excepciones);
+    igual(res.map(x => x.n), res.map(x => x.n).slice().sort((a, b) => b - a), 'tiene que venir ordenado');
+    igual(res.reduce((a, x) => a + x.n, 0), r.excepciones.length, 'el resumen suma el total');
+    res.forEach(x => cierto(x.texto && x.texto !== x.clave, 'la clave ' + x.clave + ' salio sin nombre'));
+  });
+  await prueba('T61e el resumen agrupa las que traen numero adentro del texto', () => {
+    const ops = [OPS[0], Object.assign({}, OPS[0], { nroPedido: 1 }), Object.assign({}, OPS[0], { nroPedido: 2 })];
+    const filas = N.filasWalmart([CAB, filaWM(42704805, 5)]);
+    const res = N.resumenMotivos(N.cruzar(filas, ops).excepciones);
+    igual(res, [{ clave: 'cita-ambigua', n: 1, texto: 'la cita cae en varias operaciones' }]);
+  });
+  await prueba('T61e2 la familia mas numerosa va primero y el conteo es real', () => {
+    const res = N.resumenMotivos([{ clave: 'anulada' }, { clave: 'ya-confirmada' },
+                                  { clave: 'ya-confirmada' }, { clave: 'ya-confirmada' }]);
+    igual(res, [{ clave: 'ya-confirmada', n: 3, texto: 'ya confirmadas' },
+                { clave: 'anulada', n: 1, texto: 'anuladas' }]);
+  });
+  await prueba('T61f con empate ordena por nombre, no al azar', () => {
+    const res = N.resumenMotivos([{ clave: 'ya-confirmada' }, { clave: 'anulada' }]);
+    igual(res.map(x => x.clave), ['anulada', 'ya-confirmada']);
+  });
+  await prueba('T61g sin excepciones el resumen viene vacio', () => {
+    igual(N.resumenMotivos([]), []);
+    igual(N.resumenMotivos(null), []);
+  });
+
   /* ---- la salida --------------------------------------------------------- */
 
   await prueba('T62 el csv va con encabezado, punto y coma y CRLF', () => {
@@ -692,13 +734,13 @@ const MUTACIONES = [
   ['M48 el serial de fecha queda como numero crudo', /typeof f\[idx\.cuando\] === 'number' \? serialAFecha\(f\[idx\.cuando\]\) :/, 'false ?  serialAFecha(f[idx.cuando]) :'],
 
   // el cruce
-  ['M48b una cita corta se trata como cita',         /if \(!esCita\(g\.cita\)\) \{ excepciones\.push\(Object\.assign\(base, \{ motivo: 'el número de cita no tiene 8 dígitos: no es una cita de Walmart' \}\)\); return; \}/, ''],
+  ['M48b una cita corta se trata como cita',         /if \(!esCita\(g\.cita\)\) \{ excepciones\.push\([^\n]*?\); return; \}/, ''],
   ['M48c la cita acepta cualquier largo',            /function esCita\(v\) \{ return \/\^\\d\{8\}\$\/\.test\(String\(v \|\| ''\)\); \}/, "function esCita(v) { return /^\\d+$/.test(String(v || '')); }"],
-  ['M49 una cita sin coincidencia desaparece',       /if \(c\.estado === 'sin-match'\) \{ excepciones\.push\(Object\.assign\(base, \{ motivo: 'sin coincidencia en Redlink' \}\)\); return; \}/, "if (c.estado === 'sin-match') { return; }"],
+  ['M49 una cita sin coincidencia desaparece',       /if \(c\.estado === 'sin-match'\) \{ excepciones\.push\([^\n]*?\); return; \}/, "if (c.estado === 'sin-match') { return; }"],
   ['M50 con varias operaciones se toma la primera',  /if \(c\.ops\.length !== 1\) \{/, 'if (false) {'],
-  ['M51 una anulada se confirma',                    /if \(esAnulada\(op\)\)            \{ excepciones\.push\(Object\.assign\(\{\}, fila, \{ motivo: 'transferencia anulada' \}\)\); return; \}/, ''],
+  ['M51 una anulada se confirma',                    /if \(esAnulada\(op\)\)            \{ excepciones\.push\([^\n]*?\); return; \}/, ''],
   ['M52 lo que no es transferencia se confirma',     /if \(!esTransferencia\(op\)\)     \{/, 'if (false) {'],
-  ['M53 una ya confirmada se confirma de nuevo',     /if \(estaConfirmada\(op\)\)       \{ excepciones\.push\(Object\.assign\(\{\}, fila, \{ motivo: 'ya estaba confirmada' \}\)\); return; \}/, ''],
+  ['M53 una ya confirmada se confirma de nuevo',     /if \(estaConfirmada\(op\)\)       \{ excepciones\.push\([^\n]*?\); return; \}/, ''],
   ['M54 el filtro por etapa actua siempre',          /if \(o\.exigirEtapa && !etapaConfirmable\(op\)\) \{/, 'if (!etapaConfirmable(op)) {'],
   ['M55 el filtro por etapa actua al reves',         /if \(o\.exigirEtapa && !etapaConfirmable\(op\)\) \{/, 'if (o.exigirEtapa && etapaConfirmable(op)) {'],
   ['M56 una cantidad cero se confirma',              /if \(!\(r\.aConfirmar > 0\)\)      \{/, 'if (false) {'],
@@ -711,6 +753,15 @@ const MUTACIONES = [
   ['M62b la fila pierde el id del documento',        /docId: op\.formHeaderiD,/, 'docId: null,'],
   ['M62c la fila pierde el cliente de Redlink',      /clienteRedlink: op\.clienteOrigenStr \|\| '',/, "clienteRedlink: '',"],
   ['M63 no cuenta las citas del reporte',            /citas: grupos\.length/, 'citas: 0'],
+
+  // el resumen de excepciones
+  ['M63b la excepcion pierde la clave',              /clave: 'ya-confirmada', motivo: 'ya estaba confirmada'/, "motivo: 'ya estaba confirmada'"],
+  ['M63c dos familias distintas comparten clave',    /clave: 'anulada', motivo: 'transferencia anulada'/, "clave: 'ya-confirmada', motivo: 'transferencia anulada'"],
+  ['M63d el resumen no ordena',                      /\.sort\(\(a, b\) => \(b\.n - a\.n\) \|\| a\.texto\.localeCompare\(b\.texto\)\);/, ';'],
+  ['M63e el resumen ordena de menor a mayor',        /\(b\.n - a\.n\) \|\| a\.texto\.localeCompare/, '(a.n - b.n) || a.texto.localeCompare'],
+  ['M63f el empate queda al azar',                   /\(b\.n - a\.n\) \|\| a\.texto\.localeCompare\(b\.texto\)/, '(b.n - a.n)'],
+  ['M63g el resumen no cuenta, marca presencia',     /cuenta\.set\(k, \(cuenta\.get\(k\) \|\| 0\) \+ 1\);/, 'cuenta.set(k, 1);'],
+  ['M63h el resumen muestra la clave cruda',         /texto: FAMILIAS\[clave\] \|\| clave/, 'texto: clave'],
 
   // la salida
   ['M64 el csv sale sin encabezado',                 /const out = \['folio;cantRecibida'\];/, 'const out = [];'],

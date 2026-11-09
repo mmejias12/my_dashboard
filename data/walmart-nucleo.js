@@ -237,10 +237,16 @@ function reglaCantidad(despachada, recibidaWM) {
   return { aConfirmar: a < d ? a : d, diferencia: a - d, porAvisar: a > d ? a - d : 0 };
 }
 
-// Dos etapas empiezan con "Pendiente" y son cosas distintas: "Pendiente
-// Adjuntar Respaldo" (43) espera al cliente, "Pendiente de Confirmación" (44)
-// es la única que la tabla FormMetapa marca como confirmable.
-const RE_CONFIRMABLE = /pendiente\s+de\s+confirmaci/i;
+// Las dos etapas desde las que SÍ se confirma en el circuito masivo de
+// Walmart: 44 "Pendiente de Confirmación" y 43 "Pendiente Adjuntar Respaldo".
+// La tabla FormMetapa marca Confirmar=true sólo en la 44, y por eso durante
+// días se trató la 43 como un paso pendiente del cliente. Lo resolvió Marcelo
+// el 9-nov-2026: en las confirmaciones MASIVAS de Walmart no corresponde
+// adjuntar respaldo — ese paso existe para que logística no vaya documento por
+// documento; por el camino masivo se confirma de una.
+// Lista explícita y corta: la 46 y la 49 ya están confirmadas y la 47 está
+// anulada. Y empezar con "Pendiente" no alcanza, porque las dos empiezan igual.
+const ETAPAS_CONFIRMABLES = [/pendiente\s+de\s+confirmaci/i, /pendiente\s+adjuntar\s+respaldo/i];
 const RE_ANULADA = /anulad/i;
 // Los servicios que van a Walmart por el circuito de transferencia, por NOMBRE
 // exacto y no por un regex que adivine. Medido en vivo el 9-nov sobre 14.430
@@ -254,7 +260,7 @@ const RE_ANULADA = /anulad/i;
 // salir como excepción CON SU NOMBRE, no colarse ni desaparecer en silencio.
 const SERVICIOS_TRANSFERENCIA = ['transferencia', 'transferencias', 'trans diferenciada'];
 const etapaDe = (op) => String((op && op.etapaOperacion) || '');
-const etapaConfirmable = (op) => RE_CONFIRMABLE.test(etapaDe(op));
+const etapaConfirmable = (op) => { const e = etapaDe(op); return ETAPAS_CONFIRMABLES.some(re => re.test(e)); };
 const esAnulada = (op) => RE_ANULADA.test(etapaDe(op));
 const esTransferencia = (op) => {
   const n = norm(op && op.operacion).toLowerCase();
@@ -384,7 +390,7 @@ function ventanaDeReporte(filasWM, margen) {
 
 const API = { entradasZip, leerXlsx, leerSharedStrings, leerHoja, columnaANumero, serialAFecha,
               COLUMNAS, filasWalmart, citasDeTexto, esCita, agruparPorCita, indexar, clasificar,
-              SERVICIOS_TRANSFERENCIA,
+              SERVICIOS_TRANSFERENCIA, ETAPAS_CONFIRMABLES,
               reglaCantidad, etapaConfirmable, esAnulada, esTransferencia, estaConfirmada,
               cruzar, FAMILIAS, resumenMotivos, csvDeConfirmar, tsvDeConfirmar, ventanaDeReporte };
 

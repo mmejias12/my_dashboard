@@ -150,6 +150,35 @@ function correr(S) {
     igual(S.clasificar('405').clave, 'no-permitido');
   });
 
+  /* ---- lectura del error del token -------------------------------------- */
+
+  prueba('T47 unauthorized_client apunta al cliente, no al usuario', () => {
+    const e = S.leerErrorToken(401, '{"error":"unauthorized_client","error_description":"Invalid client or Invalid client credentials"}');
+    igual(e.causa, 'cliente');
+    cierto(/client_secret/.test(e.dice), 'tiene que nombrar el client_secret');
+  });
+  prueba('T48 invalid_client también apunta al cliente', () => {
+    igual(S.leerErrorToken(401, '{"error":"invalid_client"}').causa, 'cliente');
+  });
+  prueba('T49 invalid_grant apunta al usuario', () => {
+    igual(S.leerErrorToken(401, '{"error":"invalid_grant","error_description":"Invalid user credentials"}').causa, 'usuario');
+  });
+  prueba('T50 un 401 de cliente no se confunde con uno de usuario', () => {
+    const a = S.leerErrorToken(401, '{"error":"unauthorized_client"}');
+    const b = S.leerErrorToken(401, '{"error":"invalid_grant"}');
+    cierto(a.causa !== b.causa, 'mismo status, causas distintas');
+  });
+  prueba('T51 unsupported_grant_type dice que falta el flujo', () => {
+    igual(S.leerErrorToken(400, '{"error":"unsupported_grant_type"}').causa, 'flujo');
+  });
+  prueba('T52 un 503 no acusa a nadie', () => {
+    igual(S.leerErrorToken(503, 'Service Unavailable').causa, 'servidor');
+  });
+  prueba('T53 un cuerpo vacío no inventa una causa', () => {
+    igual(S.leerErrorToken(401, '').causa, 'otra');
+    igual(S.leerErrorToken(401, null).causa, 'otra');
+  });
+
   /* ---- campos de estado ------------------------------------------------- */
 
   prueba('T25 encuentra los campos que huelen a confirmación', () => {
@@ -310,7 +339,12 @@ const MUTACIONES = [
   ['M30 el Allow no se normaliza a mayúsculas',        /\.map\(s => s\.trim\(\)\.toUpperCase\(\)\)/, '.map(s => s.trim())'],
   ['M31 el Allow no se ordena',                        /\.filter\(Boolean\)\.sort\(\)/, '.filter(Boolean)'],
   ['M32 --si queda prendido siempre',                  /else if \(x === '--si'\) a\.si = true;/, "a.si = true;"],
-  ['M33 --confirmar no lee el documento',              /\{ a\.modo = 'confirmar'; a\.id = x\.slice\(12\); \}/, "{ a.modo = 'confirmar'; }"]
+  ['M33 --confirmar no lee el documento',              /\{ a\.modo = 'confirmar'; a\.id = x\.slice\(12\); \}/, "{ a.modo = 'confirmar'; }"],
+  ['M34 el error de cliente se confunde con el de usuario', /return \{ causa: 'cliente',/, "return { causa: 'usuario',"],
+  ['M35 ya no distingue invalid_grant',                /if \(\/invalid_grant\|invalid user credentials\/i\.test\(t\)\)/, 'if (false)'],
+  ['M36 unauthorized_client deja de reconocerse',      /unauthorized_client\|invalid_client/, 'nada_de_esto'],
+  ['M37 el mensaje de cliente no nombra el secreto',   /el client_secret no sirve/, 'algo pasa'],
+  ['M38 un 503 pasa a acusar al usuario',              /return \{ causa: 'servidor',/, "return { causa: 'usuario',"]
 ];
 
 function mutar() {

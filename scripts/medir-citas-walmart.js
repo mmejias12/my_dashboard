@@ -281,6 +281,69 @@ function contrastar(fila, op) {
   };
 }
 
+/* ── El listado para confirmar ─────────────────────────────────────────────
+   Lo que pidio Marcelo el 9-nov: dos columnas, "folio" y "cantRecibida", con
+   lo que falta por confirmar, para pegarlo en el Excel que hace el ajuste en
+   SAP. El movimiento de bodegas en SAP lo sigue ejecutando ese Excel; nosotros
+   ponemos el cruce, que es la parte que nadie mas tiene medida.
+
+   El folio NO es un numero nuevo: es el 'nroPedido' de nuestro contrato, que
+   redlink-fetch.js traduce desde 'reg.folio'. Es el mismo "Nro. Pedido" que
+   muestra el portal.
+
+   Regla de oro de esta funcion: nada desaparece en silencio. Toda cita que no
+   entra al listado sale en 'fuera' con el motivo, porque una fila que falta en
+   un archivo que alguien va a pegar en un Excel no se nota hasta que el
+   cliente reclama.                                                           */
+function listadoParaConfirmar(grupos, idx) {
+  const lineas = [], fuera = [];
+  (grupos || []).forEach(function (g) {
+    const c = clasificar(g, idx);
+    if (c.estado === 'sin-match') { fuera.push({ cita: g.cita, motivo: 'sin match en Redlink' }); return; }
+    if (c.ops.length !== 1) {
+      fuera.push({ cita: g.cita, motivo: 'la cita cae en ' + c.ops.length + ' operaciones' });
+      return;
+    }
+    const op = c.ops[0];
+    const folio = op.nroPedido;
+    if (estaConfirmada(op)) { fuera.push({ cita: g.cita, folio: folio, motivo: 'ya confirmada' }); return; }
+    const r = reglaCantidad(op.cantidadDespachada, g.canje);
+    if (!(r.aConfirmar > 0)) {
+      fuera.push({ cita: g.cita, folio: folio, motivo: 'la cantidad a confirmar da cero' });
+      return;
+    }
+    if (!folio && folio !== 0) { fuera.push({ cita: g.cita, motivo: 'la operacion no trae folio' }); return; }
+    lineas.push({
+      folio: folio, cantRecibida: r.aConfirmar, cita: g.cita,
+      despachada: Number(op.cantidadDespachada) || 0, aceptadaWM: g.canje,
+      porInformar: r.porInformar, cliente: g.cliente || '', etapa: op.etapaOperacion || ''
+    });
+  });
+
+  /* Dos citas distintas que caen en el MISMO folio son una trampa: pegadas en
+     el Excel, confirmarian dos veces la misma transferencia. No se suman ni se
+     elige una — se sacan las dos y se nombran, que es una decision de negocio
+     y no de este script. */
+  const porFolio = new Map();
+  lineas.forEach(l => { porFolio.set(l.folio, (porFolio.get(l.folio) || 0) + 1); });
+  const limpias = [], repetidas = [];
+  lineas.forEach(l => { (porFolio.get(l.folio) > 1 ? repetidas : limpias).push(l); });
+  repetidas.forEach(l => fuera.push({ cita: l.cita, folio: l.folio,
+    motivo: 'el mismo folio sale de ' + porFolio.get(l.folio) + ' citas distintas' }));
+
+  limpias.sort((a, b) => Number(a.folio) - Number(b.folio));
+  return { lineas: limpias, fuera: fuera };
+}
+
+/* El archivo se escribe con punto y coma, que es lo que abre Excel en Chile
+   sin preguntar nada. Para pegar a mano, la consola imprime lo mismo separado
+   por tabulacion, que cae en dos columnas de una. */
+function csvDelListado(lineas) {
+  const filas = ['folio;cantRecibida'];
+  (lineas || []).forEach(l => filas.push(String(l.folio) + ';' + String(l.cantRecibida)));
+  return filas.join('\r\n') + '\r\n';
+}
+
 /* ── El cruce AL REVES, que es lo que alimenta el correo al cliente ────────
    La regla de Mails pide avisarle al cliente las transferencias suyas hacia
    Walmart que Walmart NO informo: sin fila en el reporte no hay con que
@@ -603,6 +666,58 @@ async function main() {
     console.log('  citas con mas de una recepcion: ' + variasRecepciones.length +
       ' (se suman antes de cruzar; comparar fila por fila inventaria diferencias)');
   }
+  /* El listado que pidio Marcelo: folio + cantRecibida de lo que falta por
+     confirmar, para pegar en el Excel que hace el ajuste en SAP. Se escribe
+     ANTES del resto del informe, para que una corrida larga no se lleve el
+     entregable por delante si algo revienta mas abajo. */
+  const destinoListado = (args.find(a => a.startsWith('--listado=')) || '').split('=')[1];
+  if (destinoListado) {
+    const lst = listadoParaConfirmar(citas, idx);
+    fs.writeFileSync(destinoListado, csvDelListado(lst.lineas), 'utf8');
+    console.log('');
+    console.log('LISTADO PARA CONFIRMAR -> ' + destinoListado);
+    console.log('  ' + lst.lineas.length + ' transferencias por confirmar, ' + lst.fuera.length + ' quedaron fuera');
+    if (lst.lineas.length) {
+      console.log('');
+      console.log('  folio\tcantRecibida        (separado por tabulacion, cae en dos columnas al pegar)');
+      lst.lineas.forEach(l => console.log('  ' + l.folio + '\t' + l.cantRecibida));
+    }
+    /* MEDIDO el 9-nov: cuando Walmart acepto MENOS, el proceso real confirmo lo
+       ACEPTADO en 33 casos y lo DESPACHADO en 10 — o sea que en ~23% de las
+       diferencias negativas la regla y la practica no coinciden. Esas filas son
+       las unicas del listado donde un ajuste equivocado en SAP es probable, y
+       van separadas para que alguien las mire antes de pegarlas. Las que no
+       tienen diferencia no admiten discusion: aceptado = despachado. */
+    const conDif = lst.lineas.filter(l => l.cantRecibida !== l.despachada);
+    if (conDif.length) {
+      console.log('');
+      console.log('  OJO: ' + conDif.length + ' de ' + lst.lineas.length + ' tienen diferencia contra lo despachado.');
+      console.log('  Sobre lo ya confirmado, en los casos de diferencia negativa el proceso real');
+      console.log('  confirmo lo ACEPTADO en 33 y lo DESPACHADO en 10 (~23% de desacuerdo). Estas');
+      console.log('  son las filas donde el listado puede no coincidir con lo que se hace hoy:');
+      conDif.forEach(l => console.log('    folio ' + l.folio + '  desp ' + l.despachada +
+        ' · WM ' + l.aceptadaWM + ' · listado ' + l.cantRecibida +
+        '  ' + String(l.cliente).slice(0, 24)));
+      console.log('  Las otras ' + (lst.lineas.length - conDif.length) + ' no admiten discusion: aceptado = despachado.');
+    }
+    if (lst.fuera.length) {
+      const porMotivo = {};
+      lst.fuera.forEach(f => { porMotivo[f.motivo] = (porMotivo[f.motivo] || 0) + 1; });
+      console.log('');
+      console.log('  fuera del listado, por motivo:');
+      Object.keys(porMotivo).sort().forEach(m => console.log('    ' + porMotivo[m] + '  ' + m));
+      const revisar = lst.fuera.filter(f => !/ya confirmada/.test(f.motivo));
+      if (revisar.length) {
+        console.log('');
+        console.log('  las que NO son "ya confirmada" hay que mirarlas una por una:');
+        revisar.slice(0, 40).forEach(f => console.log('    cita ' + f.cita +
+          (f.folio != null ? '  folio ' + f.folio : '') + '  ' + f.motivo));
+        if (revisar.length > 40) console.log('    ... y ' + (revisar.length - 40) + ' mas');
+      }
+    }
+    console.log('');
+  }
+
   const res = citas.map(function (f) {
     const c = clasificar(f, idx);
     const op = c.ops.length === 1 ? c.ops[0] : null;
@@ -790,6 +905,6 @@ module.exports = { entradasZip, leerSharedStrings, leerHoja, columnaANumero, ser
                    leerXlsx, filasWalmart, reglaCantidad, indexar, clasificar, contrastar,
                    fechasEntre, corrido, COLUMNAS, pintaDeConexion, cuentaDe, cuentaValida, noExiste,
                    estaConfirmada, agruparPorCita, esWalmart, fechaDeOp, cruceInverso, citaDeWalmart,
-                   citasDeTexto, diasCerrados };
+                   citasDeTexto, diasCerrados, listadoParaConfirmar, csvDelListado };
 
 if (require.main === module) main().catch(e => { console.error(e); process.exit(1); });

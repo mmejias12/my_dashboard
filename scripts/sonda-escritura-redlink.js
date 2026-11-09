@@ -198,6 +198,22 @@ function cuerposCandidatos(doc, cantidad) {
   return lista;
 }
 
+// Keycloak distingue entre "el cliente no me cuadra" y "el usuario no me
+// cuadra", y son dos arreglos completamente distintos. Decir sólo "HTTP 401"
+// manda a revisar la contraseña cuando el problema es el secreto del cliente.
+function leerErrorToken(status, texto) {
+  const t = String(texto == null ? '' : texto);
+  if (/unauthorized_client|invalid_client/i.test(t))
+    return { causa: 'cliente', dice: 'Keycloak rechaza el CLIENTE, no al usuario: el client_secret no sirve — mal copiado, o rotado desde que se armó la colección. El client_id es ' + CLIENT_ID + '.' };
+  if (/invalid_grant|invalid user credentials/i.test(t))
+    return { causa: 'usuario', dice: 'El cliente pasa; lo que no pasa es el usuario o su clave.' };
+  if (/unsupported_grant_type/i.test(t))
+    return { causa: 'flujo', dice: 'El cliente existe pero no tiene habilitado el flujo de password.' };
+  if (Number(status) >= 500)
+    return { causa: 'servidor', dice: 'Falló el servidor de token; no dice nada de las credenciales.' };
+  return { causa: 'otra', dice: 'Respuesta no prevista del servidor de token.' };
+}
+
 /* ------------------------------------------------- red                    */
 
 let _tok = null;
@@ -222,7 +238,9 @@ async function token(fetchFn) {
   });
   if (!r.ok) {
     const t = await r.text().catch(() => '');
-    throw new Error('No se pudo obtener el token de DEMO (HTTP ' + r.status + ') ' + enmascarar(t).slice(0, 160));
+    const e = leerErrorToken(r.status, t);
+    throw new Error('No se pudo obtener el token de DEMO (HTTP ' + r.status + ')\n  ' + e.dice +
+      '\n  respuesta: ' + enmascarar(t).slice(0, 160));
   }
   const j = await r.json();
   if (!j.access_token) throw new Error('El token vino sin access_token');
@@ -400,14 +418,18 @@ async function principal() {
   return 0;
 }
 
+// No se llama a process.exit(): en Windows, salir mientras undici todavía tiene
+// un socket vivo revienta con «Assertion failed: !(handle->flags &
+// UV_HANDLE_CLOSING)» de libuv. Se fija el código y se deja que el proceso
+// termine solo cuando no queda nada pendiente.
 if (require.main === module) {
-  principal().then(c => process.exit(c || 0)).catch(e => {
+  principal().then(c => { process.exitCode = c || 0; }).catch(e => {
     console.error('\n' + enmascarar(e && e.message ? e.message : String(e)) + '\n');
-    process.exit(2);
+    process.exitCode = 2;
   });
 }
 
 module.exports = {
   HOST_DEMO, VARS, esDemo, pintaDeMarcador, faltantes, enmascarar,
-  clasificar, camposDeEstado, asimetrias, cuerposCandidatos, verbosDe, leerArgs
+  clasificar, leerErrorToken, camposDeEstado, asimetrias, cuerposCandidatos, verbosDe, leerArgs
 };

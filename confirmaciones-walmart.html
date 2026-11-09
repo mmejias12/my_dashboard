@@ -7,10 +7,16 @@
 <link rel="icon" href="data:,">
 <style>
 /* =========================================================================
-   Confirmaciones Walmart · alcance y estado
+   Confirmaciones Walmart · herramienta operativa
    Tokens, tipografía y molde de encabezado iguales a operaciones-redtec.html
    y gestion-operacional.html: una pantalla nueva con paleta propia se ve
    como un injerto.
+
+   Lo que esta página hace: lee el reporte diario de Walmart, lo cruza contra
+   las transferencias de Redlink y entrega la lista de confirmaciones con la
+   cantidad que corresponde a cada una. La lógica del cruce NO vive acá: vive
+   en data/walmart-nucleo.js, que es el mismo archivo que usan las pruebas de
+   Node. Dos copias de la misma regla se separan sin que nadie se entere.
    ========================================================================= */
 :root{
   color-scheme: dark;
@@ -37,7 +43,7 @@ a{color:inherit}
 .crece{flex:1}
 .sello{font-size:10.5px;color:var(--muted);text-align:right;line-height:1.35}
 
-.wrap{max-width:1040px;margin:0 auto;padding:20px 20px 72px}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 20px 72px}
 
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px;margin-top:16px}
 .chead{display:flex;align-items:baseline;gap:10px;margin:0 0 8px;flex-wrap:wrap}
@@ -46,84 +52,116 @@ a{color:inherit}
 p{margin:8px 0 0;color:var(--text-2)}
 p.lede{color:var(--text);font-size:14px}
 strong{color:var(--text);font-weight:600}
+code{font-family:var(--mono);font-size:11.5px;background:var(--surface-3);border:1px solid var(--line-2);border-radius:5px;padding:1px 5px}
 
-/* ── cifras de cabecera ───────────────────────────────────────────────── */
-.cifras{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:12px;margin-top:16px}
+/* ── los dos pasos ────────────────────────────────────────────────────── */
+.pasos2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
+.paso{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;position:relative}
+.paso .nro{position:absolute;top:14px;right:16px;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.paso h3{font-size:12.5px;margin-bottom:4px}
+.paso h3 small{display:block;font-weight:400;color:var(--muted);font-size:10.5px;margin-top:3px}
+
+/* zona de archivo */
+.zona{margin-top:12px;border:1.5px dashed var(--line);border-radius:10px;padding:22px 16px;text-align:center;
+  background:var(--surface-2);cursor:pointer;transition:border-color .12s,background .12s}
+.zona:hover,.zona.encima{border-color:var(--series-1);background:rgba(57,135,229,.07)}
+.zona .ic{font-size:21px;line-height:1}
+.zona .t1{font-size:12.5px;color:var(--text);margin-top:7px}
+.zona .t2{font-size:10.5px;color:var(--muted);margin-top:3px}
+.zona.cargado{border-style:solid;border-color:rgba(12,163,12,.45);background:rgba(12,163,12,.06)}
+input[type=file]{display:none}
+
+/* controles */
+.ctrl{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:13px}
+.campo{display:flex;flex-direction:column;gap:4px}
+.campo label{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+input[type=date]{background:var(--surface-3);border:1px solid var(--line);color:var(--text);border-radius:8px;
+  padding:7px 9px;font-family:var(--sans);font-size:12px;color-scheme:dark}
+button{background:var(--surface-3);border:1px solid var(--line);color:var(--text);border-radius:8px;
+  padding:8px 13px;font-family:var(--sans);font-size:12px;cursor:pointer;transition:background .12s,border-color .12s}
+button:hover:not(:disabled){background:#27303f;border-color:rgba(255,255,255,.18)}
+button:disabled{opacity:.45;cursor:default}
+button.pri{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
+button.pri:hover:not(:disabled){background:#f03529;border-color:#f03529}
+.chk{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--text-2);cursor:pointer;padding-bottom:8px}
+.chk input{accent-color:var(--series-1);width:14px;height:14px;cursor:pointer}
+
+/* avisos */
+.aviso{margin-top:12px;border-radius:9px;padding:10px 12px;font-size:12px;display:none;border:1px solid var(--line)}
+.aviso.ver{display:block}
+.aviso.ok{border-color:rgba(12,163,12,.4);background:rgba(12,163,12,.07);color:#a9dfa9}
+.aviso.err{border-color:rgba(208,59,59,.45);background:rgba(208,59,59,.08);color:#f0b4b4}
+.aviso.carga{border-color:rgba(57,135,229,.4);background:rgba(57,135,229,.07);color:#a8c8ee}
+.aviso.ojo{border-color:rgba(250,178,25,.4);background:rgba(250,178,25,.07);color:#f1d9a6}
+.aviso .detalle{display:block;margin-top:6px;font-family:var(--mono);font-size:10.5px;color:var(--muted);
+  white-space:pre-wrap;word-break:break-word;max-height:180px;overflow:auto}
+
+/* ── cifras ───────────────────────────────────────────────────────────── */
+.cifras{display:none;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:12px;margin-top:16px}
+.cifras.ver{display:grid}
 .cifra{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px}
 .cifra.destacada{border-color:rgba(12,163,12,.45);background:rgba(12,163,12,.07)}
 .cifra.ojo{border-color:rgba(250,178,25,.4);background:rgba(250,178,25,.06)}
+.cifra.gris{border-color:var(--line)}
 .cifra .n{font-size:30px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
 .cifra.destacada .n{color:#8ee08e}
 .cifra.ojo .n{color:#f1d9a6}
 .cifra .q{font-size:12px;color:var(--text-2);margin-top:7px}
 .cifra .d{font-size:10.5px;color:var(--muted);margin-top:4px}
 
-/* ── flujo ────────────────────────────────────────────────────────────── */
-.flujo{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
-.col{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:14px}
-.col.hoy{border-left:3px solid var(--muted)}
-.col.nuevo{border-left:3px solid var(--brand)}
-.col h3{font-size:12.5px;margin-bottom:10px}
-.col h3 small{display:block;font-weight:400;color:var(--muted);font-size:10.5px;margin-top:2px}
-ol.pasos{margin:0;padding-left:0;list-style:none;counter-reset:p}
-ol.pasos li{counter-increment:p;position:relative;padding:7px 0 7px 28px;font-size:12px;color:var(--text-2);border-top:1px solid var(--line-2)}
-ol.pasos li:first-child{border-top:0}
-ol.pasos li::before{content:counter(p);position:absolute;left:0;top:7px;width:19px;height:19px;border-radius:50%;
-  background:var(--surface-3);color:var(--muted);font-size:10px;display:flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
-ol.pasos li.manual::after{content:"manual";float:right;font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--warning)}
-ol.pasos li.auto::after{content:"m3link";float:right;font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:#8ab4e8}
-ol.pasos li.igual::after{content:"sin cambios";float:right;font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
-
-/* ── barras ───────────────────────────────────────────────────────────── */
-.barras{margin-top:14px;display:flex;flex-direction:column;gap:9px}
-.fila{display:grid;grid-template-columns:168px 1fr 76px;gap:12px;align-items:center}
-.fila .et{font-size:11.5px;color:var(--text-2);text-align:right}
-.fila .pista{height:16px;background:var(--surface-3);border-radius:4px;overflow:hidden}
-.fila .barra{height:100%;border-radius:4px;background:var(--series-1);min-width:3px}
-.fila .barra.ok{background:var(--good)}
-.fila .barra.ex{background:var(--warning)}
-.fila .barra.no{background:var(--muted)}
-.fila .v{font-size:11.5px;font-variant-numeric:tabular-nums;color:var(--text)}
-.fila .v span{color:var(--muted);font-size:10.5px}
+/* ── pestañas ─────────────────────────────────────────────────────────── */
+.tabs{display:none;gap:4px;margin-top:20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.tabs.ver{display:flex}
+.tab{background:none;border:0;border-bottom:2px solid transparent;border-radius:0;padding:9px 13px;
+  font-size:12.5px;color:var(--muted);cursor:pointer}
+.tab:hover:not(.act){background:none;color:var(--text-2)}
+.tab.act{color:var(--text);border-bottom-color:var(--brand);font-weight:600}
+.tab .pill{display:inline-block;margin-left:7px;background:var(--surface-3);border-radius:9px;padding:1px 7px;
+  font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--text-2)}
+.tab.act .pill{background:rgba(224,43,32,.2);color:#f0b4b4}
+.panel{display:none}
+.panel.act{display:block}
 
 /* ── tablas ───────────────────────────────────────────────────────────── */
+.tabla-caja{overflow-x:auto;margin-top:4px}
 table{width:100%;border-collapse:collapse;margin-top:12px;font-size:12px}
-th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line-2)}
-th{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line-2);white-space:nowrap}
+th{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;
+  position:sticky;top:0;background:var(--surface);z-index:1}
 td.n{text-align:right;font-variant-numeric:tabular-nums}
+td.mono{font-family:var(--mono);font-size:11.5px}
+td.libre{white-space:normal;min-width:190px}
+tbody tr:hover td{background:var(--surface-2)}
 tr.total td{border-top:1px solid var(--line);border-bottom:0;font-weight:600;color:var(--text)}
-code{font-family:var(--mono);font-size:11.5px;background:var(--surface-3);border:1px solid var(--line-2);border-radius:5px;padding:1px 5px}
+.et{display:inline-block;font-size:10px;letter-spacing:.04em;text-transform:uppercase;border-radius:5px;padding:2px 6px;
+  border:1px solid var(--line);color:var(--text-2);background:var(--surface-3)}
+.et.lista{border-color:rgba(12,163,12,.45);color:#8ee08e;background:rgba(12,163,12,.08)}
+.et.espera{border-color:rgba(250,178,25,.4);color:#f1d9a6;background:rgba(250,178,25,.07)}
+.dif{color:var(--warning)}
+.vacio{padding:26px 10px;text-align:center;color:var(--muted);font-size:12px}
 
-/* ── estados y decisiones ─────────────────────────────────────────────── */
-.estado{display:flex;gap:10px;align-items:flex-start;padding:11px 0;border-top:1px solid var(--line-2);font-size:12.5px;color:var(--text-2)}
-.estado:first-of-type{border-top:0}
-.punto{width:9px;height:9px;border-radius:50%;flex-shrink:0;margin-top:5px}
-.punto.listo{background:var(--good)}
-.punto.parcial{background:var(--warning)}
-.punto.falta{background:var(--muted)}
-.estado b{color:var(--text);font-weight:600}
-
-.decision{border:1px solid var(--line);border-left:3px solid var(--brand);border-radius:10px;padding:13px 15px;margin-top:11px;background:var(--surface-2)}
-.decision h3{font-size:12.5px}
-.decision p{margin-top:6px;font-size:12px}
-.decision .dato{font-size:11px;color:var(--muted);margin-top:7px;font-variant-numeric:tabular-nums}
+.acciones{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px;align-items:center}
+.acciones .nota{font-size:11px;color:var(--muted)}
 
 .pie{margin-top:26px;padding-top:14px;border-top:1px solid var(--line);font-size:11px;color:var(--muted)}
+.pie b{color:var(--text-2);font-weight:600}
 
-@media (max-width:760px){
-  .flujo{grid-template-columns:1fr}
-  .fila{grid-template-columns:120px 1fr 66px;gap:9px}
+@media (max-width:860px){
+  .pasos2{grid-template-columns:1fr}
   .wrap{padding:16px 13px 56px}
   .top{padding:10px 13px}
+  .sello{display:none}
 }
 @media print{
   :root{color-scheme:light}
   body{background:#fff;color:#111}
   .top{position:static;background:#fff;border-color:#ddd}
-  .card,.cifra,.col,.decision{background:#fff;border-color:#ddd;break-inside:avoid}
+  .card,.cifra,.paso{background:#fff;border-color:#ddd;break-inside:avoid}
+  .pasos2,.tabs,.acciones,.zona,.ctrl{display:none !important}
+  .panel{display:block !important}
   .sub,.eyebrow,.d,.pie,th{color:#666}
-  p,.et,.estado{color:#333}
-  .fila .pista{background:#eee}
+  p,.et{color:#333}
+  th{background:#fff}
 }
 </style>
 </head>
@@ -133,189 +171,437 @@ code{font-family:var(--mono);font-size:11.5px;background:var(--surface-3);border
   <a href="m3link_dashboard_dark.html" class="logo" title="Volver al panel M3LINK"><img src="data:image/png;base64,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" alt="REDTEC"></a>
   <div>
     <h1>Confirmaciones Walmart</h1>
-    <div class="sub">Logística inversa · alcance y estado</div>
+    <div class="sub">Logística inversa · reporte diario contra Redlink</div>
   </div>
   <div class="crece"></div>
-  <div class="sello">Medido sobre 8 reportes diarios<br>23-oct a 5-nov 2026</div>
+  <div class="sello" id="sello">El reporte no sale de tu navegador<br>la consulta a Redlink es de sólo lectura</div>
 </div>
 
 <div class="wrap">
 
-  <div class="card">
-    <div class="chead"><span class="eyebrow">Resumen</span></div>
-    <p class="lede">El cruce entre el reporte diario de Walmart y las transferencias de Redlink
-    está construido, medido y operativo. Produce la lista de confirmaciones pendientes con la
-    cantidad que corresponde a cada una, verificada contra Redlink en el momento de usarla.</p>
-    <p>El módulo que hoy hace este trabajo pertenece a M2LINK, plataforma que se da de baja.</p>
-  </div>
+  <div class="pasos2">
 
-  <div class="cifras">
-    <div class="cifra destacada">
-      <div class="n">94</div>
-      <div class="q">confirmaciones listas</div>
-      <div class="d">sin diferencia contra lo despachado</div>
-    </div>
-    <div class="cifra ojo">
-      <div class="n">8</div>
-      <div class="q">requieren decisión</div>
-      <div class="d">confirman menos de lo despachado</div>
-    </div>
-    <div class="cifra">
-      <div class="n">102</div>
-      <div class="q">pendientes verificadas</div>
-      <div class="d">con despachos desde el 23 de octubre</div>
-    </div>
-    <div class="cifra">
-      <div class="n">97,1<span style="font-size:17px">%</span></div>
-      <div class="q">precisión de la regla</div>
-      <div class="d">331 de 341 confirmaciones reales</div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="chead"><span class="eyebrow">El circuito</span><h2>Qué cambia y qué no</h2></div>
-    <div class="flujo">
-      <div class="col hoy">
-        <h3>Hoy<small>cuatro de cinco pasos dependen de una persona disponible</small></h3>
-        <ol class="pasos">
-          <li class="igual">Walmart envía el reporte por correo</li>
-          <li class="manual">El correo se reenvía a un desarrollador</li>
-          <li class="manual">El archivo se carga en la plataforma</li>
-          <li class="manual">La plataforma cruza contra Redlink</li>
-          <li class="manual">Se ejecuta la confirmación y el ajuste en SAP</li>
-        </ol>
+    <div class="paso">
+      <div class="nro">paso 1</div>
+      <h3>El reporte de Walmart<small>el .xlsx tal como llega por correo, sin tocarlo</small></h3>
+      <div class="zona" id="zona">
+        <div class="ic">⬆</div>
+        <div class="t1" id="zona-t1">Arrastra el archivo acá</div>
+        <div class="t2" id="zona-t2">o hacé clic para buscarlo · .xlsx</div>
       </div>
-      <div class="col nuevo">
-        <h3>Con el m3link<small>el cruce y la verificación dejan de depender de una persona</small></h3>
-        <ol class="pasos">
-          <li class="igual">Walmart envía el reporte por correo</li>
-          <li class="auto">El m3link cruza el reporte contra Redlink</li>
-          <li class="auto">Verifica cada folio contra Redlink en vivo</li>
-          <li class="auto">Entrega la lista: folio y cantidad a confirmar</li>
-          <li class="igual">El ajuste en SAP se ejecuta como hasta hoy</li>
-        </ol>
+      <input type="file" id="archivo" accept=".xlsx">
+      <div class="aviso" id="av-archivo"></div>
+    </div>
+
+    <div class="paso">
+      <div class="nro">paso 2</div>
+      <h3>Las transferencias de Redlink<small>la ventana sale del propio reporte; se puede ampliar</small></h3>
+      <div class="ctrl">
+        <div class="campo"><label for="d1">Desde</label><input type="date" id="d1"></div>
+        <div class="campo"><label for="d2">Hasta</label><input type="date" id="d2"></div>
+        <button class="pri" id="btn-cruzar" disabled>Cruzar</button>
       </div>
-    </div>
-    <p>El movimiento de inventario en SAP no cambia de manos. El m3link aporta el cruce y la
-    verificación, que es donde está el trabajo y donde estaba la dependencia.</p>
-  </div>
-
-  <div class="card">
-    <div class="chead"><span class="eyebrow">Lo medido</span><h2>Qué tan bien cruza</h2></div>
-    <p>Sobre 566 citas distintas de los 8 reportes, contra 21.238 operaciones de Redlink.</p>
-    <div class="barras">
-      <div class="fila"><div class="et">Cruce directo por cita</div>
-        <div class="pista"><div class="barra ok" style="width:79.7%"></div></div>
-        <div class="v">451 <span>80%</span></div></div>
-      <div class="fila"><div class="et">Sin coincidencia</div>
-        <div class="pista"><div class="barra no" style="width:17.3%"></div></div>
-        <div class="v">98 <span>17%</span></div></div>
-      <div class="fila"><div class="et">Cita en varias operaciones</div>
-        <div class="pista"><div class="barra ex" style="width:2.8%"></div></div>
-        <div class="v">16 <span>3%</span></div></div>
-      <div class="fila"><div class="et">Por observación</div>
-        <div class="pista"><div class="barra" style="width:0.6%"></div></div>
-        <div class="v">1 <span>0%</span></div></div>
-    </div>
-    <p>En las transferencias a bodegas de Walmart, el campo de cita viene informado en
-    <strong>2.467 de 2.648</strong> casos (93,2%). Ésa es la cobertura que determina el resultado.</p>
-  </div>
-
-  <div class="card">
-    <div class="chead"><span class="eyebrow">Lo medido</span><h2>Qué tan bien decide la cantidad</h2></div>
-    <p>La regla se contrastó contra 341 transferencias que el proceso actual ya confirmó.
-    Reproduce el resultado en 331.</p>
-    <table>
-      <thead><tr><th>Caso</th><th class="n">Transferencias</th><th>Qué hizo el proceso actual</th></tr></thead>
-      <tbody>
-        <tr><td>Walmart aceptó lo mismo</td><td class="n">269</td><td>confirmó lo aceptado, sin excepción</td></tr>
-        <tr><td>Walmart aceptó más</td><td class="n">29</td><td>confirmó lo despachado, sin excepción</td></tr>
-        <tr><td>Walmart aceptó menos</td><td class="n">43</td><td>confirmó lo aceptado en 33, lo despachado en 10</td></tr>
-        <tr class="total"><td>Total contrastado</td><td class="n">341</td><td>la regla acierta en 331 · 97,1%</td></tr>
-      </tbody>
-    </table>
-    <p>Las diez excepciones son todas del mismo tipo: Walmart aceptó menos y aun así se confirmó
-    el total despachado. Seis corresponden a un mismo cliente, lo que sugiere un criterio
-    particular que no está documentado.</p>
-  </div>
-
-  <div class="card">
-    <div class="chead"><span class="eyebrow">Estado</span><h2>Qué está construido</h2></div>
-    <div class="estado"><span class="punto listo"></span><div>
-      <b>Lectura del reporte de Walmart.</b> Sin dependencias externas, con las columnas
-      ubicadas por nombre: una columna agregada al medio no rompe la lectura.</div></div>
-    <div class="estado"><span class="punto listo"></span><div>
-      <b>Cruce contra Redlink.</b> Por número de cita, con respaldo por observación y manejo de
-      citas múltiples en un mismo campo.</div></div>
-    <div class="estado"><span class="punto listo"></span><div>
-      <b>Regla de cantidades.</b> Validada contra 341 confirmaciones reales.</div></div>
-    <div class="estado"><span class="punto listo"></span><div>
-      <b>Verificación en vivo.</b> Antes de usar la lista, cada folio se relee en Redlink para
-      descartar las ya confirmadas. Evita un segundo ajuste de inventario sobre la misma
-      transferencia.</div></div>
-    <div class="estado"><span class="punto listo"></span><div>
-      <b>Listado de salida.</b> Dos columnas, folio y cantidad, separando lo que no admite
-      discusión de lo que requiere criterio.</div></div>
-    <div class="estado"><span class="punto parcial"></span><div>
-      <b>Escritura directa en Redlink.</b> La API acepta y persiste las cantidades. El avance de
-      etapa —que dispara el ajuste en SAP— está pendiente de una respuesta del proveedor de la
-      plataforma.</div></div>
-    <div class="estado"><span class="punto falta"></span><div>
-      <b>Recepción automática del correo.</b> No construida. El reporte se sigue tomando a mano.</div></div>
-    <div class="estado"><span class="punto falta"></span><div>
-      <b>Aviso al cliente.</b> No construido. El dato está disponible: en los días con información
-      completa, 108 transferencias con cita no fueron informadas por Walmart (1.811 pallets).</div></div>
-  </div>
-
-  <div class="card">
-    <div class="chead"><span class="eyebrow">Para resolver</span><h2>Tres decisiones</h2></div>
-
-    <div class="decision">
-      <h3>1 · Qué se confirma cuando Walmart recibe menos</h3>
-      <p>Existen tres versiones: las reglas entregadas dicen una cosa, la pantalla del módulo
-      otra, y las confirmaciones ya ejecutadas una tercera. Se requiere un criterio único.</p>
-      <p class="dato">Afecta a 8 de 102 confirmaciones pendientes. Históricamente, 23% de los casos
-      con diferencia negativa.</p>
+      <label class="chk" for="exigir" style="margin-top:4px">
+        <input type="checkbox" id="exigir">
+        Dejar afuera lo que todavía espera respaldo (etapa 43)
+      </label>
+      <div class="aviso" id="av-cruce"></div>
     </div>
 
-    <div class="decision">
-      <h3>2 · Usuario de sistema propio</h3>
-      <p>Las confirmaciones quedan firmadas con el usuario que las ejecuta, y esa firma es la
-      trazabilidad. Se requiere un usuario de sistema para el m3link antes de cualquier
-      confirmación en producción.</p>
-      <p class="dato">Hoy las confirmaciones automáticas aparecen firmadas por M2LinkSystem.</p>
-    </div>
+  </div>
 
-    <div class="decision">
-      <h3>3 · Alcance de la automatización</h3>
-      <p>Definir si se incorpora la recepción automática del correo, el aviso al cliente por las
-      transferencias no informadas, y la administración de los servicios de Emisión 24 y Express
-      solicitada por la contraparte.</p>
+  <div class="cifras" id="cifras">
+    <div class="cifra gris"><div class="n" id="c-citas">0</div><div class="q">citas en el reporte</div><div class="d" id="c-citas-d">&nbsp;</div></div>
+    <div class="cifra destacada"><div class="n" id="c-conf">0</div><div class="q">listas para confirmar</div><div class="d" id="c-conf-d">&nbsp;</div></div>
+    <div class="cifra ojo"><div class="n" id="c-avisar">0</div><div class="q">avisos al cliente</div><div class="d">Walmart recibió más de lo despachado</div></div>
+    <div class="cifra gris"><div class="n" id="c-exc">0</div><div class="q">excepciones</div><div class="d">cada una con su motivo</div></div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button class="tab act" data-p="p-conf">Por confirmar <span class="pill" id="t-conf">0</span></button>
+    <button class="tab" data-p="p-avisar">Avisar al cliente <span class="pill" id="t-avisar">0</span></button>
+    <button class="tab" data-p="p-exc">Excepciones <span class="pill" id="t-exc">0</span></button>
+  </div>
+
+  <div class="panel act" id="p-conf">
+    <div class="card">
+      <div class="chead"><span class="eyebrow">Para ejecutar</span><h2>Folio y cantidad a confirmar</h2></div>
+      <p>La cantidad es la regla del área: si Walmart recibió menos, se confirma lo recibido; si recibió más,
+      se confirma lo despachado, porque no se puede confirmar más de lo que salió.</p>
+      <div class="acciones">
+        <button id="btn-csv" disabled>Bajar CSV</button>
+        <button id="btn-tsv" disabled>Copiar para Excel</button>
+        <span class="nota" id="nota-copia"></span>
+      </div>
+      <div class="tabla-caja"><table id="tb-conf"></table></div>
     </div>
   </div>
 
-  <div class="card">
-    <div class="chead"><span class="eyebrow">Observado</span><h2>Dos hallazgos de calidad de dato</h2></div>
-    <table>
-      <thead><tr><th>Situación</th><th class="n">Casos</th><th>Efecto</th></tr></thead>
-      <tbody>
-        <tr><td>Transferencias a Walmart sin número de cita</td><td class="n">56</td>
-            <td>no pueden cruzarse: requieren corrección en el origen</td></tr>
-        <tr><td>Campo de cita mal escrito</td><td class="n">59</td>
-            <td>48 recuperables, 11 sin ninguna cita válida</td></tr>
-      </tbody>
-    </table>
-    <p>Corregir esos 11 registros en el origen sube la cobertura sin cambiar una línea de código.
-    Son valores como <code>DJWC13</code>, <code>17221</code> o <code>1</code> escritos en el campo
-    de cita.</p>
+  <div class="panel" id="p-avisar">
+    <div class="card">
+      <div class="chead"><span class="eyebrow">Para informar</span><h2>Diferencias a favor de Walmart</h2></div>
+      <p>Walmart declara más pallets de los que salieron en la transferencia. Esos pallets están allá
+      sin respaldo: el cliente tiene que emitir otra transferencia por la diferencia. Esta lista sale
+      completa, incluso cuando la transferencia original ya está confirmada.</p>
+      <div class="acciones">
+        <button id="btn-csv-avisar" disabled>Bajar CSV</button>
+      </div>
+      <div class="tabla-caja"><table id="tb-avisar"></table></div>
+    </div>
+  </div>
+
+  <div class="panel" id="p-exc">
+    <div class="card">
+      <div class="chead"><span class="eyebrow">Para revisar</span><h2>Lo que no se confirma, y por qué</h2></div>
+      <p>Ninguna cita del reporte desaparece en silencio: la que no entra a la lista sale acá con el motivo.
+      Una fila que falta en una lista que alguien va a ejecutar no se nota hasta que el cliente reclama.</p>
+      <div class="acciones">
+        <button id="btn-csv-exc" disabled>Bajar CSV</button>
+      </div>
+      <div class="tabla-caja"><table id="tb-exc"></table></div>
+    </div>
   </div>
 
   <div class="pie">
-    Documento de alcance · REDTEC · M3LINK. El detalle técnico, la metodología de medición y la
-    trazabilidad de cada cifra están en <code>docs/walmart-confirmaciones.md</code> del repositorio.
+    <b>Cómo sigue.</b> El ajuste de inventario en SAP se ejecuta como hasta hoy: esta pantalla aporta el cruce
+    y la verificación contra Redlink, que es donde estaba el trabajo y donde estaba la dependencia de una
+    persona disponible.<br>
+    <b>De dónde sale cada número.</b> El reporte se lee en tu navegador y no se sube a ninguna parte. Las
+    transferencias salen de <code>/proxy/ops</code>, la misma lectura que usa el resto del m3link. La lógica del
+    cruce vive en <code>data/walmart-nucleo.js</code>, el mismo archivo que corren las pruebas de
+    <code>scripts/test-walmart-nucleo.js</code>.
   </div>
 
 </div>
 
+<script src="data/walmart-nucleo.js"></script>
+<script>
+(function () {
+'use strict';
+
+var N = window.WalmartNucleo;
+var $ = function (id) { return document.getElementById(id); };
+var esLocal = location.protocol === 'file:';
+
+var S = { filas: [], ops: [], r: null, nombre: '', consultado: null };
+
+/* ── avisos: el detalle crudo NUNCA se tira ──────────────────────────────
+   Un "error al consultar" sin el status, el host y el cuerpo obliga a
+   adivinar. Si vino texto del servidor, se muestra. */
+function aviso(id, clase, texto, detalle) {
+  var e = $(id);
+  e.className = 'aviso ver ' + clase;
+  e.textContent = '';
+  var t = document.createElement('span');
+  t.textContent = texto;
+  e.appendChild(t);
+  if (detalle) {
+    var d = document.createElement('span');
+    d.className = 'detalle';
+    d.textContent = detalle;
+    e.appendChild(d);
+  }
+}
+function limpiar(id) { var e = $(id); e.className = 'aviso'; e.textContent = ''; }
+function num(n) { return Number(n || 0).toLocaleString('es-CL'); }
+
+/* ── paso 1: el archivo ─────────────────────────────────────────────────── */
+
+var zona = $('zona'), entrada = $('archivo');
+zona.addEventListener('click', function () { entrada.click(); });
+entrada.addEventListener('change', function () { if (entrada.files[0]) leer(entrada.files[0]); });
+['dragenter', 'dragover'].forEach(function (ev) {
+  zona.addEventListener(ev, function (e) { e.preventDefault(); zona.classList.add('encima'); });
+});
+['dragleave', 'drop'].forEach(function (ev) {
+  zona.addEventListener(ev, function (e) { e.preventDefault(); zona.classList.remove('encima'); });
+});
+zona.addEventListener('drop', function (e) {
+  var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) leer(f);
+});
+
+async function leer(file) {
+  limpiar('av-archivo'); limpiar('av-cruce');
+  S.filas = []; S.r = null; S.nombre = file.name;
+  $('btn-cruzar').disabled = true;
+  pintarTodo();
+  aviso('av-archivo', 'carga', 'Leyendo ' + file.name + '…');
+  try {
+    if (!/\.xlsx$/i.test(file.name)) {
+      throw new Error('El archivo tiene que ser el .xlsx de Walmart. Si te llegó un .xls viejo, abrilo en Excel y guardalo como .xlsx.');
+    }
+    var buf = new Uint8Array(await file.arrayBuffer());
+    var matriz = await N.leerXlsx(buf);
+    var filas = N.filasWalmart(matriz);
+    if (!filas.length) throw new Error('El reporte no trae ninguna fila con cita.');
+    S.filas = filas;
+
+    var citas = N.agruparPorCita(filas).length;
+    var v = N.ventanaDeReporte(filas);
+    if (v) { $('d1').value = v.desde; $('d2').value = v.hasta; }
+
+    zona.classList.add('cargado');
+    $('zona-t1').textContent = file.name;
+    $('zona-t2').textContent = num(filas.length) + ' recepciones · ' + num(citas) + ' citas';
+    aviso('av-archivo', 'ok', 'Reporte leído: ' + num(filas.length) + ' recepciones en ' + num(citas) +
+          ' citas' + (v ? ' · ' + v.desde + ' → ' + v.hasta : ''));
+    $('btn-cruzar').disabled = false;
+    if (esLocal) {
+      aviso('av-cruce', 'ojo', 'Esta página está abierta como archivo local: la consulta a Redlink no va a funcionar. Abrila desde el sitio publicado.');
+    }
+  } catch (e) {
+    zona.classList.remove('cargado');
+    $('zona-t1').textContent = 'Arrastra el archivo acá';
+    $('zona-t2').textContent = 'o hacé clic para buscarlo · .xlsx';
+    aviso('av-archivo', 'err', 'No se pudo leer el reporte.', (e && e.message) || String(e));
+  }
+}
+
+/* ── paso 2: Redlink ────────────────────────────────────────────────────── */
+
+$('btn-cruzar').addEventListener('click', cruzar);
+$('exigir').addEventListener('change', function () { if (S.ops.length) rehacer(); });
+
+async function cruzar() {
+  var d1 = $('d1').value, d2 = $('d2').value;
+  if (!d1 || !d2) { aviso('av-cruce', 'err', 'Faltan las fechas de la ventana.'); return; }
+  if (d1 > d2)    { aviso('av-cruce', 'err', '"Desde" quedó después de "Hasta".'); return; }
+
+  var b = $('btn-cruzar');
+  b.disabled = true; b.textContent = 'Consultando…';
+  aviso('av-cruce', 'carga', 'Consultando transferencias ' + d1 + ' → ' + d2 + '…');
+  var url = '/proxy/ops?fechaInicio=' + encodeURIComponent(d1) + '&fechaFin=' + encodeURIComponent(d2);
+  try {
+    var res;
+    try {
+      res = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+    } catch (red) {
+      throw new Error('La consulta no salió del navegador (' + ((red && red.message) || 'fetch falló') +
+                      '). Revisá la conexión o si la sesión del m3link sigue abierta. URL: ' + url);
+    }
+    var crudo = await res.text();
+    if (!res.ok) {
+      // 401/403 es casi siempre la sesión del m3link vencida, no un problema
+      // de Redlink: decirlo acá ahorra una vuelta de preguntas.
+      var pista = (res.status === 401 || res.status === 403)
+        ? '\nEsto suele ser la sesión del m3link vencida: recargá la página, iniciá sesión y volvé a cruzar.'
+        : '';
+      throw new Error('Redlink respondió HTTP ' + res.status + ' ' + (res.statusText || '') + pista +
+                      '\nURL: ' + url + '\n' + crudo.slice(0, 600));
+    }
+    var data;
+    try { data = JSON.parse(crudo); }
+    catch (nojson) {
+      throw new Error('La respuesta no vino como JSON.\nURL: ' + url + '\n' + crudo.slice(0, 600));
+    }
+    S.ops = Array.isArray(data) ? data : [data];
+    S.consultado = { d1: d1, d2: d2, cuando: new Date() };
+    if (!S.ops.length) {
+      aviso('av-cruce', 'ojo', 'La consulta no devolvió ninguna operación para ' + d1 + ' → ' + d2 +
+            '. Probá ampliando la ventana.');
+    }
+    rehacer();
+  } catch (e) {
+    aviso('av-cruce', 'err', 'No se pudo consultar Redlink.', (e && e.message) || String(e));
+  } finally {
+    b.disabled = false; b.textContent = 'Cruzar';
+  }
+}
+
+function rehacer() {
+  S.r = N.cruzar(S.filas, S.ops, { exigirEtapa: $('exigir').checked });
+  var c = S.consultado;
+  if (S.ops.length) {
+    aviso('av-cruce', 'ok', num(S.ops.length) + ' operaciones leídas · ' + c.d1 + ' → ' + c.d2 +
+          ' · verificado ' + c.cuando.toLocaleTimeString('es-CL'));
+  }
+  pintarTodo();
+}
+
+/* ── pintar ─────────────────────────────────────────────────────────────── */
+
+function tabla(el, cols, filas, fila, vacio) {
+  el.textContent = '';
+  if (!filas.length) {
+    var cap = document.createElement('caption');
+    cap.className = 'vacio';
+    cap.textContent = vacio;
+    el.appendChild(cap);
+    return;
+  }
+  var thead = document.createElement('thead'), tr = document.createElement('tr');
+  cols.forEach(function (c) {
+    var th = document.createElement('th');
+    th.textContent = c.t;
+    if (c.n) th.style.textAlign = 'right';
+    tr.appendChild(th);
+  });
+  thead.appendChild(tr); el.appendChild(thead);
+  var tb = document.createElement('tbody');
+  filas.forEach(function (f) {
+    var r = document.createElement('tr');
+    fila(f).forEach(function (celda, i) {
+      var td = document.createElement('td');
+      if (cols[i].n) td.className = 'n';
+      if (cols[i].mono) td.className = 'mono';
+      if (cols[i].libre) td.className = 'libre';
+      if (celda && celda.nodeType) td.appendChild(celda);
+      else td.textContent = celda === null || celda === undefined ? '' : String(celda);
+      r.appendChild(td);
+    });
+    tb.appendChild(r);
+  });
+  el.appendChild(tb);
+}
+
+function etiqueta(texto, clase) {
+  var s = document.createElement('span');
+  s.className = 'et' + (clase ? ' ' + clase : '');
+  s.textContent = texto || '—';
+  return s;
+}
+function conDif(valor, dif) {
+  var s = document.createElement('span');
+  s.textContent = num(valor);
+  if (dif) s.className = 'dif';
+  return s;
+}
+
+var COLS_CONF = [{ t: 'Folio', mono: true }, { t: 'Cita', mono: true }, { t: 'Cliente', libre: true },
+                 { t: 'Despachado', n: true }, { t: 'Walmart', n: true }, { t: 'A confirmar', n: true },
+                 { t: 'Etapa' }, { t: 'Bodega' }];
+var COLS_AVISAR = [{ t: 'Folio', mono: true }, { t: 'Cita', mono: true }, { t: 'Cliente', libre: true },
+                   { t: 'Despachado', n: true }, { t: 'Walmart', n: true }, { t: 'A informar', n: true },
+                   { t: 'Etapa' }];
+var COLS_EXC = [{ t: 'Cita', mono: true }, { t: 'Folio', mono: true }, { t: 'Motivo', libre: true },
+                { t: 'Despachado', n: true }, { t: 'Walmart', n: true }, { t: 'Etapa' }];
+
+function pintarTodo() {
+  var r = S.r;
+  var hay = !!r;
+  $('cifras').className = 'cifras' + (hay ? ' ver' : '');
+  $('tabs').className = 'tabs' + (hay ? ' ver' : '');
+  if (!hay) {
+    ['btn-csv', 'btn-tsv', 'btn-csv-avisar', 'btn-csv-exc'].forEach(function (b) { $(b).disabled = true; });
+    return;
+  }
+
+  $('c-citas').textContent = num(r.citas);
+  $('c-citas-d').textContent = num(S.filas.length) + ' recepciones · ' + (S.nombre || '');
+  $('c-conf').textContent = num(r.porConfirmar.length);
+  var pallets = r.porConfirmar.reduce(function (a, f) { return a + f.aConfirmar; }, 0);
+  $('c-conf-d').textContent = num(pallets) + ' pallets en total';
+  $('c-avisar').textContent = num(r.avisar.length);
+  $('c-exc').textContent = num(r.excepciones.length);
+  $('t-conf').textContent = num(r.porConfirmar.length);
+  $('t-avisar').textContent = num(r.avisar.length);
+  $('t-exc').textContent = num(r.excepciones.length);
+
+  tabla($('tb-conf'), COLS_CONF, r.porConfirmar, function (f) {
+    return [f.folio, f.cita, f.clienteRedlink || f.cliente, num(f.despachada),
+            conDif(f.canjeWM, f.diferencia !== 0), num(f.aConfirmar),
+            etiqueta(f.etapa, /pendiente\s+de\s+confirmaci/i.test(f.etapa) ? 'lista' : 'espera'),
+            f.bodega];
+  }, 'Nada por confirmar con este reporte y esta ventana.');
+
+  tabla($('tb-avisar'), COLS_AVISAR, r.avisar, function (f) {
+    return [f.folio, f.cita, f.clienteRedlink || f.cliente, num(f.despachada), num(f.canjeWM),
+            num(f.porAvisar), etiqueta(f.etapa)];
+  }, 'Ninguna cita declara más pallets de los que salieron.');
+
+  tabla($('tb-exc'), COLS_EXC, r.excepciones, function (f) {
+    return [f.cita, f.folio == null ? '—' : f.folio, f.motivo,
+            f.despachada == null ? '—' : num(f.despachada), num(f.canjeWM),
+            etiqueta(f.etapa)];
+  }, 'Ninguna excepción: todas las citas del reporte cruzaron.');
+
+  $('btn-csv').disabled = !r.porConfirmar.length;
+  $('btn-tsv').disabled = !r.porConfirmar.length;
+  $('btn-csv-avisar').disabled = !r.avisar.length;
+  $('btn-csv-exc').disabled = !r.excepciones.length;
+}
+
+/* ── pestañas ───────────────────────────────────────────────────────────── */
+
+Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (b) {
+  b.addEventListener('click', function () {
+    Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (x) { x.classList.remove('act'); });
+    Array.prototype.forEach.call(document.querySelectorAll('.panel'), function (x) { x.classList.remove('act'); });
+    b.classList.add('act');
+    $(b.dataset.p).classList.add('act');
+  });
+});
+
+/* ── bajar y copiar ─────────────────────────────────────────────────────── */
+
+function sello() {
+  var d = new Date();
+  return d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2);
+}
+// El BOM es para que Excel en Windows abra el acentuado sin preguntar nada.
+function bajar(nombre, texto) {
+  var b = new Blob(['﻿' + texto], { type: 'text/csv;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(b);
+  a.download = nombre;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+}
+function csvDe(cab, filas, fila) {
+  var out = [cab.join(';')];
+  filas.forEach(function (f) { out.push(fila(f).map(function (v) {
+    var s = v === null || v === undefined ? '' : String(v);
+    return /[;"\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }).join(';')); });
+  return out.join('\r\n') + '\r\n';
+}
+
+$('btn-csv').addEventListener('click', function () {
+  bajar('confirmar-walmart-' + sello() + '.csv', N.csvDeConfirmar(S.r.porConfirmar));
+});
+$('btn-csv-avisar').addEventListener('click', function () {
+  bajar('avisar-cliente-walmart-' + sello() + '.csv',
+    csvDe(['folio', 'cita', 'cliente', 'despachado', 'walmart', 'aInformar', 'etapa'],
+      S.r.avisar, function (f) {
+        return [f.folio, f.cita, f.clienteRedlink || f.cliente, f.despachada, f.canjeWM, f.porAvisar, f.etapa];
+      }));
+});
+$('btn-csv-exc').addEventListener('click', function () {
+  bajar('excepciones-walmart-' + sello() + '.csv',
+    csvDe(['cita', 'folio', 'motivo', 'despachado', 'walmart', 'etapa', 'cliente'],
+      S.r.excepciones, function (f) {
+        return [f.cita, f.folio == null ? '' : f.folio, f.motivo, f.despachada == null ? '' : f.despachada,
+                f.canjeWM, f.etapa || '', f.clienteRedlink || f.cliente];
+      }));
+});
+
+$('btn-tsv').addEventListener('click', async function () {
+  var texto = N.tsvDeConfirmar(S.r.porConfirmar);
+  var n = S.r.porConfirmar.length;
+  try {
+    await navigator.clipboard.writeText(texto);
+    $('nota-copia').textContent = num(n) + ' filas copiadas: pegalas en el Excel con Ctrl+V.';
+  } catch (e) {
+    // Sin permiso de portapapeles el texto tiene que quedar a mano igual.
+    var ta = document.createElement('textarea');
+    ta.value = texto;
+    ta.style.cssText = 'position:fixed;left:-9999px;top:0';
+    document.body.appendChild(ta); ta.select();
+    var listo = false;
+    try { listo = document.execCommand('copy'); } catch (x) { listo = false; }
+    document.body.removeChild(ta);
+    $('nota-copia').textContent = listo
+      ? num(n) + ' filas copiadas: pegalas en el Excel con Ctrl+V.'
+      : 'El navegador no dejó copiar. Usá "Bajar CSV".';
+  }
+});
+
+if (esLocal) {
+  aviso('av-cruce', 'ojo', 'Esta página está abierta como archivo local: la consulta a Redlink no va a funcionar. Abrila desde el sitio publicado del m3link.');
+}
+
+})();
+</script>
 </body>
 </html>

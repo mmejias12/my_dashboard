@@ -422,11 +422,22 @@ async function correr(N) {
 
   /* ---- las etapas -------------------------------------------------------- */
 
-  await prueba('T40 solo "Pendiente de Confirmacion" es confirmable', () => {
+  await prueba('T40 las DOS etapas pendientes son confirmables en el camino masivo', () => {
+    // Resuelto por Marcelo el 9-nov-2026: en las confirmaciones masivas de
+    // Walmart no corresponde adjuntar respaldo. Antes la 43 quedaba fuera, y
+    // eran 55 de los 60 folios del primer dia real.
     cierto(N.etapaConfirmable({ etapaOperacion: 'Pendiente de Confirmacion' }));
     cierto(N.etapaConfirmable({ etapaOperacion: 'Pendiente de Confirmación' }), 'con tilde tambien:');
-    falso(N.etapaConfirmable({ etapaOperacion: 'Pendiente Adjuntar Respaldo' }), 'esta espera al cliente:');
+    cierto(N.etapaConfirmable({ etapaOperacion: 'Pendiente Adjuntar Respaldo' }));
     falso(N.etapaConfirmable({ etapaOperacion: 'Transferencia Confirmada' }));
+    falso(N.etapaConfirmable({ etapaOperacion: 'Transferencia Reconfirmada' }));
+  });
+  await prueba('T40b empezar con "Pendiente" NO alcanza', () => {
+    // Las dos confirmables empiezan igual: un regex /pendiente/i deja pasar
+    // cualquier etapa futura que arranque con esa palabra.
+    falso(N.etapaConfirmable({ etapaOperacion: 'Pendiente' }));
+    falso(N.etapaConfirmable({ etapaOperacion: 'Pendiente de Aprobacion' }));
+    falso(N.etapaConfirmable({ etapaOperacion: 'Pendiente Reversa' }));
   });
   await prueba('T41 una operacion nula no hace reventar nada', () => {
     falso(N.etapaConfirmable(null));
@@ -545,11 +556,17 @@ async function correr(N) {
     const r = N.cruzar(FILAS, OPS);
     cierto(r.porConfirmar.some(f => f.folio === 4138211), 'la etapa 43 entra si no se exige etapa');
   });
-  await prueba('T55 con --exigir-etapa la 43 queda afuera y la 44 entra', () => {
+  await prueba('T55 con exigirEtapa las dos pendientes quedan; una cerrada sale', () => {
     const r = N.cruzar(FILAS, OPS, { exigirEtapa: true });
-    falso(r.porConfirmar.some(f => f.folio === 4138211), 'la 43 sale');
+    cierto(r.porConfirmar.some(f => f.folio === 4138211), 'la 43 queda: el camino masivo la confirma');
     cierto(r.porConfirmar.some(f => f.folio === 4138273), 'la 44 queda');
-    cierto(r.excepciones.some(e => e.folio === 4138211 && /todav/.test(e.motivo)));
+    // Y la bandera sigue sirviendo para lo que no es confirmable.
+    const ops = [Object.assign({}, OPS[1], { etapaOperacion: 'Transferencia Reconfirmada' })];
+    const filas = N.filasWalmart([CAB, filaWM(42710381, 10)]);
+    igual(N.cruzar(filas, ops).porConfirmar.length, 1, 'sin la bandera pasa');
+    const con = N.cruzar(filas, ops, { exigirEtapa: true });
+    igual(con.porConfirmar.length, 0, 'con la bandera no');
+    cierto(/todav/.test(con.excepciones[0].motivo), con.excepciones[0].motivo);
   });
   await prueba('T56 cantidad cero no se confirma', () => {
     const filas = N.filasWalmart([CAB, filaWM(42704805, 0)]);
@@ -701,7 +718,9 @@ const MUTACIONES = [
   ['M04 la diferencia sale al reves',               /diferencia: a - d/, 'diferencia: d - a'],
 
   // las etapas
-  ['M06 cualquier "Pendiente" se da por confirmable', /const RE_CONFIRMABLE = \/pendiente\\s\+de\\s\+confirmaci\/i;/, 'const RE_CONFIRMABLE = /pendiente/i;'],
+  ['M06 cualquier "Pendiente" se da por confirmable', /\/pendiente\\s\+adjuntar\\s\+respaldo\/i\]/, '/pendiente/i]'],
+  ['M06b se pierde la 43, que es la mayoria del dia',  /, \/pendiente\\s\+adjuntar\\s\+respaldo\/i\]/, ']'],
+  ['M06c se pierde la 44',                             /\[\/pendiente\\s\+de\\s\+confirmaci\/i, /, '['],
   ['M07 "confirmada" se decide solo por la cantidad', /return n > 0 && !\/\^\\s\*pendiente\/i\.test\(etapaDe\(op\)\);/, 'return n > 0;'],
   ['M08 "confirmada" se decide solo por la etapa',   /return n > 0 && !\/\^\\s\*pendiente\/i\.test\(etapaDe\(op\)\);/, 'return !/^\\s*pendiente/i.test(etapaDe(op));'],
   ['M09 todo se considera transferencia',            /return !n \|\| SERVICIOS_TRANSFERENCIA\.indexOf\(n\) >= 0;/, 'return true;'],

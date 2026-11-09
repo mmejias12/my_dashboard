@@ -437,10 +437,30 @@ async function correr(N) {
     cierto(N.esAnulada({ etapaOperacion: 'Transferencia Anulada' }));
     falso(N.esAnulada({ etapaOperacion: 'Pendiente de Confirmacion' }));
   });
-  await prueba('T43 solo las transferencias; sin dato, se deja pasar', () => {
+  await prueba('T43 solo los servicios de transferencia; sin dato, se deja pasar', () => {
     cierto(N.esTransferencia({ operacion: 'Transferencia' }));
+    cierto(N.esTransferencia({ operacion: 'Transferencias' }), 'el nombre real viene en plural:');
     cierto(N.esTransferencia({}), 'sin el campo no se descarta:');
     falso(N.esTransferencia({ operacion: 'Despacho' }));
+  });
+  await prueba('T43b "Trans Diferenciada" ES del circuito de Walmart', () => {
+    // Medido en vivo: mismo servicio hacia bodegas ZWM*, misma máquina de
+    // etapas y 698 ya confirmadas. Dejarla afuera perdía la mitad del día.
+    cierto(N.esTransferencia({ operacion: 'Trans Diferenciada' }));
+    cierto(N.esTransferencia({ operacion: '  TRANS DIFERENCIADA  ' }), 'sin importar mayusculas ni espacios:');
+  });
+  await prueba('T43c los otros servicios de Redlink NO entran', () => {
+    ['Relocalizacion', 'Traspasos', 'Devolucion', 'Emision', 'Emision 24 horas',
+     'Emision LD', 'Emision Retiro Cliente', 'Retiro'].forEach(function (o) {
+      falso(N.esTransferencia({ operacion: o }), o + ' no debería entrar');
+    });
+  });
+  await prueba('T43d un servicio nuevo sale nombrado, no se cuela', () => {
+    falso(N.esTransferencia({ operacion: 'Trans Expresa' }), 'un nombre parecido no alcanza');
+    const ops = [Object.assign({}, OPS[1], { operacion: 'Trans Expresa' })];
+    const r = N.cruzar(N.filasWalmart([CAB, filaWM(42710381, 10)]), ops);
+    igual(r.porConfirmar.length, 0);
+    cierto(/Trans Expresa/.test(r.excepciones[0].motivo), r.excepciones[0].motivo);
   });
   await prueba('T44 "confirmada" necesita DOS senales: cantidad y etapa', () => {
     cierto(N.estaConfirmada({ cantidadConfirmada: 12, etapaOperacion: 'Transferencia Confirmada' }));
@@ -565,6 +585,11 @@ async function correr(N) {
     igual(r.porConfirmar[0].docId, 684029);
     igual(r.porConfirmar[0].clienteRedlink, 'BUDDY PET LIMITADA');
   });
+  await prueba('T59c cada fila dice de qué servicio salió', () => {
+    const ops = [Object.assign({}, OPS[1], { operacion: 'Trans Diferenciada' })];
+    const r = N.cruzar(N.filasWalmart([CAB, filaWM(42710381, 10)]), ops);
+    igual(r.porConfirmar[0].servicio, 'Trans Diferenciada');
+  });
   await prueba('T60 sin operaciones, todo cae en excepciones y nada revienta', () => {
     const r = N.cruzar(FILAS, []);
     igual(r.porConfirmar.length, 0);
@@ -679,8 +704,13 @@ const MUTACIONES = [
   ['M06 cualquier "Pendiente" se da por confirmable', /const RE_CONFIRMABLE = \/pendiente\\s\+de\\s\+confirmaci\/i;/, 'const RE_CONFIRMABLE = /pendiente/i;'],
   ['M07 "confirmada" se decide solo por la cantidad', /return n > 0 && !\/\^\\s\*pendiente\/i\.test\(etapaDe\(op\)\);/, 'return n > 0;'],
   ['M08 "confirmada" se decide solo por la etapa',   /return n > 0 && !\/\^\\s\*pendiente\/i\.test\(etapaDe\(op\)\);/, 'return !/^\\s*pendiente/i.test(etapaDe(op));'],
-  ['M09 todo se considera transferencia',            /const esTransferencia = \(op\) => !norm\(op && op\.operacion\) \|\| RE_TRANSFERENCIA\.test\(String\(op\.operacion\)\);/, 'const esTransferencia = (op) => true;'],
-  ['M10 sin el campo operacion se descarta',         /!norm\(op && op\.operacion\) \|\| RE_TRANSFERENCIA/, 'RE_TRANSFERENCIA'],
+  ['M09 todo se considera transferencia',            /return !n \|\| SERVICIOS_TRANSFERENCIA\.indexOf\(n\) >= 0;/, 'return true;'],
+  ['M10 sin el campo operacion se descarta',         /return !n \|\| SERVICIOS_TRANSFERENCIA/, 'return SERVICIOS_TRANSFERENCIA'],
+  ['M09b se pierde Trans Diferenciada',              /'transferencias', 'trans diferenciada'\]/, "'transferencias']"],
+  ['M09c se pierde el plural, que es el nombre real', /'transferencia', 'transferencias',/, "'transferencia',"],
+  ['M09d el servicio no se normaliza a minusculas',  /const n = norm\(op && op\.operacion\)\.toLowerCase\(\);/, 'const n = norm(op && op.operacion);'],
+  ['M09e cualquier servicio parecido se cuela',      /SERVICIOS_TRANSFERENCIA\.indexOf\(n\) >= 0;/, "/^trans/i.test(n);"],
+  ['M59b la fila pierde el servicio',                /servicio: norm\(op\.operacion\),/, "servicio: '',"],
   ['M11 una operacion nula hace reventar la etapa',  /const etapaDe = \(op\) => String\(\(op && op\.etapaOperacion\) \|\| ''\);/, 'const etapaDe = (op) => String(op.etapaOperacion);'],
 
   // las citas

@@ -227,3 +227,80 @@ No se probó ningún método que escriba: todas las consultas fueron `GET` y `OP
 Hasta que uno de los tres cierre, el proyecto Walmart tiene todo menos el último
 paso: el cruce está medido y validado (97,1% de acierto de la regla sobre 342
 casos), y lo único que falta es el verbo que escribe la confirmación.
+
+---
+
+## El circuito que hay que reemplazar, paso a paso
+
+Tal como opera hoy, contado por quien lo recibe:
+
+1. Walmart manda el reporte por correo. Llega a Marcelo, con copia a Mauro.
+2. Marcelo se lo reenvía a un desarrollador.
+3. El desarrollador carga el archivo en la plataforma (`ImportarReporteWalmart`).
+4. La plataforma lo lee y lo cruza con lo que tiene Redlink.
+5. Se confirma, y la confirmación queda escrita **con un usuario de sistema**:
+   en la pantalla de transacciones del portal aparece como `M2LinkSystem`.
+
+De los cinco pasos, cuatro son manualidad pura: el reenvío, la carga, el
+apretar el botón y el estar disponible para hacerlo. El paso 1 se puede
+automatizar aparte (el correo llega a un buzón; de ahí a un blob hay poco), y
+el 4 ya está hecho y medido en este documento. El que falta es el 5.
+
+### El usuario que firma la confirmación no es un detalle
+
+`M2LinkSystem` es lo que queda escrito en la traza: cualquiera que mire esa
+transacción en el portal ve quién la confirmó. Para nosotros eso significa dos
+cosas, y la segunda es la que importa:
+
+- Hay que pedirle a Marcelo un usuario `M3LinkSystem` (o como se llame) antes
+  de escribir la primera confirmación de verdad.
+- **El usuario de pruebas sirve en DEMO y sólo en DEMO.** Usarlo en productivo
+  dejaría confirmaciones reales firmadas por un usuario de pruebas: la traza
+  diría una cosa y la verdad sería otra, y eso no se arregla después.
+
+### Lo que Marcelo puede y no puede responder
+
+Marcelo maneja el concepto del `POST` — que es exactamente lo que dice el PDF
+que nos entregó. El contrato del `PATCH` no lo tiene. Así que la pregunta no es
+para él sino **a través** de él, hacia Holux: qué cuerpo espera
+`PATCH /api/FormHeader` para confirmar, y un usuario de sistema propio.
+
+Mientras tanto, la sonda levanta la respuesta por su cuenta en DEMO.
+
+## La sonda
+
+`scripts/sonda-escritura-redlink.js` — averigua si `PATCH /api/FormHeader` es la
+pieza que falta, y con qué cuerpo.
+
+```
+node scripts/sonda-escritura-redlink.js --catalogo
+node scripts/sonda-escritura-redlink.js --leer [--id=N]
+node scripts/sonda-escritura-redlink.js --confirmar=N --cantidad=K       (muestra)
+node scripts/sonda-escritura-redlink.js --confirmar=N --cantidad=K --si  (manda)
+```
+
+- El host está **clavado** a `apidemo.portalredtec.cl` y no hay bandera que lo
+  cambie. Si algún día hay que escribir en productivo, eso se decide editando el
+  archivo a conciencia, no pasando un flag apurado un viernes.
+- Sin `--si` no manda nada: imprime el cuerpo exacto que mandaría y se detiene.
+- Credenciales sólo por entorno —`REDLINK_DEMO_CLIENT_SECRET`,
+  `REDLINK_DEMO_USER`, `REDLINK_DEMO_PASS`— y nunca se imprimen. Un valor con
+  `<corchetes>` se detecta como marcador pegado literal y se nombra la variable,
+  en vez de fallar quinientas líneas después con un «Invalid URL».
+
+**Cómo se lee el resultado**, que es la mitad del asunto: un **400 no es un
+fracaso**. Significa que la ruta aceptó el verbo y discutió el cuerpo — o sea,
+que `PATCH` existe y sólo falta acertarle a los campos. El que cierra la puerta
+es el **405**: ahí la ruta no acepta el verbo y la confirmación no pasa por ahí.
+Por eso la sonda manda también un **testigo con cuerpo vacío**: si el testigo
+contesta lo mismo que los candidatos, el error no está señalando ningún campo en
+particular y no hay nada que deducir de él.
+
+Prueba los dos `PATCH` que existen en ASP.NET Core, que se distinguen por el
+`Content-Type`: JsonPatch (`application/json-patch+json`, una lista de
+operaciones) y merge patch (`application/json`, un objeto parcial). Probar uno
+solo y concluir sería repetir el error de siempre: confundir «no contestó» con
+«no existe».
+
+Pruebas: `scripts/test-sonda-escritura-redlink.js` — 46 comprobaciones y 33
+mutaciones, todas muerden.

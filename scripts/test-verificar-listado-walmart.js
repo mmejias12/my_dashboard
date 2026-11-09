@@ -91,6 +91,56 @@ function correr(S) {
     const r = S.verificar([{ folio: 4138273, cantRecibida: 10 }], OPS);
     igual(r[0].veredicto, 'yaConfirmada', 'pegarla de nuevo seria un segundo ajuste en SAP');
   });
+  prueba('T10b una ANULADA no se rotula como que espera algo', () => {
+    const ops = [{ nroPedido: 1, cantidadDespachada: 19, cantidadConfirmada: 0,
+                   etapaOperacion: 'Transferencia Anulada', operacion: 'Transferencias' }];
+    igual(S.verificar([{ folio: 1, cantRecibida: 3 }], ops)[0].veredicto, 'anulada',
+      'una anulada no espera ningun respaldo');
+  });
+  prueba('T10d una operacion que no es transferencia se nombra como tal', () => {
+    const ops = [{ nroPedido: 1, cantidadDespachada: 4, cantidadConfirmada: 0,
+                   etapaOperacion: 'Confirma Relocaliza', operacion: 'Relocalizacion' }];
+    igual(S.verificar([{ folio: 1, cantRecibida: 4 }], ops)[0].veredicto, 'noEsTransferencia',
+      'la cita cayo en otra cosa: no es un problema de etapa');
+  });
+  prueba('T10e la 43 pasa aunque se exija etapa: el camino masivo la confirma', () => {
+    // Resuelto por Marcelo el 9-nov-2026: en las confirmaciones masivas de
+    // Walmart no corresponde adjuntar respaldo. Antes de eso esta prueba
+    // esperaba lo contrario, y la bandera habria sacado la mayor parte del dia.
+    const ops = [{ nroPedido: 1, cantidadDespachada: 19, cantidadConfirmada: 0,
+                   etapaOperacion: 'Pendiente Adjuntar Respaldo', operacion: 'Transferencias' }];
+    igual(S.verificar([{ folio: 1, cantRecibida: 3 }], ops)[0].veredicto, 'confirmar');
+    igual(S.verificar([{ folio: 1, cantRecibida: 3 }], ops, true)[0].veredicto, 'confirmar',
+      'la bandera ya no la deja afuera');
+  });
+  prueba('T10e2 la bandera sigue sirviendo, y sigue siendo opcional', () => {
+    const ops = [{ nroPedido: 1, cantidadDespachada: 19, cantidadConfirmada: 0,
+                   etapaOperacion: 'Transferencia Reconfirmada', operacion: 'Transferencias' }];
+    igual(S.verificar([{ folio: 1, cantRecibida: 3 }], ops)[0].veredicto, 'confirmar',
+      'sin la bandera no filtra por etapa');
+    igual(S.verificar([{ folio: 1, cantRecibida: 3 }], ops, true)[0].veredicto, 'etapaNoConfirmable');
+  });
+  prueba('T10c las DOS etapas pendientes son confirmables, y nada mas', () => {
+    cierto(S.etapaConfirmable({ etapaOperacion: 'Pendiente de Confirmacion' }));
+    cierto(S.etapaConfirmable({ etapaOperacion: 'PENDIENTE DE CONFIRMACIÓN' }));
+    cierto(S.etapaConfirmable({ etapaOperacion: 'Pendiente Adjuntar Respaldo' }));
+    falso(S.etapaConfirmable({ etapaOperacion: 'Pendiente' }), 'empezar con la palabra no alcanza');
+    falso(S.etapaConfirmable({ etapaOperacion: 'Pendiente de Aprobacion' }));
+    falso(S.etapaConfirmable({ etapaOperacion: 'Transferencia Confirmada' }));
+    falso(S.etapaConfirmable({}));
+  });
+  prueba('T10f "Trans Diferenciada" es del circuito; los otros servicios no', () => {
+    cierto(S.esTransferencia({ operacion: 'Trans Diferenciada' }));
+    cierto(S.esTransferencia({ operacion: 'Transferencias' }));
+    ['Relocalizacion', 'Traspasos', 'Devolucion', 'Emision', 'Retiro',
+     'Trans Expresa', 'Transporte'].forEach(function (o) {
+      falso(S.esTransferencia({ operacion: o }), o + ' no es del circuito');
+    });
+    const ops = [{ nroPedido: 1, cantidadDespachada: 19, cantidadConfirmada: 0,
+                   etapaOperacion: 'Pendiente Adjuntar Respaldo', operacion: 'Trans Diferenciada' }];
+    igual(S.verificar([{ folio: 1, cantRecibida: 3 }], ops)[0].veredicto, 'confirmar');
+  });
+
   prueba('T11 un folio que no aparece no se da por bueno', () => {
     igual(S.verificar([{ folio: 777, cantRecibida: 3 }], OPS)[0].veredicto, 'noAparece');
   });
@@ -201,6 +251,14 @@ function correr(S) {
 }
 
 const MUTACIONES = [
+  ['M29 el filtro por etapa actua siempre',           /if \(exigirEtapa && !etapaConfirmable\(op\)\)/, 'if (!etapaConfirmable(op))'],
+  ['M31 una anulada se trata como pendiente',         /if \(esAnulada\(op\)\) return Object\.assign\(base, \{ veredicto: 'anulada' \}\);/, ''],
+  ['M32 una no-transferencia pasa como confirmable',  /if \(op\.operacion && !esTransferencia\(op\)\)/, 'if (false)'],
+  ['M30 cualquier etapa pendiente se da por confirmable', /\/pendiente\\s\+adjuntar\\s\+respaldo\/i\]/, '/pendiente/i]'],
+  ['M30b se pierde la 43, que es la mayoria del dia',  /, \/pendiente\\s\+adjuntar\\s\+respaldo\/i\]/, ']'],
+  ['M30c se pierde la 44',                             /\[\/pendiente\\s\+de\\s\+confirmaci\/i, /, '['],
+  ['M32b se pierde Trans Diferenciada',                /'transferencias', 'trans diferenciada'\]/, "'transferencias']"],
+  ['M32c cualquier servicio parecido se cuela',        /SERVICIOS_TRANSFERENCIA\.indexOf\(n\) >= 0;/, "/^trans/i.test(n);"],
   ['M01 una ya confirmada pasa a confirmable',        /if \(estaConfirmada\(op\)\) return Object\.assign\(base, \{ veredicto: 'yaConfirmada' \}\);/, ''],
   ['M02 la etapa deja de pesar en "confirmada"',      /return n > 0 && !\/\^\\s\*pendiente\/i\.test\(String\(\(op && op\.etapaOperacion\) \|\| ''\)\);/, 'return n > 0;'],
   ['M03 la cantidad deja de pesar en "confirmada"',   /const n = Number\(op && op\.cantidadConfirmada\) \|\| 0;\n  return n > 0/, "const n = 1;\n  return n > 0"],

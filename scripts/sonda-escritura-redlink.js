@@ -173,55 +173,110 @@ function asimetrias(mapa) {
 
 /* ------------------------------------------------- cuerpos candidatos     */
 
-// ASP.NET Core tiene dos PATCH distintos y se distinguen por el Content-Type:
-// JsonPatch (una lista de operaciones, application/json-patch+json) y merge
-// patch (un objeto parcial, application/json). Probar uno solo y concluir
-// sería el mismo error de siempre: confundir "no contestó" con "no existe".
+// Los candidatos se arman DEVOLVIENDO el documento que el servidor entregó, no
+// escribiendo campos de memoria. El servidor fue dictando el contrato de a
+// pedazos, y cada paso se ganó con un error distinto:
+//
+//   "No Tiene Lineas de detalles"  -> el cuerpo debe traer formDdetalles
+//   "Falta Cantidad a Despachar"   -> cada línea necesita 'despachado'
+//   "Otro usuario Avanzo a etapa"  -> hay que mandar la etapa que leímos
+//   "Object reference not set..."  -> pasó la validación y reventó DENTRO del
+//                                     manejador: le falta alguna de las otras
+//                                     colecciones hijas, que el código recorre
+//                                     sin preguntar si vienen
+//
+// Por eso el cuerpo ahora es un eco completo: todos los escalares del documento
+// y TODAS sus colecciones hijas, con las propiedades de navegación quitadas.
+// Omitir de a un campo fue lo que nos costó cuatro vueltas.
+function idDeDocumento(doc) {
+  if (!doc || typeof doc !== 'object') return null;
+  for (const k of ['formHeaderiD', 'formHeaderId', 'id']) {
+    const v = doc[k];
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+    if (typeof v === 'string' && /^\d+$/.test(v.trim())) return Number(v.trim());
+  }
+  return null;
+}
+
+const esEscalar = v => v === null || ['number', 'string', 'boolean'].indexOf(typeof v) >= 0;
+
+// Devuelve la línea tal como vino, con los escalares nada más: las propiedades
+// de navegación (items, y cualquier otro objeto anidado) no son parte del
+// comando, y mandarlas de vuelta sólo le da al enlazador con qué tropezar.
+function lineaParaEnviar(det, despachado, recepcion) {
+  const out = {};
+  for (const k of Object.keys(det || {})) if (esEscalar(det[k])) out[k] = det[k];
+  if (despachado != null) out.despachado = despachado;
+  if (recepcion  != null) out.recepcion  = recepcion;
+  return out;
+}
+
+// La cantidad a confirmar nunca puede superar lo que la línea pide: es la misma
+// regla que ya validamos contra Walmart (si aceptaron más de lo despachado, se
+// confirma lo despachado).
+function cantidadDeLinea(det, pedida) {
+  const tope = Number(det && det.cantidad);
+  const n = Number(pedida);
+  const hayTope = Number.isFinite(tope) && tope > 0;
+  if (!Number.isFinite(n) || n <= 0) return hayTope ? tope : null;
+  if (hayTope && n > tope) return tope;
+  return n;
+}
+
+// Una fila cuya clave propia es 0 o nula no es una fila: es un relleno que el
+// servidor arrastra. Devolvérsela le pide insertarla, y ahí revienta el guardado
+// ("An error occurred while saving the entity changes"). La clave propia es el
+// primer campo que termina en iD/Id.
+function tieneIdentidad(fila) {
+  if (!fila || typeof fila !== 'object') return false;
+  const clave = Object.keys(fila).find(k => /i[dD]$/.test(k));
+  if (!clave) return true;                 // sin clave reconocible, no la descarto
+  const v = Number(fila[clave]);
+  return Number.isFinite(v) && v > 0;
+}
+
+// El eco: escalares del encabezado + todas las colecciones hijas. Una lista que
+// vino vacía se manda vacía, no se omite: omitirla es justamente lo que deja al
+// manejador recorriendo un nulo.
+function cuerpoEco(doc, opciones) {
+  const o = opciones || {};
+  const cuerpo = {};
+  if (!doc || typeof doc !== 'object') return cuerpo;
+  for (const k of Object.keys(doc)) if (esEscalar(doc[k])) cuerpo[k] = doc[k];
+  for (const k of Object.keys(doc)) {
+    const v = doc[k];
+    if (!Array.isArray(v)) continue;
+    const filas = v.filter(x => x && typeof x === 'object' && tieneIdentidad(x));
+    if (k === 'formDdetalles') {
+      cuerpo[k] = filas.map(d => {
+        const n = cantidadDeLinea(d, o.cantidad);
+        return lineaParaEnviar(d, o.despachado ? n : null, o.recepcion ? n : null);
+      });
+    } else {
+      cuerpo[k] = filas.map(d => lineaParaEnviar(d, null, null));
+    }
+  }
+  cuerpo.avanzaEtapa = !!o.avanzar;
+  return cuerpo;
+}
+
 function cuerposCandidatos(doc, cantidad) {
-  const id  = doc && (doc.id != null ? doc.id : doc.formHeaderId);
-  const det = (doc && Array.isArray(doc.formDdetalles) && doc.formDdetalles[0]) || null;
-  const n   = Number(cantidad);
-  const cant = Number.isFinite(n) && n > 0 ? n : null;
   const lista = [];
-
-  if (cant != null) {
-    lista.push({
-      nombre: 'merge · cantidadConfirmada en el encabezado',
-      contentType: 'application/json',
-      cuerpo: { id: id, cantidadConfirmada: cant }
-    });
-    lista.push({
-      nombre: 'json-patch · replace /cantidadConfirmada',
-      contentType: 'application/json-patch+json',
-      cuerpo: [{ op: 'replace', path: '/cantidadConfirmada', value: cant }]
-    });
-    if (det) {
-      lista.push({
-        nombre: 'merge · cantidadConfirmada en el detalle',
-        contentType: 'application/json',
-        cuerpo: { id: id, formDdetalles: [{ id: det.id, cantidad: det.cantidad, cantidadConfirmada: cant }] }
-      });
-    }
-  }
-
-  for (const campo of ['estadoId', 'estado', 'etapaOperacionId']) {
-    if (doc && Object.prototype.hasOwnProperty.call(doc, campo)) {
-      lista.push({
-        nombre: 'json-patch · replace /' + campo,
-        contentType: 'application/json-patch+json',
-        cuerpo: [{ op: 'replace', path: '/' + campo, value: doc[campo] }]
-      });
-    }
-  }
-
-  // Un cuerpo vacío no confirma nada y sirve de testigo: si éste también
-  // contesta 400, el 400 de los otros no prueba que el campo sea el correcto.
-  lista.push({
-    nombre: 'testigo · cuerpo vacío',
-    contentType: 'application/json',
-    cuerpo: {}
+  if (idDeDocumento(doc) == null) return lista;
+  const eco = (nombre, o) => lista.push({
+    nombre: nombre, contentType: 'application/json',
+    cuerpo: cuerpoEco(doc, Object.assign({ cantidad: cantidad }, o))
   });
 
+  // 1. Lo que de verdad queremos.
+  eco('eco completo · despachado + recepcion + avanzaEtapa', { despachado: true, recepcion: true, avanzar: true });
+  // 2. Igual, por si la etapa avanza sola al quedar la recepción completa.
+  eco('eco completo · despachado + recepcion, sin avanzar',  { despachado: true, recepcion: true, avanzar: false });
+  // 3. Sólo despachado, por si "Por Confirmar" exige primero el despacho.
+  eco('eco completo · sólo despachado + avanzaEtapa',        { despachado: true, recepcion: false, avanzar: true });
+  // 4. Testigo: el documento devuelto tal cual. Si éste también es aceptado,
+  //    un 200 no prueba que se haya confirmado nada.
+  eco('testigo · eco completo sin cambios',                  { despachado: false, recepcion: false, avanzar: false });
   return lista;
 }
 
@@ -285,6 +340,215 @@ function leerErrorToken(status, texto) {
   if (Number(status) >= 500)
     return { causa: 'servidor', dice: 'Falló el servidor de token; no dice nada de las credenciales.' };
   return { causa: 'otra', dice: 'Respuesta no prevista del servidor de token.' };
+}
+
+// La API contesta la creación con el id pelado en el cuerpo —684029, sin
+// comillas ni objeto— y no con un {"id": ...}. Buscar sólo campos de objeto
+// deja tirado justo el dato por el que se hizo la llamada.
+// Ojo con formId: ése es el tipo de formulario (1 = Emisión), no el documento.
+function idCreado(texto) {
+  const t = String(texto == null ? '' : texto).trim();
+  if (!t) return null;
+  if (/^\d+$/.test(t)) return Number(t);
+  let j = null;
+  try { j = JSON.parse(t); } catch (e) { return null; }
+  if (typeof j === 'number' && Number.isFinite(j)) return j;
+  if (j && typeof j === 'object') {
+    for (const k of ['id', 'formHeaderId', 'formHeaderiD', 'nroPedido', 'pedido']) {
+      const v = j[k];
+      if (typeof v === 'number' && Number.isFinite(v)) return v;
+      if (typeof v === 'string' && /^\d+$/.test(v.trim())) return Number(v.trim());
+    }
+  }
+  return null;
+}
+
+/* ---- maestros: descubrir las llaves, no adivinarlas ---------------------- */
+
+// Adivinar que el id se llama "id" y caer en undefined fue exactamente lo que
+// pasó la primera vez. Acá se mira qué llaves trae la lista y se elige con una
+// regla explícita; además el que llama imprime la primera fila cruda, para que
+// la salida sirva aunque esta detección falle.
+function detectarCampos(filas) {
+  const prim = (filas || []).find(f => f && typeof f === 'object' && !Array.isArray(f));
+  if (!prim) return { campos: [], campoId: null, campoNombre: null };
+  const campos = Object.keys(prim);
+  const esNumero = k => typeof prim[k] === 'number' || (/^\d+$/.test(String(prim[k] == null ? '' : prim[k])) && prim[k] !== '');
+
+  let campoId = campos.find(k => k.toLowerCase() === 'id' && esNumero(k));
+  if (!campoId) campoId = campos.find(k => /id$/i.test(k) && esNumero(k));
+  if (!campoId) campoId = campos.find(k => esNumero(k)) || null;
+
+  const esTexto = k => typeof prim[k] === 'string';
+  // Primero los nombres que se llaman como uno espera; si no hay ninguno
+  // —Redlink usa cardName y bodegaCliente—, cualquier texto que no sea el id
+  // sirve más que no mostrar nada.
+  let campoNombre = campos.find(k => /(nombre|descripcion|descripción|razon|razón|glosa|titulo|título|cardname)/i.test(k) && esTexto(k));
+  if (!campoNombre) campoNombre = campos.find(k => k !== campoId && esTexto(k)) || null;
+  return { campos: campos, campoId: campoId, campoNombre: campoNombre };
+}
+
+/* ---- armado del documento de prueba ------------------------------------- */
+
+const BP_REDTEC = 433;
+const TOPE_CANTIDAD = 540;          // lo dice la planilla del proveedor
+const OBS_PRUEBA = 'PRUEBA M3LINK - sonda de escritura (DEMO)';
+
+// Se arma a partir de la planilla "API Portal Redtec.xlsx", que es el contrato
+// entregado. Valida antes de mandar y NOMBRA lo que falta: un 400 del servidor
+// no dice cuál campo es, y adivinar de a uno cuesta una vuelta cada vez.
+function armarPayload(o) {
+  o = o || {};
+  const n = (v) => { const x = parseInt(v, 10); return Number.isFinite(x) ? x : null; };
+  const form = n(o.form) || 1;
+  if (form !== 1 && form !== 6)
+    throw new Error('Esta sonda sólo arma formId 1 (Emisión) y 6 (Transferencia); llegó ' + form);
+
+  const cliente       = n(o.cliente);
+  const servicio      = n(o.servicio);
+  const usuario       = n(o.usuario);
+  const bodegaOrigen  = n(o.bodegaOrigen);
+  const bodegaDestino = n(o.bodegaDestino);
+  const cantidad      = n(o.cantidad) || 1;
+
+  const falta = [];
+  if (!cliente)       falta.push('--cliente (bpId)');
+  if (!servicio)      falta.push('--servicio (servicioId)');
+  if (!usuario)       falta.push('--usuario (usuarioIngresoId)');
+  if (!bodegaOrigen)  falta.push('--bodega-origen');
+  if (!bodegaDestino) falta.push('--bodega-destino');
+  if (form === 6) {
+    if (!n(o.destino))        falta.push('--destino (bpDestinoId del retail)');
+    if (!n(o.documento))      falta.push('--documento (documentoId)');
+    if (!n(o.documentoNumero))falta.push('--documento-numero');
+  }
+  if (falta.length) throw new Error('Falta: ' + falta.join(', '));
+  if (cantidad < 1 || cantidad > TOPE_CANTIDAD)
+    throw new Error('La cantidad tiene que estar entre 1 y ' + TOPE_CANTIDAD + '; llegó ' + cantidad);
+
+  const hoy = (o.fecha && /^\d{4}-\d{2}-\d{2}$/.test(o.fecha)) ? o.fecha : new Date().toISOString().slice(0, 10);
+
+  const cuerpo = {
+    formId: form,
+    bpId: cliente,
+    servicioId: servicio,
+    usuarioIngresoId: usuario,
+    fechaRequerida: hoy,
+    observacionOrigen: OBS_PRUEBA,
+    bpOrigenId: form === 1 ? BP_REDTEC : cliente,
+    bodegaOrigenId: bodegaOrigen,
+    bpDestinoId: form === 1 ? cliente : n(o.destino),
+    bodegaDestinoId: bodegaDestino,
+    formDdetalles: [{ itemsId: 1, cantidad: cantidad }]
+  };
+
+  if (form === 6) {
+    cuerpo.documentoId = n(o.documento);
+    cuerpo.documentoNumero = n(o.documentoNumero);
+    cuerpo.formDtransportes = [{
+      cita: String(o.cita || '').trim() || '00000000',
+      citaFecha: hoy,
+      patenteCliente: 'XXXX00',
+      nombreCliente: 'PRUEBA M3LINK'
+    }];
+  }
+
+  return cuerpo;
+}
+
+// Los campos del encabezado se listan solos, pero los nombres que importan
+// —los de las líneas de detalle— viven en las colecciones hijas, y ésas no se
+// ven si uno sólo imprime Object.keys del documento. Listar el encabezado y
+// callar los hijos fue lo que nos dejó inventando "cantidadConfirmada".
+function hijosDelDocumento(doc) {
+  if (!doc || typeof doc !== 'object') return [];
+  const out = [];
+  for (const k of Object.keys(doc)) {
+    const v = doc[k];
+    if (Array.isArray(v)) {
+      const prim = v.find(x => x && typeof x === 'object');
+      out.push({ nombre: k, tipo: 'lista', largo: v.length, campos: prim ? Object.keys(prim) : [], muestra: prim || null });
+    } else if (v && typeof v === 'object') {
+      out.push({ nombre: k, tipo: 'objeto', largo: null, campos: Object.keys(v), muestra: v });
+    }
+  }
+  return out;
+}
+
+/* ---- lo que el servidor dicta en sus errores ---------------------------- */
+
+// Un 400 con mensajes de validación NO es "no concluye nada": es el contrato
+// hablando. Decir "el testigo contestó igual, así que no señala ningún campo"
+// es cierto sobre la FORMA del cuerpo y falso sobre el CONTENIDO, porque los
+// mensajes nombran lo que falta. Esta función los saca a la luz.
+function pistaDeContrato(texto) {
+  const t = String(texto == null ? '' : texto).trim();
+  const out = { comando: null, mensajes: [] };
+  if (!t) return out;
+
+  // ASP.NET nombra la clase a la que no pudo convertir el cuerpo: ése es el
+  // nombre del contrato que hay que pedir o reproducir.
+  const m = t.match(/[A-Za-z0-9_.]*\.Commands\.[A-Za-z0-9_]+/);
+  if (m) out.comando = m[0];
+
+  let j = null;
+  try { j = JSON.parse(t); } catch (e) { j = null; }
+  if (Array.isArray(j)) {
+    out.mensajes = j.filter(x => typeof x === 'string').map(x => x.trim()).filter(Boolean);
+  } else if (j && typeof j === 'object' && j.errors && typeof j.errors === 'object') {
+    for (const k of Object.keys(j.errors)) {
+      const v = j.errors[k];
+      if (Array.isArray(v)) for (const x of v) if (typeof x === 'string') out.mensajes.push((k === '$' ? '' : k + ': ') + x.trim());
+    }
+  }
+  return out;
+}
+
+// Junta las pistas de todos los intentos sin repetir, conservando el orden en
+// que aparecieron.
+// Un "Object reference not set" no es un cuerpo mal formado: es el manejador
+// reventando adentro. Decirlo como "el cuerpo no es el que espera" manda a
+// revisar los campos que uno mandó, cuando el problema es uno que NO mandó.
+function esFallaInterna(texto) {
+  return /object reference not set|nullreference|sequence contains no elements|index .*out of range/i
+    .test(String(texto == null ? '' : texto));
+}
+
+// La lectura final es lo que la persona va a creer, así que se arma aparte y
+// se prueba. Lo que importa es no confundir tres cosas distintas: el verbo no
+// existe, el cuerpo no cuadra, y el cuerpo cuadró pero el manejador reventó.
+function lecturaDeIntentos(vistos) {
+  const v = vistos || [];
+  const out = [];
+  const sirven = v.filter(x => x && x.cl && x.cl.clave === 'sirve');
+  if (sirven.length) {
+    for (const x of sirven) out.push(x.c.nombre + ' fue aceptado.');
+    out.push('Relee el documento antes de cantar victoria: que haya avanzado de etapa no garantiza que el resto de los campos siga en pie.');
+    return out;
+  }
+  if (v.some(x => esFallaInterna(x && x.texto))) {
+    out.push('El cuerpo pasó la validación y la ejecución llegó al manejador, que reventó con un nulo.');
+    out.push('No es un campo mal mandado: es uno que falta, y el servidor no dice cuál.');
+    return out;
+  }
+  if (v.some(x => x && x.cl && x.cl.verbo === true)) {
+    out.push('PATCH existe y el cuerpo llegó a enlazarse: lo que falló es la validación, no la operación.');
+    return out;
+  }
+  if (v.length) out.push('La ruta no aceptó PATCH. La confirmación no pasa por acá.');
+  return out;
+}
+
+function juntarPistas(textos) {
+  const vistos = Object.create(null);
+  const mensajes = [];
+  let comando = null;
+  for (const t of (textos || [])) {
+    const p = pistaDeContrato(t);
+    if (!comando && p.comando) comando = p.comando;
+    for (const m of p.mensajes) if (!vistos[m]) { vistos[m] = true; mensajes.push(m); }
+  }
+  return { comando: comando, mensajes: mensajes };
 }
 
 /* ------------------------------------------------- red                    */
@@ -423,12 +687,26 @@ function imprimirIntento(c, res) {
 /* ------------------------------------------------- principal              */
 
 function leerArgs(argv) {
-  const a = { modo: null, id: null, cantidad: null, si: false, bp: '433', dias: '7', todo: false, plazo: null, desde: null, hasta: null };
+  const a = { modo: null, id: null, cantidad: null, si: false, bp: '433', dias: '7', todo: false, plazo: null, desde: null, hasta: null,
+                 form: '1', cliente: null, servicio: null, usuario: null,
+                 bodegaOrigen: null, bodegaDestino: null, destino: null,
+                 documento: null, documentoNumero: null, cita: null };
   for (const x of (argv || [])) {
     if (x === '--catalogo') a.modo = 'catalogo';
     else if (x === '--leer') a.modo = 'leer';
     else if (x === '--verbo') a.modo = 'verbo';
     else if (x === '--buscar') a.modo = 'buscar';
+    else if (x === '--maestros') a.modo = 'maestros';
+    else if (x.indexOf('--form=') === 0) a.form = x.slice(7);
+    else if (x.indexOf('--cliente=') === 0) a.cliente = x.slice(10);
+    else if (x.indexOf('--servicio=') === 0) a.servicio = x.slice(11);
+    else if (x.indexOf('--usuario=') === 0) a.usuario = x.slice(10);
+    else if (x.indexOf('--bodega-origen=') === 0) a.bodegaOrigen = x.slice(16);
+    else if (x.indexOf('--bodega-destino=') === 0) a.bodegaDestino = x.slice(17);
+    else if (x.indexOf('--destino=') === 0) a.destino = x.slice(10);
+    else if (x.indexOf('--documento=') === 0) a.documento = x.slice(12);
+    else if (x.indexOf('--documento-numero=') === 0) a.documentoNumero = x.slice(19);
+    else if (x.indexOf('--cita=') === 0) a.cita = x.slice(7);
     else if (x.indexOf('--desde=') === 0) a.desde = x.slice(8);
     else if (x.indexOf('--hasta=') === 0) a.hasta = x.slice(8);
     else if (x === '--crear') a.modo = 'crear';
@@ -485,6 +763,79 @@ async function principal() {
     if (cl.verbo === false) console.log('Lectura: la ruta no acepta PATCH. La confirmación no pasa por acá.\n');
     if (cl.verbo === null)  console.log('Lectura: no concluye nada todavía.\n');
     return 0;
+  }
+
+  if (a.modo === 'maestros') {
+    const cli = a.cliente || '499';
+    const form = a.form || '1';
+    const fuentes = [
+      ['Clientes',                 '/api/BusinessPartner/clientesocio/0'],
+      ['Retails',                  '/api/BusinessPartner/retail'],
+      ['Bodegas de emisión (Redtec)', '/api/Bodega/emision'],
+      ['Bodegas del cliente ' + cli, '/api/Bodega/cliente/' + encodeURIComponent(cli)],
+      ['Servicios cliente ' + cli + ' / formulario ' + form,
+       '/api/Servicio/cliente/' + encodeURIComponent(cli) + '/formulario/' + encodeURIComponent(form)],
+      ['Documentos',               '/api/Documento']
+    ];
+    for (const [titulo, ruta] of fuentes) {
+      let r;
+      try { r = await pedir(ruta, { method: 'GET', headers: auth }); }
+      catch (e) { console.log('\n' + titulo + ': no se pudo (' + describirError(e).split('\n')[0] + ')'); continue; }
+      console.log('\n' + titulo + '  ·  ' + ruta + '  ->  HTTP ' + r.status);
+      if (r.status !== 200) { console.log('  ' + enmascarar(r.texto).slice(0, 200)); continue; }
+      let j; try { j = JSON.parse(r.texto); } catch (e) { j = null; }
+      if (!Array.isArray(j)) { console.log('  (no vino una lista) ' + enmascarar(String(r.texto)).slice(0, 160)); continue; }
+      const d = detectarCampos(j);
+      console.log('  ' + j.length + ' opciones' + (j.length > 15 ? ' (muestro 15)' : ''));
+      console.log('  campos: ' + (d.campos.length ? d.campos.join(', ') : '(la lista vino vacía)'));
+      if (j.length) console.log('  primera fila cruda: ' + enmascarar(JSON.stringify(j[0])).slice(0, 300));
+      if (!d.campoId) {
+        console.log('  No reconocí cuál campo es el id. Mira la fila cruda de arriba.');
+      } else {
+        for (const it of j.slice(0, 15)) {
+          const id  = it ? it[d.campoId] : null;
+          const nom = (it && d.campoNombre) ? it[d.campoNombre] : '';
+          console.log('    ' + String(id) + '  ' + String(nom == null ? '' : nom).slice(0, 60));
+        }
+        console.log('  (id = ' + d.campoId + (d.campoNombre ? ', nombre = ' + d.campoNombre : '') + ')');
+      }
+    }
+    console.log('');
+    return 0;
+  }
+
+  if (a.modo === 'crear') {
+    let cuerpo;
+    try { cuerpo = armarPayload(a); }
+    catch (e) {
+      console.log('\n' + e.message);
+      console.log('Corre --maestros para ver qué ids existen hoy en DEMO.\n');
+      return 2;
+    }
+    console.log('\nPOST /api/FormHeader  (crear en DEMO)');
+    console.log('  ' + JSON.stringify(cuerpo));
+    if (!a.si) { console.log('\nNo mandé nada: agrega --si para crearlo.\n'); return 0; }
+    const r = await pedir('/api/FormHeader', {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, auth),
+      body: JSON.stringify(cuerpo)
+    });
+    console.log('\n  HTTP ' + r.status);
+    const txt = enmascarar(r.texto || '').trim();
+    if (txt) console.log('  respuesta: ' + txt.slice(0, 500).replace(/\s+/g, ' '));
+    const id = idCreado(r.texto);
+    if (r.status >= 200 && r.status < 300 && id != null) {
+      console.log('\nCreado con id ' + id + '. Ahora:');
+      console.log('  node scripts\\sonda-escritura-redlink.js --leer --id=' + id);
+      console.log('  node scripts\\sonda-escritura-redlink.js --confirmar=' + id + ' --cantidad=' + (a.cantidad || 1) + '\n');
+      return 0;
+    }
+    if (r.status >= 200 && r.status < 300) {
+      console.log('\nAceptado, pero no reconocí el id en la respuesta. Está arriba, en crudo.\n');
+      return 0;
+    }
+    console.log('\nNo se creó. ' + clasificar(r.status, r.texto).dice + '\n');
+    return 2;
   }
 
   if (a.modo === 'buscar') {
@@ -555,6 +906,17 @@ async function principal() {
     console.log('\nCampos que huelen a estado de confirmación:');
     if (!est.length) console.log('  ninguno — eso ya es un dato.');
     for (const e of est) console.log('  ' + e.campo + ' = ' + JSON.stringify(e.valor));
+    const hijos = hijosDelDocumento(doc);
+    if (hijos.length) {
+      console.log('\nColecciones y objetos hijos (acá viven los nombres de las líneas):');
+      for (const h of hijos) {
+        const cab = '  ' + h.nombre + ' · ' + h.tipo + (h.tipo === 'lista' ? ' de ' + h.largo : '');
+        if (!h.campos.length) { console.log(cab + ' · (vacío)'); continue; }
+        console.log(cab);
+        console.log('    campos: ' + h.campos.join(', '));
+        console.log('    muestra: ' + enmascarar(JSON.stringify(h.muestra)).slice(0, 400));
+      }
+    }
     console.log('');
     return 0;
   }
@@ -581,30 +943,27 @@ async function principal() {
         headers: Object.assign({ 'Content-Type': c.contentType }, auth),
         body: JSON.stringify(c.cuerpo)
       });
-      vistos.push({ c: c, cl: imprimirIntento(c, res) });
+      const cl = imprimirIntento(c, res);
+      vistos.push({ c: c, cl: cl, texto: res.texto });
+      // Si uno funcionó, el documento YA cambió: seguir mandando los demás
+      // sería escribir sobre un documento que está en otro estado, y lo que
+      // contestaran no diría nada del cuerpo sino del estado nuevo.
+      if (cl.clave === 'sirve') { console.log('  Paré acá: el documento ya cambió.\n'); break; }
     }
-    const sirven = vistos.filter(v => v.cl.clave === 'sirve');
-    const testigo = vistos.find(v => /testigo/.test(v.c.nombre));
+    const pistas = juntarPistas(vistos.map(v => v.texto));
     console.log('Lectura:');
-    if (sirven.length) {
-      for (const v of sirven) console.log('  · ' + v.c.nombre + ' fue aceptado. Verificar en el portal que el documento quedó confirmado.');
-    } else if (vistos.some(v => v.cl.verbo === true)) {
-      console.log('  · PATCH existe en la ruta, pero ninguno de estos cuerpos es el que espera.');
-      if (testigo && testigo.cl.verbo === true) {
-        console.log('    El testigo vacío contestó igual, así que el error no señala ningún campo en particular.');
-      }
-      console.log('    Lo que falta es el contrato del cuerpo: eso se pide, no se adivina.');
-    } else {
-      console.log('  · La ruta no aceptó PATCH. La confirmación no pasa por acá.');
+    for (const linea of lecturaDeIntentos(vistos)) console.log('  · ' + linea);
+    if (pistas.comando) {
+      console.log('\nEl servidor nombró el contrato que espera:');
+      console.log('  ' + pistas.comando);
+    }
+    if (pistas.mensajes.length) {
+      console.log('\nLo que el servidor pide, en sus palabras:');
+      for (const m of pistas.mensajes) console.log('  · ' + m);
+      console.log('\nEso no es ruido: cada línea nombra algo que al cuerpo le falta.');
     }
     console.log('');
     return 0;
-  }
-
-  if (a.modo === 'crear') {
-    console.log('\n--crear todavía no arma el cuerpo solo: necesita cliente, bodegas y servicio de DEMO.');
-    console.log('Usa --leer para ver un documento que ya exista y --confirmar=<id> sobre ése.\n');
-    return 2;
   }
 
   return 0;
@@ -626,5 +985,6 @@ if (require.main === module) {
 
 module.exports = {
   HOST_DEMO, VARS, esDemo, pintaDeMarcador, faltantes, enmascarar,
-  clasificar, hablaDelRecurso, rangoBusqueda, TOPE_BUSQUEDA, leerErrorToken, describirError, conHost, leerFalloRed, aUS, ventana, camposDeEstado, asimetrias, cuerposCandidatos, verbosDe, leerArgs
+  clasificar, hablaDelRecurso, rangoBusqueda, TOPE_BUSQUEDA,
+  idCreado, idDeDocumento, lineaParaEnviar, cantidadDeLinea, cuerpoEco, tieneIdentidad, pistaDeContrato, juntarPistas, esFallaInterna, lecturaDeIntentos, hijosDelDocumento, detectarCampos, armarPayload, BP_REDTEC, TOPE_CANTIDAD, OBS_PRUEBA, leerErrorToken, describirError, conHost, leerFalloRed, aUS, ventana, camposDeEstado, asimetrias, cuerposCandidatos, verbosDe, leerArgs
 };

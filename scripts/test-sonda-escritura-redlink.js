@@ -150,6 +150,40 @@ function correr(S) {
     igual(S.clasificar('405').clave, 'no-permitido');
   });
 
+  /* ---- descripción de un error de red ----------------------------------- */
+
+  prueba('T54 sigue la cadena de causas, no sólo el mensaje de arriba', () => {
+    const hondo = new Error('getaddrinfo ENOTFOUND apidemo.portalredtec.cl');
+    hondo.code = 'ENOTFOUND';
+    const medio = new Error('fetch failed'); medio.cause = hondo;
+    const d = S.describirError(medio);
+    cierto(/fetch failed/.test(d), 'tiene que estar el de arriba');
+    cierto(/ENOTFOUND/.test(d), 'y sobre todo el de abajo');
+  });
+  prueba('T55 muestra el code cuando lo hay', () => {
+    const e = new Error('socket hang up'); e.code = 'ECONNRESET';
+    cierto(/\[ECONNRESET\]/.test(S.describirError(e)));
+  });
+  prueba('T56 un error sin causa no se rompe', () => {
+    igual(S.describirError(new Error('seco')), 'seco');
+  });
+  prueba('T57 una cadena circular no lo deja dando vueltas', () => {
+    const a = new Error('a'), b = new Error('b');
+    a.cause = b; b.cause = a;
+    const d = S.describirError(a);
+    cierto(d.split('causa:').length <= 7, 'tiene que cortar la cadena');
+  });
+  prueba('T58 aguanta algo que no es Error', () => {
+    cierto(/ENOTFOUND/.test(S.describirError({ message: 'ENOTFOUND', code: null })));
+    cierto(S.describirError('texto pelado').length > 0);
+  });
+  prueba('T59 conHost nombra el host y conserva la causa', () => {
+    const raiz = new Error('fetch failed');
+    const e = S.conHost(raiz, 'https://accounts.portalredtec.cl/x');
+    cierto(/accounts\.portalredtec\.cl/.test(e.message), 'tiene que nombrar el host');
+    igual(e.cause === raiz, true, 'no puede perder la causa');
+  });
+
   /* ---- lectura del error del token -------------------------------------- */
 
   prueba('T47 unauthorized_client apunta al cliente, no al usuario', () => {
@@ -344,7 +378,12 @@ const MUTACIONES = [
   ['M35 ya no distingue invalid_grant',                /if \(\/invalid_grant\|invalid user credentials\/i\.test\(t\)\)/, 'if (false)'],
   ['M36 unauthorized_client deja de reconocerse',      /unauthorized_client\|invalid_client/, 'nada_de_esto'],
   ['M37 el mensaje de cliente no nombra el secreto',   /el client_secret no sirve/, 'algo pasa'],
-  ['M38 un 503 pasa a acusar al usuario',              /return \{ causa: 'servidor',/, "return { causa: 'usuario',"]
+  ['M38 un 503 pasa a acusar al usuario',              /return \{ causa: 'servidor',/, "return { causa: 'usuario',"],
+  ['M39 el error no sigue la cadena de causas',        /x = x && x\.cause;/, 'x = null;'],
+  ['M40 el error se come el code',                     /const cod = \(x && x\.code\) \? ' \[' \+ x\.code \+ '\]' : '';/, "const cod = '';"],
+  ['M41 la cadena circular no se corta',               /n\+\+ < 6/, 'n < 6'],
+  ['M42 conHost pierde la causa',                      /nuevo\.cause = e;/, ''],
+  ['M43 conHost no nombra el host',                    /'No se pudo hablar con ' \+ url/, "'No se pudo hablar'"]
 ];
 
 function mutar() {

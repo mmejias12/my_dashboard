@@ -60,8 +60,16 @@ $inicio = Get-Date
 # primera linea de stderr -- justo cuando mas falta hace la bitacora. node
 # escribe avisos por stderr en corridas que terminan bien, asi que no es un
 # caso raro. Se baja a 'Continue' solo para esta llamada.
+# 'ForEach-Object { "$_" }' aplana cada linea a texto ANTES de que llegue al
+# archivo. Sin eso, Windows PowerShell 5.1 formatea el ErrorRecord con toda su
+# decoracion -- 'powershell.exe : ', '+ CategoryInfo', '+ FullyQualifiedErrorId'
+# -- y una corrida que termino bien queda con un bloque rojo en medio. Visto el
+# 2026-11-09: 'git push' escribe "To https://github.com/..." por stderr AUNQUE
+# el push salga bien, asi que ese bloque salia todos los dias. Una bitacora que
+# grita error cuando no lo hubo ensena a no leerla.
 $ErrorActionPreference = 'Continue'
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $cierre 2>&1 |
+  ForEach-Object { "$_" } |
   Tee-Object -FilePath $log -Append
 $codigo = $LASTEXITCODE
 $ErrorActionPreference = 'Stop'

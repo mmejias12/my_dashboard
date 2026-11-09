@@ -273,10 +273,10 @@ function cruzar(filasWM, ops, opciones) {
     const base = { cita: g.cita, cliente: g.cliente, rut: g.rut, cd: g.cd, fecha: g.fecha,
                    recepciones: g.recepciones, totalWM: g.total, canjeWM: g.canje, malosWM: g.malos };
 
-    if (!esCita(g.cita)) { excepciones.push(Object.assign(base, { motivo: 'el número de cita no tiene 8 dígitos: no es una cita de Walmart' })); return; }
-    if (c.estado === 'sin-match') { excepciones.push(Object.assign(base, { motivo: 'sin coincidencia en Redlink' })); return; }
+    if (!esCita(g.cita)) { excepciones.push(Object.assign(base, { clave: 'cita-invalida', motivo: 'el número de cita no tiene 8 dígitos: no es una cita de Walmart' })); return; }
+    if (c.estado === 'sin-match') { excepciones.push(Object.assign(base, { clave: 'sin-match', motivo: 'sin coincidencia en Redlink' })); return; }
     if (c.ops.length !== 1) {
-      excepciones.push(Object.assign(base, { motivo: 'la cita cae en ' + c.ops.length + ' operaciones' }));
+      excepciones.push(Object.assign(base, { clave: 'cita-ambigua', motivo: 'la cita cae en ' + c.ops.length + ' operaciones' }));
       return;
     }
     const op = c.ops[0];
@@ -294,15 +294,15 @@ function cruzar(filasWM, ops, opciones) {
 
     if (r.porAvisar > 0) avisar.push(fila);
 
-    if (esAnulada(op))            { excepciones.push(Object.assign({}, fila, { motivo: 'transferencia anulada' })); return; }
-    if (!esTransferencia(op))     { excepciones.push(Object.assign({}, fila, { motivo: 'la operación no es una transferencia: ' + fila.operacion })); return; }
-    if (estaConfirmada(op))       { excepciones.push(Object.assign({}, fila, { motivo: 'ya estaba confirmada' })); return; }
+    if (esAnulada(op))            { excepciones.push(Object.assign({}, fila, { clave: 'anulada', motivo: 'transferencia anulada' })); return; }
+    if (!esTransferencia(op))     { excepciones.push(Object.assign({}, fila, { clave: 'no-transferencia', motivo: 'la operación no es una transferencia: ' + fila.operacion })); return; }
+    if (estaConfirmada(op))       { excepciones.push(Object.assign({}, fila, { clave: 'ya-confirmada', motivo: 'ya estaba confirmada' })); return; }
     if (o.exigirEtapa && !etapaConfirmable(op)) {
-      excepciones.push(Object.assign({}, fila, { motivo: 'etapa "' + fila.etapa + '": todavía no es confirmable' }));
+      excepciones.push(Object.assign({}, fila, { clave: 'etapa', motivo: 'etapa "' + fila.etapa + '": todavía no es confirmable' }));
       return;
     }
-    if (!(r.aConfirmar > 0))      { excepciones.push(Object.assign({}, fila, { motivo: 'la cantidad a confirmar da cero' })); return; }
-    if (fila.folio == null)       { excepciones.push(Object.assign({}, fila, { motivo: 'la operación no trae folio' })); return; }
+    if (!(r.aConfirmar > 0))      { excepciones.push(Object.assign({}, fila, { clave: 'cantidad-cero', motivo: 'la cantidad a confirmar da cero' })); return; }
+    if (fila.folio == null)       { excepciones.push(Object.assign({}, fila, { clave: 'sin-folio', motivo: 'la operación no trae folio' })); return; }
 
     vistos[fila.folio] = (vistos[fila.folio] || 0) + 1;
     porConfirmar.push(fila);
@@ -312,7 +312,7 @@ function cruzar(filasWM, ops, opciones) {
   // transferencia. No se suman ni se elige una: salen las dos, nombradas.
   const limpias = [];
   porConfirmar.forEach(function (f) {
-    if (vistos[f.folio] > 1) excepciones.push(Object.assign({}, f, { motivo: 'el mismo folio sale de ' + vistos[f.folio] + ' citas' }));
+    if (vistos[f.folio] > 1) excepciones.push(Object.assign({}, f, { clave: 'folio-repetido', motivo: 'el mismo folio sale de ' + vistos[f.folio] + ' citas' }));
     else limpias.push(f);
   });
   limpias.sort((a, b) => Number(a.folio) - Number(b.folio));
@@ -320,6 +320,32 @@ function cruzar(filasWM, ops, opciones) {
   excepciones.sort((a, b) => String(a.motivo).localeCompare(String(b.motivo)));
 
   return { porConfirmar: limpias, excepciones: excepciones, avisar: avisar, citas: grupos.length };
+}
+
+const FAMILIAS = {
+  'ya-confirmada':   'ya confirmadas',
+  'sin-match':       'sin coincidencia en Redlink',
+  'etapa':           'esperan respaldo',
+  'anulada':         'anuladas',
+  'no-transferencia':'no son transferencias',
+  'cita-ambigua':    'la cita cae en varias operaciones',
+  'folio-repetido':  'el folio sale de varias citas',
+  'cita-invalida':   'el número no es una cita',
+  'cantidad-cero':   'la cantidad da cero',
+  'sin-folio':       'la operación no trae folio'
+};
+
+// De mayor a menor, y con empate resuelto por nombre para que dos corridas del
+// mismo reporte no muestren el mismo resumen en distinto orden.
+function resumenMotivos(excepciones) {
+  const cuenta = new Map();
+  (excepciones || []).forEach(function (e) {
+    const k = e && e.clave ? e.clave : 'otro';
+    cuenta.set(k, (cuenta.get(k) || 0) + 1);
+  });
+  return Array.from(cuenta.entries())
+    .map(([clave, n]) => ({ clave: clave, n: n, texto: FAMILIAS[clave] || clave }))
+    .sort((a, b) => (b.n - a.n) || a.texto.localeCompare(b.texto));
 }
 
 function csvDeConfirmar(filas) {
@@ -345,7 +371,7 @@ function ventanaDeReporte(filasWM, margen) {
 const API = { entradasZip, leerXlsx, leerSharedStrings, leerHoja, columnaANumero, serialAFecha,
               COLUMNAS, filasWalmart, citasDeTexto, esCita, agruparPorCita, indexar, clasificar,
               reglaCantidad, etapaConfirmable, esAnulada, esTransferencia, estaConfirmada,
-              cruzar, csvDeConfirmar, tsvDeConfirmar, ventanaDeReporte };
+              cruzar, FAMILIAS, resumenMotivos, csvDeConfirmar, tsvDeConfirmar, ventanaDeReporte };
 
 if (typeof module !== 'undefined' && module.exports) module.exports = API;
 else raiz.WalmartNucleo = API;

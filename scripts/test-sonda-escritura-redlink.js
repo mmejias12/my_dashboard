@@ -295,6 +295,240 @@ function correr(S) {
     cierto(S.hablaDelRecurso('FormHeader 0 is not found'));
   });
 
+  /* ---- lo que el servidor dicta en sus errores --------------------------- */
+
+  const ERR_VALIDA = '["No Tiene Lineas de detalles","Falta Cantidad a Despachar","Otro usuario Avanzo a etapa Siguiente. Favor Revizar"]';
+  const ERR_TIPO = '{"title":"One or more validation errors occurred.","status":400,"errors":{"$":["The JSON value could not be converted to Application.Features.FormHeaders.Commands.UpdateForm."]}}';
+
+  prueba('T113 saca los mensajes de validación de una lista', () => {
+    const p = S.pistaDeContrato(ERR_VALIDA);
+    igual(p.mensajes.length, 3);
+    cierto(/Cantidad a Despachar/.test(p.mensajes[1]));
+  });
+  prueba('T114 saca el nombre del comando que el servidor nombró', () => {
+    igual(S.pistaDeContrato(ERR_TIPO).comando, 'Application.Features.FormHeaders.Commands.UpdateForm');
+  });
+  prueba('T115 saca los mensajes del formato errors de ASP.NET', () => {
+    const p = S.pistaDeContrato(ERR_TIPO);
+    cierto(p.mensajes.length >= 1, 'el detalle del error también es un mensaje');
+  });
+  prueba('T116 prefija con el campo cuando errors lo nombra', () => {
+    const p = S.pistaDeContrato('{"errors":{"cantidad":["requerido"]}}');
+    igual(p.mensajes, ['cantidad: requerido']);
+  });
+  prueba('T117 el "$" de ASP.NET no se imprime como nombre de campo', () => {
+    falso(/^\$: /.test(S.pistaDeContrato(ERR_TIPO).mensajes[0] || ''));
+  });
+  prueba('T118 junta varios intentos sin repetir y conserva el orden', () => {
+    const p = S.juntarPistas([ERR_VALIDA, ERR_VALIDA, ERR_TIPO]);
+    igual(p.mensajes[0], 'No Tiene Lineas de detalles');
+    igual(p.mensajes.filter(m => m === 'No Tiene Lineas de detalles').length, 1, 'sin repetir:');
+    igual(p.comando, 'Application.Features.FormHeaders.Commands.UpdateForm');
+  });
+  prueba('T119 un cuerpo vacío o que no es JSON no inventa pistas', () => {
+    igual(S.pistaDeContrato('').mensajes, []);
+    igual(S.pistaDeContrato(null).comando, null);
+    igual(S.juntarPistas([]).mensajes, []);
+    igual(S.juntarPistas(null).comando, null);
+  });
+
+  /* ---- hijos del documento ------------------------------------------------ */
+
+  const DOCH = {
+    formHeaderiD: 684029, bpId: 499,
+    formDdetalles: [{ formDdetalleiD: 1, itemsId: 1, cantidad: 15, cantidadDespachar: null }],
+    formDregistros: [],
+    formMetapa: { formMetapaiD: 2, nombre: 'Por despachar' }
+  };
+
+  prueba('T120 encuentra las colecciones hijas y sus campos', () => {
+    const h = S.hijosDelDocumento(DOCH);
+    const det = h.find(x => x.nombre === 'formDdetalles');
+    igual(det.tipo, 'lista');
+    igual(det.largo, 1);
+    cierto(det.campos.indexOf('cantidadDespachar') >= 0, 'el nombre que no se ve en el encabezado');
+  });
+  prueba('T121 también los objetos embebidos', () => {
+    const m = S.hijosDelDocumento(DOCH).find(x => x.nombre === 'formMetapa');
+    igual(m.tipo, 'objeto');
+    cierto(m.campos.indexOf('formMetapaiD') >= 0);
+  });
+  prueba('T122 una lista vacía se informa, no se oculta', () => {
+    const r = S.hijosDelDocumento(DOCH).find(x => x.nombre === 'formDregistros');
+    igual(r.largo, 0);
+    igual(r.campos, []);
+  });
+  prueba('T123 los campos planos no se confunden con hijos', () => {
+    falso(S.hijosDelDocumento(DOCH).some(x => x.nombre === 'bpId'));
+  });
+  prueba('T124 un nulo no revienta', () => {
+    igual(S.hijosDelDocumento(null), []);
+    igual(S.hijosDelDocumento({ a: null }), []);
+  });
+
+  /* ---- el id de la creación ---------------------------------------------- */
+
+  prueba('T108 el id pelado en el cuerpo se reconoce', () => {
+    igual(S.idCreado('684029'), 684029);
+    igual(S.idCreado('  684029\n'), 684029, 'con espacios alrededor también:');
+    // Caso defensivo, y el único que sólo resuelve la vía directa: JSON.parse
+    // revienta con un cero a la izquierda, así que sin ella esto daría nulo.
+    igual(S.idCreado(' 0684029 '), 684029, 'con cero a la izquierda:');
+  });
+  prueba('T109 también si viene envuelto en un objeto', () => {
+    igual(S.idCreado('{"id":4242}'), 4242);
+    igual(S.idCreado('{"formHeaderiD":99}'), 99, 'con la mayúscula rara de Redlink:');
+  });
+  prueba('T110 NO confunde formId con el id del documento', () => {
+    igual(S.idCreado('{"formId":1}'), null, 'formId es el tipo de formulario, no el documento');
+  });
+  prueba('T111 un id en texto se convierte a número', () => {
+    igual(S.idCreado('{"id":"684029"}'), 684029);
+  });
+  prueba('T112 una respuesta vacía o sin id no inventa uno', () => {
+    igual(S.idCreado(''), null);
+    igual(S.idCreado(null), null);
+    igual(S.idCreado('{"mensaje":"ok"}'), null);
+    igual(S.idCreado('creado con exito'), null);
+  });
+
+  /* ---- detección de llaves en los maestros ------------------------------- */
+
+  prueba('T96 encuentra el id aunque no se llame "id"', () => {
+    const d = S.detectarCampos([{ bpId: 499, nombre: 'CLIENTE', esRetail: false }]);
+    igual(d.campoId, 'bpId');
+    igual(d.campoNombre, 'nombre');
+  });
+  prueba('T97 un "id" exacto gana sobre otro que sólo termina en id', () => {
+    const d = S.detectarCampos([{ clienteId: 7, id: 42, nombre: 'X' }]);
+    igual(d.campoId, 'id', 'el exacto tiene prioridad:');
+  });
+  prueba('T98 no toma por id un campo de texto que termine en Id', () => {
+    const d = S.detectarCampos([{ externoId: 'AB-12', bodegaId: 9, nombreBodega: 'B' }]);
+    igual(d.campoId, 'bodegaId');
+  });
+  prueba('T104 prefiere el campo que termina en Id antes que cualquier número', () => {
+    // Sin la regla, el primer numérico sería "cantidad", que no identifica nada.
+    const d = S.detectarCampos([{ cantidad: 5, bodegaId: 9, nombreBodega: 'B' }]);
+    igual(d.campoId, 'bodegaId');
+  });
+  prueba('T105 un campo "nombre..." numérico no sirve de nombre', () => {
+    const d = S.detectarCampos([{ bpId: 1, nombreId: 7, razonSocial: 'ACME SA' }]);
+    igual(d.campoNombre, 'razonSocial', 'el nombre tiene que ser texto:');
+  });
+
+  prueba('T99 el campo nombrable gana sobre el primer texto cualquiera', () => {
+    igual(S.detectarCampos([{ documentoId: 3, descripcion: 'Guia' }]).campoNombre, 'descripcion');
+    // La dirección viene antes y también es texto: sin la regla de nombres, el
+    // respaldo la elegiría y la lista mostraría calles en vez de clientes.
+    igual(S.detectarCampos([{ bpId: 1, direccion: 'Av. Siempreviva 742', razonSocial: 'ACME SA' }]).campoNombre, 'razonSocial');
+  });
+  prueba('T100 devuelve las llaves para poder mirarlas', () => {
+    igual(S.detectarCampos([{ a: 1, b: 'x' }]).campos, ['a', 'b']);
+  });
+  prueba('T101 una lista vacía o de basura no revienta ni inventa', () => {
+    igual(S.detectarCampos([]), { campos: [], campoId: null, campoNombre: null });
+    igual(S.detectarCampos(null), { campos: [], campoId: null, campoNombre: null });
+    igual(S.detectarCampos([null, 3, 'x']), { campos: [], campoId: null, campoNombre: null });
+  });
+  prueba('T102 salta los elementos nulos y usa el primero que sirva', () => {
+    igual(S.detectarCampos([null, { servicioId: 1, nombre: 'E' }]).campoId, 'servicioId');
+  });
+  prueba('T103 sin ningún texto deja campoNombre en nulo, no en vacío', () => {
+    const d = S.detectarCampos([{ bodegaId: 5, activo: true }]);
+    igual(d.campoId, 'bodegaId');
+    igual(d.campoNombre, null);
+  });
+  prueba('T106 cae a cualquier texto cuando el nombre no se llama "nombre"', () => {
+    // Redlink los llama cardName y bodegaCliente: sin respaldo, la lista sale
+    // con los ids pelados y hay que ir a buscar cada uno a mano.
+    igual(S.detectarCampos([{ businessPartneriD: 434, cardName: 'AC MARCA' }]).campoNombre, 'cardName');
+    igual(S.detectarCampos([{ bodegaiD: 1681, bodegaCliente: 'REDTEC COQUIMBO', direccion: 'x' }]).campoNombre, 'bodegaCliente');
+  });
+  prueba('T107 el respaldo nunca toma el propio id como nombre', () => {
+    // Acá el id es texto ('0012') y no hay ningún campo nombrable: sin el
+    // resguardo, el respaldo devolvería el mismo campo como nombre y la lista
+    // saldría con el id repetido dos veces.
+    const d = S.detectarCampos([{ codigo: '0012', activo: true }]);
+    igual(d.campoId, 'codigo');
+    igual(d.campoNombre, null, 'id y nombre no pueden ser el mismo campo:');
+  });
+
+  /* ---- armado del documento de prueba ------------------------------------ */
+
+  const MIN = { cliente: 499, servicio: 1, usuario: 13, bodegaOrigen: 1338, bodegaDestino: 1549 };
+
+  prueba('T84 una emisión sale con la forma de la planilla', () => {
+    const c = S.armarPayload(Object.assign({}, MIN, { cantidad: 15 }));
+    igual(c.formId, 1);
+    igual(c.bpOrigenId, S.BP_REDTEC, 'en una emisión el origen es REDTEC:');
+    igual(c.bpDestinoId, 499, 'y el destino es el cliente:');
+    igual(c.formDdetalles, [{ itemsId: 1, cantidad: 15 }]);
+  });
+  prueba('T85 nombra TODO lo que falta de una vez, no de a uno', () => {
+    let msg = '';
+    try { S.armarPayload({ cliente: 499 }); } catch (e) { msg = e.message; }
+    cierto(/--servicio/.test(msg) && /--usuario/.test(msg) && /--bodega-origen/.test(msg) && /--bodega-destino/.test(msg),
+      'tiene que nombrar los cuatro: ' + msg);
+  });
+  prueba('T86 la observación marca el documento como prueba', () => {
+    cierto(/PRUEBA/i.test(S.armarPayload(MIN).observacionOrigen), 'quien lo vea en DEMO tiene que saber qué es');
+  });
+  prueba('T87 respeta el tope de cantidad de la planilla', () => {
+    let msg = '';
+    try { S.armarPayload(Object.assign({}, MIN, { cantidad: S.TOPE_CANTIDAD + 1 })); } catch (e) { msg = e.message; }
+    cierto(/cantidad/.test(msg), 'tiene que rebotar: ' + msg);
+    cierto(S.armarPayload(Object.assign({}, MIN, { cantidad: S.TOPE_CANTIDAD })).formDdetalles[0].cantidad === S.TOPE_CANTIDAD,
+      'el tope exacto sí vale');
+  });
+  prueba('T88 una cantidad de cero o negativa no pasa', () => {
+    igual(S.armarPayload(Object.assign({}, MIN, { cantidad: 0 })).formDdetalles[0].cantidad, 1, 'cero cae a 1:');
+    let msg = ''; try { S.armarPayload(Object.assign({}, MIN, { cantidad: -3 })); } catch (e) { msg = e.message; }
+    cierto(/cantidad/.test(msg));
+  });
+  prueba('T89 una transferencia exige destino, documento y número', () => {
+    let msg = '';
+    try { S.armarPayload(Object.assign({}, MIN, { form: 6 })); } catch (e) { msg = e.message; }
+    // Ojo: "--documento-numero" contiene "--documento", así que buscar el
+    // prefijo pelado daría por cubierto un campo que no se está pidiendo.
+    cierto(/--destino/.test(msg), msg);
+    cierto(/--documento \(documentoId\)/.test(msg), msg);
+    cierto(/--documento-numero/.test(msg), msg);
+  });
+  prueba('T90 en una transferencia el origen es el cliente, no REDTEC', () => {
+    const c = S.armarPayload(Object.assign({}, MIN, { form: 6, destino: 700, documento: 5, documentoNumero: 123 }));
+    igual(c.bpOrigenId, 499);
+    igual(c.bpDestinoId, 700);
+    cierto(Array.isArray(c.formDtransportes), 'una transferencia lleva transporte');
+  });
+  prueba('T91 una emisión NO lleva transporte ni documento', () => {
+    const c = S.armarPayload(MIN);
+    falso('formDtransportes' in c);
+    falso('documentoId' in c);
+  });
+  prueba('T92 un formId que la planilla no cubre se rechaza', () => {
+    let msg = ''; try { S.armarPayload(Object.assign({}, MIN, { form: 3 })); } catch (e) { msg = e.message; }
+    cierto(/formId/.test(msg), msg);
+  });
+  prueba('T93 la fecha sale en ISO y se puede fijar', () => {
+    cierto(/^\d{4}-\d{2}-\d{2}$/.test(S.armarPayload(MIN).fechaRequerida));
+    igual(S.armarPayload(Object.assign({}, MIN, { fecha: '2026-01-15' })).fechaRequerida, '2026-01-15');
+    cierto(/^\d{4}-\d{2}-\d{2}$/.test(S.armarPayload(Object.assign({}, MIN, { fecha: 'ayer' })).fechaRequerida), 'basura cae a hoy');
+  });
+  prueba('T94 los ids llegan como texto desde la línea de comandos', () => {
+    const c = S.armarPayload({ cliente: '499', servicio: '1', usuario: '13', bodegaOrigen: '1338', bodegaDestino: '1549' });
+    igual(c.bpId, 499, 'tienen que ser números, no texto:');
+  });
+  prueba('T95 --maestros y los ids del creador se leen', () => {
+    const a = S.leerArgs(['--crear', '--cliente=499', '--servicio=1', '--usuario=13',
+                          '--bodega-origen=1338', '--bodega-destino=1549', '--form=6',
+                          '--destino=700', '--documento=5', '--documento-numero=123', '--cita=42674991']);
+    igual(a.modo, 'crear');
+    igual(a.cliente, '499'); igual(a.bodegaOrigen, '1338'); igual(a.bodegaDestino, '1549');
+    igual(a.destino, '700'); igual(a.documento, '5'); igual(a.documentoNumero, '123'); igual(a.cita, '42674991');
+    igual(S.leerArgs(['--maestros']).modo, 'maestros');
+  });
+
   /* ---- rango de búsqueda ------------------------------------------------- */
 
   prueba('T79 sin rango usa el tope, no infinito', () => {
@@ -364,52 +598,201 @@ function correr(S) {
 
   /* ---- cuerpos candidatos ----------------------------------------------- */
 
-  const DOC = { id: 77, cantidad: 30, formDdetalles: [{ id: 5, cantidad: 30, itemsId: 1 }] };
+  // La forma REAL que devolvió el servidor, con la línea completa.
+  const LINEA = {
+    formDdetalleiD: 682870, formHeaderId: 684029, formId: 0, linea: 0, folio: 0,
+    tipoProducto: 0, arriendo: false, itemsId: 1, itemCode: null, itemName: null,
+    cantidad: 15, despachado: null, recepcion: null, recepcionAnterior: null,
+    precio: null, items: { itemsiD: 1, itemName: 'PALLET REDTEC ROJO' }
+  };
+  const DOC = {
+    formHeaderiD: 684029, formId: 1, formMetapaId: 2, avanzaEtapa: false,
+    usuarioIngresoId: 13, bpId: 499, confirmacionVeces: 0, usuarioConfirmaId: null,
+    servicio: { servicioiD: 1, nombre: 'Emision' },
+    formMetapa: { formMetapaiD: 2, nombre: 'Por Confirmar' },
+    formDdetalles: [LINEA], formDanexos: [], formDtransportes: [],
+    formDregistros: [{ formDdetalleiD: 0, formHeaderId: 684029, cantidad: null }],
+    formDinspeccions: []
+  };
 
-  prueba('T33 con cantidad propone merge y json-patch, con sus Content-Type', () => {
-    const l = S.cuerposCandidatos(DOC, 25);
-    const merge = l.find(c => /encabezado/.test(c.nombre));
-    const jp    = l.find(c => /json-patch · replace \/cantidadConfirmada/.test(c.nombre));
-    cierto(merge && jp, 'tienen que estar los dos');
-    igual(merge.contentType, 'application/json');
-    igual(jp.contentType, 'application/json-patch+json');
+  prueba('T33 el id sale de formHeaderiD, no de "id"', () => {
+    igual(S.idDeDocumento(DOC), 684029);
+    igual(S.idDeDocumento({ id: 7 }), 7, 'pero si viene como id, también:');
+    igual(S.idDeDocumento({ formId: 1 }), null, 'formId NO es el id del documento:');
+    igual(S.idDeDocumento({ formHeaderiD: '684029' }), 684029, 'si viene como texto, se convierte:');
+    igual(S.idDeDocumento(null), null);
   });
-  prueba('T34 el json-patch va como lista de operaciones', () => {
-    const jp = S.cuerposCandidatos(DOC, 25).find(c => c.contentType === 'application/json-patch+json');
-    cierto(Array.isArray(jp.cuerpo), 'JsonPatch es una lista');
-    igual(jp.cuerpo[0].op, 'replace');
-    igual(jp.cuerpo[0].value, 25);
+  prueba('T48 el eco manda TODAS las colecciones hijas, vacías incluidas', () => {
+    // Omitir una lista vacía es justo lo que deja al manejador recorriendo un
+    // nulo: el "Object reference not set" que nos costó una vuelta entera.
+    const c = S.cuerposCandidatos(DOC, 15)[0].cuerpo;
+    for (const k of ['formDdetalles', 'formDanexos', 'formDtransportes', 'formDregistros', 'formDinspeccions']) {
+      cierto(Array.isArray(c[k]), 'falta ' + k);
+    }
+    igual(c.formDanexos, [], 'la vacía va vacía, no omitida:');
+    // La única fila de formDregistros del documento es relleno (clave en 0), así
+    // que la lista va, pero vacía: la lista presente evita el nulo del manejador
+    // y la fila ausente evita el fallo al guardar.
+    igual(c.formDregistros, []);
   });
-  prueba('T35 propone también el detalle cuando el documento lo trae', () => {
-    const d = S.cuerposCandidatos(DOC, 25).find(c => /detalle/.test(c.nombre));
-    cierto(d, 'falta el candidato del detalle');
-    igual(d.cuerpo.formDdetalles[0].id, 5);
-    igual(d.cuerpo.formDdetalles[0].cantidadConfirmada, 25);
+  prueba('T58 una fila sin identidad propia no se devuelve', () => {
+    // formDregistros llega con una fila de relleno (formDdetalleiD: 0). Si se
+    // la devolvemos, el servidor intenta insertarla y falla al guardar.
+    const doc = Object.assign({}, DOC, {
+      formDregistros: [{ formDdetalleiD: 0, formHeaderId: 684029, cantidad: null },
+                       { formDdetalleiD: 77, formHeaderId: 684029, cantidad: 5 }]
+    });
+    const c = S.cuerposCandidatos(doc, 15)[0].cuerpo;
+    igual(c.formDregistros.length, 1, 'sólo la que existe de verdad:');
+    igual(c.formDregistros[0].formDdetalleiD, 77);
   });
-  prueba('T36 sin detalles no inventa el candidato del detalle', () => {
-    const l = S.cuerposCandidatos({ id: 1 }, 10);
-    falso(l.some(c => /detalle/.test(c.nombre)));
+  prueba('T59 la línea de detalle con identidad sí se devuelve', () => {
+    cierto(S.tieneIdentidad({ formDdetalleiD: 682870 }));
+    falso(S.tieneIdentidad({ formDdetalleiD: 0 }));
+    falso(S.tieneIdentidad({ formDdetalleiD: null }));
+    igual(S.cuerposCandidatos(DOC, 15)[0].cuerpo.formDdetalles.length, 1);
   });
-  prueba('T37 sin cantidad no propone cuerpos de cantidad', () => {
-    const l = S.cuerposCandidatos(DOC, null);
-    falso(l.some(c => /cantidadConfirmada/.test(c.nombre)), 'sin cantidad no hay qué confirmar');
+  prueba('T60 sin clave reconocible no se descarta la fila', () => {
+    cierto(S.tieneIdentidad({ cantidad: 5 }), 'mejor mandarla de más que perderla');
+    falso(S.tieneIdentidad(null));
   });
-  prueba('T38 una cantidad de cero o negativa no cuenta como cantidad', () => {
-    falso(S.cuerposCandidatos(DOC, 0).some(c => /cantidadConfirmada/.test(c.nombre)));
-    falso(S.cuerposCandidatos(DOC, -3).some(c => /cantidadConfirmada/.test(c.nombre)));
+  prueba('T61 la clave propia es la PRIMERA que termina en iD', () => {
+    // formHeaderId viene después y no es cero: si se mirara ése, la fila de
+    // relleno pasaría por buena.
+    falso(S.tieneIdentidad({ formDdetalleiD: 0, formHeaderId: 684029 }));
+    // Y si hubiera dos claves con esa forma, manda la propia, que va primero:
+    // mirar la última daría por buena una fila de relleno que apunta a otra.
+    falso(S.tieneIdentidad({ formDdetalleiD: 0, otroiD: 9 }));
   });
-  prueba('T39 la cantidad llega como texto desde la línea de comandos', () => {
-    const jp = S.cuerposCandidatos(DOC, '25').find(c => c.contentType === 'application/json-patch+json');
-    igual(jp.cuerpo[0].value, 25, 'tiene que ser número, no texto:');
+
+  prueba('T49 el eco conserva los escalares del encabezado', () => {
+    const c = S.cuerposCandidatos(DOC, 15)[0].cuerpo;
+    igual(c.bpId, 499);
+    igual(c.usuarioConfirmaId, null, 'los nulos también:');
   });
-  prueba('T40 siempre va el testigo vacío, y va al final', () => {
-    const l = S.cuerposCandidatos(DOC, 25);
-    igual(/testigo/.test(l[l.length - 1].nombre), true);
-    igual(l[l.length - 1].cuerpo, {});
+  prueba('T50 el eco no manda los objetos de navegación del encabezado', () => {
+    const c = S.cuerposCandidatos(DOC, 15)[0].cuerpo;
+    falso('formMetapa' in c, 'formMetapa es navegación');
+    falso('servicio' in c);
   });
-  prueba('T41 propone estadoId sólo si el documento lo tiene', () => {
-    falso(S.cuerposCandidatos(DOC, 25).some(c => /estadoId/.test(c.nombre)));
-    cierto(S.cuerposCandidatos({ id: 1, estadoId: 3 }, 25).some(c => /estadoId/.test(c.nombre)));
+  prueba('T51 avanzaEtapa va SIEMPRE, explícito, no por omisión', () => {
+    const l = S.cuerposCandidatos(DOC, 15);
+    for (const c of l) cierto('avanzaEtapa' in c.cuerpo, c.nombre + ': tiene que ir explícito');
+    igual(l[0].cuerpo.avanzaEtapa, true);
+    igual(l[l.length - 1].cuerpo.avanzaEtapa, false, 'el testigo lo manda en false, no lo omite:');
+  });
+  prueba('T52 una falla interna no se confunde con un cuerpo mal formado', () => {
+    cierto(S.esFallaInterna('{"error":"Object reference not set to an instance of an object."}'));
+    cierto(S.esFallaInterna('Sequence contains no elements'));
+    falso(S.esFallaInterna('["Falta Cantidad a Despachar"]'));
+    falso(S.esFallaInterna(''));
+    falso(S.esFallaInterna(null));
+  });
+
+  prueba('T53 avanzaEtapa se agrega aunque el documento no lo traiga', () => {
+    const sinBandera = { formHeaderiD: 1, formMetapaId: 2, formDdetalles: [{ cantidad: 3 }] };
+    const l = S.cuerposCandidatos(sinBandera, 3);
+    cierto('avanzaEtapa' in l[0].cuerpo, 'tiene que ir explícito, no depender del eco');
+    igual(l[0].cuerpo.avanzaEtapa, true);
+    igual(l[l.length - 1].cuerpo.avanzaEtapa, false, 'y el testigo lo manda en false:');
+  });
+  prueba('T54 la lectura separa "reventó adentro" de "cuerpo malo"', () => {
+    const interno = S.lecturaDeIntentos([{ c: { nombre: 'x' }, cl: { clave: 'cuerpo-malo', verbo: true },
+                                           texto: '{"error":"Object reference not set to an instance of an object."}' }]);
+    cierto(/manejador/.test(interno.join(' ')), interno.join(' '));
+    cierto(/uno que falta/.test(interno.join(' ')), 'tiene que decir que falta un campo, no que sobra');
+    const validacion = S.lecturaDeIntentos([{ c: { nombre: 'x' }, cl: { clave: 'cuerpo-malo', verbo: true },
+                                              texto: '["Falta Cantidad a Despachar"]' }]);
+    cierto(/validación/.test(validacion.join(' ')), validacion.join(' '));
+    falso(/manejador/.test(validacion.join(' ')), 'no puede decir lo mismo para los dos');
+  });
+  prueba('T55 un éxito manda a releer antes de cantar victoria', () => {
+    const l = S.lecturaDeIntentos([{ c: { nombre: 'el bueno' }, cl: { clave: 'sirve', verbo: true }, texto: '1' }]);
+    cierto(/el bueno/.test(l.join(' ')));
+    cierto(/Relee/.test(l.join(' ')), 'tiene que pedir la relectura');
+  });
+  prueba('T56 un 405 dice que la confirmación no pasa por ahí', () => {
+    const l = S.lecturaDeIntentos([{ c: { nombre: 'x' }, cl: { clave: 'no-permitido', verbo: false }, texto: '' }]);
+    cierto(/no aceptó PATCH/.test(l.join(' ')));
+  });
+  prueba('T57 sin intentos no inventa lectura', () => {
+    igual(S.lecturaDeIntentos([]), []);
+    igual(S.lecturaDeIntentos(null), []);
+  });
+
+  prueba('T34 la línea se devuelve tal cual, sin las propiedades de navegación', () => {
+    const l = S.lineaParaEnviar(LINEA, 15, 15);
+    igual(l.formDdetalleiD, 682870, 'conserva el id de la línea:');
+    igual(l.itemCode, null, 'conserva los nulos, no los borra:');
+    falso('items' in l, 'items es navegación y no va');
+  });
+  prueba('T35 lineaParaEnviar no inventa campos que no estaban', () => {
+    const l = S.lineaParaEnviar({ cantidad: 5 }, null, null);
+    igual(l, { cantidad: 5 }, 'sin cantidades pedidas no agrega nada:');
+  });
+  prueba('T36 la cantidad nunca supera lo que la línea pide', () => {
+    igual(S.cantidadDeLinea(LINEA, 99), 15, 'se recorta al tope de la línea:');
+    igual(S.cantidadDeLinea(LINEA, 10), 10);
+    igual(S.cantidadDeLinea(LINEA, null), 15, 'sin cantidad, la de la línea:');
+    igual(S.cantidadDeLinea({ cantidad: null }, null), null, 'sin nada, nada:');
+  });
+  prueba('T37 el primer candidato es el que confirma de verdad', () => {
+    const l = S.cuerposCandidatos(DOC, 15);
+    cierto(/despachado \+ recepcion \+ avanzaEtapa/.test(l[0].nombre), l[0].nombre);
+    igual(l[0].cuerpo.formDdetalles[0].despachado, 15);
+    igual(l[0].cuerpo.formDdetalles[0].recepcion, 15);
+    igual(l[0].cuerpo.avanzaEtapa, true);
+  });
+  prueba('T38 todos los cuerpos mandan la etapa leída, contra "otro usuario avanzó"', () => {
+    for (const c of S.cuerposCandidatos(DOC, 15)) igual(c.cuerpo.formMetapaId, 2, c.nombre + ':');
+  });
+  prueba('T39 todos llevan el id con el nombre que usa Redlink', () => {
+    for (const c of S.cuerposCandidatos(DOC, 15)) igual(c.cuerpo.formHeaderiD, 684029, c.nombre + ':');
+  });
+  prueba('T40 todos llevan las líneas, que es lo que el servidor reclamó', () => {
+    for (const c of S.cuerposCandidatos(DOC, 15)) {
+      cierto(Array.isArray(c.cuerpo.formDdetalles) && c.cuerpo.formDdetalles.length === 1, c.nombre + ':');
+    }
+  });
+  prueba('T41 el candidato de sólo despacho no manda recepción', () => {
+    const c = S.cuerposCandidatos(DOC, 15).find(x => /sólo despachado/.test(x.nombre));
+    igual(c.cuerpo.formDdetalles[0].despachado, 15);
+    igual(c.cuerpo.formDdetalles[0].recepcion, null, 'la recepción queda como vino:');
+  });
+  prueba('T42 el testigo no pide ningún cambio', () => {
+    const l = S.cuerposCandidatos(DOC, 15);
+    const t = l[l.length - 1];
+    cierto(/testigo/.test(t.nombre), 'y va al final');
+    igual(t.cuerpo.formDdetalles[0].despachado, null);
+    igual(t.cuerpo.formDdetalles[0].recepcion, null);
+    igual(t.cuerpo.avanzaEtapa, false, 'el testigo no avanza nada');
+  });
+  prueba('T43 la cantidad llega como texto desde la línea de comandos', () => {
+    igual(S.cuerposCandidatos(DOC, '10')[0].cuerpo.formDdetalles[0].recepcion, 10);
+  });
+  prueba('T44 un documento sin líneas no finge tenerlas', () => {
+    const c = S.cuerposCandidatos({ formHeaderiD: 1, formMetapaId: 2 }, 15)[0].cuerpo;
+    falso('formDdetalles' in c, 'si el documento no las trae, el eco tampoco');
+  });
+  prueba('T47 una línea nula en el arreglo no se manda como línea', () => {
+    // Si el arreglo trae un hueco, mandarlo de vuelta como {} haría que el
+    // servidor viera una línea sin cantidad y la rechazara entera.
+    const doc = Object.assign({}, DOC, { formDdetalles: [null, LINEA] });
+    const c = S.cuerposCandidatos(doc, 15)[0];
+    igual(c.cuerpo.formDdetalles.length, 1, 'sólo la línea de verdad:');
+    igual(c.cuerpo.formDdetalles[0].formDdetalleiD, 682870);
+  });
+
+  prueba('T45 sin id no se manda nada, ni el testigo', () => {
+    igual(S.cuerposCandidatos({ formId: 1 }, 15), []);
+  });
+  prueba('T46 varias líneas se recortan cada una contra su propio tope', () => {
+    const doc = Object.assign({}, DOC, {
+      formDdetalles: [Object.assign({}, LINEA, { cantidad: 5 }), Object.assign({}, LINEA, { cantidad: 30 })]
+    });
+    const c = S.cuerposCandidatos(doc, 20)[0];
+    igual(c.cuerpo.formDdetalles[0].recepcion, 5, 'la de 5 no puede recibir 20:');
+    igual(c.cuerpo.formDdetalles[1].recepcion, 20);
   });
 
   /* ---- lectura del Allow ------------------------------------------------ */
@@ -488,13 +871,40 @@ const MUTACIONES = [
   ['M20 los campos de estado pierden el valor',        /out\.push\(\{ campo: ruta, valor: v \}\)/, 'out.push({ campo: ruta, valor: null })'],
   ['M21 la asimetría también marca verbos repetidos',  /if \(cuenta\[v\] === 1 && rutas\.length > 1\)/, 'if (cuenta[v] >= 1 && rutas.length > 1)'],
   ['M22 la asimetría ignora que haya una sola ruta',   /cuenta\[v\] === 1 && rutas\.length > 1/, 'cuenta[v] === 1'],
-  ['M23 el json-patch se manda como objeto',           /cuerpo: \[\{ op: 'replace', path: '\/cantidadConfirmada', value: cant \}\]/, "cuerpo: { op: 'replace', path: '/cantidadConfirmada', value: cant }"],
-  ['M24 el json-patch va con Content-Type de merge',   /contentType: 'application\/json-patch\+json',\n      cuerpo: \[\{ op: 'replace', path: '\/cantidadConfirmada'/, "contentType: 'application/json',\n      cuerpo: [{ op: 'replace', path: '/cantidadConfirmada'"],
-  ['M25 la cantidad no se convierte a número',         /const n   = Number\(cantidad\);/, 'const n   = cantidad;'],
-  ['M26 una cantidad de cero se acepta',               /n > 0 \? n : null/, 'n >= 0 ? n : null'],
-  ['M27 el candidato del detalle se arma sin detalle', /if \(det\) \{/, 'if (true) {'],
-  ['M28 desaparece el testigo vacío',                  /lista\.push\(\{\n    nombre: 'testigo · cuerpo vacío',[\s\S]*?\}\);\n/, ''],
-  ['M29 el testigo queda primero',                     /return lista;\n\}/, 'return lista.slice(-1).concat(lista.slice(0,-1));\n}'],
+  ['M99 no saca el nombre del comando',                /const m = t\.match\(\/\[A-Za-z0-9_\.\]\*\\\.Commands\\\.\[A-Za-z0-9_\]\+\/\);/, 'const m = null;'],
+  ['M100 no lee los mensajes de una lista',            /out\.mensajes = j\.filter\(x => typeof x === 'string'\)[^\n]*/, 'out.mensajes = [];'],
+  ['M101 no lee el formato errors de ASP\.NET',        /\} else if \(j && typeof j === 'object' && j\.errors && typeof j\.errors === 'object'\) \{/, '} else if (false) {'],
+  ['M102 imprime el "\$" como nombre de campo',        /\(k === '\$' \? '' : k \+ ': '\)/, "(k + ': ')"],
+  ['M103 junta los mensajes repitiendo',               /if \(!vistos\[m\]\) \{ vistos\[m\] = true; mensajes\.push\(m\); \}/, 'mensajes.push(m);'],
+  ['M104 el primer comando encontrado se pisa',        /if \(!comando && p\.comando\) comando = p\.comando;/, 'if (p.comando) comando = null;'],
+  ['M105 los hijos no muestran sus campos',            /campos: prim \? Object\.keys\(prim\) : \[\]/, 'campos: []'],
+  ['M106 los objetos embebidos se ignoran',            /\} else if \(v && typeof v === 'object'\) \{\n      out\.push\(\{ nombre: k, tipo: 'objeto'/, '} else if (false) {\n      out.push({ nombre: k, tipo: \'objeto\''],
+  ['M107 los campos planos pasan por hijos',           /if \(Array\.isArray\(v\)\) \{/, 'if (true) {'],
+  ['M108 la lista vacía se oculta',                    /out\.push\(\{ nombre: k, tipo: 'lista', largo: v\.length,/, "if (!v.length) continue; out.push({ nombre: k, tipo: 'lista', largo: v.length,"],
+  ['M25 la cantidad no se recorta al tope',            /if \(hayTope && n > tope\) return tope;/, ''],
+  ['M26 una cantidad de cero o negativa se acepta',    /if \(!Number\.isFinite\(n\) \|\| n <= 0\) return hayTope \? tope : null;/, 'if (!Number.isFinite(n)) return hayTope ? tope : null;'],
+  ['M27 sin cantidad no cae a la de la línea',         /return hayTope \? tope : null;/, 'return null;'],
+  ['M91 el id del documento sale de formId',           /for \(const k of \['formHeaderiD', 'formHeaderId', 'id'\]\)/, "for (const k of ['formId', 'formHeaderiD', 'formHeaderId', 'id'])"],
+  ['M28 desaparece el testigo',                        /eco\('testigo · eco completo sin cambios',[^\n]*\n/, ''],
+  ['M29 el testigo también avanza etapa',              /eco\('testigo · eco completo sin cambios',                  \{ despachado: false, recepcion: false, avanzar: false \}\);/, "eco('testigo · eco completo sin cambios',                  { despachado: false, recepcion: false, avanzar: true });"],
+  ['M92 el eco omite las listas vacías',               /cuerpo\[k\] = filas\.map\(d => lineaParaEnviar\(d, null, null\)\);/, 'if (filas.length) cuerpo[k] = filas.map(d => lineaParaEnviar(d, null, null));'],
+  ['M93 el eco omite las colecciones que no son detalle', /\} else \{\n      cuerpo\[k\] = filas\.map\(d => lineaParaEnviar\(d, null, null\)\);\n    \}/, '}'],
+  ['M94 el eco manda los objetos de navegación',       /for \(const k of Object\.keys\(doc\)\) if \(esEscalar\(doc\[k\]\)\) cuerpo\[k\] = doc\[k\];/, 'for (const k of Object.keys(doc)) if (!Array.isArray(doc[k])) cuerpo[k] = doc[k];'],
+  ['M95 el primer candidato no lleva recepción',       /eco\('eco completo · despachado \+ recepcion \+ avanzaEtapa', \{ despachado: true, recepcion: true, avanzar: true \}\);/, "eco('eco completo · despachado + recepcion + avanzaEtapa', { despachado: true, recepcion: false, avanzar: true });"],
+  ['M97 el primer candidato no avanza la etapa',       /\{ despachado: true, recepcion: true, avanzar: true \}/, '{ despachado: true, recepcion: true, avanzar: false }'],
+  ['M109 avanzaEtapa se omite en vez de ir explícito', /cuerpo\.avanzaEtapa = !!o\.avanzar;/, 'if (o.avanzar) cuerpo.avanzaEtapa = true;'],
+  ['M110 las líneas no se filtran por objeto',         /const filas = v\.filter\(x => x && typeof x === 'object' && tieneIdentidad\(x\)\);/, 'const filas = v;'],
+  ['M112 esFallaInterna marca cualquier error',        /\/object reference not set\|nullreference\|sequence contains no elements\|index \.\*out of range\/i/, '/./'],
+  ['M23 la línea manda las propiedades de navegación', /for \(const k of Object\.keys\(det \|\| \{\}\)\) if \(esEscalar\(det\[k\]\)\) out\[k\] = det\[k\];/, 'for (const k of Object.keys(det || {})) out[k] = det[k];'],
+  ['M24 el escalar deja de incluir los nulos',         /const esEscalar = v => v === null \|\| \['number', 'string', 'boolean'\]\.indexOf\(typeof v\) >= 0;/, "const esEscalar = v => ['number', 'string', 'boolean'].indexOf(typeof v) >= 0;"],
+  ['M96 sin id igual manda cuerpos',                   /if \(idDeDocumento\(doc\) == null\) return lista;/, ''],
+  ['M111 la falla interna se confunde con cuerpo malo', /if \(v\.some\(x => esFallaInterna\(x && x\.texto\)\)\) \{/, 'if (false) {'],
+  ['M113 la lectura no pide relectura tras un éxito',  /out\.push\('Relee el documento antes de cantar victoria[^']*'\);/, ''],
+  ['M114 un éxito no nombra cuál candidato fue',       /out\.push\(x\.c\.nombre \+ ' fue aceptado\.'\);/, "out.push('algo fue aceptado.');"],
+  ['M115 las filas de relleno se devuelven',           /&& tieneIdentidad\(x\)/, ''],
+  ['M116 la identidad mira cualquier campo iD',        /Object\.keys\(fila\)\.find\(k => \/i\[dD\]\$\/\.test\(k\)\)/, 'Object.keys(fila).reverse().find(k => /i[dD]$/.test(k))'],
+  ['M117 una clave en cero pasa por identidad',        /return Number\.isFinite\(v\) && v > 0;/, 'return Number.isFinite(v);'],
+  ['M118 sin clave reconocible se descarta la fila',   /if \(!clave\) return true;[^\n]*/, 'if (!clave) return false;'],
   ['M30 el Allow no se normaliza a mayúsculas',        /\.map\(s => s\.trim\(\)\.toUpperCase\(\)\)/, '.map(s => s.trim())'],
   ['M31 el Allow no se ordena',                        /\.filter\(Boolean\)\.sort\(\)/, '.filter(Boolean)'],
   ['M32 --si queda prendido siempre',                  /else if \(x === '--si'\) a\.si = true;/, "a.si = true;"],
@@ -527,7 +937,36 @@ const MUTACIONES = [
   ['M59 el barrido pierde el tope',                    /if \(h - d \+ 1 > t\) h = d \+ t - 1;/, ''],
   ['M60 el barrido puede ir hacia atrás',              /if \(!Number\.isFinite\(h\) \|\| h < d\)/, 'if (!Number.isFinite(h))'],
   ['M61 el barrido no avisa que recortó',              /recortado: \(parseInt\(hasta, 10\) \|\| 0\) > h/, 'recortado: false'],
-  ['M62 --buscar no se reconoce',                      /else if \(x === '--buscar'\) a\.modo = 'buscar';/, '']
+  ['M62 --buscar no se reconoce',                      /else if \(x === '--buscar'\) a\.modo = 'buscar';/, ''],
+  ['M63 la emision sale con origen en el cliente',     /bpOrigenId: form === 1 \? BP_REDTEC : cliente,/, 'bpOrigenId: cliente,'],
+  ['M64 el destino de la emision queda en REDTEC',     /bpDestinoId: form === 1 \? cliente : n\(o\.destino\),/, 'bpDestinoId: n(o.destino),'],
+  ['M65 el armador reclama una falta a la vez',        /if \(falta\.length\) throw new Error\('Falta: ' \+ falta\.join\(', '\)\);/, "if (falta.length) throw new Error('Falta: ' + falta[0]);"],
+  ['M66 el tope de cantidad desaparece',               /if \(cantidad < 1 \|\| cantidad > TOPE_CANTIDAD\)/, 'if (false)'],
+  ['M67 el tope de cantidad queda abierto por arriba', /cantidad > TOPE_CANTIDAD/, 'cantidad > TOPE_CANTIDAD + 100'],
+  ['M68 la observacion ya no dice que es prueba',      /const OBS_PRUEBA = '[^']*';/, "const OBS_PRUEBA = 'x';"],
+  ['M69 la transferencia no exige documento',          /if \(!n\(o\.documento\)\)      falta\.push\('--documento \(documentoId\)'\);/, ''],
+  ['M70 la transferencia no lleva transporte',         /cuerpo\.formDtransportes = \[\{/, 'cuerpo.noVa = [{'],
+  ['M71 la emision tambien lleva transporte',          /if \(form === 6\) \{\n    cuerpo\.documentoId/, 'if (true) {\n    cuerpo.documentoId'],
+  ['M72 acepta cualquier formId',                      /if \(form !== 1 && form !== 6\)/, 'if (false)'],
+  ['M73 los ids no se convierten a numero',            /const n = \(v\) => \{ const x = parseInt\(v, 10\); return Number\.isFinite\(x\) \? x : null; \};/, 'const n = (v) => v;'],
+  ['M74 la fecha pedida no se valida',                 /\(o\.fecha && \/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$\/\.test\(o\.fecha\)\)/, '(o.fecha)'],
+  ['M75 --maestros no se reconoce',                    /else if \(x === '--maestros'\) a\.modo = 'maestros';/, ''],
+  ['M76 vuelve a adivinar que el id se llama id',      /if \(!campoId\) campoId = campos\.find\(k => \/id\$\/i\.test\(k\) && esNumero\(k\)\);/, ''],
+  ['M77 el id exacto deja de tener prioridad',         /let campoId = campos\.find\(k => k\.toLowerCase\(\) === 'id' && esNumero\(k\)\);/, 'let campoId = null;'],
+  ['M78 toma por id un texto que termina en Id',       /\/id\$\/i\.test\(k\) && esNumero\(k\)/, '/id$/i.test(k)'],
+  ['M79 no reconoce descripcion como nombre',          /\(nombre\|descripcion\|descripción\|razon\|razón\|glosa\|titulo\|título\|cardname\)/, '(zzz)'],
+  ['M80 el nombre puede no ser texto',                 /const esTexto = k => typeof prim\[k\] === 'string';/, 'const esTexto = k => true;'],
+  ['M81 no salta los elementos nulos',                 /\(filas \|\| \[\]\)\.find\(f => f && typeof f === 'object' && !Array\.isArray\(f\)\)/, '(filas || [])[0]'],
+  ['M82 no devuelve las llaves',                       /const campos = Object\.keys\(prim\);/, 'const campos = [];'],
+  ['M83 sin respaldo para cardName',                   /if \(!campoNombre\) campoNombre = campos\.find\(k => k !== campoId && esTexto\(k\)\) \|\| null;/, ''],
+  ['M84 el respaldo puede tomar el id como nombre',    /campos\.find\(k => k !== campoId && esTexto\(k\)\)/, 'campos.find(k => esTexto(k))'],
+  ['M86 el id pelado deja de reconocerse',             /if \(\/\^\\d\+\$\/\.test\(t\)\) return Number\(t\);/, ''],
+  ['M87 el id no se recorta de espacios',              /const t = String\(texto == null \? '' : texto\)\.trim\(\);\n  if \(!t\) return null;/, "const t = String(texto == null ? '' : texto);\n  if (!t) return null;"],
+  ['M88 formId pasa por id del documento',             /\['id', 'formHeaderId', 'formHeaderiD', 'nroPedido', 'pedido'\]/, "['id', 'formId', 'formHeaderId', 'formHeaderiD', 'nroPedido', 'pedido']"],
+  ['M89 un id en texto no se convierte (idCreado)',    /const v = j\[k\];\n      if \(typeof v === 'number' && Number\.isFinite\(v\)\) return v;\n      if \(typeof v === 'string' && \/\^\\d\+\$\/\.test\(v\.trim\(\)\)\) return Number\(v\.trim\(\)\);/, "const v = j[k];\n      if (typeof v === 'number' && Number.isFinite(v)) return v;"],
+  ['M98 un id en texto no se convierte (documento)',   /const v = doc\[k\];\n    if \(typeof v === 'number' && Number\.isFinite\(v\)\) return v;\n    if \(typeof v === 'string' && \/\^\\d\+\$\/\.test\(v\.trim\(\)\)\) return Number\(v\.trim\(\)\);/, "const v = doc[k];\n    if (typeof v === 'number' && Number.isFinite(v)) return v;"],
+  ['M90 inventa un id cuando no lo hay',               /return null;\n\}\n\n\/\* ---- maestros/, 'return 0;\n}\n\n/* ---- maestros'],
+  ['M85 el respaldo acepta cualquier tipo',            /if \(!campoNombre\) campoNombre = campos\.find\(k => k !== campoId && esTexto\(k\)\)/, 'if (!campoNombre) campoNombre = campos.find(k => k !== campoId)']
 ];
 
 function mutar() {

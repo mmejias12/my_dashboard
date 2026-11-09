@@ -52,6 +52,12 @@ const CLIENT_ID  = 'apiportalredtec';
 
 const VARS = ['REDLINK_DEMO_CLIENT_SECRET', 'REDLINK_DEMO_USER', 'REDLINK_DEMO_PASS'];
 
+// Sin plazo, cada error cuesta cinco minutos de espera: ése es el valor por
+// omisión de undici para los encabezados. Treinta segundos alcanzan de sobra
+// para cualquier respuesta sana y convierten un error en algo que se puede
+// repetir diez veces seguidas.
+let PLAZO = 30000;
+
 /* ---------------------------------------------------------------- guardas */
 
 // El host está clavado. Esta función existe para que la guarda sea una cosa
@@ -226,6 +232,24 @@ function conHost(e, url) {
   return nuevo;
 }
 
+// Un timeout de encabezados NO es lo mismo que un host caído: la conexión se
+// aceptó y el servidor se quedó pensando. En una ruta de colección eso suele
+// significar que está tratando de devolver la tabla entera.
+function leerFalloRed(e) {
+  const t = describirError(e);
+  if (/UND_ERR_HEADERS_TIMEOUT|HeadersTimeout|TimeoutError|ABORT_ERR/i.test(t))
+    return 'El servidor aceptó la conexión y no contestó dentro del plazo. En una ruta de colección casi siempre es que intenta devolver la tabla completa: pide un documento puntual con --id, o sube el plazo con --timeout.';
+  if (/ENOTFOUND|EAI_AGAIN/i.test(t))
+    return 'No se resolvió el nombre del host. Es DNS o red, no credenciales.';
+  if (/ECONNREFUSED/i.test(t))
+    return 'El host existe pero rechazó la conexión en ese puerto.';
+  if (/ECONNRESET|EPIPE/i.test(t))
+    return 'La conexión se cortó a mitad de camino.';
+  if (/CERT|SELF_SIGNED|UNABLE_TO_VERIFY|DEPTH_ZERO/i.test(t))
+    return 'Falló la validación del certificado: suele ser un proxy de la empresa interceptando TLS.';
+  return null;
+}
+
 // Keycloak distingue entre "el cliente no me cuadra" y "el usuario no me
 // cuadra", y son dos arreglos completamente distintos. Decir sólo "HTTP 401"
 // manda a revisar la contraseña cuando el problema es el secreto del cliente.
@@ -282,11 +306,23 @@ async function token(fetchFn) {
 async function pedir(ruta, opciones, fetchFn) {
   const url = API_BASE + ruta;
   if (!esDemo(url)) throw new Error('Esta sonda sólo habla con ' + HOST_DEMO + '; se intentó ' + url);
+  const o = Object.assign({}, opciones || {});
+  if (!o.signal && typeof AbortSignal !== 'undefined' && AbortSignal.timeout) o.signal = AbortSignal.timeout(PLAZO);
   let r;
-  try { r = await (fetchFn || fetch)(url, opciones || {}); }
+  try { r = await (fetchFn || fetch)(url, o); }
   catch (e) { throw conHost(e, url); }
   const texto = await r.text().catch(() => '');
   return { status: r.status, texto: texto, headers: r.headers };
+}
+
+/* ---- fechas: Redlink espera MM-dd-yyyy, no ISO --------------------------- */
+const dos = n => String(n).padStart(2, '0');
+function aUS(f) { return dos(f.getUTCMonth() + 1) + '-' + dos(f.getUTCDate()) + '-' + f.getUTCFullYear(); }
+function ventana(dias) {
+  const d = Math.max(1, parseInt(dias, 10) || 7);
+  const hasta = new Date();
+  const desde = new Date(hasta.getTime() - (d - 1) * 86400000);
+  return { desde: aUS(desde), hasta: aUS(hasta) };
 }
 
 /* ------------------------------------------------- pasos                  */
@@ -354,14 +390,19 @@ function imprimirIntento(c, res) {
 /* ------------------------------------------------- principal              */
 
 function leerArgs(argv) {
-  const a = { modo: null, id: null, cantidad: null, si: false };
+  const a = { modo: null, id: null, cantidad: null, si: false, bp: '433', dias: '7', todo: false, plazo: null };
   for (const x of (argv || [])) {
     if (x === '--catalogo') a.modo = 'catalogo';
     else if (x === '--leer') a.modo = 'leer';
+    else if (x === '--verbo') a.modo = 'verbo';
     else if (x === '--crear') a.modo = 'crear';
     else if (x.indexOf('--confirmar=') === 0) { a.modo = 'confirmar'; a.id = x.slice(12); }
     else if (x.indexOf('--id=') === 0) a.id = x.slice(5);
     else if (x.indexOf('--cantidad=') === 0) a.cantidad = x.slice(11);
+    else if (x.indexOf('--bp=') === 0) a.bp = x.slice(5);
+    else if (x.indexOf('--dias=') === 0) a.dias = x.slice(7);
+    else if (x.indexOf('--timeout=') === 0) a.plazo = x.slice(10);
+    else if (x === '--todo') a.todo = true;
     else if (x === '--si') a.si = true;
   }
   if (!a.modo) a.modo = 'catalogo';
@@ -370,6 +411,7 @@ function leerArgs(argv) {
 
 async function principal() {
   const a = leerArgs(process.argv.slice(2));
+  if (a.plazo) { const n = parseInt(a.plazo, 10); if (n > 0) PLAZO = n * 1000; }
   console.log('Sonda de escritura en Redlink · ' + HOST_DEMO + ' (DEMO — nunca productivo)');
 
   if (a.modo === 'catalogo') {
@@ -382,7 +424,56 @@ async function principal() {
   const t = await token();
   const auth = { Authorization: 'Bearer ' + t, Accept: 'application/json' };
 
+  if (a.modo === 'verbo') {
+    // No necesita ningún documento: un cuerpo vacío no puede identificar uno,
+    // así que no puede modificar nada. Lo único que se mira es si la ruta
+    // discute el cuerpo (el verbo existe) o lo rechaza de plano (no existe).
+    if (!a.si) {
+      console.log('\nMandaría PATCH /api/FormHeader con el cuerpo {} y nada más.');
+      console.log('Un cuerpo vacío no identifica ningún documento, así que no puede modificar nada.');
+      console.log('Agrega --si para que lo haga.\n');
+      return 0;
+    }
+    const res = await pedir('/api/FormHeader', {
+      method: 'PATCH',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, auth),
+      body: '{}'
+    });
+    const cl = clasificar(res.status);
+    console.log('\nPATCH /api/FormHeader  {}  ->  HTTP ' + res.status);
+    console.log('  ' + cl.clave + ' · ' + cl.dice);
+    const cuerpo = enmascarar(res.texto || '').trim();
+    if (cuerpo) console.log('  respuesta: ' + cuerpo.slice(0, 400).replace(/\s+/g, ' '));
+    console.log('');
+    if (cl.verbo === true)  console.log('Lectura: el verbo existe. Falta el contrato del cuerpo.\n');
+    if (cl.verbo === false) console.log('Lectura: la ruta no acepta PATCH. La confirmación no pasa por acá.\n');
+    if (cl.verbo === null)  console.log('Lectura: no concluye nada todavía.\n');
+    return 0;
+  }
+
   if (a.modo === 'leer') {
+    if (!a.id && !a.todo) {
+      const v = ventana(a.dias);
+      const ruta = '/api/FormHeader/historico/' + encodeURIComponent(a.bp) +
+                   '?fechainicio=' + v.desde + '&fechafin=' + v.hasta;
+      const r = await pedir(ruta, { method: 'GET', headers: auth });
+      console.log('\nGET ' + ruta + '  ->  HTTP ' + r.status);
+      if (r.status !== 200) { console.log(enmascarar(r.texto).slice(0, 400)); return 2; }
+      let j; try { j = JSON.parse(r.texto); } catch (e) { console.log('La respuesta no es JSON.'); return 2; }
+      const filas = Array.isArray(j) ? j : [j];
+      console.log('Registros en los últimos ' + v.desde + ' a ' + v.hasta + ': ' + filas.length);
+      if (!filas.length) { console.log('DEMO no tiene movimiento en esa ventana. Prueba con --dias mayor o con --bp de otro cliente.\n'); return 2; }
+      const doc = filas[0];
+      console.log('\nCampos del primer registro (' + Object.keys(doc).length + '):');
+      console.log('  ' + Object.keys(doc).join(', '));
+      const est = camposDeEstado(doc);
+      console.log('\nCampos que huelen a estado de confirmación:');
+      if (!est.length) console.log('  ninguno — eso ya es un dato.');
+      for (const e of est) console.log('  ' + e.campo + ' = ' + JSON.stringify(e.valor));
+      console.log('');
+      return 0;
+    }
+    if (a.todo) console.log('\nAviso: --todo pide la colección entera y es justo lo que se cuelga. Usa --timeout si hace falta.');
     const ruta = a.id ? '/api/FormHeader/' + encodeURIComponent(a.id) : '/api/FormHeader';
     const r = await pedir(ruta, { method: 'GET', headers: auth });
     console.log('\nGET ' + ruta + '  ->  HTTP ' + r.status);
@@ -457,12 +548,15 @@ async function principal() {
 // termine solo cuando no queda nada pendiente.
 if (require.main === module) {
   principal().then(c => { process.exitCode = c || 0; }).catch(e => {
-    console.error('\n' + enmascarar(describirError(e)) + '\n');
+    const lectura = leerFalloRed(e);
+    console.error('\n' + enmascarar(describirError(e)));
+    if (lectura) console.error('\n  ' + lectura);
+    console.error('');
     process.exitCode = 2;
   });
 }
 
 module.exports = {
   HOST_DEMO, VARS, esDemo, pintaDeMarcador, faltantes, enmascarar,
-  clasificar, leerErrorToken, describirError, conHost, camposDeEstado, asimetrias, cuerposCandidatos, verbosDe, leerArgs
+  clasificar, leerErrorToken, describirError, conHost, leerFalloRed, aUS, ventana, camposDeEstado, asimetrias, cuerposCandidatos, verbosDe, leerArgs
 };

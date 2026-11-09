@@ -17,6 +17,35 @@ const zlib = require('zlib');
 const ORIGEN = path.join(__dirname, 'medir-citas-walmart.js');
 
 const MUTACIONES = {
+  L01: { que: 'el listado incluye transferencias YA confirmadas',
+         de: "    if (estaConfirmada(op)) { fuera.push({ cita: g.cita, folio: folio, motivo: 'ya confirmada' }); return; }",
+         a: '' },
+  L02: { que: 'el listado toma la primera operacion cuando la cita cae en varias',
+         de: '    if (c.ops.length !== 1) {', a: '    if (c.ops.length < 1) {' },
+  L03: { que: 'el listado manda citas sin match en Redlink',
+         de: "    if (c.estado === 'sin-match') { fuera.push({ cita: g.cita, motivo: 'sin match en Redlink' }); return; }",
+         a: "    if (c.estado === 'sin-match') { return; }" },
+  L04: { que: 'el listado manda cantidades en cero',
+         de: '    if (!(r.aConfirmar > 0)) {', a: '    if (false) {' },
+  L05: { que: 'el folio repetido en dos citas se deja pasar',
+         de: '  lineas.forEach(l => { (porFolio.get(l.folio) > 1 ? repetidas : limpias).push(l); });',
+         a: '  lineas.forEach(l => { limpias.push(l); });' },
+  L06: { que: 'el listado no sale ordenado por folio',
+         de: '  limpias.sort((a, b) => Number(a.folio) - Number(b.folio));', a: '' },
+  L07: { que: 'lo que queda fuera sale sin motivo',
+         de: "      fuera.push({ cita: g.cita, motivo: 'la cita cae en ' + c.ops.length + ' operaciones' });",
+         a: '      fuera.push({ cita: g.cita, motivo: 0 });' },
+  L08: { que: 'el csv pierde el encabezado',
+         de: "  const filas = ['folio;cantRecibida'];", a: '  const filas = [];' },
+  L09: { que: 'el csv separa con coma en vez de punto y coma',
+         de: "  (lineas || []).forEach(l => filas.push(String(l.folio) + ';' + String(l.cantRecibida)));",
+         a: "  (lineas || []).forEach(l => filas.push(String(l.folio) + ',' + String(l.cantRecibida)));" },
+  L10: { que: 'el listado usa lo aceptado por Walmart sin topearlo contra lo despachado',
+         de: '    const r = reglaCantidad(op.cantidadDespachada, g.canje);',
+         a: '    const r = { aConfirmar: g.canje, diferencia: 0, porInformar: 0 };' },
+  L11: { que: 'el listado pierde el detalle para revisar a mano',
+         de: '      porInformar: r.porInformar, cliente: g.cliente || \'\', etapa: op.etapaOperacion || \'\'',
+         a: '      porInformar: 0, cliente: \'\', etapa: \'\'' },
   H01: { que: 'la letra de columna se traduce corrida en uno',
          de: '  return n - 1;', a: '  return n;' },
   H02: { que: 'el serial de Excel se convierte con un dia de diferencia',
@@ -533,6 +562,104 @@ prueba('T32 cuando aceptado y despachado son iguales, el caso se cuenta UNA vez'
                                           etapaOperacion: 'Transferencia Confirmada' });
   igual([c.laRegla, c.loReal, c.calza], [24, 24, true], 'un caso, un veredicto');
 });
+
+/* ── El listado para confirmar (folio + cantRecibida) ───────────────────── */
+
+const OPS_LST = [
+  { nroCita: '42674991', nroPedido: 4141181, cantidadDespachada: 15, cantidadConfirmada: 0,
+    etapaOperacion: 'Pendiente de Confirmacion', observacion: '', bodegaDestinoStr: 'ZWM01' },
+  { nroCita: '42674992', nroPedido: 4141182, cantidadDespachada: 20, cantidadConfirmada: 20,
+    etapaOperacion: 'Transferencia Confirmada', observacion: '', bodegaDestinoStr: 'ZWM01' },
+  { nroCita: '42674993', nroPedido: 4141183, cantidadDespachada: 10, cantidadConfirmada: 0,
+    etapaOperacion: 'Pendiente de Confirmacion', observacion: '', bodegaDestinoStr: 'ZWM01' }
+];
+const grupo = (cita, canje, extra) => Object.assign({ cita: cita, canje: canje, filas: 1, total: canje,
+  malos: 0, cliente: 'CLIENTE', rut: '1-9', cd: 6009, fecha: '2026-11-05', recepciones: [] }, extra || {});
+
+prueba('T33 el listado trae folio y cantRecibida, con la regla aplicada', (M) => {
+  const idx = M.indexar(OPS_LST);
+  const r = M.listadoParaConfirmar([grupo('42674991', 12)], idx);
+  igual(r.lineas.length, 1, 'tiene que salir una linea');
+  igual(r.lineas[0].folio, 4141181, 'el folio es el nroPedido de la operacion');
+  igual(r.lineas[0].cantRecibida, 12, 'Walmart acepto menos: se confirma lo aceptado');
+});
+
+prueba('T34 si Walmart acepto MAS de lo despachado se confirma lo despachado', (M) => {
+  const idx = M.indexar(OPS_LST);
+  const r = M.listadoParaConfirmar([grupo('42674991', 99)], idx);
+  igual(r.lineas[0].cantRecibida, 15, 'no se puede confirmar mas de lo que salio');
+  igual(r.lineas[0].porInformar, 0, 'una diferencia positiva no deja nada por informar');
+});
+
+prueba('T35 una transferencia YA confirmada no entra al listado', (M) => {
+  const idx = M.indexar(OPS_LST);
+  const r = M.listadoParaConfirmar([grupo('42674992', 20)], idx);
+  igual(r.lineas.length, 0, 'confirmarla de nuevo seria duplicar el ajuste en SAP');
+  cierto(/ya confirmada/.test(r.fuera[0].motivo), 'y tiene que decir por que: ' + JSON.stringify(r.fuera));
+});
+
+prueba('T36 nada desaparece en silencio: lo que no entra sale con motivo', (M) => {
+  const idx = M.indexar(OPS_LST);
+  const r = M.listadoParaConfirmar([grupo('42674991', 12), grupo('42674992', 20), grupo('99999999', 5)], idx);
+  igual(r.lineas.length + r.fuera.length, 3, 'entraron tres citas, tienen que salir tres');
+  cierto(r.fuera.every(f => f.motivo && f.motivo.length > 4), 'todo motivo tiene que estar escrito');
+});
+
+prueba('T37 una cita sin match en Redlink no se inventa', (M) => {
+  const idx = M.indexar(OPS_LST);
+  const r = M.listadoParaConfirmar([grupo('99999999', 5)], idx);
+  igual(r.lineas.length, 0, '');
+  cierto(/sin match/.test(r.fuera[0].motivo), r.fuera[0].motivo);
+});
+
+prueba('T38 una cita que cae en varias operaciones queda fuera, no se elige una', (M) => {
+  const ops = OPS_LST.concat([{ nroCita: '42674991', nroPedido: 4141999, cantidadDespachada: 7,
+    cantidadConfirmada: 0, etapaOperacion: 'Pendiente de Confirmacion', observacion: '' }]);
+  const r = M.listadoParaConfirmar([grupo('42674991', 5)], M.indexar(ops));
+  igual(r.lineas.length, 0, 'elegir una al azar escribiria en la transferencia equivocada');
+  cierto(/2 operaciones/.test(r.fuera[0].motivo), r.fuera[0].motivo);
+});
+
+prueba('T39 dos citas que caen en el MISMO folio se sacan las dos', (M) => {
+  const ops = [{ nroCita: '42674991-42674993', nroPedido: 4141181, cantidadDespachada: 30,
+    cantidadConfirmada: 0, etapaOperacion: 'Pendiente de Confirmacion', observacion: '' }];
+  const r = M.listadoParaConfirmar([grupo('42674991', 10), grupo('42674993', 20)], M.indexar(ops));
+  igual(r.lineas.length, 0, 'pegadas en el Excel confirmarian dos veces el mismo folio');
+  igual(r.fuera.length, 2, 'y las dos tienen que quedar nombradas');
+  cierto(/mismo folio/.test(r.fuera[0].motivo), r.fuera[0].motivo);
+});
+
+prueba('T40 una cantidad a confirmar en cero no se manda', (M) => {
+  const idx = M.indexar(OPS_LST);
+  const r = M.listadoParaConfirmar([grupo('42674991', 0)], idx);
+  igual(r.lineas.length, 0, 'confirmar cero no es confirmar');
+  cierto(/cero/.test(r.fuera[0].motivo), r.fuera[0].motivo);
+});
+
+prueba('T41 el listado sale ordenado por folio', (M) => {
+  const idx = M.indexar(OPS_LST);
+  const r = M.listadoParaConfirmar([grupo('42674993', 10), grupo('42674991', 12)], idx);
+  igual(r.lineas.map(l => l.folio), [4141181, 4141183], 'pegado en un Excel, el orden importa para revisarlo');
+});
+
+prueba('T42 el csv lleva encabezado, punto y coma y fin de linea de Windows', (M) => {
+  const csv = M.csvDelListado([{ folio: 4141181, cantRecibida: 12 }, { folio: 4141183, cantRecibida: 10 }]);
+  igual(csv, 'folio;cantRecibida\r\n4141181;12\r\n4141183;10\r\n',
+    'Excel en Chile abre el punto y coma sin preguntar');
+});
+
+prueba('T43 un listado vacio igual escribe el encabezado', (M) => {
+  igual(M.csvDelListado([]), 'folio;cantRecibida\r\n', 'un archivo sin encabezado no se puede pegar');
+  igual(M.csvDelListado(null), 'folio;cantRecibida\r\n', '');
+});
+
+prueba('T44 el listado conserva lo que hace falta para revisarlo a mano', (M) => {
+  const r = M.listadoParaConfirmar([grupo('42674991', 12)], M.indexar(OPS_LST));
+  const l = r.lineas[0];
+  igual([l.cita, l.despachada, l.aceptadaWM, l.porInformar], ['42674991', 15, 12, 3],
+    'sin esto, una diferencia no se puede explicar');
+});
+
 
 /* ── Corredor ─────────────────────────────────────────────────────────────── */
 function cargar(mutar) {

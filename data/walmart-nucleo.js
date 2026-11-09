@@ -242,11 +242,24 @@ function reglaCantidad(despachada, recibidaWM) {
 // es la única que la tabla FormMetapa marca como confirmable.
 const RE_CONFIRMABLE = /pendiente\s+de\s+confirmaci/i;
 const RE_ANULADA = /anulad/i;
-const RE_TRANSFERENCIA = /transferenc/i;
+// Los servicios que van a Walmart por el circuito de transferencia, por NOMBRE
+// exacto y no por un regex que adivine. Medido en vivo el 9-nov sobre 14.430
+// operaciones: "Transferencias" (servicioId 28, 731 a bodegas ZWM*) y
+// "Trans Diferenciada" (servicioId 70, 1.061 a ZWM*) usan la MISMA máquina de
+// etapas —43 Pendiente Respaldo, 44 Pendiente de Confirmación, 46 Confirmada,
+// 47 Anulada, 49 Reconfirmada— y "Trans Diferenciada" ya acumulaba 698
+// confirmadas por 12.519 pallets. Un regex /transferenc/i dejaba fuera a la
+// más grande de las dos.
+// Lista explícita a propósito: cuando aparezca un servicio nuevo tiene que
+// salir como excepción CON SU NOMBRE, no colarse ni desaparecer en silencio.
+const SERVICIOS_TRANSFERENCIA = ['transferencia', 'transferencias', 'trans diferenciada'];
 const etapaDe = (op) => String((op && op.etapaOperacion) || '');
 const etapaConfirmable = (op) => RE_CONFIRMABLE.test(etapaDe(op));
 const esAnulada = (op) => RE_ANULADA.test(etapaDe(op));
-const esTransferencia = (op) => !norm(op && op.operacion) || RE_TRANSFERENCIA.test(String(op.operacion));
+const esTransferencia = (op) => {
+  const n = norm(op && op.operacion).toLowerCase();
+  return !n || SERVICIOS_TRANSFERENCIA.indexOf(n) >= 0;
+};
 
 // Dos señales independientes, porque con una sola ya nos equivocamos: una
 // operación en etapa "Pendiente" puede traer fecha de confirmación con la
@@ -283,6 +296,7 @@ function cruzar(filasWM, ops, opciones) {
     const fila = Object.assign(base, {
       folio: op.nroPedido, etapa: etapaDe(op), operacion: op.operacion || '',
       docId: op.formHeaderiD, clienteRedlink: op.clienteOrigenStr || '',
+      servicio: norm(op.operacion),
       despachada: Number(op.cantidadDespachada) || 0,
       confirmada: Number(op.cantidadConfirmada) || 0,
       bodega: op.bodegaDestinoStr || '', via: c.estado
@@ -370,6 +384,7 @@ function ventanaDeReporte(filasWM, margen) {
 
 const API = { entradasZip, leerXlsx, leerSharedStrings, leerHoja, columnaANumero, serialAFecha,
               COLUMNAS, filasWalmart, citasDeTexto, esCita, agruparPorCita, indexar, clasificar,
+              SERVICIOS_TRANSFERENCIA,
               reglaCantidad, etapaConfirmable, esAnulada, esTransferencia, estaConfirmada,
               cruzar, FAMILIAS, resumenMotivos, csvDeConfirmar, tsvDeConfirmar, ventanaDeReporte };
 

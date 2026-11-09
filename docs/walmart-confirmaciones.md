@@ -789,3 +789,52 @@ como firma en `usuarioIngresoId`.
 columna `appt_nbr` un número corto y sin cliente (38046, 38044, 38090): son
 filas de resumen, no citas. Salen con motivo propio y no como "sin coincidencia
 en Redlink", que mandaría a alguien a buscar en Redlink algo que nunca existió.
+
+## Resuelto: la etapa 43 SÍ se confirma por el camino masivo (9-nov-2026)
+
+Durante días se trabajó suponiendo lo contrario. La tabla `FormMetapa` marca
+`Confirmar=true` en una sola etapa por formulario —la **44**, "Pendiente de
+Confirmación"— y la **43**, "Pendiente Adjuntar Respaldo", parecía un paso del
+negocio que faltaba. El filtro quedó deliberadamente **opcional** porque la
+regla estaba deducida de la tabla y no vista funcionar.
+
+**Marcelo lo cerró:** en las confirmaciones **masivas** de Walmart no
+corresponde adjuntar respaldo. Ese paso existe para que la gente de logística
+no tenga que ir documento por documento; por el camino masivo se confirma de
+una. O sea la 43 es confirmable en este circuito.
+
+Lo que cambió, en los tres lugares donde vivía la regla:
+
+| archivo | antes | ahora |
+|---|---|---|
+| `data/walmart-nucleo.js` | sólo 44 | `ETAPAS_CONFIRMABLES` = 43 y 44 |
+| `scripts/verificar-listado-walmart.js` | sólo 44 | ídem; `--exigir-etapa` sigue existiendo y ahora sólo descarta 46/47/49 |
+| `scripts/confirmar-redlink.js` | **rechazaba** la 43 | la acepta |
+
+El tercero era el que importaba: es el que escribe. Con la regla vieja, la
+primera confirmación real habría fallado en **55 de los 60 folios del día**.
+
+La lista es explícita y corta a propósito, y las pruebas lo fijan: **empezar con
+"Pendiente" no alcanza**. Las dos confirmables empiezan con esa palabra, así que
+un `/pendiente/i` dejaría pasar cualquier etapa futura que arranque igual — que
+es exactamente el error que ya nos mordió una vez.
+
+En la pantalla se sacó el interruptor "dejar afuera lo que espera respaldo": un
+control que ya no hace nada confunde más de lo que ayuda. En su lugar quedó la
+regla escrita, con fecha y con quién la respondió.
+
+## El costo del módulo muerto, medido (9-nov-2026)
+
+Porcentaje de transferencias de Walmart que quedan en etapa 43, por semana de
+despacho, sobre 5.931 operaciones a bodegas `ZWM*` de los dos servicios:
+
+| semana del | en espera |
+|---|---|
+| 17-ago a 12-oct | 2 – 8 % |
+| 19-oct | 18 % |
+| 26-oct | 12 % |
+| **2-nov** | **59 %** — 315 de 535 |
+
+El residuo normal era 2–8 %. El atraso arranca a mediados de octubre y se rompe
+la primera semana de noviembre. No es una opinión sobre lo que pasa cuando el
+módulo deja de correr: es el dato.

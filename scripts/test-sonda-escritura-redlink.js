@@ -184,6 +184,57 @@ function correr(S) {
     igual(e.cause === raiz, true, 'no puede perder la causa');
   });
 
+  /* ---- lectura de un fallo de red --------------------------------------- */
+
+  prueba('T60 un timeout de encabezados NO se confunde con host caído', () => {
+    const e = new Error('fetch failed'); e.cause = Object.assign(new Error('Headers Timeout Error'), { code: 'UND_ERR_HEADERS_TIMEOUT' });
+    const l = S.leerFalloRed(e);
+    cierto(/no contestó dentro del plazo/.test(l), 'tiene que decir que el servidor no contestó');
+    falso(/DNS/.test(l), 'no es DNS');
+  });
+  prueba('T61 y propone la salida concreta', () => {
+    const e = Object.assign(new Error('x'), { code: 'UND_ERR_HEADERS_TIMEOUT' });
+    cierto(/--id/.test(S.leerFalloRed(e)), 'tiene que proponer pedir un documento puntual');
+  });
+  prueba('T62 ENOTFOUND se lee como DNS y descarta credenciales', () => {
+    const e = Object.assign(new Error('getaddrinfo ENOTFOUND x'), { code: 'ENOTFOUND' });
+    cierto(/DNS/.test(S.leerFalloRed(e)));
+    cierto(/no credenciales/.test(S.leerFalloRed(e)));
+  });
+  prueba('T63 un certificado se lee como proxy que intercepta', () => {
+    const e = Object.assign(new Error('unable to verify the first certificate'), { code: 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' });
+    cierto(/proxy/.test(S.leerFalloRed(e)));
+  });
+  prueba('T64 ECONNREFUSED y ECONNRESET se leen, y distinto', () => {
+    const a = S.leerFalloRed(Object.assign(new Error('x'), { code: 'ECONNREFUSED' }));
+    const b = S.leerFalloRed(Object.assign(new Error('x'), { code: 'ECONNRESET' }));
+    cierto(a, 'una conexión rechazada tiene que tener lectura');
+    cierto(b, 'una conexión cortada también');
+    cierto(a !== b, 'rechazar la conexión y cortarla a mitad no son lo mismo');
+  });
+  prueba('T65 un error que no es de red no inventa lectura', () => {
+    igual(S.leerFalloRed(new Error('cualquier cosa')), null);
+  });
+
+  /* ---- fechas de Redlink ------------------------------------------------- */
+
+  prueba('T66 la fecha sale en MM-dd-yyyy, no en ISO', () => {
+    igual(S.aUS(new Date(Date.UTC(2026, 10, 9))), '11-09-2026');
+  });
+  prueba('T67 rellena con cero el mes y el día de un dígito', () => {
+    igual(S.aUS(new Date(Date.UTC(2026, 0, 5))), '01-05-2026');
+  });
+  prueba('T68 la ventana cubre los días pedidos, extremos incluidos', () => {
+    const v = S.ventana(1);
+    igual(v.desde, v.hasta, 'un día es un solo día');
+  });
+  prueba('T69 una ventana inválida cae a la de por omisión, no a cero ni al revés', () => {
+    const porOmision = S.ventana(7);
+    igual(S.ventana('abc'), porOmision, 'texto basura:');
+    igual(S.ventana(0), porOmision, 'cero cae a la de por omisión:');
+    igual(S.ventana(-5), S.ventana(1), 'negativo se recorta a un día, nunca a una ventana al revés:');
+  });
+
   /* ---- lectura del error del token -------------------------------------- */
 
   prueba('T47 unauthorized_client apunta al cliente, no al usuario', () => {
@@ -330,6 +381,24 @@ function correr(S) {
     igual(a.id, '4125549');
     igual(a.cantidad, '30');
   });
+  prueba('T70 --verbo se reconoce como modo propio', () => {
+    igual(S.leerArgs(['--verbo']).modo, 'verbo');
+  });
+  prueba('T71 --timeout, --bp, --dias y --todo se leen', () => {
+    const a = S.leerArgs(['--leer', '--timeout=90', '--bp=499', '--dias=30', '--todo']);
+    igual(a.plazo, '90');
+    igual(a.bp, '499');
+    igual(a.dias, '30');
+    igual(a.todo, true);
+  });
+  prueba('T72 sin pedirlos, bp y dias tienen valor por omisión y --todo es falso', () => {
+    const a = S.leerArgs(['--leer']);
+    igual(a.bp, '433');
+    igual(a.dias, '7');
+    igual(a.todo, false);
+    igual(a.plazo, null);
+  });
+
   prueba('T46 sin --si no se manda nada', () => {
     igual(S.leerArgs(['--confirmar=1']).si, false);
     igual(S.leerArgs(['--confirmar=1', '--si']).si, true);
@@ -383,7 +452,18 @@ const MUTACIONES = [
   ['M40 el error se come el code',                     /const cod = \(x && x\.code\) \? ' \[' \+ x\.code \+ '\]' : '';/, "const cod = '';"],
   ['M41 la cadena circular no se corta',               /n\+\+ < 6/, 'n < 6'],
   ['M42 conHost pierde la causa',                      /nuevo\.cause = e;/, ''],
-  ['M43 conHost no nombra el host',                    /'No se pudo hablar con ' \+ url/, "'No se pudo hablar'"]
+  ['M43 conHost no nombra el host',                    /'No se pudo hablar con ' \+ url/, "'No se pudo hablar'"],
+  ['M44 el timeout se lee como host caído',            /UND_ERR_HEADERS_TIMEOUT\|HeadersTimeout\|TimeoutError\|ABORT_ERR/, 'NADA_DE_ESTO'],
+  ['M45 el timeout deja de proponer --id',             /pide un documento puntual con --id/, 'reintenta'],
+  ['M46 DNS y certificado se confunden',               /if \(\/ENOTFOUND\|EAI_AGAIN\/i\.test\(t\)\)/, 'if (false)'],
+  ['M47 rechazo y corte de conexión se funden',        /if \(\/ECONNREFUSED\/i\.test\(t\)\)\n    return '[^']*';/, ''],
+  ['M48 inventa lectura para cualquier error',         /return null;\n\}\n\n\/\/ Keycloak/, "return 'algo de red';\n}\n\n// Keycloak"],
+  ['M49 la fecha sale en ISO',                         /return dos\(f\.getUTCMonth\(\) \+ 1\) \+ '-' \+ dos\(f\.getUTCDate\(\)\) \+ '-' \+ f\.getUTCFullYear\(\);/, "return f.getUTCFullYear() + '-' + dos(f.getUTCMonth() + 1) + '-' + dos(f.getUTCDate());"],
+  ['M50 la fecha no rellena con cero',                 /const dos = n => String\(n\)\.padStart\(2, '0'\);/, 'const dos = n => String(n);'],
+  ['M51 la ventana se corre un día',                   /\(d - 1\) \* 86400000/, 'd * 86400000'],
+  ['M52 una ventana inválida queda en cero días',      /Math\.max\(1, parseInt\(dias, 10\) \|\| 7\)/, 'parseInt(dias, 10) || 0'],
+  ['M53 --timeout no se lee',                          /else if \(x\.indexOf\('--timeout='\) === 0\) a\.plazo = x\.slice\(10\);/, ''],
+  ['M54 --verbo no se reconoce',                       /else if \(x === '--verbo'\) a\.modo = 'verbo';/, '']
 ];
 
 function mutar() {

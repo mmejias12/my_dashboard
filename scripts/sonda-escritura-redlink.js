@@ -91,8 +91,15 @@ function faltantes(env) {
 // salir, no al armar, para que un camino nuevo no se escape por olvido.
 function enmascarar(texto) {
   return String(texto == null ? '' : texto)
+    // El encabezado completo primero: si corriera después del Bearer dejaría
+    // un "*** ***" que no dice nada.
+    .replace(/("?authorization"?"?\s*[:=]\s*"?)[^",\n}]+/gi, '$1***')
     .replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]{8,}/gi, '$1***')
-    .replace(/("?(?:access_token|refresh_token|id_token|client_secret|password)"?\s*[:=]\s*"?)[^"&,\s}]+/gi, '$1***');
+    // Cualquier clave que TERMINE en token/secret/password/api-key, no una
+    // lista cerrada: un "token" pelado se escapaba de la lista anterior, y el
+    // que se escapa es justo el que no estabas mirando. "key" a secas NO entra:
+    // cliente_key y bodegaKey son datos legítimos que hacen falta para leer.
+    .replace(/("?[A-Za-z0-9_.-]*(?:token|secret|password|passwd|api[-_]?key)"?\s*[:=]\s*"?)[^"&,\s}]+/gi, '$1***');
 }
 
 /* ------------------------------------------------- lectura de respuestas  */
@@ -135,7 +142,11 @@ function clasificar(status, texto) {
   return { clave: 'otro', verbo: null, dice: 'respuesta no prevista' };
 }
 
-const RE_ESTADO = /(confirm|estado|etapa|autoriz|aprob|cantidad|fecha)/i;
+// "usuario" entra a la lista y no es un detalle: la firma del documento es
+// usuarioIngresoId, y sin esta palabra el único campo de usuario que salía era
+// usuarioConfirmaId — que está siempre en null. Mirar sólo lo que el filtro
+// deja ver fue parte de por qué se creyó durante días que la firma era ese.
+const RE_ESTADO = /(confirm|estado|etapa|autoriz|aprob|cantidad|fecha|usuario)/i;
 
 // Qué campos de un documento huelen a "estado de confirmación". No adivina
 // cuál es: los nombra para que la decisión la tome alguien mirando.
@@ -243,6 +254,14 @@ function cuerpoEco(doc, opciones) {
   const cuerpo = {};
   if (!doc || typeof doc !== 'object') return cuerpo;
   for (const k of Object.keys(doc)) if (esEscalar(doc[k])) cuerpo[k] = doc[k];
+  // MEDIDO el 9-nov en DEMO: al apretar un boton, el portal SOBRESCRIBE
+  // usuarioIngresoId con el usuario que ejecuta la accion (paso de 13/malfaro
+  // a 6/mmesias). Esa es la traza que muestra la pantalla de transacciones —
+  // NO usuarioConfirmaId, que quedo en null incluso despues de confirmar a
+  // mano. Devolver el usuario que ya tenia el documento dejaria la firma a
+  // nombre de quien no hizo nada.
+  const u = parseInt(o.usuario, 10);
+  if (Number.isFinite(u) && u > 0) cuerpo.usuarioIngresoId = u;
   for (const k of Object.keys(doc)) {
     const v = doc[k];
     if (!Array.isArray(v)) continue;
@@ -274,12 +293,12 @@ function fechaDeDespacho(doc) {
   return new Date().toISOString().slice(0, 10) + 'T00:00:00';
 }
 
-function cuerposCandidatos(doc, cantidad) {
+function cuerposCandidatos(doc, cantidad, usuario) {
   const lista = [];
   if (idDeDocumento(doc) == null) return lista;
   const eco = (nombre, o) => lista.push({
     nombre: nombre, avanza: !!o.avanzar, contentType: 'application/json',
-    cuerpo: cuerpoEco(doc, Object.assign({ cantidad: cantidad }, o))
+    cuerpo: cuerpoEco(doc, Object.assign({ cantidad: cantidad, usuario: usuario }, o))
   });
 
   // El orden importa porque se corta en el primer éxito, y hay un candidato
@@ -497,6 +516,39 @@ function hijosDelDocumento(doc) {
   return out;
 }
 
+/* ---- instantáneas: mirar lo que el portal DEJA, no lo que manda ---------- */
+
+// El portal es Blazor Server: los clics viajan por WebSocket y la escritura la
+// ejecuta el servidor por dentro, así que no hay petición que capturar. Pero el
+// EFECTO sí se ve. Guardando el documento antes y después de cada botón, el
+// diff dice exactamente qué tiene que producir nuestra escritura — que es lo
+// que hay que reproducir, no la forma del mensaje.
+function diferencias(antes, despues, prefijo) {
+  prefijo = prefijo || '';
+  const out = [];
+  const esObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
+  const claves = Object.keys(Object.assign({}, antes || {}, despues || {}));
+  for (const k of claves) {
+    const a = antes ? antes[k] : undefined;
+    const b = despues ? despues[k] : undefined;
+    const ruta = prefijo ? prefijo + '.' + k : k;
+    if (Array.isArray(a) || Array.isArray(b)) {
+      const la = Array.isArray(a) ? a : [], lb = Array.isArray(b) ? b : [];
+      if (la.length !== lb.length) out.push({ campo: ruta + '[]', antes: la.length, despues: lb.length });
+      const n = Math.max(la.length, lb.length);
+      for (let i = 0; i < n; i++) {
+        if (esObj(la[i]) || esObj(lb[i])) out.push.apply(out, diferencias(la[i] || {}, lb[i] || {}, ruta + '[' + i + ']'));
+        else if (JSON.stringify(la[i]) !== JSON.stringify(lb[i])) out.push({ campo: ruta + '[' + i + ']', antes: la[i], despues: lb[i] });
+      }
+    } else if (esObj(a) || esObj(b)) {
+      out.push.apply(out, diferencias(a || {}, b || {}, ruta));
+    } else if (JSON.stringify(a) !== JSON.stringify(b)) {
+      out.push({ campo: ruta, antes: a, despues: b });
+    }
+  }
+  return out;
+}
+
 /* ---- lo que el servidor dicta en sus errores ---------------------------- */
 
 // Un 400 con mensajes de validación NO es "no concluye nada": es el contrato
@@ -599,6 +651,11 @@ async function token(fetchFn) {
       grant_type: 'password',
       username: process.env.REDLINK_DEMO_USER,
       password: process.env.REDLINK_DEMO_PASS,
+      // SOLO 'openid'. El portal pide ademas usersiD, bpid, cardname y cargo,
+      // pero esos scopes son del cliente portalredtecapp; el nuestro es
+      // apiportalredtec y Keycloak rechaza el token entero con
+      // invalid_scope si se los pide. Pedir de mas no deja un token mas rico:
+      // deja sin token.
       scope: 'openid'
     })
   });
@@ -711,11 +768,62 @@ function imprimirIntento(c, res) {
   return cl;
 }
 
+// Un argumento que tiene que ser un numero y llega con corchetes es un
+// marcador que alguien pego literal de unas instrucciones. Pasa, pasa seguido,
+// y el error que sale despues ("HTTP 400", "Invalid URL") no dice nada de la
+// causa. Se ataja aca, con el nombre de la bandera a la vista.
+const NUMERICOS = {
+  id: '--id', cantidad: '--cantidad', usuario: '--usuario', bp: '--bp',
+  dias: '--dias', desde: '--desde', hasta: '--hasta', plazo: '--timeout',
+  form: '--form', cliente: '--cliente', servicio: '--servicio',
+  bodegaOrigen: '--bodega-origen', bodegaDestino: '--bodega-destino',
+  destino: '--destino', documento: '--documento', documentoNumero: '--documento-numero'
+};
+function revisarArgs(a) {
+  const problemas = [];
+  for (const k of Object.keys(NUMERICOS)) {
+    const v = a[k];
+    if (v === null || v === undefined || v === '') continue;
+    const t = String(v);
+    if (/[<>]/.test(t)) problemas.push(NUMERICOS[k] + '=' + t + '  <- eso es un marcador, no un valor');
+    else if (!/^-?\d+$/.test(t)) problemas.push(NUMERICOS[k] + '=' + t + '  <- tiene que ser un numero');
+  }
+  return problemas;
+}
+
+// El id numerico del usuario NO se deduce del token del lado del servidor:
+// nuestro POST en DEMO mando usuarioIngresoId 13 y el documento quedo con 13.
+// O sea que para firmar hay que saber el numero. Y esta en el propio token:
+// el portal pide el scope "usersiD" al autenticarse, asi que la credencial
+// trae el id adentro. Se lee del payload del JWT, que es texto en base64url y
+// no requiere ninguna llave para leerse — es informacion publica del token,
+// no el secreto.
+function reclamosDeToken(jwt) {
+  const partes = String(jwt || '').split('.');
+  if (partes.length < 2) return null;
+  try {
+    const txt = Buffer.from(partes[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+    return JSON.parse(txt);
+  } catch (e) { return null; }
+}
+
+// Del token sale mucho mas de lo que hace falta. Se muestran los reclamos que
+// identifican al usuario y nada mas: nada de firmas, nada de tiempos de
+// sesion, nada que sirva para suplantar a nadie.
+const RECLAMOS_UTILES = ['usersiD', 'usersId', 'userssiD', 'preferred_username', 'name', 'bpid', 'bpId', 'cardname', 'cargo', 'email'];
+function identidadDeToken(jwt) {
+  const c = reclamosDeToken(jwt);
+  if (!c) return null;
+  const out = {};
+  RECLAMOS_UTILES.forEach(function (k) { if (c[k] !== undefined) out[k] = c[k]; });
+  return out;
+}
+
 /* ------------------------------------------------- principal              */
 
 function leerArgs(argv) {
   const a = { modo: null, id: null, cantidad: null, si: false, bp: '433', dias: '7', todo: false, plazo: null, desde: null, hasta: null,
-                 form: '1', cliente: null, servicio: null, usuario: null,
+                 archivo: null, form: '1', cliente: null, servicio: null, usuario: null,
                  bodegaOrigen: null, bodegaDestino: null, destino: null,
                  documento: null, documentoNumero: null, cita: null };
   for (const x of (argv || [])) {
@@ -724,6 +832,9 @@ function leerArgs(argv) {
     else if (x === '--verbo') a.modo = 'verbo';
     else if (x === '--buscar') a.modo = 'buscar';
     else if (x === '--maestros') a.modo = 'maestros';
+    else if (x === '--quiensoy') a.modo = 'quiensoy';
+    else if (x.indexOf('--instantanea=') === 0) { a.modo = 'instantanea'; a.archivo = x.slice(14); }
+    else if (x.indexOf('--comparar=') === 0) { a.modo = 'comparar'; a.archivo = x.slice(11); }
     else if (x.indexOf('--form=') === 0) a.form = x.slice(7);
     else if (x.indexOf('--cliente=') === 0) a.cliente = x.slice(10);
     else if (x.indexOf('--servicio=') === 0) a.servicio = x.slice(11);
@@ -752,6 +863,14 @@ function leerArgs(argv) {
 
 async function principal() {
   const a = leerArgs(process.argv.slice(2));
+  const malos = revisarArgs(a);
+  if (malos.length) {
+    console.log('\nHay argumentos que no son valores:');
+    malos.forEach(m => console.log('  ' + m));
+    console.log('\nSi los copiaste de unas instrucciones, reemplaza los corchetes por el');
+    console.log('numero de verdad. Nada se ejecuto.\n');
+    return 2;
+  }
   if (a.plazo) { const n = parseInt(a.plazo, 10); if (n > 0) PLAZO = n * 1000; }
   console.log('Sonda de escritura en Redlink · ' + HOST_DEMO + ' (DEMO — nunca productivo)');
 
@@ -759,6 +878,23 @@ async function principal() {
     imprimirCatalogo(await pasoCatalogo());
     console.log('\nUn 405 dice que la ruta no acepta ese verbo. Que lo acepte no dice todavía');
     console.log('qué cuerpo espera: eso lo averigua --confirmar.\n');
+    return 0;
+  }
+
+  // Comparar dos instantáneas no toca la red ni necesita credenciales.
+  if (a.modo === 'comparar') {
+    const partes = String(a.archivo || '').split(',');
+    if (partes.length !== 2) { console.log('\nUsa --comparar=antes.json,despues.json\n'); return 2; }
+    const leer = (f) => JSON.parse(require('fs').readFileSync(f.trim(), 'utf8'));
+    let A, B;
+    try { A = leer(partes[0]); } catch (e) { console.log('\nNo se pudo leer ' + partes[0] + ': ' + e.message + '\n'); return 2; }
+    try { B = leer(partes[1]); } catch (e) { console.log('\nNo se pudo leer ' + partes[1] + ': ' + e.message + '\n'); return 2; }
+    const d = diferencias(A, B);
+    console.log('\n' + partes[0].trim() + '  ->  ' + partes[1].trim());
+    if (!d.length) { console.log('  Sin diferencias: el documento quedó igual.\n'); return 0; }
+    console.log('  ' + d.length + ' campos cambiaron:\n');
+    d.forEach(x => console.log('    ' + x.campo + ': ' + JSON.stringify(x.antes) + '  ->  ' + JSON.stringify(x.despues)));
+    console.log('');
     return 0;
   }
 
@@ -789,6 +925,48 @@ async function principal() {
     if (cl.verbo === true)  console.log('Lectura: el verbo existe. Falta el contrato del cuerpo.\n');
     if (cl.verbo === false) console.log('Lectura: la ruta no acepta PATCH. La confirmación no pasa por acá.\n');
     if (cl.verbo === null)  console.log('Lectura: no concluye nada todavía.\n');
+    return 0;
+  }
+
+  if (a.modo === 'quiensoy') {
+    const ident = identidadDeToken(t);
+    console.log('\nQuien firma con estas credenciales:');
+    if (!ident || !Object.keys(ident).length) {
+      console.log('  El token no trae ningun reclamo de identidad legible.');
+      return 2;
+    }
+    Object.keys(ident).forEach(k => console.log('  ' + k.padEnd(20) + ident[k]));
+    const id = ident.usersiD || ident.usersId || ident.userssiD;
+    console.log('');
+    if (id != null) {
+      console.log('  Ese es el numero que va en --usuario y en usuarioIngresoId.');
+    } else {
+      console.log('  El token NO trae el id numerico del usuario, y no se puede pedir:');
+      console.log('  el scope "usersiD" pertenece al cliente del portal (portalredtecapp),');
+      console.log('  no al de la API (apiportalredtec). Pedirlo devuelve invalid_scope y');
+      console.log('  deja sin token.');
+      console.log('');
+      console.log('  Para firmar hace falta ese numero. Dos caminos:');
+      console.log('    1. Pedirselo a quien administra los usuarios del portal.');
+      console.log('    2. Leer en PRODUCTIVO una transferencia que haya tocado el usuario de');
+      console.log('       sistema: su usuarioIngresoId es el numero, y usuarioIngresoNombre');
+      console.log('       confirma de quien es.');
+    }
+    console.log('');
+    return 0;
+  }
+
+  if (a.modo === 'instantanea') {
+    if (!a.id) { console.log('\nFalta --id=<documento>\n'); return 2; }
+    const r = await pedir('/api/FormHeader/' + encodeURIComponent(a.id), { method: 'GET', headers: auth });
+    if (r.status !== 200) { console.log('\nHTTP ' + r.status + '\n'); return 2; }
+    require('fs').writeFileSync(a.archivo, r.texto, 'utf8');
+    let j = null; try { j = JSON.parse(r.texto); } catch (e) {}
+    const etapa = (j && j.formMetapa && j.formMetapa.nombre) || '(no se pudo leer)';
+    const det = (j && j.formDdetalles && j.formDdetalles[0]) || {};
+    console.log('\nInstantánea -> ' + a.archivo);
+    console.log('  etapa: ' + etapa + '   cantidad ' + det.cantidad +
+                ' · despachado ' + det.despachado + ' · recepcion ' + det.recepcion + '\n');
     return 0;
   }
 
@@ -972,7 +1150,7 @@ async function principal() {
     const r = await pedir('/api/FormHeader/' + encodeURIComponent(a.id), { method: 'GET', headers: auth });
     if (r.status !== 200) { console.log('No se pudo leer el documento ' + a.id + ': HTTP ' + r.status); return 2; }
     let doc; try { doc = JSON.parse(r.texto); } catch (e) { console.log('El documento no vino como JSON.'); return 2; }
-    const lista = cuerposCandidatos(doc, a.cantidad);
+    const lista = cuerposCandidatos(doc, a.cantidad, a.usuario);
     console.log('\nDocumento ' + a.id + ' · ' + lista.length + ' cuerpos candidatos\n');
     if (!a.si) {
       for (const c of lista) {
@@ -1031,6 +1209,6 @@ if (require.main === module) {
 
 module.exports = {
   HOST_DEMO, VARS, esDemo, pintaDeMarcador, faltantes, enmascarar,
-  clasificar, hablaDelRecurso, rangoBusqueda, TOPE_BUSQUEDA,
+  clasificar, reclamosDeToken, identidadDeToken, RECLAMOS_UTILES, revisarArgs, NUMERICOS, diferencias, hablaDelRecurso, rangoBusqueda, TOPE_BUSQUEDA,
   idCreado, idDeDocumento, lineaParaEnviar, cantidadDeLinea, cuerpoEco, fechaDeDespacho, tieneIdentidad, pistaDeContrato, juntarPistas, esFallaInterna, lecturaDeIntentos, hijosDelDocumento, detectarCampos, armarPayload, BP_REDTEC, TOPE_CANTIDAD, OBS_PRUEBA, leerErrorToken, describirError, conHost, leerFalloRed, aUS, ventana, camposDeEstado, asimetrias, cuerposCandidatos, verbosDe, leerArgs
 };

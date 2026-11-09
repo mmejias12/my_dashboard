@@ -198,6 +198,34 @@ function cuerposCandidatos(doc, cantidad) {
   return lista;
 }
 
+// undici tira un TypeError seco, «fetch failed», y mete el motivo de verdad en
+// e.cause — a veces dos niveles abajo. Imprimir sólo el mensaje de arriba deja
+// al que mira sin saber si fue DNS, certificado, proxy o timeout. Es el mismo
+// defecto que tiene Emisiones_Detalle.html cuando se queda con r.status y bota
+// el detail del servidor.
+function describirError(e) {
+  const partes = [];
+  let x = e, n = 0;
+  while (x && n++ < 6) {
+    const msg = (x && x.message) ? x.message : String(x);
+    const cod = (x && x.code) ? ' [' + x.code + ']' : '';
+    partes.push(msg + cod);
+    x = x && x.cause;
+  }
+  return partes.join('\n  causa: ');
+}
+
+// Un fallo de red sin decir contra qué host se intentó obliga a adivinar. Esto
+// pega el host al error en el momento en que se pierde, no después.
+function conHost(e, url) {
+  // El mensaje sólo nombra el host: la cadena la recorre describirError una
+  // sola vez, al imprimir. Si la describiera acá además, cada causa saldría
+  // dos veces.
+  const nuevo = new Error('No se pudo hablar con ' + url);
+  nuevo.cause = e;
+  return nuevo;
+}
+
 // Keycloak distingue entre "el cliente no me cuadra" y "el usuario no me
 // cuadra", y son dos arreglos completamente distintos. Decir sólo "HTTP 401"
 // manda a revisar la contraseña cuando el problema es el secreto del cliente.
@@ -224,7 +252,9 @@ async function token(fetchFn) {
     throw new Error('Faltan variables de entorno: ' + falta.join(', ') +
       '. Cárgalas en tu sesión; la sonda nunca las imprime ni las pide por pantalla.');
   }
-  const r = await (fetchFn || fetch)(TOKEN_URL, {
+  let r;
+  try {
+  r = await (fetchFn || fetch)(TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
     body: new URLSearchParams({
@@ -236,6 +266,7 @@ async function token(fetchFn) {
       scope: 'openid'
     })
   });
+  } catch (e) { throw conHost(e, TOKEN_URL); }
   if (!r.ok) {
     const t = await r.text().catch(() => '');
     const e = leerErrorToken(r.status, t);
@@ -251,7 +282,9 @@ async function token(fetchFn) {
 async function pedir(ruta, opciones, fetchFn) {
   const url = API_BASE + ruta;
   if (!esDemo(url)) throw new Error('Esta sonda sólo habla con ' + HOST_DEMO + '; se intentó ' + url);
-  const r = await (fetchFn || fetch)(url, opciones || {});
+  let r;
+  try { r = await (fetchFn || fetch)(url, opciones || {}); }
+  catch (e) { throw conHost(e, url); }
   const texto = await r.text().catch(() => '');
   return { status: r.status, texto: texto, headers: r.headers };
 }
@@ -424,12 +457,12 @@ async function principal() {
 // termine solo cuando no queda nada pendiente.
 if (require.main === module) {
   principal().then(c => { process.exitCode = c || 0; }).catch(e => {
-    console.error('\n' + enmascarar(e && e.message ? e.message : String(e)) + '\n');
+    console.error('\n' + enmascarar(describirError(e)) + '\n');
     process.exitCode = 2;
   });
 }
 
 module.exports = {
   HOST_DEMO, VARS, esDemo, pintaDeMarcador, faltantes, enmascarar,
-  clasificar, leerErrorToken, camposDeEstado, asimetrias, cuerposCandidatos, verbosDe, leerArgs
+  clasificar, leerErrorToken, describirError, conHost, camposDeEstado, asimetrias, cuerposCandidatos, verbosDe, leerArgs
 };

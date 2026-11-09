@@ -83,8 +83,9 @@ button:hover:not(:disabled){background:#27303f;border-color:rgba(255,255,255,.18
 button:disabled{opacity:.45;cursor:default}
 button.pri{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
 button.pri:hover:not(:disabled){background:#f03529;border-color:#f03529}
-.chk{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--text-2);cursor:pointer;padding-bottom:8px}
-.chk input{accent-color:var(--series-1);width:14px;height:14px;cursor:pointer}
+.nota-regla{margin-top:12px;font-size:11.5px;color:var(--text-2);line-height:1.5;
+  border-left:2px solid var(--line);padding-left:11px}
+.nota-regla span{display:block;color:var(--muted);font-size:10.5px;margin-top:4px}
 
 /* avisos */
 .aviso{margin-top:12px;border-radius:9px;padding:10px 12px;font-size:12px;display:none;border:1px solid var(--line)}
@@ -210,10 +211,10 @@ tr.total td{border-top:1px solid var(--line);border-bottom:0;font-weight:600;col
         <div class="campo"><label for="d2">Hasta</label><input type="date" id="d2"></div>
         <button class="pri" id="btn-cruzar" disabled>Cruzar</button>
       </div>
-      <label class="chk" for="exigir" style="margin-top:4px">
-        <input type="checkbox" id="exigir">
-        Dejar afuera lo que todavía espera respaldo (etapa 43)
-      </label>
+      <p class="nota-regla">En las confirmaciones masivas de Walmart no corresponde adjuntar respaldo:
+      ese paso existe para que logística no vaya documento por documento. Por este camino entran tanto
+      las que están en <strong>Pendiente de Confirmación</strong> como en <strong>Pendiente Adjuntar
+      Respaldo</strong>. <span>Confirmado por Marcelo · 9-nov-2026</span></p>
       <div class="aviso" id="av-cruce"></div>
     </div>
 
@@ -372,7 +373,7 @@ async function leer(file) {
 /* ── paso 2: Redlink ────────────────────────────────────────────────────── */
 
 $('btn-cruzar').addEventListener('click', cruzar);
-$('exigir').addEventListener('change', function () { if (S.ops.length) rehacer(); });
+
 
 async function cruzar() {
   var d1 = $('d1').value, d2 = $('d2').value;
@@ -421,7 +422,7 @@ async function cruzar() {
 }
 
 function rehacer() {
-  S.r = N.cruzar(S.filas, S.ops, { exigirEtapa: $('exigir').checked });
+  S.r = N.cruzar(S.filas, S.ops);
   var c = S.consultado;
   if (S.ops.length) {
     aviso('av-cruce', 'ok', num(S.ops.length) + ' operaciones leídas · ' + c.d1 + ' → ' + c.d2 +

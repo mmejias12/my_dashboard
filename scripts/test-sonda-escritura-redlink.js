@@ -264,6 +264,62 @@ function correr(S) {
     igual(S.leerErrorToken(401, null).causa, 'otra');
   });
 
+  /* ---- el 404 que sí concluye ------------------------------------------- */
+
+  prueba('T73 un 404 que nombra el recurso prueba que el verbo corrió', () => {
+    const c = S.clasificar(404, '{"error":"FormHeader (0) is not found"}');
+    igual(c.clave, 'documento-no-esta');
+    igual(c.verbo, true, 'el verbo enlazó el cuerpo y fue a buscar:');
+  });
+  prueba('T74 un 404 sin cuerpo no concluye nada', () => {
+    igual(S.clasificar(404, '').verbo, null);
+    igual(S.clasificar(404).verbo, null, 'sin el cuerpo tampoco:');
+  });
+  prueba('T75 el 404 con HTML genérico tampoco concluye', () => {
+    // La página de error del servidor dice "Not Found" en el cuerpo: si no se
+    // la descarta por ser HTML, pasa por mensaje propio de la aplicación.
+    const pagina = '<!DOCTYPE html><html><head><title>404 Not Found</title></head><body>Not Found</body></html>';
+    igual(S.clasificar(404, pagina).verbo, null);
+    falso(S.hablaDelRecurso(pagina));
+  });
+  prueba('T76 un "Not Found" pelado no alcanza como prueba', () => {
+    igual(S.clasificar(404, '{"title":"Not Found"}').verbo, null, 'el genérico de ASP.NET no dice nada:');
+  });
+  prueba('T77 hablaDelRecurso distingue el mensaje propio del genérico', () => {
+    cierto(S.hablaDelRecurso('{"error":"FormHeader (0) is not found"}'));
+    cierto(S.hablaDelRecurso('{"message":"No se encontró el documento 123"}'));
+    falso(S.hablaDelRecurso(''));
+    falso(S.hablaDelRecurso('{"title":"Not Found"}'));
+  });
+  prueba('T78 un cuerpo que no es JSON igual puede nombrar el recurso', () => {
+    cierto(S.hablaDelRecurso('FormHeader 0 is not found'));
+  });
+
+  /* ---- rango de búsqueda ------------------------------------------------- */
+
+  prueba('T79 sin rango usa el tope, no infinito', () => {
+    const r = S.rangoBusqueda(null, null);
+    igual(r.desde, 1);
+    igual(r.hasta, S.TOPE_BUSQUEDA);
+  });
+  prueba('T80 un rango gigante se recorta y lo dice', () => {
+    const r = S.rangoBusqueda(1, 99999);
+    igual(r.hasta, S.TOPE_BUSQUEDA);
+    igual(r.recortado, true, 'tiene que avisar que recortó:');
+  });
+  prueba('T81 un rango al revés no se recorre hacia atrás', () => {
+    const r = S.rangoBusqueda(500, 100);
+    cierto(r.hasta >= r.desde, 'hasta nunca puede quedar antes que desde');
+  });
+  prueba('T82 un rango chico se respeta tal cual', () => {
+    const r = S.rangoBusqueda(10, 20);
+    igual(r.desde, 10); igual(r.hasta, 20); igual(r.recortado, false);
+  });
+  prueba('T83 --buscar, --desde y --hasta se leen', () => {
+    const a = S.leerArgs(['--buscar', '--desde=10', '--hasta=20']);
+    igual(a.modo, 'buscar'); igual(a.desde, '10'); igual(a.hasta, '20');
+  });
+
   /* ---- campos de estado ------------------------------------------------- */
 
   prueba('T25 encuentra los campos que huelen a confirmación', () => {
@@ -463,7 +519,15 @@ const MUTACIONES = [
   ['M51 la ventana se corre un día',                   /\(d - 1\) \* 86400000/, 'd * 86400000'],
   ['M52 una ventana inválida queda en cero días',      /Math\.max\(1, parseInt\(dias, 10\) \|\| 7\)/, 'parseInt(dias, 10) || 0'],
   ['M53 --timeout no se lee',                          /else if \(x\.indexOf\('--timeout='\) === 0\) a\.plazo = x\.slice\(10\);/, ''],
-  ['M54 --verbo no se reconoce',                       /else if \(x === '--verbo'\) a\.modo = 'verbo';/, '']
+  ['M54 --verbo no se reconoce',                       /else if \(x === '--verbo'\) a\.modo = 'verbo';/, ''],
+  ['M55 el 404 vuelve a mirar sólo el número',         /if \(s === 404 && hablaDelRecurso\(texto\)\)/, 'if (false)'],
+  ['M56 cualquier 404 pasa a probar el verbo',         /if \(s === 404 && hablaDelRecurso\(texto\)\)/, 'if (s === 404)'],
+  ['M57 el HTML genérico cuenta como mensaje propio',  /if \(!t \|\| \/\^<!DOCTYPE\|\^<html\/i\.test\(t\)\) return false;/, 'if (!t) return false;'],
+  ['M58 el "Not Found" pelado cuenta',                 /if \(\/\^not found\$\/i\.test\(dicho\.trim\(\)\)\) return false;[^\n]*/, ''],
+  ['M59 el barrido pierde el tope',                    /if \(h - d \+ 1 > t\) h = d \+ t - 1;/, ''],
+  ['M60 el barrido puede ir hacia atrás',              /if \(!Number\.isFinite\(h\) \|\| h < d\)/, 'if (!Number.isFinite(h))'],
+  ['M61 el barrido no avisa que recortó',              /recortado: \(parseInt\(hasta, 10\) \|\| 0\) > h/, 'recortado: false'],
+  ['M62 --buscar no se reconoce',                      /else if \(x === '--buscar'\) a\.modo = 'buscar';/, '']
 ];
 
 function mutar() {

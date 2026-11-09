@@ -100,7 +100,26 @@ function enmascarar(texto) {
 // El sentido de toda la sonda está en esta tabla. Un 400 NO es un fracaso:
 // significa que la ruta aceptó el verbo y discutió el cuerpo, que es
 // exactamente lo que queríamos saber. Un 405 sí es un no.
-function clasificar(status) {
+// Un 404 de ruta inexistente viene sin cuerpo (o con el HTML genérico del
+// servidor). Un 404 que trae un cuerpo nombrando el recurso que buscó —
+// {"error":"FormHeader (0) is not found"}— dice otra cosa completamente: el
+// verbo corrió, enlazó el cuerpo, fue a la base y no encontró el documento.
+// Mirar sólo el número y botar el cuerpo confunde esas dos cosas, que son la
+// diferencia entre "no existe la operación" y "existe y le erré al id".
+function hablaDelRecurso(texto) {
+  const t = String(texto == null ? '' : texto).trim();
+  if (!t || /^<!DOCTYPE|^<html/i.test(t)) return false;
+  let j = null;
+  try { j = JSON.parse(t); } catch (e) { j = null; }
+  const dicho = j && typeof j === 'object'
+    ? String(j.error || j.message || j.title || j.detail || '')
+    : t;
+  if (!dicho) return false;
+  if (/^not found$/i.test(dicho.trim())) return false;   // el genérico no cuenta
+  return /\bis not found\b|\bnot found\b|no (se )?encontr/i.test(dicho) && /[A-Za-z]{3,}/.test(dicho);
+}
+
+function clasificar(status, texto) {
   const s = Number(status);
   if (s === 200 || s === 201 || s === 204) return { clave: 'sirve',          verbo: true,  dice: 'el verbo existe y aceptó el cuerpo' };
   if (s === 400 || s === 422)              return { clave: 'cuerpo-malo',    verbo: true,  dice: 'el verbo existe; el cuerpo no es el que espera' };
@@ -108,6 +127,8 @@ function clasificar(status) {
   if (s === 415)                           return { clave: 'tipo-malo',      verbo: true,  dice: 'el verbo existe; rechaza el Content-Type' };
   if (s === 403)                           return { clave: 'sin-permiso',    verbo: true,  dice: 'el verbo existe; este usuario no tiene el permiso' };
   if (s === 401)                           return { clave: 'no-autenticado', verbo: null,  dice: 'no hay sesión válida — no dice nada del verbo' };
+  if (s === 404 && hablaDelRecurso(texto))
+                                           return { clave: 'documento-no-esta', verbo: true, dice: 'el verbo CORRIÓ: enlazó el cuerpo, buscó el documento y no lo encontró. Falta el id, no la operación' };
   if (s === 404)                           return { clave: 'no-existe',      verbo: null,  dice: 'no hay ruta ahí, o el documento no existe' };
   if (s === 405)                           return { clave: 'no-permitido',   verbo: false, dice: 'la ruta existe pero NO acepta este verbo' };
   if (s >= 500)                            return { clave: 'error-servidor', verbo: null,  dice: 'falló el servidor' };
@@ -357,6 +378,18 @@ async function pasoCatalogo(fetchFn) {
   return mapa;
 }
 
+// Un barrido de ids tiene que tener tope: sin él, un --hasta mal tipeado son
+// diez mil peticiones contra el servidor de otro.
+const TOPE_BUSQUEDA = 200;
+function rangoBusqueda(desde, hasta, tope) {
+  const t = Math.max(1, parseInt(tope, 10) || TOPE_BUSQUEDA);
+  const d = Math.max(1, parseInt(desde, 10) || 1);
+  let h = parseInt(hasta, 10);
+  if (!Number.isFinite(h) || h < d) h = d + t - 1;
+  if (h - d + 1 > t) h = d + t - 1;
+  return { desde: d, hasta: h, recortado: (parseInt(hasta, 10) || 0) > h };
+}
+
 /* ------------------------------------------------- salida                 */
 
 function imprimirCatalogo(mapa) {
@@ -377,7 +410,7 @@ function imprimirCatalogo(mapa) {
 }
 
 function imprimirIntento(c, res) {
-  const cl = clasificar(res.status);
+  const cl = clasificar(res.status, res.texto);
   console.log('  ' + c.nombre);
   console.log('    Content-Type: ' + c.contentType);
   console.log('    HTTP ' + res.status + '  ->  ' + cl.clave + ' · ' + cl.dice);
@@ -390,11 +423,14 @@ function imprimirIntento(c, res) {
 /* ------------------------------------------------- principal              */
 
 function leerArgs(argv) {
-  const a = { modo: null, id: null, cantidad: null, si: false, bp: '433', dias: '7', todo: false, plazo: null };
+  const a = { modo: null, id: null, cantidad: null, si: false, bp: '433', dias: '7', todo: false, plazo: null, desde: null, hasta: null };
   for (const x of (argv || [])) {
     if (x === '--catalogo') a.modo = 'catalogo';
     else if (x === '--leer') a.modo = 'leer';
     else if (x === '--verbo') a.modo = 'verbo';
+    else if (x === '--buscar') a.modo = 'buscar';
+    else if (x.indexOf('--desde=') === 0) a.desde = x.slice(8);
+    else if (x.indexOf('--hasta=') === 0) a.hasta = x.slice(8);
     else if (x === '--crear') a.modo = 'crear';
     else if (x.indexOf('--confirmar=') === 0) { a.modo = 'confirmar'; a.id = x.slice(12); }
     else if (x.indexOf('--id=') === 0) a.id = x.slice(5);
@@ -439,7 +475,7 @@ async function principal() {
       headers: Object.assign({ 'Content-Type': 'application/json' }, auth),
       body: '{}'
     });
-    const cl = clasificar(res.status);
+    const cl = clasificar(res.status, res.texto);
     console.log('\nPATCH /api/FormHeader  {}  ->  HTTP ' + res.status);
     console.log('  ' + cl.clave + ' · ' + cl.dice);
     const cuerpo = enmascarar(res.texto || '').trim();
@@ -451,6 +487,25 @@ async function principal() {
     return 0;
   }
 
+  if (a.modo === 'buscar') {
+    const r = rangoBusqueda(a.desde, a.hasta);
+    console.log('\nBuscando documentos en DEMO entre el id ' + r.desde + ' y el ' + r.hasta + ' (sólo GET, no modifica nada)');
+    if (r.recortado) console.log('El rango pedido se recortó al tope de ' + TOPE_BUSQUEDA + ' ids.');
+    const hallados = [];
+    for (let n = r.desde; n <= r.hasta; n++) {
+      const res = await pedir('/api/FormHeader/' + n, { method: 'GET', headers: auth });
+      if (res.status === 200) { hallados.push(n); if (hallados.length >= 5) break; }
+    }
+    console.log('');
+    if (!hallados.length) {
+      console.log('Ninguno en ese rango. Prueba otro con --desde y --hasta.\n');
+      return 2;
+    }
+    console.log('Existen: ' + hallados.join(', '));
+    console.log('Mira uno con:  node scripts\\sonda-escritura-redlink.js --leer --id=' + hallados[0] + '\n');
+    return 0;
+  }
+
   if (a.modo === 'leer') {
     if (!a.id && !a.todo) {
       const v = ventana(a.dias);
@@ -459,7 +514,20 @@ async function principal() {
       const r = await pedir(ruta, { method: 'GET', headers: auth });
       console.log('\nGET ' + ruta + '  ->  HTTP ' + r.status);
       if (r.status !== 200) { console.log(enmascarar(r.texto).slice(0, 400)); return 2; }
-      let j; try { j = JSON.parse(r.texto); } catch (e) { console.log('La respuesta no es JSON.'); return 2; }
+      let j;
+      try { j = JSON.parse(r.texto); }
+      catch (e) {
+        // Decir "no es JSON" y callar lo que vino es botar justo el dato que
+        // explica por qué. Un 200 con cuerpo vacío y un 200 con una página de
+        // login son cosas distintas y se distinguen mirándolas.
+        const tipo = (r.headers && r.headers.get) ? (r.headers.get('content-type') || '(sin content-type)') : '(sin cabeceras)';
+        const crudo = String(r.texto == null ? '' : r.texto);
+        console.log('La respuesta no es JSON.');
+        console.log('  content-type: ' + tipo);
+        console.log('  largo: ' + crudo.length + ' caracteres');
+        console.log('  primeros bytes: ' + (crudo.length ? JSON.stringify(enmascarar(crudo).slice(0, 200)) : '(vacío)'));
+        return 2;
+      }
       const filas = Array.isArray(j) ? j : [j];
       console.log('Registros en los últimos ' + v.desde + ' a ' + v.hasta + ': ' + filas.length);
       if (!filas.length) { console.log('DEMO no tiene movimiento en esa ventana. Prueba con --dias mayor o con --bp de otro cliente.\n'); return 2; }
@@ -558,5 +626,5 @@ if (require.main === module) {
 
 module.exports = {
   HOST_DEMO, VARS, esDemo, pintaDeMarcador, faltantes, enmascarar,
-  clasificar, leerErrorToken, describirError, conHost, leerFalloRed, aUS, ventana, camposDeEstado, asimetrias, cuerposCandidatos, verbosDe, leerArgs
+  clasificar, hablaDelRecurso, rangoBusqueda, TOPE_BUSQUEDA, leerErrorToken, describirError, conHost, leerFalloRed, aUS, ventana, camposDeEstado, asimetrias, cuerposCandidatos, verbosDe, leerArgs
 };

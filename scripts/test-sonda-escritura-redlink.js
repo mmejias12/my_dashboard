@@ -423,6 +423,19 @@ function correr(S) {
     // respaldo la elegiría y la lista mostraría calles en vez de clientes.
     igual(S.detectarCampos([{ bpId: 1, direccion: 'Av. Siempreviva 742', razonSocial: 'ACME SA' }]).campoNombre, 'razonSocial');
   });
+  prueba('T71 devuelve los booleanos del maestro como banderas', () => {
+    const d = S.detectarCampos([{ businessPartneriD: 8, cardName: 'ADELCO', transferencia: false }]);
+    igual(d.banderas, ['transferencia'], 'esconderlas hace elegir un id a ciegas:');
+  });
+  prueba('T72 sin booleanos la lista de banderas va vacía, no indefinida', () => {
+    igual(S.detectarCampos([{ bpId: 1, nombre: 'X' }]).banderas, []);
+    igual(S.detectarCampos([]).banderas, undefined, 'una lista vacía no tiene forma que describir');
+  });
+  prueba('T73 varias banderas salen todas', () => {
+    const d = S.detectarCampos([{ documentoiD: 1, nombre: 'X', vigente: true, esCliente: false }]);
+    igual(d.banderas, ['vigente', 'esCliente']);
+  });
+
   prueba('T100 devuelve las llaves para poder mirarlas', () => {
     igual(S.detectarCampos([{ a: 1, b: 'x' }]).campos, ['a', 'b']);
   });
@@ -665,6 +678,34 @@ function correr(S) {
     falso(S.tieneIdentidad({ formDdetalleiD: 0, otroiD: 9 }));
   });
 
+  prueba('T62 hay un candidato que llena la fecha de despacho', () => {
+    const c = S.cuerposCandidatos(DOC, 15).find(x => /fechaDespacho/.test(x.nombre));
+    cierto(c, 'tiene que existir');
+    cierto(/^\d{4}-\d{2}-\d{2}T/.test(c.cuerpo.fechaDespacho), c.cuerpo.fechaDespacho);
+  });
+  prueba('T63 la fecha de despacho sale de la requerida del documento', () => {
+    // Una fecha que NO es hoy, o la prueba pasaría aunque la función ignorara
+    // el documento y devolviera siempre la fecha actual.
+    const doc = Object.assign({}, DOC, { fechaRequerida: '2026-03-04T00:00:00' });
+    igual(S.fechaDeDespacho(doc), '2026-03-04T00:00:00', 'no una fecha inventada:');
+  });
+  prueba('T64 sin fecha requerida usable cae a hoy, no a vacío', () => {
+    cierto(/^\d{4}-\d{2}-\d{2}T00:00:00$/.test(S.fechaDeDespacho({})));
+    cierto(/^\d{4}-\d{2}-\d{2}T00:00:00$/.test(S.fechaDeDespacho({ fechaRequerida: 'cualquier cosa' })));
+    cierto(/^\d{4}-\d{2}-\d{2}T00:00:00$/.test(S.fechaDeDespacho(null)));
+  });
+  prueba('T65 no pisa una fecha de despacho que el documento ya tenga', () => {
+    const doc = Object.assign({}, DOC, { fechaDespacho: '2026-10-01T00:00:00' });
+    const c = S.cuerposCandidatos(doc, 15).find(x => /fechaDespacho/.test(x.nombre));
+    igual(c.cuerpo.fechaDespacho, '2026-10-01T00:00:00');
+  });
+  prueba('T66 los demás candidatos no tocan la fecha de despacho', () => {
+    for (const c of S.cuerposCandidatos(DOC, 15)) {
+      if (/fechaDespacho/.test(c.nombre)) continue;
+      igual(c.cuerpo.fechaDespacho, undefined, c.nombre + ': no puede inventarla');
+    }
+  });
+
   prueba('T49 el eco conserva los escalares del encabezado', () => {
     const c = S.cuerposCandidatos(DOC, 15)[0].cuerpo;
     igual(c.bpId, 499);
@@ -706,6 +747,31 @@ function correr(S) {
     cierto(/validación/.test(validacion.join(' ')), validacion.join(' '));
     falso(/manejador/.test(validacion.join(' ')), 'no puede decir lo mismo para los dos');
   });
+  prueba('T67 los candidatos que avanzan van antes del que siempre funciona', () => {
+    const l = S.cuerposCandidatos(DOC, 15);
+    const ultimoQueAvanza = l.map(c => !!c.avanza).lastIndexOf(true);
+    const primeroQueNo    = l.map(c => !!c.avanza).indexOf(false);
+    cierto(ultimoQueAvanza < primeroQueNo,
+      'si el que sólo guarda va antes, tapa a los demás: ' + l.map(c => c.nombre).join(' | '));
+  });
+  prueba('T68 el candidato de fechaDespacho intenta avanzar', () => {
+    const c = S.cuerposCandidatos(DOC, 15).find(x => /fechaDespacho/.test(x.nombre));
+    igual(c.avanza, true);
+    igual(c.cuerpo.avanzaEtapa, true);
+  });
+  prueba('T69b un éxito que no pedía avanzar no se canta como confirmación', () => {
+    const l = S.lecturaDeIntentos([{ c: { nombre: 'sin avanzar', avanza: false },
+                                     cl: { clave: 'sirve', verbo: true }, texto: '{}' }]);
+    cierto(/NO pedía avanzar/.test(l.join(' ')), l.join(' '));
+    cierto(/sigue sin confirmar/.test(l.join(' ')));
+  });
+  prueba('T70b un éxito que sí pedía avanzar no lleva esa advertencia', () => {
+    const l = S.lecturaDeIntentos([{ c: { nombre: 'con avanzar', avanza: true },
+                                     cl: { clave: 'sirve', verbo: true }, texto: '{}' }]);
+    falso(/NO pedía avanzar/.test(l.join(' ')));
+    cierto(/Relee/.test(l.join(' ')));
+  });
+
   prueba('T55 un éxito manda a releer antes de cantar victoria', () => {
     const l = S.lecturaDeIntentos([{ c: { nombre: 'el bueno' }, cl: { clave: 'sirve', verbo: true }, texto: '1' }]);
     cierto(/el bueno/.test(l.join(' ')));
@@ -905,6 +971,17 @@ const MUTACIONES = [
   ['M116 la identidad mira cualquier campo iD',        /Object\.keys\(fila\)\.find\(k => \/i\[dD\]\$\/\.test\(k\)\)/, 'Object.keys(fila).reverse().find(k => /i[dD]$/.test(k))'],
   ['M117 una clave en cero pasa por identidad',        /return Number\.isFinite\(v\) && v > 0;/, 'return Number.isFinite(v);'],
   ['M118 sin clave reconocible se descarta la fila',   /if \(!clave\) return true;[^\n]*/, 'if (!clave) return false;'],
+  ['M119 la fecha de despacho no se llena nunca',      /if \(o\.fechaDespacho && !cuerpo\.fechaDespacho\) \{/, 'if (false) {'],
+  ['M120 la fecha de despacho se llena siempre',       /if \(o\.fechaDespacho && !cuerpo\.fechaDespacho\) \{/, 'if (!cuerpo.fechaDespacho) {'],
+  ['M121 pisa la fecha de despacho existente',         /o\.fechaDespacho && !cuerpo\.fechaDespacho/, 'o.fechaDespacho'],
+  ['M122 la fecha de despacho se inventa en hoy',      /if \(\/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\/\.test\(req\)\) return req\.slice\(0, 10\) \+ 'T00:00:00';/, ''],
+  ['M123 la fecha de despacho va sin hora',            /return new Date\(\)\.toISOString\(\)\.slice\(0, 10\) \+ 'T00:00:00';/, "return new Date().toISOString().slice(0, 10);"],
+  ['M124 el que sólo guarda vuelve a ir primero',      /eco\('eco completo · despachado \+ recepcion \+ avanzaEtapa', \{ despachado: true, recepcion: true, avanzar: true \}\);/, "eco('eco completo · despachado + recepcion, sin avanzar',  { despachado: true, recepcion: true, avanzar: false });"],
+  ['M125 los candidatos no dicen si avanzan',          /nombre: nombre, avanza: !!o\.avanzar,/, 'nombre: nombre,'],
+  ['M126 un éxito sin avance se canta como confirmación', /if \(!sirven\.some\(x => x\.c && x\.c\.avanza\)\) \{/, 'if (false) {'],
+  ['M127 la advertencia sale siempre, avance o no',    /if \(!sirven\.some\(x => x\.c && x\.c\.avanza\)\) \{/, 'if (true) {'],
+  ['M128 las banderas del maestro se esconden',        /const banderas = campos\.filter\(k => typeof prim\[k\] === 'boolean'\);/, 'const banderas = [];'],
+  ['M129 cualquier campo pasa por bandera',            /campos\.filter\(k => typeof prim\[k\] === 'boolean'\)/, 'campos.filter(k => true)'],
   ['M30 el Allow no se normaliza a mayúsculas',        /\.map\(s => s\.trim\(\)\.toUpperCase\(\)\)/, '.map(s => s.trim())'],
   ['M31 el Allow no se ordena',                        /\.filter\(Boolean\)\.sort\(\)/, '.filter(Boolean)'],
   ['M32 --si queda prendido siempre',                  /else if \(x === '--si'\) a\.si = true;/, "a.si = true;"],

@@ -211,13 +211,27 @@ function agruparPorCita(filas) {
 }
 
 /* ── La regla de cantidades ────────────────────────────────────────────────
-   Leída de la pantalla del módulo del proveedor, no inventada. Las positivas
-   (Walmart aceptó MAS de lo despachado) se confirman por lo despachado: no se
-   puede confirmar más de lo que salió.                                      */
+   CONFIRMADA por el área el 9-nov-2026, y corrige lo que este archivo decía
+   antes. Son dos cosas distintas que conviene no mezclar:
+
+   CUANTO SE CONFIRMA. Si Walmart recibió MENOS, se confirma lo recibido. Si
+   recibió MAS, se confirma lo despachado: no se puede confirmar más de lo que
+   salió.
+
+   QUE SE LE AVISA AL CLIENTE. Las POSITIVAS. Si el cliente despachó 10 y
+   Walmart dice 15, se confirman 10 y hay que avisarle para que emita otra
+   transferencia por los 5 que faltan: esos pallets están en Walmart sin
+   respaldo. Las negativas no dejan nada abierto — el cliente despachó 10,
+   llegaron 5, se confirman 5, y los otros 5 son un problema de transporte, no
+   una transferencia por emitir.
+
+   Acá estaba el error: hasta el 9-nov esto devolvía lo contrario, leído de la
+   pantalla del proveedor en vez de las reglas escritas. El aviso al cliente
+   habría salido con los casos equivocados.                                  */
 function reglaCantidad(despachada, aceptadaWM) {
   const d = Number(despachada) || 0, a = Number(aceptadaWM) || 0;
   const aConfirmar = a < d ? a : d;
-  return { aConfirmar: aConfirmar, diferencia: a - d, porInformar: a < d ? d - a : 0 };
+  return { aConfirmar: aConfirmar, diferencia: a - d, porInformar: a > d ? a - d : 0 };
 }
 
 /* ── El cruce ─────────────────────────────────────────────────────────────── */
@@ -260,6 +274,21 @@ function clasificar(fila, idx) {
    prueba que este confirmada — parece ser la fecha prevista, no la del hecho.
    Se exige cantidad > 0 Y que la etapa no diga "Pendiente": dos señales
    independientes, porque con una sola ya nos equivocamos. */
+/* MEDIDO el 9-nov contra produccion: una transferencia a Walmart puede estar
+   en etapa "Pendiente Adjuntar Respaldo", que NO es confirmable. La tabla
+   FormMetapa marca con Confirmar=true una sola etapa por formulario, y para
+   transferencias es la 44, "Pendiente de Confirmacion". El circuito es
+   37 -> 43 -> 44 -> 46.
+
+   Esto estaba mal: estaConfirmada() descarta las confirmadas, pero las DOS
+   etapas pendientes pasaban igual, porque las dos empiezan con "Pendiente".
+   El listado proponia confirmar documentos que todavia esperan el respaldo
+   del cliente. */
+const RE_CONFIRMABLE = /pendiente\s+de\s+confirmaci/i;
+function etapaConfirmable(op) {
+  return RE_CONFIRMABLE.test(String((op && op.etapaOperacion) || ''));
+}
+
 function estaConfirmada(op) {
   const n = Number(op && op.cantidadConfirmada) || 0;
   const etapa = String((op && op.etapaOperacion) || '');
@@ -307,6 +336,11 @@ function listadoParaConfirmar(grupos, idx) {
     const op = c.ops[0];
     const folio = op.nroPedido;
     if (estaConfirmada(op)) { fuera.push({ cita: g.cita, folio: folio, motivo: 'ya confirmada' }); return; }
+    if (!etapaConfirmable(op)) {
+      fuera.push({ cita: g.cita, folio: folio,
+        motivo: 'etapa "' + (op.etapaOperacion || '(vacia)') + '": todavia no es confirmable' });
+      return;
+    }
     const r = reglaCantidad(op.cantidadDespachada, g.canje);
     if (!(r.aConfirmar > 0)) {
       fuera.push({ cita: g.cita, folio: folio, motivo: 'la cantidad a confirmar da cero' });
@@ -801,8 +835,9 @@ async function main() {
               (pendientes.length ? '  (son las que haria el reemplazo)' : ''));
 
   const porInformar = unicos.filter(r => r.cmp.porInformar > 0);
-  console.log('  con diferencia a informar  ' + String(porInformar.length).padStart(4) +
-              '  (' + miles(porInformar.reduce((a, r) => a + r.cmp.porInformar, 0)) + ' pallets)');
+  console.log('  por avisar al cliente      ' + String(porInformar.length).padStart(4) +
+              '  (' + miles(porInformar.reduce((a, r) => a + r.cmp.porInformar, 0)) +
+              ' pallets que Walmart recibio DE MAS y el cliente debe transferir)');
 
   /* El cruce al reves: lo que alimentaria el correo al cliente. */
   const invDias = Number((process.argv.find(a => a.startsWith('--inverso-dias=')) || '').split('=')[1]);
@@ -905,6 +940,6 @@ module.exports = { entradasZip, leerSharedStrings, leerHoja, columnaANumero, ser
                    leerXlsx, filasWalmart, reglaCantidad, indexar, clasificar, contrastar,
                    fechasEntre, corrido, COLUMNAS, pintaDeConexion, cuentaDe, cuentaValida, noExiste,
                    estaConfirmada, agruparPorCita, esWalmart, fechaDeOp, cruceInverso, citaDeWalmart,
-                   citasDeTexto, diasCerrados, listadoParaConfirmar, csvDelListado };
+                   citasDeTexto, diasCerrados, listadoParaConfirmar, csvDelListado, etapaConfirmable };
 
 if (require.main === module) main().catch(e => { console.error(e); process.exit(1); });

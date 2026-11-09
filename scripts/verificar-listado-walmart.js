@@ -71,15 +71,48 @@ function estaConfirmada(op) {
   return n > 0 && !/^\s*pendiente/i.test(String((op && op.etapaOperacion) || ''));
 }
 
+// Las dos etapas desde las que SI se confirma en el circuito masivo de
+// Walmart: 44 "Pendiente de Confirmacion" y 43 "Pendiente Adjuntar Respaldo".
+// La tabla FormMetapa marca Confirmar=true solo en la 44, y por eso aca se
+// exigia; Marcelo lo resolvio el 9-nov-2026: en las confirmaciones masivas no
+// corresponde adjuntar respaldo, ese paso existe para que logistica no vaya
+// documento por documento. Lista explicita y corta: la 46 y la 49 ya estan
+// confirmadas y la 47 esta anulada, ninguna de esas entra.
+// OJO: empezar con "Pendiente" no alcanza, porque las dos empiezan igual.
+const ETAPAS_CONFIRMABLES = [/pendiente\s+de\s+confirmaci/i, /pendiente\s+adjuntar\s+respaldo/i];
+function etapaConfirmable(op) {
+  const e = String((op && op.etapaOperacion) || '');
+  return ETAPAS_CONFIRMABLES.some(re => re.test(e));
+}
+
+// Una transferencia ANULADA no espera ningun respaldo, y una relocalizacion
+// no es una transferencia. Meter las tres cosas en un solo veredicto y
+// rotularlo con una sola causa es afirmar lo que no se sabe: la etapa viene en
+// el dato, asi que se nombra tal cual en vez de interpretarla.
+const RE_ANULADA = /anulad/i;
+// Los dos servicios del circuito de Walmart, por nombre exacto. "Trans
+// Diferenciada" (servicioId 70) es el mas grande hacia bodegas ZWM* y un
+// regex /transferenc/i la dejaba fuera entera. Lista explicita a proposito:
+// un servicio nuevo tiene que salir nombrado, no colarse.
+const SERVICIOS_TRANSFERENCIA = ['transferencia', 'transferencias', 'trans diferenciada'];
+const esAnulada = (op) => RE_ANULADA.test(String((op && op.etapaOperacion) || ''));
+const esTransferencia = (op) => {
+  const n = String((op && op.operacion) || '').trim().toLowerCase();
+  return SERVICIOS_TRANSFERENCIA.indexOf(n) >= 0;
+};
+
 const VEREDICTOS = {
   confirmar:    'sigue pendiente, la cantidad calza',
+  anulada:      'ANULADA — sacar del listado',
+  noEsTransferencia: 'la cita cayo en una operacion que NO es transferencia',
+  etapaNoConfirmable: 'la etapa no es la confirmable',
   recalcular:   'sigue pendiente pero lo despachado cambió',
   yaConfirmada: 'YA fue confirmada — sacar del listado',
   noAparece:    'no aparece en la ventana consultada',
   duplicada:    'el folio aparece en mas de una operacion'
 };
 
-function verificar(filas, ops) {
+function verificar(filas, ops, exigirEtapa) {
   const porFolio = new Map();
   (ops || []).forEach(function (o) {
     const f = Number(o && o.nroPedido);
@@ -101,7 +134,10 @@ function verificar(filas, ops) {
       confirmada: Number(op.cantidadConfirmada) || 0,
       etapa: op.etapaOperacion || ''
     });
+    if (esAnulada(op)) return Object.assign(base, { veredicto: 'anulada' });
+    if (op.operacion && !esTransferencia(op)) return Object.assign(base, { veredicto: 'noEsTransferencia' });
     if (estaConfirmada(op)) return Object.assign(base, { veredicto: 'yaConfirmada' });
+    if (exigirEtapa && !etapaConfirmable(op)) return Object.assign(base, { veredicto: 'etapaNoConfirmable' });
     // Si lo despachado cambió, la cantidad del listado se calculó contra otro
     // número y hay que rehacerla: no se recorta en silencio.
     if (l.cantRecibida > desp) return Object.assign(base, { veredicto: 'recalcular' });
@@ -193,7 +229,12 @@ async function main() {
   }
   console.log('  operaciones leídas: ' + r.filas.length + ' en ' + r.ms + ' ms');
 
-  const res = verificar(filas, r.filas);
+  // El filtro por etapa queda DETRAS de una bandera hasta que se compruebe en
+  // el portal si la etapa 43 es confirmable para transferencias. Dejarlo
+  // prendido por omision vaciaria el listado por una regla deducida de la
+  // tabla y nunca vista operar.
+  const exigirEtapa = args.indexOf('--exigir-etapa') >= 0;
+  const res = verificar(filas, r.filas, exigirEtapa);
   const c = resumen(res);
   console.log('');
   Object.keys(VEREDICTOS).forEach(function (k) {
@@ -207,7 +248,7 @@ async function main() {
     problemas.forEach(f => console.log('    folio ' + f.folio + '  pedía ' + f.cantRecibida +
       (f.despachada != null ? '  desp ' + f.despachada : '') +
       (f.confirmada ? '  confirmada ' + f.confirmada : '') +
-      '  ' + VEREDICTOS[f.veredicto] + (f.etapa ? '  · ' + f.etapa : '')));
+      '  ' + VEREDICTOS[f.veredicto] + (f.etapa ? '  · etapa: ' + f.etapa : '')));
   }
 
   const dif = conDiferencia(res);
@@ -241,13 +282,15 @@ async function main() {
   } else {
     console.log('');
     console.log('  Agrega --salida=<archivo.csv> para escribir el listado ya depurado.');
+    console.log('  Agrega --exigir-etapa para dejar fuera las que no estan en "Pendiente de');
+    console.log('  Confirmacion" (sin comprobar todavia si esa etapa es la unica confirmable).');
     console.log('  Agrega ademas --sin-diferencia para dejar fuera las que confirman menos de');
     console.log('  lo despachado; esas van a su propio archivo, para decidirlas aparte.');
   }
   console.log('');
 }
 
-module.exports = { leerListado, estaConfirmada, verificar, conDiferencia, csvDelVerificado, csvParaRevisar, resumen, VEREDICTOS };
+module.exports = { leerListado, estaConfirmada, verificar, conDiferencia, csvDelVerificado, csvParaRevisar, etapaConfirmable, ETAPAS_CONFIRMABLES, SERVICIOS_TRANSFERENCIA, esTransferencia, resumen, VEREDICTOS };
 
 if (require.main === module) {
   main().then(() => { process.exitCode = 0; }).catch(e => {

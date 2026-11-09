@@ -838,3 +838,186 @@ despacho, sobre 5.931 operaciones a bodegas `ZWM*` de los dos servicios:
 El residuo normal era 2–8 %. El atraso arranca a mediados de octubre y se rompe
 la primera semana de noviembre. No es una opinión sobre lo que pasa cuando el
 módulo deja de correr: es el dato.
+
+## Quién firma: medido en producción (9-nov-2026)
+
+```
+node scripts/confirmar-redlink.js --productivo --quien=4145690 --dias=7
+
+  histórico 2026-11-02 a 2026-11-09: 4746 operaciones
+  folio 4145690  (documento 688543)
+  etapa                  Transferencia Reconfirmada
+  usuarioIngresoNombre   M2LinkSystem
+  usuarioIngresoId       951
+  usuarioConfirmaId      (null)
+```
+
+Tres cosas quedan fijadas con esto:
+
+1. **La firma es `usuarioIngresoId`**, y en producción `usuarioConfirmaId` queda
+   en `null` incluso en un documento Reconfirmado. Lo mismo que se había medido
+   a mano en DEMO, ahora confirmado sobre un documento real del módulo viejo.
+2. **M2LinkSystem = 951** en producción. Sirve de patrón de control.
+3. El modo `--quien` lee y no escribe: no pide `--cantidad` ni las credenciales
+   de escritura.
+
+### La ventana de 31 días se cortaba por tamaño
+
+El primer intento con `--dias=30` devolvió HTTP 200 con el cuerpo vacío, y el
+script lo reportó como "no hay datos en esa ventana: prueba --dias mayor" — el
+consejo exactamente al revés. La causa era `await r.text().catch(() => '')`, que
+convierte un corte de descarga en una respuesta vacía. Con `--dias=7` entró sin
+problema: 4.746 operaciones.
+
+Ahora `leerCuerpo()` guarda el motivo del corte y `porQueNoHayJson()` separa las
+tres cosas que antes se contaban como una: se cortó la bajada, el servidor
+contestó vacío de verdad, o contestó algo que no es JSON. Si el servidor declara
+un `content-length` y llegan cero bytes, lo dice: **el cuerpo se perdió, no vino
+vacío.**
+
+### LA TRAMPA: el id de DEMO no sirve para producción
+
+DEMO y producción son bases distintas. El `usersiD` de M3LinkSystem en DEMO no
+tiene por qué ser el mismo que en producción, y escribir el número equivocado en
+`usuarioIngresoId` firma la confirmación con otro usuario — o con ninguno.
+
+Por eso el experimento en DEMO (crear un documento, aprobarlo como M3LinkSystem
+y leer la firma) sirve para **probar el camino de escritura de punta a punta**,
+no para cosechar el número que se va a usar en producción.
+
+El número de producción sale de la tabla de usuarios, y la consulta se valida
+sola: **pedir los dos usuarios juntos**. Si M2LinkSystem vuelve 951, la tabla y
+la columna son las correctas y el número de M3LinkSystem de esa misma consulta
+es confiable. Si vuelve otra cosa, se está mirando el lugar equivocado.
+
+## M3LinkSystem = 983, y el defecto que el número destapó
+
+Marcelo entregó el `usersiD` de producción el 9-nov-2026: **983**. Encaja con el
+patrón de control — M2LinkSystem es 951, los dos usuarios de sistema en el mismo
+rango.
+
+Al cablearlo apareció un defecto que sólo se habría notado después de la primera
+confirmación real, y en el peor lugar: **el cuerpo del PATCH no llevaba la
+firma**. `cuerpoEco` devolvía el `usuarioIngresoId` que el documento ya traía,
+así que la confirmación habría quedado a nombre de **quien tocó el documento
+antes** — probablemente el usuario del cliente que emitió la transferencia. No
+habría dado error. Simplemente nadie habría sabido que la hizo el m3link, y el
+rastro de auditoría habría apuntado a una persona que no hizo nada.
+
+Tres cosas quedaron en su lugar:
+
+1. El cuerpo lleva `usuarioIngresoId: 983` (parametrizable por
+   `REDLINK_M3LINK_USERSID`, e inyectable en `planDeConfirmacion` para poder
+   probarlo).
+2. **Sin usersiD el plan se niega.** Mejor no escribir que escribir sin firma.
+3. Después de escribir, `veredictoDeFirma()` juzga el resultado **por el
+   NOMBRE** que devolvió el servidor, no por el número. Un id equivocado no da
+   error: graba otro usuario y se queda callado. Lo único que prueba que 983 era
+   el correcto es que vuelva `usuarioIngresoNombre = M3LinkSystem`. Si no
+   vuelve, el script lo dice en mayúsculas y termina con código 1.
+
+### De paso: el campo que no se mostraba
+
+`--leer` de la sonda lista los "campos que huelen a estado de confirmación" con
+un filtro por nombre, y ese filtro **no incluía la palabra "usuario"**. El único
+campo de usuario que aparecía era `usuarioConfirmaId`, que está siempre en
+`null`. El que de verdad se escribe —`usuarioIngresoId`— quedaba invisible.
+
+Eso fue parte de por qué durante días se creyó que la firma era `usuarioConfirmaId`:
+**el que no se muestra es el que no se revisa.** El filtro ahora incluye
+"usuario" y la prueba T25b lo fija.
+
+## Primer disparo real: HTTP 400, y no se escribió nada (9-nov-2026)
+
+```
+folio 4139366  (documento 682214)   Trans Diferenciada · ZWM01 CD WM LO AGUIRRE SECO
+etapa Pendiente Adjuntar Respaldo   despachado 30 -> a confirmar 30
+
+PATCH /api/FormHeader  ->  HTTP 400
+respuesta: {"error":"An error occurred while saving the entity changes.
+            See the inner exception for details."}
+
+El documento NO cambió.
+FIRMA MAL: se mandó 983 y quedó 920 / "Eliecer_Baeza"
+```
+
+**No hubo movimiento en SAP y el documento quedó intacto.** El chequeo de firma
+que se había agregado esa misma mañana avisó en el acto en vez de dejar creer
+que había quedado confirmada.
+
+De paso: **Eliecer_Baeza = 920**. Con 920, 951 (M2LinkSystem) y 983
+(M3LinkSystem) el espacio de ids es consistente, así que 983 es plausible —
+pero sigue sin estar verificado contra producción.
+
+### Dos sospechosos, y el cuerpo lleva los dos
+
+El mensaje es un `DbUpdateException` de Entity Framework: algo falló al grabar
+en la base, no al validar la petición. El cuerpo lleva **dos cosas que nunca se
+vieron grabar**:
+
+| sospechoso | antecedente |
+|---|---|
+| `avanzaEtapa: true` | **siete intentos fallidos en DEMO**, en cuatro etapas, dos tipos de formulario y seis cuerpos distintos. Nunca funcionó en ningún lado |
+| `usuarioIngresoId: 983` | se agregó hoy. Si 983 no existe en la tabla de usuarios de PRODUCCIÓN, una violación de clave foránea da exactamente este error |
+
+Un 400 no dice cuál de los dos fue, y adivinar cuesta escrituras en producción.
+
+### Cómo se separan, sin adivinar
+
+Primero, lo gratis: el mensaje dice *"See the inner exception for details"*. Esa
+excepción interna está en el log del servidor y la lee Marcelo o Holux en un
+minuto. Si dice violación de clave foránea sobre el usuario, el problema es 983;
+si habla de la etapa o del ajuste a SAP, es `avanzaEtapa`. **Eso vale más que
+cualquier intento adicional.**
+
+Si hay que medirlo igual, el script trae dos banderas que sacan una variable por
+vez (`--sin-firma` y `--sin-avanzar`), y el orden importa:
+
+1. `--sin-firma` primero. Si graba, la confirmación queda completa pero a nombre
+   del usuario anterior — recuperable, y además prueba que el problema era 983.
+   Si vuelve a dar 400, el problema es `avanzaEtapa` y la firma queda absuelta.
+2. `--sin-avanzar` sólo después, y con cuidado: si graba, escribe la recepción
+   **sin** avanzar la etapa y deja el documento a medio camino.
+
+Un PATCH que falla no cambia nada —está comprobado en esta misma corrida—, así
+que el riesgo de cada intento está sólo en que tenga éxito a medias.
+
+## El histórico se baja por tramos (9-nov-2026)
+
+El intento con `--sin-firma` ni siquiera llegó al PATCH:
+
+```
+El histórico no vino como JSON.
+  ruta: /api/FormHeader/historico/433?fechainicio=10-10-2026&fechafin=11-09-2026
+  la descarga se CORTÓ a mitad de camino: The operation was aborted due to timeout
+  no es que no haya datos — no se alcanzó a leer la respuesta
+```
+
+Ese mensaje, escrito una hora antes, resolvió de una el misterio del "cuerpo
+vacío" del primer `--quien`: **31 días del BP 433 son ~17.500 operaciones con el
+registro crudo completo y la descarga no alcanza a terminar en 60 segundos.**
+Con la versión anterior del script esto se habría leído como "no hay datos en
+esa ventana, prueba --dias mayor" — el consejo exactamente al revés.
+
+El arreglo no es adivinar `--dias`. `buscarPorFolio` ahora baja el histórico
+**en tramos de 7 días, del más nuevo al más viejo, y corta apenas encuentra el
+folio**. Un folio del día aparece en el primer tramo; el 4139366, despachado el
+23-oct, aparece en el tercero. El código del m3link que sí funciona también
+trocea (31 días), pero corre dentro de Azure y no sobre la conexión de una
+oficina.
+
+Cada tramo se canta mientras baja, así que si uno se corta se ve cuál y dónde
+iba:
+
+```
+  tramo 1/5  2026-11-03 a 2026-11-09: 4.746 operaciones
+  tramo 2/5  2026-10-27 a 2026-11-02: 5.112 operaciones
+  tramo 3/5  2026-10-20 a 2026-10-26: 4.980 operaciones  <- acá está
+```
+
+`buscarPorFolio` recibe la función que baja cada tramo, así que las pruebas la
+ejercitan sin red: que corte apenas encuentra, que recorra la ventana entera
+antes de decir que no está, que compare el folio como texto (el argumento llega
+como texto y el dato viene como número), y que un `--dias` mal escrito no deje
+la búsqueda en cero tramos — buscar en cero tramos diría "no aparece" sin haber
+mirado nada.

@@ -98,8 +98,24 @@ function correr(S) {
 
   /* ---- enmascarado ------------------------------------------------------ */
 
-  prueba('T13 enmascara un Bearer', () => {
-    igual(S.enmascarar('Authorization: Bearer eyJhbGciOiJSUzI1NiJ9.abc'), 'Authorization: Bearer ***');
+  prueba('T13 enmascara un Bearer, venga o no con el encabezado', () => {
+    // El encabezado entero se tapa de una; suelto, se tapa el valor y queda la
+    // palabra Bearer, que dice de qué tipo era sin regalar nada.
+    igual(S.enmascarar('Authorization: Bearer eyJhbGciOiJSUzI1NiJ9.abc'), 'Authorization: ***');
+    igual(S.enmascarar('Bearer eyJhbGciOiJSUzI1NiJ9.abc'), 'Bearer ***');
+    falso(/eyJhbGci/.test(S.enmascarar('authorization=Bearer eyJhbGciOiJSUzI1NiJ9.abc')));
+  });
+  prueba('T13b tapa cualquier clave que termine en token, secret, password o api-key', () => {
+    ['{"token":"xyz789"}', '{"x-api-key":"xyz789"}', '{"apiKey":"xyz789"}',
+     '{"miSecret":"xyz789"}', 'passwd=xyz789'].forEach(function (c) {
+      falso(/xyz789/.test(S.enmascarar(c)), 'se escapó en ' + c);
+    });
+  });
+  prueba('T13c pero NO tapa los datos que hacen falta para leer', () => {
+    const s = S.enmascarar('{"cliente_key":"buddy-pet","bodegaKey":"ZWM02","usuarioIngresoId":17}');
+    cierto(/buddy-pet/.test(s), 'cliente_key es dato público');
+    cierto(/ZWM02/.test(s));
+    cierto(/17/.test(s), 'el id del usuario es justo lo que vamos a leer');
   });
   prueba('T14 enmascara access_token y client_secret en JSON', () => {
     const s = S.enmascarar('{"access_token":"eyJabc","client_secret":"s3cr3t","expires_in":60}');
@@ -667,6 +683,20 @@ function correr(S) {
     cierto(campos.indexOf('fechaConfirmacion') >= 0);
     falso(campos.indexOf('patente') >= 0, 'patente no es estado');
   });
+  prueba('T25b muestra usuarioIngresoId, que es LA firma del documento', () => {
+    // Sin la palabra "usuario" en el filtro, el único campo de usuario que
+    // salía era usuarioConfirmaId —siempre null— y el que de verdad se escribe
+    // quedaba invisible. Eso ayudó a creer durante días que la firma era el
+    // otro. El que no se muestra es el que no se revisa.
+    const c = S.camposDeEstado({ usuarioIngresoId: 951, usuarioIngresoNombre: 'M3LinkSystem',
+                                 usuarioConfirmaId: null, patente: 'AB12' });
+    const campos = c.map(x => x.campo);
+    cierto(campos.indexOf('usuarioIngresoId') >= 0, 'falta la firma: ' + campos.join(', '));
+    cierto(campos.indexOf('usuarioIngresoNombre') >= 0, 'sin el nombre, el número no prueba de quién es');
+    cierto(campos.indexOf('usuarioConfirmaId') >= 0);
+    falso(campos.indexOf('patente') >= 0, 'patente sigue sin ser estado');
+    igual(c.find(x => x.campo === 'usuarioIngresoId').valor, 951);
+  });
   prueba('T26 entra al primer elemento de un arreglo de detalles', () => {
     const c = S.camposDeEstado({ id: 1, formDdetalles: [{ id: 5, cantidad: 10, itemsId: 1 }] });
     cierto(c.map(x => x.campo).indexOf('formDdetalles[0].cantidad') >= 0);
@@ -1023,6 +1053,8 @@ function correr(S) {
 /* -------------------------------------------------------- mutaciones ----- */
 
 const MUTACIONES = [
+  ['M12 el filtro de estado deja de ver los usuarios', /\|fecha\|usuario\)\/i;/, '|fecha)/i;'],
+  ['M12b el filtro de estado se abre a todo',          /const RE_ESTADO = \/\([^)]*\)\/i;/, 'const RE_ESTADO = /./;'],
   ['M01 la guarda acepta cualquier host',              /u\.hostname\.toLowerCase\(\) === HOST_DEMO/, 'true'],
   ['M02 la guarda acepta http',                        /u\.protocol === 'https:' &&/, 'true &&'],
   ['M03 la guarda compara con endsWith',               /u\.hostname\.toLowerCase\(\) === HOST_DEMO/, "u.hostname.toLowerCase().endsWith(HOST_DEMO)"],
@@ -1033,14 +1065,15 @@ const MUTACIONES = [
   ['M08 faltantes acepta el vacío',                    /if \(!v \|\| !String\(v\)\.trim\(\)\)/, 'if (false)'],
   ['M09 faltantes se queda con la primera variable',   /for \(const k of VARS\) \{/, 'for (const k of VARS.slice(0,1)) {'],
   ['M10 no enmascara el Bearer',                       /\(Bearer\\s\+\)\[A-Za-z0-9\._~\+\/=-\]\{8,\}\/gi, '\$1\*\*\*'/, "(Bearer\\s+)[A-Za-z0-9._~+/=-]{8,}/gi, '$1$&'"],
-  ['M11 no enmascara access_token',                    /access_token\|refresh_token\|id_token\|client_secret\|password/, 'nada_de_esto'],
+    ['M11 no enmascara lo que termina en token/secret',  /\("\?\[A-Za-z0-9_\.-\]\*\(\?:token\|secret\|password\|passwd\|api\[-_\]\?key\)"\?/, '("?(?:nadaquecalce)"?'],
+  ['M11c no enmascara el encabezado Authorization',    /\.replace\(\/\("\?authorization"\?"\?\\s\*\[:=\]\\s\*"\?\)\[\^",\\n\}\]\+\/gi, '\$1\*\*\*'\)\n    /, ''],
   ['M12 un 400 pasa a contar como que el verbo no existe', /return \{ clave: 'cuerpo-malo',    verbo: true,/, "return { clave: 'cuerpo-malo',    verbo: false,"],
   ['M13 un 405 pasa a contar como que el verbo existe',   /return \{ clave: 'no-permitido',   verbo: false,/, "return { clave: 'no-permitido',   verbo: true,"],
   ['M14 un 401 pasa a concluir algo',                  /return \{ clave: 'no-autenticado', verbo: null,/, "return { clave: 'no-autenticado', verbo: true,"],
   ['M15 un 403 deja de contar como verbo existente',   /return \{ clave: 'sin-permiso',    verbo: true,/, "return { clave: 'sin-permiso',    verbo: null,"],
   ['M16 un 415 deja de contar',                        /return \{ clave: 'tipo-malo',      verbo: true,/, "return { clave: 'tipo-malo',      verbo: null,"],
   ['M17 el status no se convierte a número',           /const s = Number\(status\);/, 'const s = status;'],
-  ['M18 los campos de estado pierden "cantidad"',      /\(confirm\|estado\|etapa\|autoriz\|aprob\|cantidad\|fecha\)/, '(confirm|estado|etapa|autoriz|aprob|fecha)'],
+  ['M18 los campos de estado pierden "cantidad"',      /\|aprob\|cantidad\|fecha\|usuario\)/, '|aprob|fecha|usuario)'],
   ['M19 los campos de estado no entran a los arreglos',/if \(v\.length && typeof v\[0\] === 'object'\) ver\(v\[0\], ruta \+ '\[0\]'\);/, ''],
   ['M20 los campos de estado pierden el valor',        /out\.push\(\{ campo: ruta, valor: v \}\)/, 'out.push({ campo: ruta, valor: null })'],
   ['M21 la asimetría también marca verbos repetidos',  /if \(cuenta\[v\] === 1 && rutas\.length > 1\)/, 'if (cuenta[v] >= 1 && rutas.length > 1)'],

@@ -304,3 +304,105 @@ solo y concluir sería repetir el error de siempre: confundir «no contestó» c
 
 Pruebas: `scripts/test-sonda-escritura-redlink.js` — 46 comprobaciones y 33
 mutaciones, todas muerden.
+
+---
+
+## El contrato de escritura, medido contra el servidor
+
+Lo que sigue no sale de ninguna documentación: se levantó probando en DEMO,
+error por error, el 9-nov-2026. La documentación entregada dice que sólo hay
+creación; el servidor dice otra cosa.
+
+### Lo que quedó probado
+
+**`PATCH /api/FormHeader` escribe.** Enlaza el comando
+`Application.Features.FormHeaders.Commands.UpdateForm` y persiste cambios sobre
+un documento existente. Lo verificamos creando un documento propio en DEMO
+(id 684029, una emisión de 15 pallets) y releyéndolo después de cada intento.
+
+**El modelo no tiene ningún `cantidadConfirmada`.** Las cantidades viven en las
+líneas de `formDdetalles`, con estos nombres:
+
+| En las líneas de Redlink | En el contrato RDT que ya usamos |
+|---|---|
+| `cantidad` | cantidad solicitada |
+| `despachado` | cantidad despachada |
+| `recepcion` | cantidad confirmada |
+| `recepcionAnterior` | — |
+
+**La confirmación es un cambio de etapa.** El encabezado trae `formMetapaId` y
+el objeto `formMetapa`; el documento recién creado queda en
+`{formMetapaiD: 2, nombre: "Por Confirmar"}`. Al lado hay una bandera
+`avanzaEtapa`, en `false`, y los campos que se llenan al confirmar:
+`fechaConfirmacion`, `fechaConfirmacionHora`, `confirmacionVeces` y
+**`usuarioConfirmaId`** — este último es el que en producción queda con el
+usuario de sistema, el que la pantalla de transacciones muestra como
+`M2LinkSystem`.
+
+**Lo que el cuerpo tiene que llevar**, aprendido un error a la vez:
+
+| Error del servidor | Lo que significaba |
+|---|---|
+| `No Tiene Lineas de detalles` | el cuerpo debe traer `formDdetalles`; no se leen de la base |
+| `Falta Cantidad a Despachar` | cada línea necesita `despachado` |
+| `Otro usuario Avanzo a etapa Siguiente` | hay que mandar el `formMetapaId` que se leyó, para que cuadre el control de concurrencia |
+| `Object reference not set to an instance of an object` | faltaba alguna de las otras colecciones hijas; el manejador las recorre sin preguntar si vienen |
+| `An error occurred while saving the entity changes` | aparece sólo con `avanzaEtapa: true` |
+
+El cuerpo que **sí** funciona es un eco del documento leído: todos los
+escalares del encabezado, las cinco colecciones hijas presentes (las vacías,
+vacías), sin las propiedades de navegación (`items`, `formMetapa`, `bp`…) y sin
+las filas de relleno que el servidor arrastra con la clave en cero. Con eso,
+`despachado` y `recepcion` quedan guardados y **ningún otro campo se pisa**:
+`bpId`, bodegas, fechas y observación siguen intactos.
+
+### Lo que no se pudo cerrar
+
+**Avanzar de etapa.** Con `avanzaEtapa: true`, el servidor responde siempre
+`An error occurred while saving the entity changes`. No es validación —el
+cuerpo pasa— sino un fallo al escribir en la base, con la causa en una
+*inner exception* que no se expone. Probamos con y sin las filas de relleno,
+con y sin recepción: siempre el mismo error. Desde afuera no hay más que
+deducir: falta algo del estado del servidor que no se ve.
+
+Entonces: **las cantidades se escriben, la confirmación no.**
+
+### Dos cosas operativas que hay que tener presentes
+
+1. **El PATCH no es idempotente.** Cada llamada agrega una fila a
+   `formDregistros`, **incluso cuando falla**: después de dos intentos (uno
+   fallido y uno exitoso) la colección pasó de 1 fila a 3. Cuando esto corra
+   solo contra el reporte de Walmart, un reintento no es gratis — hay que
+   releer y decidir antes de repetir.
+2. **El usuario firma la confirmación.** `usuarioConfirmaId` es la traza. El
+   usuario de pruebas sirve en DEMO y sólo en DEMO; en productivo hace falta un
+   usuario de sistema propio antes de la primera escritura real.
+
+### La pregunta que queda, con nombre y apellido
+
+> `PATCH /api/FormHeader` guarda bien `despachado` y `recepcion` sobre un
+> documento en etapa "Por Confirmar", pero con `avanzaEtapa: true` responde
+> *"An error occurred while saving the entity changes"*. ¿Qué más espera el
+> comando `UpdateForm` para avanzar de etapa, y qué debería traer el cuerpo?
+
+Si eso no se responde, la alternativa no es seguir tanteando sino **mirar**:
+confirmar una transferencia a mano en el portal mientras se observa la red
+muestra el cuerpo exacto que manda la aplicación. Cinco minutos, sin tocar
+nada: uno confirma, el otro lee.
+
+### Cómo repetir todo esto
+
+```
+node scripts\sonda-escritura-redlink.js --catalogo
+node scripts\sonda-escritura-redlink.js --maestros
+node scripts\sonda-escritura-redlink.js --crear --cliente=499 --servicio=1 --usuario=13 --bodega-origen=1338 --bodega-destino=1524 --cantidad=15 --si
+node scripts\sonda-escritura-redlink.js --leer --id=<el id que devolvió>
+node scripts\sonda-escritura-redlink.js --confirmar=<id> --cantidad=15 --si
+```
+
+Las credenciales se cargan con `backfill\cargar-demo.ps1`, que las pide por
+pantalla y las deja sólo en esa ventana. El host está clavado a
+`apidemo.portalredtec.cl` y no hay bandera que lo cambie.
+
+Pruebas: `scripts/test-sonda-escritura-redlink.js` — 144 comprobaciones y 118
+mutaciones, todas muerden.

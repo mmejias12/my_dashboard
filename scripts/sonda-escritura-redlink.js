@@ -257,25 +257,43 @@ function cuerpoEco(doc, opciones) {
     }
   }
   cuerpo.avanzaEtapa = !!o.avanzar;
+  // El portal sólo lista para confirmar documentos que YA tienen fecha de
+  // despacho. El nuestro, creado por API, la tiene en nulo: ésa es la única
+  // diferencia observable entre los que se dejan confirmar y el nuestro.
+  if (o.fechaDespacho && !cuerpo.fechaDespacho) {
+    cuerpo.fechaDespacho = fechaDeDespacho(doc);
+  }
   return cuerpo;
+}
+
+// Usa la fecha requerida del propio documento si la tiene —así el despacho no
+// queda en una fecha inventada— y si no, hoy.
+function fechaDeDespacho(doc) {
+  const req = doc && typeof doc.fechaRequerida === 'string' ? doc.fechaRequerida : '';
+  if (/^\d{4}-\d{2}-\d{2}/.test(req)) return req.slice(0, 10) + 'T00:00:00';
+  return new Date().toISOString().slice(0, 10) + 'T00:00:00';
 }
 
 function cuerposCandidatos(doc, cantidad) {
   const lista = [];
   if (idDeDocumento(doc) == null) return lista;
   const eco = (nombre, o) => lista.push({
-    nombre: nombre, contentType: 'application/json',
+    nombre: nombre, avanza: !!o.avanzar, contentType: 'application/json',
     cuerpo: cuerpoEco(doc, Object.assign({ cantidad: cantidad }, o))
   });
 
-  // 1. Lo que de verdad queremos.
+  // El orden importa porque se corta en el primer éxito, y hay un candidato
+  // que SIEMPRE tiene éxito: el que sólo guarda cantidades sin avanzar. Si va
+  // antes, tapa a los que de verdad queremos probar. Primero los que intentan
+  // avanzar; el que sólo guarda, al final, como red.
   eco('eco completo · despachado + recepcion + avanzaEtapa', { despachado: true, recepcion: true, avanzar: true });
-  // 2. Igual, por si la etapa avanza sola al quedar la recepción completa.
-  eco('eco completo · despachado + recepcion, sin avanzar',  { despachado: true, recepcion: true, avanzar: false });
-  // 3. Sólo despachado, por si "Por Confirmar" exige primero el despacho.
+  // La fecha de despacho es la única diferencia observable entre nuestro
+  // documento y los que el portal sí deja confirmar.
+  eco('eco completo · + fechaDespacho + avanzaEtapa',        { despachado: true, recepcion: true, avanzar: true, fechaDespacho: true });
   eco('eco completo · sólo despachado + avanzaEtapa',        { despachado: true, recepcion: false, avanzar: true });
-  // 4. Testigo: el documento devuelto tal cual. Si éste también es aceptado,
-  //    un 200 no prueba que se haya confirmado nada.
+  eco('eco completo · despachado + recepcion, sin avanzar',  { despachado: true, recepcion: true, avanzar: false });
+  // Testigo: el documento devuelto tal cual. Si éste también es aceptado, un
+  // 200 no prueba que se haya confirmado nada.
   eco('testigo · eco completo sin cambios',                  { despachado: false, recepcion: false, avanzar: false });
   return lista;
 }
@@ -380,12 +398,16 @@ function detectarCampos(filas) {
   if (!campoId) campoId = campos.find(k => esNumero(k)) || null;
 
   const esTexto = k => typeof prim[k] === 'string';
+  // Los booleanos del maestro dicen cosas que importan — un retail trae
+  // "transferencia", un documento trae "vigente" — y esconderlos hace elegir
+  // a ciegas un id que el servidor después rechaza.
+  const banderas = campos.filter(k => typeof prim[k] === 'boolean');
   // Primero los nombres que se llaman como uno espera; si no hay ninguno
   // —Redlink usa cardName y bodegaCliente—, cualquier texto que no sea el id
   // sirve más que no mostrar nada.
   let campoNombre = campos.find(k => /(nombre|descripcion|descripción|razon|razón|glosa|titulo|título|cardname)/i.test(k) && esTexto(k));
   if (!campoNombre) campoNombre = campos.find(k => k !== campoId && esTexto(k)) || null;
-  return { campos: campos, campoId: campoId, campoNombre: campoNombre };
+  return { campos: campos, campoId: campoId, campoNombre: campoNombre, banderas: banderas };
 }
 
 /* ---- armado del documento de prueba ------------------------------------- */
@@ -523,6 +545,11 @@ function lecturaDeIntentos(vistos) {
   const sirven = v.filter(x => x && x.cl && x.cl.clave === 'sirve');
   if (sirven.length) {
     for (const x of sirven) out.push(x.c.nombre + ' fue aceptado.');
+    // Un éxito sobre un candidato que no pedía avanzar guarda cantidades y
+    // nada más. Cantarlo como confirmación sería el error más caro de todos.
+    if (!sirven.some(x => x.c && x.c.avanza)) {
+      out.push('Pero ese cuerpo NO pedía avanzar de etapa: guardó cantidades y nada más. El documento sigue sin confirmar.');
+    }
     out.push('Relee el documento antes de cantar victoria: que haya avanzado de etapa no garantiza que el resto de los campos siga en pie.');
     return out;
   }
@@ -777,6 +804,11 @@ async function principal() {
        '/api/Servicio/cliente/' + encodeURIComponent(cli) + '/formulario/' + encodeURIComponent(form)],
       ['Documentos',               '/api/Documento']
     ];
+    // Una transferencia va a la bodega de un retail, no del cliente. Sin este
+    // maestro no hay con qué armarla, y es justo el que faltaba.
+    if (a.destino) {
+      fuentes.splice(4, 0, ['Bodegas del retail ' + a.destino, '/api/Bodega/retail/' + encodeURIComponent(a.destino)]);
+    }
     for (const [titulo, ruta] of fuentes) {
       let r;
       try { r = await pedir(ruta, { method: 'GET', headers: auth }); }
@@ -787,6 +819,15 @@ async function principal() {
       if (!Array.isArray(j)) { console.log('  (no vino una lista) ' + enmascarar(String(r.texto)).slice(0, 160)); continue; }
       const d = detectarCampos(j);
       console.log('  ' + j.length + ' opciones' + (j.length > 15 ? ' (muestro 15)' : ''));
+      const dPrev = detectarCampos(j);
+      for (const b of (dPrev.banderas || [])) {
+        const conLaBandera = j.filter(x => x && x[b] === true);
+        if (conLaBandera.length && conLaBandera.length < j.length) {
+          console.log('  con ' + b + ' = true (' + conLaBandera.length + ' de ' + j.length + '): ' +
+            conLaBandera.slice(0, 20).map(x => String(x[dPrev.campoId]) + ' ' +
+              String(dPrev.campoNombre ? x[dPrev.campoNombre] : '').slice(0, 28)).join(' · '));
+        }
+      }
       console.log('  campos: ' + (d.campos.length ? d.campos.join(', ') : '(la lista vino vacía)'));
       if (j.length) console.log('  primera fila cruda: ' + enmascarar(JSON.stringify(j[0])).slice(0, 300));
       if (!d.campoId) {
@@ -795,10 +836,15 @@ async function principal() {
         for (const it of j.slice(0, 15)) {
           const id  = it ? it[d.campoId] : null;
           const nom = (it && d.campoNombre) ? it[d.campoNombre] : '';
-          console.log('    ' + String(id) + '  ' + String(nom == null ? '' : nom).slice(0, 60));
+          const marcas = (d.banderas || []).map(k => k + '=' + (it ? it[k] : '')).join('  ');
+          console.log('    ' + String(id).padStart(6) + '  ' + String(nom == null ? '' : nom).slice(0, 44).padEnd(44) +
+                      (marcas ? '  ' + marcas : ''));
         }
         console.log('  (id = ' + d.campoId + (d.campoNombre ? ', nombre = ' + d.campoNombre : '') + ')');
       }
+    }
+    if (!a.destino) {
+      console.log('\nPara una transferencia agrega --destino=<id de retail> y te listo también sus bodegas.');
     }
     console.log('');
     return 0;
@@ -986,5 +1032,5 @@ if (require.main === module) {
 module.exports = {
   HOST_DEMO, VARS, esDemo, pintaDeMarcador, faltantes, enmascarar,
   clasificar, hablaDelRecurso, rangoBusqueda, TOPE_BUSQUEDA,
-  idCreado, idDeDocumento, lineaParaEnviar, cantidadDeLinea, cuerpoEco, tieneIdentidad, pistaDeContrato, juntarPistas, esFallaInterna, lecturaDeIntentos, hijosDelDocumento, detectarCampos, armarPayload, BP_REDTEC, TOPE_CANTIDAD, OBS_PRUEBA, leerErrorToken, describirError, conHost, leerFalloRed, aUS, ventana, camposDeEstado, asimetrias, cuerposCandidatos, verbosDe, leerArgs
+  idCreado, idDeDocumento, lineaParaEnviar, cantidadDeLinea, cuerpoEco, fechaDeDespacho, tieneIdentidad, pistaDeContrato, juntarPistas, esFallaInterna, lecturaDeIntentos, hijosDelDocumento, detectarCampos, armarPayload, BP_REDTEC, TOPE_CANTIDAD, OBS_PRUEBA, leerErrorToken, describirError, conHost, leerFalloRed, aUS, ventana, camposDeEstado, asimetrias, cuerposCandidatos, verbosDe, leerArgs
 };

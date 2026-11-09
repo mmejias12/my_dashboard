@@ -604,3 +604,188 @@ Tarda alrededor de 80 segundos: lee 45 días de histórico completo.
 
 Pruebas: `test-medir-citas-walmart.js` (44 y 41 mutaciones) y
 `test-verificar-listado-walmart.js` (31 y 28 mutaciones). Todas muerden.
+
+---
+
+## El contrato de la confirmación, medido botón por botón (9-nov-2026)
+
+El portal es Blazor Server: los clics viajan por WebSocket y no hay petición que
+capturar. Pero el **efecto** sí se ve. Tomando una instantánea del documento
+antes y después de cada botón, el diff dice exactamente qué produce cada acción
+— que es lo que hay que reproducir, no la forma del mensaje.
+
+Se hizo sobre una transferencia de prueba creada en DEMO (id 684031, 10 pallets,
+PF → Walmart). `scripts/sonda-escritura-redlink.js --instantanea=` y `--comparar=`.
+
+### Son DOS operaciones, no una
+
+| | Pantalla | Botón | Etapa |
+|---|---|---|---|
+| Paso 1 | Transacciones en proceso → Transferencia | **Actualizar y Avanzar** | 43 → 44 |
+| Paso 2 | Confirmaciones → Confirmar transferencia | **Confirmar** | 44 → 46 |
+
+**Qué deja el paso 1** (avanzar):
+
+```
+formMetapaId          43 -> 44
+usuarioIngresoId      13 -> 6          <- la firma se escribe ACA
+usuarioIngresoNombre  malfaro -> mmesias
+fechaConfirmacion     null -> 2026-11-09
+confirmacionVeces     0 -> 1
+formDdetalles[0].recepcionAnterior   null -> 0
+formDregistros        +1 fila (relleno, todo en cero)
+```
+
+**Qué deja el paso 2** (confirmar):
+
+```
+formMetapaId          44 -> 46
+confirmacionVeces     1 -> 2
+abierto               true -> false    <- el documento se cierra
+formDdetalles[0].recepcion          null -> 10
+formDdetalles[0].recepcionAnterior  0 -> 10
+formDregistros        +1 fila
+```
+
+### La firma NO está donde parecía
+
+`usuarioConfirmaId` quedó en **null** incluso después de una confirmación real
+hecha a mano en el portal. No es ahí donde queda la traza.
+
+Donde queda es en **`usuarioIngresoId`**: el portal lo sobrescribe con el
+usuario que ejecuta la acción. Ésa es la columna "Usuario" de la pantalla de
+transacciones, y por eso las confirmaciones automáticas aparecen como
+`M2LinkSystem`.
+
+Para nuestra escritura esto es una obligación, no un detalle: hay que **mandar**
+el id del usuario que firma. El servidor no lo deduce del token — se comprobó
+creando un documento con `usuarioIngresoId: 13` estando autenticado como otro
+usuario, y quedó con 13.
+
+El número tampoco sale del token: el scope `usersiD` pertenece al cliente del
+portal (`portalredtecapp`), no al de la API (`apiportalredtec`), y pedirlo
+devuelve `invalid_scope` y deja **sin token**. El token de la API sí trae
+`preferred_username`, `bpid`, `cardname`, `cargo` y `email`, pero no el id.
+`--quiensoy` lo muestra.
+
+Dato conocido: **`mmesias` es el `usersiD` 6**, deducido del diff. Falta el de
+`M3LinkSystem`, y es una pregunta de un renglón a quien administra los usuarios.
+
+### Por qué en DEMO no se puede avanzar, y ya no es misterio
+
+`avanzaEtapa: true` falló **siempre**, con el mismo error de guardado, en:
+
+- formulario 1 (Emisión), etapa 2
+- formulario 6 (Transferencia), etapa 43 "Pendiente Adjuntar Respaldo"
+- formulario 6 (Transferencia), **etapa 44 "Pendiente de Confirmación"** — la
+  etapa desde la que el botón del portal sí funciona
+- con y sin recepción, con y sin `fechaDespacho`, con y sin las filas de relleno
+
+Siete intentos, cuatro etapas, dos formularios, seis cuerpos, un solo error.
+Y en paralelo, lo que **sí** funciona siempre es escribir cantidades sin
+avanzar.
+
+Eso encaja con lo que explicó el proveedor: **confirmar o reconfirmar dispara un
+proceso de ajuste hacia SAP que mueve bodegas**. DEMO no tiene esa integración,
+así que la parte que no toca SAP pasa y la que sí toca falla. No es un campo
+faltante en el cuerpo: es el otro lado que no está.
+
+**Corolario: en DEMO no se va a poder avanzar nunca.** La prueba en productivo
+dejó de ser una apuesta y pasó a ser la única forma de saberlo, con una razón
+concreta detrás.
+
+### Cómo repetir la medición
+
+```
+node scripts\sonda-escritura-redlink.js --crear --form=6 --cliente=499 ^
+     --servicio=28 --usuario=13 --bodega-origen=1524 --destino=16 ^
+     --bodega-destino=386 --documento=14 --documento-numero=900003 ^
+     --cita=42674993 --cantidad=12 --si
+node scripts\sonda-escritura-redlink.js --instantanea=t0.json --id=<el que devolvio>
+   (apretar "Actualizar y Avanzar" en el portal)
+node scripts\sonda-escritura-redlink.js --instantanea=t1.json --id=...
+   (apretar "Confirmar")
+node scripts\sonda-escritura-redlink.js --instantanea=t2.json --id=...
+node scripts\sonda-escritura-redlink.js --comparar=t0.json,t1.json
+node scripts\sonda-escritura-redlink.js --comparar=t1.json,t2.json
+```
+
+La instantánea hay que tomarla **antes** del primer clic: si el documento ya
+está confirmado, los tres diffs salen vacíos y no se aprende nada.
+
+## Corrección: a quién se le avisa
+
+El aviso al cliente son las diferencias **POSITIVAS**, no las negativas.
+Confirmado por el área el 9-nov: si el cliente despachó 10 y Walmart dice 15, se
+confirman 10 y hay que avisarle para que **emita otra transferencia por los 5
+que faltan** — esos pallets están en Walmart sin respaldo. Si Walmart recibió
+menos, se confirma lo recibido y no queda nada abierto: la diferencia es un
+problema de transporte, no una transferencia por emitir.
+
+`reglaCantidad()` devolvía lo contrario hasta el 9-nov, leído de la pantalla del
+proveedor en vez de las reglas escritas. El correo al cliente habría salido con
+los casos equivocados.
+
+## Corrección: no toda etapa pendiente es confirmable
+
+`estaConfirmada()` descarta las confirmadas, pero **"Pendiente Adjuntar
+Respaldo" y "Pendiente de Confirmación" empiezan las dos con "Pendiente"** y
+pasaban igual. El listado proponía confirmar documentos que todavía esperan el
+respaldo del cliente.
+
+Medido sobre los 104 propuestos: **91 estaban en "Pendiente Adjuntar
+Respaldo"**, 10 en "Pendiente de Confirmación", 3 ya confirmadas. Si ese 91 es
+real, hay un atraso del que nadie está hablando; si el flujo de Walmart salta
+ese paso, el filtro sobra. El filtro quedó **opcional** (`--exigir-etapa`) hasta
+que se compruebe operando, porque es una regla deducida de la tabla y no vista
+funcionar.
+
+De paso aparecieron dos que nunca debieron estar en el listado: una
+**Transferencia Anulada** y una **relocalización** a la que la cita hizo match
+por error. Ahora tienen veredicto propio.
+
+## La pantalla: `confirmaciones-walmart.html` (9-nov-2026)
+
+El módulo de M2LINK que hacía este trabajo **murió** con unos cambios en Holux.
+No se está reemplazando contra un plazo: no hay nada corriendo. Por eso lo que
+se entrega es la herramienta andando, no el alcance.
+
+**Qué hace.** Se arrastra el `.xlsx` de Walmart tal como llega por correo. El
+archivo se lee **en el navegador** y no se sube a ninguna parte. De las fechas
+del propio reporte sale la ventana de consulta (±20 días, editable), se piden
+las transferencias a `/proxy/ops` —la misma lectura autenticada que usa el
+resto del m3link, así que no hubo que escribir ninguna Function nueva ni se
+toca el corte de 45 s— y se entrega el cruce en tres bandejas:
+
+| bandeja | qué trae | salida |
+|---|---|---|
+| Por confirmar | folio + cantidad, con la etapa a la vista | CSV `folio;cantRecibida` y copiar/pegar a Excel |
+| Avisar al cliente | las diferencias **positivas**: Walmart recibió más de lo despachado | CSV con cliente, cita y cantidad |
+| Excepciones | toda cita que no entra, **con su motivo** | CSV |
+
+Medido contra `Reporte-RedTec5.xlsx` real: 106 citas → 85 por confirmar, 9
+avisos, 21 excepciones. 85 + 21 = 106: **ninguna cita desaparece en silencio**.
+
+**Dónde vive la lógica.** En `data/walmart-nucleo.js`, sin dependencias, cargado
+tanto por la página como por `scripts/test-walmart-nucleo.js` en Node: **una
+sola copia de la regla**. Dos copias de la misma regla se separan sin que nadie
+se entere y después nadie sabe cuál de las dos corrió. 74 pruebas, 76
+mutaciones, todas mueren.
+
+El `.xlsx` se abre sin librería: es un ZIP con XML adentro, y tanto Chrome como
+Node traen `DecompressionStream`. Dos trampas que las pruebas cubren porque ya
+nos mordieron: los largos de nombre y extra del **encabezado local** no son los
+del directorio central (usar los del central corre el dato unos bytes sin
+avisar), y la celda **autocerrada** `<c r="B1"/>` tiene que ir primero en la
+alternancia del regex o la rama normal se la come junto con la celda siguiente.
+
+**Lo que la pantalla NO hace todavía.** No escribe en Redlink. Entrega la lista;
+la confirmación se ejecuta con `scripts/confirmar-redlink.js`, de a un folio,
+contra producción, y **esa prueba con un folio real sigue pendiente**. También
+sigue pendiente el `usersiD` numérico de `M3LinkSystem`, que es lo que se graba
+como firma en `usuarioIngresoId`.
+
+**Un hallazgo del reporte real.** De 573 filas en ocho reportes, 3 traen en la
+columna `appt_nbr` un número corto y sin cliente (38046, 38044, 38090): son
+filas de resumen, no citas. Salen con motivo propio y no como "sin coincidencia
+en Redlink", que mandaría a alguien a buscar en Redlink algo que nunca existió.

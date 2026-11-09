@@ -140,6 +140,15 @@ tr.total td{border-top:1px solid var(--line);border-bottom:0;font-weight:600;col
 .dif{color:var(--warning)}
 .vacio{padding:26px 10px;text-align:center;color:var(--muted);font-size:12px}
 
+/* resumen por familia: 47 filas sueltas no se leen de un vistazo */
+.resumen{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px}
+.resumen .f{display:flex;align-items:baseline;gap:7px;background:var(--surface-2);border:1px solid var(--line);
+  border-radius:9px;padding:7px 11px}
+.resumen .f b{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text)}
+.resumen .f span{font-size:11.5px;color:var(--text-2)}
+.resumen .f.mirar{border-color:rgba(250,178,25,.4);background:rgba(250,178,25,.06)}
+.resumen .f.mirar b{color:#f1d9a6}
+
 .acciones{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px;align-items:center}
 .acciones .nota{font-size:11px;color:var(--muted)}
 
@@ -255,6 +264,7 @@ tr.total td{border-top:1px solid var(--line);border-bottom:0;font-weight:600;col
       <div class="chead"><span class="eyebrow">Para revisar</span><h2>Lo que no se confirma, y por qué</h2></div>
       <p>Ninguna cita del reporte desaparece en silencio: la que no entra a la lista sale acá con el motivo.
       Una fila que falta en una lista que alguien va a ejecutar no se nota hasta que el cliente reclama.</p>
+      <div class="resumen" id="resumen-exc"></div>
       <div class="acciones">
         <button id="btn-csv-exc" disabled>Bajar CSV</button>
       </div>
@@ -510,6 +520,20 @@ function pintarTodo() {
             num(f.porAvisar), etiqueta(f.etapa)];
   }, 'Ninguna cita declara más pallets de los que salieron.');
 
+  // Las familias que piden una mirada se marcan; las que simplemente no
+  // corresponde confirmar (ya confirmada, anulada) no tienen nada que revisar.
+  var MIRAR = { 'sin-match': 1, 'cita-ambigua': 1, 'folio-repetido': 1, 'sin-folio': 1, 'cantidad-cero': 1 };
+  var cajaRes = $('resumen-exc');
+  cajaRes.textContent = '';
+  N.resumenMotivos(r.excepciones).forEach(function (x) {
+    var d = document.createElement('div');
+    d.className = 'f' + (MIRAR[x.clave] ? ' mirar' : '');
+    var n = document.createElement('b'); n.textContent = num(x.n);
+    var t = document.createElement('span'); t.textContent = x.texto;
+    d.appendChild(n); d.appendChild(t);
+    cajaRes.appendChild(d);
+  });
+
   tabla($('tb-exc'), COLS_EXC, r.excepciones, function (f) {
     return [f.cita, f.folio == null ? '—' : f.folio, f.motivo,
             f.despachada == null ? '—' : num(f.despachada), num(f.canjeWM),
@@ -569,9 +593,10 @@ $('btn-csv-avisar').addEventListener('click', function () {
 });
 $('btn-csv-exc').addEventListener('click', function () {
   bajar('excepciones-walmart-' + sello() + '.csv',
-    csvDe(['cita', 'folio', 'motivo', 'despachado', 'walmart', 'etapa', 'cliente'],
+    csvDe(['cita', 'folio', 'familia', 'motivo', 'despachado', 'walmart', 'etapa', 'cliente'],
       S.r.excepciones, function (f) {
-        return [f.cita, f.folio == null ? '' : f.folio, f.motivo, f.despachada == null ? '' : f.despachada,
+        return [f.cita, f.folio == null ? '' : f.folio, f.clave, f.motivo,
+                f.despachada == null ? '' : f.despachada,
                 f.canjeWM, f.etapa || '', f.clienteRedlink || f.cliente];
       }));
 });

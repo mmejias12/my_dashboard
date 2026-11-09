@@ -25,6 +25,10 @@ const MUTACIONES = {
   L03: { que: 'el listado manda citas sin match en Redlink',
          de: "    if (c.estado === 'sin-match') { fuera.push({ cita: g.cita, motivo: 'sin match en Redlink' }); return; }",
          a: "    if (c.estado === 'sin-match') { return; }" },
+  L12: { que: 'el listado incluye etapas que todavia no son confirmables',
+         de: '    if (!etapaConfirmable(op)) {', a: '    if (false) {' },
+  L13: { que: 'cualquier etapa pendiente se da por confirmable',
+         de: 'const RE_CONFIRMABLE = /pendiente\\s+de\\s+confirmaci/i;', a: 'const RE_CONFIRMABLE = /pendiente/i;' },
   L04: { que: 'el listado manda cantidades en cero',
          de: '    if (!(r.aConfirmar > 0)) {', a: '    if (false) {' },
   L05: { que: 'el folio repetido en dos citas se deja pasar',
@@ -61,8 +65,8 @@ const MUTACIONES = {
          de: '    const i = cab.indexOf(COLUMNAS[k]);', a: '    const i = Object.keys(COLUMNAS).indexOf(k);' },
   H07: { que: 'se confirma lo que acepto Walmart aunque sea MAS de lo despachado',
          de: '  const aConfirmar = a < d ? a : d;', a: '  const aConfirmar = a;' },
-  H08: { que: 'una diferencia positiva tambien deja algo por informar',
-         de: '  return { aConfirmar: aConfirmar, diferencia: a - d, porInformar: a < d ? d - a : 0 };',
+  H08: { que: 'una diferencia NEGATIVA tambien deja algo por avisar',
+         de: '  return { aConfirmar: aConfirmar, diferencia: a - d, porInformar: a > d ? a - d : 0 };',
          a: '  return { aConfirmar: aConfirmar, diferencia: a - d, porInformar: Math.abs(d - a) };' },
   H09: { que: 'una cita que matchea varias operaciones se trata como match exacto',
          de: "  if (exactas.length > 1) return { estado: 'duplicada', ops: exactas };",
@@ -288,14 +292,16 @@ prueba('T09 las filas sin cita no entran al cruce', (M) => {
   igual(M.filasWalmart(M.leerXlsx(buf)).length, 1, 'una fila sin cita no se puede cruzar con nada');
 });
 
-prueba('T10 la regla: Walmart acepto MENOS que lo despachado', (M) => {
-  igual(M.reglaCantidad(24, 20), { aConfirmar: 20, diferencia: -4, porInformar: 4 },
-    'se confirma lo aceptado y quedan 4 por informarle al cliente');
+prueba('T10 la regla: Walmart recibio MENOS que lo despachado', (M) => {
+  igual(M.reglaCantidad(24, 20), { aConfirmar: 20, diferencia: -4, porInformar: 0 },
+    'se confirma lo recibido, y NO queda nada por avisar: los 4 que faltan son un ' +
+    'problema de transporte, no una transferencia por emitir');
 });
 
-prueba('T11 la regla: Walmart acepto MAS que lo despachado', (M) => {
-  igual(M.reglaCantidad(24, 30), { aConfirmar: 24, diferencia: 6, porInformar: 0 },
-    'no se puede confirmar mas de lo que salio, y una diferencia positiva NO deja nada por informar');
+prueba('T11 la regla: Walmart recibio MAS que lo despachado', (M) => {
+  igual(M.reglaCantidad(24, 30), { aConfirmar: 24, diferencia: 6, porInformar: 6 },
+    'se confirma lo despachado, y los 6 de mas SI se le avisan al cliente para que ' +
+    'emita otra transferencia: estan en Walmart sin respaldo');
 });
 
 prueba('T12 la regla: Walmart acepto exactamente lo despachado', (M) => {
@@ -320,7 +326,7 @@ prueba('T13 el cruce distingue exacta, duplicada, por observacion y sin match', 
 prueba('T14 el contraste compara la regla contra lo que YA se confirmo', (M) => {
   const ok = M.contrastar({ canje: 20 },
     { cantidadDespachada: 24, cantidadConfirmada: 20, fechaConfirmacion: '2026-11-06' });
-  igual([ok.yaConfirmada, ok.laRegla, ok.loReal, ok.calza, ok.porInformar], [true, 20, 20, true, 4],
+  igual([ok.yaConfirmada, ok.laRegla, ok.loReal, ok.calza, ok.porInformar], [true, 20, 20, true, 0],
     'la regla reproduce lo confirmado');
 
   const mal = M.contrastar({ canje: 20 },
@@ -588,7 +594,7 @@ prueba('T34 si Walmart acepto MAS de lo despachado se confirma lo despachado', (
   const idx = M.indexar(OPS_LST);
   const r = M.listadoParaConfirmar([grupo('42674991', 99)], idx);
   igual(r.lineas[0].cantRecibida, 15, 'no se puede confirmar mas de lo que salio');
-  igual(r.lineas[0].porInformar, 0, 'una diferencia positiva no deja nada por informar');
+  igual(r.lineas[0].porInformar, 84, 'Walmart dice 99 contra 15 despachados: 84 pallets que el cliente debe transferir');
 });
 
 prueba('T35 una transferencia YA confirmada no entra al listado', (M) => {
@@ -636,6 +642,22 @@ prueba('T40 una cantidad a confirmar en cero no se manda', (M) => {
   cierto(/cero/.test(r.fuera[0].motivo), r.fuera[0].motivo);
 });
 
+prueba('T45 una transferencia que espera el respaldo NO entra al listado', (M) => {
+  const ops = [{ nroCita: '42674991', nroPedido: 4141181, cantidadDespachada: 19,
+                 cantidadConfirmada: 0, etapaOperacion: 'Pendiente Adjuntar Respaldo', observacion: '' }];
+  const r = M.listadoParaConfirmar([grupo('42674991', 3)], M.indexar(ops));
+  igual(r.lineas.length, 0, 'todavia no llego a la etapa confirmable');
+  cierto(/Pendiente Adjuntar Respaldo/.test(r.fuera[0].motivo), r.fuera[0].motivo);
+});
+
+prueba('T46 la etapa confirmable se distingue de la otra pendiente', (M) => {
+  cierto(M.etapaConfirmable({ etapaOperacion: 'Pendiente de Confirmacion' }));
+  cierto(M.etapaConfirmable({ etapaOperacion: 'PENDIENTE DE CONFIRMACIÓN' }), 'con tilde y en mayusculas');
+  cierto(!M.etapaConfirmable({ etapaOperacion: 'Pendiente Adjuntar Respaldo' }),
+    'las dos empiezan con "Pendiente" y son etapas distintas');
+  cierto(!M.etapaConfirmable({}));
+});
+
 prueba('T41 el listado sale ordenado por folio', (M) => {
   const idx = M.indexar(OPS_LST);
   const r = M.listadoParaConfirmar([grupo('42674993', 10), grupo('42674991', 12)], idx);
@@ -656,7 +678,7 @@ prueba('T43 un listado vacio igual escribe el encabezado', (M) => {
 prueba('T44 el listado conserva lo que hace falta para revisarlo a mano', (M) => {
   const r = M.listadoParaConfirmar([grupo('42674991', 12)], M.indexar(OPS_LST));
   const l = r.lineas[0];
-  igual([l.cita, l.despachada, l.aceptadaWM, l.porInformar], ['42674991', 15, 12, 3],
+  igual([l.cita, l.despachada, l.aceptadaWM, l.porInformar], ['42674991', 15, 12, 0],
     'sin esto, una diferencia no se puede explicar');
 });
 

@@ -47,6 +47,16 @@ const FILAS = [
                           body: JSON.stringify(r.cuerpo || r) });
   });
 
+  // El seguimiento de citas sin cruce se intercepta: esta prueba es sobre
+  // confirmar, y sin esto cada cruce intentaría hablar con el api.
+  const PEND = { estado: { almacenamiento: true, diasParaPreguntar: 7, abiertas: 0, pallets: 0,
+                           urgentes: 0, citas: [], clientes: [] }, pedidos: [] };
+  await pg.route('**/api/pendientes-cruce', async (route) => {
+    PEND.pedidos.push({ metodo: route.request().method(),
+                        cuerpo: route.request().postData() ? JSON.parse(route.request().postData()) : null });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(PEND.estado) });
+  });
+
   await pg.goto('http://127.0.0.1:8899/confirmaciones-walmart.html');
   const sembrar = async () => pg.evaluate((filas) => {
     const S = window.__prueba.S; S.conf = {}; S.sel = {}; S.corriendo = false;
@@ -154,6 +164,95 @@ const FILAS = [
      'la tercera sigue sin tocar, con su botón');
   ok(await pg.locator('#tb-conf tbody tr').first().locator('input.chk').isDisabled(),
      'el check de una ya resuelta queda fuera de juego');
+
+  console.log('\n-- las citas sin cruce se guardan y se re-cruzan --');
+  // La bandeja de excepciones ahora tiene que decir DE QUIÉN es cada cita.
+  await pg.evaluate(() => {
+    const S = window.__prueba.S;
+    S.filas = [{ cita: '42759276', rut: '77643296-2', cliente: 'NUTRISCO CHILE S. A.',
+                 cd: '6009', recepcion: '406507', fecha: '2026-11-09', po: '2851158713',
+                 total: 15, malos: 0, canje: 15 }];
+    S.nombre = 'Reporte-RedTec.xlsx';
+    S.ops = [];
+    S.conf = {}; S.sel = {}; S.pend = null; S.reaparecidas = [];
+    S.r = { citas: 1, porConfirmar: [], avisar: [], excepciones: [
+      { cita: '42759276', clave: 'sin-match', motivo: 'sin coincidencia en Redlink',
+        cliente: 'NUTRISCO CHILE S. A.', rut: '77643296-2', canjeWM: 15, totalWM: 15,
+        fecha: '2026-11-09', folio: null, despachada: null, etapa: '' } ] };
+    window.__prueba.pintarTodo();
+  });
+  const filaExc = await pg.locator('#tb-exc tbody tr').first().innerText();
+  ok(/NUTRISCO/.test(filaExc), 'la excepción dice de qué cliente es: ' + filaExc.replace(/\t/g, ' | '));
+  ok(/77643296-2/.test(filaExc), 'y su rut');
+
+  PEND.pedidos.length = 0;
+  await pg.evaluate(() => window.__prueba.sincronizarPendientes());
+  await pg.waitForTimeout(300);
+  ok(PEND.pedidos.length === 2, 'lee y después guarda: ' + PEND.pedidos.map(p => p.metodo).join(','));
+  const post = PEND.pedidos.find(p => p.metodo === 'POST');
+  ok(post && post.cuerpo.vistas.length === 1, 'manda la cita sin cruce');
+  ok(post && post.cuerpo.vistas[0].cita === '42759276' && post.cuerpo.vistas[0].pallets === 15,
+     'con sus pallets: ' + JSON.stringify(post && post.cuerpo.vistas[0] && {
+       cita: post.cuerpo.vistas[0].cita, pallets: post.cuerpo.vistas[0].pallets }));
+  // Lo que hace posible re-cruzarla mañana: van las filas ORIGINALES.
+  ok(post && post.cuerpo.vistas[0].filas.length === 1 && post.cuerpo.vistas[0].filas[0].canje === 15,
+     'y las filas originales del reporte, para poder re-cruzarla');
+  ok(post && post.cuerpo.archivo === 'Reporte-RedTec.xlsx', 'y de qué archivo salió');
+
+  console.log('\n-- una pendiente que por fin cruza vuelve a la bandeja --');
+  // El api devuelve una pendiente de ayer; hoy Redlink ya tiene su operación.
+  PEND.estado = { almacenamiento: true, diasParaPreguntar: 7, abiertas: 1, pallets: 9, urgentes: 1,
+    citas: [{ cita: '42704805', cliente: 'OTRO CLIENTE', rut: '1-9', pallets: 9, estado: 'abierta',
+              desde: '2026-11-01', dias: 9, urgente: true,
+              filas: [{ cita: '42704805', rut: '1-9', cliente: 'OTRO CLIENTE', cd: '6009',
+                        recepcion: '1', fecha: '2026-11-01', total: 9, malos: 0, canje: 9 }] }],
+    clientes: [{ cliente: 'OTRO CLIENTE', rut: '1-9', citas: 1, pallets: 9, urgentes: 1,
+                 masVieja: '2026-11-01', filas: [{ cita: '42704805' }] }] };
+  PEND.pedidos.length = 0;
+  await pg.evaluate(() => {
+    const S = window.__prueba.S;
+    S.r = { citas: 0, porConfirmar: [], avisar: [], excepciones: [] };
+    S.filas = []; S.reaparecidas = [];
+    // Hoy Redlink SÍ tiene la operación de esa cita.
+    S.ops = [{ nroPedido: 4150001, nroCita: '42704805', operacion: 'Transferencia',
+               etapaOperacion: 'Pendiente de Confirmacion', cantidadDespachada: 9,
+               cantidadConfirmada: 0, bodegaDestinoStr: 'ZWM01', observacion: '' }];
+    window.__prueba.pintarTodo();
+    return window.__prueba.sincronizarPendientes();
+  });
+  await pg.waitForTimeout(300);
+  const post2 = PEND.pedidos.find(p => p.metodo === 'POST');
+  ok(post2 && post2.cuerpo.cruzadas.length === 1, 'avisa que cruzó: ' + JSON.stringify(post2 && post2.cuerpo.cruzadas));
+  ok(post2 && post2.cuerpo.cruzadas[0].folio === 4150001, 'con el folio que encontró');
+  const trasRe = await pg.evaluate(() => ({
+    enBandeja: window.__prueba.S.r.porConfirmar.map(f => f.folio),
+    marcada: window.__prueba.S.r.porConfirmar.every(f => f.reaparecida === true),
+    aviso: (document.getElementById('av-pend') || {}).textContent
+  }));
+  ok(trasRe.enBandeja.length === 1 && trasRe.enBandeja[0] === 4150001,
+     'y se suma sola a POR CONFIRMAR: ' + JSON.stringify(trasRe.enBandeja));
+  ok(trasRe.marcada, 'marcada como reaparecida');
+  ok(/aparecieron hoy/.test(trasRe.aviso), 'y se avisa: ' + trasRe.aviso);
+
+  console.log('\n-- la pestaña de sin cruce --');
+  await pg.evaluate(() => {
+    const S = window.__prueba.S;
+    S.pend = { almacenamiento: true, diasParaPreguntar: 7, abiertas: 3, pallets: 40, urgentes: 2,
+      citas: [], clientes: [
+        { cliente: 'GRANDE SA', rut: '1-9', citas: 2, pallets: 37, urgentes: 2,
+          masVieja: '2026-11-01', filas: [{ cita: '42704805' }, { cita: '42704806' }] },
+        { cliente: 'CHICO LTDA', rut: '2-7', citas: 1, pallets: 3, urgentes: 0,
+          masVieja: '2026-11-08', filas: [{ cita: '42704807' }] }] };
+    S.reaparecidas = [];
+    window.__prueba.pintarTodo();
+  });
+  ok(await pg.locator('#t-pend').innerText() === '3', 'la pestaña cuenta las abiertas');
+  ok((await pg.locator('#tb-pend tbody tr').count()) === 2, 'dos clientes');
+  const pend0 = await pg.locator('#tb-pend tbody tr').first().innerText();
+  ok(/GRANDE SA/.test(pend0) && /37/.test(pend0), 'el de más pallets primero: ' + pend0.replace(/\t/g, ' | '));
+  ok(/42704805/.test(pend0), 'y se ven las citas, que es lo que se le pregunta al cliente');
+  ok(/pallets en juego/.test(await pg.locator('#resumen-pend').innerText()),
+     'el resumen dice los pallets en juego');
 
   console.log('\n-- una confirmación que no quedó en el historial --');
   await sembrar();

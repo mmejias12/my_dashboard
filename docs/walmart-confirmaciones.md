@@ -1324,4 +1324,30 @@ cruzado confirma la transferencia equivocada y el PATCH no pregunta), que traiga
 una sola línea de detalle y que su `recepcion` sea **la cantidad que pedimos**.
 Cualquiera de esas cosas detiene la corrida.
 
-Cobertura: 93 pruebas, 84 mutaciones, todas mueren.
+### `--candidatos`: de dónde sale el folio
+
+El 10-nov quedó claro que pedirle a alguien un folio para tipear es pedirle que
+se equivoque (la primera corrida se hizo literal con `--folio=N`). Así que el
+script lo busca:
+
+```
+node scripts/confirmar-redlink.js --productivo --candidatos
+```
+
+Lee el histórico de los **últimos 3 días** (no 30: son ~4.000 operaciones por
+semana y la que se confirma hoy es de ayer o de hoy), filtra las que van a
+Walmart y están en etapa 43 o 44, lee el documento de cada una para saber la
+cantidad despachada, la pasa por **las mismas nueve guardas del plan** y escribe
+la línea de comando lista para copiar. Corta en cuanto junta las que pidió
+(`--cuantos=5` por omisión), así que no baja los cinco tramos.
+
+Los nombres de los campos se leen por lista de alternativas (`etapaOperacion`,
+`formMetapaNombre`, `etapa`…): el histórico crudo y el `/proxy/ops` no etiquetan
+igual lo mismo, y adivinar uno solo deja la búsqueda muda — no encuentra nada y
+no dice por qué. Si ninguna fila trae un campo de etapa legible, lo dice con
+esas palabras en vez de informar "no hay candidatas".
+
+La cantidad que propone es la **despachada**. Si Walmart recibió menos, va lo
+que recibió: ese número es el que mueve stock.
+
+Cobertura: 106 pruebas, 97 mutaciones, todas mueren.

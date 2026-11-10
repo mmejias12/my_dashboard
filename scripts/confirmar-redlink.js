@@ -194,13 +194,18 @@ function comparar(antes, despues) {
 
 function leerArgs(argv) {
   const a = { productivo: false, folio: null, cantidad: null, si: false, dias: '30', quien: null,
-              usuario: null, preparar: false, tramo: '7', timeout: null };
+              usuario: null, preparar: false, tramo: '7', timeout: null,
+              candidatos: false, cuantos: '5', diasExplicito: false };
   for (const x of (argv || [])) {
     if (x === '--productivo') a.productivo = true;
     else if (x === '--si') a.si = true;
     else if (x.indexOf('--folio=') === 0) a.folio = x.slice(8);
     else if (x.indexOf('--cantidad=') === 0) a.cantidad = x.slice(11);
-    else if (x.indexOf('--dias=') === 0) a.dias = x.slice(7);
+    else if (x.indexOf('--dias=') === 0) { a.dias = x.slice(7); a.diasExplicito = true; }
+    else if (x.indexOf('--cuantos=') === 0) a.cuantos = x.slice(10);
+    // --candidatos no escribe nada: busca transferencias de Walmart que hoy
+    // SÍ corresponda confirmar y arma la línea de comando para cada una.
+    else if (x === '--candidatos') a.candidatos = true;
     else if (x.indexOf('--tramo=') === 0) a.tramo = x.slice(8);
     else if (x.indexOf('--timeout=') === 0) a.timeout = x.slice(10);
     else if (x.indexOf('--quien=') === 0) { a.quien = x.slice(8); a.folio = a.folio || a.quien; }
@@ -356,6 +361,47 @@ function cotejarFirma(resuelto, configurado) {
   }
   return { ok: true, usar: configurado, verificado: true,
            dice: 'verificado: ' + (resuelto.nombre || NOMBRE_M3LINK) + ' es ' + configurado };
+}
+
+// ---- buscar transferencias que hoy corresponda confirmar ----------------
+//
+// Las filas del histórico crudo y las del /proxy/ops no usan las mismas
+// etiquetas para lo mismo. Adivinar UNA sola deja la búsqueda muda: no
+// encuentra nada y no dice por qué, que es la peor de las dos respuestas.
+const CAMPOS_FILA = {
+  folio:    ['folio', 'nroPedido'],
+  etapa:    ['etapaOperacion', 'formMetapaNombre', 'etapa', 'nombreEtapa', 'etapaNombre'],
+  destino:  ['bpDestinoNombre', 'destino', 'clienteDestino', 'bpDestino', 'destinoNombre'],
+  servicio: ['operacion', 'servicio', 'formNombre', 'nombreForm', 'formDescripcion'],
+  id:       ['formHeaderiD', 'formHeaderId', 'id']
+};
+function campoFila(fila, cual) {
+  const nombres = CAMPOS_FILA[cual] || [];
+  for (let i = 0; i < nombres.length; i++) {
+    const v = fila ? fila[nombres[i]] : undefined;
+    if (v !== undefined && v !== null && String(v).trim() !== '') return v;
+  }
+  return null;
+}
+
+// El filtro es el mismo que el del plan, pero sobre la fila del listado: hacia
+// Walmart y en una de las dos etapas confirmables. Se cuenta aparte cuántas
+// filas no traían etapa, para distinguir "no hay candidatas" de "no supe leer
+// el listado" — son dos problemas distintos y mandan a mirar lados distintos.
+function candidatosDe(filas) {
+  const out = [];
+  let sinEtapa = 0;
+  (filas || []).forEach(function (f) {
+    if (!f || typeof f !== 'object') return;
+    const etapa = campoFila(f, 'etapa');
+    if (etapa === null) { sinEtapa++; return; }
+    if (!/walmart/i.test(String(campoFila(f, 'destino') || ''))) return;
+    if (!ETAPAS_CONFIRMABLES.some(re => re.test(String(etapa)))) return;
+    out.push({ folio: campoFila(f, 'folio'), id: campoFila(f, 'id'), etapa: String(etapa),
+               destino: String(campoFila(f, 'destino') || ''),
+               servicio: String(campoFila(f, 'servicio') || '') });
+  });
+  return { candidatos: out, sinEtapa: sinEtapa, filas: (filas || []).length };
 }
 
 // Quien firma un documento. Es `usuarioIngresoId`, no `usuarioConfirmaId`:
@@ -598,6 +644,35 @@ async function prepararConfirmacion(ruta, pedirFn) {
   return Object.assign({}, otra, { conLectura: true, statusEscritura: r.status });
 }
 
+// Una transferencia que hoy corresponde confirmar es de los últimos días.
+// Bajar treinta por omisión es hacer esperar diecisiete mil operaciones para
+// nada; si alguien pide --dias se respeta lo que pidió, aunque pida más.
+const DIAS_CANDIDATOS = '3';
+function diasParaCandidatos(a) {
+  return (a && a.diasExplicito) ? a.dias : DIAS_CANDIDATOS;
+}
+
+// Igual que buscarPorFolio pero acumula: corta en cuanto juntó suficientes,
+// para no bajar diecisiete mil operaciones cuando alcanzan las de ayer.
+async function buscarCandidatos(dias, paso, cuantos, alTramo, traer, alCorte) {
+  const lista = tramosHaciaAtras(dias, paso);
+  const bajar = traer || traerTramo;
+  const meta = Math.max(1, parseInt(cuantos, 10) || 5);
+  let total = 0, sinEtapa = 0, acum = [];
+  for (let i = 0; i < lista.length; i++) {
+    const t = lista[i];
+    const arr = await bajar(t, alCorte);
+    total += arr.length;
+    const r = candidatosDe(arr);
+    sinEtapa += r.sinEtapa;
+    acum = acum.concat(r.candidatos);
+    if (alTramo) alTramo({ i: i + 1, de: lista.length, desde: t.desde, hasta: t.hasta,
+                           registros: arr.length, encontrado: r.candidatos.length });
+    if (acum.length >= meta) break;
+  }
+  return { candidatos: acum, total: total, sinEtapa: sinEtapa, deTramos: lista.length };
+}
+
 async function leerDocumento(id) {
   const r = await pedir('/api/FormHeader/' + encodeURIComponent(id), { method: 'GET' }, 'lectura');
   if (r.status !== 200) throw new Error('No se pudo leer el documento ' + id + ': HTTP ' + r.status);
@@ -629,6 +704,7 @@ async function main() {
     console.log('     node scripts/confirmar-redlink.js --productivo --folio=N --cantidad=K --si');
     console.log('');
     console.log('Para sólo MIRAR, sin escribir nada:');
+    console.log('  --candidatos     qué transferencias de Walmart corresponde confirmar hoy');
     console.log('  --quien=N        quién firmó el documento de ese folio');
     console.log('  --usuario=NOMBRE qué usersiD tiene ese usuario según la API');
     console.log('\nSi el histórico se corta por tiempo se parte solo; --timeout=120 le da más plazo.\n');
@@ -665,6 +741,55 @@ async function main() {
     console.log('\n  Sólo pregunté. No mandé nada.\n');
     return u.ok ? 0 : 1;
   }
+  // --candidatos SOLO LEE. Existe para el primer disparo: en vez de pedirle a
+  // alguien que saque un folio del Excel y lo tipee, el script busca las que
+  // hoy corresponde confirmar, las pasa por las mismas guardas del plan y
+  // escribe la línea de comando de cada una.
+  if (a.candidatos) {
+    const dias = diasParaCandidatos(a);
+    const r = await buscarCandidatos(dias, a.tramo, a.cuantos, eco, null, alCorte);
+    console.log('  histórico: ' + r.total.toLocaleString('es-CL') + ' operaciones en ' + dias + ' días');
+    if (r.sinEtapa === r.total && r.total > 0) {
+      console.log('\nNinguna fila del histórico trae un campo de etapa que sepa leer.');
+      console.log('No es que no haya candidatas: no supe leer el listado.');
+      console.log('Los campos que busco: ' + CAMPOS_FILA.etapa.join(', ') + '\n');
+      return 2;
+    }
+    if (!r.candidatos.length) {
+      console.log('\nNo hay transferencias de Walmart en etapa confirmable en ' + dias + ' días.');
+      console.log('Prueba --dias mayor.\n');
+      return 2;
+    }
+    console.log('');
+    let sirven = 0;
+    for (const c of r.candidatos) {
+      if (!c.id) { console.log('  folio ' + c.folio + ': la fila no trae formHeaderiD'); continue; }
+      // Se lee el documento de cada una: la fila del listado no alcanza para
+      // saber qué cantidad corresponde, y ese número es el que mueve stock.
+      let doc;
+      try { doc = await leerDocumento(c.id); }
+      catch (e) { console.log('  folio ' + c.folio + ': no se pudo leer (' + ((e && e.message) || e) + ')'); continue; }
+      const det = (doc.formDdetalles || [])[0] || {};
+      const desp = Number(det.despachado) || 0;
+      const plan = planDeConfirmacion(doc, desp, USERSID_M3LINK);
+      if (!plan.ok) {
+        console.log('  folio ' + c.folio + ' — NO: ' + plan.problemas.join(' · '));
+        continue;
+      }
+      sirven++;
+      console.log('  folio ' + c.folio + '  ·  despachado ' + desp + '  ·  ' + plan.resumen.etapa);
+      console.log('    ' + plan.resumen.destino + ' · ' + (plan.resumen.bodega || '(sin bodega)'));
+      console.log('    node scripts/confirmar-redlink.js --productivo --folio=' + c.folio +
+                  ' --cantidad=' + desp + ' --preparar');
+    }
+    console.log('');
+    console.log(sirven ? '  ' + sirven + ' sirven. La cantidad de arriba es la DESPACHADA: si Walmart ' +
+                         'recibió menos,\n  hay que poner lo que recibió, no lo despachado.'
+                       : '  Ninguna pasó las guardas del plan.');
+    console.log('\n  Sólo leí. No mandé nada.\n');
+    return sirven ? 0 : 2;
+  }
+
   // --quien SOLO LEE: ni pide la cantidad ni exige las credenciales de
   // escritura, porque no va a escribir nada.
   if (a.quien) {
@@ -827,6 +952,7 @@ module.exports = { revisarCredenciales, USUARIOS, ETAPAS_CONFIRMABLES, etapaConf
   USERSID_M3LINK, NOMBRE_M3LINK, veredictoDeFirma, tramosHaciaAtras, buscarPorFolio,
   partirTramo, esCorteDeTiempo, partirYReintentar, ORIGEN, urlConfirmar, revisarPreparado,
   interpretarUsuario, idDeUsuario, rutaDeUsuario, cotejarFirma, prepararConfirmacion, RE_NOMBRE_USUARIO,
+  CAMPOS_FILA, campoFila, candidatosDe, buscarCandidatos, diasParaCandidatos, DIAS_CANDIDATOS,
   planDeConfirmacion, comparar, leerArgs, esConfirmada, CAMPOS_ESTADO, aUS };
 
 if (require.main === module) {

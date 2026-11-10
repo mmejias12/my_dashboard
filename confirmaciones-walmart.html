@@ -87,6 +87,8 @@ button.pri:hover:not(:disabled){background:#f03529;border-color:#f03529}
    que verse distinto del primero, no sólo leerse distinto. */
 button.pri.armado{background:#a8160c;border-color:#ff6b5e;box-shadow:0 0 0 2px rgba(255,107,94,.25)}
 button.mini{padding:3px 9px;font-size:11px;border-radius:6px;white-space:nowrap}
+input.chk{width:15px;height:15px;accent-color:var(--brand);cursor:pointer;vertical-align:middle}
+input.chk:disabled{cursor:default;opacity:.4}
 .nota-regla{margin-top:12px;font-size:11.5px;color:var(--text-2);line-height:1.5;
   border-left:2px solid var(--line);padding-left:11px}
 .nota-regla span{display:block;color:var(--muted);font-size:10.5px;margin-top:4px}
@@ -531,8 +533,11 @@ function tabla(el, cols, filas, fila, vacio) {
   var thead = document.createElement('thead'), tr = document.createElement('tr');
   cols.forEach(function (c) {
     var th = document.createElement('th');
-    th.textContent = c.t;
+    // Un encabezado puede ser un elemento (el check de "todas") en vez de texto.
+    if (c.el) th.appendChild(c.el());
+    else th.textContent = c.t;
     if (c.n) th.style.textAlign = 'right';
+    if (c.ancho) th.style.width = c.ancho;
     tr.appendChild(th);
   });
   thead.appendChild(tr); el.appendChild(thead);
@@ -566,9 +571,15 @@ function conDif(valor, dif) {
   return s;
 }
 
-var COLS_CONF = [{ t: 'Folio', mono: true }, { t: 'Cita', mono: true }, { t: 'Cliente', libre: true },
+// Las dos primeras columnas son las de ACCIÓN, y van primero a propósito: con
+// 52 filas la tabla scrollea horizontal y la última columna arranca en los
+// 1330px dentro de un contenedor de 1102 — medido el 10-nov, después de que
+// nadie encontrara el botón. Una columna de acción que hay que ir a buscar
+// scrolleando es una columna que no existe.
+var COLS_CONF = [{ t: '', el: checkTodas, ancho: '34px' }, { t: 'Confirmación', ancho: '116px' },
+                 { t: 'Folio', mono: true }, { t: 'Cita', mono: true }, { t: 'Cliente', libre: true },
                  { t: 'Servicio' }, { t: 'Despachado', n: true }, { t: 'Walmart', n: true },
-                 { t: 'A confirmar', n: true }, { t: 'Etapa' }, { t: 'Bodega' }, { t: 'Confirmación' }];
+                 { t: 'A confirmar', n: true }, { t: 'Etapa' }, { t: 'Bodega' }];
 var COLS_AVISAR = [{ t: 'Folio', mono: true }, { t: 'Cita', mono: true }, { t: 'Cliente', libre: true },
                    { t: 'Servicio' }, { t: 'Despachado', n: true }, { t: 'Walmart', n: true },
                    { t: 'A informar', n: true }, { t: 'Etapa' }];
@@ -617,10 +628,11 @@ function pintarTodo() {
     });
 
   tabla($('tb-conf'), COLS_CONF, r.porConfirmar, function (f) {
-    return [f.folio, f.cita, f.clienteRedlink || f.cliente, f.servicio, num(f.despachada),
+    return [celdaSeleccion(f), celdaConfirmacion(f),
+            f.folio, f.cita, f.clienteRedlink || f.cliente, f.servicio, num(f.despachada),
             conDif(f.canjeWM, f.diferencia !== 0), num(f.aConfirmar),
             etiqueta(f.etapa, /pendiente\s+de\s+confirmaci/i.test(f.etapa) ? 'lista' : 'espera'),
-            f.bodega, celdaConfirmacion(f)];
+            f.bodega];
   }, 'Nada por confirmar con este reporte y esta ventana.');
 
   tabla($('tb-avisar'), COLS_AVISAR, r.avisar, function (f) {
@@ -663,6 +675,7 @@ function pintarTodo() {
   }
 
   textoBoton();
+  pintarCheckTodas();
   $('btn-csv').disabled = !r.porConfirmar.length;
   $('btn-tsv').disabled = !r.porConfirmar.length;
   $('btn-csv-avisar').disabled = !r.avisar.length;
@@ -720,7 +733,62 @@ function csvDe(cab, filas, fila) {
  * ------------------------------------------------------------------ */
 
 S.conf = {};          // folio -> { estado, dice }
+S.sel = {};           // folio -> false cuando se destildó; ausente = seleccionada
 S.corriendo = false;
+
+// Seleccionada por omisión: la bandeja "por confirmar" ES lo que corresponde
+// confirmar, así que lo normal es todas. Destildar es la excepción, y para eso
+// está el check — que fue justamente lo que faltó la primera vez.
+function seleccionada(f) { return S.sel[f.folio] !== false; }
+function pendientes() {
+  var r = S.r;
+  if (!r) return [];
+  return r.porConfirmar.filter(function (f) { return !S.conf[f.folio]; });
+}
+function elegidas() { return pendientes().filter(seleccionada); }
+
+function celdaSeleccion(f) {
+  var c = document.createElement('input');
+  c.type = 'checkbox';
+  c.className = 'chk';
+  c.checked = seleccionada(f);
+  // Una ya resuelta no se puede volver a elegir: el check queda fuera de juego
+  // para que no parezca que apretar el masivo la va a tocar otra vez.
+  c.disabled = !!S.conf[f.folio] || S.corriendo;
+  c.setAttribute('aria-label', 'confirmar el folio ' + f.folio);
+  c.addEventListener('change', function () {
+    if (c.checked) delete S.sel[f.folio]; else S.sel[f.folio] = false;
+    textoBoton();
+    pintarCheckTodas();
+  });
+  return c;
+}
+
+// El check del encabezado: tilda o destilda todas las que quedan pendientes.
+var refTodas = null;
+function checkTodas() {
+  var c = document.createElement('input');
+  c.type = 'checkbox';
+  c.className = 'chk';
+  c.title = 'todas / ninguna';
+  c.setAttribute('aria-label', 'seleccionar todas');
+  c.addEventListener('change', function () {
+    pendientes().forEach(function (f) {
+      if (c.checked) delete S.sel[f.folio]; else S.sel[f.folio] = false;
+    });
+    pintarTodo();
+  });
+  refTodas = c;
+  pintarCheckTodas();
+  return c;
+}
+function pintarCheckTodas() {
+  if (!refTodas) return;
+  var p = pendientes().length, e = elegidas().length;
+  refTodas.checked = p > 0 && e === p;
+  refTodas.indeterminate = e > 0 && e < p;
+  refTodas.disabled = !p || S.corriendo;
+}
 
 function celdaConfirmacion(f) {
   var hecho = S.conf[f.folio];
@@ -790,19 +858,25 @@ async function pedirConfirmacion(f) {
 // botón que escribe en SAP de un clic es un accidente esperando.
 var armado = 0;
 function textoBoton() {
-  var r = S.r;
-  var faltan = r ? r.porConfirmar.filter(function (f) { return !S.conf[f.folio]; }) : [];
   var b = $('btn-confirmar');
-  if (!faltan.length) { b.textContent = 'Confirmar'; b.disabled = true; b.className = 'pri'; return faltan; }
+  var e = elegidas();
+  var cuantas = e.length === 1 ? '1 seleccionada' : e.length + ' seleccionadas';
+  if (!e.length) {
+    b.className = 'pri';
+    b.textContent = pendientes().length ? 'Confirmar · ninguna seleccionada' : 'Confirmar';
+    b.disabled = true;
+    if (armado) { clearTimeout(armado); armado = 0; }
+    return e;
+  }
   if (armado) {
     b.className = 'pri armado';
-    b.textContent = 'Sí, confirmar ' + faltan.length + ' · escribe en SAP';
+    b.textContent = 'Sí, confirmar ' + cuantas + ' · escribe en SAP';
   } else {
     b.className = 'pri';
-    b.textContent = 'Confirmar ' + faltan.length;
+    b.textContent = 'Confirmar ' + cuantas;
   }
   b.disabled = S.corriendo;
-  return faltan;
+  return e;
 }
 
 $('btn-confirmar').addEventListener('click', function () {
@@ -810,7 +884,7 @@ $('btn-confirmar').addEventListener('click', function () {
   if (!armado) {
     armado = setTimeout(function () { armado = 0; textoBoton(); }, 6000);
     textoBoton();
-    decir('Van a confirmarse de a una, en orden, y se detiene en la primera que no salga bien. Vuelve a hacer clic para largar.', false);
+    decir('Se confirman las ' + elegidas().length + ' seleccionadas, de a una y en orden, y se detiene en la primera que no salga bien. Vuelve a hacer clic para largar.', false);
     return;
   }
   clearTimeout(armado); armado = 0;
@@ -818,7 +892,7 @@ $('btn-confirmar').addEventListener('click', function () {
 });
 
 async function todas() {
-  var faltan = S.r ? S.r.porConfirmar.filter(function (f) { return !S.conf[f.folio]; }) : [];
+  var faltan = elegidas();
   if (!faltan.length) return;
   S.corriendo = true;
   textoBoton();

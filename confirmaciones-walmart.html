@@ -241,6 +241,7 @@ tr.total td{border-top:1px solid var(--line);border-bottom:0;font-weight:600;col
     <button class="tab act" data-p="p-conf">Por confirmar <span class="pill" id="t-conf">0</span></button>
     <button class="tab" data-p="p-avisar">Avisar al cliente <span class="pill" id="t-avisar">0</span></button>
     <button class="tab" data-p="p-exc">Excepciones <span class="pill" id="t-exc">0</span></button>
+    <button class="tab" data-p="p-pend">Sin cruce <span class="pill" id="t-pend">0</span></button>
   </div>
 
   <div class="panel act" id="p-conf">
@@ -270,6 +271,18 @@ tr.total td{border-top:1px solid var(--line);border-bottom:0;font-weight:600;col
         <button id="btn-csv-avisar" disabled>Bajar CSV</button>
       </div>
       <div class="tabla-caja"><table id="tb-avisar"></table></div>
+    </div>
+  </div>
+
+  <div class="panel" id="p-pend">
+    <div class="card">
+      <div class="chead"><span class="eyebrow">Seguimiento</span><h2>Citas que todavía no cruzan</h2></div>
+      <p>Walmart dice que recibió estos pallets y en Redlink no hay transferencia que los respalde.
+      La causa más probable es que el cliente todavía no la emitió. <strong>Se guardan y se vuelven a
+      cruzar solas</strong> cada vez que subes un reporte: no hace falta volver a subir los archivos viejos.</p>
+      <div class="resumen" id="resumen-pend"></div>
+      <div class="aviso" id="av-pend"></div>
+      <div class="tabla-caja"><table id="tb-pend"></table></div>
     </div>
   </div>
 
@@ -520,6 +533,150 @@ function rehacer() {
           ' · verificado ' + c.cuando.toLocaleTimeString('es-CL'));
   }
   pintarTodo();
+  // El seguimiento va DESPUÉS de pintar: el cruce ya está en pantalla y la
+  // persona puede empezar a confirmar mientras esto va y vuelve.
+  sincronizarPendientes();
+}
+
+
+/* ------------------------------------------------------------------ *
+ *  CITAS QUE TODAVÍA NO CRUZAN
+ *
+ *  El reporte de Walmart trae citas sin transferencia en Redlink. Medido el
+ *  10-nov: 8 de esas citas contra 26.390 operaciones de 45 días dieron cero,
+ *  así que no es un problema de ventana de fechas. La hipótesis es que el
+ *  cliente todavía no emitió la transferencia — y si una cita es "todavía no"
+ *  o "nunca" NO SE PUEDE SABER MIRÁNDOLA UN DÍA.
+ *
+ *  Por eso se guardan con sus FILAS ORIGINALES del reporte: volver a cruzarlas
+ *  mañana es llamar al mismo N.cruzar() con las operaciones de mañana. Ni una
+ *  regla de calce nueva que se pueda separar de la otra.
+ * ------------------------------------------------------------------ */
+
+S.pend = null;            // lo que contestó el api
+S.reaparecidas = [];      // las que hoy sí cruzaron, para sumarlas a la bandeja
+
+// Las filas crudas del reporte de esta cita. Son las que se guardan.
+function filasDeCita(cita) {
+  return (S.filas || []).filter(function (f) { return String(f.cita) === String(cita); });
+}
+
+// Vuelve a cruzar las pendientes guardadas contra las operaciones de HOY.
+// Reusa N.cruzar entero: mismas reglas, mismo código probado.
+function recruzar(abiertas, ops) {
+  var filas = [];
+  (abiertas || []).forEach(function (c) {
+    (c.filas || []).forEach(function (f) { filas.push(f); });
+  });
+  if (!filas.length) return { cruzadas: [], porConfirmar: [], avisar: [] };
+  var r = N.cruzar(filas, ops || []);
+  var cruzadas = [];
+  // Cualquier bandeja distinta de "sin coincidencia" significa que la cita YA
+  // encontró su operación. Incluso una excepción por anulada o ya confirmada
+  // es un cruce: la transferencia existe, que es lo que estábamos esperando.
+  r.porConfirmar.forEach(function (f) { cruzadas.push({ cita: f.cita, folio: f.folio }); });
+  r.avisar.forEach(function (f) { cruzadas.push({ cita: f.cita, folio: f.folio }); });
+  r.excepciones.forEach(function (f) {
+    if (f.clave !== 'sin-match' && f.clave !== 'cita-invalida') {
+      cruzadas.push({ cita: f.cita, folio: f.folio || null });
+    }
+  });
+  return { cruzadas: cruzadas, porConfirmar: r.porConfirmar, avisar: r.avisar };
+}
+
+async function sincronizarPendientes() {
+  var hoySinCruce = ((S.r && S.r.excepciones) || []).filter(function (f) { return f.clave === 'sin-match'; });
+  var vistas = hoySinCruce.map(function (f) {
+    return { cita: f.cita, rut: f.rut, cliente: f.cliente, pallets: f.canjeWM || f.totalWM || 0,
+             fechaReporte: f.fecha, filas: filasDeCita(f.cita) };
+  });
+
+  // Primero se lee lo que había, para poder re-cruzarlo con las operaciones
+  // que ya bajamos. Si esto falla, el cruce de hoy sigue sirviendo igual.
+  var antes = null;
+  try {
+    var r0 = await fetch('/api/pendientes-cruce', { headers: { Accept: 'application/json' }, cache: 'no-store' });
+    if (r0.status === 403) { avisoPend('Tu usuario no ve el seguimiento de citas sin cruce.', 'err'); return; }
+    antes = await r0.json();
+  } catch (e) {
+    avisoPend('No se pudo leer el seguimiento de citas sin cruce (' + ((e && e.message) || e) + ').', 'err');
+    return;
+  }
+
+  var abiertasAntes = (antes && antes.citas) || [];
+  // No se re-cruzan las que ya vinieron en el reporte de hoy: de esas ya sabemos.
+  var deHoy = {};
+  hoySinCruce.forEach(function (f) { deHoy[String(f.cita)] = 1; });
+  var aRevisar = abiertasAntes.filter(function (c) { return !deHoy[String(c.cita)]; });
+  var re = recruzar(aRevisar, S.ops);
+  S.reaparecidas = re.porConfirmar;
+
+  try {
+    var r1 = await fetch('/api/pendientes-cruce', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
+      body: JSON.stringify({ archivo: S.nombre, vistas: vistas, cruzadas: re.cruzadas })
+    });
+    S.pend = await r1.json();
+  } catch (e) {
+    S.pend = antes;
+    avisoPend('No se pudo guardar el seguimiento (' + ((e && e.message) || e) + '). ' +
+              'Lo que ves es lo que había antes de este cruce.', 'err');
+  }
+
+  // Las que reaparecieron se suman a la bandeja de hoy, marcadas: son
+  // confirmables igual que cualquier otra, pero conviene verlas.
+  if (S.reaparecidas.length && S.r) {
+    S.reaparecidas.forEach(function (f) {
+      f.reaparecida = true;
+      if (!S.r.porConfirmar.some(function (x) { return String(x.folio) === String(f.folio); })) {
+        S.r.porConfirmar.push(f);
+      }
+    });
+  }
+  pintarTodo();
+}
+
+function avisoPend(texto, clase) {
+  var e = $('av-pend');
+  if (!e) return;
+  e.className = 'aviso' + (texto ? ' ver' : '') + (clase ? ' ' + clase : '');
+  e.textContent = texto || '';
+}
+
+function pintarPendientes() {
+  var p = S.pend;
+  var clientes = (p && p.clientes) || [];
+  $('t-pend').textContent = num(p ? p.abiertas : 0);
+
+  var caja = $('resumen-pend');
+  if (caja) {
+    caja.textContent = '';
+    if (p) {
+      [[p.abiertas, 'citas sin transferencia'], [p.pallets, 'pallets en juego'],
+       [p.urgentes, 'pasaron los ' + (p.diasParaPreguntar || 7) + ' días']].forEach(function (x) {
+        var d = document.createElement('div');
+        d.className = 'f' + (/^pasaron/.test(x[1]) && x[0] ? ' mirar' : '');
+        var n = document.createElement('b'); n.textContent = num(x[0]);
+        var t = document.createElement('span'); t.textContent = x[1];
+        d.appendChild(n); d.appendChild(t); caja.appendChild(d);
+      });
+    }
+  }
+
+  if (p && p.almacenamiento === false) {
+    avisoPend('El api no tiene almacenamiento configurado: las citas sin cruce NO se están guardando.', 'err');
+  } else if (p && p.aviso) {
+    avisoPend(p.aviso, 'err');
+  } else if (S.reaparecidas.length) {
+    avisoPend(S.reaparecidas.length + ' cita(s) que estaban sin cruce aparecieron hoy en Redlink y se ' +
+              'sumaron a POR CONFIRMAR: ' + S.reaparecidas.map(function (f) { return f.cita; }).join(', '), 'ok');
+  }
+
+  tabla($('tb-pend'), COLS_PEND, clientes, function (c) {
+    return [c.cliente, c.rut || '—', num(c.citas), num(c.pallets),
+            c.urgentes ? etiqueta(num(c.urgentes), 'mal') : '0',
+            c.masVieja, (c.filas || []).map(function (x) { return x.cita; }).join(', ')];
+  }, 'Ninguna cita quedó sin cruzar. Todas las del reporte encontraron su transferencia.');
 }
 
 /* ── pintar ─────────────────────────────────────────────────────────────── */
@@ -586,8 +743,17 @@ var COLS_CONF = [{ t: '', el: checkTodas, ancho: '34px' }, { t: 'Confirmación',
 var COLS_AVISAR = [{ t: 'Folio', mono: true }, { t: 'Cita', mono: true }, { t: 'Cliente', libre: true },
                    { t: 'Servicio' }, { t: 'Despachado', n: true }, { t: 'Walmart', n: true },
                    { t: 'A informar', n: true }, { t: 'Etapa' }];
-var COLS_EXC = [{ t: 'Cita', mono: true }, { t: 'Folio', mono: true }, { t: 'Motivo', libre: true },
+// El CLIENTE es lo accionable de una excepción: "sin coincidencia en Redlink"
+// sin saber de quién es no se puede ir a buscar a ninguna parte. Y el rut y la
+// razón social vienen en el reporte de Walmart, así que los tenemos aunque
+// Redlink no sepa nada de esa cita.
+var COLS_EXC = [{ t: 'Cita', mono: true }, { t: 'Cliente', libre: true }, { t: 'Rut', mono: true },
+                { t: 'Folio', mono: true }, { t: 'Motivo', libre: true },
                 { t: 'Despachado', n: true }, { t: 'Walmart', n: true }, { t: 'Etapa' }];
+
+var COLS_PEND = [{ t: 'Cliente', libre: true }, { t: 'Rut', mono: true }, { t: 'Citas', n: true },
+                 { t: 'Pallets en juego', n: true }, { t: 'Pasados los 7 días', n: true },
+                 { t: 'La más vieja' }, { t: 'Citas' }];
 
 function pintarTodo() {
   var r = S.r;
@@ -658,10 +824,12 @@ function pintarTodo() {
   });
 
   tabla($('tb-exc'), COLS_EXC, r.excepciones, function (f) {
-    return [f.cita, f.folio == null ? '—' : f.folio, f.motivo,
+    return [f.cita, f.cliente || '—', f.rut || '—', f.folio == null ? '—' : f.folio, f.motivo,
             f.despachada == null ? '—' : num(f.despachada), num(f.canjeWM),
             etiqueta(f.etapa)];
   }, 'Ninguna excepción: todas las citas del reporte cruzaron.');
+
+  pintarPendientes();
 
   // Con datos incompletos las excepciones mienten hacia el lado caro: una cita
   // sin su operación se lee como "sin coincidencia en Redlink", que es
@@ -953,7 +1121,8 @@ function decir(texto, mal) {
    existe, así que no hay forma de sembrar estado desde afuera; y aunque la
    hubiera, escribir sigue dependiendo del rol que exige el api. */
 if (esLocal || location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
-  window.__prueba = { S: S, pintarTodo: pintarTodo };
+  window.__prueba = { S: S, pintarTodo: pintarTodo, sincronizarPendientes: sincronizarPendientes,
+                      recruzar: recruzar, filasDeCita: filasDeCita };
 }
 
 $('btn-csv').addEventListener('click', function () {

@@ -1827,3 +1827,79 @@ muestra lo que había antes.
 | `prueba-pagina-confirmaciones.js` (navegador) | +18 comprobaciones | — |
 
 Todas mueren.
+
+# RECONFIRMACIÓN: la cita que vuelve con más (10-nov-2026)
+
+Logística trajo el caso desde el módulo **Trazabilidad** de M2LINK:
+
+> Walmart recibe 9 de 20 enviados. Se confirma por 9. Días después llega la
+> misma cita, pero ahora viene por 20.
+
+Caso real que mostraron (cita 42510877, pedido 4077940, LABORATORIO BALLERINA):
+
+```
+Transacción del cliente   Desp. 20 · Conf. 9 · Transferencia Confirmada
+Planillas de Walmart      14-07: total 20 · acept. 20
+                          10-07: total  9 · acept.  9
+```
+
+## Qué hacía nuestro cruce con eso
+
+Lo mandaba a **"ya confirmada"**, junto a otras cincuenta y nueve excepciones.
+Nadie lo miraba. **Once pallets sin confirmar, en silencio, por cita.**
+
+Es un hueco de lo que construimos, no un pedido nuevo. Y en M2LINK este caso
+tiene su propia pestaña con **72 acumulados**, así que no es raro.
+
+## Lo que no hacía falta
+
+El historial. La comparación está entera dentro del cruce: Redlink dice cuánto
+hay confirmado (`cantidadConfirmada`) y el reporte dice cuánto declara Walmart
+hoy. No hace falta mirar qué confirmamos nosotros — lo que importa es el estado,
+no el autor. Así funciona también para las que confirmó M2LinkSystem, y para las
+anteriores a que existiera nuestro registro.
+
+## La regla
+
+```
+objetivo = reglaCantidad(despachado, walmartHoy).aConfirmar   // la MISMA de siempre
+faltan   = objetivo > confirmado ? objetivo - confirmado : 0
+sobran   = confirmado > objetivo ? confirmado - objetivo : 0
+```
+
+El objetivo **nunca pasa de lo despachado**: es la regla del área aplicada
+contra lo ya confirmado en vez de contra cero. Walmart declarando 25 sobre 20
+despachados sigue dando 20.
+
+Y el caso inverso se nombra: si ahora declara **menos** de lo confirmado, no se
+puede desconfirmar, pero queda dicho (`confirmada-de-mas`). Callarlo sería
+esconder que se confirmó de más.
+
+Tres resultados donde antes había uno:
+
+| antes | ahora |
+|---|---|
+| ya confirmada | **reconfirmar** · faltan N |
+| ya confirmada | **confirmada de más** · sobran N |
+| ya confirmada | ya confirmada (nada que hacer) |
+
+## Lo que NO se hizo, a propósito
+
+**No se reconfirma sola.** Logística pidió "una alerta o algo que permita luego
+confirmarlo manualmente", y eso es exactamente lo que hay: la bandeja, los
+números y un CSV con folio / confirmado / debe quedar.
+
+Escribir una reconfirmación es otra cosa y **no la hemos medido**. Redlink tiene
+la etapa 49 "Transferencia Reconfirmada" y el documento trae un campo
+`recepcionAnterior`, así que el camino existe — pero no sabemos si
+`ConfirmarTransferencia` lo cubre cuando el documento ya está confirmado, y
+suponerlo sería repetir el error de la teoría muerta. Nuestras guardas hoy la
+rechazan ("la transferencia YA está confirmada"), que es el comportamiento
+correcto mientras no se mida.
+
+**La medición que falta**: correr `--preparar` sobre un folio ya confirmado con
+la cantidad nueva y mirar qué arma el servidor. Es de sólo lectura y es el mismo
+método que resolvió la confirmación.
+
+Cobertura: 98 pruebas y 106 mutaciones en el núcleo, más 7 comprobaciones de
+navegador. Todas mueren.

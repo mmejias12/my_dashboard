@@ -10,7 +10,9 @@ let fallos = 0;
 const ok = (c, m) => { if (!c) { fallos++; console.log('  FALLA ' + m); } else console.log('  ok   ' + m); };
 
 const FILAS = [
-  { folio: 4149330, cita: '12345678', clienteRedlink: 'IPAL', servicio: 'Transferencias',
+  { folio: 4149330, cita: '42759276', cliente: 'NUTRISCO CHILE S. A.', rut: '77643296-2',
+    po: '2851158713', fecha: '2026-11-09', malosWM: 0,
+    clienteRedlink: 'IPAL', servicio: 'Transferencias',
     despachada: 1, canjeWM: 1, diferencia: 0, aConfirmar: 1, etapa: 'Pendiente Adjuntar Respaldo',
     bodega: 'ZWM11', docId: 692187 },
   { folio: 4149331, cita: '12345679', clienteRedlink: 'IPAL', servicio: 'Trans Diferenciada',
@@ -107,7 +109,14 @@ const FILAS = [
   await pg.waitForTimeout(150);
   ok(pedidos.length === 1, 'un solo pedido');
   ok(pedidos[0].folio === 4149330 && pedidos[0].cantidad === 1 && pedidos[0].id === 692187,
-     'manda folio, cantidad y el id del documento: ' + JSON.stringify(pedidos[0]));
+     'manda folio, cantidad y el id del documento');
+  // Lo que no existe en Redlink y sólo puede viajar desde acá.
+  const rep0 = pedidos[0].reporte || {};
+  ok(rep0.cita === '42759276' && rep0.po === '2851158713' && rep0.rut === '77643296-2' &&
+     rep0.razonSocial === 'NUTRISCO CHILE S. A.',
+     'manda la cita, el PO, el rut y la razón social: ' + JSON.stringify(rep0));
+  ok(rep0.aceptados === 1 && rep0.rechazados === 0 && rep0.cuando === '2026-11-09',
+     'y lo que declaró Walmart: ' + JSON.stringify(rep0));
   ok(/confirmada/i.test(await pg.locator('#tb-conf tbody tr').first().innerText()),
      'la fila queda marcada confirmada');
   ok((await pg.locator('#tb-conf tbody tr').first().locator('button').count()) === 0,
@@ -145,6 +154,17 @@ const FILAS = [
      'la tercera sigue sin tocar, con su botón');
   ok(await pg.locator('#tb-conf tbody tr').first().locator('input.chk').isDisabled(),
      'el check de una ya resuelta queda fuera de juego');
+
+  console.log('\n-- una confirmación que no quedó en el historial --');
+  await sembrar();
+  respuesta = () => ({ estado: 'confirmada', dice: 'confirmada 1 · Transferencia Confirmada',
+                       historial: 'NO quedó en el historial: AuthorizationFailure' });
+  await pg.locator('#tb-conf tbody tr').first().locator('button').click();
+  await pg.waitForTimeout(250);
+  const avh = await pg.locator('#estado-conf').innerText();
+  ok(/OJO/.test(avh) && /historial/.test(avh), 'lo avisa: ' + avh);
+  ok(/confirmada/i.test(await pg.locator('#tb-conf tbody tr').first().innerText()),
+     'pero la fila sigue marcada confirmada: la escritura en Redlink sí ocurrió');
 
   console.log('\n-- 403: el rol no alcanza --');
   await sembrar();

@@ -385,6 +385,66 @@ async function correr(S) {
     igual(avisos[1].encontrado, 1, 'el aviso dice en qué tramo apareció');
     cierto(avisos[0].desde && avisos[0].hasta, 'y de qué fechas era');
   });
+  prueba('T13a parte un tramo al medio, sin huecos ni solapes', () => {
+    const m = S.partirTramo({ desde: '2026-11-03', hasta: '2026-11-09' });
+    igual(m, [{ desde: '2026-11-03', hasta: '2026-11-05' },
+              { desde: '2026-11-06', hasta: '2026-11-09' }]);
+  });
+  prueba('T13b un tramo de un día ya no se parte', () => {
+    igual(S.partirTramo({ desde: '2026-11-03', hasta: '2026-11-03' }), null);
+  });
+  prueba('T13c un tramo de dos días se parte en dos de uno', () => {
+    igual(S.partirTramo({ desde: '2026-11-03', hasta: '2026-11-04' }),
+          [{ desde: '2026-11-03', hasta: '2026-11-03' }, { desde: '2026-11-04', hasta: '2026-11-04' }]);
+  });
+  prueba('T13d sólo se parte ante un corte de TIEMPO', () => {
+    // Partir ante un 400 o un 500 sería pedir lo mismo dos veces: ahí el
+    // problema no se arregla pidiendo menos.
+    cierto(S.esCorteDeTiempo(new Error('The operation was aborted due to timeout')));
+    cierto(S.esCorteDeTiempo('terminated'));
+    cierto(S.esCorteDeTiempo(new Error('ETIMEDOUT')));
+    falso(S.esCorteDeTiempo(new Error('HTTP 400 Bad Request')));
+    falso(S.esCorteDeTiempo(new Error('No se pudo leer el histórico: HTTP 500')));
+    falso(S.esCorteDeTiempo(null));
+  });
+  pruebaAsync('T13e el tramo partido devuelve TODO, no la mitad', async () => {
+    // Si al partir se perdiera una mitad, el folio podría quedar invisible y
+    // el script diría "no aparece" sobre datos que sí bajó.
+    let n = 0;
+    const bajar = async (t) => {
+      n++;
+      const m = S.partirTramo(t);
+      if (n === 1 && m) { const a2 = await bajar(m[0]), b2 = await bajar(m[1]); return a2.concat(b2); }
+      return [{ folio: 100 + n }];
+    };
+    const r = await S.buscarPorFolio(999, 7, 7, null, bajar);
+    igual(r.total, 2, 'las dos mitades suman');
+  });
+  pruebaAsync('T13f al partir se devuelven LAS DOS mitades, no la primera', async () => {
+    const pedidos = [];
+    const falsoBajar = async (m) => { pedidos.push(m.desde + '..' + m.hasta); return [{ folio: pedidos.length }]; };
+    const out = await S.partirYReintentar({ desde: '2026-11-03', hasta: '2026-11-09' },
+                                          'timeout', null, falsoBajar);
+    igual(pedidos.length, 2, 'tiene que pedir las dos mitades');
+    igual(out.length, 2, 'y devolver las dos: perder una haría invisible un folio');
+  });
+  pruebaAsync('T13g si el tramo ya es de un día, revienta diciendo qué hacer', async () => {
+    let e = null;
+    try { await S.partirYReintentar({ desde: '2026-11-03', hasta: '2026-11-03' }, 'timeout', null, async () => []); }
+    catch (x) { e = x; }
+    cierto(e, 'tiene que reventar en vez de devolver vacío en silencio');
+    cierto(/UN día/.test(e.message), e.message);
+    cierto(/--timeout/.test(e.message), 'y decir cómo salir: ' + e.message);
+  });
+  pruebaAsync('T13h el aviso del corte dice qué tramo y en qué se parte', async () => {
+    const avisos = [];
+    await S.partirYReintentar({ desde: '2026-11-03', hasta: '2026-11-09' }, 'timeout',
+                              (c) => avisos.push(c), async () => []);
+    igual(avisos.length, 1);
+    igual(avisos[0].mitades.length, 2);
+    igual(avisos[0].tramo.desde, '2026-11-03');
+    cierto(/timeout/.test(avisos[0].motivo), 'el motivo viaja');
+  });
   prueba('T10c el nombre de la etapa se reconoce con y sin tilde', () => {
     cierto(S.etapaConfirmable({ formMetapa: { nombre: 'Pendiente de Confirmacion' } }));
     cierto(S.etapaConfirmable({ formMetapa: { nombre: 'PENDIENTE DE CONFIRMACIÓN' } }));
@@ -477,6 +537,14 @@ async function correr(S) {
 }
 
 const MUTACIONES = [
+  ['M67 el tramo de un dia se sigue partiendo',       /if \(largo <= 1\) return null;/, 'if (largo <= 0) return null;'],
+  ['M68 las mitades se solapan',                      /const sig = new Date\(d0\.getTime\(\) \+ mitad \* dia\)/, 'const sig = new Date(d0.getTime() + (mitad - 1) * dia)'],
+  ['M69 las mitades dejan un hueco',                  /const corte = new Date\(d0\.getTime\(\) \+ \(mitad - 1\) \* dia\)/, 'const corte = new Date(d0.getTime() + (mitad - 2) * dia)'],
+  ['M70 se parte ante cualquier error, no solo tiempo', /const esCorteDeTiempo = \(x\) => RE_TIEMPO\.test\(String\(\(x && x\.message\) \|\| x \|\| ''\)\);/, 'const esCorteDeTiempo = () => true;'],
+  ['M71 no se reconoce ningun corte de tiempo',        /const esCorteDeTiempo = \(x\) => RE_TIEMPO/, 'const esCorteDeTiempo = (x) => !RE_TIEMPO'],
+  ['M72 el tramo partido devuelve solo una mitad',     /for \(const m of mitades\) out = out\.concat\(await traer\(m, avisarCorte\)\);/, 'out = await traer(mitades[0], avisarCorte);'],
+  ['M73 el corte en un dia devuelve vacio en silencio', /throw new Error\('El histórico se cortó por tiempo y el tramo ya es de UN día/, "return []; throw new Error('El histórico se cortó por tiempo y el tramo ya es de UN día"],
+  ['M74 el aviso del corte se pierde',                 /if \(avisarCorte\) avisarCorte\(\{ tramo: t, motivo: motivo, mitades: mitades \}\);/, ''],
   ['M57 el troceo va del mas viejo al mas nuevo',     /out\.push\(\{ desde: atras\(ini\), hasta: atras\(fin\) \}\);/, 'out.unshift({ desde: atras(ini), hasta: atras(fin) });'],
   ['M58 los tramos se pisan entre si',                /const ini = Math\.min\(fin \+ p - 1, total - 1\);/, 'const ini = Math.min(fin + p, total - 1);'],
   ['M59 el troceo deja huecos',                       /for \(let fin = 0; fin < total; fin \+= p\)/, 'for (let fin = 0; fin < total; fin += p + 1)'],

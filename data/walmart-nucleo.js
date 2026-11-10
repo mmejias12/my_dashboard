@@ -135,6 +135,12 @@ function serialAFecha(n) {
 
 /* ── las columnas del reporte, por NOMBRE ─────────────────────────────────── */
 
+// Columnas OPCIONALES: su ausencia no invalida el reporte. El PO sirve para el
+// informe al cliente, pero un reporte sin esa columna sigue siendo un reporte
+// válido y confirmable — exigirla haría que un archivo bueno se rechace entero
+// por una columna que no decide nada.
+const COLUMNAS_OPCIONALES = { po: 'po_nbr' };
+
 const COLUMNAS = {
   cita: 'appt_nbr', rut: 'Rut', cliente: 'Razon Social', cd: 'po_dc_nbr',
   recepcion: 'rcvr_nbr', cuando: 'rcvr_final_ts', tipo: 'cntnr_type_desc',
@@ -153,12 +159,19 @@ function filasWalmart(matriz) {
     if (i < 0) throw new Error('Al reporte le falta la columna "' + COLUMNAS[k] + '"');
     idx[k] = i;
   });
+  Object.keys(COLUMNAS_OPCIONALES).forEach(function (k) {
+    idx[k] = cab.indexOf(COLUMNAS_OPCIONALES[k]);   // -1 cuando no viene
+  });
   const out = [];
   for (let r = 1; r < matriz.length; r++) {
     const f = matriz[r];
     if (!f || f[idx.cita] === null || f[idx.cita] === undefined || f[idx.cita] === '') continue;
     out.push({
       cita: String(Math.round(Number(f[idx.cita]))),
+      // El PO va en el informe al cliente, y como todo lo que viene del reporte
+      // no existe en Redlink: si no se arrastra desde acá, después no hay de
+      // dónde sacarlo salvo volver a cruzar el .xlsx.
+      po: idx.po < 0 ? '' : String(f[idx.po] === null || f[idx.po] === undefined ? '' : f[idx.po]).trim(),
       rut: String(f[idx.rut] || '').trim(),
       cliente: String(f[idx.cliente] || '').trim(),
       cd: String(f[idx.cd] === null ? '' : Math.round(Number(f[idx.cd]))),
@@ -194,7 +207,7 @@ function agruparPorCita(filas) {
   (filas || []).forEach(function (f) {
     if (!m.has(f.cita)) m.set(f.cita, { cita: f.cita, filas: 0, total: 0, malos: 0, canje: 0,
                                         cliente: f.cliente, rut: f.rut, cd: f.cd, fecha: f.fecha,
-                                        recepciones: [] });
+                                        po: f.po || '', recepciones: [] });
     const g = m.get(f.cita);
     g.filas++; g.total += f.total; g.malos += f.malos; g.canje += f.canje;
     if (f.recepcion) g.recepciones.push(f.recepcion);
@@ -290,6 +303,7 @@ function cruzar(filasWM, ops, opciones) {
   grupos.forEach(function (g) {
     const c = clasificar(g, idx);
     const base = { cita: g.cita, cliente: g.cliente, rut: g.rut, cd: g.cd, fecha: g.fecha,
+                   po: g.po || '',
                    recepciones: g.recepciones, totalWM: g.total, canjeWM: g.canje, malosWM: g.malos };
 
     if (!esCita(g.cita)) { excepciones.push(Object.assign(base, { clave: 'cita-invalida', motivo: 'el número de cita no tiene 8 dígitos: no es una cita de Walmart' })); return; }
@@ -419,7 +433,7 @@ function ventanaDeReporte(filasWM, margen) {
 }
 
 const API = { entradasZip, leerXlsx, leerSharedStrings, leerHoja, columnaANumero, serialAFecha,
-              COLUMNAS, filasWalmart, citasDeTexto, esCita, agruparPorCita, indexar, clasificar,
+              COLUMNAS, COLUMNAS_OPCIONALES, filasWalmart, citasDeTexto, esCita, agruparPorCita, indexar, clasificar,
               SERVICIOS_TRANSFERENCIA, ETAPAS_CONFIRMABLES,
               reglaCantidad, etapaConfirmable, esAnulada, esTransferencia, estaConfirmada,
               cruzar, FAMILIAS, resumenMotivos, csvDeConfirmar, tsvDeConfirmar, ventanaDeReporte,

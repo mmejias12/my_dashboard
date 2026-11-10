@@ -19,10 +19,30 @@ const RUTA_F = path.join(__dirname, '..', 'api', 'confirmar-walmart', 'index.js'
 const FUENTE   = fs.readFileSync(RUTA, 'utf8');
 const FUENTE_F = fs.readFileSync(RUTA_F, 'utf8');
 
+// El historial se sustituye por uno de mentira: así esta suite prueba QUÉ se
+// le manda a guardar sin depender del SDK de Azure ni de una cuenta real, y
+// además puede hacerlo fallar a voluntad — que es el caso que importa.
+const GUARDADO = [];
+let historialFalla = false;
+function historialFalso() {
+  return {
+    registrar: async function (datos) {
+      GUARDADO.push(datos);
+      return historialFalla
+        ? { ok: false, registro: datos, motivo: 'AuthorizationFailure' }
+        : { ok: true, registro: datos, motivo: '' };
+    }
+  };
+}
+
 function compilar(ruta, fuente) {
   const m = new Module(ruta, null);
   m.filename = ruta;
   m.paths = Module._nodeModulePaths(path.dirname(ruta));
+  const propio = Module.prototype.require.bind(m);
+  m.require = function (pedido) {
+    return /confirmaciones-registro\.js$/.test(pedido) ? historialFalso() : propio(pedido);
+  };
   m._compile(fuente, ruta);
   return m.exports;
 }
@@ -320,6 +340,79 @@ async function correr(S, hacerF) {
     });
   });
 
+  /* ---- el historial ------------------------------------------------------ */
+
+  pruebaAsync('E19 una confirmación deja registro con lo de Redlink y lo del reporte', async () => {
+    // La CITA es el único dato que Redlink no guarda, y el informe al cliente
+    // se organiza por cita. Si no queda acá, no queda en ninguna parte.
+    await conEntorno(async () => {
+      GUARDADO.length = 0; historialFalla = false;
+      const s = servidor();
+      const r = await S.confirmarUna(4149330, 1, { id: 692187, pedir: s.pedir,
+        quien: 'mmejias@redtecsa.com', via: 'pagina',
+        reporte: { cita: '42759276', razonSocial: 'NUTRISCO CHILE S. A.', aceptados: 1, rechazados: 0 } });
+      igual(r.estado, 'confirmada', r.dice);
+      igual(GUARDADO.length, 1, 'tiene que haberse guardado');
+      const g = GUARDADO[0];
+      igual([g.folio, g.docId, g.cantidad], [4149330, 692187, 1]);
+      igual(g.quien, 'mmejias@redtecsa.com', 'quién lo pidió: en Redlink dice M3LinkSystem');
+      igual(g.reporte.cita, '42759276');
+      // Lo de Redlink sale del documento RELEÍDO, no de lo que dijo el navegador.
+      igual(g.redlink.recepcion, 1);
+      igual(g.redlink.etapaAntes, 'Pendiente Adjuntar Respaldo');
+      igual(g.redlink.etapaDespues, 'Transferencia Confirmada');
+      igual(g.redlink.firma, 'M3LinkSystem');
+      igual(r.historial, 'guardado');
+    });
+  });
+  pruebaAsync('E19b el historial guarda lo que quedó en Redlink, no lo que se pidió', async () => {
+    // Si el documento terminó con otra cantidad, el registro tiene que decir la
+    // del documento: es la que movió inventario. Y además eso detiene la
+    // operación, porque el cuerpo preparado llevaba la cantidad pedida.
+    await conEntorno(async () => {
+      GUARDADO.length = 0;
+      const s = servidor({ despues: con({ formMetapa: { nombre: 'Transferencia Confirmada' },
+                                          usuarioIngresoId: 983, usuarioIngresoNombre: 'M3LinkSystem',
+                                          formDdetalles: [{ despachado: 1, recepcion: 2 }] }) });
+      const r = await S.confirmarUna(4149330, 1, { id: 692187, pedir: s.pedir });
+      igual(r.estado, 'detener', 'una cantidad distinta a la pedida no pasa en silencio');
+      cierto(/recepción 2/.test(r.dice), r.dice);
+    });
+  });
+  pruebaAsync('E20 si el historial falla, la confirmación SIGUE siendo confirmada', async () => {
+    // Cuando esto corre ya se movió inventario en SAP. Reportar "falló" haría
+    // que alguien la reintente, que es lo peor que podría pasar.
+    await conEntorno(async () => {
+      GUARDADO.length = 0; historialFalla = true;
+      const s = servidor();
+      const r = await S.confirmarUna(4149330, 1, { id: 692187, pedir: s.pedir });
+      igual(r.estado, 'confirmada', 'la escritura ocurrió: eso no se discute');
+      cierto(/NO quedó en el historial/.test(r.historial || ''), r.historial);
+      cierto(/AuthorizationFailure/.test(r.historial || ''), 'y dice por qué: ' + r.historial);
+      historialFalla = false;
+    });
+  });
+  pruebaAsync('E21 una que se SALTA no deja registro: no se confirmó nada', async () => {
+    await conEntorno(async () => {
+      GUARDADO.length = 0;
+      const ya = con({ formMetapa: { nombre: 'Transferencia Confirmada' },
+                       formDdetalles: [{ despachado: 1, recepcion: 1 }] });
+      const s = servidor({ antes: ya });
+      const r = await S.confirmarUna(4149330, 1, { id: 692187, pedir: s.pedir });
+      igual(r.estado, 'saltada');
+      igual(GUARDADO.length, 0, 'registrar una que ya estaba la contaría dos veces en el informe');
+    });
+  });
+  pruebaAsync('E22 una que se DETIENE tampoco deja registro', async () => {
+    await conEntorno(async () => {
+      GUARDADO.length = 0;
+      const s = servidor({ statusPatch: 400 });
+      const r = await S.confirmarUna(4149330, 1, { id: 692187, pedir: s.pedir });
+      igual(r.estado, 'detener');
+      igual(GUARDADO.length, 0);
+    });
+  });
+
   /* ---- la función HTTP --------------------------------------------------- */
 
   const principal = (roles, nombre) => Buffer.from(JSON.stringify({
@@ -366,6 +459,25 @@ async function correr(S, hacerF) {
     await F(c, { method: 'POST', headers: { 'x-ms-client-principal': 'no-es-base64-valido!!' },
                  body: { folio: 4149330, cantidad: 1 } });
     igual(c.res.status, 403);
+  });
+  pruebaAsync('F09 la función pasa la cita y acota lo que viene del navegador', async () => {
+    const c = ctx();
+    await conEntorno(async () => {
+      GUARDADO.length = 0;
+      const F2 = hacerF();
+      await F2(c, { method: 'POST', headers: { 'x-ms-client-principal': principal(['logistica'], 'ana@redtecsa.com') },
+                    body: { folio: 4149330, cantidad: 1, id: 692187,
+                            reporte: { cita: '42759276', razonSocial: 'x'.repeat(900),
+                                       inventado: 'no deberia viajar', po: { raro: 1 } } } });
+    });
+    igual(GUARDADO.length, 1);
+    const g = GUARDADO[0];
+    igual(g.reporte.cita, '42759276');
+    igual(g.quien, 'ana@redtecsa.com', 'quién apretó, no quién firma en Redlink');
+    igual(g.via, 'pagina');
+    cierto(g.reporte.razonSocial.length <= 200, 'quedó en ' + g.reporte.razonSocial.length);
+    falso('inventado' in g.reporte, 'un campo que no está en la lista no entra');
+    igual(g.reporte.po, '', 'un objeto no entra como texto');
   });
   pruebaAsync('F08 si algo revienta, el navegador NO recibe el detalle', async () => {
     // La excepción puede traer adentro la respuesta de Redlink, y ahí va
@@ -426,7 +538,20 @@ const MUTACIONES = [
   ['X25 un cero pasa como folio',                         /return Number\.isInteger\(n\) && n > 0 \? n : null;/, 'return Number.isInteger(n) ? n : null;'],
   ['X26 no se registra quién lo pidió',                   /context\.log\('confirmar-walmart: ' \+ q\.nombre/, "context.log('confirmar-walmart: ' + ''"],
   ['X27 el preflight escribe',                            /if \(req\.method === 'OPTIONS'\) return salir\(204, ''\);/, ''],
-  ['X28 el detalle del error se le manda al navegador',   /dice: 'la confirmación falló antes de completarse; revisar el log de la función'/, "dice: String((e && e.message) || e)"]
+  ['X28 el detalle del error se le manda al navegador',   /dice: 'la confirmación falló antes de completarse; revisar el log de la función'/, "dice: String((e && e.message) || e)"],
+  ['X30 no se guarda nada en el historial',              /const guardado = await historial\.registrar\(\{/, 'const guardado = { ok: true }; const noUsado = ({'],
+  ['X31 un fallo del historial tumba la confirmación',    /historial: guardado\.ok \? 'guardado' : 'NO quedó en el historial: ' \+ guardado\.motivo/, "historial: 'guardado'"],
+  // X32 (recepcion: det.recepcion -> cantidad) se quitó: desde que existe la
+  // guarda X39, llegar a guardar implica que los dos números son iguales, así
+  // que la mutación es equivalente. El código se deja como está igual, porque
+  // nombrar el documento dice de dónde sale el dato.
+  ['X39 la cantidad escrita no se coteja con la pedida', /if \(Number\(det\.recepcion\) !== Number\(cantidad\)\) \{/, 'if (false) {'],
+  ['X33 el historial no registra quién lo pidió',         /folio: folio, docId: id, cantidad: cantidad, quien: o\.quien, via: o\.via,/, 'folio: folio, docId: id, cantidad: cantidad, quien: undefined, via: o.via,'],
+  ['X34 la cita no viaja al historial',                   /reporte: o\.reporte \|\| \{\}/, 'reporte: {}'],
+  ['X35 una saltada igual deja registro',                 /if \(c\.accion === 'saltar'\) return resp\('saltada', c\.motivo, \{ etapa: N\.etapaDe\(doc\) \}\);/, "if (c.accion === 'saltar') { await historial.registrar({ folio: folio }); return resp('saltada', c.motivo, { etapa: N.etapaDe(doc) }); }"],
+  ['X36 el api acepta cualquier campo del navegador',     /CAMPOS_REPORTE\.forEach\(function \(k\) \{/, 'Object.keys(r).forEach(function (k) {'],
+  ['X37 el api no acota lo que viene del navegador',      /String\(v\)\.slice\(0, 200\)/, 'String(v)'],
+  ['X38 quien aprieta no se le pasa al historial',        /id: id, quien: q\.nombre, via: 'pagina', reporte: reporteDe\(cuerpo\)/, "id: id, via: 'pagina', reporte: reporteDe(cuerpo)"]
 ];
 
 async function mutar() {

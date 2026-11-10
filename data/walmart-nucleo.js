@@ -242,6 +242,33 @@ function clasificar(grupo, idx) {
 
 // CUANTO SE CONFIRMA: si Walmart recibió menos, lo recibido; si recibió más, lo
 // despachado, porque no se puede confirmar más de lo que salió.
+// RECONFIRMAR: la misma cita vuelve con MÁS de lo que ya está confirmado.
+//
+// El caso real, de los que trae logística: Walmart recibe 9 de 20, se confirma
+// por 9, y días después la misma cita vuelve en el reporte diciendo 20. Los 11
+// que faltan tienen que confirmarse, pero la transferencia en Redlink ya está
+// en etapa confirmada — así que el cruce la mandaba a "ya confirmada" junto a
+// otras cincuenta excepciones y nadie la miraba nunca. Once pallets perdidos
+// en silencio, por cita.
+//
+// El objetivo se calcula con reglaCantidad, la MISMA de siempre: nunca más de
+// lo despachado. Lo único nuevo es compararlo contra lo que Redlink ya tiene
+// confirmado en vez de contra cero.
+//
+// El caso inverso también se nombra: si Walmart ahora declara MENOS de lo que
+// ya está confirmado, no se puede desconfirmar, pero tampoco puede quedar
+// callado — significa que se confirmó de más.
+function reglaReconfirmacion(despachada, recibidaWM, confirmada) {
+  const objetivo = reglaCantidad(despachada, recibidaWM).aConfirmar;
+  const c = Number(confirmada) || 0;
+  return {
+    objetivo: objetivo,
+    yaConfirmada: c,
+    faltan: objetivo > c ? objetivo - c : 0,
+    sobran: c > objetivo ? c - objetivo : 0
+  };
+}
+
 // QUE SE LE AVISA AL CLIENTE: las POSITIVAS. Si despachó 10 y Walmart dice 15,
 // se confirman 10 y hay que avisarle para que emita otra transferencia por los
 // 5 que faltan — esos pallets están en Walmart sin respaldo.
@@ -297,7 +324,7 @@ function cruzar(filasWM, ops, opciones) {
   const o = opciones || {};
   const grupos = agruparPorCita(filasWM);
   const idx = indexar(ops);
-  const porConfirmar = [], excepciones = [], avisar = [];
+  const porConfirmar = [], excepciones = [], avisar = [], reconfirmar = [];
   const vistos = Object.create(null);
 
   grupos.forEach(function (g) {
@@ -330,7 +357,28 @@ function cruzar(filasWM, ops, opciones) {
 
     if (esAnulada(op))            { excepciones.push(Object.assign({}, fila, { clave: 'anulada', motivo: 'transferencia anulada' })); return; }
     if (!esTransferencia(op))     { excepciones.push(Object.assign({}, fila, { clave: 'no-transferencia', motivo: 'la operación no es una transferencia: ' + fila.operacion })); return; }
-    if (estaConfirmada(op))       { excepciones.push(Object.assign({}, fila, { clave: 'ya-confirmada', motivo: 'ya estaba confirmada' })); return; }
+    if (estaConfirmada(op)) {
+      // Ya está confirmada, pero ¿por cuánto? Si Walmart ahora declara más,
+      // esto no es una excepción: es trabajo pendiente.
+      const rc = reglaReconfirmacion(fila.despachada, g.canje, fila.confirmada);
+      fila.yaConfirmada = rc.yaConfirmada;
+      fila.objetivo = rc.objetivo;
+      fila.faltanPorConfirmar = rc.faltan;
+      if (rc.faltan > 0) {
+        reconfirmar.push(Object.assign({}, fila, { clave: 'reconfirmar',
+          motivo: 'confirmada por ' + rc.yaConfirmada + ' y Walmart ahora declara ' + rc.objetivo +
+                  ': faltan ' + rc.faltan }));
+        return;
+      }
+      if (rc.sobran > 0) {
+        excepciones.push(Object.assign({}, fila, { clave: 'confirmada-de-mas',
+          motivo: 'confirmada por ' + rc.yaConfirmada + ' y Walmart ahora declara ' + rc.objetivo +
+                  ': ' + rc.sobran + ' de más' }));
+        return;
+      }
+      excepciones.push(Object.assign({}, fila, { clave: 'ya-confirmada', motivo: 'ya estaba confirmada' }));
+      return;
+    }
     if (o.exigirEtapa && !etapaConfirmable(op)) {
       excepciones.push(Object.assign({}, fila, { clave: 'etapa', motivo: 'etapa "' + fila.etapa + '": todavía no es confirmable' }));
       return;
@@ -353,11 +401,13 @@ function cruzar(filasWM, ops, opciones) {
   avisar.sort((a, b) => b.porAvisar - a.porAvisar);
   excepciones.sort((a, b) => String(a.motivo).localeCompare(String(b.motivo)));
 
-  return { porConfirmar: limpias, excepciones: excepciones, avisar: avisar, citas: grupos.length };
+  return { porConfirmar: limpias, excepciones: excepciones, avisar: avisar,
+           reconfirmar: reconfirmar, citas: grupos.length };
 }
 
 const FAMILIAS = {
   'ya-confirmada':   'ya confirmadas',
+  'confirmada-de-mas': 'confirmadas por MÁS de lo que Walmart declara hoy',
   'sin-match':       'sin coincidencia en Redlink',
   'etapa':           'esperan respaldo',
   'anulada':         'anuladas',
@@ -436,7 +486,7 @@ const API = { entradasZip, leerXlsx, leerSharedStrings, leerHoja, columnaANumero
               COLUMNAS, COLUMNAS_OPCIONALES, filasWalmart, citasDeTexto, esCita, agruparPorCita, indexar, clasificar,
               SERVICIOS_TRANSFERENCIA, ETAPAS_CONFIRMABLES,
               reglaCantidad, etapaConfirmable, esAnulada, esTransferencia, estaConfirmada,
-              cruzar, FAMILIAS, resumenMotivos, csvDeConfirmar, tsvDeConfirmar, ventanaDeReporte,
+              cruzar, reglaReconfirmacion, FAMILIAS, resumenMotivos, csvDeConfirmar, tsvDeConfirmar, ventanaDeReporte,
               ventanasDe, seSolapan };
 
 if (typeof module !== 'undefined' && module.exports) module.exports = API;

@@ -165,6 +165,31 @@ const FILAS = [
   ok(await pg.locator('#tb-conf tbody tr').first().locator('input.chk').isDisabled(),
      'el check de una ya resuelta queda fuera de juego');
 
+  console.log('-- la cita que vuelve con MÁS de lo confirmado --');
+  // El caso que trajo logística: 9 de 20, se confirma por 9, y días después la
+  // misma cita vuelve diciendo 20. Antes caía en "ya confirmada" entre otras
+  // cincuenta excepciones y nadie la miraba: 11 pallets perdidos.
+  await pg.evaluate(() => {
+    const S = window.__prueba.S;
+    S.conf = {}; S.sel = {}; S.pend = null; S.reaparecidas = []; S.filas = [];
+    S.r = { citas: 1, porConfirmar: [], avisar: [], excepciones: [], reconfirmar: [
+      { folio: 4077940, cita: '42510877', cliente: 'LABORATORIO BALLERINA LIMITADA',
+        clienteRedlink: 'LABORATORIO BALLERINA LIMITADA', despachada: 20, yaConfirmada: 9,
+        objetivo: 20, faltanPorConfirmar: 11, bodega: 'ZWM01', clave: 'reconfirmar',
+        motivo: 'confirmada por 9 y Walmart ahora declara 20: faltan 11' } ] };
+    window.__prueba.pintarTodo();
+  });
+  ok(await pg.locator('#t-recon').innerText() === '1', 'la pestaña Reconfirmar la cuenta');
+  const rec0 = await pg.locator('#tb-recon tbody tr').first().innerText();
+  ok(/4077940/.test(rec0) && /BALLERINA/.test(rec0), 'con su folio y su cliente');
+  ok(/\t9\t/.test(rec0) || /9/.test(rec0), 'dice por cuánto está confirmada');
+  ok(/11/.test(rec0), 'y cuántos faltan: ' + rec0.replace(/\t/g, ' | '));
+  ok(/pallets sin confirmar/.test(await pg.locator('#resumen-recon').innerText()),
+     'el resumen nombra los pallets, que es lo que está en juego');
+  ok(!(await pg.locator('#btn-csv-recon').isDisabled()), 'se puede bajar para reconfirmar a mano');
+  ok((await pg.locator('#tb-exc tbody tr').count()) === 0,
+     'y NO queda enterrada entre las excepciones');
+
   console.log('\n-- las citas sin cruce se guardan y se re-cruzan --');
   // La bandeja de excepciones ahora tiene que decir DE QUIÉN es cada cita.
   await pg.evaluate(() => {

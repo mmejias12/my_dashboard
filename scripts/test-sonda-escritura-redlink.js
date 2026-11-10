@@ -697,6 +697,74 @@ function correr(S) {
     falso(campos.indexOf('patente') >= 0, 'patente sigue sin ser estado');
     igual(c.find(x => x.campo === 'usuarioIngresoId').valor, 951);
   });
+  prueba('T25c --etapa ESCRIBE formMetapaId; sin ella no se toca', () => {
+    // Escribir la etapa y PEDIR que avance son cosas distintas: avanzaEtapa le
+    // pide al servidor que corra su proceso (y falla siempre); formMetapaId es
+    // un escalar mas, y los escalares si persisten por esta via.
+    const doc = { formHeaderiD: 1, formMetapaId: 43, formDdetalles: [{ id: 5, despachado: 10 }] };
+    igual(S.cuerpoEco(doc, { cantidad: 10 }).formMetapaId, 43, 'sin --etapa se devuelve la que tenia');
+    igual(S.cuerpoEco(doc, { cantidad: 10, etapa: 44 }).formMetapaId, 44);
+    igual(S.cuerpoEco(doc, { cantidad: 10, etapa: '44' }).formMetapaId, 44, 'llega como texto');
+  });
+  prueba('T25d una etapa basura no pisa la que trae el documento', () => {
+    const doc = { formHeaderiD: 1, formMetapaId: 43, formDdetalles: [] };
+    [0, -1, 'abc', '', null, undefined].forEach(function (v) {
+      igual(S.cuerpoEco(doc, { etapa: v }).formMetapaId, 43, 'con etapa=' + JSON.stringify(v));
+    });
+  });
+  prueba('T25e --etapa NO pide avanzar: son caminos distintos', () => {
+    const doc = { formHeaderiD: 1, formMetapaId: 43, formDdetalles: [] };
+    igual(S.cuerpoEco(doc, { etapa: 44, avanzar: false }).avanzaEtapa, false,
+      'escribir la etapa no puede arrastrar el avanzaEtapa que falla siempre');
+  });
+  prueba('T25f un marcador en --etapa se rechaza como en los demas', () => {
+    cierto(S.revisarArgs({ etapa: '<la etapa>' }).length > 0, 'ya nos paso tres veces');
+    igual(S.revisarArgs({ etapa: '44' }), []);
+  });
+  prueba('T25g los candidatos de etapa van ANTES del que siempre funciona', () => {
+    // La corrida se corta en el primer exito, y "guardar cantidades sin
+    // avanzar" funciona siempre. Si va antes, los candidatos nuevos nunca se
+    // mandan y la prueba no prueba nada. Ya nos mordio una vez.
+    const doc = { formHeaderiD: 1, formMetapaId: 43, formDdetalles: [{ id: 5, despachado: 10 }] };
+    const n = S.cuerposCandidatos(doc, 10, 6, 44).map(c => c.nombre);
+    const iEtapa = n.findIndex(x => /etapa directa/.test(x));
+    const iSiempre = n.findIndex(x => /sin avanzar/.test(x) && !/etapa directa/.test(x));
+    cierto(iEtapa >= 0, 'no se armaron los candidatos de etapa: ' + n.join(' | '));
+    cierto(iSiempre >= 0, 'falta el candidato que siempre funciona');
+    cierto(iEtapa < iSiempre, 'el de etapa quedo tapado: ' + n.join(' | '));
+  });
+  prueba('T25h sin --etapa no se agregan candidatos de etapa', () => {
+    const doc = { formHeaderiD: 1, formMetapaId: 43, formDdetalles: [] };
+    falso(S.cuerposCandidatos(doc, 10, 6).some(c => /etapa directa/.test(c.nombre)));
+    falso(S.cuerposCandidatos(doc, 10, 6, 0).some(c => /etapa directa/.test(c.nombre)));
+  });
+  prueba('T25i un exito por etapa directa NO se lee como "no paso nada"', () => {
+    // Paso el 10-nov-2026 en DEMO: el cuerpo movio la etapa 43 -> 44 y la
+    // lectura dijo "guardo cantidades y nada mas. El documento sigue sin
+    // confirmar". Las dos mitades eran falsas.
+    const l = S.lecturaDeIntentos([{ c: { nombre: 'etapa directa', avanza: false, escribeEtapa: true },
+                                     cl: { clave: 'sirve' }, texto: '{}' }]).join(' ');
+    falso(/sigue sin confirmar/.test(l), l);
+    falso(/nada más|nada mas/.test(l), l);
+    cierto(/ESCRIBIO la etapa/.test(l), l);
+    cierto(/NO es confirmar/.test(l), 'tiene que decir que mover la etapa no alcanza');
+    cierto(/SAP/.test(l), 'y nombrar el riesgo concreto');
+  });
+  prueba('T25j2 el candidato de etapa queda MARCADO como tal', () => {
+    // Sin la marca, la lectura no puede distinguir "movio la etapa" de "guardo
+    // cantidades", que es justo la distincion que importa.
+    const doc = { formHeaderiD: 1, formMetapaId: 43, formDdetalles: [{ id: 5, despachado: 10 }] };
+    const c = S.cuerposCandidatos(doc, 10, 6, 44);
+    cierto(c.filter(x => /etapa directa/.test(x.nombre)).every(x => x.escribeEtapa === true),
+      'los de etapa directa tienen que venir marcados');
+    cierto(c.filter(x => !/etapa directa/.test(x.nombre)).every(x => x.escribeEtapa === false),
+      'y los demas no');
+  });
+  prueba('T25j un exito sin avanzar y sin etapa SI avisa que no confirmo', () => {
+    const l = S.lecturaDeIntentos([{ c: { nombre: 'solo cantidades', avanza: false, escribeEtapa: false },
+                                     cl: { clave: 'sirve' }, texto: '{}' }]).join(' ');
+    cierto(/sigue sin confirmar/.test(l), l);
+  });
   prueba('T26 entra al primer elemento de un arreglo de detalles', () => {
     const c = S.camposDeEstado({ id: 1, formDdetalles: [{ id: 5, cantidad: 10, itemsId: 1 }] });
     cierto(c.map(x => x.campo).indexOf('formDdetalles[0].cantidad') >= 0);
@@ -1053,6 +1121,14 @@ function correr(S) {
 /* -------------------------------------------------------- mutaciones ----- */
 
 const MUTACIONES = [
+  ['M13g la etapa directa se lee como "no paso nada"', /const conEtapa = sirven\.some\(x => x\.c && x\.c\.escribeEtapa\);/, 'const conEtapa = false;'],
+  ['M13h todo exito se lee como etapa directa',        /const conEtapa = sirven\.some\(x => x\.c && x\.c\.escribeEtapa\);/, 'const conEtapa = true;'],
+  ['M13i el candidato no se marca como escribe-etapa',  /escribeEtapa: Number\.isFinite\(parseInt\(o\.etapa, 10\)\) && parseInt\(o\.etapa, 10\) > 0,/, 'escribeEtapa: false,'],
+  ['M13 --etapa no escribe la etapa',                 /if \(Number\.isFinite\(et\) && et > 0\) cuerpo\.formMetapaId = et;/, ''],
+  ['M13b --etapa acepta basura',                      /if \(Number\.isFinite\(et\) && et > 0\)/, 'if (true)'],
+  ['M13c --etapa escapa de la guarda de marcadores',  /  etapa: '--etapa'\n\};/, '};'],
+  ['M13e sin --etapa igual se arman los candidatos',  /if \(Number\.isFinite\(parseInt\(etapa, 10\)\) && parseInt\(etapa, 10\) > 0\) \{/, 'if (true) {'],
+  ['M13f los candidatos de etapa quedan tapados por el que siempre sirve', /\n  if \(Number\.isFinite\(parseInt\(etapa, 10\)\)/, "\n  eco('eco completo · despachado + recepcion, sin avanzar',  { despachado: true, recepcion: true, avanzar: false });\n  if (Number.isFinite(parseInt(etapa, 10))"],
   ['M12 el filtro de estado deja de ver los usuarios', /\|fecha\|usuario\)\/i;/, '|fecha)/i;'],
   ['M12b el filtro de estado se abre a todo',          /const RE_ESTADO = \/\([^)]*\)\/i;/, 'const RE_ESTADO = /./;'],
   ['M01 la guarda acepta cualquier host',              /u\.hostname\.toLowerCase\(\) === HOST_DEMO/, 'true'],

@@ -1716,3 +1716,42 @@ Todas las mutaciones mueren. La prueba de navegador levanta la página en
 Chromium, intercepta `/api/confirmar-walmart` y comprueba el recorrido completo:
 una sola, el masivo de dos clics, el corte en la primera que falla, el 403 y la
 red cayéndose.
+
+## Defecto en vivo: la columna de acción no se veía (10-nov-2026)
+
+Mauro cargó el reporte, le salieron 52 por confirmar y **no encontró con qué
+elegir una**. Lo único que veía era el botón masivo.
+
+El botón por fila estaba. Medido con 52 filas en una ventana de 1440px: la
+última columna arrancaba en el **pixel 1330, dentro de un contenedor de 1102**.
+La tabla scrollea horizontal —son nueve columnas de datos— y la columna de
+acción, por estar al final, quedaba fuera de pantalla. Nunca aparecía sin
+scrollear a la derecha, y nadie scrollea a la derecha para buscar un botón que
+no sabe que existe.
+
+**Una columna de acción que hay que ir a buscar es una columna que no existe.**
+
+Arreglado moviendo las dos columnas de acción al principio, y agregado el check
+que faltaba:
+
+```
+[✓] [Confirmar 28] | Folio | Cita | Cliente | Servicio | Despachado | ...
+ ↑        ↑
+ check   botón de una sola
+```
+
+- **Check por fila**, seleccionadas por omisión: la bandeja "por confirmar" ES
+  lo que corresponde confirmar, así que lo normal es todas. Destildar es la
+  excepción.
+- **Check en el encabezado** para todas/ninguna, con estado a medias cuando hay
+  una selección parcial.
+- El masivo pasó a decir **"Confirmar N seleccionadas"** y toca sólo las
+  tildadas. Con ninguna seleccionada dice "ninguna seleccionada" y no se puede
+  apretar.
+- El check de una fila ya resuelta queda fuera de juego, para que no parezca que
+  el masivo la va a tocar de nuevo.
+
+La prueba de navegador ahora **mide la geometría**: comprueba que el check y el
+botón caen dentro del contenedor visible y que son las dos primeras columnas.
+Ese defecto no lo habría encontrado ninguna prueba de lógica, porque la lógica
+estaba bien — el elemento existía en el DOM y respondía al clic.

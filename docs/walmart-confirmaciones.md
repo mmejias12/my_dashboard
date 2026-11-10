@@ -685,14 +685,25 @@ Siete intentos, cuatro etapas, dos formularios, seis cuerpos, un solo error.
 Y en paralelo, lo que **sí** funciona siempre es escribir cantidades sin
 avanzar.
 
-Eso encaja con lo que explicó el proveedor: **confirmar o reconfirmar dispara un
-proceso de ajuste hacia SAP que mueve bodegas**. DEMO no tiene esa integración,
-así que la parte que no toca SAP pasa y la que sí toca falla. No es un campo
-faltante en el cuerpo: es el otro lado que no está.
+Eso encajaba con lo que explicó el proveedor: **confirmar o reconfirmar dispara
+un proceso de ajuste hacia SAP que mueve bodegas**. DEMO no tiene esa
+integración, así que la parte que no toca SAP pasaría y la que sí toca fallaría.
 
-**Corolario: en DEMO no se va a poder avanzar nunca.** La prueba en productivo
-dejó de ser una apuesta y pasó a ser la única forma de saberlo, con una razón
-concreta detrás.
+> ### ESTA TEORÍA ESTÁ MUERTA (9-nov-2026)
+>
+> El 9-nov se probó en **productivo**, que sí tiene la integración con SAP, y
+> dio **exactamente el mismo error**. Dos veces: con la firma en el cuerpo y
+> sin ella. O sea el problema no era "el otro lado que no está".
+>
+> Van **ocho intentos** en cuatro etapas, dos formularios, seis cuerpos y
+> **los dos ambientes**, siempre el mismo `DbUpdateException`. La lectura que
+> queda en pie es más simple y más incómoda: **`PATCH /api/FormHeader` con
+> `avanzaEtapa: true` no confirma, y punto.** Los botones del portal hacen otra
+> cosa — otro endpoint, un procedimiento almacenado, o el Excel.
+>
+> Se deja escrita la teoría vieja, y no se borra, porque tenía toda la pinta de
+> ser cierta y encajaba con lo que había dicho el proveedor. Eso es justamente
+> lo que la hacía peligrosa.
 
 ### Cómo repetir la medición
 
@@ -1021,3 +1032,118 @@ antes de decir que no está, que compare el folio como texto (el argumento llega
 como texto y el dato viene como número), y que un `--dias` mal escrito no deje
 la búsqueda en cero tramos — buscar en cero tramos diría "no aparece" sin haber
 mirado nada.
+
+### El umbral del timeout no es fijo: el tramo se parte solo
+
+A las 15:30 un tramo de 7 días entró sin problema (4.746 operaciones). A las
+17:00 **el mismo tamaño se cortó**. O sea el límite no es una cantidad de
+registros: depende de cómo esté el servidor y la conexión en ese momento, y
+pedirle a alguien que adivine el `--tramo` es hacerle perder vueltas.
+
+`traerTramo` ahora, **ante un corte de tiempo**, parte el tramo al medio y
+reintenta cada mitad, recursivamente, hasta llegar a un día. Lo dice mientras lo
+hace:
+
+```
+  · el tramo 2026-11-03 a 2026-11-09 se cortó por tiempo;
+    lo parto en 2026-11-03..2026-11-05 y 2026-11-06..2026-11-09
+```
+
+Tres cosas que las pruebas fijan, porque las tres se pueden romper en silencio:
+
+- **Sólo se parte ante un corte de TIEMPO.** Ante un 400 o un 500 pedir menos
+  no arregla nada: sería repetir el mismo error dos veces.
+- **Vuelven LAS DOS mitades.** Quedarse con la primera haría invisible un folio
+  y el script diría "no aparece" sobre datos que sí bajó.
+- **Si el tramo ya es de un día, revienta y dice cómo salir** (`--timeout=120`,
+  u otra conexión) en vez de devolver vacío, que se leería como "no hay datos".
+
+## El experimento de aislamiento: la firma queda absuelta (9-nov-2026)
+
+```
+tramo 1/5  2026-11-03 a 2026-11-09: 4.038 operaciones
+tramo 2/5  2026-10-27 a 2026-11-02: 4.281 operaciones
+tramo 3/5  2026-10-20 a 2026-10-26: 4.279 operaciones  <- acá está
+histórico: 12.598 operaciones en 3 de 5 tramos
+
+PATCH /api/FormHeader  ->  HTTP 400
+respuesta: {"error":"An error occurred while saving the entity changes..."}
+El documento NO cambió.
+Firma: se mandó SIN firma a propósito; quedó 920 / "Eliecer_Baeza"
+```
+
+Mismo error **sin** `usuarioIngresoId` en el cuerpo. Los dos sospechosos quedan
+resueltos:
+
+| sospechoso | veredicto |
+|---|---|
+| `usuarioIngresoId: 983` | **absuelto.** El error aparece igual sin él |
+| `avanzaEtapa: true` | **culpable.** Único elemento común a los ocho intentos |
+
+El troceo funcionó como se esperaba: tres tramos, cortó al encontrarlo, no bajó
+los dos viejos.
+
+### Lo que esto cambia
+
+Marcelo había propuesto un "camino intermedio": que el m3link genere las
+columnas `folio` y `cantRecibida` para pegarlas en el Excel que conversa con el
+sistema. A la luz de estos ocho intentos, **ese camino puede no ser intermedio
+sino el único**: es plausible que el Excel exista precisamente porque la
+confirmación no se puede disparar por el API.
+
+Y para ese camino **la herramienta ya está terminada**: la pantalla entrega
+exactamente `folio;cantRecibida`, que es el contrato que pidió Marcelo.
+
+### Lo que NO conviene probar
+
+`--sin-avanzar` diría si el API puede escribir *algo* en este documento. Pero ya
+se sabe por DEMO que `despachado` y `recepcion` persisten, así que lo más
+probable es que grabe la recepción **sin** avanzar la etapa y deje un documento
+productivo a medio camino — bastante ruido a cambio de poca información nueva.
+
+La pregunta que queda es **cómo confirma el portal de verdad**, y eso lo
+contesta el proveedor, no otro intento en producción.
+
+## La consulta también va por tramos (10-nov-2026)
+
+Con Redlink lento, la página **no funcionaba**: pedía los ~40 días de la ventana
+en una sola llamada y el proxy moría con `502 Proxy error · fetch failed` a los
+21 segundos. Medido el 10-nov en vivo: 2 días responden en 1 segundo, 10 días
+mueren a los 21.
+
+`traerOperaciones()` ahora parte la ventana en tramos de 5 días, y un tramo que
+falla se parte al medio y se reintenta hasta tres niveles. Validado contra el
+Redlink real de ese día: **8 de 9 tramos entre 0,3 y 1,7 segundos, cero
+duplicados** entre tramos.
+
+### Por qué un hueco importa tanto
+
+Una operación que no se trajo **se ve exactamente igual que una que no existe**:
+la cita cae en "sin coincidencia en Redlink", que es justamente la lista que se
+le manda al cliente para que emita de nuevo la transferencia. Un hueco silencioso
+termina en un correo pidiéndole al cliente que reemita algo que ya está.
+
+Por eso lo que falta se **anota** y se avisa, y nunca se presenta como resultado
+completo.
+
+### Pero no todo hueco importa: de dónde viene cada día
+
+`/proxy/ops` ya sirve los días **cerrados** desde nuestro blob
+`redtec-os-operaciones` (instantáneo) y sólo los **últimos 2 días** en vivo
+contra Redlink (`OPS_COLD=operaciones`, `OPS_COLD_LIVE_DIAS=2`, confirmado con
+`?diag=1`). La parte que falla es casi siempre esa cola viva.
+
+Y para este tablero, la cola viva casi no importa: las transferencias de un
+reporte de Walmart se despacharon días o semanas antes de la recepción, así que
+salen del blob.
+
+De ahí la regla final: **se bloquea la descarga de excepciones sólo si el tramo
+que faltó se pisa con las fechas PROPIAS del reporte** (sin el margen de ±20
+días). Un hueco en el margen se avisa y no estorba.
+
+### Un hallazgo para el proveedor
+
+El 10-nov, el histórico de **2026-11-09 solo** falló de forma reproducible: 502 a
+los ~21 segundos, dos veces seguidas, mientras 2026-11-08 devolvía 33
+operaciones en 0,3 segundos y un tramo de 5 días traía 3.753 en 1,7. No es
+volumen: es ese día.

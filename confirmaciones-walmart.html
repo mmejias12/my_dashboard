@@ -817,9 +817,7 @@ async function unaSola(f, boton) {
   var r = await pedirConfirmacion(f);
   S.conf[f.folio] = r;
   S.corriendo = false;
-  decir(r.estado === 'detener'
-    ? 'Folio ' + f.folio + ': ' + r.dice
-    : 'Folio ' + f.folio + ': ' + r.dice, r.estado === 'detener');
+  decir('Folio ' + f.folio + ': ' + r.dice + avisoHistorial(r), r.estado === 'detener');
   pintarTodo();
 }
 
@@ -831,7 +829,20 @@ async function pedirConfirmacion(f) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       cache: 'no-store',
-      body: JSON.stringify({ folio: f.folio, cantidad: f.aConfirmar, id: f.docId || null })
+      // Junto con la orden va lo que dijo el reporte de Walmart. El api NO lo
+      // usa para decidir —sigue leyendo el documento por su cuenta— pero es lo
+      // único que después permite armar el informe por cliente: la CITA, el PO
+      // y la hora de recepción en el CD no existen en Redlink. Si no viajan
+      // ahora, no hay de dónde sacarlos salvo volver a cruzar el .xlsx.
+      body: JSON.stringify({
+        folio: f.folio, cantidad: f.aConfirmar, id: f.docId || null,
+        reporte: {
+          cita: f.cita, po: f.po, rut: f.rut, razonSocial: f.cliente,
+          cd: f.bodega, servicio: f.servicio,
+          recepcionWM: f.canjeWM, aceptados: f.canjeWM, rechazados: f.malosWM,
+          cuando: f.fecha
+        }
+      })
     });
     if (res.status === 403) {
       return { estado: 'detener', dice: 'tu usuario no tiene permiso para confirmar transferencias' };
@@ -896,18 +907,19 @@ async function todas() {
   if (!faltan.length) return;
   S.corriendo = true;
   textoBoton();
-  var hechas = 0, saltadas = 0, detenida = null;
+  var hechas = 0, saltadas = 0, detenida = null, sinHistorial = 0;
   for (var i = 0; i < faltan.length; i++) {
     var f = faltan[i];
     decir('Confirmando ' + (i + 1) + ' de ' + faltan.length + ' · folio ' + f.folio + '…', false);
     var r = await pedirConfirmacion(f);
     S.conf[f.folio] = r;
-    if (r.estado === 'confirmada') hechas++;
+    if (r.estado === 'confirmada') { hechas++; if (avisoHistorial(r)) sinHistorial++; }
     else if (r.estado === 'saltada') saltadas++;
     else { detenida = { folio: f.folio, dice: r.dice }; break; }
   }
   S.corriendo = false;
-  var resumen = hechas + ' confirmadas, ' + saltadas + ' que ya estaban';
+  var resumen = hechas + ' confirmadas, ' + saltadas + ' que ya estaban' +
+                (sinHistorial ? ' · ' + sinHistorial + ' NO quedaron en el historial' : '');
   if (detenida) {
     decir('SE DETUVO en el folio ' + detenida.folio + ': ' + detenida.dice +
           ' — ' + resumen + '. Las que quedan no se tocaron.', true);
@@ -915,6 +927,13 @@ async function todas() {
     decir(resumen + '. Revisar en el portal y los ajustes en SAP.', false);
   }
   pintarTodo();
+}
+
+// Una confirmación que no quedó en el historial SÍ se escribió en Redlink. No
+// se reintenta — se avisa, porque lo que falta es el registro, no la operación.
+function avisoHistorial(r) {
+  if (!r || !r.historial || r.historial === 'guardado') return '';
+  return ' · OJO: ' + r.historial;
 }
 
 function decir(texto, mal) {

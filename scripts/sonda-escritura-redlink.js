@@ -262,6 +262,14 @@ function cuerpoEco(doc, opciones) {
   // nombre de quien no hizo nada.
   const u = parseInt(o.usuario, 10);
   if (Number.isFinite(u) && u > 0) cuerpo.usuarioIngresoId = u;
+  // ESCRIBIR la etapa en vez de PEDIR que avance. Son dos cosas distintas:
+  // avanzaEtapa le pide al servidor que corra su proceso de avance (y eso
+  // falla siempre); formMetapaId es un campo escalar mas, y los escalares si
+  // persisten por esta via. Sirve de DIAGNOSTICO, no de solucion: si la etapa
+  // se mueve pero el ajuste a SAP no corre, el documento queda cerrado sin
+  // movimiento de inventario, que es peor que dejarlo pendiente.
+  const et = parseInt(o.etapa, 10);
+  if (Number.isFinite(et) && et > 0) cuerpo.formMetapaId = et;
   for (const k of Object.keys(doc)) {
     const v = doc[k];
     if (!Array.isArray(v)) continue;
@@ -293,11 +301,13 @@ function fechaDeDespacho(doc) {
   return new Date().toISOString().slice(0, 10) + 'T00:00:00';
 }
 
-function cuerposCandidatos(doc, cantidad, usuario) {
+function cuerposCandidatos(doc, cantidad, usuario, etapa) {
   const lista = [];
   if (idDeDocumento(doc) == null) return lista;
   const eco = (nombre, o) => lista.push({
-    nombre: nombre, avanza: !!o.avanzar, contentType: 'application/json',
+    nombre: nombre, avanza: !!o.avanzar,
+    escribeEtapa: Number.isFinite(parseInt(o.etapa, 10)) && parseInt(o.etapa, 10) > 0,
+    contentType: 'application/json',
     cuerpo: cuerpoEco(doc, Object.assign({ cantidad: cantidad, usuario: usuario }, o))
   });
 
@@ -310,6 +320,16 @@ function cuerposCandidatos(doc, cantidad, usuario) {
   // documento y los que el portal sí deja confirmar.
   eco('eco completo · + fechaDespacho + avanzaEtapa',        { despachado: true, recepcion: true, avanzar: true, fechaDespacho: true });
   eco('eco completo · sólo despachado + avanzaEtapa',        { despachado: true, recepcion: false, avanzar: true });
+  // Testigo: el documento devuelto tal cual. Si éste también es aceptado, un
+  // 200 no prueba que se haya confirmado nada.
+  // Escribir la etapa DIRECTO, sin pedir avanzar. Nunca se probo: todos los
+  // intentos anteriores pedian avanzaEtapa.
+  if (Number.isFinite(parseInt(etapa, 10)) && parseInt(etapa, 10) > 0) {
+    eco('etapa directa · formMetapaId=' + parseInt(etapa, 10) + ', SIN avanzaEtapa',
+        { despachado: true, recepcion: true, avanzar: false, etapa: etapa });
+    eco('etapa directa · solo formMetapaId=' + parseInt(etapa, 10) + ', sin cantidades',
+        { despachado: false, recepcion: false, avanzar: false, etapa: etapa });
+  }
   eco('eco completo · despachado + recepcion, sin avanzar',  { despachado: true, recepcion: true, avanzar: false });
   // Testigo: el documento devuelto tal cual. Si éste también es aceptado, un
   // 200 no prueba que se haya confirmado nada.
@@ -599,7 +619,17 @@ function lecturaDeIntentos(vistos) {
     for (const x of sirven) out.push(x.c.nombre + ' fue aceptado.');
     // Un éxito sobre un candidato que no pedía avanzar guarda cantidades y
     // nada más. Cantarlo como confirmación sería el error más caro de todos.
-    if (!sirven.some(x => x.c && x.c.avanza)) {
+    // PERO escribir formMetapaId directo SÍ mueve la etapa, y decir que "no
+    // pasó nada" seria tan falso como cantar la confirmacion: el 10-nov-2026
+    // ese cuerpo movio 43 -> 44 en DEMO y este mensaje dijo lo contrario.
+    const conEtapa = sirven.some(x => x.c && x.c.escribeEtapa);
+    if (conEtapa) {
+      out.push('Ese cuerpo ESCRIBIO la etapa directamente (formMetapaId), sin pedir avanzaEtapa.');
+      out.push('Mover la etapa NO es confirmar: el portal, al avanzar, ademas escribe fecha de');
+      out.push('confirmacion, sube el contador y agrega una fila de registro. Relee el documento y');
+      out.push('compara contra eso: si esos efectos NO estan, el documento quedo a medio camino y');
+      out.push('el ajuste a SAP probablemente no corrio.');
+    } else if (!sirven.some(x => x.c && x.c.avanza)) {
       out.push('Pero ese cuerpo NO pedía avanzar de etapa: guardó cantidades y nada más. El documento sigue sin confirmar.');
     }
     out.push('Relee el documento antes de cantar victoria: que haya avanzado de etapa no garantiza que el resto de los campos siga en pie.');
@@ -777,7 +807,8 @@ const NUMERICOS = {
   dias: '--dias', desde: '--desde', hasta: '--hasta', plazo: '--timeout',
   form: '--form', cliente: '--cliente', servicio: '--servicio',
   bodegaOrigen: '--bodega-origen', bodegaDestino: '--bodega-destino',
-  destino: '--destino', documento: '--documento', documentoNumero: '--documento-numero'
+  destino: '--destino', documento: '--documento', documentoNumero: '--documento-numero',
+  etapa: '--etapa'
 };
 function revisarArgs(a) {
   const problemas = [];
@@ -832,6 +863,7 @@ function leerArgs(argv) {
     else if (x === '--verbo') a.modo = 'verbo';
     else if (x === '--buscar') a.modo = 'buscar';
     else if (x === '--maestros') a.modo = 'maestros';
+    else if (x.indexOf('--etapa=') === 0) a.etapa = x.slice(8);
     else if (x === '--quiensoy') a.modo = 'quiensoy';
     else if (x.indexOf('--instantanea=') === 0) { a.modo = 'instantanea'; a.archivo = x.slice(14); }
     else if (x.indexOf('--comparar=') === 0) { a.modo = 'comparar'; a.archivo = x.slice(11); }
@@ -1150,7 +1182,7 @@ async function principal() {
     const r = await pedir('/api/FormHeader/' + encodeURIComponent(a.id), { method: 'GET', headers: auth });
     if (r.status !== 200) { console.log('No se pudo leer el documento ' + a.id + ': HTTP ' + r.status); return 2; }
     let doc; try { doc = JSON.parse(r.texto); } catch (e) { console.log('El documento no vino como JSON.'); return 2; }
-    const lista = cuerposCandidatos(doc, a.cantidad, a.usuario);
+    const lista = cuerposCandidatos(doc, a.cantidad, a.usuario, a.etapa);
     console.log('\nDocumento ' + a.id + ' · ' + lista.length + ' cuerpos candidatos\n');
     if (!a.si) {
       for (const c of lista) {

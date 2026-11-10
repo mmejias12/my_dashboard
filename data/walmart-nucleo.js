@@ -368,6 +368,36 @@ function resumenMotivos(excepciones) {
     .sort((a, b) => (b.n - a.n) || a.texto.localeCompare(b.texto));
 }
 
+// Partir la ventana de consulta en tramos. Medido el 10-nov-2026: con Redlink
+// lento, 2 días responden en 1 segundo y 10 días mueren a los 21 con un 502
+// del proxy. La página pedía ~40 días de una, así que en un día malo no
+// funcionaba. El umbral no es fijo: depende de cómo esté el servidor.
+function ventanasDe(desde, hasta, dias) {
+  const paso = Math.max(1, parseInt(dias, 10) || 5);
+  const d0 = new Date(String(desde) + 'T12:00:00'), d1 = new Date(String(hasta) + 'T12:00:00');
+  // Explícito aunque el for tampoco correría: una guarda que se lee vale más
+  // que un vacío que hay que deducir.
+  if (isNaN(d0) || isNaN(d1) || d1 < d0) return [];
+  const DIA = 86400000, out = [];
+  for (let t = d0.getTime(); t <= d1.getTime(); t += paso * DIA) {
+    const fin = Math.min(t + (paso - 1) * DIA, d1.getTime());
+    out.push({ desde: new Date(t).toISOString().slice(0, 10),
+               hasta: new Date(fin).toISOString().slice(0, 10) });
+  }
+  return out;
+}
+
+// ¿Dos rangos de fecha se pisan? Sirve para decidir si un tramo que no se pudo
+// traer importa o no: /proxy/ops sirve los días cerrados desde nuestro blob
+// (instantáneo) y sólo los últimos 2 en vivo contra Redlink, que es la parte
+// que falla. Un hueco en esa cola viva no afecta a un reporte de Walmart cuyas
+// recepciones son de hace días: esas transferencias se despacharon antes y
+// salen del blob.
+function seSolapan(a, b) {
+  if (!a || !b || !a.desde || !a.hasta || !b.desde || !b.hasta) return false;
+  return String(a.desde) <= String(b.hasta) && String(b.desde) <= String(a.hasta);
+}
+
 function csvDeConfirmar(filas) {
   const out = ['folio;cantRecibida'];
   (filas || []).forEach(f => out.push(String(f.folio) + ';' + String(f.aConfirmar)));
@@ -392,7 +422,8 @@ const API = { entradasZip, leerXlsx, leerSharedStrings, leerHoja, columnaANumero
               COLUMNAS, filasWalmart, citasDeTexto, esCita, agruparPorCita, indexar, clasificar,
               SERVICIOS_TRANSFERENCIA, ETAPAS_CONFIRMABLES,
               reglaCantidad, etapaConfirmable, esAnulada, esTransferencia, estaConfirmada,
-              cruzar, FAMILIAS, resumenMotivos, csvDeConfirmar, tsvDeConfirmar, ventanaDeReporte };
+              cruzar, FAMILIAS, resumenMotivos, csvDeConfirmar, tsvDeConfirmar, ventanaDeReporte,
+              ventanasDe, seSolapan };
 
 if (typeof module !== 'undefined' && module.exports) module.exports = API;
 else raiz.WalmartNucleo = API;

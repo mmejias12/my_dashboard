@@ -786,6 +786,57 @@ async function correr(N) {
     igual(N.COLUMNAS_OPCIONALES.po, 'po_nbr');
   });
 
+  await prueba('T95 una cita que vuelve con MÁS va a reconfirmar, no a excepciones', () => {
+    // El caso de logística: Walmart recibió 9 de 20, se confirmó por 9, y días
+    // después la misma cita vuelve diciendo 20. Antes caía en "ya confirmada"
+    // junto a cincuenta excepciones y nadie la miraba: 11 pallets perdidos.
+    const ops = [{ nroPedido: 4077940, nroCita: '42510877', operacion: 'Transferencia',
+                   etapaOperacion: 'Transferencia Confirmada', cantidadDespachada: 20,
+                   cantidadConfirmada: 9, bodegaDestinoStr: 'ZWM01', observacion: '' }];
+    const filas = [{ cita: '42510877', rut: '1-9', cliente: 'LABORATORIO BALLERINA LIMITADA',
+                     cd: '6009', recepcion: '1', fecha: '2026-07-14', po: '5450705665',
+                     total: 20, malos: 0, canje: 20 }];
+    const r = N.cruzar(filas, ops);
+    igual(r.reconfirmar.length, 1, 'tiene que salir en su propia bandeja');
+    igual(r.excepciones.length, 0, 'y NO quedar enterrada entre las excepciones');
+    igual(r.porConfirmar.length, 0, 'tampoco se confirma como si fuera nueva');
+    const f = r.reconfirmar[0];
+    igual([f.yaConfirmada, f.objetivo, f.faltanPorConfirmar], [9, 20, 11]);
+    cierto(/faltan 11/.test(f.motivo), f.motivo);
+  });
+  await prueba('T96 si vuelve con lo mismo, sigue siendo sólo "ya confirmada"', () => {
+    const ops = [{ nroPedido: 4077940, nroCita: '42510877', operacion: 'Transferencia',
+                   etapaOperacion: 'Transferencia Confirmada', cantidadDespachada: 20,
+                   cantidadConfirmada: 9, bodegaDestinoStr: 'ZWM01', observacion: '' }];
+    const filas = [{ cita: '42510877', rut: '1-9', cliente: 'X', cd: '6009', recepcion: '1',
+                     fecha: '2026-07-14', po: '', total: 9, malos: 0, canje: 9 }];
+    const r = N.cruzar(filas, ops);
+    igual(r.reconfirmar.length, 0, 'no hay nada que reconfirmar');
+    igual(r.excepciones.map(e => e.clave), ['ya-confirmada']);
+  });
+  await prueba('T97 si ahora declara MENOS de lo confirmado, se dice', () => {
+    // No se puede desconfirmar, pero quedarse callado sería esconder que se
+    // confirmó de más.
+    const ops = [{ nroPedido: 4077940, nroCita: '42510877', operacion: 'Transferencia',
+                   etapaOperacion: 'Transferencia Confirmada', cantidadDespachada: 20,
+                   cantidadConfirmada: 9, bodegaDestinoStr: 'ZWM01', observacion: '' }];
+    const filas = [{ cita: '42510877', rut: '1-9', cliente: 'X', cd: '6009', recepcion: '1',
+                     fecha: '2026-07-14', po: '', total: 5, malos: 0, canje: 5 }];
+    const r = N.cruzar(filas, ops);
+    igual(r.reconfirmar.length, 0);
+    igual(r.excepciones.map(e => e.clave), ['confirmada-de-mas']);
+    cierto(/4 de más/.test(r.excepciones[0].motivo), r.excepciones[0].motivo);
+  });
+  await prueba('T98 la reconfirmación nunca apunta a más de lo despachado', () => {
+    // Walmart declarando 25 sobre 20 despachados no significa confirmar 25:
+    // es la misma regla de cantidad de siempre, sólo que contra lo ya
+    // confirmado en vez de contra cero.
+    igual(N.reglaReconfirmacion(20, 25, 9).objetivo, 20);
+    igual(N.reglaReconfirmacion(20, 25, 9).faltan, 11);
+    igual(N.reglaReconfirmacion(20, 20, 20).faltan, 0, 'completa no necesita nada');
+    igual(N.reglaReconfirmacion(20, 0, 9).sobran, 9);
+  });
+
   return { ok: ok, fallos: fallos };
 }
 
@@ -876,7 +927,14 @@ const MUTACIONES = [
   ['M50 con varias operaciones se toma la primera',  /if \(c\.ops\.length !== 1\) \{/, 'if (false) {'],
   ['M51 una anulada se confirma',                    /if \(esAnulada\(op\)\)            \{ excepciones\.push\([^\n]*?\); return; \}/, ''],
   ['M52 lo que no es transferencia se confirma',     /if \(!esTransferencia\(op\)\)     \{/, 'if (false) {'],
-  ['M53 una ya confirmada se confirma de nuevo',     /if \(estaConfirmada\(op\)\)       \{ excepciones\.push\([^\n]*?\); return; \}/, ''],
+  ['M53 una ya confirmada se confirma de nuevo',     /if \(estaConfirmada\(op\)\) \{\n      \/\/ Ya está confirmada/, 'if (false) {\n      // Ya está confirmada'],
+  // La reconfirmación: el caso que logística trajo el 10-nov.
+  ['M94 una que vuelve con más se da por cerrada',   /if \(rc\.faltan > 0\) \{/, 'if (false) {'],
+  ['M95 lo que falta se calcula al revés',           /faltan: objetivo > c \? objetivo - c : 0,/, 'faltan: c > objetivo ? c - objetivo : 0,'],
+  ['M96 lo que falta ignora lo ya confirmado',       /faltan: objetivo > c \? objetivo - c : 0,/, 'faltan: objetivo,'],
+  ['M97 el objetivo puede pasar lo despachado',      /const objetivo = reglaCantidad\(despachada, recibidaWM\)\.aConfirmar;/, 'const objetivo = Number(recibidaWM) || 0;'],
+  ['M98 confirmar de más no se nombra',              /if \(rc\.sobran > 0\) \{/, 'if (false) {'],
+  ['M99 confirmada de más se cuenta como que falta', /sobran: c > objetivo \? c - objetivo : 0/, 'sobran: 0'],
   ['M54 el filtro por etapa actua siempre',          /if \(o\.exigirEtapa && !etapaConfirmable\(op\)\) \{/, 'if (!etapaConfirmable(op)) {'],
   ['M55 el filtro por etapa actua al reves',         /if \(o\.exigirEtapa && !etapaConfirmable\(op\)\) \{/, 'if (o.exigirEtapa && etapaConfirmable(op)) {'],
   ['M56 una cantidad cero se confirma',              /if \(!\(r\.aConfirmar > 0\)\)      \{/, 'if (false) {'],

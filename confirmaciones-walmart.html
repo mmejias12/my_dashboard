@@ -240,6 +240,7 @@ tr.total td{border-top:1px solid var(--line);border-bottom:0;font-weight:600;col
   <div class="tabs" id="tabs">
     <button class="tab act" data-p="p-conf">Por confirmar <span class="pill" id="t-conf">0</span></button>
     <button class="tab" data-p="p-avisar">Avisar al cliente <span class="pill" id="t-avisar">0</span></button>
+    <button class="tab" data-p="p-recon">Reconfirmar <span class="pill" id="t-recon">0</span></button>
     <button class="tab" data-p="p-exc">Excepciones <span class="pill" id="t-exc">0</span></button>
     <button class="tab" data-p="p-pend">Sin cruce <span class="pill" id="t-pend">0</span></button>
   </div>
@@ -271,6 +272,24 @@ tr.total td{border-top:1px solid var(--line);border-bottom:0;font-weight:600;col
         <button id="btn-csv-avisar" disabled>Bajar CSV</button>
       </div>
       <div class="tabla-caja"><table id="tb-avisar"></table></div>
+    </div>
+  </div>
+
+  <div class="panel" id="p-recon">
+    <div class="card">
+      <div class="chead"><span class="eyebrow">Vuelven con más</span><h2>Citas que ya se confirmaron por menos</h2></div>
+      <p>Walmart recibió una parte, se confirmó por esa parte, y ahora la misma cita vuelve declarando
+      <strong>más</strong>. La transferencia en Redlink ya está confirmada, así que no se puede volver a
+      confirmar por el camino normal: <strong>hay que reconfirmarla</strong>, y eso todavía se hace a mano
+      en el portal.</p>
+      <div class="resumen" id="resumen-recon"></div>
+      <div class="acciones">
+        <button id="btn-csv-recon" disabled>Bajar CSV</button>
+      </div>
+      <div class="tabla-caja"><table id="tb-recon"></table></div>
+      <div class="nota-regla">La cantidad objetivo nunca pasa de lo despachado: es la misma regla del área,
+        aplicada contra lo que ya está confirmado en vez de contra cero.
+        <span>Medido: en M2LINK este caso tiene su propia pestaña con 72 casos acumulados, así que no es raro.</span></div>
     </div>
   </div>
 
@@ -751,6 +770,10 @@ var COLS_EXC = [{ t: 'Cita', mono: true }, { t: 'Cliente', libre: true }, { t: '
                 { t: 'Folio', mono: true }, { t: 'Motivo', libre: true },
                 { t: 'Despachado', n: true }, { t: 'Walmart', n: true }, { t: 'Etapa' }];
 
+var COLS_RECON = [{ t: 'Folio', mono: true }, { t: 'Cita', mono: true }, { t: 'Cliente', libre: true },
+                  { t: 'Despachado', n: true }, { t: 'Confirmado', n: true },
+                  { t: 'Walmart dice ahora', n: true }, { t: 'Faltan', n: true }, { t: 'Bodega' }];
+
 var COLS_PEND = [{ t: 'Cliente', libre: true }, { t: 'Rut', mono: true }, { t: 'Citas', n: true },
                  { t: 'Pallets en juego', n: true }, { t: 'Pasados los 7 días', n: true },
                  { t: 'La más vieja' }, { t: 'Citas' }];
@@ -822,6 +845,27 @@ function pintarTodo() {
     d.appendChild(n); d.appendChild(t);
     cajaRes.appendChild(d);
   });
+
+  var recon = r.reconfirmar || [];
+  $('t-recon').textContent = num(recon.length);
+  var cajaRecon = $('resumen-recon');
+  if (cajaRecon) {
+    cajaRecon.textContent = '';
+    var palletsRecon = recon.reduce(function (a, f) { return a + (f.faltanPorConfirmar || 0); }, 0);
+    [[recon.length, 'citas por reconfirmar'], [palletsRecon, 'pallets sin confirmar']].forEach(function (x) {
+      var d = document.createElement('div');
+      d.className = 'f' + (x[0] ? ' mirar' : '');
+      var n = document.createElement('b'); n.textContent = num(x[0]);
+      var t = document.createElement('span'); t.textContent = x[1];
+      d.appendChild(n); d.appendChild(t); cajaRecon.appendChild(d);
+    });
+  }
+  tabla($('tb-recon'), COLS_RECON, recon, function (f) {
+    return [f.folio, f.cita, f.clienteRedlink || f.cliente, num(f.despachada),
+            num(f.yaConfirmada), num(f.objetivo),
+            etiqueta(num(f.faltanPorConfirmar), 'mal'), f.bodega];
+  }, 'Ninguna cita volvió con más de lo que ya estaba confirmado.');
+  $('btn-csv-recon').disabled = !recon.length;
 
   tabla($('tb-exc'), COLS_EXC, r.excepciones, function (f) {
     return [f.cita, f.cliente || '—', f.rut || '—', f.folio == null ? '—' : f.folio, f.motivo,
@@ -1124,6 +1168,18 @@ if (esLocal || location.hostname === '127.0.0.1' || location.hostname === 'local
   window.__prueba = { S: S, pintarTodo: pintarTodo, sincronizarPendientes: sincronizarPendientes,
                       recruzar: recruzar, filasDeCita: filasDeCita };
 }
+
+// El CSV de reconfirmaciones lleva lo que hace falta para hacerlas a mano en
+// el portal: folio, cuánto está confirmado y cuánto tiene que quedar.
+$('btn-csv-recon').addEventListener('click', function () {
+  var filas = (S.r && S.r.reconfirmar) || [];
+  var lineas = ['folio;cita;cliente;despachado;confirmado;debeQuedar;faltan'];
+  filas.forEach(function (f) {
+    lineas.push([f.folio, f.cita, (f.clienteRedlink || f.cliente || '').replace(/[;\r\n]/g, ' '),
+                 f.despachada, f.yaConfirmada, f.objetivo, f.faltanPorConfirmar].join(';'));
+  });
+  bajar('reconfirmar.csv', lineas.join('\r\n') + '\r\n');
+});
 
 $('btn-csv').addEventListener('click', function () {
   bajar('confirmar-walmart-' + sello() + '.csv', N.csvDeConfirmar(S.r.porConfirmar));

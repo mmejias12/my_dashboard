@@ -749,6 +749,43 @@ async function correr(N) {
     cierto(N.ventanaDeReporte(filas) !== null, 'la ventana sale del propio reporte');
   });
 
+  await prueba('T90 el PO del reporte se arrastra hasta la fila cruzada', () => {
+    // No existe en Redlink. Si no viaja desde el .xlsx, después no hay de
+    // dónde sacarlo para el informe al cliente salvo volver a cruzar a mano.
+    const cab = Object.keys(N.COLUMNAS).map(k => N.COLUMNAS[k]).concat(['po_nbr']);
+    const fila = cab.map(function (c) {
+      if (c === 'appt_nbr') return 42704805;
+      if (c === 'po_nbr') return '2851158713';
+      if (c === 'Rut') return '77643296-2';
+      if (c === 'Razon Social') return 'NUTRISCO CHILE S. A.';
+      if (c === 'pallet_tot_qty' || c === 'pallet_exch_qty') return 15;
+      if (c === 'pallet_bad_qty') return 0;
+      return 1;
+    });
+    const f = N.filasWalmart([cab, fila]);
+    igual(f[0].po, '2851158713');
+    igual(N.agruparPorCita(f)[0].po, '2851158713', 'y sobrevive al agrupado por cita');
+    // Y llega hasta la fila cruzada, que es la que el navegador manda a guardar.
+    const r = N.cruzar(f, OPS);
+    igual(r.porConfirmar.length, 1, JSON.stringify(r.excepciones));
+    igual(r.porConfirmar[0].po, '2851158713', 'el PO tiene que llegar hasta acá');
+  });
+  await prueba('T91 un reporte SIN la columna de PO sigue siendo válido', () => {
+    // Exigirla haría que un archivo bueno se rechace entero por una columna
+    // que no decide nada.
+    const cab = Object.keys(N.COLUMNAS).map(k => N.COLUMNAS[k]);
+    const fila = cab.map(function (c) {
+      if (c === 'appt_nbr') return 42759276;
+      if (c === 'pallet_tot_qty' || c === 'pallet_exch_qty') return 15;
+      if (c === 'pallet_bad_qty') return 0;
+      return 1;
+    });
+    const f = N.filasWalmart([cab, fila]);
+    igual(f[0].po, '', 'sin PO queda vacío, no undefined');
+    igual(N.COLUMNAS.po, undefined, 'el PO no puede estar entre las obligatorias');
+    igual(N.COLUMNAS_OPCIONALES.po, 'po_nbr');
+  });
+
   return { ok: ok, fallos: fallos };
 }
 
@@ -757,6 +794,10 @@ async function correr(N) {
 /* ======================================================================== */
 
 const MUTACIONES = [
+  ['T90m el PO no se arrastra',                     /po: idx\.po < 0 \? '' : String\(f\[idx\.po\] === null/, "po: '' && String(f[idx.po] === null"],
+  ['T91m el PO se vuelve obligatorio',              /const COLUMNAS_OPCIONALES = \{ po: 'po_nbr' \};/, 'const COLUMNAS_OPCIONALES = {};'],
+  ['T92m el PO se pierde al agrupar por cita',      /po: f\.po \|\| '', recepciones: \[\]/, "po: '', recepciones: []"],
+  ['T93m el PO se pierde en la fila cruzada',       /po: g\.po \|\| '',/, "po: '',"],
   // la regla de cantidad
   ['M01 confirma siempre lo despachado',            /aConfirmar: a < d \? a : d/, 'aConfirmar: d'],
   ['M02 confirma siempre lo que dice Walmart',      /aConfirmar: a < d \? a : d/, 'aConfirmar: a'],

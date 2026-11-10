@@ -1208,6 +1208,13 @@ El camino que queda es el que propuso Marcelo: el m3link entrega `folio` y
 `cantRecibida`, y la confirmación corre por donde hoy ya funciona. Para ese
 camino la herramienta está terminada.
 
+> **ESTA CONCLUSIÓN TAMBIÉN ESTÁ MUERTA (10-nov-2026).** La escritura por API
+> funciona: se confirmó el folio 4149330 en producción, etapa 43 → 46, firmado
+> por M3LinkSystem. Lo que estaba descartado no era la escritura sino *nuestra
+> forma de armar el cuerpo*. Queda escrita porque los tres puntos de arriba son
+> ciertos uno por uno y la conclusión igual era falsa: tres mediciones correctas
+> apiladas no son una demostración.
+
 # LA RESPUESTA: cómo se confirma de verdad (10-nov-2026)
 
 Luis Macri, autor de M2LINK, entregó la planilla `Confirmacion_Ver2.xlsm` que el
@@ -1215,7 +1222,7 @@ proveedor mandó usar como reemplazo. Su macro contiene el mecanismo completo.
 
 **Nuestro error era estructural: armábamos el cuerpo del PATCH nosotros. El
 servidor lo arma.** Existe un endpoint dedicado que devuelve el documento ya
-preparado para confirmar, y lo único que hay que hacer es devolvérselo tal cual.
+preparado para confirmar, y lo único que hay que hacer es devuelverselo tal cual.
 
 ### El flujo, en cuatro pasos
 
@@ -1253,7 +1260,7 @@ servidor.
 | hay que averiguar el `usersiD` preguntando | sale de `/api/User/nombreusuario/{nombre}` |
 | el API de escritura se rompió | el API funciona; nunca habíamos encontrado la ruta |
 
-Los ocho 400 se explican solos: mandábamos un cuerpo armado a mano a un endpoint
+Los ocho 400 se explican solos: mandabamos un cuerpo armado a mano a un endpoint
 que espera el cuerpo que él mismo genera.
 
 ### Hallazgo de seguridad
@@ -1350,4 +1357,362 @@ esas palabras en vez de informar "no hay candidatas".
 La cantidad que propone es la **despachada**. Si Walmart recibió menos, va lo
 que recibió: ese número es el que mueve stock.
 
-Cobertura: 106 pruebas, 97 mutaciones, todas mueren.
+**Defecto que salió en la primera corrida real:** `--cuantos` recortaba los
+tramos que se bajaban, pero no la lista. Un tramo de tres días trajo 135
+candidatas de una, y como el modo lee el documento de cada una para saber la
+cantidad, hizo 135 consultas para mostrar cinco. Ahora la lista se recorta donde
+se arma, y el total visto se informa aparte (`135 en etapa confirmable; muestro
+5`), porque ese número es un dato por sí mismo.
+
+### Medición del 10-nov-2026: el atraso está vivo
+
+Primera corrida de `--candidatos` sobre los últimos 3 días: **1.156 operaciones,
+135 transferencias de Walmart en etapa confirmable, todas en la 43 "Pendiente
+Adjuntar Respaldo"**. Ninguna en la 44. Es el mismo atraso que medimos por
+semana de despacho (59% la semana del 2-nov) visto desde el otro lado: el módulo
+del proveedor no está confirmando nada.
+
+Cobertura: 107 pruebas, 99 mutaciones, todas mueren.
+
+# EL SEGMENTO `original/` NO ES UNA MARCA LIBRE (medido 10-nov-2026)
+
+Supuse que `original/` era una etiqueta de procedencia que quedaba guardada del
+lado del servidor, y que por eso podíamos poner `M3LINK` para distinguir nuestras
+confirmaciones de las de la planilla. **Está medido que no.**
+
+Mismo folio (4149330), misma cantidad (1), mismo usuario (983). Única variable
+cambiada: el segmento `original/`.
+
+| `original/M3LINK` | `original/CONFIRMAVER2` |
+|---|---|
+| HTTP 200, 3.866 bytes | HTTP 200, 3.870 bytes |
+| etapa 43, **sin tocar** | etapa **44** |
+| `recepcion: null` | `recepcion: 1` |
+| firma 60 / dpalma | firma **983** |
+| 0 campos distintos del documento actual | 10 campos distintos |
+
+Con un valor que el servidor no reconoce **devuelve el documento tal cual, con
+HTTP 200 y sin una palabra de error**. Si no hubiéramos cotejado la recepción
+contra la cantidad pedida, habríamos mandado ese documento por PATCH creyendo
+que era el preparado.
+
+## Lo que el servidor pone en el cuerpo preparado
+
+```
+avanzaEtapa:        false -> true
+formMetapaId:       43 -> 44
+detalle.recepcion:  null -> 1
+usuarioIngresoId:   60 -> 983
+usuarioConfirmaId:  null -> 983
+filler:             null -> "CONFNORMAL"
+claveFrontend:      (no existía) -> "5957527e-1917-44d4-b5f7-f866cefae2d4"
+formDregistros:     [un registro] -> []
+formDtransportes:   [un registro] -> []
+```
+
+Tres cosas que explican los ocho 400 y que **jamás habríamos adivinado**:
+
+1. **`filler: "CONFNORMAL"`.** Un campo llamado "filler" que lleva el tipo de
+   operación. Nunca lo mandamos.
+2. **`claveFrontend`,** un GUID nuevo por cada preparación. Parece la clave de
+   idempotencia o de concurrencia. Nunca lo mandamos.
+3. **`formMetapaId: 44` + `avanzaEtapa: true`.** El documento está en 43 y el
+   servidor arma el cuerpo con 44: la etapa del cuerpo es el estado *desde* el
+   que se avanza, y la máquina de etapas lo lleva a 46. Nosotros mandabamos la
+   etapa leída (43) y pedíamos avanzar, que no es la misma instrucción.
+
+Y `usuarioConfirmaId` **sí se usa**: medimos antes que en los documentos
+*guardados* queda null, y de ahí concluimos que no era el campo de la firma. Lo
+que el cuerpo preparado muestra es que se mandan **los dos**, y que el servidor
+después resuelve el nombre — el preparado trae `usuarioIngresoId: 983` y todavía
+`usuarioIngresoNombre: "dpalma"`, porque el nombre lo pone al guardar.
+
+## Decisión: la marca por omisión es CONFIRMAVER2
+
+Es la que el servidor prepara, así que es la que va. La traza de quién confirmó
+**no se pierde**: viaja en `usuarioIngresoId` y `usuarioConfirmaId`, que el
+preparado deja en **983 = M3LinkSystem**. El segmento `original/` es una etiqueta
+secundaria, y `filler: "CONFNORMAL"` sugiere que el servidor la traduce a un tipo
+de operación — probablemente haya otros valores (¿reconfirmación?).
+
+**Pregunta abierta para Luis Macri:** qué valores acepta ese segmento y a qué
+`filler` mapea cada uno. No bloquea nada; se puede confirmar hoy con
+CONFIRMAVER2.
+
+## Riesgo aceptado, y cómo se vigila
+
+El cuerpo preparado manda `formDregistros` y `formDtransportes` **vacíos**,
+aunque el documento 692187 tenía un registro en cada uno (el transporte 433211).
+Si el PATCH reemplaza esas colecciones en vez de ignorarlas, esos registros se
+borran.
+
+La planilla manda exactamente este cuerpo desde siempre y el portal sigue
+funcionando, así que el servidor aparentemente las ignora. Pero "aparentemente"
+no es una medición: después de escribir, el script revisa las cuatro colecciones
+hijas y si alguna pasó de tener registros a estar vacía lo dice con esas
+palabras y pide no confirmar más folios hasta resolverlo.
+
+El informe posterior al PATCH también pasó a ser el **diff completo** del
+documento, no una lista de campos conocidos: el cuerpo lleva cosas que no
+pusimos nosotros, y una lista blanca sólo muestra lo que ya esperábamos.
+
+Cobertura: 114 pruebas, 109 mutaciones, todas mueren.
+
+# PRIMERA CONFIRMACIÓN REAL POR API (10-nov-2026)
+
+Folio **4149330**, documento 692187, INDUSTRIAS PRODUCTOS ALIMENTICIOS SA →
+WALMART CHILE COMERCIAL S.A, bodega ZWM11 CD WM EL PEÑON, **1 pallet**.
+
+```
+PATCH /api/FormHeader  ->  HTTP 200  ·  respuesta {}
+```
+
+Lo que quedó escrito, releído del documento:
+
+```
+formMetapa:            43 "Pendiente Adjuntar Respaldo" -> 46 "Transferencia Confirmada"
+detalle.recepcion:     null -> 1
+detalle.recepcionAnterior: null -> 1
+confirmacionVeces:     0 -> 1
+fechaConfirmacion:     null -> "2026-11-10T00:00:00"
+abierto:               true -> false
+usuarioIngresoId:      60 -> 983
+usuarioIngresoNombre:  "dpalma" -> "M3LinkSystem"
+usuarioIngreso:        {60, dpalma} -> {983, M3LinkSystem}
+usuarioConfirmaId:     null -> 983
+filler:                null -> "          "
+```
+
+**La etapa fue a la 46, no a la 44.** El cuerpo preparado traía `formMetapaId: 44`
+más `avanzaEtapa: true`, y la máquina de etapas hizo 44 → 46. Confirma la lectura:
+la etapa del cuerpo es el estado *desde* el que se avanza.
+
+**El servidor resolvió el nombre.** Mandamos el número 983 y el documento quedó
+con `usuarioIngresoNombre: "M3LinkSystem"`. Eso cierra la verificación de la firma
+por el único camino que vale: el nombre, no el número.
+
+**Las colecciones hijas NO se perdieron.** Esto era el riesgo aceptado: el cuerpo
+preparado manda `formDregistros` y `formDtransportes` vacíos. Después de escribir,
+`formDregistros` volvió con su registro y `formDtransportes` **no aparece en el
+diff**, o sea quedó igual — el transporte 433211 sigue ahí. El servidor ignora
+esas colecciones cuando vienen vacías. Deja de ser un supuesto y pasa a ser una
+medición, sobre un documento que tenía registros en las dos.
+
+**`filler` no guarda lo que se le manda.** Fue `"CONFNORMAL"` en el cuerpo y quedó
+en diez espacios. Es un campo de tránsito: el servidor lo lee para saber qué
+operación es y después lo limpia.
+
+## Verificado de punta a punta (10-nov-2026)
+
+**En el portal productivo de Redlink:** el folio 4149330 aparece confirmado por
+**M3LinkSystem**.
+
+**En SAP:** el documento llegó. Usuario **dpalma** y
+`U_HX_RD_TipoDocInterno: "Trans Diferenciada"`.
+
+Las dos cosas confirman, cada una por su lado, lo que Marcelo había anticipado
+antes de que lo midiéramos:
+
+1. *"En el portal queda el usuario de sistema, pero en SAP queda el usuario
+   inicial o el que creó la transferencia, porque la firma viaja con él."*
+   En SAP quedó dpalma, el creador. **Correcto, no es un defecto.**
+2. *"En Redlink se llama transferencia y cuando viaja a SAP se llama trans
+   diferenciada."* `U_HX_RD_TipoDocInterno` dice exactamente eso.
+
+Dos predicciones independientes que se cumplieron sobre un documento que
+escribimos nosotros. El mecanismo está probado de Redlink a SAP.
+
+### Lo que queda por cotejar antes del lote
+
+El documento SAP existe, pero de él se miraron el usuario y el tipo. Para cerrar
+sin supuestos falta mirar en ese mismo documento la **cantidad (1)** y la
+**bodega (ZWM11)**, y compararlo con uno que haya confirmado M2LinkSystem el
+mismo día: si la estructura es la misma, nuestro camino y el del proveedor
+producen el mismo documento. Es el patrón de control que usamos en todo el resto
+de la investigación y acá vale igual.
+
+Cobertura: 114 pruebas, 109 mutaciones, todas mueren.
+
+# EL LOTE: `--lote=confirmar.csv` (10-nov-2026)
+
+Lee el mismo CSV que exporta la página (`folio;cantRecibida`) con el **mismo
+parser** que `verificar-listado-walmart.js` — importado, no copiado: dos parsers
+del mismo contrato se separan el día que alguien arregla uno.
+
+```
+node scripts/confirmar-redlink.js --productivo --lote=confirmar.csv        # ensayo
+node scripts/confirmar-redlink.js --productivo --lote=confirmar.csv --si    # escribe
+```
+
+## Lo que define este modo no es que escriba varias
+
+Es **dónde relee**. Cada folio se relee justo antes de su propia escritura, no
+todos al empezar. Si el lote leyera 135 documentos al principio y escribiera
+durante diez minutos, el módulo del proveedor puede confirmar uno en el medio y
+le mandamos un segundo ajuste de inventario encima.
+
+## Las decisiones, y por qué
+
+**Una ya confirmada se SALTA; cualquier otra cosa DETIENE.** Es la distinción
+que hace que el lote sea reintentable: una transferencia ya confirmada no es una
+anomalía, es una fila que ya se hizo. Cualquier otro problema —destino que no es
+Walmart, varias líneas de detalle, cantidad mayor que la despachada, etapa
+anulada— significa que el documento no es el que el archivo describe, y seguir
+con los siguientes es confirmar a ciegas. Se corta, se dice en qué folio, y las
+que quedan no se tocan. Volver a correr el mismo archivo después retoma: las ya
+hechas se saltan solas.
+
+**El mismo folio dos veces en el archivo no se corre.** Son dos ajustes de
+inventario sobre la misma transferencia.
+
+**Una línea mal formada detiene el archivo entero, no se saltea.** Un CSV con
+basura adentro quiere decir que el que lo generó falló, y entonces las filas
+buenas tampoco son de fiar: salieron del mismo lugar.
+
+**Tope de 50 filas.** No es paternalismo: un archivo con 5.000 filas significa
+que algo se rompió aguas arriba, y la forma de que eso se vea es que el lote se
+niegue en vez de confirmar 5.000 en silencio. Se sube con `--tope=N` y el
+mensaje dice exactamente qué número poner.
+
+**Si falta un folio en el histórico, no se corre nada.** Un archivo a medias no
+se corre a medias; además dice *cuáles* faltan, no sólo cuántos.
+
+**Después de cada escritura se revisan cuatro cosas**: HTTP 200, que la etapa
+diga "confirmada", que la firma sea M3LinkSystem por nombre, y que no se haya
+vaciado ninguna colección hija. Cualquiera de las cuatro detiene el lote.
+
+**La cantidad sale del archivo, no de lo despachado.** La del archivo la puso
+Walmart; la despachada es lo que salió de acá. `--candidatos` propone lo
+despachado porque sirve para elegir un folio de prueba; para operar, el número
+lo pone el cliente.
+
+**El archivo se revisa antes que las credenciales**, así quien arma el CSV puede
+corregirlo sin tener cargadas las de escritura.
+
+Pausa de 200 ms entre folios (`--pausa=ms`). No es por el servidor: es para que
+una corrida de 135 escrituras se pueda interrumpir con Ctrl-C en un punto
+conocido.
+
+Cobertura: 129 pruebas, 127 mutaciones, todas mueren.
+
+# LA PÁGINA CONFIRMA (10-nov-2026)
+
+La página dejó de ser de sólo lectura. El sello del encabezado lo dice con esas
+palabras, porque seguir anunciando "la consulta a Redlink es de sólo lectura"
+mientras hay un botón que mueve inventario es la clase de mentira que alguien
+cree.
+
+## Dónde vive la lógica, y por qué ahí
+
+Static Web Apps despliega **sólo la carpeta `api/`** como functions app: una
+función no puede requerir nada de `scripts/` ni de `data/`. Así que el núcleo de
+las decisiones se movió a **`api/shared/confirmar-nucleo.js`**, y lo requieren
+los dos lados:
+
+```
+api/shared/confirmar-nucleo.js     las decisiones: sin red, sin disco, sin argv
+  ├── api/shared/confirmar-escritura.js   la red del lado del api
+  │     └── api/confirmar-walmart/        la función HTTP (POST)
+  └── scripts/confirmar-redlink.js        la consola (--folio, --lote, --candidatos)
+```
+
+Era eso o dos implementaciones del mismo contrato. Y ya sabemos en qué termina:
+el bug que nos costó ocho intentos fue, exactamente, armar nosotros un cuerpo
+que el servidor ya armaba.
+
+El enmascarador de secretos **se inyecta**: el script le pasa el de la sonda
+—probado aparte, 157 mutaciones— y la función HTTP no le pasa ninguno, porque no
+tiene por qué devolverle al navegador lo que contestó Redlink. Sin enmascarador,
+`revisarPreparado` no muestra el cuerpo y lo dice.
+
+El arnés de mutaciones de `test-confirmar-redlink.js` aprendió a mutar **los dos
+archivos**: intercepta el `require` del script para pasarle el núcleo mutado. Si
+sólo mutara el script, la mitad de las guardas habría quedado sin arnés justo
+después de moverlas, y el informe diría "todo verde".
+
+## Un folio por pedido
+
+Nunca la lista entera en una llamada. Tres razones, todas concretas:
+
+1. Una función de Static Web Apps se corta a los ~45 segundos. Sesenta folios no
+   entran.
+2. Un corte a mitad dejaría media lista confirmada sin que nadie sepa cuál.
+3. Cada folio se relee **del lado del api**, justo antes de SU escritura. Si el
+   módulo del proveedor confirma uno mientras la página recorre la lista, ese se
+   saltea en vez de recibir un segundo ajuste de inventario.
+
+La página recorre la lista de a una, muestra el avance y **se detiene en la
+primera que no sale bien**, diciendo en qué folio. Las que quedan no se tocan.
+
+## Quién puede apretar
+
+Ruta en `staticwebapp.config.json`, con roles — el mismo patrón que
+`/api/clientes-store`:
+
+```json
+{ "route": "/api/confirmar-walmart", "methods": ["POST", "OPTIONS"],
+  "allowedRoles": ["admin", "logistica", "jefatura"] }
+{ "route": "/confirmaciones-walmart.html",
+  "allowedRoles": ["admin", "logistica", "jefatura"] }
+```
+
+La función **igual verifica el rol por su cuenta**, leyendo
+`x-ms-client-principal`. No es redundante: si algún día alguien agrega una regla
+más arriba que tape la de esta ruta, la función no se queda escribiendo para
+cualquiera. Un principal corrupto o ausente no pasa.
+
+## Y se registra quién apretó
+
+En Redlink **toda** confirmación queda firmada por M3LinkSystem. Eso era
+trazabilidad suficiente mientras el único que escribía era un script que corría
+Mauro; con tres roles apretando un botón, "lo confirmó el m3link" es todo lo que
+se podría averiguar. Así que el nombre de la persona sale de
+`x-ms-client-principal` y queda en el log de la función, y vuelve en la respuesta
+como `pedidoPor`.
+
+## El botón masivo pide dos clics
+
+El primero arma y cambia de color; el segundo escribe. Se desarma solo a los 6
+segundos. Un botón que dispara sesenta ajustes de inventario en SAP de un clic es
+un accidente esperando.
+
+## Lo que la página NO hace
+
+- **No manda el cuerpo del PATCH.** Manda `{folio, cantidad, id}`. El cuerpo lo
+  pide y lo devuelve el api, y los bytes del preparado no pasan por el navegador.
+- **No recibe la respuesta de Redlink.** La función devuelve `{estado, dice,
+  etapa, firma}` y nada más. `estado` es uno de tres: `confirmada`, `saltada`,
+  `detener`.
+- **No cuenta como hecha una que no sabe si se escribió.** Si la red se corta a
+  mitad, lo dice con esas palabras y pide volver a cruzar antes de reintentar.
+  Ese reintento relee el documento y, si ya estaba confirmada, la saltea.
+
+## Application Settings que hay que cargar
+
+Son nuevas. El api ya tiene `REDLINK_CLIENT_SECRET`; faltan las de escritura:
+
+```
+REDLINK_M3LINK_USER      M3LinkSystem
+REDLINK_M3LINK_PASS      (la clave)
+REDLINK_M3LINK_USERSID   983      (opcional: se coteja contra la API igual)
+```
+
+Sin ellas la función responde `detener` y lo dice con el nombre de la variable
+que falta. **No** reutiliza `REDLINK_USER`: ese es el usuario de lectura, y
+firmar una confirmación con él no se corrige después.
+
+## Cobertura
+
+| suite | pruebas | mutaciones |
+|---|---|---|
+| `test-confirmar-redlink.js` (script + núcleo) | 129 | 127 |
+| `test-confirmar-escritura.js` (api + función HTTP) | 28 | 27 |
+| `test-sonda-escritura-redlink.js` | 188 | 157 |
+| `test-verificar-listado-walmart.js` | 37 | 36 |
+| `test-walmart-nucleo.js` | 92 | 96 |
+| `prueba-pagina-confirmaciones.js` (navegador real) | 19 comprobaciones | — |
+
+Todas las mutaciones mueren. La prueba de navegador levanta la página en
+Chromium, intercepta `/api/confirmar-walmart` y comprueba el recorrido completo:
+una sola, el masivo de dos clics, el corte en la primera que falla, el 403 y la
+red cayéndose.

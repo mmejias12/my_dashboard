@@ -57,8 +57,23 @@
 // ============================================================================
 'use strict';
 
+const fs = require('fs');
 const path = require('path');
 const sonda = require(path.join(__dirname, 'sonda-escritura-redlink.js'));
+// El lector del CSV es el MISMO que usa verificar-listado-walmart.js. Dos
+// parsers del mismo contrato se separan el día que alguien arregla uno.
+const listado = require(path.join(__dirname, 'verificar-listado-walmart.js'));
+// El núcleo de la confirmación vive bajo api/ porque Static Web Apps despliega
+// SÓLO esa carpeta como functions app: una función no puede requerir nada de
+// scripts/. La función HTTP y este script usan EL MISMO módulo, no dos copias.
+// Las decisiones están ahí; acá queda la red, el disco y la consola.
+const N = require(path.join(__dirname, '..', 'api', 'shared', 'confirmar-nucleo.js'));
+N.usarMascara(sonda.enmascarar);
+const { ETAPAS_CONFIRMABLES, etapaDe, etapaConfirmable, esConfirmada,
+        USERSID_M3LINK, NOMBRE_M3LINK, ORIGEN, urlConfirmar, revisarPreparado,
+        interpretarUsuario, cotejarFirma, firmaDe, veredictoDeFirma,
+        planDeConfirmacion, clasificarEnLote, diferencias, recorteValor,
+        COLECCIONES_HIJAS, coleccionesVaciadas, rutaDeUsuario, RE_NOMBRE_USUARIO } = N;
 
 const HOST = 'api.portalredtec.cl';
 const API  = 'https://' + HOST;
@@ -108,70 +123,6 @@ function revisarCredenciales(env) {
 //
 // Esto no es "cualquier etapa": la lista es explicita y corta. La 46 y la 49
 // ya estan confirmadas y la 47 esta anulada; ninguna de esas se toca.
-const ETAPAS_CONFIRMABLES = [/pendiente\s+de\s+confirmaci/i, /pendiente\s+adjuntar\s+respaldo/i];
-const etapaDe = (doc) => String((doc && doc.formMetapa && doc.formMetapa.nombre) || '');
-const etapaConfirmable = (doc) => ETAPAS_CONFIRMABLES.some(re => re.test(etapaDe(doc)));
-
-const esConfirmada = (doc) => {
-  const det = (doc && doc.formDdetalles && doc.formDdetalles[0]) || {};
-  const n = Number(det.recepcion) || 0;
-  return n > 0 && !/^\s*pendiente/i.test(String((doc && doc.formMetapa && doc.formMetapa.nombre) || ''));
-};
-
-// Todo lo que tiene que ser cierto ANTES de escribir, junto y nombrado. Un
-// solo problema detiene la operación: acá no hay "seguir con lo que se pueda".
-//
-// Lo que este plan YA NO hace es armar el cuerpo del PATCH. Lo armó durante
-// ocho intentos y el servidor devolvió 400 las ocho veces: ese cuerpo lo arma
-// el servidor en ConfirmarTransferencia y nosotros se lo devolvemos tal cual.
-// Acá sólo se decide si corresponde pedirlo, y con qué número de usuario.
-function planDeConfirmacion(doc, cantidad, usersId) {
-  const firma = (usersId === undefined || usersId === null) ? USERSID_M3LINK : Number(usersId);
-  const problemas = [];
-  if (!doc || typeof doc !== 'object') return { ok: false, problemas: ['no se pudo leer el documento'] };
-
-  const det = (doc.formDdetalles || []).filter(d => d && typeof d === 'object');
-  const desp = det.length ? Number(det[0].despachado) || 0 : 0;
-  const n = Number(cantidad);
-
-  // El número de usuario viaja en la URL: es lo que el servidor usa para saber
-  // a nombre de quién preparar la confirmación. Sin él no hay nada que pedir.
-  if (!(firma > 0)) problemas.push('no hay usersiD de ' + NOMBRE_M3LINK +
-    ': sin ese número el servidor no sabe a nombre de quién preparar la confirmación');
-  if (Number(doc.formId) !== 6) problemas.push('no es una transferencia (formId ' + doc.formId + ')');
-  const destino = String(doc.bpDestinoNombre || '');
-  if (!/walmart/i.test(destino)) problemas.push('el destino no es Walmart: ' + (destino || '(vacío)'));
-  if (det.length !== 1) problemas.push('el documento tiene ' + det.length + ' líneas de detalle; esta versión confirma una');
-  if (esConfirmada(doc)) problemas.push('la transferencia YA está confirmada');
-  else if (!etapaConfirmable(doc)) problemas.push('la etapa es "' + (etapaDe(doc) || '(vacía)') +
-    '" y las confirmables son "Pendiente de Confirmación" y "Pendiente Adjuntar Respaldo"');
-  if (!Number.isFinite(n) || n <= 0) problemas.push('la cantidad a confirmar tiene que ser un número mayor que cero');
-  else if (!desp) problemas.push('la línea no tiene cantidad despachada: no hay contra qué confirmar');
-  else if (n > desp) problemas.push('se pide confirmar ' + n + ' y sólo se despacharon ' + desp);
-
-  if (problemas.length) return { ok: false, problemas: problemas };
-
-  // urlConfirmar vuelve a validar los tres números por su cuenta. Que una
-  // excepción de armado de URL salga como problema del plan y no como un
-  // reventón a mitad de camino.
-  let url;
-  try { url = urlConfirmar(doc.folio, n, firma, ORIGEN); }
-  catch (e) { return { ok: false, problemas: [(e && e.message) || String(e)] }; }
-
-  return {
-    ok: true,
-    problemas: [],
-    usersId: firma,
-    resumen: {
-      folio: doc.folio, id: doc.formHeaderiD,
-      cliente: doc.bpOrigenNombre, destino: doc.bpDestinoNombre,
-      bodega: doc.bodegaDestinoNombre, etapa: (doc.formMetapa || {}).nombre,
-      despachado: desp, aConfirmar: n, porAvisar: 0
-    },
-    url: url
-  };
-}
-
 const CAMPOS_ESTADO = ['formMetapaId', 'avanzaEtapa', 'fechaConfirmacion', 'confirmacionVeces', 'usuarioConfirmaId'];
 
 // Un 200 no prueba nada: lo que prueba es el documento releído. Se comparan
@@ -195,7 +146,8 @@ function comparar(antes, despues) {
 function leerArgs(argv) {
   const a = { productivo: false, folio: null, cantidad: null, si: false, dias: '30', quien: null,
               usuario: null, preparar: false, tramo: '7', timeout: null,
-              candidatos: false, cuantos: '5', diasExplicito: false };
+              candidatos: false, cuantos: '5', diasExplicito: false, origen: null,
+              lote: null, tope: null, pausa: '200' };
   for (const x of (argv || [])) {
     if (x === '--productivo') a.productivo = true;
     else if (x === '--si') a.si = true;
@@ -203,6 +155,14 @@ function leerArgs(argv) {
     else if (x.indexOf('--cantidad=') === 0) a.cantidad = x.slice(11);
     else if (x.indexOf('--dias=') === 0) { a.dias = x.slice(7); a.diasExplicito = true; }
     else if (x.indexOf('--cuantos=') === 0) a.cuantos = x.slice(10);
+    // La marca de procedencia, por línea de comandos. El 10-nov el preparador
+    // devolvió el documento SIN TOCAR con la marca M3LINK, y la planilla usa
+    // CONFIRMAVER2: poder cambiar sólo eso convierte la sospecha en una
+    // medición de una variable.
+    else if (x.indexOf('--origen=') === 0) a.origen = x.slice(9);
+    else if (x.indexOf('--lote=') === 0) a.lote = x.slice(7);
+    else if (x.indexOf('--tope=') === 0) a.tope = x.slice(7);
+    else if (x.indexOf('--pausa=') === 0) a.pausa = x.slice(8);
     // --candidatos no escribe nada: busca transferencias de Walmart que hoy
     // SÍ corresponda confirmar y arma la línea de comando para cada una.
     else if (x === '--candidatos') a.candidatos = true;
@@ -218,122 +178,6 @@ function leerArgs(argv) {
   return a;
 }
 
-// El usersiD numérico de M3LinkSystem en PRODUCCIÓN, que Marcelo confirmó el
-// 9-nov-2026. Es lo que se escribe en `usuarioIngresoId` para que la
-// confirmación quede firmada por el usuario de sistema del m3link.
-//
-// OJO: este número es de PRODUCCIÓN. DEMO es otra base y su id puede ser otro;
-// escribir el de DEMO acá firmaría con el usuario equivocado.
-// Patrón de control: M2LinkSystem, el usuario del módulo viejo, es 951.
-const USERSID_M3LINK = Math.max(0, parseInt(process.env.REDLINK_M3LINK_USERSID || '983', 10) || 0);
-const NOMBRE_M3LINK = 'M3LinkSystem';
-
-// LA RUTA QUE FALTABA. Sacada de la macro Confirmacion_Ver2.xlsm que el
-// proveedor mandó usar como reemplazo (10-nov-2026). El servidor ARMA el
-// documento a confirmar y lo devuelve; nosotros sólo se lo devolvemos tal cual
-// por PATCH. Durante ocho intentos armamos el cuerpo a mano, que es por lo que
-// siempre dio 400: le mandábamos a ese endpoint un cuerpo que no era el suyo.
-//
-// El segmento `original/` es una marca de procedencia que queda del lado del
-// servidor: la planilla manda CONFIRMAVER2, nosotros mandamos M3LINK para que
-// en el portal se distinga quién confirmó qué.
-const ORIGEN = String(process.env.REDLINK_ORIGEN || 'M3LINK').trim() || 'M3LINK';
-
-function urlConfirmar(folio, cantidad, usersId, origen) {
-  const f = String(folio == null ? '' : folio).trim();
-  const c = String(cantidad == null ? '' : cantidad).trim();
-  const u = String(usersId == null ? '' : usersId).trim();
-  const o = String(origen || ORIGEN).trim();
-  if (!/^\d+$/.test(f)) throw new Error('el folio tiene que ser un número: ' + JSON.stringify(folio));
-  if (!/^\d+$/.test(c)) throw new Error('la cantidad tiene que ser un número: ' + JSON.stringify(cantidad));
-  if (!/^\d+$/.test(u)) throw new Error('el usersiD tiene que ser un número: ' + JSON.stringify(usersId));
-  if (!/^[A-Za-z0-9_-]+$/.test(o)) throw new Error('la marca de origen sólo admite letras, números, guion y guion bajo: ' + JSON.stringify(o));
-  return '/api/FormHeader/ConfirmarTransferencia/Folio/' + f +
-         '/recibido/' + c + '/original/' + o + '/usuarioconfirma/' + u;
-}
-
-// Lo que devuelve esa ruta antes de mandarlo de vuelta. Un 200 con la palabra
-// "error" adentro NO es un documento: la macro hace esta misma comprobación.
-function revisarPreparado(texto, folio, cantidad) {
-  const crudo = String(texto == null ? '' : texto);
-  const problemas = [];
-  if (!crudo.trim()) return { ok: false, problemas: ['el servidor devolvió el cuerpo vacío'], doc: null };
-  let doc = null;
-  try { doc = JSON.parse(crudo); }
-  catch (e) { return { ok: false, problemas: ['la respuesta no es JSON: ' + sonda.enmascarar(crudo).slice(0, 200)], doc: null }; }
-  if (doc && typeof doc === 'object' && !Array.isArray(doc) && doc.error) {
-    return { ok: false, problemas: ['el servidor contestó un error: ' + String(doc.error).slice(0, 200)], doc: doc };
-  }
-  if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
-    return { ok: false, problemas: ['la respuesta no es un documento'], doc: doc };
-  }
-  // Que el documento que volvió sea el que pedimos: un folio cruzado acá
-  // confirmaría la transferencia equivocada.
-  if (String(doc.folio) !== String(folio)) {
-    problemas.push('el documento que volvió es del folio ' + doc.folio + ' y pedimos el ' + folio);
-  }
-  const det = (doc.formDdetalles || []).filter(d => d && typeof d === 'object');
-  if (det.length !== 1) problemas.push('el documento trae ' + det.length + ' líneas de detalle; esta versión confirma una');
-  else if (Number(det[0].recepcion) !== Number(cantidad)) {
-    problemas.push('el documento viene con recepción ' + det[0].recepcion + ' y pedimos ' + cantidad);
-  }
-  return { ok: !problemas.length, problemas: problemas, doc: doc,
-           etapa: String((doc.formMetapa || {}).nombre || ''), firma: firmaDe(doc) };
-}
-
-// ---- a quién firmar, preguntado por nombre --------------------------------
-//
-// La macro no lleva el número escrito: pregunta por el nombre y usa lo que el
-// servidor contesta. Es mejor que un número a mano por una razón concreta: el
-// nombre es lo que una persona puede verificar mirando el portal, el número no.
-//
-// El servidor busca por coincidencia, así que pedir "M3Link" puede traer otro
-// usuario cuyo nombre lo contenga. Si el nombre que vuelve no es exactamente
-// el que se pidió, el número no es el que se cree que es.
-function interpretarUsuario(texto, nombre) {
-  const crudo = String(texto == null ? '' : texto);
-  const nada = { ok: false, id: null, nombre: '' };
-  if (!crudo.trim()) return Object.assign({ problemas: ['el servidor devolvió el cuerpo vacío'] }, nada);
-  let j;
-  try { j = JSON.parse(crudo); }
-  catch (e) {
-    return Object.assign({ problemas: ['la respuesta no es JSON: ' + sonda.enmascarar(crudo).slice(0, 200)] }, nada);
-  }
-  const lista = (Array.isArray(j) ? j : [j]).filter(x => x && typeof x === 'object');
-  const conId = lista.filter(x => Number(x.usersiD) > 0);
-  if (!conId.length) {
-    return Object.assign({ problemas: ['no vino ningún usersiD para "' + nombre + '"'] }, nada);
-  }
-  const pedido = String(nombre || '').trim().toLowerCase();
-  const exactos = conId.filter(x => String(x.userName || '').trim().toLowerCase() === pedido);
-  const elegidos = exactos.length ? exactos : conId;
-  if (elegidos.length > 1) {
-    return Object.assign({ problemas: ['el nombre "' + nombre + '" devolvió ' + elegidos.length +
-      ' usuarios (' + elegidos.map(x => String(x.userName || '?') + '=' + x.usersiD).join(', ') +
-      '): no se elige uno'] }, nada);
-  }
-  const u = elegidos[0];
-  const encontrado = String(u.userName || '').trim();
-  const problemas = [];
-  if (pedido && encontrado.toLowerCase() !== pedido) {
-    problemas.push('se pidió "' + nombre + '" y el servidor devolvió "' + (encontrado || '(sin nombre)') + '"');
-  }
-  return { ok: !problemas.length, problemas: problemas, id: Number(u.usersiD), nombre: encontrado };
-}
-
-// El nombre entra a una URL, así que se valida ANTES y de forma sincrónica:
-// una validación adentro de una async se convierte en una promesa rechazada y
-// se la puede tragar quien no la espere.
-const RE_NOMBRE_USUARIO = /^[A-Za-z0-9_.-]+$/;
-function rutaDeUsuario(nombre) {
-  const n = String(nombre == null ? '' : nombre).trim();
-  if (!n) throw new Error('falta el nombre de usuario');
-  if (!RE_NOMBRE_USUARIO.test(n)) {
-    throw new Error('el nombre de usuario sólo admite letras, números, punto, guion y guion bajo: ' + JSON.stringify(nombre));
-  }
-  return '/api/User/nombreusuario/' + encodeURIComponent(n);
-}
-
 async function idDeUsuario(nombre, pedirFn) {
   const p = pedirFn || pedir;
   const ruta = rutaDeUsuario(nombre);
@@ -346,22 +190,77 @@ async function idDeUsuario(nombre, pedirFn) {
   return interpretarUsuario(r.texto, n);
 }
 
-// Qué decir cuando la API y el número configurado no coinciden. No se elige
-// uno: un número de usuario equivocado firma a otra persona y no da error.
-function cotejarFirma(resuelto, configurado) {
-  if (!resuelto || !resuelto.ok) {
-    return { ok: true, usar: configurado, verificado: false,
-             dice: 'no se pudo verificar por API (' + (((resuelto || {}).problemas || ['sin detalle'])[0]) +
-                   '); se usa el ' + configurado + ' configurado' };
+// ---- el lote (sólo del lado del script: el archivo es cosa de la consola) --
+//
+// Tope de seguridad. No es paternalismo: un CSV con 5.000 filas significa que
+// algo se rompió aguas arriba, y la forma de que eso se vea es que el lote se
+// niegue a correr en vez de confirmar 5.000 transferencias en silencio. Subirlo
+// es un argumento explícito en la línea de comandos.
+const TOPE_LOTE = 50;
+
+function revisarLote(filas, malas, tope) {
+  const problemas = [];
+  const t = Math.max(1, parseInt(tope, 10) || TOPE_LOTE);
+  // Una línea mal formada NO se saltea. Un CSV con basura adentro quiere decir
+  // que el que lo generó falló, y entonces las filas buenas tampoco son de
+  // fiar: las dos cosas salieron del mismo lugar.
+  (malas || []).forEach(function (m) {
+    problemas.push('línea ' + m.linea + ' no se entiende: ' + m.texto);
+  });
+  const vistos = Object.create(null), repetidos = [];
+  (filas || []).forEach(function (f) {
+    const k = String(f.folio);
+    if (vistos[k]) { if (repetidos.indexOf(k) < 0) repetidos.push(k); }
+    vistos[k] = (vistos[k] || 0) + 1;
+  });
+  // El mismo folio dos veces en el archivo son DOS ajustes de inventario.
+  if (repetidos.length) {
+    problemas.push('folios repetidos en el archivo: ' + repetidos.join(', '));
   }
-  if (Number(resuelto.id) !== Number(configurado)) {
-    return { ok: false, usar: null, verificado: true,
-             dice: 'la API dice que ' + NOMBRE_M3LINK + ' es ' + resuelto.id + ' y acá está configurado ' +
-                   configurado + '. No se elige uno de los dos: hay que resolver cuál es antes de firmar' };
+  if (!(filas || []).length) problemas.push('el archivo no trae ninguna fila utilizable');
+  else if (filas.length > t) {
+    problemas.push('el archivo trae ' + filas.length + ' filas y el tope es ' + t +
+      '. Si de verdad son todas, pídelo con --tope=' + filas.length);
   }
-  return { ok: true, usar: configurado, verificado: true,
-           dice: 'verificado: ' + (resuelto.nombre || NOMBRE_M3LINK) + ' es ' + configurado };
+  return { ok: !problemas.length, problemas: problemas, cuantas: (filas || []).length, tope: t };
 }
+
+// Folio -> filas del histórico, en UNA pasada. Buscar folio por folio sobre
+// 3.866 operaciones son 135 recorridos del mismo arreglo.
+function indicePorFolio(ops) {
+  const ix = Object.create(null);
+  (ops || []).forEach(function (o) {
+    if (!o || typeof o !== 'object') return;
+    const f = String(o.folio == null ? '' : o.folio).trim();
+    if (!f) return;
+    if (!ix[f]) ix[f] = [];
+    ix[f].push(o);
+  });
+  return ix;
+}
+
+// El id del documento para un folio, o por qué no se puede escribir.
+function idDeFolio(ix, folio) {
+  const filas = (ix || Object.create(null))[String(folio)] || [];
+  if (!filas.length) return { id: null, motivo: 'no aparece en la ventana leída del histórico' };
+  if (filas.length > 1) return { id: null, motivo: 'el folio cae en ' + filas.length + ' operaciones' };
+  const id = filas[0].formHeaderiD;
+  if (!id) return { id: null, motivo: 'el registro no trae formHeaderiD' };
+  return { id: id, motivo: '' };
+}
+
+function resumenDeLote(resultados) {
+  const r = { confirmadas: 0, saltadas: 0, detenido: null, pendientes: 0 };
+  (resultados || []).forEach(function (x) {
+    if (x.accion === 'confirmar') r.confirmadas++;
+    else if (x.accion === 'saltar') r.saltadas++;
+    // Hay a lo sumo UNO: el bucle del lote corta en el primero.
+    else if (x.accion === 'detener') r.detenido = x;
+  });
+  return r;
+}
+
+const dormir = (ms) => new Promise(function (ok) { setTimeout(ok, Math.max(0, ms || 0)); });
 
 // ---- buscar transferencias que hoy corresponda confirmar ----------------
 //
@@ -402,25 +301,6 @@ function candidatosDe(filas) {
                servicio: String(campoFila(f, 'servicio') || '') });
   });
   return { candidatos: out, sinEtapa: sinEtapa, filas: (filas || []).length };
-}
-
-// Quien firma un documento. Es `usuarioIngresoId`, no `usuarioConfirmaId`:
-// medido el 9-nov-2026, una confirmacion manual real dejo usuarioConfirmaId en
-// null y sobrescribio usuarioIngresoId con el usuario que actuo. El servidor
-// NO lo deduce del token, guarda lo que se le manda.
-//
-// Para que esto sirva hay que leer un documento que el usuario HAYA TOCADO:
-// el nombre confirma de quien es el numero, y sin el nombre el numero no
-// prueba nada.
-function firmaDe(doc) {
-  if (!doc || typeof doc !== 'object') return { id: null, nombre: '', confirmaId: null };
-  const n = Number(doc.usuarioIngresoId);
-  return {
-    id: Number.isFinite(n) && n > 0 ? n : null,
-    nombre: String(doc.usuarioIngresoNombre || '').trim(),
-    confirmaId: (doc.usuarioConfirmaId === null || doc.usuarioConfirmaId === undefined)
-      ? null : Number(doc.usuarioConfirmaId)
-  };
 }
 
 /* ------------------------------------------------- red ------------------- */
@@ -478,24 +358,6 @@ async function leerCuerpo(r) {
            largoDeclarado: cab('content-length'), tipo: cab('content-type') };
 }
 
-// Después de escribir, lo único que prueba que el número era el correcto es el
-// NOMBRE que devolvió el servidor. Un id equivocado no da error: graba otro
-// usuario y queda igual de callado.
-function veredictoDeFirma(docDespues, esperado) {
-  const esp = (esperado === undefined || esperado === null) ? USERSID_M3LINK : Number(esperado);
-  const f = firmaDe(docDespues);
-  if (f.id === esp && f.nombre.toLowerCase() === NOMBRE_M3LINK.toLowerCase()) {
-    return { ok: true, dice: 'firmada por ' + f.nombre + ' (' + f.id + ')' };
-  }
-  if (f.id === esp) {
-    return { ok: false, dice: 'el id ' + f.id + ' quedó grabado pero el nombre es "' +
-      (f.nombre || '(vacío)') + '", no ' + NOMBRE_M3LINK + ': el número NO es de ese usuario' };
-  }
-  return { ok: false, dice: 'se mandó ' + esp + ' y quedó ' +
-    (f.id === null ? '(vacío)' : f.id) + ' / "' + (f.nombre || '(vacío)') +
-    '": la confirmación NO quedó firmada por ' + NOMBRE_M3LINK };
-}
-
 // Qué decir cuando el histórico no trae un JSON utilizable. Separa las tres
 // cosas que hasta ahora se contaban como una sola: se cortó la descarga, el
 // servidor contestó vacío de verdad, o contestó algo que no es JSON.
@@ -503,7 +365,7 @@ function porQueNoHayJson(r) {
   if (r.falloCuerpo) {
     return ['la descarga se CORTÓ a mitad de camino: ' + r.falloCuerpo,
             'no es que no haya datos — no se alcanzó a leer la respuesta',
-            'probá con --dias menor (una ventana más chica baja el tamaño)'];
+            'prueba con --dias menor (una ventana más chica baja el tamaño)'];
   }
   const declarado = r.largoDeclarado;
   if (!String(r.texto || '').length) {
@@ -602,7 +464,7 @@ async function partirYReintentar(t, motivo, avisarCorte, bajar) {
     throw new Error('El histórico se cortó por tiempo y el tramo ya es de UN día (' +
       t.desde + ').\n  ' + motivo +
       '\n  Partirlo más no se puede: un solo día no entra en el plazo.' +
-      '\n  Subí el plazo con --timeout=120 o probá desde otra conexión.');
+      '\n  Sube el plazo con --timeout=120 o prueba desde otra conexión.');
   }
   if (avisarCorte) avisarCorte({ tramo: t, motivo: motivo, mitades: mitades });
   let out = [];
@@ -670,7 +532,38 @@ async function buscarCandidatos(dias, paso, cuantos, alTramo, traer, alCorte) {
                            registros: arr.length, encontrado: r.candidatos.length });
     if (acum.length >= meta) break;
   }
-  return { candidatos: acum, total: total, sinEtapa: sinEtapa, deTramos: lista.length };
+  // Recortar ACÁ, no sólo dejar de bajar tramos. Un tramo de tres días trae 135
+  // candidatas de una, y quien las reciba va a leer el documento de cada una:
+  // 135 consultas para mostrar cinco. `hay` guarda cuántas se vieron, porque el
+  // número total es el dato que importa aparte.
+  return { candidatos: acum.slice(0, meta), hay: acum.length, total: total,
+           sinEtapa: sinEtapa, deTramos: lista.length };
+}
+
+// Los folios del lote, resueltos en una pasada por tramo. Corta en cuanto
+// encontró todos: un archivo del día se resuelve con el primer tramo.
+async function buscarVariosFolios(folios, dias, paso, alTramo, traer, alCorte) {
+  const lista = tramosHaciaAtras(dias, paso);
+  const bajar = traer || traerTramo;
+  const faltan = Object.create(null);
+  (folios || []).forEach(function (f) { faltan[String(f)] = 1; });
+  let total = 0;
+  const ix = Object.create(null);
+  for (let i = 0; i < lista.length; i++) {
+    const t = lista[i];
+    const arr = await bajar(t, alCorte);
+    total += arr.length;
+    const parcial = indicePorFolio(arr);
+    Object.keys(parcial).forEach(function (k) {
+      ix[k] = (ix[k] || []).concat(parcial[k]);
+      delete faltan[k];
+    });
+    const quedan = Object.keys(faltan).length;
+    if (alTramo) alTramo({ i: i + 1, de: lista.length, desde: t.desde, hasta: t.hasta,
+                           registros: arr.length, faltan: quedan });
+    if (!quedan) break;
+  }
+  return { indice: ix, total: total, faltan: Object.keys(faltan) };
 }
 
 async function leerDocumento(id) {
@@ -703,8 +596,13 @@ async function main() {
     console.log('  2) confirmar de verdad:');
     console.log('     node scripts/confirmar-redlink.js --productivo --folio=N --cantidad=K --si');
     console.log('');
+    console.log('  De a muchas, desde el CSV de la página (folio;cantRecibida):');
+    console.log('     node scripts/confirmar-redlink.js --productivo --lote=confirmar.csv');
+    console.log('     node scripts/confirmar-redlink.js --productivo --lote=confirmar.csv --si');
+    console.log('');
     console.log('Para sólo MIRAR, sin escribir nada:');
     console.log('  --candidatos     qué transferencias de Walmart corresponde confirmar hoy');
+    console.log('  --origen=MARCA   cambia la marca de procedencia (por omisión ' + ORIGEN + ')');
     console.log('  --quien=N        quién firmó el documento de ese folio');
     console.log('  --usuario=NOMBRE qué usersiD tiene ese usuario según la API');
     console.log('\nSi el histórico se corta por tiempo se parte solo; --timeout=120 le da más plazo.\n');
@@ -741,6 +639,151 @@ async function main() {
     console.log('\n  Sólo pregunté. No mandé nada.\n');
     return u.ok ? 0 : 1;
   }
+  // ---- el lote ----------------------------------------------------------
+  //
+  // Lo que define este modo no es que escriba varias: es DÓNDE relee. Cada
+  // folio se relee justo antes de su propia escritura, no todos al empezar. Si
+  // el lote leyera 135 documentos al principio y escribiera durante diez
+  // minutos, el módulo del proveedor puede confirmar uno en el medio y le
+  // mandamos un segundo ajuste de inventario encima.
+  if (a.lote) {
+    // El archivo PRIMERO, antes de las credenciales: revisarlo no necesita
+    // ninguna, y así quien está armando el CSV puede corregirlo sin tener las
+    // de escritura cargadas.
+    let texto;
+    try { texto = fs.readFileSync(a.lote, 'utf8'); }
+    catch (e) { console.log('\nNo pude leer ' + a.lote + ': ' + ((e && e.message) || e) + '\n'); return 2; }
+    const l = listado.leerListado(texto);
+    const rev = revisarLote(l.filas, l.malas, a.tope);
+    console.log('  archivo: ' + a.lote);
+    console.log('  filas utilizables: ' + rev.cuantas + '  ·  tope ' + rev.tope);
+    if (!rev.ok) {
+      console.log('\nEl archivo no sirve para correr un lote:');
+      rev.problemas.forEach(x => console.log('  · ' + x));
+      console.log('');
+      return 2;
+    }
+    const mal = revisarCredenciales();
+    if (mal.length) {
+      console.log('\nEl archivo está bien, pero no se puede confirmar:');
+      mal.forEach(m => console.log('  · ' + m));
+      console.log('');
+      return 2;
+    }
+
+    const resuelto0 = await idDeUsuario(NOMBRE_M3LINK).catch(e => ({ ok: false, id: null, nombre: '',
+      problemas: [(e && e.message) || String(e)] }));
+    const cot = cotejarFirma(resuelto0, USERSID_M3LINK);
+    console.log('  firma: ' + cot.dice);
+    if (!cot.ok) { console.log(''); return 2; }
+
+    const ecoLote = (t) => console.log('  tramo ' + t.i + '/' + t.de + '  ' + t.desde + ' a ' + t.hasta +
+      ': ' + t.registros.toLocaleString('es-CL') + ' operaciones' +
+      (t.faltan ? '  (faltan ' + t.faltan + ' folios)' : '  (están todos)'));
+    const b = await buscarVariosFolios(l.filas.map(f => f.folio), a.dias, a.tramo, ecoLote, null, alCorte);
+    console.log('  histórico: ' + b.total.toLocaleString('es-CL') + ' operaciones');
+    if (b.faltan.length) {
+      console.log('\n' + b.faltan.length + ' folios del archivo no aparecen en ' + a.dias + ' días:');
+      console.log('  ' + b.faltan.slice(0, 20).join(', ') + (b.faltan.length > 20 ? ' …' : ''));
+      console.log('Un folio que no se encuentra no se puede escribir, y un archivo a medias');
+      console.log('no se corre a medias. Revisa el listado o prueba --dias mayor.\n');
+      return 2;
+    }
+
+    console.log('');
+    if (!a.si) console.log('  ENSAYO: releo cada documento y digo qué haría. No escribo nada.\n');
+    const hechos = [];
+    for (const f of l.filas) {
+      const r = idDeFolio(b.indice, f.folio);
+      if (!r.id) {
+        hechos.push({ accion: 'detener', folio: f.folio, motivo: r.motivo });
+        console.log('  ' + f.folio + '  DETENER: ' + r.motivo);
+        break;
+      }
+      // Releído ACÁ, folio por folio.
+      let doc;
+      try { doc = await leerDocumento(r.id); }
+      catch (e) {
+        hechos.push({ accion: 'detener', folio: f.folio, motivo: 'no se pudo leer: ' + ((e && e.message) || e) });
+        console.log('  ' + f.folio + '  DETENER: no se pudo leer el documento ' + r.id);
+        break;
+      }
+      const c = clasificarEnLote(doc, f.cantRecibida, cot.usar, a.origen);
+      if (c.accion === 'saltar') {
+        hechos.push({ accion: 'saltar', folio: f.folio, motivo: c.motivo });
+        console.log('  ' + f.folio + '  salto: ' + c.motivo);
+        continue;
+      }
+      if (c.accion === 'detener') {
+        hechos.push({ accion: 'detener', folio: f.folio, motivo: c.motivo });
+        console.log('  ' + f.folio + '  DETENER: ' + c.motivo);
+        break;
+      }
+      if (!a.si) {
+        hechos.push({ accion: 'confirmar', folio: f.folio, motivo: '' });
+        console.log('  ' + f.folio + '  confirmaría ' + f.cantRecibida + ' de ' +
+                    c.plan.resumen.despachado + '  ·  ' + c.plan.resumen.etapa);
+        continue;
+      }
+
+      const prep = await prepararConfirmacion(c.plan.url);
+      if (prep.status !== 200 || prep.falloCuerpo) {
+        const por = prep.falloCuerpo ? 'la descarga se cortó: ' + prep.falloCuerpo : 'HTTP ' + prep.status;
+        hechos.push({ accion: 'detener', folio: f.folio, motivo: 'el preparado falló (' + por + ')' });
+        console.log('  ' + f.folio + '  DETENER: el preparado falló (' + por + ')');
+        break;
+      }
+      const rp = revisarPreparado(prep.texto, doc.folio, f.cantRecibida);
+      if (!rp.ok) {
+        hechos.push({ accion: 'detener', folio: f.folio, motivo: rp.problemas.join(' · ') });
+        console.log('  ' + f.folio + '  DETENER: el preparado no sirve: ' + rp.problemas.join(' · '));
+        break;
+      }
+      const res = await pedir('/api/FormHeader', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: prep.texto
+      }, 'escritura');
+      const despues = await leerDocumento(r.id);
+      const etapaFin = etapaDe(despues);
+      const v = veredictoDeFirma(despues, cot.usar);
+      const vaciadas = coleccionesVaciadas(doc, despues);
+      const problemas = [];
+      if (res.status !== 200) problemas.push('el PATCH devolvió HTTP ' + res.status + ': ' +
+        sonda.enmascarar(String(res.texto || '')).slice(0, 200).replace(/\s+/g, ' '));
+      if (!/confirmada/i.test(etapaFin)) problemas.push('la etapa quedó en "' + (etapaFin || '(vacía)') + '"');
+      if (!v.ok) problemas.push(v.dice);
+      if (vaciadas.length) problemas.push('se VACIARON colecciones: ' + vaciadas.join(', '));
+      if (problemas.length) {
+        hechos.push({ accion: 'detener', folio: f.folio, motivo: problemas.join(' · ') });
+        console.log('  ' + f.folio + '  DETENER tras escribir:');
+        problemas.forEach(x => console.log('      · ' + x));
+        break;
+      }
+      hechos.push({ accion: 'confirmar', folio: f.folio, motivo: '' });
+      console.log('  ' + f.folio + '  confirmada ' + f.cantRecibida + '  ·  ' + etapaFin);
+      await dormir(parseInt(a.pausa, 10));
+    }
+
+    const R2 = resumenDeLote(hechos);
+    const faltaron = l.filas.length - hechos.length;
+    console.log('');
+    console.log('  ' + (a.si ? 'confirmadas' : 'confirmaría') + ': ' + R2.confirmadas +
+                '   saltadas: ' + R2.saltadas + '   sin tocar: ' + faltaron);
+    if (R2.detenido) {
+      console.log('');
+      console.log('  SE DETUVO en el folio ' + R2.detenido.folio + '.');
+      console.log('  Las ' + faltaron + ' que quedan NO se tocaron. Resuelve eso y vuelve a correr el');
+      console.log('  mismo archivo: las ya confirmadas se saltan solas.');
+      console.log('');
+      return 1;
+    }
+    if (!a.si) {
+      console.log('\n  Fue un ensayo. Agrega --si para confirmar de verdad.\n');
+      return 0;
+    }
+    console.log('\n  Verificar en el portal y revisar los ajustes en SAP.\n');
+    return 0;
+  }
+
   // --candidatos SOLO LEE. Existe para el primer disparo: en vez de pedirle a
   // alguien que saque un folio del Excel y lo tipee, el script busca las que
   // hoy corresponde confirmar, las pasa por las mismas guardas del plan y
@@ -749,6 +792,10 @@ async function main() {
     const dias = diasParaCandidatos(a);
     const r = await buscarCandidatos(dias, a.tramo, a.cuantos, eco, null, alCorte);
     console.log('  histórico: ' + r.total.toLocaleString('es-CL') + ' operaciones en ' + dias + ' días');
+    if (r.hay > r.candidatos.length) {
+      console.log('  ' + r.hay.toLocaleString('es-CL') + ' en etapa confirmable; muestro ' +
+                  r.candidatos.length + ' (--cuantos=N para más)');
+    }
     if (r.sinEtapa === r.total && r.total > 0) {
       console.log('\nNinguna fila del histórico trae un campo de etapa que sepa leer.');
       console.log('No es que no haya candidatas: no supe leer el listado.');
@@ -804,7 +851,13 @@ async function main() {
     const f = firmaDe(doc0);
     console.log('');
     console.log('  folio ' + a.quien + '  (documento ' + id0 + ')');
+    const d0 = (doc0.formDdetalles || [])[0] || {};
     console.log('  etapa                  ' + ((doc0.formMetapa || {}).nombre || '(vacía)'));
+    // Las cantidades van acá porque es la única señal de si alguien ya
+    // confirmó: la etapa sola no alcanza y el 10-nov hizo falta justo esto
+    // para saber si un GET había dejado algo escrito.
+    console.log('  despachado / recepción ' + JSON.stringify(d0.despachado) + ' / ' + JSON.stringify(d0.recepcion));
+    console.log('  formMetapaId           ' + JSON.stringify(doc0.formMetapaId));
     console.log('  usuarioIngresoNombre   ' + (f.nombre || '(vacío)'));
     console.log('  usuarioIngresoId       ' + (f.id === null ? '(vacío)' : f.id) + '   <- el número que se firma');
     console.log('  usuarioConfirmaId      ' + (f.confirmaId === null ? '(null)' : f.confirmaId) +
@@ -843,7 +896,7 @@ async function main() {
   console.log('  firma: ' + cotejo.dice);
   if (!cotejo.ok) { console.log(''); return 2; }
 
-  const plan = planDeConfirmacion(antes, a.cantidad, cotejo.usar);
+  const plan = planDeConfirmacion(antes, a.cantidad, cotejo.usar, a.origen);
   if (!plan.ok) {
     console.log('\nNo se puede confirmar el folio ' + a.folio + ':');
     plan.problemas.forEach(p => console.log('  · ' + p));
@@ -859,6 +912,11 @@ async function main() {
   console.log('  etapa     ' + R.etapa);
   console.log('  despachado ' + R.despachado + '  ->  a confirmar ' + R.aConfirmar);
   console.log('');
+  console.log('');
+  console.log('  marca de procedencia: ' + plan.origen +
+              (plan.origen === 'CONFIRMAVER2'
+                ? '  (la única que el servidor prepara; medido 10-nov)'
+                : '  <- OJO: con otra que no sea CONFIRMAVER2 el servidor devolvió el documento sin tocar'));
   console.log('  El cuerpo del PATCH lo arma el servidor. Se le pide con:');
   console.log('    GET ' + plan.url);
 
@@ -895,6 +953,18 @@ async function main() {
     console.log('  trae recepción  ' + JSON.stringify(((rev.doc.formDdetalles || [])[0] || {}).recepcion));
     console.log('  trae firma      ' + (rev.firma.id === null ? '(vacío)' : rev.firma.id) +
                 ' / "' + (rev.firma.nombre || '(vacío)') + '"');
+    // QUÉ cambió el servidor respecto del documento que ya teníamos. Sin esto
+    // la respuesta es "no sirve" y no se sabe si el servidor no preparó nada o
+    // si preparó algo en un campo que no estábamos mirando.
+    const d = diferencias(antes, rev.doc);
+    console.log('');
+    if (!d.length) {
+      console.log('  El preparado es IDÉNTICO al documento que ya teníamos.');
+      console.log('  El servidor no preparó nada: con la marca "' + plan.origen + '" este GET sólo lee.');
+    } else {
+      console.log('  Qué trae distinto del documento actual (' + d.length + ' campos):');
+      d.forEach(x => console.log('    ' + x.campo + ': ' + x.antes + '  ->  ' + x.despues));
+    }
   }
   if (!rev.ok) {
     console.log('');
@@ -925,18 +995,32 @@ async function main() {
   if (cuerpo) console.log('  respuesta: ' + cuerpo.slice(0, 300).replace(/\s+/g, ' '));
 
   const despues = await leerDocumento(id);
-  const cambios = comparar(antes, despues);
+  // Diff COMPLETO, no una lista de campos conocidos: el cuerpo que se mandó
+  // trae cosas que no pusimos nosotros (claveFrontend, filler, colecciones
+  // vacías) y lo que importa es qué hizo el servidor con todas ellas.
+  const cambios = diferencias(antes, despues);
   console.log('');
   if (!cambios.length) {
     console.log('  El documento NO cambió. Un 200 sin cambios no es una confirmación.');
   } else {
-    console.log('  Qué cambió en el documento:');
-    cambios.forEach(c => console.log('    ' + c.campo + ': ' + JSON.stringify(c.antes) + '  ->  ' + JSON.stringify(c.despues)));
+    console.log('  Qué cambió en el documento (' + cambios.length + ' campos):');
+    cambios.forEach(c => console.log('    ' + c.campo + ': ' + c.antes + '  ->  ' + c.despues));
     const etapa = (despues.formMetapa || {}).nombre || '';
     console.log('');
     console.log(/confirmada/i.test(etapa)
       ? '  CONFIRMADA. Verificar en el portal y revisar que el ajuste en SAP se haya generado.'
       : '  Cambió, pero la etapa quedó en "' + etapa + '". Revisar antes de repetir.');
+  }
+
+  // El cuerpo preparado manda las colecciones hijas vacías. Si el servidor las
+  // reemplaza, se perdieron registros del documento y nadie lo iba a notar
+  // mirando la etapa, que es lo único que se mira cuando sale bien.
+  const vaciadas = coleccionesVaciadas(antes, despues);
+  if (vaciadas.length) {
+    console.log('');
+    console.log('  OJO: se VACIARON colecciones del documento: ' + vaciadas.join(', '));
+    console.log('  El cuerpo preparado las manda como [] y el servidor las reemplazó.');
+    console.log('  NO confirmar más folios hasta resolver esto.');
   }
 
   // La firma se revisa SIEMPRE, haya cambiado el documento o no: un id
@@ -948,12 +1032,15 @@ async function main() {
   return v.ok ? 0 : 1;
 }
 
-module.exports = { revisarCredenciales, USUARIOS, ETAPAS_CONFIRMABLES, etapaConfirmable, etapaDe, firmaDe, porQueNoHayJson, leerCuerpo,
+module.exports = Object.assign({}, N, { revisarCredenciales, USUARIOS, ETAPAS_CONFIRMABLES, etapaConfirmable, etapaDe, firmaDe, porQueNoHayJson, leerCuerpo,
   USERSID_M3LINK, NOMBRE_M3LINK, veredictoDeFirma, tramosHaciaAtras, buscarPorFolio,
   partirTramo, esCorteDeTiempo, partirYReintentar, ORIGEN, urlConfirmar, revisarPreparado,
-  interpretarUsuario, idDeUsuario, rutaDeUsuario, cotejarFirma, prepararConfirmacion, RE_NOMBRE_USUARIO,
+  interpretarUsuario, idDeUsuario, rutaDeUsuario, cotejarFirma, prepararConfirmacion,
   CAMPOS_FILA, campoFila, candidatosDe, buscarCandidatos, diasParaCandidatos, DIAS_CANDIDATOS,
-  planDeConfirmacion, comparar, leerArgs, esConfirmada, CAMPOS_ESTADO, aUS };
+  diferencias, recorteValor, COLECCIONES_HIJAS, coleccionesVaciadas,
+  TOPE_LOTE, revisarLote, clasificarEnLote, indicePorFolio, idDeFolio, resumenDeLote, leerListado: listado.leerListado,
+  buscarVariosFolios, dormir,
+  comparar, leerArgs, CAMPOS_ESTADO, aUS, RE_NOMBRE_USUARIO });
 
 if (require.main === module) {
   main().then(c => { process.exitCode = c || 0; }).catch(e => {

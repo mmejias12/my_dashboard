@@ -5,17 +5,29 @@
 //  CONFIRMA UNA transferencia en Redlink PRODUCTIVO. Escribe de verdad, y esa
 //  escritura dispara un ajuste de inventario en SAP que no se deshace.
 //
-//  Por qué existe y por qué es de a una
-//  ------------------------------------
-//  En DEMO el avance de etapa nunca funcionó: el entorno de pruebas no tiene
-//  el proceso de ajuste hacia SAP, así que el guardado fallaba siempre. La
-//  única forma de saber si el contrato sirve es ejecutarlo donde ese proceso
-//  existe. Para que eso no sea una apuesta, la prueba se hace sobre una
-//  transferencia que YA correspondía confirmar por esa misma cantidad: si
-//  funciona, se hizo lo correcto; si falla, no pasó nada.
+//  Cómo se confirma de verdad
+//  --------------------------
+//  Son DOS pasos, y el orden importa:
 //
-//  Por eso toma UN folio y UNA cantidad. Sin lotes, sin archivos, sin bucles.
-//  Cuando el contrato esté probado, el lote se construye aparte y a conciencia.
+//    1. GET  /api/FormHeader/ConfirmarTransferencia/Folio/{folio}/recibido/{n}
+//            /original/{marca}/usuarioconfirma/{usersiD}
+//       El servidor arma el documento confirmado y lo devuelve.
+//    2. PATCH /api/FormHeader  con ESE cuerpo, tal cual vino.
+//
+//  Durante ocho intentos armamos el cuerpo nosotros y el servidor devolvió 400
+//  las ocho veces. No era el avanzaEtapa ni la firma ni el entorno: era que a
+//  ese PATCH hay que devolverle el cuerpo que él mismo preparó. La ruta salió
+//  de la macro Confirmacion_Ver2.xlsm que el proveedor mandó usar cuando dejó
+//  de contestar por la API (10-nov-2026).
+//
+//  Por qué es de a una
+//  -------------------
+//  Toma UN folio y UNA cantidad. Sin lotes, sin archivos, sin bucles. La
+//  escritura dispara un ajuste de inventario en SAP que no se deshace, así que
+//  la primera prueba se hace sobre una transferencia que YA correspondía
+//  confirmar por esa misma cantidad: si funciona, se hizo lo correcto; si
+//  falla, no pasó nada. Cuando el contrato esté probado, el lote se construye
+//  aparte y a conciencia.
 //
 //  La firma
 //  --------
@@ -27,16 +39,21 @@
 //  Uso
 //  ---
 //    node scripts/confirmar-redlink.js --productivo --folio=N --cantidad=K
+//    node scripts/confirmar-redlink.js --productivo --folio=N --cantidad=K --preparar
 //    node scripts/confirmar-redlink.js --productivo --folio=N --cantidad=K --si
+//    node scripts/confirmar-redlink.js --productivo --usuario=M3LinkSystem
 //
 //  Sin --productivo no hace nada: la bandera está para que nadie llegue acá
-//  por inercia. Sin --si muestra el plan completo y se detiene.
+//  por inercia. Sin --si ni --preparar muestra el plan y se detiene sin tocar
+//  el servidor. Con --preparar pide el documento y lo muestra, sin mandarlo.
 //
 //  Variables de entorno:
 //    REDLINK_CLIENT_SECRET        (el mismo cliente apiportalredtec)
 //    REDLINK_M3LINK_USER          (M3LinkSystem)
 //    REDLINK_M3LINK_PASS
 //    REDLINK_USER                 (sólo para comprobar que no son el mismo)
+//    REDLINK_M3LINK_USERSID       (983; se coteja con la API antes de escribir)
+//    REDLINK_ORIGEN               (la marca de procedencia; M3LINK)
 // ============================================================================
 'use strict';
 
@@ -103,11 +120,13 @@ const esConfirmada = (doc) => {
 
 // Todo lo que tiene que ser cierto ANTES de escribir, junto y nombrado. Un
 // solo problema detiene la operación: acá no hay "seguir con lo que se pueda".
-function planDeConfirmacion(doc, cantidad, usersId, opciones) {
-  const o = opciones || {};
-  const firma = o.sinFirma ? 0
-    : ((usersId === undefined || usersId === null) ? USERSID_M3LINK : Number(usersId));
-  const avanzar = !o.sinAvanzar;
+//
+// Lo que este plan YA NO hace es armar el cuerpo del PATCH. Lo armó durante
+// ocho intentos y el servidor devolvió 400 las ocho veces: ese cuerpo lo arma
+// el servidor en ConfirmarTransferencia y nosotros se lo devolvemos tal cual.
+// Acá sólo se decide si corresponde pedirlo, y con qué número de usuario.
+function planDeConfirmacion(doc, cantidad, usersId) {
+  const firma = (usersId === undefined || usersId === null) ? USERSID_M3LINK : Number(usersId);
   const problemas = [];
   if (!doc || typeof doc !== 'object') return { ok: false, problemas: ['no se pudo leer el documento'] };
 
@@ -115,10 +134,10 @@ function planDeConfirmacion(doc, cantidad, usersId, opciones) {
   const desp = det.length ? Number(det[0].despachado) || 0 : 0;
   const n = Number(cantidad);
 
-  // Con --sin-firma el experimento ES mandar sin firma, así que no se objeta;
-  // el aviso de que quedará a nombre de otro lo da main() antes de escribir.
-  if (!o.sinFirma && !(firma > 0)) problemas.push('no hay usersiD de ' + NOMBRE_M3LINK +
-    ': sin firma la confirmación quedaría a nombre de quien tocó el documento antes');
+  // El número de usuario viaja en la URL: es lo que el servidor usa para saber
+  // a nombre de quién preparar la confirmación. Sin él no hay nada que pedir.
+  if (!(firma > 0)) problemas.push('no hay usersiD de ' + NOMBRE_M3LINK +
+    ': sin ese número el servidor no sabe a nombre de quién preparar la confirmación');
   if (Number(doc.formId) !== 6) problemas.push('no es una transferencia (formId ' + doc.formId + ')');
   const destino = String(doc.bpDestinoNombre || '');
   if (!/walmart/i.test(destino)) problemas.push('el destino no es Walmart: ' + (destino || '(vacío)'));
@@ -132,20 +151,24 @@ function planDeConfirmacion(doc, cantidad, usersId, opciones) {
 
   if (problemas.length) return { ok: false, problemas: problemas };
 
+  // urlConfirmar vuelve a validar los tres números por su cuenta. Que una
+  // excepción de armado de URL salga como problema del plan y no como un
+  // reventón a mitad de camino.
+  let url;
+  try { url = urlConfirmar(doc.folio, n, firma, ORIGEN); }
+  catch (e) { return { ok: false, problemas: [(e && e.message) || String(e)] }; }
+
   return {
     ok: true,
     problemas: [],
+    usersId: firma,
     resumen: {
       folio: doc.folio, id: doc.formHeaderiD,
       cliente: doc.bpOrigenNombre, destino: doc.bpDestinoNombre,
       bodega: doc.bodegaDestinoNombre, etapa: (doc.formMetapa || {}).nombre,
       despachado: desp, aConfirmar: n, porAvisar: 0
     },
-    // Sin `usuario`, cuerpoEco devuelve el usuarioIngresoId que YA tenía el
-    // documento: la confirmación quedaría firmada por quien lo tocó antes y
-    // nadie sabría que la hizo el m3link.
-    cuerpo: sonda.cuerpoEco(doc, { cantidad: n, despachado: true, recepcion: true,
-                                   avanzar: avanzar, usuario: firma })
+    url: url
   };
 }
 
@@ -171,7 +194,7 @@ function comparar(antes, despues) {
 
 function leerArgs(argv) {
   const a = { productivo: false, folio: null, cantidad: null, si: false, dias: '30', quien: null,
-              sinFirma: false, sinAvanzar: false, tramo: '7', timeout: null };
+              usuario: null, preparar: false, tramo: '7', timeout: null };
   for (const x of (argv || [])) {
     if (x === '--productivo') a.productivo = true;
     else if (x === '--si') a.si = true;
@@ -181,12 +204,11 @@ function leerArgs(argv) {
     else if (x.indexOf('--tramo=') === 0) a.tramo = x.slice(8);
     else if (x.indexOf('--timeout=') === 0) a.timeout = x.slice(10);
     else if (x.indexOf('--quien=') === 0) { a.quien = x.slice(8); a.folio = a.folio || a.quien; }
-    // Las dos banderas de AISLAMIENTO. El cuerpo lleva dos cosas que nunca se
-    // vieron grabar: avanzaEtapa (siete intentos fallidos en DEMO) y la firma
-    // (nueva). Un 400 no dice cuál de las dos fue. Estas banderas sacan una
-    // por vez para que el experimento tenga una sola variable.
-    else if (x === '--sin-firma') a.sinFirma = true;
-    else if (x === '--sin-avanzar') a.sinAvanzar = true;
+    else if (x.indexOf('--usuario=') === 0) a.usuario = x.slice(10);
+    // --preparar pide el documento al servidor y se detiene antes del PATCH.
+    // Es el único paso que permite MIRAR el cuerpo que se va a mandar antes de
+    // mandarlo, y por eso es el primer disparo recomendado sobre un folio real.
+    else if (x === '--preparar') a.preparar = true;
   }
   return a;
 }
@@ -200,6 +222,141 @@ function leerArgs(argv) {
 // Patrón de control: M2LinkSystem, el usuario del módulo viejo, es 951.
 const USERSID_M3LINK = Math.max(0, parseInt(process.env.REDLINK_M3LINK_USERSID || '983', 10) || 0);
 const NOMBRE_M3LINK = 'M3LinkSystem';
+
+// LA RUTA QUE FALTABA. Sacada de la macro Confirmacion_Ver2.xlsm que el
+// proveedor mandó usar como reemplazo (10-nov-2026). El servidor ARMA el
+// documento a confirmar y lo devuelve; nosotros sólo se lo devolvemos tal cual
+// por PATCH. Durante ocho intentos armamos el cuerpo a mano, que es por lo que
+// siempre dio 400: le mandábamos a ese endpoint un cuerpo que no era el suyo.
+//
+// El segmento `original/` es una marca de procedencia que queda del lado del
+// servidor: la planilla manda CONFIRMAVER2, nosotros mandamos M3LINK para que
+// en el portal se distinga quién confirmó qué.
+const ORIGEN = String(process.env.REDLINK_ORIGEN || 'M3LINK').trim() || 'M3LINK';
+
+function urlConfirmar(folio, cantidad, usersId, origen) {
+  const f = String(folio == null ? '' : folio).trim();
+  const c = String(cantidad == null ? '' : cantidad).trim();
+  const u = String(usersId == null ? '' : usersId).trim();
+  const o = String(origen || ORIGEN).trim();
+  if (!/^\d+$/.test(f)) throw new Error('el folio tiene que ser un número: ' + JSON.stringify(folio));
+  if (!/^\d+$/.test(c)) throw new Error('la cantidad tiene que ser un número: ' + JSON.stringify(cantidad));
+  if (!/^\d+$/.test(u)) throw new Error('el usersiD tiene que ser un número: ' + JSON.stringify(usersId));
+  if (!/^[A-Za-z0-9_-]+$/.test(o)) throw new Error('la marca de origen sólo admite letras, números, guion y guion bajo: ' + JSON.stringify(o));
+  return '/api/FormHeader/ConfirmarTransferencia/Folio/' + f +
+         '/recibido/' + c + '/original/' + o + '/usuarioconfirma/' + u;
+}
+
+// Lo que devuelve esa ruta antes de mandarlo de vuelta. Un 200 con la palabra
+// "error" adentro NO es un documento: la macro hace esta misma comprobación.
+function revisarPreparado(texto, folio, cantidad) {
+  const crudo = String(texto == null ? '' : texto);
+  const problemas = [];
+  if (!crudo.trim()) return { ok: false, problemas: ['el servidor devolvió el cuerpo vacío'], doc: null };
+  let doc = null;
+  try { doc = JSON.parse(crudo); }
+  catch (e) { return { ok: false, problemas: ['la respuesta no es JSON: ' + sonda.enmascarar(crudo).slice(0, 200)], doc: null }; }
+  if (doc && typeof doc === 'object' && !Array.isArray(doc) && doc.error) {
+    return { ok: false, problemas: ['el servidor contestó un error: ' + String(doc.error).slice(0, 200)], doc: doc };
+  }
+  if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
+    return { ok: false, problemas: ['la respuesta no es un documento'], doc: doc };
+  }
+  // Que el documento que volvió sea el que pedimos: un folio cruzado acá
+  // confirmaría la transferencia equivocada.
+  if (String(doc.folio) !== String(folio)) {
+    problemas.push('el documento que volvió es del folio ' + doc.folio + ' y pedimos el ' + folio);
+  }
+  const det = (doc.formDdetalles || []).filter(d => d && typeof d === 'object');
+  if (det.length !== 1) problemas.push('el documento trae ' + det.length + ' líneas de detalle; esta versión confirma una');
+  else if (Number(det[0].recepcion) !== Number(cantidad)) {
+    problemas.push('el documento viene con recepción ' + det[0].recepcion + ' y pedimos ' + cantidad);
+  }
+  return { ok: !problemas.length, problemas: problemas, doc: doc,
+           etapa: String((doc.formMetapa || {}).nombre || ''), firma: firmaDe(doc) };
+}
+
+// ---- a quién firmar, preguntado por nombre --------------------------------
+//
+// La macro no lleva el número escrito: pregunta por el nombre y usa lo que el
+// servidor contesta. Es mejor que un número a mano por una razón concreta: el
+// nombre es lo que una persona puede verificar mirando el portal, el número no.
+//
+// El servidor busca por coincidencia, así que pedir "M3Link" puede traer otro
+// usuario cuyo nombre lo contenga. Si el nombre que vuelve no es exactamente
+// el que se pidió, el número no es el que se cree que es.
+function interpretarUsuario(texto, nombre) {
+  const crudo = String(texto == null ? '' : texto);
+  const nada = { ok: false, id: null, nombre: '' };
+  if (!crudo.trim()) return Object.assign({ problemas: ['el servidor devolvió el cuerpo vacío'] }, nada);
+  let j;
+  try { j = JSON.parse(crudo); }
+  catch (e) {
+    return Object.assign({ problemas: ['la respuesta no es JSON: ' + sonda.enmascarar(crudo).slice(0, 200)] }, nada);
+  }
+  const lista = (Array.isArray(j) ? j : [j]).filter(x => x && typeof x === 'object');
+  const conId = lista.filter(x => Number(x.usersiD) > 0);
+  if (!conId.length) {
+    return Object.assign({ problemas: ['no vino ningún usersiD para "' + nombre + '"'] }, nada);
+  }
+  const pedido = String(nombre || '').trim().toLowerCase();
+  const exactos = conId.filter(x => String(x.userName || '').trim().toLowerCase() === pedido);
+  const elegidos = exactos.length ? exactos : conId;
+  if (elegidos.length > 1) {
+    return Object.assign({ problemas: ['el nombre "' + nombre + '" devolvió ' + elegidos.length +
+      ' usuarios (' + elegidos.map(x => String(x.userName || '?') + '=' + x.usersiD).join(', ') +
+      '): no se elige uno'] }, nada);
+  }
+  const u = elegidos[0];
+  const encontrado = String(u.userName || '').trim();
+  const problemas = [];
+  if (pedido && encontrado.toLowerCase() !== pedido) {
+    problemas.push('se pidió "' + nombre + '" y el servidor devolvió "' + (encontrado || '(sin nombre)') + '"');
+  }
+  return { ok: !problemas.length, problemas: problemas, id: Number(u.usersiD), nombre: encontrado };
+}
+
+// El nombre entra a una URL, así que se valida ANTES y de forma sincrónica:
+// una validación adentro de una async se convierte en una promesa rechazada y
+// se la puede tragar quien no la espere.
+const RE_NOMBRE_USUARIO = /^[A-Za-z0-9_.-]+$/;
+function rutaDeUsuario(nombre) {
+  const n = String(nombre == null ? '' : nombre).trim();
+  if (!n) throw new Error('falta el nombre de usuario');
+  if (!RE_NOMBRE_USUARIO.test(n)) {
+    throw new Error('el nombre de usuario sólo admite letras, números, punto, guion y guion bajo: ' + JSON.stringify(nombre));
+  }
+  return '/api/User/nombreusuario/' + encodeURIComponent(n);
+}
+
+async function idDeUsuario(nombre, pedirFn) {
+  const p = pedirFn || pedir;
+  const ruta = rutaDeUsuario(nombre);
+  const n = String(nombre).trim();
+  const r = await p(ruta, { method: 'GET' }, 'escritura');
+  if (r.status !== 200) {
+    return { ok: false, id: null, nombre: '', problemas: ['HTTP ' + r.status + ' al resolver "' + n + '"' +
+      (r.texto ? ' · ' + sonda.enmascarar(String(r.texto)).slice(0, 200) : '')] };
+  }
+  return interpretarUsuario(r.texto, n);
+}
+
+// Qué decir cuando la API y el número configurado no coinciden. No se elige
+// uno: un número de usuario equivocado firma a otra persona y no da error.
+function cotejarFirma(resuelto, configurado) {
+  if (!resuelto || !resuelto.ok) {
+    return { ok: true, usar: configurado, verificado: false,
+             dice: 'no se pudo verificar por API (' + (((resuelto || {}).problemas || ['sin detalle'])[0]) +
+                   '); se usa el ' + configurado + ' configurado' };
+  }
+  if (Number(resuelto.id) !== Number(configurado)) {
+    return { ok: false, usar: null, verificado: true,
+             dice: 'la API dice que ' + NOMBRE_M3LINK + ' es ' + resuelto.id + ' y acá está configurado ' +
+                   configurado + '. No se elige uno de los dos: hay que resolver cuál es antes de firmar' };
+  }
+  return { ok: true, usar: configurado, verificado: true,
+           dice: 'verificado: ' + (resuelto.nombre || NOMBRE_M3LINK) + ' es ' + configurado };
+}
 
 // Quien firma un documento. Es `usuarioIngresoId`, no `usuarioConfirmaId`:
 // medido el 9-nov-2026, una confirmacion manual real dejo usuarioConfirmaId en
@@ -278,36 +435,19 @@ async function leerCuerpo(r) {
 // Después de escribir, lo único que prueba que el número era el correcto es el
 // NOMBRE que devolvió el servidor. Un id equivocado no da error: graba otro
 // usuario y queda igual de callado.
-function veredictoDeFirma(docDespues) {
+function veredictoDeFirma(docDespues, esperado) {
+  const esp = (esperado === undefined || esperado === null) ? USERSID_M3LINK : Number(esperado);
   const f = firmaDe(docDespues);
-  if (f.id === USERSID_M3LINK && f.nombre.toLowerCase() === NOMBRE_M3LINK.toLowerCase()) {
+  if (f.id === esp && f.nombre.toLowerCase() === NOMBRE_M3LINK.toLowerCase()) {
     return { ok: true, dice: 'firmada por ' + f.nombre + ' (' + f.id + ')' };
   }
-  if (f.id === USERSID_M3LINK) {
+  if (f.id === esp) {
     return { ok: false, dice: 'el id ' + f.id + ' quedó grabado pero el nombre es "' +
       (f.nombre || '(vacío)') + '", no ' + NOMBRE_M3LINK + ': el número NO es de ese usuario' };
   }
-  return { ok: false, dice: 'se mandó ' + USERSID_M3LINK + ' y quedó ' +
+  return { ok: false, dice: 'se mandó ' + esp + ' y quedó ' +
     (f.id === null ? '(vacío)' : f.id) + ' / "' + (f.nombre || '(vacío)') +
     '": la confirmación NO quedó firmada por ' + NOMBRE_M3LINK };
-}
-
-// Cada aviso dice lo que hace SU bandera y nada más. La continuación del aviso
-// de --sin-avanzar estaba fuera de su `if` y salía siempre: con --sin-firma
-// avisaba "queda a medio camino", que es justo lo contrario — esa bandera SÍ
-// avanza la etapa, la confirmación queda completa y lo único que falta es la
-// firma. Un aviso que afirma de más asusta en el momento equivocado.
-function avisosDeAislamiento(a, nombreActual) {
-  const out = [];
-  if (a && a.sinFirma) {
-    out.push('    · va SIN firma: si graba, la confirmación queda COMPLETA');
-    out.push('      pero a nombre de "' + (nombreActual || '(el anterior)') + '"');
-  }
-  if (a && a.sinAvanzar) {
-    out.push('    · va SIN avanzar de etapa: si graba, escribe la recepción');
-    out.push('      y el documento queda A MEDIO CAMINO');
-  }
-  return out;
 }
 
 // Qué decir cuando el histórico no trae un JSON utilizable. Separa las tres
@@ -445,6 +585,19 @@ async function buscarPorFolio(folio, dias, paso, alTramo, traer, alCorte) {
            total: total, tramos: lista.length, deTramos: lista.length };
 }
 
+// El GET que arma el documento. La macro corre todo con una sola sesión, la
+// del usuario que confirma, así que esta llamada va con M3LinkSystem: es parte
+// de la escritura, no de la lectura del histórico (ese alcance es el otro).
+// Si el servidor la rechaza por permisos se reintenta con el usuario de lectura
+// y se dice, porque la firma la lleva la URL y no el token — eso está medido.
+async function prepararConfirmacion(ruta, pedirFn) {
+  const p = pedirFn || pedir;
+  const r = await p(ruta, { method: 'GET' }, 'escritura');
+  if (r.status !== 401 && r.status !== 403) return Object.assign({}, r, { conLectura: false });
+  const otra = await p(ruta, { method: 'GET' }, 'lectura');
+  return Object.assign({}, otra, { conLectura: true, statusEscritura: r.status });
+}
+
 async function leerDocumento(id) {
   const r = await pedir('/api/FormHeader/' + encodeURIComponent(id), { method: 'GET' }, 'lectura');
   if (r.status !== 200) throw new Error('No se pudo leer el documento ' + id + ': HTTP ' + r.status);
@@ -469,11 +622,48 @@ async function main() {
   if (!a.productivo) {
     console.log('\nEste script escribe en producción y dispara un ajuste de inventario en SAP.');
     console.log('Para usarlo hay que pedirlo explícitamente con --productivo.');
-    console.log('  node scripts/confirmar-redlink.js --productivo --folio=N --cantidad=K');
-    console.log('\nPara sólo MIRAR quién firmó un documento, sin escribir nada:');
-    console.log('  node scripts/confirmar-redlink.js --productivo --quien=N');
+    console.log('');
+    console.log('  1) mirar el documento que el servidor prepara, SIN mandarlo:');
+    console.log('     node scripts/confirmar-redlink.js --productivo --folio=N --cantidad=K --preparar');
+    console.log('  2) confirmar de verdad:');
+    console.log('     node scripts/confirmar-redlink.js --productivo --folio=N --cantidad=K --si');
+    console.log('');
+    console.log('Para sólo MIRAR, sin escribir nada:');
+    console.log('  --quien=N        quién firmó el documento de ese folio');
+    console.log('  --usuario=NOMBRE qué usersiD tiene ese usuario según la API');
     console.log('\nSi el histórico se corta por tiempo se parte solo; --timeout=120 le da más plazo.\n');
     return 2;
+  }
+
+  // --usuario SOLO PREGUNTA un nombre. Es la forma de comprobar el número de
+  // la firma sin tocar ninguna transferencia.
+  if (a.usuario) {
+    // Pregunta con el usuario de escritura, así que pide SÓLO esas credenciales:
+    // bloquear una consulta de lectura por una variable que no usa manda a
+    // buscar el problema al lado equivocado.
+    const faltan = ['REDLINK_CLIENT_SECRET', 'REDLINK_M3LINK_USER', 'REDLINK_M3LINK_PASS']
+      .filter(k => !String(process.env[k] || '').trim());
+    if (faltan.length) {
+      console.log('\nPara preguntar por un usuario falta: ' + faltan.join(', ') + '\n');
+      return 2;
+    }
+    const u = await idDeUsuario(a.usuario);
+    console.log('');
+    console.log('  GET /api/User/nombreusuario/' + a.usuario);
+    if (!u.ok && u.id === null) {
+      u.problemas.forEach(x => console.log('  · ' + x));
+      console.log('');
+      return 2;
+    }
+    console.log('  usersiD   ' + u.id);
+    console.log('  userName  ' + (u.nombre || '(sin nombre)'));
+    u.problemas.forEach(x => console.log('  · ' + x));
+    if (String(a.usuario).trim().toLowerCase() === NOMBRE_M3LINK.toLowerCase()) {
+      console.log('  configurado acá: ' + USERSID_M3LINK +
+                  (Number(u.id) === USERSID_M3LINK ? '  (coinciden)' : '  <- NO COINCIDE'));
+    }
+    console.log('\n  Sólo pregunté. No mandé nada.\n');
+    return u.ok ? 0 : 1;
   }
   // --quien SOLO LEE: ni pide la cantidad ni exige las credenciales de
   // escritura, porque no va a escribir nada.
@@ -518,7 +708,17 @@ async function main() {
   if (!id) { console.log('\nEl registro no trae formHeaderiD: sin el id no se puede escribir.\n'); return 2; }
 
   const antes = await leerDocumento(id);
-  const plan = planDeConfirmacion(antes, a.cantidad, null, { sinFirma: a.sinFirma, sinAvanzar: a.sinAvanzar });
+
+  // El número de la firma se pregunta por nombre antes de armar nada. Si la
+  // API contesta otro número que el configurado, no se escribe: elegir uno de
+  // los dos a ojo firma a nombre de quien no confirmó y eso no se corrige.
+  const resuelto = await idDeUsuario(NOMBRE_M3LINK).catch(e => ({ ok: false, id: null, nombre: '',
+    problemas: [(e && e.message) || String(e)] }));
+  const cotejo = cotejarFirma(resuelto, USERSID_M3LINK);
+  console.log('  firma: ' + cotejo.dice);
+  if (!cotejo.ok) { console.log(''); return 2; }
+
+  const plan = planDeConfirmacion(antes, a.cantidad, cotejo.usar);
   if (!plan.ok) {
     console.log('\nNo se puede confirmar el folio ' + a.folio + ':');
     plan.problemas.forEach(p => console.log('  · ' + p));
@@ -533,23 +733,66 @@ async function main() {
   console.log('  destino   ' + R.destino + ' · ' + R.bodega);
   console.log('  etapa     ' + R.etapa);
   console.log('  despachado ' + R.despachado + '  ->  a confirmar ' + R.aConfirmar);
+  console.log('');
+  console.log('  El cuerpo del PATCH lo arma el servidor. Se le pide con:');
+  console.log('    GET ' + plan.url);
 
-  if (a.sinFirma || a.sinAvanzar) {
-    console.log('');
-    console.log('  AISLANDO UNA VARIABLE — este cuerpo no es el definitivo:');
-    avisosDeAislamiento(a, firmaDe(antes).nombre).forEach(l => console.log(l));
-  }
-
-  if (!a.si) {
-    console.log('\n  No mandé nada. Agrega --si para confirmar.');
-    console.log('  Esto escribe en Redlink y mueve inventario en SAP.\n');
+  if (!a.si && !a.preparar) {
+    console.log('\n  No mandé nada.');
+    console.log('  --preparar  pide ese documento y lo muestra, sin confirmar.');
+    console.log('  --si        pide ese documento y lo devuelve por PATCH: eso confirma.\n');
     return 0;
   }
 
+  // Hasta no haberla visto funcionar una vez, esta ruta no se llama sin que
+  // alguien lo pida: se llama ConfirmarTransferencia y nadie midió todavía si
+  // sólo prepara o si además deja algo escrito. Por eso --preparar es un paso
+  // aparte y no parte del plan.
+  const prep = await prepararConfirmacion(plan.url);
+  console.log('');
+  console.log('  GET preparado  ->  HTTP ' + prep.status +
+              (prep.conLectura ? '  (con el usuario de lectura: escritura dio ' + prep.statusEscritura + ')' : ''));
+  if (prep.falloCuerpo) {
+    console.log('  la descarga se cortó: ' + prep.falloCuerpo);
+    console.log('');
+    return 2;
+  }
+  if (prep.status !== 200) {
+    console.log('  ' + sonda.enmascarar(String(prep.texto || '(cuerpo vacío)')).slice(0, 300).replace(/\s+/g, ' '));
+    console.log('');
+    return 2;
+  }
+
+  const rev = revisarPreparado(prep.texto, antes.folio, R.aConfirmar);
+  console.log('  cuerpo: ' + String(prep.texto || '').length.toLocaleString('es-CL') + ' bytes');
+  if (rev.doc) {
+    console.log('  trae etapa      ' + (rev.etapa || '(vacía)'));
+    console.log('  trae recepción  ' + JSON.stringify(((rev.doc.formDdetalles || [])[0] || {}).recepcion));
+    console.log('  trae firma      ' + (rev.firma.id === null ? '(vacío)' : rev.firma.id) +
+                ' / "' + (rev.firma.nombre || '(vacío)') + '"');
+  }
+  if (!rev.ok) {
+    console.log('');
+    console.log('  El documento preparado no sirve para mandarlo:');
+    rev.problemas.forEach(x => console.log('    · ' + x));
+    console.log('');
+    return 2;
+  }
+
+  if (!a.si) {
+    console.log('');
+    console.log('  No mandé el PATCH. Este es el cuerpo que se devolvería tal cual.');
+    console.log('  Agrega --si para confirmar de verdad.\n');
+    return 0;
+  }
+
+  // El cuerpo va EXACTO como vino. Ni reserializado ni retocado: ocho intentos
+  // con el cuerpo armado a mano dieron 400, y la diferencia entre el que falla
+  // y el que sirve puede ser un campo que no sabemos leer.
   const res = await pedir('/api/FormHeader', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(plan.cuerpo)
+    body: prep.texto
   }, 'escritura');       // la escritura SI va firmada por M3LinkSystem
   const cl = sonda.clasificar(res.status, res.texto);
   console.log('\n  PATCH /api/FormHeader  ->  HTTP ' + res.status + '  ·  ' + cl.dice);
@@ -573,15 +816,7 @@ async function main() {
 
   // La firma se revisa SIEMPRE, haya cambiado el documento o no: un id
   // equivocado no da error, graba otro usuario y se queda callado.
-  if (a.sinFirma) {
-    const f = firmaDe(despues);
-    console.log('');
-    console.log('  Firma: se mandó SIN firma a propósito; quedó ' +
-                (f.id === null ? '(vacío)' : f.id) + ' / "' + (f.nombre || '(vacío)') + '"');
-    console.log('');
-    return 0;
-  }
-  const v = veredictoDeFirma(despues);
+  const v = veredictoDeFirma(despues, cotejo.usar);
   console.log('');
   console.log(v.ok ? '  Firma: ' + v.dice : '  FIRMA MAL: ' + v.dice);
   console.log('');
@@ -589,8 +824,10 @@ async function main() {
 }
 
 module.exports = { revisarCredenciales, USUARIOS, ETAPAS_CONFIRMABLES, etapaConfirmable, etapaDe, firmaDe, porQueNoHayJson, leerCuerpo,
-  USERSID_M3LINK, NOMBRE_M3LINK, veredictoDeFirma, avisosDeAislamiento, tramosHaciaAtras, buscarPorFolio,
-  partirTramo, esCorteDeTiempo, partirYReintentar, planDeConfirmacion, comparar, leerArgs, esConfirmada, CAMPOS_ESTADO, aUS };
+  USERSID_M3LINK, NOMBRE_M3LINK, veredictoDeFirma, tramosHaciaAtras, buscarPorFolio,
+  partirTramo, esCorteDeTiempo, partirYReintentar, ORIGEN, urlConfirmar, revisarPreparado,
+  interpretarUsuario, idDeUsuario, rutaDeUsuario, cotejarFirma, prepararConfirmacion, RE_NOMBRE_USUARIO,
+  planDeConfirmacion, comparar, leerArgs, esConfirmada, CAMPOS_ESTADO, aUS };
 
 if (require.main === module) {
   main().then(c => { process.exitCode = c || 0; }).catch(e => {

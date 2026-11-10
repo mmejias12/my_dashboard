@@ -42,6 +42,26 @@ const entero = (v) => {
   return Number.isInteger(n) && n > 0 ? n : null;
 };
 
+// Los campos del reporte de Walmart que la página adjunta. NO deciden nada: el
+// api sigue leyendo el documento por su cuenta. Van al historial como etiqueta,
+// y por eso se acotan acá — vienen del navegador y terminan en un archivo que
+// después alguien lee como si fuera verdad.
+//
+// La CITA es el único de estos datos que no existe en Redlink, y el informe al
+// cliente se organiza por cita. Es el motivo de que esto viaje.
+const CAMPOS_REPORTE = ['cita', 'po', 'rut', 'razonSocial', 'cd', 'servicio',
+                        'recepcionWM', 'aceptados', 'rechazados', 'cuando'];
+function reporteDe(cuerpo) {
+  const r = (cuerpo && cuerpo.reporte) || {};
+  const out = {};
+  CAMPOS_REPORTE.forEach(function (k) {
+    const v = r[k];
+    if (v === null || v === undefined) return;
+    out[k] = (typeof v === 'object') ? '' : String(v).slice(0, 200);
+  });
+  return out;
+}
+
 module.exports = async function (context, req) {
   const cors = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
   const salir = (status, cuerpo) => { context.res = { status: status, headers: cors, body: cuerpo }; };
@@ -64,7 +84,9 @@ module.exports = async function (context, req) {
   }
 
   try {
-    const r = await escritura.confirmarUna(folio, cantidad, { id: id });
+    const r = await escritura.confirmarUna(folio, cantidad, {
+      id: id, quien: q.nombre, via: 'pagina', reporte: reporteDe(cuerpo)
+    });
     // El log es la única traza de quién lo pidió: en Redlink dice M3LinkSystem.
     context.log('confirmar-walmart: ' + q.nombre + ' -> folio ' + folio + ' x' + cantidad +
                 ' = ' + r.estado + ' (' + r.dice + ')');

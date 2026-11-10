@@ -48,7 +48,8 @@ const API  = 'https://' + HOST;
 const TOKEN_URL = 'https://accounts.portalredtec.cl/realms/Redtec/protocol/openid-connect/token';
 const CLIENT_ID = 'apiportalredtec';
 const BP_REDTEC = '433';
-const PLAZO = 60000;
+let PLAZO = 60000;
+function fijarPlazo(seg) { const n = parseInt(seg, 10); if (Number.isFinite(n) && n > 0) PLAZO = n * 1000; }
 
 /* ------------------------------------------------- credenciales ---------- */
 
@@ -170,7 +171,7 @@ function comparar(antes, despues) {
 
 function leerArgs(argv) {
   const a = { productivo: false, folio: null, cantidad: null, si: false, dias: '30', quien: null,
-              sinFirma: false, sinAvanzar: false, tramo: '7' };
+              sinFirma: false, sinAvanzar: false, tramo: '7', timeout: null };
   for (const x of (argv || [])) {
     if (x === '--productivo') a.productivo = true;
     else if (x === '--si') a.si = true;
@@ -178,6 +179,7 @@ function leerArgs(argv) {
     else if (x.indexOf('--cantidad=') === 0) a.cantidad = x.slice(11);
     else if (x.indexOf('--dias=') === 0) a.dias = x.slice(7);
     else if (x.indexOf('--tramo=') === 0) a.tramo = x.slice(8);
+    else if (x.indexOf('--timeout=') === 0) a.timeout = x.slice(10);
     else if (x.indexOf('--quien=') === 0) { a.quien = x.slice(8); a.folio = a.folio || a.quien; }
     // Las dos banderas de AISLAMIENTO. El cuerpo lleva dos cosas que nunca se
     // vieron grabar: avanzaEtapa (siete intentos fallidos en DEMO) y la firma
@@ -358,12 +360,45 @@ function tramosHaciaAtras(dias, paso) {
   return out;
 }
 
+// Un corte por tiempo, venga por donde venga: la petición puede abortar al
+// conectar (fetch tira) o a mitad de la descarga del cuerpo (falloCuerpo).
+const RE_TIEMPO = /abort|timeout|tiempo|ETIMEDOUT|ECONNRESET|terminated/i;
+const esCorteDeTiempo = (x) => RE_TIEMPO.test(String((x && x.message) || x || ''));
+
+// Partir un tramo al medio. Devuelve null si ya es de un día: ahí no hay nada
+// más que partir y el problema es otro.
+function partirTramo(t) {
+  const dia = 86400000;
+  const d0 = new Date(t.desde + 'T12:00:00'), d1 = new Date(t.hasta + 'T12:00:00');
+  const largo = Math.round((d1 - d0) / dia) + 1;
+  if (largo <= 1) return null;
+  const mitad = Math.floor(largo / 2);
+  const corte = new Date(d0.getTime() + (mitad - 1) * dia).toISOString().slice(0, 10);
+  const sig = new Date(d0.getTime() + mitad * dia).toISOString().slice(0, 10);
+  return [{ desde: t.desde, hasta: corte }, { desde: sig, hasta: t.hasta }];
+}
+
 // Un tramo del histórico, ya parseado. Separado para que buscarPorFolio se
 // pueda probar sin red.
-async function traerTramo(t) {
+//
+// Si se corta POR TIEMPO, el tramo se parte al medio y se reintenta cada mitad.
+// Medido el 9-nov-2026: 31 días cortaban; 7 días entraban a las 15:30 y se
+// cortaban a las 17:00 con el mismo tamaño. O sea el umbral no es fijo y
+// pedirle al usuario que adivine el --tramo es hacerle perder vueltas. Partir
+// sólo ante un corte de TIEMPO, nunca ante un 400 o un 500: ahí el problema no
+// se arregla pidiendo menos.
+async function traerTramo(t, avisarCorte) {
   const ruta = '/api/FormHeader/historico/' + BP_REDTEC +
                '?fechainicio=' + aUS(t.desde) + '&fechafin=' + aUS(t.hasta);
-  const r = await pedir(ruta, { method: 'GET' }, 'lectura');
+  let r;
+  try { r = await pedir(ruta, { method: 'GET' }, 'lectura'); }
+  catch (e) {
+    if (!esCorteDeTiempo(e)) throw e;
+    return await partirYReintentar(t, (e && e.message) || String(e), avisarCorte, traerTramo);
+  }
+  if (r.falloCuerpo && esCorteDeTiempo(r.falloCuerpo)) {
+    return await partirYReintentar(t, r.falloCuerpo, avisarCorte, traerTramo);
+  }
   if (r.status !== 200) throw new Error('No se pudo leer el histórico: HTTP ' + r.status +
     ' · ' + sonda.enmascarar(String(r.texto || '')).slice(0, 200));
   let j;
@@ -375,13 +410,28 @@ async function traerTramo(t) {
   return Array.isArray(j) ? j : [];
 }
 
-async function buscarPorFolio(folio, dias, paso, alTramo, traer) {
+async function partirYReintentar(t, motivo, avisarCorte, bajar) {
+  const mitades = partirTramo(t);
+  if (!mitades) {
+    throw new Error('El histórico se cortó por tiempo y el tramo ya es de UN día (' +
+      t.desde + ').\n  ' + motivo +
+      '\n  Partirlo más no se puede: un solo día no entra en el plazo.' +
+      '\n  Subí el plazo con --timeout=120 o probá desde otra conexión.');
+  }
+  if (avisarCorte) avisarCorte({ tramo: t, motivo: motivo, mitades: mitades });
+  let out = [];
+  const traer = bajar || traerTramo;
+  for (const m of mitades) out = out.concat(await traer(m, avisarCorte));
+  return out;
+}
+
+async function buscarPorFolio(folio, dias, paso, alTramo, traer, alCorte) {
   const lista = tramosHaciaAtras(dias, paso);
   const bajar = traer || traerTramo;
   let total = 0;
   for (let i = 0; i < lista.length; i++) {
     const t = lista[i];
-    const arr = await bajar(t);
+    const arr = await bajar(t, alCorte);
     total += arr.length;
     const filas = arr.filter(x => String(x && x.folio) === String(folio));
     if (alTramo) alTramo({ i: i + 1, de: lista.length, desde: t.desde, hasta: t.hasta,
@@ -405,7 +455,12 @@ async function leerDocumento(id) {
 
 async function main() {
   const a = leerArgs(process.argv.slice(2));
+  if (a.timeout) fijarPlazo(a.timeout);
   console.log('CONFIRMAR EN REDLINK · ' + HOST + ' · PRODUCTIVO');
+  // Cuando un tramo se corta por tiempo y se parte, se dice: si no, el usuario
+  // ve una pausa larga sin explicación y cree que se colgó.
+  const alCorte = (c) => console.log('  · el tramo ' + c.tramo.desde + ' a ' + c.tramo.hasta +
+    ' se cortó por tiempo; lo parto en ' + c.mitades.map(m => m.desde + '..' + m.hasta).join(' y '));
   // Cada tramo se canta mientras baja: si uno se corta, se ve cuál y dónde iba.
   const eco = (t) => console.log('  tramo ' + t.i + '/' + t.de + '  ' + t.desde + ' a ' + t.hasta +
     ': ' + t.registros.toLocaleString('es-CL') + ' operaciones' + (t.encontrado ? '  <- acá está' : ''));
@@ -416,13 +471,14 @@ async function main() {
     console.log('Para usarlo hay que pedirlo explícitamente con --productivo.');
     console.log('  node scripts/confirmar-redlink.js --productivo --folio=N --cantidad=K');
     console.log('\nPara sólo MIRAR quién firmó un documento, sin escribir nada:');
-    console.log('  node scripts/confirmar-redlink.js --productivo --quien=N\n');
+    console.log('  node scripts/confirmar-redlink.js --productivo --quien=N');
+    console.log('\nSi el histórico se corta por tiempo se parte solo; --timeout=120 le da más plazo.\n');
     return 2;
   }
   // --quien SOLO LEE: ni pide la cantidad ni exige las credenciales de
   // escritura, porque no va a escribir nada.
   if (a.quien) {
-    const b0 = await buscarPorFolio(a.quien, a.dias, a.tramo, eco);
+    const b0 = await buscarPorFolio(a.quien, a.dias, a.tramo, eco, null, alCorte);
     console.log('  histórico: ' + b0.total.toLocaleString('es-CL') + ' operaciones en ' +
                 b0.tramos + ' de ' + b0.deTramos + ' tramos');
     if (!b0.filas.length) { console.log('\nEl folio ' + a.quien + ' no aparece en ' + a.dias + ' días. Prueba --dias mayor.\n'); return 2; }
@@ -452,7 +508,7 @@ async function main() {
     return 2;
   }
 
-  const b = await buscarPorFolio(a.folio, a.dias, a.tramo, eco);
+  const b = await buscarPorFolio(a.folio, a.dias, a.tramo, eco, null, alCorte);
   console.log('  histórico: ' + b.total.toLocaleString('es-CL') + ' operaciones en ' +
               b.tramos + ' de ' + b.deTramos + ' tramos');
   if (!b.filas.length) { console.log('\nEl folio ' + a.folio + ' no aparece en ' + a.dias + ' días. Prueba --dias mayor.\n'); return 2; }
@@ -533,7 +589,8 @@ async function main() {
 }
 
 module.exports = { revisarCredenciales, USUARIOS, ETAPAS_CONFIRMABLES, etapaConfirmable, etapaDe, firmaDe, porQueNoHayJson, leerCuerpo,
-  USERSID_M3LINK, NOMBRE_M3LINK, veredictoDeFirma, avisosDeAislamiento, tramosHaciaAtras, buscarPorFolio, planDeConfirmacion, comparar, leerArgs, esConfirmada, CAMPOS_ESTADO, aUS };
+  USERSID_M3LINK, NOMBRE_M3LINK, veredictoDeFirma, avisosDeAislamiento, tramosHaciaAtras, buscarPorFolio,
+  partirTramo, esCorteDeTiempo, partirYReintentar, planDeConfirmacion, comparar, leerArgs, esConfirmada, CAMPOS_ESTADO, aUS };
 
 if (require.main === module) {
   main().then(c => { process.exitCode = c || 0; }).catch(e => {

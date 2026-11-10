@@ -692,6 +692,52 @@ async function correr(N) {
     igual(N.ventanaDeReporte([]), null);
   });
 
+  /* ---- la consulta en tramos --------------------------------------------- */
+
+  await prueba('T70 parte la ventana en tramos que cubren todo sin huecos', () => {
+    const v = N.ventanasDe('2026-10-08', '2026-11-17', 5);
+    cierto(v.length >= 8, 'tiene que trocear: ' + v.length);
+    igual(v[0].desde, '2026-10-08', 'arranca donde se pidió');
+    igual(v[v.length - 1].hasta, '2026-11-17', 'y termina donde se pidió');
+    const DIA = 86400000;
+    for (let i = 1; i < v.length; i++) {
+      const salto = (new Date(v[i].desde) - new Date(v[i - 1].hasta)) / DIA;
+      igual(salto, 1, 'hueco entre el tramo ' + i + ' y el ' + (i + 1));
+    }
+  });
+  await prueba('T71 ningún tramo pasa del paso pedido', () => {
+    const DIA = 86400000;
+    [[ '2026-10-08', '2026-11-17', 5 ], [ '2026-01-01', '2026-01-02', 5 ], [ '2026-01-01', '2026-01-01', 5 ]]
+      .forEach(function (c) {
+        N.ventanasDe(c[0], c[1], c[2]).forEach(function (x) {
+          const largo = (new Date(x.hasta) - new Date(x.desde)) / DIA + 1;
+          cierto(largo <= c[2] && largo >= 1, 'tramo de ' + largo + ' días');
+        });
+      });
+  });
+  await prueba('T72 un solo día devuelve un solo tramo de ese día', () => {
+    igual(N.ventanasDe('2026-11-09', '2026-11-09', 5), [{ desde: '2026-11-09', hasta: '2026-11-09' }]);
+  });
+  await prueba('T73 fechas al revés o inválidas devuelven vacío, no una ventana inventada', () => {
+    igual(N.ventanasDe('2026-11-17', '2026-10-08', 5), []);
+    igual(N.ventanasDe('', '', 5), []);
+    igual(N.ventanasDe('ayer', 'hoy', 5), []);
+  });
+
+  await prueba('T74 dos rangos se pisan si comparten aunque sea un día', () => {
+    const r = (d, h) => ({ desde: d, hasta: h });
+    cierto(N.seSolapan(r('2026-10-08','2026-10-28'), r('2026-10-28','2026-11-02')), 'un día en común basta');
+    cierto(N.seSolapan(r('2026-10-08','2026-11-17'), r('2026-11-09','2026-11-09')), 'uno contenido en el otro');
+    cierto(N.seSolapan(r('2026-11-09','2026-11-09'), r('2026-10-08','2026-11-17')), 'y al revés');
+    falso(N.seSolapan(r('2026-10-08','2026-10-28'), r('2026-10-29','2026-11-02')), 'pegados no es pisarse');
+    falso(N.seSolapan(r('2026-11-09','2026-11-10'), r('2026-10-08','2026-10-28')));
+  });
+  await prueba('T75 sin rangos válidos no inventa un solape', () => {
+    falso(N.seSolapan(null, { desde: '2026-11-09', hasta: '2026-11-09' }));
+    falso(N.seSolapan({ desde: '2026-11-09' }, { desde: '2026-11-09', hasta: '2026-11-09' }));
+    falso(N.seSolapan({}, {}));
+  });
+
   /* ---- de punta a punta -------------------------------------------------- */
 
   await prueba('T69 del .xlsx al csv, el camino completo', async () => {
@@ -811,6 +857,15 @@ const MUTACIONES = [
   ['M63f el empate queda al azar',                   /\(b\.n - a\.n\) \|\| a\.texto\.localeCompare\(b\.texto\)/, '(b.n - a.n)'],
   ['M63g el resumen no cuenta, marca presencia',     /cuenta\.set\(k, \(cuenta\.get\(k\) \|\| 0\) \+ 1\);/, 'cuenta.set(k, 1);'],
   ['M63h el resumen muestra la clave cruda',         /texto: FAMILIAS\[clave\] \|\| clave/, 'texto: clave'],
+
+  // la consulta en tramos
+  ['M75 los tramos se pisan',                        /const fin = Math\.min\(t \+ \(paso - 1\) \* DIA, d1\.getTime\(\)\);/, 'const fin = Math.min(t + paso * DIA, d1.getTime());'],
+  ['M76 no trocea: pide todo de una',                /const paso = Math\.max\(1, parseInt\(dias, 10\) \|\| 5\);/, 'const paso = 99999;'],
+  ['M78 el ultimo tramo se pasa de la fecha pedida', /Math\.min\(t \+ \(paso - 1\) \* DIA, d1\.getTime\(\)\)/, 't + (paso - 1) * DIA'],
+
+  ['M79 pegados se dan por solapados',               /String\(a\.desde\) <= String\(b\.hasta\) && String\(b\.desde\) <= String\(a\.hasta\)/, 'String(a.desde) <= String(b.hasta)'],
+  ['M80 nunca se solapan',                           /return String\(a\.desde\) <= String\(b\.hasta\)/, 'return false && String(a.desde) <= String(b.hasta)'],
+  ['M81 un rango incompleto se da por valido',       /if \(!a \|\| !b \|\| !a\.desde \|\| !a\.hasta \|\| !b\.desde \|\| !b\.hasta\) return false;/, 'if (!a || !b) return false;'],
 
   // la salida
   ['M64 el csv sale sin encabezado',                 /const out = \['folio;cantRecibida'\];/, 'const out = [];'],

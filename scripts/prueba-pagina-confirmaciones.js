@@ -47,7 +47,7 @@ const FILAS = [
 
   await pg.goto('http://127.0.0.1:8899/confirmaciones-walmart.html');
   const sembrar = async () => pg.evaluate((filas) => {
-    const S = window.__prueba.S; S.conf = {}; S.corriendo = false;
+    const S = window.__prueba.S; S.conf = {}; S.sel = {}; S.corriendo = false;
     S.filas = filas; S.nombre = 'prueba.xlsx';
     S.r = { citas: filas.length, porConfirmar: filas, avisar: [], excepciones: [] };
     window.__prueba.pintarTodo();
@@ -58,7 +58,49 @@ const FILAS = [
   ok(await pg.locator('#tb-conf tbody tr').count() === 3, 'tres filas');
   ok((await pg.locator('#tb-conf tbody tr').first().locator('button').textContent()) === 'Confirmar 1',
      'el botón de la fila dice la cantidad');
-  ok((await pg.locator('#btn-confirmar').textContent()).trim() === 'Confirmar 3', 'el masivo dice cuántas');
+  ok((await pg.locator('#btn-confirmar').textContent()).trim() === 'Confirmar 3 seleccionadas',
+     'el masivo dice cuántas: ' + (await pg.locator('#btn-confirmar').textContent()));
+
+  // El defecto que encontró Mauro: con 52 filas la última columna arrancaba en
+  // los 1330px dentro de un contenedor de 1102 y el botón no se veía nunca.
+  console.log('\n-- las columnas de acción se ven sin scrollear --');
+  const geo = await pg.evaluate(() => {
+    const caja = document.querySelector('.tabla-caja');
+    const tr = document.querySelector('#tb-conf tbody tr');
+    const r = caja.getBoundingClientRect();
+    const chk = tr.children[0].getBoundingClientRect();
+    const bot = tr.children[1].getBoundingClientRect();
+    const ths = [...document.querySelectorAll('#tb-conf th')].map(x => x.textContent);
+    return { dentro: chk.right <= r.right + 1 && bot.right <= r.right + 1, ths: ths };
+  });
+  ok(geo.dentro, 'el check y el botón caen dentro del contenedor visible');
+  ok(geo.ths[0] === '' && geo.ths[1] === 'Confirmación',
+     'y son las dos primeras columnas: ' + JSON.stringify(geo.ths.slice(0, 3)));
+
+  console.log('\n-- el check elige qué se confirma --');
+  const chks = pg.locator('#tb-conf tbody input.chk');
+  ok(await chks.count() === 3, 'un check por fila');
+  ok(await chks.first().isChecked(), 'vienen seleccionadas: la bandeja ES lo que corresponde confirmar');
+  await pg.locator('#tb-conf thead input.chk').click();
+  await pg.waitForTimeout(80);
+  ok((await pg.locator('#btn-confirmar').textContent()).indexOf('ninguna seleccionada') >= 0,
+     'sin ninguna, el masivo lo dice: ' + (await pg.locator('#btn-confirmar').textContent()));
+  ok(await pg.locator('#btn-confirmar').isDisabled(), 'y no se puede apretar');
+  await pg.locator('#tb-conf tbody input.chk').nth(1).click();
+  await pg.waitForTimeout(80);
+  ok((await pg.locator('#btn-confirmar').textContent()).indexOf('1 seleccionada') >= 0,
+     'con una: ' + (await pg.locator('#btn-confirmar').textContent()));
+  ok(await pg.evaluate(() => document.querySelector('#tb-conf thead input.chk').indeterminate),
+     'el check del encabezado queda a medias');
+  pedidos.length = 0;
+  await pg.locator('#btn-confirmar').click();
+  await pg.waitForTimeout(80);
+  await pg.locator('#btn-confirmar').click();
+  await pg.waitForTimeout(400);
+  ok(pedidos.length === 1 && pedidos[0].folio === 4149331,
+     'el masivo con una elegida toca SÓLO esa: ' + JSON.stringify(pedidos.map(x => x.folio)));
+  await sembrar();
+  pedidos.length = 0;
 
   console.log('\n-- una sola --');
   await pg.locator('#tb-conf tbody tr').first().locator('button').click();
@@ -101,6 +143,8 @@ const FILAS = [
   ok(estado.indexOf('SE DETUVO') >= 0 && estado.indexOf('4149331') >= 0, 'dice dónde se detuvo: ' + estado);
   ok((await pg.locator('#tb-conf tbody tr').nth(2).locator('button').count()) === 1,
      'la tercera sigue sin tocar, con su botón');
+  ok(await pg.locator('#tb-conf tbody tr').first().locator('input.chk').isDisabled(),
+     'el check de una ya resuelta queda fuera de juego');
 
   console.log('\n-- 403: el rol no alcanza --');
   await sembrar();

@@ -1147,3 +1147,181 @@ El 10-nov, el histórico de **2026-11-09 solo** falló de forma reproducible: 50
 los ~21 segundos, dos veces seguidas, mientras 2026-11-08 devolvía 33
 operaciones en 0,3 segundos y un tramo de 5 días traía 3.753 en 1,7. No es
 volumen: es ese día.
+
+## La etapa SÍ se puede escribir — y por qué igual no sirve (10-nov-2026)
+
+Nunca se había probado **escribir `formMetapaId` directo** en vez de pedir
+`avanzaEtapa: true`. Se probó en DEMO sobre el documento 684033:
+
+```
+etapa directa · formMetapaId=44, SIN avanzaEtapa   ->  HTTP 200
+antes:   Pendiente Adjuntar Respaldo · despachado 10 · recepcion null
+después: Pendiente de Confirmación   · despachado 10 · recepcion 10
+```
+
+Es lo primero que mueve la etapa por el API, después de ocho intentos con
+`avanzaEtapa`. Pero mover la etapa **no es confirmar**. Comparado contra lo que
+deja el botón "Actualizar y Avanzar" del portal, se consiguieron **2 de 5**
+efectos:
+
+| efecto del paso 1 del portal | nosotros |
+|---|---|
+| `formMetapaId` 43 → 44 | **sí** |
+| `usuarioIngresoId` → el que actúa | **sí** |
+| `fechaConfirmacion` → fecha | no (`null`) |
+| `confirmacionVeces` 0 → 1 | no (`0`) |
+| `formDdetalles[0].recepcionAnterior` → 0 | no (`null`) |
+
+El resultado es un documento que **el portal nunca produciría**: dice "Pendiente
+de Confirmación" con recepción escrita, pero sin fecha, sin contador y sin
+recepción anterior.
+
+**Hallazgo bueno de paso:** se mandó `usuarioIngresoId: 6` y el servidor
+devolvió `usuarioIngreso: {usersiD: 6, userName: "mmesias"}`. Resuelve el nombre
+solo, así que la firma por id funciona — en productivo, 983 haría aparecer
+M3LinkSystem.
+
+### Lo que cierra la puerta: no podemos verificar el ajuste
+
+El contrato RDT trae los campos que dirían si el movimiento llegó a SAP:
+`enviadoSap`, `sapObjType`, `sapDocEntry`, `sapDocNum`. Y no es que no lleguen
+los datos de transporte — sus vecinos del mismo origen vienen poblados
+(`patente` en 480 de 1.491 operaciones, `chofer` en 483, `folioGuiaDte` y
+`linkGuia` en 38).
+
+Pero los cuatro campos SAP están **vacíos en las 1.491 operaciones**, incluidas
+las **281 confirmadas** por M2LinkSystem y por personas.
+
+O sea: aunque lográramos fabricar la confirmación, **no tendríamos forma de
+comprobar desde nuestro lado que el inventario se movió.** Escribir sin poder
+verificar, sobre un documento que mueve stock, es peor que no escribir.
+
+### Conclusión de la línea de investigación
+
+1. `avanzaEtapa: true` no funciona. Ocho intentos, dos ambientes.
+2. `formMetapaId` directo **sí** mueve la etapa, pero deja el documento a medio
+   camino, en un estado que el portal no produce.
+3. El ajuste a SAP **no es verificable** con los datos que tenemos.
+
+Con eso, la escritura por API queda descartada **con dato, no por cansancio**.
+El camino que queda es el que propuso Marcelo: el m3link entrega `folio` y
+`cantRecibida`, y la confirmación corre por donde hoy ya funciona. Para ese
+camino la herramienta está terminada.
+
+# LA RESPUESTA: cómo se confirma de verdad (10-nov-2026)
+
+Luis Macri, autor de M2LINK, entregó la planilla `Confirmacion_Ver2.xlsm` que el
+proveedor mandó usar como reemplazo. Su macro contiene el mecanismo completo.
+
+**Nuestro error era estructural: armábamos el cuerpo del PATCH nosotros. El
+servidor lo arma.** Existe un endpoint dedicado que devuelve el documento ya
+preparado para confirmar, y lo único que hay que hacer es devolvérselo tal cual.
+
+### El flujo, en cuatro pasos
+
+```
+1.  POST https://accounts.portalredtec.cl/realms/Redtec/protocol/openid-connect/token
+    client_id=apiportalredtec & grant_type=password & client_secret=... &
+    scope=openid & username=... & password=...
+    -> la macro toma id_token (nosotros veníamos usando access_token)
+
+2.  GET  /api/User/nombreusuario/{nombre}
+    -> devuelve el usuario, de donde sale "usersiD"
+
+3.  GET  /api/FormHeader/ConfirmarTransferencia
+             /Folio/{folio}
+             /recibido/{cantidad}
+             /original/CONFIRMAVER2
+             /usuarioconfirma/{usersiD}
+    -> devuelve el documento YA ARMADO para confirmar (esto es lo que faltaba)
+
+4.  PATCH /api/FormHeader
+    cuerpo = la respuesta EXACTA del paso 3, sin tocar
+    -> 200 = confirmada
+```
+
+El segmento `original/` es una marca de procedencia: la planilla manda
+`CONFIRMAVER2`. Es el equivalente a nuestra firma, y queda del lado del
+servidor.
+
+### Lo que esto corrige de todo lo anterior
+
+| lo que creíamos | lo que es |
+|---|---|
+| `avanzaEtapa: true` es la forma de confirmar | no existe como mecanismo; el endpoint dedicado hace todo |
+| hay que construir el cuerpo del PATCH | el servidor lo construye y lo entrega |
+| hay que averiguar el `usersiD` preguntando | sale de `/api/User/nombreusuario/{nombre}` |
+| el API de escritura se rompió | el API funciona; nunca habíamos encontrado la ruta |
+
+Los ocho 400 se explican solos: mandábamos un cuerpo armado a mano a un endpoint
+que espera el cuerpo que él mismo genera.
+
+### Hallazgo de seguridad
+
+La macro trae el **`client_secret` de `apiportalredtec` en texto plano**, en un
+archivo que circula por correo y vive en OneDrive. Es el mismo client que usa el
+m3link. **Hay que rotarlo**, y tratar esa planilla como material comprometido.
+
+## Implementado en `scripts/confirmar-redlink.js` (10-nov-2026)
+
+El script ya no arma ningún cuerpo. Quedó en cuatro pasos, con un paso de
+**mirar** antes del paso de **mandar**:
+
+```
+node scripts/confirmar-redlink.js --productivo --usuario=M3LinkSystem
+   -> GET /api/User/nombreusuario/M3LinkSystem, imprime usersiD y userName,
+      y lo coteja con el 983 configurado. No toca ninguna transferencia.
+
+node scripts/confirmar-redlink.js --productivo --folio=N --cantidad=K
+   -> busca el folio, lee el documento, revisa las nueve guardas del plan y
+      MUESTRA la URL del preparador. No pega en el servidor de escritura.
+
+node scripts/confirmar-redlink.js --productivo --folio=N --cantidad=K --preparar
+   -> además pide el documento preparado y lo revisa: tamaño, etapa que trae,
+      recepción que trae y a nombre de quién viene firmado. NO manda el PATCH.
+
+node scripts/confirmar-redlink.js --productivo --folio=N --cantidad=K --si
+   -> lo mismo y además el PATCH con el cuerpo exacto. Esto confirma y mueve
+      inventario en SAP.
+```
+
+### Decisiones que vale la pena dejar escritas
+
+**El cuerpo se manda como texto, no reserializado.** `body: prep.texto`, los
+bytes tal como vinieron. Un `JSON.parse` + `JSON.stringify` cambia el orden de
+las claves, el formato de los decimales y la representación de las fechas. No
+sabemos qué mira el servidor; sabemos que ocho cuerpos armados por nosotros
+fallaron.
+
+**`--preparar` existe porque nadie midió si `ConfirmarTransferencia` sólo
+prepara.** El nombre dice "Confirmar" y en la macro el PATCH es el que
+compromete, pero esa misma clase de inferencia razonable fue la teoría muerta de
+la página anterior. Así que el GET no se dispara sin que alguien lo pida, y el
+plan sin banderas no toca el servidor de escritura.
+
+**El `usersiD` se pregunta por nombre y se coteja con el configurado.** Si la
+API dice otro número, el script **se detiene**: hay dos fuentes y se
+contradicen, y elegir una a ojo firma a nombre de quien no confirmó. Si la API
+no contesta, sigue con el 983 pero dice "no se pudo verificar" — porque decir
+"verificado" sin haber verificado es lo que haría que nadie vuelva a mirarlo.
+
+**El GET del preparador va con M3LinkSystem, no con el usuario de lectura.** La
+macro corre todo con una sola sesión, la del que confirma. Si el servidor lo
+rechaza por permisos (401/403) reintenta con el de lectura **y lo dice**, porque
+la firma la lleva la URL y no el token — eso está medido. Un 500 no se reintenta:
+reintentar un error del servidor con otro usuario esconde el problema y manda el
+mismo pedido dos veces.
+
+**Se fueron `--sin-firma` y `--sin-avanzar`.** Servían para aislar cuál de dos
+campos causaba el 400. Ya se sabe: ninguno de los dos, era el cuerpo entero.
+Dejarlas sería dejar a mano el único camino que sabemos que no funciona.
+
+### Guardas antes de mandar
+
+Antes del PATCH el documento preparado tiene que pasar: que sea JSON, que no
+traiga `error` adentro de un 200, que sea **del folio que pedimos** (un folio
+cruzado confirma la transferencia equivocada y el PATCH no pregunta), que traiga
+una sola línea de detalle y que su `recepcion` sea **la cantidad que pedimos**.
+Cualquiera de esas cosas detiene la corrida.
+
+Cobertura: 93 pruebas, 84 mutaciones, todas mueren.

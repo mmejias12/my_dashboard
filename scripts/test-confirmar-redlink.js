@@ -462,6 +462,105 @@ async function correr(S) {
     igual([b.preparar, b.si], [false, true]);
     igual(S.leerArgs(['--usuario=M3LinkSystem']).usuario, 'M3LinkSystem');
   });
+  /* ---- buscar qué corresponde confirmar hoy ----------------------------- */
+
+  const FILA = { folio: 4146335, formHeaderiD: 684100, etapaOperacion: 'Pendiente de Confirmación',
+                 bpDestinoNombre: 'WALMART CHILE COMERCIAL S.A', operacion: 'Transferencias' };
+  const fila = (c) => Object.assign({}, FILA, c);
+
+  prueba('T13a encuentra las de Walmart en etapa confirmable', () => {
+    const r = S.candidatosDe([fila({}), fila({ folio: 2, etapaOperacion: 'Pendiente Adjuntar Respaldo' })]);
+    igual(r.candidatos.length, 2, 'las dos etapas del circuito masivo entran');
+    igual(r.candidatos[0].folio, 4146335);
+  });
+  prueba('T13b no propone las que ya están confirmadas ni las anuladas', () => {
+    const r = S.candidatosDe([
+      fila({ etapaOperacion: 'Transferencia Confirmada' }),
+      fila({ etapaOperacion: 'Transferencia Reconfirmada' }),
+      fila({ etapaOperacion: 'Transferencia Anulada' })
+    ]);
+    igual(r.candidatos.length, 0, 'proponer una confirmada dispara un SEGUNDO ajuste en SAP');
+  });
+  prueba('T13c no propone las que no van a Walmart', () => {
+    igual(S.candidatosDe([fila({ bpDestinoNombre: 'OTRO RETAIL' })]).candidatos.length, 0);
+  });
+  prueba('T13d una fila sin etapa se CUENTA, no se descarta en silencio', () => {
+    // "No hay candidatas" y "no supe leer el listado" son dos respuestas
+    // distintas, y una manda a mirar el lado equivocado.
+    const r = S.candidatosDe([{ folio: 1, bpDestinoNombre: 'WALMART' }, fila({})]);
+    igual([r.sinEtapa, r.candidatos.length, r.filas], [1, 1, 2]);
+  });
+  prueba('T13e lee la etapa venga con el nombre que venga', () => {
+    // El histórico crudo y el /proxy/ops no etiquetan igual lo mismo.
+    S.CAMPOS_FILA.etapa.forEach(function (k) {
+      const f = { bpDestinoNombre: 'WALMART CHILE', folio: 7 };
+      f[k] = 'Pendiente de Confirmación';
+      igual(S.candidatosDe([f]).candidatos.length, 1, 'no supo leer la etapa en ' + k);
+    });
+  });
+  prueba('T13f lee el destino y el folio venga con el nombre que venga', () => {
+    S.CAMPOS_FILA.destino.forEach(function (k) {
+      const f = { etapaOperacion: 'Pendiente de Confirmación', folio: 7 };
+      f[k] = 'WALMART CHILE';
+      igual(S.candidatosDe([f]).candidatos.length, 1, 'no supo leer el destino en ' + k);
+    });
+    igual(S.campoFila({ nroPedido: 99 }, 'folio'), 99);
+    igual(S.campoFila({ formHeaderId: 5 }, 'id'), 5);
+  });
+  prueba('T13g un campo vacío no cuenta como presente', () => {
+    // Un '' o un null en el primer nombre tiene que dejar probar el siguiente,
+    // o el dato queda ilegible estando ahí.
+    igual(S.campoFila({ folio: '', nroPedido: 99 }, 'folio'), 99);
+    igual(S.campoFila({ folio: null, nroPedido: 99 }, 'folio'), 99);
+    igual(S.campoFila({}, 'folio'), null);
+    igual(S.campoFila(null, 'folio'), null);
+  });
+  prueba('T13h la basura del listado no revienta la búsqueda', () => {
+    const r = S.candidatosDe([null, 'x', 7, fila({})]);
+    igual(r.candidatos.length, 1);
+    // Y no se cuentan como "filas que no supe leer": si se contaran, un
+    // listado con un null al final diría "no supe leer el histórico", que es
+    // una afirmación distinta y manda a revisar los nombres de los campos.
+    igual(r.sinEtapa, 0, 'un null no es una fila con la etapa ilegible');
+    igual(S.candidatosDe(null).candidatos.length, 0);
+  });
+  pruebaAsync('T13i corta en cuanto juntó suficientes: no baja 17.000 por gusto', async () => {
+    let bajados = 0;
+    const traer = () => { bajados++; return Promise.resolve([fila({}), fila({ folio: 2 })]); };
+    const r = await S.buscarCandidatos(30, 7, 2, null, traer, null);
+    igual(bajados, 1, 'con dos en el primer tramo no hay por qué seguir');
+    igual(r.candidatos.length, 2);
+  });
+  pruebaAsync('T13j si el primer tramo no alcanza, sigue y SUMA lo de los dos', async () => {
+    let bajados = 0;
+    const traer = () => { bajados++; return Promise.resolve([fila({ folio: bajados })]); };
+    const r = await S.buscarCandidatos(30, 7, 2, null, traer, null);
+    igual(bajados, 2, 'con una por tramo y meta 2, dos tramos');
+    igual(r.candidatos.map(c => c.folio), [1, 2], 'lo del primer tramo no se pierde');
+  });
+  pruebaAsync('T13j2 un tramo vacío no detiene la búsqueda', async () => {
+    let bajados = 0;
+    const traer = () => { bajados++; return Promise.resolve(bajados === 1 ? [] : [fila({})]); };
+    const r = await S.buscarCandidatos(30, 7, 2, null, traer, null);
+    cierto(bajados >= 2, 'tenía que seguir buscando: ' + bajados);
+    cierto(r.candidatos.length >= 1);
+  });
+  prueba('T13l --candidatos mira pocos días por omisión, y respeta --dias', () => {
+    // Por omisión tiene que ser una ventana corta: son 4.000 operaciones por
+    // semana y la que se va a confirmar hoy es de ayer o de hoy.
+    igual(S.diasParaCandidatos(S.leerArgs(['--productivo', '--candidatos'])), S.DIAS_CANDIDATOS);
+    cierto(Number(S.DIAS_CANDIDATOS) <= 7, 'una ventana corta: ' + S.DIAS_CANDIDATOS);
+    igual(S.diasParaCandidatos(S.leerArgs(['--productivo', '--candidatos', '--dias=45'])), '45');
+    igual(S.leerArgs(['--productivo', '--candidatos', '--cuantos=9']).cuantos, '9');
+    cierto(S.leerArgs(['--productivo', '--candidatos']).candidatos);
+    falso(S.leerArgs(['--productivo']).candidatos);
+  });
+  pruebaAsync('T13k suma el total leído y las filas que no supo leer', async () => {
+    const traer = () => Promise.resolve([{ folio: 1 }, { folio: 2 }]);
+    const r = await S.buscarCandidatos(7, 7, 5, null, traer, null);
+    igual([r.total, r.sinEtapa, r.candidatos.length], [2, 2, 0]);
+  });
+
   prueba('T12a los tramos van del MÁS NUEVO al más viejo', () => {
     // Un folio que se confirma hoy es de los últimos días: buscando desde el
     // presente aparece en el primer o segundo tramo y el resto no se baja.
@@ -700,6 +799,19 @@ async function correr(S) {
 }
 
 const MUTACIONES = [
+  ['M110 propone confirmar lo que ya está confirmado', /if \(!ETAPAS_CONFIRMABLES\.some\(re => re\.test\(String\(etapa\)\)\)\) return;/, ''],
+  ['M111 propone transferencias que no van a Walmart', /if \(!\/walmart\/i\.test\(String\(campoFila\(f, 'destino'\) \|\| ''\)\)\) return;/, ''],
+  ['M112 una fila sin etapa se descarta en silencio',  /if \(etapa === null\) \{ sinEtapa\+\+; return; \}/, 'if (etapa === null) { return; }'],
+  ['M113 sólo prueba el primer nombre de cada campo',  /for \(let i = 0; i < nombres\.length; i\+\+\) \{/, 'for (let i = 0; i < 1; i++) {'],
+  ['M114 un campo vacío se toma por presente',         /if \(v !== undefined && v !== null && String\(v\)\.trim\(\) !== ''\) return v;/, 'if (v !== undefined) return v;'],
+  ['M115 la basura del listado revienta la búsqueda',  /if \(!f \|\| typeof f !== 'object'\) return;/, ''],
+  ['M116 baja todos los tramos aunque ya tenga',       /if \(acum\.length >= meta\) break;/, ''],
+  ['M117 corta en el primer tramo tenga o no',         /if \(acum\.length >= meta\) break;/, 'break;'],
+  ['M118 no acumula: se queda con el último tramo',    /acum = acum\.concat\(r\.candidatos\);/, 'acum = r.candidatos;'],
+  ['M119 no cuenta las filas ilegibles de cada tramo', /sinEtapa \+= r\.sinEtapa;/, ''],
+  ['M120 --candidatos baja 30 días por omisión',       /return \(a && a\.diasExplicito\) \? a\.dias : DIAS_CANDIDATOS;/, 'return a.dias;'],
+  ['M120b la ventana corta se vuelve larga',           /const DIAS_CANDIDATOS = '3';/, "const DIAS_CANDIDATOS = '30';"],
+  ['M121 --dias explícito se ignora',                  /\{ a\.dias = x\.slice\(7\); a\.diasExplicito = true; \}/, '{ a.dias = x.slice(7); }'],
   // El mecanismo de verdad: la URL que prepara y el cuerpo que se devuelve.
   ['M80 la URL confirma lo despachado y no lo pedido',  /url = urlConfirmar\(doc\.folio, n, firma, ORIGEN\);/, 'url = urlConfirmar(doc.folio, desp, firma, ORIGEN);'],
   ['M81 la URL va sin el usuario que firma',            /'\/original\/' \+ o \+ '\/usuarioconfirma\/' \+ u;/, "'/original/' + o;"],

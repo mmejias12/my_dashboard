@@ -1755,3 +1755,75 @@ La prueba de navegador ahora **mide la geometría**: comprueba que el check y el
 botón caen dentro del contenedor visible y que son las dos primeras columnas.
 Ese defecto no lo habría encontrado ninguna prueba de lógica, porque la lógica
 estaba bien — el elemento existía en el DOM y respondía al clic.
+
+# CITAS QUE NO CRUZAN: seguimiento (10-nov-2026)
+
+## La medición que lo motivó
+
+Las citas "sin coincidencia en Redlink" desaparecían al subir el reporte del día
+siguiente. Mauro preguntó si podían quedar pendientes, porque "quizás hoy no
+aparece el cruce pero mañana sí".
+
+Antes de diseñar, se midió. Sus 8 citas, contra **26.390 operaciones de 45 días**
+(27-sep a 10-nov), buscando por `nroCita` **y** dentro de las observaciones:
+
+**Las 8 dan cero.** Segunda vez que se mide lo mismo: en octubre, 15 citas contra
+47.745 operaciones de tres meses, idéntico resultado.
+
+O sea **no es un problema de ventana de fechas**. La hipótesis es que el cliente
+todavía no emitió la transferencia. Y acá está lo que justifica la pieza entera:
+si una cita es "todavía no" o "nunca" **no se puede saber mirándola un día**. Hay
+que volver a mirarla mañana, y para eso tiene que quedar escrita — el archivo de
+mañana ya no la trae.
+
+Esas 8 citas sumaban **70 pallets** que Walmart declara haber recibido sin
+transferencia que los respalde. No es papeleo.
+
+## El defecto que apareció de paso
+
+La tabla de excepciones mostraba Cita, Folio, Motivo, Despachado, Walmart y
+Etapa — **no el cliente**. Pero el Rut y la Razón Social vienen en el reporte de
+Walmart, así que los teníamos aunque Redlink no supiera nada de esa cita. Sin esa
+columna, "sin coincidencia en Redlink" es un misterio; con ella es accionable:
+*tal cliente tiene N citas sin transferencia emitida*.
+
+## El diseño
+
+**Se guardan las FILAS ORIGINALES del reporte, no un resumen.** Volver a cruzar
+mañana es llamar al mismo `N.cruzar()` con las operaciones de mañana — mismas
+reglas, mismo código con 94 pruebas y 100 mutaciones. La alternativa era una
+segunda lógica de calce, que se habría separado de la primera el día que alguien
+arregle una de las dos. Ese error ya lo cometimos una vez en este mismo problema.
+
+**Bitácora append-only con reductor**, igual que la del andén: eventos `vista`,
+`cruzo` y `cerrada`, y el estado vigente de cada cita es el último de la cadena
+ordenada por hora (dos personas cruzando en dos computadores escriben en el mismo
+blob y el append no garantiza orden). Nada se edita ni se borra.
+
+**Los datos del reporte más reciente ganan.** Walmart corrige cantidades de un
+día para otro y el informe tiene que decir la última, no la primera.
+
+**Siete días** para pasar de "todavía no cruza" a "hay que preguntar" — decidido
+con logística. No archiva nada: sólo cambia de qué lado de la lista aparece.
+
+**Se leen seis meses hacia atrás** para reconstruir el estado. Una abierta de hace
+más de eso deja de aparecer, y es deliberado: a los seis meses no es una
+pendiente, es una abandonada, y seguirla leyendo haría la consulta más lenta cada
+mes que pasa.
+
+**Una que reaparece se suma sola a POR CONFIRMAR**, marcada, y se avisa cuáles.
+Pasa por las mismas guardas que cualquier otra fila.
+
+**Guardar el seguimiento no puede tumbar el cruce.** Corre después de pintar: la
+persona ya está confirmando mientras esto va y vuelve. Si falla, se dice y se
+muestra lo que había antes.
+
+## Cobertura
+
+| suite | pruebas | mutaciones |
+|---|---|---|
+| `test-pendientes-cruce.js` (el reductor) | 25 | 27 |
+| `test-pendientes-endpoint.js` (la función HTTP) | 15 | 20 |
+| `prueba-pagina-confirmaciones.js` (navegador) | +18 comprobaciones | — |
+
+Todas mueren.

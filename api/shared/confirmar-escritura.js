@@ -30,6 +30,7 @@
 'use strict';
 
 const N = require('./confirmar-nucleo.js');
+const historial = require('./confirmaciones-registro.js');
 
 const TOKEN_URL = process.env.REDLINK_TOKEN_URL ||
   'https://accounts.portalredtec.cl/realms/Redtec/protocol/openid-connect/token';
@@ -187,8 +188,18 @@ async function confirmarUna(folio, cantidad, opciones) {
   const etapa = N.etapaDe(despues);
   const v = N.veredictoDeFirma(despues, cotejo.usar);
   const vaciadas = N.coleccionesVaciadas(doc, despues);
+  const det = (despues.formDdetalles || [])[0] || {};
   const problemas = [];
   if (res.status !== 200) problemas.push('el PATCH devolvió HTTP ' + res.status);
+  // Lo que quedó escrito tiene que ser lo que se pidió. El cuerpo preparado
+  // traía esta misma cantidad y se mandó tal cual, así que una diferencia acá
+  // significa que el servidor guardó otra cosa — y ese número es el que movió
+  // inventario en SAP. Medido una sola vez (pedimos 1, quedó 1): si algún día
+  // esto detiene un lote por un caso legítimo, se mira y se afloja con dato.
+  if (Number(det.recepcion) !== Number(cantidad)) {
+    problemas.push('se pidió confirmar ' + cantidad + ' y el documento quedó con recepción ' +
+                   JSON.stringify(det.recepcion));
+  }
   if (!/confirmada/i.test(etapa)) problemas.push('la etapa quedó en "' + (etapa || '(vacía)') + '"');
   if (!v.ok) problemas.push(v.dice);
   if (vaciadas.length) problemas.push('se vaciaron colecciones del documento: ' + vaciadas.join(', '));
@@ -196,8 +207,24 @@ async function confirmarUna(folio, cantidad, opciones) {
     return resp('detener', problemas.join(' · '), { id: id, etapa: etapa, firma: v.dice,
                                                     vaciadas: vaciadas, http: res.status });
   }
+  // El historial se escribe DESPUÉS de verificar, y su fallo no cambia el
+  // veredicto: cuando llegamos acá la confirmación ya está escrita en Redlink
+  // y ya movió inventario en SAP. Decir "falló" haría que alguien la reintente,
+  // que es exactamente lo peor que podría pasar. Se informa aparte.
+  const guardado = await historial.registrar({
+    folio: folio, docId: id, cantidad: cantidad, quien: o.quien, via: o.via,
+    redlink: {
+      cliente: despues.bpOrigenNombre, destino: despues.bpDestinoNombre,
+      bodega: despues.bodegaDestinoNombre,
+      despachado: det.despachado, recepcion: det.recepcion,
+      etapaAntes: N.etapaDe(doc), etapaDespues: etapa, firma: N.firmaDe(despues).nombre
+    },
+    reporte: o.reporte || {}
+  });
+
   return resp('confirmada', 'confirmada ' + cantidad + ' · ' + etapa,
-              { id: id, etapa: etapa, firma: v.dice, http: res.status });
+              { id: id, etapa: etapa, firma: v.dice, http: res.status,
+                historial: guardado.ok ? 'guardado' : 'NO quedó en el historial: ' + guardado.motivo });
 }
 
 module.exports = { confirmarUna, cuerpoDeToken, rutaDeUsuario, idDeUsuario, idDeFolio, leerDocumento, pedir, faltantes, CLAVES };

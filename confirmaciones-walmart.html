@@ -266,6 +266,7 @@ tr.total td{border-top:1px solid var(--line);border-bottom:0;font-weight:600;col
       <div class="chead"><span class="eyebrow">Para revisar</span><h2>Lo que no se confirma, y por qué</h2></div>
       <p>Ninguna cita del reporte desaparece en silencio: la que no entra a la lista sale acá con el motivo.
       Una fila que falta en una lista que alguien va a ejecutar no se nota hasta que el cliente reclama.</p>
+      <div class="aviso" id="nota-exc"></div>
       <div class="resumen" id="resumen-exc"></div>
       <div class="acciones">
         <button id="btn-csv-exc" disabled>Bajar CSV</button>
@@ -295,7 +296,7 @@ var N = window.WalmartNucleo;
 var $ = function (id) { return document.getElementById(id); };
 var esLocal = location.protocol === 'file:';
 
-var S = { filas: [], ops: [], r: null, nombre: '', consultado: null };
+var S = { filas: [], ops: [], r: null, nombre: '', consultado: null, faltantes: [], graves: [], propio: null };
 
 /* ── avisos: el detalle crudo NUNCA se tira ──────────────────────────────
    Un "error al consultar" sin el status, el host y el cuerpo obliga a
@@ -350,6 +351,9 @@ async function leer(file) {
     S.filas = filas;
 
     var citas = N.agruparPorCita(filas).length;
+    // El rango PROPIO del reporte (sin margen): es contra esto que se juzga si
+    // un tramo que faltó importa o no.
+    S.propio = N.ventanaDeReporte(filas, 0);
     var v = N.ventanaDeReporte(filas);
     if (v) { $('d1').value = v.desde; $('d2').value = v.hasta; }
 
@@ -383,33 +387,12 @@ async function cruzar() {
   var b = $('btn-cruzar');
   b.disabled = true; b.textContent = 'Consultando…';
   aviso('av-cruce', 'carga', 'Consultando transferencias ' + d1 + ' → ' + d2 + '…');
-  var url = '/proxy/ops?fechaInicio=' + encodeURIComponent(d1) + '&fechaFin=' + encodeURIComponent(d2);
   try {
-    var res;
-    try {
-      res = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' });
-    } catch (red) {
-      throw new Error('La consulta no salió del navegador (' + ((red && red.message) || 'fetch falló') +
-                      '). Revisá la conexión o si la sesión del m3link sigue abierta. URL: ' + url);
-    }
-    var crudo = await res.text();
-    if (!res.ok) {
-      // 401/403 es casi siempre la sesión del m3link vencida, no un problema
-      // de Redlink: decirlo acá ahorra una vuelta de preguntas.
-      var pista = (res.status === 401 || res.status === 403)
-        ? '\nEsto suele ser la sesión del m3link vencida: recargá la página, iniciá sesión y volvé a cruzar.'
-        : '';
-      throw new Error('Redlink respondió HTTP ' + res.status + ' ' + (res.statusText || '') + pista +
-                      '\nURL: ' + url + '\n' + crudo.slice(0, 600));
-    }
-    var data;
-    try { data = JSON.parse(crudo); }
-    catch (nojson) {
-      throw new Error('La respuesta no vino como JSON.\nURL: ' + url + '\n' + crudo.slice(0, 600));
-    }
-    S.ops = Array.isArray(data) ? data : [data];
+    var r = await traerOperaciones(d1, d2);
+    S.ops = r.ops;
+    S.faltantes = r.faltantes;
     S.consultado = { d1: d1, d2: d2, cuando: new Date() };
-    if (!S.ops.length) {
+    if (!S.ops.length && !r.faltantes.length) {
       aviso('av-cruce', 'ojo', 'La consulta no devolvió ninguna operación para ' + d1 + ' → ' + d2 +
             '. Probá ampliando la ventana.');
     }
@@ -421,10 +404,106 @@ async function cruzar() {
   }
 }
 
+/* ── la consulta, en tramos ───────────────────────────────────────────────
+   Medido el 10-nov-2026 con Redlink lento: 2 días responden en 1 segundo y
+   10 días mueren a los 21 con un 502 del proxy. Pedir 40 días de una hacía
+   que en un día malo la herramienta simplemente no funcionara.
+   Un tramo que falla se parte al medio y se reintenta; lo que no se pudo
+   traer se ANOTA y se avisa, porque una operación que falta no se ve como
+   un error: se ve como una cita "sin coincidencia en Redlink". */
+async function unTramo(d1, d2) {
+  var url = '/proxy/ops?fechaInicio=' + encodeURIComponent(d1) + '&fechaFin=' + encodeURIComponent(d2);
+  var res;
+  try {
+    res = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+  } catch (red) {
+    throw new Error('la consulta no salió del navegador (' + ((red && red.message) || 'fetch falló') + ')');
+  }
+  var crudo = await res.text();
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) {
+      throw new Error('SESION: la sesión del m3link venció. Recargá la página, iniciá sesión y volvé a cruzar.');
+    }
+    throw new Error('HTTP ' + res.status + ' ' + (res.statusText || '') + ' · ' + crudo.slice(0, 200));
+  }
+  var data;
+  try { data = JSON.parse(crudo); }
+  catch (nojson) { throw new Error('la respuesta no vino como JSON · ' + crudo.slice(0, 200)); }
+  return Array.isArray(data) ? data : [data];
+}
+
+async function traerOperaciones(d1, d2) {
+  var tramos = N.ventanasDe(d1, d2, 5);
+  var ops = [], faltantes = [], hechos = 0, vistos = Object.create(null);
+  async function bajar(t, nivel) {
+    try {
+      var r = await unTramo(t.desde, t.hasta);
+      // Los tramos no se pisan por fecha, pero el histórico filtra por un campo
+      // y el documento puede traer otro: si uno cayera en dos tramos, el cruce
+      // lo vería como "la cita cae en 2 operaciones" y lo mandaría a excepciones
+      // por un problema nuestro. Deduplicar cuesta nada y lo descarta.
+      for (var k = 0; k < r.length; k++) {
+        var id = r[k] && (r[k].formHeaderiD != null ? 'd' + r[k].formHeaderiD
+                                                    : 'p' + r[k].nroPedido);
+        if (id && vistos[id]) continue;
+        if (id) vistos[id] = 1;
+        ops.push(r[k]);
+      }
+    } catch (e) {
+      var msg = (e && e.message) || String(e);
+      // La sesión vencida no se arregla pidiendo menos: corta todo.
+      if (msg.indexOf('SESION:') === 0) throw new Error(msg.slice(7).trim());
+      var mitades = partirVentana(t);
+      if (!mitades || nivel > 3) { faltantes.push({ tramo: t, motivo: msg }); return; }
+      aviso('av-cruce', 'carga', 'El tramo ' + t.desde + ' → ' + t.hasta +
+            ' no respondió; lo parto en dos y reintento…');
+      await bajar(mitades[0], nivel + 1);
+      await bajar(mitades[1], nivel + 1);
+    }
+  }
+  for (var i = 0; i < tramos.length; i++) {
+    aviso('av-cruce', 'carga', 'Consultando ' + d1 + ' → ' + d2 + ' · tramo ' + (i + 1) + ' de ' +
+          tramos.length + ' · ' + num(ops.length) + ' operaciones');
+    await bajar(tramos[i], 1);
+    hechos++;
+  }
+  return { ops: ops, faltantes: faltantes, tramos: tramos.length };
+}
+
+function partirVentana(t) {
+  var DIA = 86400000;
+  var a = new Date(t.desde + 'T12:00:00'), b = new Date(t.hasta + 'T12:00:00');
+  var largo = Math.round((b - a) / DIA) + 1;
+  if (largo <= 1) return null;
+  var mitad = Math.floor(largo / 2);
+  return [{ desde: t.desde, hasta: new Date(a.getTime() + (mitad - 1) * DIA).toISOString().slice(0, 10) },
+          { desde: new Date(a.getTime() + mitad * DIA).toISOString().slice(0, 10), hasta: t.hasta }];
+}
+
 function rehacer() {
   S.r = N.cruzar(S.filas, S.ops);
   var c = S.consultado;
-  if (S.ops.length) {
+  S.graves = (S.faltantes || []).filter(function (f) { return N.seSolapan(f.tramo, S.propio); });
+  if (S.graves.length) {
+    // Un hueco DENTRO de las fechas del propio reporte sí importa: una
+    // operación que no se trajo se ve exactamente igual que una que no existe,
+    // y el correo al cliente saldría pidiéndole que emita de nuevo una
+    // transferencia que sí está.
+    aviso('av-cruce', 'err',
+      'Faltan operaciones dentro de las fechas del reporte (' + S.graves.length + ' tramo(s)). ' +
+      'La lista POR CONFIRMAR es válida, pero las EXCEPCIONES no son confiables.',
+      S.graves.map(function (f) { return f.tramo.desde + ' → ' + f.tramo.hasta + ' · ' + f.motivo; }).join('\n') +
+      '\n\nVolvé a cruzar para reintentar sólo esos tramos.');
+  } else if (S.faltantes && S.faltantes.length) {
+    // Fuera del rango del reporte el hueco es casi siempre la cola viva de
+    // Redlink (hoy y ayer), y las transferencias de un reporte de Walmart se
+    // despacharon antes: salen del almacén frío. Se avisa, no se bloquea.
+    aviso('av-cruce', 'ojo',
+      num(S.ops.length) + ' operaciones leídas · ' + c.d1 + ' → ' + c.d2 + '. No respondieron ' +
+      S.faltantes.length + ' tramo(s), pero están fuera de las fechas del reporte (' +
+      S.propio.desde + ' → ' + S.propio.hasta + '), así que el cruce no se ve afectado.',
+      S.faltantes.map(function (f) { return f.tramo.desde + ' → ' + f.tramo.hasta + ' · ' + f.motivo; }).join('\n'));
+  } else if (S.ops.length) {
     aviso('av-cruce', 'ok', num(S.ops.length) + ' operaciones leídas · ' + c.d1 + ' → ' + c.d2 +
           ' · verificado ' + c.cuando.toLocaleTimeString('es-CL'));
   }
@@ -562,10 +641,24 @@ function pintarTodo() {
             etiqueta(f.etapa)];
   }, 'Ninguna excepción: todas las citas del reporte cruzaron.');
 
+  // Con datos incompletos las excepciones mienten hacia el lado caro: una cita
+  // sin su operación se lee como "sin coincidencia en Redlink", que es
+  // justamente lo que se le manda al cliente. Se bloquea su descarga.
+  var incompleto = !!(S.graves && S.graves.length);
+  var nota = $('nota-exc');
+  if (nota) {
+    nota.className = 'aviso' + (incompleto ? ' ver err' : '');
+    nota.textContent = incompleto
+      ? 'Datos incompletos: faltan operaciones de ' +
+        S.graves.map(function (f) { return f.tramo.desde + '→' + f.tramo.hasta; }).join(', ') +
+        '. Alguna de estas citas puede existir en Redlink y no haberse traído, así que esta lista NO sirve para el correo al cliente. Volvé a cruzar.'
+      : '';
+  }
+
   $('btn-csv').disabled = !r.porConfirmar.length;
   $('btn-tsv').disabled = !r.porConfirmar.length;
   $('btn-csv-avisar').disabled = !r.avisar.length;
-  $('btn-csv-exc').disabled = !r.excepciones.length;
+  $('btn-csv-exc').disabled = !r.excepciones.length || incompleto;
 }
 
 /* ── pestañas ───────────────────────────────────────────────────────────── */

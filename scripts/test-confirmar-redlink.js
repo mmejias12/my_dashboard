@@ -17,14 +17,39 @@ const path = require('path');
 const Module = require('module');
 
 const RUTA = path.join(__dirname, 'confirmar-redlink.js');
+// El núcleo de las decisiones vive bajo api/ (Static Web Apps despliega sólo
+// esa carpeta). Las mutaciones tienen que poder tocarlo: si sólo se mutara el
+// script, la mitad de las guardas quedaría sin arnés justo después de moverlas.
+const RUTA_N = path.join(__dirname, '..', 'api', 'shared', 'confirmar-nucleo.js');
+const RE_NUCLEO = /confirmar-nucleo\.js$/;
 
-function cargar(fuente) {
+function compilar(ruta, fuente, requerir) {
+  const m = new Module(ruta, null);
+  m.filename = ruta;
+  m.paths = Module._nodeModulePaths(path.dirname(ruta));
+  if (requerir) m.require = requerir;
+  m._compile(fuente, ruta);
+  return m.exports;
+}
+
+// Carga el script con UN núcleo determinado: el `require` se intercepta para
+// que el script reciba el núcleo mutado en vez del del disco. Así cada
+// mutación, viva en el archivo que viva, se juzga con TODAS las pruebas.
+function cargar(fuente, fuenteNucleo) {
+  const nucleo = compilar(RUTA_N, fuenteNucleo === undefined ? FUENTE_N : fuenteNucleo);
   const m = new Module(RUTA, null);
   m.filename = RUTA;
   m.paths = Module._nodeModulePaths(path.dirname(RUTA));
+  const propio = Module.prototype.require.bind(m);
+  m.require = function (pedido) {
+    return RE_NUCLEO.test(pedido) ? nucleo : propio(pedido);
+  };
   m._compile(fuente, RUTA);
   return m.exports;
 }
+
+const FUENTE = fs.readFileSync(RUTA, 'utf8');
+const FUENTE_N = fs.readFileSync(RUTA_N, 'utf8');
 
 let ok = 0, fallos = [];
 function prueba(n, fn) { try { fn(); ok++; } catch (e) { fallos.push(n + ' -> ' + (e && e.message ? e.message : String(e))); } }
@@ -468,6 +493,186 @@ async function correr(S) {
                  bpDestinoNombre: 'WALMART CHILE COMERCIAL S.A', operacion: 'Transferencias' };
   const fila = (c) => Object.assign({}, FILA, c);
 
+  /* ---- el lote ---------------------------------------------------------- */
+
+  prueba('T15a el mismo folio dos veces en el archivo NO se corre', () => {
+    // Dos filas con el mismo folio son dos ajustes de inventario sobre la
+    // misma transferencia.
+    const r = S.revisarLote([{ folio: 1, cantRecibida: 1 }, { folio: 1, cantRecibida: 2 }], [], 50);
+    falso(r.ok);
+    cierto(tiene(r.problemas, 'repetidos'), JSON.stringify(r.problemas));
+  });
+  prueba('T15b una línea mal formada detiene el archivo entero', () => {
+    // Un CSV con basura adentro quiere decir que el que lo generó falló, y
+    // entonces las filas buenas tampoco son de fiar: salieron del mismo lugar.
+    const r = S.revisarLote([{ folio: 1, cantRecibida: 1 }], [{ linea: 7, texto: 'basura' }], 50);
+    falso(r.ok, 'no se saltea una línea rota');
+    cierto(tiene(r.problemas, 'línea 7'), JSON.stringify(r.problemas));
+  });
+  prueba('T15c un archivo gigante no se corre sin pedirlo', () => {
+    const muchas = [];
+    for (let i = 0; i < 80; i++) muchas.push({ folio: 4000 + i, cantRecibida: 1 });
+    const r = S.revisarLote(muchas, [], null);
+    falso(r.ok, '80 filas con tope 50 tiene que negarse');
+    cierto(tiene(r.problemas, '--tope=80'), 'y decir cómo pedirlo: ' + JSON.stringify(r.problemas));
+    cierto(S.revisarLote(muchas, [], 80).ok, 'pedido explícito, procede');
+    igual(S.TOPE_LOTE, 50);
+  });
+  prueba('T15d un archivo vacío no es un lote de cero', () => {
+    const r = S.revisarLote([], [], 50);
+    falso(r.ok);
+    cierto(tiene(r.problemas, 'ninguna fila utilizable'), JSON.stringify(r.problemas));
+  });
+  prueba('T15e una ya confirmada se SALTA, no detiene el lote', () => {
+    // El módulo del proveedor pudo haberla confirmado mientras corríamos, o es
+    // un archivo que se reintenta. Detener ahí dejaría el resto sin hacer por
+    // una fila que ya estaba lista.
+    const ya = con({ formMetapa: { nombre: 'Transferencia Confirmada' },
+                     formDdetalles: [{ despachado: 19, recepcion: 19 }] });
+    const c = S.clasificarEnLote(ya, 19, 983);
+    igual(c.accion, 'saltar');
+    cierto(/ya está confirmada/.test(c.motivo), c.motivo);
+  });
+  prueba('T15f cualquier otro problema DETIENE el lote', () => {
+    // Si el documento no es el que el archivo describe, seguir con los
+    // siguientes es confirmar a ciegas.
+    igual(S.clasificarEnLote(con({ bpDestinoNombre: 'OTRO RETAIL' }), 3, 983).accion, 'detener');
+    igual(S.clasificarEnLote(con({ formId: 1 }), 3, 983).accion, 'detener');
+    igual(S.clasificarEnLote(DOC, 99, 983).accion, 'detener', 'más de lo despachado');
+    igual(S.clasificarEnLote(null, 3, 983).accion, 'detener');
+    igual(S.clasificarEnLote(con({ formMetapa: { nombre: 'Transferencia Anulada' },
+                                   formDdetalles: [{ despachado: 19, recepcion: null }] }), 3, 983).accion, 'detener');
+  });
+  prueba('T15g una que corresponde confirmar trae su plan armado', () => {
+    const c = S.clasificarEnLote(DOC, 3, 983);
+    igual(c.accion, 'confirmar');
+    cierto(c.plan && c.plan.ok, 'tiene que venir con el plan');
+    cierto(c.plan.url.indexOf('/recibido/3/') >= 0, c.plan.url);
+    cierto(c.plan.url.indexOf('/usuarioconfirma/983') >= 0, c.plan.url);
+  });
+  prueba('T15h el lote usa la cantidad del ARCHIVO, no la despachada', () => {
+    // La del archivo la puso Walmart; la despachada es lo que salió de acá.
+    const c = S.clasificarEnLote(DOC, 3, 983);
+    cierto(c.plan.url.indexOf('/recibido/3/') >= 0, 'despachado 19, archivo 3: ' + c.plan.url);
+    falso(c.plan.url.indexOf('/recibido/19/') >= 0, c.plan.url);
+  });
+  prueba('T15i el índice agrupa por folio en una pasada', () => {
+    const ix = S.indicePorFolio([{ folio: 1, formHeaderiD: 10 }, { folio: 2, formHeaderiD: 20 },
+                                 { folio: 1, formHeaderiD: 11 }, null, { formHeaderiD: 99 }]);
+    igual(ix['1'].length, 2);
+    igual(ix['2'].length, 1);
+    igual(Object.keys(ix).sort(), ['1', '2'], 'una fila sin folio no inventa una entrada');
+  });
+  prueba('T15j un folio duplicado o ausente en el histórico no se escribe', () => {
+    const ix = S.indicePorFolio([{ folio: 1, formHeaderiD: 10 }, { folio: 2, formHeaderiD: 20 },
+                                 { folio: 2, formHeaderiD: 21 }, { folio: 3 }]);
+    igual(S.idDeFolio(ix, 1).id, 10);
+    igual(S.idDeFolio(ix, 2).id, null, 'dos operaciones: no se elige una');
+    cierto(/2 operaciones/.test(S.idDeFolio(ix, 2).motivo));
+    igual(S.idDeFolio(ix, 3).id, null, 'sin formHeaderiD no se puede escribir');
+    igual(S.idDeFolio(ix, 9).id, null);
+    cierto(/no aparece/.test(S.idDeFolio(ix, 9).motivo));
+    igual(S.idDeFolio(null, 1).id, null, 'sin índice tampoco revienta');
+  });
+  pruebaAsync('T15k los folios del lote se resuelven en una pasada y corta al tenerlos', async () => {
+    let bajados = 0;
+    const traer = () => { bajados++; return Promise.resolve([{ folio: 1, formHeaderiD: 10 },
+                                                             { folio: 2, formHeaderiD: 20 }]); };
+    const r = await S.buscarVariosFolios([1, 2], 30, 7, null, traer, null);
+    igual(bajados, 1, 'con los dos en el primer tramo no hay por qué seguir');
+    igual(r.faltan, []);
+    igual(S.idDeFolio(r.indice, 2).id, 20);
+  });
+  pruebaAsync('T15l si falta uno sigue buscando, y al final lo nombra', async () => {
+    let bajados = 0;
+    const traer = () => { bajados++; return Promise.resolve([{ folio: 1, formHeaderiD: 10 }]); };
+    const r = await S.buscarVariosFolios([1, 777], 30, 7, null, traer, null);
+    cierto(bajados > 1, 'tenía que seguir buscando el que falta: ' + bajados);
+    igual(r.faltan, ['777'], 'y decir cuál falta, no sólo que faltan');
+  });
+  prueba('T15m el resumen cuenta y nombra dónde se detuvo', () => {
+    const r = S.resumenDeLote([{ accion: 'confirmar', folio: 1 }, { accion: 'saltar', folio: 2 },
+                               { accion: 'confirmar', folio: 3 }, { accion: 'detener', folio: 4, motivo: 'x' }]);
+    igual([r.confirmadas, r.saltadas], [2, 1]);
+    igual(r.detenido.folio, 4);
+    igual(S.resumenDeLote([]).detenido, null);
+  });
+  prueba('T15n el lote lee el mismo CSV que exporta la página', () => {
+    // Un segundo parser del mismo contrato se separa del primero el día que
+    // alguien arregla uno de los dos.
+    const r = S.leerListado('folio;cantRecibida\r\n4149330;1\r\n4149331;2\r\n');
+    igual(r.filas, [{ folio: 4149330, cantRecibida: 1 }, { folio: 4149331, cantRecibida: 2 }]);
+    igual(r.malas, []);
+  });
+  prueba('T15o --lote, --tope y --pausa se leen de la línea de comandos', () => {
+    const a = S.leerArgs(['--productivo', '--lote=c.csv', '--tope=80', '--pausa=500', '--si']);
+    igual([a.lote, a.tope, a.pausa, a.si], ['c.csv', '80', '500', true]);
+    igual(S.leerArgs(['--productivo', '--lote=c.csv']).si, false, 'el lote no se dispara sin --si');
+  });
+
+  prueba('T14a el diff muestra todo lo que cambió, no una lista conocida', () => {
+    // El 10-nov el preparador devolvió el documento sin tocar y la respuesta
+    // fue "no sirve". Sin un diff completo no se distingue entre "el servidor
+    // no preparó nada" y "preparó algo en un campo que no miramos".
+    const d = S.diferencias({ a: 1, inventado: 'x' }, { a: 2, inventado: 'x' });
+    igual(d.length, 1);
+    igual([d[0].campo, d[0].antes, d[0].despues], ['a', '1', '2']);
+  });
+  prueba('T14b un campo que sólo está en uno de los dos también sale', () => {
+    const d = S.diferencias({ a: 1 }, { a: 1, nuevo: 7 });
+    igual(d.length, 1);
+    igual([d[0].campo, d[0].antes, d[0].despues], ['nuevo', '(sin el campo)', '7']);
+    const e = S.diferencias({ viejo: 7 }, {});
+    igual([e[0].campo, e[0].antes, e[0].despues], ['viejo', '7', '(sin el campo)']);
+  });
+  prueba('T14c dos documentos iguales no tienen diferencias', () => {
+    igual(S.diferencias(DOC, JSON.parse(JSON.stringify(DOC))), []);
+    igual(S.diferencias(null, null), []);
+  });
+  prueba('T14d baja a la línea de detalle: ahí vive la cantidad', () => {
+    // Arriba formDdetalles sale como un bloque JSON recortado y el campo que
+    // importa queda escondido justamente en el recorte.
+    const otro = JSON.parse(JSON.stringify(DOC));
+    otro.formDdetalles[0].recepcion = 3;
+    const d = S.diferencias(DOC, otro);
+    cierto(d.some(x => x.campo === 'detalle.recepcion'), JSON.stringify(d.map(x => x.campo)));
+    const det = d.filter(x => x.campo === 'detalle.recepcion')[0];
+    igual([det.antes, det.despues], ['null', '3']);
+  });
+  prueba('T14e un valor enorme se recorta, y se ve que está recortado', () => {
+    const largo = S.recorteValor('x'.repeat(500));
+    cierto(largo.length < 200, 'quedó en ' + largo.length);
+    cierto(/…$/.test(largo), 'tiene que verse que hay más: ' + largo.slice(-20));
+    igual(S.recorteValor(undefined), '(sin el campo)');
+    igual(S.recorteValor(null), 'null', 'un null es un valor, no un campo ausente');
+  });
+  prueba('T14f la marca de procedencia se puede cambiar por comando', () => {
+    // Para medir UNA variable: mismo folio, misma cantidad, sólo la marca.
+    // Fue así como se encontró que el servidor sólo prepara con CONFIRMAVER2.
+    igual(S.leerArgs(['--origen=M3LINK']).origen, 'M3LINK');
+    igual(S.leerArgs([]).origen, null);
+    const p = S.planDeConfirmacion(DOC, 3, 983, 'M3LINK');
+    cierto(p.url.indexOf('/original/M3LINK/') >= 0, p.url);
+    igual(p.origen, 'M3LINK');
+    // Sin pedirla, la que el servidor reconoce.
+    igual(S.ORIGEN, 'CONFIRMAVER2', 'el valor por omisión tiene que ser el que prepara');
+    cierto(S.planDeConfirmacion(DOC, 3, 983).url.indexOf('/original/CONFIRMAVER2/') >= 0);
+  });
+  prueba('T14g avisa si el PATCH vació una colección del documento', () => {
+    // El cuerpo preparado manda formDtransportes y formDregistros como [].
+    // Si el servidor los reemplaza, se perdieron registros y nadie lo iba a
+    // notar mirando la etapa, que es lo único que se mira cuando sale bien.
+    const antes = con({ formDtransportes: [{ formDtransporteiD: 433211 }], formDregistros: [{ x: 1 }] });
+    const despues = con({ formDtransportes: [], formDregistros: [{ x: 1 }] });
+    igual(S.coleccionesVaciadas(antes, despues), ['formDtransportes']);
+    igual(S.coleccionesVaciadas(antes, antes), [], 'si no se vació nada, no se avisa nada');
+    // Una colección que ya estaba vacía no se vació ahora.
+    igual(S.coleccionesVaciadas(con({ formDtransportes: [] }), con({ formDtransportes: [] })), []);
+    igual(S.coleccionesVaciadas(null, null), []);
+    cierto(S.COLECCIONES_HIJAS.indexOf('formDtransportes') >= 0);
+    cierto(S.COLECCIONES_HIJAS.indexOf('formDregistros') >= 0);
+  });
+
   prueba('T13a encuentra las de Walmart en etapa confirmable', () => {
     const r = S.candidatosDe([fila({}), fila({ folio: 2, etapaOperacion: 'Pendiente Adjuntar Respaldo' })]);
     igual(r.candidatos.length, 2, 'las dos etapas del circuito masivo entran');
@@ -523,6 +728,16 @@ async function correr(S) {
     // una afirmación distinta y manda a revisar los nombres de los campos.
     igual(r.sinEtapa, 0, 'un null no es una fila con la etapa ilegible');
     igual(S.candidatosDe(null).candidatos.length, 0);
+  });
+  pruebaAsync('T13i2 un tramo con 135 candidatas igual entrega las que se pidieron', async () => {
+    // Salió en producción: --cuantos recortaba los tramos pero no la lista, y
+    // un tramo de tres días trajo 135 de una. Quien las recibe lee el
+    // documento de cada una: 135 consultas para mostrar cinco.
+    const muchas = [];
+    for (let i = 0; i < 135; i++) muchas.push(fila({ folio: 4149000 + i }));
+    const r = await S.buscarCandidatos(3, 7, 5, null, () => Promise.resolve(muchas), null);
+    igual(r.candidatos.length, 5, 'tiene que entregar cinco, no ciento treinta y cinco');
+    igual(r.hay, 135, 'pero el total se informa, porque es el dato que importa aparte');
   });
   pruebaAsync('T13i corta en cuanto juntó suficientes: no baja 17.000 por gusto', async () => {
     let bajados = 0;
@@ -799,6 +1014,28 @@ async function correr(S) {
 }
 
 const MUTACIONES = [
+  ['M150 el lote corre con folios repetidos',           /if \(repetidos\.length\) \{/, 'if (false) {'],
+  ['M151 el lote se saltea las líneas rotas',           /\(malas \|\| \[\]\)\.forEach\(function \(m\) \{/, '[].forEach(function (m) {'],
+  ['M152 el lote no tiene tope',                        /else if \(filas\.length > t\) \{/, 'else if (false) {'],
+  ['M153 el tope no dice cómo subirlo',                 /'\. Si de verdad son todas, pídelo con --tope=' \+ filas\.length/, "''"],
+  ['M154 un archivo vacío se corre igual',              /if \(!\(filas \|\| \[\]\)\.length\) problemas\.push/, 'if (false) problemas.push'],
+  ['M155 el tope por omisión se vuelve enorme',         /const TOPE_LOTE = 50;/, 'const TOPE_LOTE = 100000;'],
+  ['M156 una ya confirmada detiene el lote',            /if \(esConfirmada\(doc\)\) \{\n    const det =/, 'if (false) {\n    const det ='],
+  ['M157 cualquier problema se salta en vez de detener', /if \(!plan\.ok\) return \{ accion: 'detener', motivo: plan\.problemas\.join\(' · '\) \};/, "if (!plan.ok) return { accion: 'saltar', motivo: plan.problemas.join(' · ') };"],
+  ['M158 el lote confirma lo despachado y no lo del archivo', /const plan = planDeConfirmacion\(doc, cantidad, usersId, origen\);/, 'const plan = planDeConfirmacion(doc, ((doc.formDdetalles || [])[0] || {}).despachado, usersId, origen);'],
+  ['M160 el índice apila las filas sin folio bajo una clave', /if \(!f\) return;\n    if \(!ix\[f\]\) ix\[f\] = \[\];/, 'if (!ix[f]) ix[f] = [];'],
+  ['M161 un folio duplicado en el histórico se escribe igual', /if \(filas\.length > 1\) return \{ id: null/, 'if (false) return { id: null'],
+  ['M162 un folio ausente no se distingue de uno hallado', /if \(!filas\.length\) return \{ id: null, motivo: 'no aparece/, "if (false) return { id: null, motivo: 'no aparece"],
+  ['M163 un registro sin formHeaderiD pasa',            /if \(!id\) return \{ id: null, motivo: 'el registro no trae formHeaderiD' \};/, ''],
+  ['M164 la búsqueda no corta aunque estén todos',      /if \(!quedan\) break;/, ''],
+  ['M165 la búsqueda corta en el primer tramo',         /if \(!quedan\) break;/, 'break;'],
+  ['M166 no se dice cuáles folios faltaron',            /return \{ indice: ix, total: total, faltan: Object\.keys\(faltan\) \};/, 'return { indice: ix, total: total, faltan: [] };'],
+  ['M167 el resumen no marca dónde se detuvo',          /else if \(x\.accion === 'detener'\) r\.detenido = x;/, ''],
+  ['M169 --lote no se lee de los argumentos',           /else if \(x\.indexOf\('--lote='\) === 0\) a\.lote = x\.slice\(7\);/, ''],
+  ['M140 no avisa si se vació una colección',          /return \(a\.length \|\| 0\) > 0 && \(d\.length \|\| 0\) === 0;/, 'return false;'],
+  ['M141 avisa de las que ya estaban vacías',          /return \(a\.length \|\| 0\) > 0 && \(d\.length \|\| 0\) === 0;/, 'return (d.length || 0) === 0;'],
+  ['M142 no revisa el transporte',                     /const COLECCIONES_HIJAS = \['formDregistros', 'formDtransportes'/, "const COLECCIONES_HIJAS = ['formDregistros'"],
+  ['M143 la marca por omisión vuelve a la que no prepara', /process\.env\.REDLINK_ORIGEN \|\| 'CONFIRMAVER2'\)\.trim\(\) \|\| 'CONFIRMAVER2'/, "process.env.REDLINK_ORIGEN || 'M3LINK').trim() || 'M3LINK'"],
   ['M110 propone confirmar lo que ya está confirmado', /if \(!ETAPAS_CONFIRMABLES\.some\(re => re\.test\(String\(etapa\)\)\)\) return;/, ''],
   ['M111 propone transferencias que no van a Walmart', /if \(!\/walmart\/i\.test\(String\(campoFila\(f, 'destino'\) \|\| ''\)\)\) return;/, ''],
   ['M112 una fila sin etapa se descarta en silencio',  /if \(etapa === null\) \{ sinEtapa\+\+; return; \}/, 'if (etapa === null) { return; }'],
@@ -806,6 +1043,8 @@ const MUTACIONES = [
   ['M114 un campo vacío se toma por presente',         /if \(v !== undefined && v !== null && String\(v\)\.trim\(\) !== ''\) return v;/, 'if (v !== undefined) return v;'],
   ['M115 la basura del listado revienta la búsqueda',  /if \(!f \|\| typeof f !== 'object'\) return;/, ''],
   ['M116 baja todos los tramos aunque ya tenga',       /if \(acum\.length >= meta\) break;/, ''],
+  ['M116b entrega la lista entera sin recortar',        /candidatos: acum\.slice\(0, meta\), hay: acum\.length/, 'candidatos: acum, hay: acum.length'],
+  ['M116c el total visto se pierde',                   /hay: acum\.length, total: total,/, 'hay: 0, total: total,'],
   ['M117 corta en el primer tramo tenga o no',         /if \(acum\.length >= meta\) break;/, 'break;'],
   ['M118 no acumula: se queda con el último tramo',    /acum = acum\.concat\(r\.candidatos\);/, 'acum = r.candidatos;'],
   ['M119 no cuenta las filas ilegibles de cada tramo', /sinEtapa \+= r\.sinEtapa;/, ''],
@@ -813,7 +1052,14 @@ const MUTACIONES = [
   ['M120b la ventana corta se vuelve larga',           /const DIAS_CANDIDATOS = '3';/, "const DIAS_CANDIDATOS = '30';"],
   ['M121 --dias explícito se ignora',                  /\{ a\.dias = x\.slice\(7\); a\.diasExplicito = true; \}/, '{ a.dias = x.slice(7); }'],
   // El mecanismo de verdad: la URL que prepara y el cuerpo que se devuelve.
-  ['M80 la URL confirma lo despachado y no lo pedido',  /url = urlConfirmar\(doc\.folio, n, firma, ORIGEN\);/, 'url = urlConfirmar(doc.folio, desp, firma, ORIGEN);'],
+  ['M80 la URL confirma lo despachado y no lo pedido',  /url = urlConfirmar\(doc\.folio, n, firma, origen \|\| ORIGEN\);/, 'url = urlConfirmar(doc.folio, desp, firma, origen || ORIGEN);'],
+  ['M80b la marca pedida se ignora',                   /url = urlConfirmar\(doc\.folio, n, firma, origen \|\| ORIGEN\);/, 'url = urlConfirmar(doc.folio, n, firma, ORIGEN);'],
+  // El diff del preparado: es el instrumento con el que se mide qué hace el servidor.
+  ['M130 el diff sólo mira los campos conocidos',      /if \(JSON\.stringify\(x\) === JSON\.stringify\(y\)\) return;/, 'if (true) return;'],
+  ['M131 el diff ignora los campos que sólo están en uno', /\[a, b\]\.forEach\(function \(o\) \{/, '[a].forEach(function (o) {'],
+  ['M132 el diff no baja a la línea de detalle',        /if \(da \|\| db\) \{/, 'if (false) {'],
+  ['M133 un campo ausente se confunde con uno vacío',   /if \(v === undefined\) return '\(sin el campo\)';/, ''],
+  ['M134 los valores largos se imprimen enteros',       /return t\.length > 160 \? t\.slice\(0, 160\) \+ '…' : t;/, 'return t;'],
   ['M81 la URL va sin el usuario que firma',            /'\/original\/' \+ o \+ '\/usuarioconfirma\/' \+ u;/, "'/original/' + o;"],
   ['M82 el folio de la URL no se valida',               /if \(!\/\^\\d\+\$\/\.test\(f\)\) throw new Error/, 'if (false) throw new Error'],
   ['M83 la cantidad de la URL no se valida',            /if \(!\/\^\\d\+\$\/\.test\(c\)\) throw new Error/, 'if (false) throw new Error'],
@@ -900,16 +1146,26 @@ const MUTACIONES = [
   ['M22 la fecha va en ISO y no en el formato de Redlink', /return p\[1\] \+ '-' \+ p\[2\] \+ '-' \+ p\[0\];/, "return p[0] + '-' + p[1] + '-' + p[2];"]
 ];
 
+// Cada mutación se aplica al archivo donde vive ese código: primero se prueba
+// en el script y, si no está ahí, en el núcleo. Que una mutación no aparezca en
+// NINGUNO de los dos sigue siendo un NO APLICA y sigue siendo un fallo: quiere
+// decir que el código que decía proteger ya no existe con esa forma.
 async function mutar() {
-  const fuente = fs.readFileSync(RUTA, 'utf8');
   const vivas = [], noAplican = [];
   let muertas = 0;
   for (const [nombre, busca, pone] of MUTACIONES) {
-    if (!busca.test(fuente)) { noAplican.push(nombre); continue; }
-    const mutado = fuente.replace(busca, pone);
-    if (mutado === fuente) { noAplican.push(nombre); continue; }
+    let fuente = FUENTE, fuenteN = FUENTE_N, mutado;
+    if (busca.test(FUENTE)) {
+      mutado = FUENTE.replace(busca, pone);
+      if (mutado === FUENTE) { noAplican.push(nombre); continue; }
+      fuente = mutado;
+    } else if (busca.test(FUENTE_N)) {
+      mutado = FUENTE_N.replace(busca, pone);
+      if (mutado === FUENTE_N) { noAplican.push(nombre); continue; }
+      fuenteN = mutado;
+    } else { noAplican.push(nombre); continue; }
     let r;
-    try { r = await correr(cargar(mutado)); } catch (e) { muertas++; continue; }
+    try { r = await correr(cargar(fuente, fuenteN)); } catch (e) { muertas++; continue; }
     if (r.fallos.length) muertas++; else vivas.push(nombre);
   }
   return { vivas, muertas, noAplican, total: MUTACIONES.length };

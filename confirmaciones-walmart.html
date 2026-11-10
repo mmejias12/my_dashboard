@@ -83,6 +83,10 @@ button:hover:not(:disabled){background:#27303f;border-color:rgba(255,255,255,.18
 button:disabled{opacity:.45;cursor:default}
 button.pri{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
 button.pri:hover:not(:disabled){background:#f03529;border-color:#f03529}
+/* El masivo armado cambia de color: el segundo clic escribe en SAP y eso tiene
+   que verse distinto del primero, no sólo leerse distinto. */
+button.pri.armado{background:#a8160c;border-color:#ff6b5e;box-shadow:0 0 0 2px rgba(255,107,94,.25)}
+button.mini{padding:3px 9px;font-size:11px;border-radius:6px;white-space:nowrap}
 .nota-regla{margin-top:12px;font-size:11.5px;color:var(--text-2);line-height:1.5;
   border-left:2px solid var(--line);padding-left:11px}
 .nota-regla span{display:block;color:var(--muted);font-size:10.5px;margin-top:4px}
@@ -138,6 +142,7 @@ tr.total td{border-top:1px solid var(--line);border-bottom:0;font-weight:600;col
   border:1px solid var(--line);color:var(--text-2);background:var(--surface-3)}
 .et.lista{border-color:rgba(12,163,12,.45);color:#8ee08e;background:rgba(12,163,12,.08)}
 .et.espera{border-color:rgba(250,178,25,.4);color:#f1d9a6;background:rgba(250,178,25,.07)}
+.et.mal{border-color:rgba(255,107,94,.5);color:#ffb3ab;background:rgba(255,107,94,.09)}
 .dif{color:var(--warning)}
 .vacio{padding:26px 10px;text-align:center;color:var(--muted);font-size:12px}
 
@@ -184,7 +189,7 @@ tr.total td{border-top:1px solid var(--line);border-bottom:0;font-weight:600;col
     <div class="sub">Logística inversa · reporte diario contra Redlink</div>
   </div>
   <div class="crece"></div>
-  <div class="sello" id="sello">El reporte no sale de tu navegador<br>la consulta a Redlink es de sólo lectura</div>
+  <div class="sello" id="sello">El reporte no sale de tu navegador<br>confirmar <b>escribe en Redlink</b> y mueve inventario en SAP</div>
 </div>
 
 <div class="wrap">
@@ -240,10 +245,12 @@ tr.total td{border-top:1px solid var(--line);border-bottom:0;font-weight:600;col
       se confirma lo despachado, porque no se puede confirmar más de lo que salió.</p>
       <div class="resumen" id="resumen-conf"></div>
       <div class="acciones">
+        <button class="pri" id="btn-confirmar" disabled>Confirmar</button>
         <button id="btn-csv" disabled>Bajar CSV</button>
         <button id="btn-tsv" disabled>Copiar para Excel</button>
         <span class="nota" id="nota-copia"></span>
       </div>
+      <div class="aviso" id="estado-conf"></div>
       <div class="tabla-caja"><table id="tb-conf"></table></div>
     </div>
   </div>
@@ -394,7 +401,7 @@ async function cruzar() {
     S.consultado = { d1: d1, d2: d2, cuando: new Date() };
     if (!S.ops.length && !r.faltantes.length) {
       aviso('av-cruce', 'ojo', 'La consulta no devolvió ninguna operación para ' + d1 + ' → ' + d2 +
-            '. Probá ampliando la ventana.');
+            '. Prueba ampliando la ventana.');
     }
     rehacer();
   } catch (e) {
@@ -422,7 +429,7 @@ async function unTramo(d1, d2) {
   var crudo = await res.text();
   if (!res.ok) {
     if (res.status === 401 || res.status === 403) {
-      throw new Error('SESION: la sesión del m3link venció. Recargá la página, iniciá sesión y volvé a cruzar.');
+      throw new Error('SESION: la sesión del m3link venció. Recarga la página, inicia sesión y vuelve a cruzar.');
     }
     throw new Error('HTTP ' + res.status + ' ' + (res.statusText || '') + ' · ' + crudo.slice(0, 200));
   }
@@ -493,7 +500,7 @@ function rehacer() {
       'Faltan operaciones dentro de las fechas del reporte (' + S.graves.length + ' tramo(s)). ' +
       'La lista POR CONFIRMAR es válida, pero las EXCEPCIONES no son confiables.',
       S.graves.map(function (f) { return f.tramo.desde + ' → ' + f.tramo.hasta + ' · ' + f.motivo; }).join('\n') +
-      '\n\nVolvé a cruzar para reintentar sólo esos tramos.');
+      '\n\nVuelve a cruzar para reintentar sólo esos tramos.');
   } else if (S.faltantes && S.faltantes.length) {
     // Fuera del rango del reporte el hueco es casi siempre la cola viva de
     // Redlink (hoy y ayer), y las transferencias de un reporte de Walmart se
@@ -561,7 +568,7 @@ function conDif(valor, dif) {
 
 var COLS_CONF = [{ t: 'Folio', mono: true }, { t: 'Cita', mono: true }, { t: 'Cliente', libre: true },
                  { t: 'Servicio' }, { t: 'Despachado', n: true }, { t: 'Walmart', n: true },
-                 { t: 'A confirmar', n: true }, { t: 'Etapa' }, { t: 'Bodega' }];
+                 { t: 'A confirmar', n: true }, { t: 'Etapa' }, { t: 'Bodega' }, { t: 'Confirmación' }];
 var COLS_AVISAR = [{ t: 'Folio', mono: true }, { t: 'Cita', mono: true }, { t: 'Cliente', libre: true },
                    { t: 'Servicio' }, { t: 'Despachado', n: true }, { t: 'Walmart', n: true },
                    { t: 'A informar', n: true }, { t: 'Etapa' }];
@@ -613,7 +620,7 @@ function pintarTodo() {
     return [f.folio, f.cita, f.clienteRedlink || f.cliente, f.servicio, num(f.despachada),
             conDif(f.canjeWM, f.diferencia !== 0), num(f.aConfirmar),
             etiqueta(f.etapa, /pendiente\s+de\s+confirmaci/i.test(f.etapa) ? 'lista' : 'espera'),
-            f.bodega];
+            f.bodega, celdaConfirmacion(f)];
   }, 'Nada por confirmar con este reporte y esta ventana.');
 
   tabla($('tb-avisar'), COLS_AVISAR, r.avisar, function (f) {
@@ -651,10 +658,11 @@ function pintarTodo() {
     nota.textContent = incompleto
       ? 'Datos incompletos: faltan operaciones de ' +
         S.graves.map(function (f) { return f.tramo.desde + '→' + f.tramo.hasta; }).join(', ') +
-        '. Alguna de estas citas puede existir en Redlink y no haberse traído, así que esta lista NO sirve para el correo al cliente. Volvé a cruzar.'
+        '. Alguna de estas citas puede existir en Redlink y no haberse traído, así que esta lista NO sirve para el correo al cliente. Vuelve a cruzar.'
       : '';
   }
 
+  textoBoton();
   $('btn-csv').disabled = !r.porConfirmar.length;
   $('btn-tsv').disabled = !r.porConfirmar.length;
   $('btn-csv-avisar').disabled = !r.avisar.length;
@@ -694,6 +702,162 @@ function csvDe(cab, filas, fila) {
     return /[;"\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }).join(';')); });
   return out.join('\r\n') + '\r\n';
+}
+
+
+/* ------------------------------------------------------------------ *
+ *  CONFIRMAR. Acá la página deja de ser de sólo lectura.
+ *
+ *  Un folio por pedido, nunca la lista entera en una llamada. Tres razones,
+ *  todas medidas: una función de Static Web Apps se corta a los ~45 segundos;
+ *  un corte a mitad dejaría media lista confirmada sin que nadie sepa cuál; y
+ *  cada folio se relee del lado del api justo antes de SU escritura, así que si
+ *  el módulo del proveedor confirma uno mientras recorremos la lista, ese se
+ *  saltea en vez de recibir un segundo ajuste de inventario.
+ *
+ *  El estado vive en S.conf, por folio, porque pintarTodo() reconstruye las
+ *  tablas: si viviera en la celda, se perdería al repintar.
+ * ------------------------------------------------------------------ */
+
+S.conf = {};          // folio -> { estado, dice }
+S.corriendo = false;
+
+function celdaConfirmacion(f) {
+  var hecho = S.conf[f.folio];
+  if (hecho) {
+    var cl = hecho.estado === 'confirmada' ? 'lista'
+           : (hecho.estado === 'saltada' ? 'espera' : 'mal');
+    var e = etiqueta(hecho.estado === 'confirmada' ? 'confirmada'
+                   : (hecho.estado === 'saltada' ? 'ya estaba' : 'no se pudo'), cl);
+    if (hecho.dice) e.title = hecho.dice;
+    return e;
+  }
+  var b = document.createElement('button');
+  b.className = 'mini';
+  b.textContent = 'Confirmar ' + f.aConfirmar;
+  b.disabled = S.corriendo;
+  b.addEventListener('click', function () { unaSola(f, b); });
+  return b;
+}
+
+// Una sola, pedida a mano. No pregunta: la cantidad está a la vista en la fila
+// y el botón la dice. Lo que SÍ hace es no dejar dos clics sobre lo mismo.
+async function unaSola(f, boton) {
+  if (S.corriendo || S.conf[f.folio]) return;
+  S.corriendo = true;
+  if (boton) { boton.disabled = true; boton.textContent = 'confirmando…'; }
+  var r = await pedirConfirmacion(f);
+  S.conf[f.folio] = r;
+  S.corriendo = false;
+  decir(r.estado === 'detener'
+    ? 'Folio ' + f.folio + ': ' + r.dice
+    : 'Folio ' + f.folio + ': ' + r.dice, r.estado === 'detener');
+  pintarTodo();
+}
+
+// El pedido en sí. Una respuesta siempre con la misma forma, incluso cuando la
+// red falla: la página no tiene que adivinar qué pasó.
+async function pedirConfirmacion(f) {
+  try {
+    var res = await fetch('/api/confirmar-walmart', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+      body: JSON.stringify({ folio: f.folio, cantidad: f.aConfirmar, id: f.docId || null })
+    });
+    if (res.status === 403) {
+      return { estado: 'detener', dice: 'tu usuario no tiene permiso para confirmar transferencias' };
+    }
+    if (res.status === 401) {
+      return { estado: 'detener', dice: 'se cerró la sesión; vuelve a entrar y reintenta' };
+    }
+    var j = null;
+    try { j = await res.json(); } catch (e) { j = null; }
+    if (!j || !j.estado) {
+      return { estado: 'detener', dice: 'el api contestó algo que no se entiende (HTTP ' + res.status + ')' };
+    }
+    return j;
+  } catch (e) {
+    // Una confirmación que no se sabe si se escribió NO se cuenta como hecha.
+    // El siguiente intento relee el documento y, si ya estaba, la saltea.
+    return { estado: 'detener',
+             dice: 'no se pudo hablar con el api (' + ((e && e.message) || e) +
+                   '). No se sabe si alcanzó a escribir: vuelve a cruzar antes de reintentar.' };
+  }
+}
+
+// El masivo. Dos clics a propósito: el primero arma, el segundo dispara. Un
+// botón que escribe en SAP de un clic es un accidente esperando.
+var armado = 0;
+function textoBoton() {
+  var r = S.r;
+  var faltan = r ? r.porConfirmar.filter(function (f) { return !S.conf[f.folio]; }) : [];
+  var b = $('btn-confirmar');
+  if (!faltan.length) { b.textContent = 'Confirmar'; b.disabled = true; b.className = 'pri'; return faltan; }
+  if (armado) {
+    b.className = 'pri armado';
+    b.textContent = 'Sí, confirmar ' + faltan.length + ' · escribe en SAP';
+  } else {
+    b.className = 'pri';
+    b.textContent = 'Confirmar ' + faltan.length;
+  }
+  b.disabled = S.corriendo;
+  return faltan;
+}
+
+$('btn-confirmar').addEventListener('click', function () {
+  if (S.corriendo) return;
+  if (!armado) {
+    armado = setTimeout(function () { armado = 0; textoBoton(); }, 6000);
+    textoBoton();
+    decir('Van a confirmarse de a una, en orden, y se detiene en la primera que no salga bien. Vuelve a hacer clic para largar.', false);
+    return;
+  }
+  clearTimeout(armado); armado = 0;
+  todas();
+});
+
+async function todas() {
+  var faltan = S.r ? S.r.porConfirmar.filter(function (f) { return !S.conf[f.folio]; }) : [];
+  if (!faltan.length) return;
+  S.corriendo = true;
+  textoBoton();
+  var hechas = 0, saltadas = 0, detenida = null;
+  for (var i = 0; i < faltan.length; i++) {
+    var f = faltan[i];
+    decir('Confirmando ' + (i + 1) + ' de ' + faltan.length + ' · folio ' + f.folio + '…', false);
+    var r = await pedirConfirmacion(f);
+    S.conf[f.folio] = r;
+    if (r.estado === 'confirmada') hechas++;
+    else if (r.estado === 'saltada') saltadas++;
+    else { detenida = { folio: f.folio, dice: r.dice }; break; }
+  }
+  S.corriendo = false;
+  var resumen = hechas + ' confirmadas, ' + saltadas + ' que ya estaban';
+  if (detenida) {
+    decir('SE DETUVO en el folio ' + detenida.folio + ': ' + detenida.dice +
+          ' — ' + resumen + '. Las que quedan no se tocaron.', true);
+  } else {
+    decir(resumen + '. Revisar en el portal y los ajustes en SAP.', false);
+  }
+  pintarTodo();
+}
+
+function decir(texto, mal) {
+  var e = $('estado-conf');
+  if (!e) return;
+  e.className = 'aviso ver' + (mal ? ' err' : '');
+  e.textContent = texto;
+}
+
+/* Gancho de prueba, y SÓLO en local. La página vive dentro de un IIFE a
+   propósito —nada de esto es global— pero el recorrido de confirmación hay que
+   poder manejarlo desde un navegador de prueba sin inventar un .xlsx de Walmart
+   y sin pegarle a Redlink. En producción el hostname no es local y esta rama no
+   existe, así que no hay forma de sembrar estado desde afuera; y aunque la
+   hubiera, escribir sigue dependiendo del rol que exige el api. */
+if (esLocal || location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
+  window.__prueba = { S: S, pintarTodo: pintarTodo };
 }
 
 $('btn-csv').addEventListener('click', function () {

@@ -136,6 +136,21 @@ async function idDeFolio(folio, desdeIso, hastaIso, pedirFn) {
 //
 // NUNCA devuelve el cuerpo que contestó Redlink. Lo que entra al navegador es
 // lo que decidimos nosotros, no lo que llegó de afuera.
+// Un error inesperado se resume SIN su detalle: el mensaje puede traer la
+// respuesta de Redlink y ahí adentro va cualquier cosa. Lo que sí viaja es de
+// qué TIPO fue, que es lo que permite decidir si se reintenta.
+function resumirFalla(e) {
+  const m = (e && e.message) ? String(e.message) : String(e);
+  const n = (e && e.name) ? String(e.name) : '';
+  if (/TimeoutError|AbortError|aborted|timed?[ -]?out/i.test(n + ' ' + m)) {
+    return 'Redlink no respondió dentro del plazo';
+  }
+  const http = m.match(/HTTP (\d{3})/);
+  if (http) return 'Redlink respondió HTTP ' + http[1];
+  if (/autenticar|access_token/i.test(m)) return 'no se pudo autenticar como M3LinkSystem';
+  return 'no se pudo hablar con Redlink';
+}
+
 async function confirmarUna(folio, cantidad, opciones) {
   const o = opciones || {};
   const p = o.pedir || pedir;
@@ -147,13 +162,21 @@ async function confirmarUna(folio, cantidad, opciones) {
   if (falta.length) return resp('detener', 'el api no tiene cargadas las credenciales de escritura (' +
     falta.join(', ') + ')');
 
+  // De qué lado del PATCH estamos. Es la única pregunta que importa cuando algo
+  // se cae: antes del PATCH no se escribió nada y reintentar es gratis; desde el
+  // PATCH en adelante la escritura pudo haber llegado igual —Redlink puede
+  // procesarla aunque a nosotros se nos corte la espera— y reintentar a ciegas
+  // confirmaría dos veces y movería inventario dos veces en SAP.
+  let tocamosLaEscritura = false;
+  let id = o.id;
+  try {
+
   // A nombre de quién, preguntado por nombre y cotejado con lo configurado.
   const resuelto = await idDeUsuario(N.NOMBRE_M3LINK, p)
     .catch(e => ({ ok: false, id: null, nombre: '', problemas: [(e && e.message) || String(e)] }));
   const cotejo = N.cotejarFirma(resuelto, N.USERSID_M3LINK);
   if (!cotejo.ok) return resp('detener', cotejo.dice);
 
-  let id = o.id;
   if (!id) {
     const hoy = new Date().toISOString().slice(0, 10);
     const antes = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
@@ -178,6 +201,7 @@ async function confirmarUna(folio, cantidad, opciones) {
   const rev = N.revisarPreparado(prep.texto, doc.folio, cantidad);
   if (!rev.ok) return resp('detener', 'el documento preparado no sirve: ' + rev.problemas.join(' · '));
 
+  tocamosLaEscritura = true;
   const res = await p('/api/FormHeader', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -225,6 +249,17 @@ async function confirmarUna(folio, cantidad, opciones) {
   return resp('confirmada', 'confirmada ' + cantidad + ' · ' + etapa,
               { id: id, etapa: etapa, firma: v.dice, http: res.status,
                 historial: guardado.ok ? 'guardado' : 'NO quedó en el historial: ' + guardado.motivo });
+
+  } catch (e) {
+    const porque = resumirFalla(e);
+    if (!tocamosLaEscritura) {
+      return resp('detener', 'no se escribió nada: ' + porque + '. La transferencia quedó como ' +
+        'estaba y se puede reintentar.', { escribio: 'no' });
+    }
+    return resp('detener', 'se cortó durante la escritura: ' + porque + '. NO se sabe si alcanzó ' +
+      'a escribir en Redlink: revisa el folio ' + folio + ' antes de reintentar, porque confirmar ' +
+      'dos veces mueve inventario dos veces en SAP.', { escribio: 'no-se-sabe', id: id });
+  }
 }
 
 module.exports = { confirmarUna, cuerpoDeToken, rutaDeUsuario, idDeUsuario, idDeFolio, leerDocumento, pedir, faltantes, CLAVES };

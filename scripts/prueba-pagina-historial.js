@@ -6,8 +6,9 @@
 //  /api/confirmaciones-historial se intercepta y contesta a propósito.
 //
 //  Lo que mira que ninguna prueba de lógica puede mirar: que el calendario
-//  caiga en el día correcto, que el color diga la magnitud, y que un clic
-//  filtre de verdad.
+//  caiga en el día correcto, que el color diga la magnitud, que un clic filtre
+//  de verdad, que la alarma de pendientes se vea al ABRIR (sin cruzar nada) y
+//  que la pestaña de trazabilidad encuentre un pedido y muestre el desajuste.
 // ============================================================================
 'use strict';
 
@@ -62,6 +63,30 @@ const registro = require(path.join(RAIZ, 'api', 'shared', 'confirmaciones-regist
       registros: dentro, dias: registro.porDia(dentro), clientes: registro.porCliente(dentro),
       aviso: ALMACEN ? undefined : 'el api no tiene almacenamiento configurado'
     }) });
+  });
+
+  // ── el api de pendientes, para la alarma ────────────────────────────────
+  let PEND = { almacenamiento: true, diasParaPreguntar: 7, abiertas: 0, pallets: 0,
+               urgentes: 0, citas: [], clientes: [] };
+  let PEND_HTTP = 200;
+  let pedidosPend = 0;
+  await pg.route('**/api/pendientes-cruce*', async (route) => {
+    pedidosPend++;
+    if (PEND_HTTP !== 200) return route.fulfill({ status: PEND_HTTP, contentType: 'application/json',
+                                                  body: JSON.stringify({ error: 'no' }) });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(PEND) });
+  });
+
+  // ── el api de trazabilidad ──────────────────────────────────────────────
+  let TRAZA = null;
+  let TRAZA_HTTP = 200;
+  const consultas = [];
+  await pg.route('**/api/trazabilidad*', async (route) => {
+    const url = new URL(route.request().url());
+    consultas.push({ q: url.searchParams.get('q'), meses: url.searchParams.get('meses') });
+    if (TRAZA_HTTP !== 200) return route.fulfill({ status: TRAZA_HTTP, contentType: 'application/json',
+                                                   body: JSON.stringify({ error: 'busca un número de pedido, una cita o un PO' }) });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(TRAZA) });
   });
 
   const hoy = new Date().toISOString().slice(0, 10);
@@ -183,6 +208,142 @@ const registro = require(path.join(RAIZ, 'api', 'shared', 'confirmaciones-regist
   await pg.waitForTimeout(250);
   ok(/permiso/.test(await pg.locator('#av').innerText()), 'el 403 se explica');
   HTTP = 200;
+
+  console.log('\n-- la alarma de pendientes se ve al ABRIR, sin cruzar nada --');
+  ok(pedidosPend >= 1, 'la página pide los pendientes sola: ' + pedidosPend + ' vez/veces');
+  ok(await pg.locator('#alarma').isHidden(), 'sin citas abiertas la banda no molesta');
+
+  PEND = { almacenamiento: true, diasParaPreguntar: 7, abiertas: 24, pallets: 413, urgentes: 0,
+           citas: [], clientes: [] };
+  await pg.evaluate(() => window.__prueba.cargarAlarma());
+  await pg.waitForTimeout(150);
+  ok(await pg.locator('#alarma').isVisible(), 'con 24 citas abiertas la banda aparece');
+  const alt = await pg.locator('#al-t').innerText();
+  ok(/413/.test(alt), 'y dice los pallets: ' + alt);
+  const aln = await pg.locator('#al-n').innerText();
+  ok(/24/.test(aln) && /413/.test(aln), 'con las tres cifras: ' + aln.replace(/\n/g, ' · '));
+  ok((await pg.locator('#alarma').getAttribute('class')).indexOf('urge') < 0,
+     'sin urgentes NO se pinta como crítica');
+
+  PEND = Object.assign({}, PEND, { urgentes: 5 });
+  await pg.evaluate(() => window.__prueba.cargarAlarma());
+  await pg.waitForTimeout(150);
+  ok((await pg.locator('#alarma').getAttribute('class')).indexOf('urge') >= 0,
+     'con urgentes sí se pinta como crítica');
+  ok(/preguntarle al cliente/.test(await pg.locator('#al-c').innerText()),
+     'y dice qué hacer, no sólo que hay un problema');
+
+  console.log('\n-- un 403 en pendientes no rompe ni asusta --');
+  PEND_HTTP = 403;
+  await pg.evaluate(() => window.__prueba.cargarAlarma());
+  await pg.waitForTimeout(150);
+  ok(await pg.locator('#alarma').isVisible(), 'la banda que ya estaba no se borra por un 403');
+  ok(await pg.locator('#card-detalle, .cifras').first().isVisible(), 'y el historial sigue en pie');
+  PEND_HTTP = 200;
+
+  console.log('\n-- la pestaña de trazabilidad --');
+  ok(await pg.locator('#v-traza').isHidden(), 'arranca cerrada');
+  await pg.locator('#p-traza').click();
+  await pg.waitForTimeout(150);
+  ok(await pg.locator('#v-traza').isVisible(), 'se abre al hacer clic');
+  ok(await pg.locator('#v-hist').isHidden(), 'y el historial se guarda');
+  ok(await pg.locator('#p-traza').getAttribute('aria-selected') === 'true', 'queda marcada');
+
+  console.log('\n-- buscar un pedido que no existe --');
+  TRAZA = { termino: '9999999', almacenamiento: true, meses: 6, citas: [], folios: [],
+            apariciones: [], cambios: [], confirmaciones: [], pendientes: [], desajustes: [],
+            hallado: false };
+  await pg.locator('#q').fill('9999999');
+  await pg.locator('#b-buscar').click();
+  await pg.waitForTimeout(200);
+  ok(consultas.length === 1 && consultas[0].q === '9999999', 'consulta con el término: ' + JSON.stringify(consultas[0]));
+  ok(/No hay nada guardado/.test(await pg.locator('#av-tz').innerText()), 'lo dice sin inventar');
+  ok(await pg.locator('#card-apar').isHidden(), 'y no deja tablas vacías colgando');
+
+  console.log('\n-- el caso de logística: 9 confirmados, Walmart ahora dice 20 --');
+  const d4 = new Date(Date.parse(hoy) - 4 * 86400000).toISOString().slice(0, 10);
+  const apT = (dia, canje, total, folio, archivo) => ({
+    ts: dia + 'T10:00:00.000Z', dia: dia, archivo: archivo, quien: 'mmejias', cita: '42510877',
+    po: '8651142003', rut: '92091000-9', cliente: 'UNILEVER CHILE LIMITADA', cd: '6009',
+    recepcion: '7703', fecha: dia, total: total, malos: total - canje, canje: canje,
+    folio: folio, bandeja: folio ? 'porConfirmar' : 'excepcion:sin-match' });
+  TRAZA = {
+    termino: '42510877', almacenamiento: true, meses: 6, hallado: true,
+    citas: ['42510877'], folios: ['4149330'],
+    apariciones: [apT(hoy, 20, 20, 4149330, 'wm-hoy.xlsx'), apT(d4, 9, 9, 4149330, 'wm-4.xlsx')],
+    cambios: [{ cita: '42510877', de: d4, a: hoy, canjeAntes: 9, canjeAhora: 20,
+                totalAntes: 9, totalAhora: 20, diferencia: 11 }],
+    confirmaciones: [reg(d4, 'sin-diferencia', 9, 'UNILEVER CHILE LIMITADA')],
+    pendientes: [],
+    desajustes: [{ cita: '42510877', folio: 4149330, declarado: 20, confirmado: 9, faltan: 11,
+                   sobran: 0, ultimoReporte: hoy, archivo: 'wm-hoy.xlsx', confirmadoEl: d4,
+                   confirmadoPor: 'ana@redtecsa.com' }]
+  };
+  await pg.locator('#q').fill('42510877');
+  await pg.locator('#b-buscar').click();
+  await pg.waitForTimeout(250);
+
+  ok(await pg.locator('#card-salto').isVisible(), 'el desajuste es lo PRIMERO que se ve');
+  // Verde = "no hay nada que hacer". Con un desajuste abierto, un resumen
+  // verde arriba contradice la tarjeta naranja de abajo, y gana el de arriba.
+  const clsRes = await pg.locator('#av-tz').getAttribute('class');
+  ok(clsRes.indexOf('ok') < 0, 'y el resumen NO se pinta de verde: ' + clsRes);
+  ok(/cantidad cambiada/.test(await pg.locator('#av-tz').innerText()),
+     'el resumen nombra el desajuste: ' + await pg.locator('#av-tz').innerText());
+  ok(/pestaña/.test(await pg.locator('#card-salto p').innerText()),
+     'y la tarjeta dice qué hacer, no sólo qué pasó');
+  const salto = await pg.locator('#saltos').innerText();
+  ok(/faltan 11/.test(salto), 'y dice cuántos faltan: ' + salto.replace(/\n/g, ' · '));
+  ok(/4149330/.test(salto), 'con el pedido a confirmar');
+
+  // El desajuste tiene que quedar ARRIBA de las tablas, no al final de la página.
+  const yS = (await pg.locator('#card-salto').boundingBox()).y;
+  const yA = (await pg.locator('#card-apar').boundingBox()).y;
+  ok(yS < yA, 'el aviso va antes de las planillas (' + Math.round(yS) + ' < ' + Math.round(yA) + ')');
+
+  const linea = await pg.locator('#linea .linea').count();
+  ok(linea === 4, 'la línea de tiempo junta las 4 cosas que pasaron: ' + linea);
+  // Arriba va el cambio de cantidad, no la aparición: es lo que obliga a
+  // hacer algo. Después, las apariciones de la más nueva a la más vieja.
+  const prim = await pg.locator('#linea .linea').first().innerText();
+  ok(/Cambió la cantidad: 9 → 20/.test(prim), 'arriba queda el cambio: ' + prim.replace(/\n/g, ' · '));
+  const dias = await pg.locator('#linea .linea .d').allInnerTexts();
+  const iHoy = dias.findIndex(t => t.indexOf(hoy) === 0);
+  const iViejo = dias.findIndex(t => t.indexOf(d4) === 0);
+  ok(iHoy >= 0 && iViejo > iHoy, 'y la aparición de hoy va antes que la de hace 4 días (' +
+     iHoy + ' < ' + iViejo + ')');
+  const cambio = await pg.locator('#linea .linea.cambio').count();
+  ok(cambio === 1, 'el cambio de cantidad se marca aparte: ' + cambio);
+  const hito = await pg.locator('#linea .linea.hito').count();
+  ok(hito === 1, 'y nuestra confirmación también: ' + hito);
+
+  const apar = await pg.locator('#tb-apar tbody tr').count();
+  ok(apar === 2, 'las dos apariciones en planillas: ' + apar);
+  const f0 = await pg.locator('#tb-apar tbody tr').first().innerText();
+  ok(/wm-hoy\.xlsx/.test(f0), 'con el nombre del archivo: ' + f0.replace(/\t/g, ' | '));
+  ok((await pg.locator('#tb-conf tbody tr').count()) === 1, 'y nuestra confirmación en su tabla');
+  const chips = await pg.locator('#chips .chip').count();
+  ok(chips === 2, 'los chips resumen a qué cita y pedido se llegó: ' + chips);
+
+  console.log('\n-- el enlace queda compartible --');
+  ok(/#traza:42510877/.test(pg.url()), 'el hash lleva el término: ' + pg.url().split('#')[1]);
+
+  console.log('\n-- buscar vacío no pega al api --');
+  const antes = consultas.length;
+  await pg.locator('#q').fill('');
+  await pg.locator('#b-buscar').click();
+  await pg.waitForTimeout(150);
+  ok(consultas.length === antes, 'no se consultó nada');
+  ok(/Escribe un número/.test(await pg.locator('#av-tz').innerText()), 'y dice qué poner');
+
+  console.log('\n-- un 400 del api se muestra tal cual --');
+  TRAZA_HTTP = 400;
+  await pg.locator('#q').fill('12');
+  await pg.locator('#b-buscar').click();
+  await pg.waitForTimeout(200);
+  ok(/un número de pedido/.test(await pg.locator('#av-tz').innerText()),
+     'el mensaje del api llega al usuario: ' + await pg.locator('#av-tz').innerText());
+  TRAZA_HTTP = 200;
 
   await pg.screenshot({ path: '/tmp/historial.png', fullPage: false });
   await b.close(); srv.close();

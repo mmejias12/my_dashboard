@@ -859,9 +859,13 @@ function pintarTraza(d) {
   if (d.almacenamiento === false) { decirTz(d.aviso || 'No hay historia guardada todavía.', 'err'); return; }
 
   if (!d.hallado) {
-    decirTz('No hay nada guardado para ' + d.termino + ' en los últimos ' + d.meses + ' meses. ' +
-            'Las apariciones en planillas se guardan desde el 11-nov-2026: antes de esa fecha sólo ' +
-            'están las confirmaciones.', '');
+    // Se dice QUÉ se miró, no sólo que no se encontró: así se ve de una que el
+    // buscador anduvo y que el número buscado no es de los nuestros.
+    var u = d.universo || {};
+    decirTz('No encontramos ' + d.termino + '. Se buscó en ' + num(u.confirmaciones) +
+            ' confirmación(es) y ' + num(u.apariciones) + ' aparición(es) de planillas desde el ' +
+            (d.desde || '—') + '. Si es un pedido de Redlink que nunca confirmamos por acá, ' +
+            'no va a estar. Las apariciones en planillas recién se guardan desde el 11-nov-2026.', '');
     return;
   }
   // Verde significa "no hay nada que hacer". Con un desajuste abierto abajo,

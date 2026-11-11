@@ -140,6 +140,10 @@ function armar(t, filas, confs, estados) {
 
   return {
     termino: t,
+    // Qué se miró. Sin esto, "no hay nada" no distingue entre "el buscador no
+    // anduvo" y "este pedido no es de los nuestros", y la persona queda sin
+    // saber si el problema es suyo o de la herramienta.
+    universo: { confirmaciones: (confs || []).length, apariciones: (filas || []).length },
     citas: Object.keys(citas).sort(),
     folios: Object.keys(folios).sort(),
     apariciones: apar,

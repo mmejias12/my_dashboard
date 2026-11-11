@@ -279,6 +279,57 @@ const FILAS = [
   ok(/pallets en juego/.test(await pg.locator('#resumen-pend').innerText()),
      'el resumen dice los pallets en juego');
 
+  console.log('\n-- varias citas del MISMO cliente se cruzan una por una --');
+  // Caso real: UNILEVER con tres citas pendientes. Cada cita es una visita
+  // distinta al CD y tiene su propia transferencia: si el re-cruce las tratara
+  // como un bloque, bastaría con que una no apareciera para que las tres
+  // quedaran colgadas.
+  const tresCitas = ['42751929', '42751936', '42751943'].map(c => ({
+    cita: c, cliente: 'UNILEVER CHILE LIMITADA', rut: '92091000-9', pallets: 24,
+    estado: 'abierta', desde: '2026-11-11', dias: 0, urgente: false,
+    filas: [{ cita: c, rut: '92091000-9', cliente: 'UNILEVER CHILE LIMITADA', cd: '6009',
+              recepcion: '1', fecha: '2026-11-11', total: 24, malos: 0, canje: 24 }]
+  }));
+  const reTres = await pg.evaluate((citas) => {
+    // Redlink tiene la transferencia de DOS de las tres.
+    const ops = [
+      { nroPedido: 4150010, nroCita: '42751929', operacion: 'Transferencia',
+        etapaOperacion: 'Pendiente de Confirmacion', cantidadDespachada: 24,
+        cantidadConfirmada: 0, bodegaDestinoStr: 'ZWM01', observacion: '' },
+      { nroPedido: 4150011, nroCita: '42751943', operacion: 'Transferencia',
+        etapaOperacion: 'Pendiente Adjuntar Respaldo', cantidadDespachada: 24,
+        cantidadConfirmada: 0, bodegaDestinoStr: 'ZWM02', observacion: '' }
+    ];
+    const r = window.__prueba.recruzar(citas, ops);
+    return { cruzadas: r.cruzadas.map(c => c.cita + ':' + c.folio),
+             alaBandeja: r.porConfirmar.map(f => f.cita + ':' + f.folio + ':' + f.aConfirmar) };
+  }, tresCitas);
+  ok(reTres.cruzadas.length === 2, 'cruzan las dos que Redlink tiene: ' + JSON.stringify(reTres.cruzadas));
+  ok(reTres.cruzadas.join(',').indexOf('42751936') < 0, 'la tercera sigue pendiente, no se da por cruzada');
+  ok(reTres.alaBandeja.length === 2, 'y las dos entran a por confirmar con su cantidad: ' +
+     JSON.stringify(reTres.alaBandeja));
+
+  console.log('\n-- dos citas que caen en el MISMO folio no quedan colgadas --');
+  // Si dos citas apuntan al mismo folio, confirmar sería ambiguo y el cruce las
+  // manda a excepciones. Pero para el seguimiento SÍ encontraron transferencia:
+  // dejarlas abiertas diría que el cliente no la emitió, y sí la emitió.
+  const dosMismoFolio = await pg.evaluate(() => {
+    const citas = ['42751929', '42751936'].map(c => ({
+      cita: c, cliente: 'X', pallets: 10, estado: 'abierta', desde: '2026-11-11',
+      filas: [{ cita: c, rut: '1-9', cliente: 'X', cd: '6009', recepcion: '1',
+                fecha: '2026-11-11', total: 10, malos: 0, canje: 10 }]
+    }));
+    const ops = [{ nroPedido: 4150020, nroCita: '42751929 42751936', operacion: 'Transferencia',
+                   etapaOperacion: 'Pendiente de Confirmacion', cantidadDespachada: 20,
+                   cantidadConfirmada: 0, bodegaDestinoStr: 'ZWM01',
+                   observacion: 'citas 42751929 y 42751936' }];
+    const r = window.__prueba.recruzar(citas, ops);
+    return { cruzadas: r.cruzadas.map(c => c.cita), bandeja: r.porConfirmar.length };
+  });
+  ok(dosMismoFolio.cruzadas.length === 2,
+     'las dos se dan por cruzadas aunque no se puedan confirmar: ' + JSON.stringify(dosMismoFolio.cruzadas));
+  ok(dosMismoFolio.bandeja === 0, 'pero NO entran a confirmar: sería ambiguo');
+
   console.log('\n-- una confirmación que no quedó en el historial --');
   await sembrar();
   respuesta = () => ({ estado: 'confirmada', dice: 'confirmada 1 · Transferencia Confirmada',

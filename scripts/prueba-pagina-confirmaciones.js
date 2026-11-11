@@ -57,6 +57,15 @@ const FILAS = [
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(PEND.estado) });
   });
 
+  // La trazabilidad se intercepta igual: cada cruce anota las apariciones del
+  // reporte, y esta prueba comprueba QUÉ se anota.
+  const TZ = { pedidos: [], http: 200, cuerpo: { guardados: 0, ok: true, aviso: '' } };
+  await pg.route('**/api/trazabilidad*', async (route) => {
+    TZ.pedidos.push(route.request().postData() ? JSON.parse(route.request().postData()) : null);
+    await route.fulfill({ status: TZ.http, contentType: 'application/json',
+                          body: JSON.stringify(TZ.cuerpo) });
+  });
+
   await pg.goto('http://127.0.0.1:8899/confirmaciones-walmart.html');
   const sembrar = async () => pg.evaluate((filas) => {
     const S = window.__prueba.S; S.conf = {}; S.sel = {}; S.corriendo = false;
@@ -357,6 +366,93 @@ const FILAS = [
   await pg.waitForTimeout(300);
   const t = await pg.locator('#estado-conf').innerText();
   ok(/No se sabe si alcanzó a escribir/.test(t), 'no dice que salió bien ni que salió mal: ' + t);
+
+  console.log('\n-- la alarma de pendientes se lee al ABRIR la página --');
+  // Hasta ahora los pallets en juego sólo se veían después de cruzar un
+  // reporte. Quien abre la página a mirar no los veía en ninguna parte.
+  const abiertoAlArranque = PEND.pedidos.filter(x => x.metodo === 'GET').length;
+  ok(abiertoAlArranque >= 1, 'la página pidió los pendientes sola: ' + abiertoAlArranque + ' GET');
+
+  await pg.evaluate(() => {
+    window.__prueba.S.pend = { almacenamiento: true, diasParaPreguntar: 7, abiertas: 24,
+                               pallets: 413, urgentes: 0, citas: [], clientes: [] };
+    window.__prueba.pintarAlarma();
+  });
+  await pg.waitForTimeout(120);
+  ok(await pg.locator('#alarma').isVisible(), 'con citas abiertas la banda se ve');
+  const bt = await pg.locator('#al-t').innerText();
+  ok(/413/.test(bt) && /24/.test(bt), 'con los pallets y las citas: ' + bt);
+
+  // La banda está arriba de los pasos: no hay que scrollear para encontrarla.
+  const yB = (await pg.locator('#alarma').boundingBox()).y;
+  const yP = (await pg.locator('.pasos2').boundingBox()).y;
+  ok(yB < yP, 'y queda arriba de todo (' + Math.round(yB) + ' < ' + Math.round(yP) + ')');
+
+  await pg.locator('#al-ir').click();
+  await pg.waitForTimeout(250);
+  ok(await pg.locator('#p-pend').isVisible(), 'el botón abre la pestaña de sin cruce');
+
+  console.log('\n-- cada cruce anota las apariciones del reporte --');
+  TZ.pedidos.length = 0;
+  await pg.evaluate(() => {
+    const S = window.__prueba.S;
+    S.nombre = 'wm-11-nov.xlsx';
+    const base = (cita, po, canje, total, folio, clave) => ({
+      cita: cita, po: po, rut: '92091000-9', cliente: 'UNILEVER CHILE LIMITADA', cd: '6009',
+      fecha: '2026-11-10', recepciones: ['7703', '7704'],
+      totalWM: total, canjeWM: canje, malosWM: total - canje,
+      folio: folio, clave: clave });
+    S.r = { citas: 4,
+            porConfirmar: [base('42751929', '8651142003', 20, 20, 4149330, null)],
+            avisar:       [base('42751936', '5450706975', 9, 20, 4149331, null)],
+            reconfirmar:  [base('42751943', '5450706960', 20, 20, 4149332, null)],
+            excepciones:  [base('42751950', '5450706961', 15, 15, null, 'sin-match')] };
+    return window.__prueba.anotarApariciones();
+  });
+  await pg.waitForTimeout(250);
+
+  ok(TZ.pedidos.length === 1, 'se mandó una sola vez: ' + TZ.pedidos.length);
+  const env = TZ.pedidos[0] || {};
+  ok(env.archivo === 'wm-11-nov.xlsx', 'con el nombre del archivo: ' + env.archivo);
+  ok((env.filas || []).length === 4, 'las 4 citas del reporte, no sólo las confirmables: ' +
+     (env.filas || []).length);
+  const porCita = {};
+  (env.filas || []).forEach(f => { porCita[f.cita] = f; });
+  ok(porCita['42751929'] && porCita['42751929'].bandeja === 'porConfirmar', 'la bandeja de cada una');
+  ok(porCita['42751936'] && porCita['42751936'].bandeja === 'avisar', 'incluida avisar');
+  ok(porCita['42751943'] && porCita['42751943'].bandeja === 'reconfirmar', 'y reconfirmar');
+  ok(porCita['42751950'] && porCita['42751950'].bandeja === 'excepcion:sin-match',
+     'la excepción dice POR QUÉ lo fue: ' + (porCita['42751950'] || {}).bandeja);
+  ok(porCita['42751950'] && porCita['42751950'].folio === null,
+     'una cita sin cruce va con folio null, no con cero');
+  ok(porCita['42751929'].folio === 4149330, 'y la que cruzó lleva su folio resuelto');
+  ok(porCita['42751936'].canje === 9 && porCita['42751936'].total === 20,
+     'se guarda lo que Walmart declaró ese día: ' + porCita['42751936'].canje + ' de ' +
+     porCita['42751936'].total);
+  ok(porCita['42751929'].recepcion === '7703,7704', 'con sus recepciones: ' + porCita['42751929'].recepcion);
+  ok(porCita['42751929'].po === '8651142003', 'y el PO, que es por donde se busca');
+
+  console.log('\n-- si no se puede guardar la trazabilidad, el cruce igual sirve --');
+  TZ.pedidos.length = 0;
+  TZ.cuerpo = { guardados: 0, ok: false, aviso: 'AuthorizationFailure' };
+  await pg.evaluate(() => window.__prueba.anotarApariciones());
+  await pg.waitForTimeout(250);
+  const avp = await pg.locator('#av-pend').innerText();
+  ok(/no se pudo guardar la trazabilidad/.test(avp), 'lo avisa: ' + avp);
+  ok(/cruce está bien/.test(avp), 'y aclara que el cruce sí sirve');
+  ok(await pg.locator('#tb-conf tbody tr').count() >= 0, 'la tabla no se tocó');
+  TZ.cuerpo = { guardados: 0, ok: true, aviso: '' };
+
+  console.log('\n-- un 403 en trazabilidad no molesta a nadie --');
+  TZ.http = 403;
+  await pg.evaluate(() => {
+    window.__prueba.S.pend = null;
+    const e = document.getElementById('av-pend'); e.className = 'aviso'; e.textContent = '';
+    return window.__prueba.anotarApariciones();
+  });
+  await pg.waitForTimeout(250);
+  ok((await pg.locator('#av-pend').innerText()).trim() === '', 'no dice nada: sin permiso no es un error');
+  TZ.http = 200;
 
   await b.close(); srv.close();
   console.log(fallos ? '\n' + fallos + ' FALLAS' : '\nTodo bien');

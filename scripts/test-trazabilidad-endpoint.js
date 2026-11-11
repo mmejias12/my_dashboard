@@ -259,6 +259,16 @@ async function correr(S) {
 
   /* ---- el caso de logística: 9 y después 20 ----------------------------- */
 
+  pruebaAsync('T11h cuando no se encuentra, se dice QUÉ se miró', async function () {
+    // "No hay nada" a secas deja sin saber si el buscador anduvo. El universo
+    // de la búsqueda es lo que separa "no es tuyo" de "esto está roto".
+    FILAS = [ap(dia(2), '42751929'), ap(dia(3), '42751936')];
+    CONFS = [conf(dia(2), 4148680, '42751929', 20)];
+    const r = await pedir(S, { q: '4077940' }, 'GET');
+    igual(r.body.hallado, false);
+    igual(r.body.universo, { confirmaciones: 1, apariciones: 2 });
+  });
+
   pruebaAsync('T12 el salto de 9 a 20 queda en cambios', async function () {
     FILAS = [ap(dia(4), '42510877', { total: 9, canje: 9 }),
              ap(dia(1), '42510877', { total: 20, canje: 20 })];
@@ -453,6 +463,8 @@ const MUTACIONES = [
   ['Y28 un fallo al guardar no dice por qué',  /aviso: r\.ok \? '' : 'no se pudieron guardar las apariciones: ' \+ r\.motivo/, "aviso: ''"],
   ['Y29 sin almacenamiento se contesta como si no existiera el pedido', /if \(!planillas\.hayStorage\(\)\) \{[\s\S]*?\n    \}/, ''],
   ['Y30 el error interno se filtra al navegador', /return salir\(502, \{ error: 'no se pudo leer la trazabilidad; revisar el log de la función' \}\);/, "return salir(502, { error: String((e && e.message) || e) });"],
+  ['Y30b el universo de la búsqueda no viaja', /universo: \{ confirmaciones: \(confs \|\| \[\]\)\.length, apariciones: \(filas \|\| \[\]\)\.length \},/, ''],
+  ['Y30c el universo confunde planillas con confirmaciones', /universo: \{ confirmaciones: \(confs \|\| \[\]\)\.length, apariciones: \(filas \|\| \[\]\)\.length \}/, 'universo: { confirmaciones: (filas || []).length, apariciones: (confs || []).length }'],
   ['Y31 los meses no tienen tope',             /return Math\.min\(n, MESES_TOPE\);/, 'return n;'],
   ['Y32 un meses inválido no cae al default',  /if \(!Number\.isFinite\(n\) \|\| n < 1\) return MESES_DEF;/, ''],
   ['Y33 el OPTIONS exige rol',                 /if \(req\.method === 'OPTIONS'\) return salir\(204, ''\);/, ''],

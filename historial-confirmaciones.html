@@ -70,7 +70,7 @@ a{color:inherit}
 p{margin:8px 0 0;color:var(--text-2)}
 strong{color:var(--text);font-weight:600}
 
-button{background:var(--surface-3);border:1px solid var(--line);color:var(--text);border-radius:8px;
+button,select{background:var(--surface-3);border:1px solid var(--line);color:var(--text);border-radius:8px;
   padding:7px 13px;font-size:12px;font-family:inherit;cursor:pointer}
 button:hover:not(:disabled){background:#27303f;border-color:rgba(255,255,255,.18)}
 button:disabled{opacity:.45;cursor:default}
@@ -137,6 +137,53 @@ button.pri{background:var(--brand);border-color:var(--brand);color:#fff;font-wei
 
 /* tablas */
 .tabla-caja{margin-top:13px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+
+/* ── pestañas ─────────────────────────────────────────────────────────── */
+.pest{display:flex;gap:6px;margin-top:16px;flex-wrap:wrap}
+.pest button{border-radius:9px;padding:8px 14px;font-size:12.5px}
+.pest button[aria-selected="true"]{background:var(--surface);border-color:rgba(255,255,255,.22);
+  color:var(--text);font-weight:600;box-shadow:inset 0 -2px 0 var(--brand)}
+
+/* ── la alarma de pendientes ──────────────────────────────────────────── */
+/* Se pinta SIEMPRE que haya citas abiertas, se entre por donde se entre: la
+   bandeja de pendientes sólo se llena después de cruzar un reporte, así que
+   sin esta banda los pallets en juego no se ven hasta que alguien sube un
+   archivo. El naranja es el mismo de "recibió menos" porque es el mismo
+   tipo de cosa: algo que falta por resolver. */
+.alarma{display:none;margin-top:16px;border:1px solid rgba(217,89,38,.45);
+  background:rgba(217,89,38,.08);border-radius:var(--r);padding:14px 16px}
+.alarma.ver{display:block}
+.alarma.urge{border-color:rgba(208,59,59,.55);background:rgba(208,59,59,.1)}
+.alarma .t{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.alarma .t b{font-size:13.5px}
+.alarma .pico{width:8px;height:8px;border-radius:50%;background:var(--est-menos);flex:none}
+.alarma.urge .pico{background:var(--critical)}
+.alarma .cuerpo{font-size:12px;color:var(--text-2);margin-top:6px;line-height:1.55}
+.alarma .crece{flex:1}
+.alarma .nums{display:flex;gap:18px;margin-top:10px;flex-wrap:wrap}
+.alarma .nums div{font-size:11.5px;color:var(--muted)}
+.alarma .nums b{display:block;font-size:20px;font-weight:650;color:var(--text);
+  font-variant-numeric:tabular-nums}
+
+/* ── trazabilidad ─────────────────────────────────────────────────────── */
+.busca{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.busca input{background:var(--surface-3);border:1px solid var(--line);color:var(--text);
+  border-radius:8px;padding:9px 12px;font-size:13px;font-family:var(--mono);width:200px}
+.busca input:focus{outline:none;border-color:rgba(255,255,255,.3)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.chip{font-size:11px;font-family:var(--mono);border:1px solid var(--line);border-radius:999px;
+  padding:3px 10px;color:var(--text-2);background:var(--surface-3)}
+.salto{border:1px solid rgba(217,89,38,.45);background:rgba(217,89,38,.08);border-radius:10px;
+  padding:11px 13px;margin-top:10px;font-size:12px;line-height:1.55}
+.salto b{font-family:var(--mono)}
+.linea{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--line-2)}
+.linea:last-child{border-bottom:0}
+.linea .pt{width:9px;height:9px;border-radius:50%;margin-top:4px;flex:none;background:var(--muted)}
+.linea.hito .pt{background:var(--est-igual)}
+.linea.cambio .pt{background:var(--est-menos)}
+.linea .cu{flex:1;min-width:0}
+.linea .q{font-size:12.5px}
+.linea .d{font-size:11px;color:var(--muted);margin-top:2px;font-family:var(--mono)}
 table{width:100%;border-collapse:collapse;font-size:12px}
 th{position:sticky;top:0;background:var(--surface-2);text-align:left;font-weight:600;font-size:10px;
   letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
@@ -182,6 +229,24 @@ caption.vacio{caption-side:bottom;padding:22px;color:var(--muted);font-size:12px
 </div>
 
 <div class="wrap">
+
+  <div class="alarma" id="alarma" role="status">
+    <div class="t">
+      <span class="pico" aria-hidden="true"></span>
+      <b id="al-t">—</b>
+      <div class="crece"></div>
+      <a class="vinculo" href="confirmaciones-walmart.html#pend">Ver la lista →</a>
+    </div>
+    <div class="cuerpo" id="al-c"></div>
+    <div class="nums" id="al-n"></div>
+  </div>
+
+  <div class="pest" role="tablist">
+    <button id="p-hist"  role="tab" aria-selected="true"  aria-controls="v-hist">Historial</button>
+    <button id="p-traza" role="tab" aria-selected="false" aria-controls="v-traza">Trazabilidad</button>
+  </div>
+
+<div id="v-hist" role="tabpanel">
 
   <div class="card">
     <div class="chead"><span class="eyebrow">Periodo</span><h2>Qué mes estás mirando</h2></div>
@@ -230,6 +295,55 @@ caption.vacio{caption-side:bottom;padding:22px;color:var(--muted);font-size:12px
     <div class="chead"><span class="eyebrow">Detalle</span><h2 id="t-detalle">Citas</h2></div>
     <div class="tabla-caja"><table id="tb-det"></table></div>
   </div>
+
+</div><!-- /v-hist -->
+
+<div id="v-traza" role="tabpanel" hidden>
+
+  <div class="card">
+    <div class="chead"><span class="eyebrow">Buscar</span><h2>Un pedido, toda su historia</h2></div>
+    <p>Escribe un <strong>número de pedido</strong> (folio de Redlink), una <strong>cita</strong> de
+    Walmart o un <strong>PO</strong>. No hace falta cruzar nada: se busca en lo que ya quedó guardado.</p>
+    <div class="busca">
+      <input id="q" type="search" inputmode="numeric" autocomplete="off" placeholder="4149330"
+             aria-label="Número de pedido, cita o PO">
+      <button id="b-buscar" class="pri">Buscar</button>
+      <select id="meses" aria-label="Cuánto mirar hacia atrás">
+        <option value="6" selected>últimos 6 meses</option>
+        <option value="12">últimos 12 meses</option>
+        <option value="24">últimos 24 meses</option>
+      </select>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="aviso" id="av-tz"></div>
+  </div>
+
+  <div class="card" id="card-salto" style="display:none">
+    <div class="chead"><span class="eyebrow">Ojo</span><h2>Walmart cambió la cantidad</h2></div>
+    <p>La misma cita volvió a aparecer con otro número y ya se había confirmado por el número viejo.
+    <strong>Qué hacer:</strong> cruza el reporte de hoy en
+    <a class="vinculo" href="confirmaciones-walmart.html">la página de confirmar</a> — la cita va a
+    salir en la pestaña <strong>Reconfirmar</strong>, con la diferencia ya calculada.</p>
+    <div id="saltos"></div>
+  </div>
+
+  <div class="card" id="card-linea" style="display:none">
+    <div class="chead"><span class="eyebrow">Línea de tiempo</span><h2 id="t-linea">Qué pasó</h2></div>
+    <p>De lo más nuevo a lo más viejo, igual que la trazabilidad del M2LINK.</p>
+    <div id="linea"></div>
+  </div>
+
+  <div class="card" id="card-apar" style="display:none">
+    <div class="chead"><span class="eyebrow">Planillas</span><h2 id="t-apar">Cada vez que apareció en un reporte</h2></div>
+    <div class="tabla-caja"><table id="tb-apar"></table></div>
+  </div>
+
+  <div class="card" id="card-conf" style="display:none">
+    <div class="chead"><span class="eyebrow">Nuestras confirmaciones</span><h2 id="t-conf">Qué confirmamos</h2></div>
+    <div class="tabla-caja"><table id="tb-conf"></table></div>
+  </div>
+
+</div><!-- /v-traza -->
 
 </div>
 
@@ -640,6 +754,264 @@ function pintarTodo() {
   pintarDetalle();
 }
 
+
+/* ══ pestañas ══════════════════════════════════════════════════════════════ */
+
+function verPestana(cual) {
+  var h = cual === 'traza';
+  $('v-hist').hidden = h;
+  $('v-traza').hidden = !h;
+  $('p-hist').setAttribute('aria-selected', String(!h));
+  $('p-traza').setAttribute('aria-selected', String(h));
+  if (h) $('q').focus();
+  // El hash deja la pestaña compartible: un enlace a una cita abre la búsqueda.
+  if (location.hash.slice(1).split(':')[0] !== (h ? 'traza' : 'historial')) {
+    history.replaceState(null, '', '#' + (h ? 'traza' : 'historial'));
+  }
+}
+$('p-hist').addEventListener('click', function () { verPestana('hist'); });
+$('p-traza').addEventListener('click', function () { verPestana('traza'); });
+
+/* ══ la alarma de citas pendientes ═════════════════════════════════════════
+   Por qué va acá y no sólo en la página de confirmar: la bandeja de
+   pendientes se llena cuando alguien cruza un reporte. Si nadie cruza, los
+   pallets en juego no aparecen en ninguna parte. Esto se lee al abrir. */
+
+async function cargarAlarma() {
+  var caja = $('alarma');
+  var p;
+  try {
+    var r = await fetch('/api/pendientes-cruce', { headers: { Accept: 'application/json' }, cache: 'no-store' });
+    if (r.status === 403) return;                      // sin permiso: no se molesta
+    p = await r.json();
+  } catch (e) { return; }                              // la alarma nunca rompe la página
+
+  if (p && p.almacenamiento === false) {
+    caja.className = 'alarma ver urge';
+    $('al-t').textContent = 'Las citas sin cruce NO se están guardando';
+    $('al-c').textContent = 'El api no tiene almacenamiento configurado. Mientras siga así, una cita ' +
+      'que Walmart declara y que no tiene transferencia se pierde con el reporte del día.';
+    $('al-n').textContent = '';
+    return;
+  }
+  if (!p || !p.abiertas) { caja.className = 'alarma'; return; }
+
+  var urge = p.urgentes > 0;
+  caja.className = 'alarma ver' + (urge ? ' urge' : '');
+  $('al-t').textContent = num(p.pallets) + ' pallets esperando transferencia';
+  $('al-c').textContent = urge
+    ? num(p.urgentes) + ' de estas citas llevan más de ' + (p.diasParaPreguntar || 7) +
+      ' días sin aparecer en Redlink. Ya no es que falte el cruce: hay que preguntarle al cliente.'
+    : 'Walmart declaró estas recepciones y todavía no tienen transferencia en Redlink. ' +
+      'Puede ser que aparezcan mañana; se revisan solas en cada cruce.';
+  var n = $('al-n');
+  n.textContent = '';
+  [[p.abiertas, 'citas sin transferencia'], [p.pallets, 'pallets en juego'],
+   [p.urgentes, 'pasaron los ' + (p.diasParaPreguntar || 7) + ' días']].forEach(function (x) {
+    var d = document.createElement('div');
+    var b = document.createElement('b'); b.textContent = num(x[0]);
+    d.appendChild(b); d.appendChild(document.createTextNode(x[1]));
+    n.appendChild(d);
+  });
+}
+
+/* ══ trazabilidad ══════════════════════════════════════════════════════════ */
+
+var T = { r: null, buscando: false };
+
+function decirTz(texto, clase) {
+  var e = $('av-tz');
+  e.className = 'aviso' + (texto ? ' ver' : '') + (clase ? ' ' + clase : '');
+  e.textContent = texto || '';
+}
+
+function verCard(id, ver) { $(id).style.display = ver ? '' : 'none'; }
+
+async function buscar(q) {
+  var t = String(q == null ? $('q').value : q).trim();
+  if (!t) { decirTz('Escribe un número de pedido, una cita o un PO.', 'err'); return; }
+  if (T.buscando) return;
+  T.buscando = true;
+  $('b-buscar').disabled = true;
+  decirTz('Buscando ' + t + '…', '');
+  ['card-salto', 'card-linea', 'card-apar', 'card-conf'].forEach(function (i) { verCard(i, false); });
+  $('chips').textContent = '';
+  try {
+    var u = '/api/trazabilidad?q=' + encodeURIComponent(t) + '&meses=' + encodeURIComponent($('meses').value);
+    var res = await fetch(u, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+    var d = await res.json();
+    if (!res.ok) { decirTz(d && d.error ? d.error : 'La búsqueda falló (HTTP ' + res.status + ').', 'err'); return; }
+    T.r = d;
+    pintarTraza(d);
+    history.replaceState(null, '', '#traza:' + encodeURIComponent(t));
+  } catch (e) {
+    decirTz('No se pudo buscar (' + ((e && e.message) || e) + ').', 'err');
+  } finally {
+    T.buscando = false;
+    $('b-buscar').disabled = false;
+  }
+}
+
+$('b-buscar').addEventListener('click', function () { buscar(); });
+$('q').addEventListener('keydown', function (e) { if (e.key === 'Enter') buscar(); });
+
+function pintarTraza(d) {
+  if (d.almacenamiento === false) { decirTz(d.aviso || 'No hay historia guardada todavía.', 'err'); return; }
+
+  if (!d.hallado) {
+    decirTz('No hay nada guardado para ' + d.termino + ' en los últimos ' + d.meses + ' meses. ' +
+            'Las apariciones en planillas se guardan desde el 11-nov-2026: antes de esa fecha sólo ' +
+            'están las confirmaciones.', '');
+    return;
+  }
+  // Verde significa "no hay nada que hacer". Con un desajuste abierto abajo,
+  // un resumen verde arriba contradice a la tarjeta naranja y gana el verde,
+  // porque es lo primero que se lee.
+  var hayQueHacer = (d.desajustes || []).length || (d.pendientes || []).length;
+  decirTz(d.apariciones.length + ' aparición(es) en reportes · ' + d.confirmaciones.length +
+          ' confirmación(es) nuestras' + (d.pendientes.length ? ' · ' + d.pendientes.length + ' esperando transferencia' : '') +
+          ((d.desajustes || []).length ? ' · ' + d.desajustes.length + ' cita(s) con la cantidad cambiada' : ''),
+          hayQueHacer ? '' : 'ok');
+
+  var ch = $('chips');
+  d.citas.forEach(function (c) { ch.appendChild(chip('cita ' + c)); });
+  d.folios.forEach(function (f) { ch.appendChild(chip('pedido ' + f)); });
+
+  pintarSaltos(d);
+  pintarLinea(d);
+  pintarApariciones(d);
+  pintarConfirmaciones(d);
+}
+
+function chip(t) { var s = document.createElement('span'); s.className = 'chip'; s.textContent = t; return s; }
+
+// Lo primero que se ve: una cita que ya se confirmó y que Walmart ahora
+// declara distinta. Es el caso que trajo logística y es el único que obliga a
+// hacer algo.
+function pintarSaltos(d) {
+  var caja = $('saltos');
+  caja.textContent = '';
+  var hay = (d.desajustes || []).length;
+  verCard('card-salto', !!hay);
+  if (!hay) return;
+  d.desajustes.forEach(function (x) {
+    var div = document.createElement('div');
+    div.className = 'salto';
+    var b = document.createElement('b'); b.textContent = 'Cita ' + x.cita;
+    div.appendChild(b);
+    var txt = x.faltan
+      ? ' · se confirmaron ' + num(x.confirmado) + ' y Walmart ahora declara ' + num(x.declarado) +
+        ': faltan ' + num(x.faltan) + ' pallet(s) por confirmar.'
+      : ' · se confirmaron ' + num(x.confirmado) + ' y Walmart ahora declara ' + num(x.declarado) +
+        ': hay ' + num(x.sobran) + ' pallet(s) confirmados de más.';
+    div.appendChild(document.createTextNode(txt));
+    var d2 = document.createElement('div');
+    d2.style.cssText = 'font-size:11px;color:var(--muted);margin-top:4px';
+    d2.textContent = 'pedido ' + x.folio + ' · confirmado el ' + x.confirmadoEl +
+                     (x.confirmadoPor ? ' por ' + x.confirmadoPor : '') +
+                     ' · último reporte ' + x.ultimoReporte + ' (' + x.archivo + ')';
+    div.appendChild(d2);
+    caja.appendChild(div);
+  });
+}
+
+// Una sola lista, mezclando lo que dijo Walmart con lo que hicimos nosotros,
+// porque la pregunta es "qué pasó con este pedido" y no "qué dice cada tabla".
+function pintarLinea(d) {
+  var hitos = [];
+  (d.apariciones || []).forEach(function (f) {
+    hitos.push({ ts: f.ts, clase: '', q: 'Walmart declara ' + num(f.canje) + ' pallet(s)' +
+      (f.malos ? ' (' + num(f.malos) + ' rechazado(s) de ' + num(f.total) + ')' : '') +
+      ' · cita ' + f.cita,
+      d: f.dia + ' · ' + (f.archivo || 'reporte') + (f.folio ? ' · pedido ' + f.folio : ' · sin cruce ese día') });
+  });
+  (d.confirmaciones || []).forEach(function (r) {
+    var rl = r.redlink || {};
+    hitos.push({ ts: r.ts, clase: 'hito',
+      q: 'Confirmamos ' + num(r.cantidad) + ' pallet(s) · pedido ' + r.folio,
+      d: r.dia + ' · ' + (r.quien || 'sin usuario') + ' · ' + (r.via || 'pagina') +
+         (rl.firma ? ' · firma ' + rl.firma : '') +
+         (rl.etapaDespues ? ' · ' + rl.etapaDespues : '') });
+  });
+  (d.cambios || []).forEach(function (c) {
+    // El cambio se cuelga del final del día del reporte nuevo a propósito: no
+    // es un hecho con hora propia (lo deducimos comparando dos reportes), y
+    // así queda arriba de la aparición que lo provocó, que es el orden en que
+    // conviene leerlo — primero "ojo, cambió", después "esto decía".
+    hitos.push({ ts: c.a + 'T23:59:59', clase: 'cambio',
+      q: 'Cambió la cantidad: ' + num(c.canjeAntes) + ' → ' + num(c.canjeAhora) + ' · cita ' + c.cita,
+      d: 'entre el reporte del ' + c.de + ' y el del ' + c.a });
+  });
+  (d.pendientes || []).forEach(function (e) {
+    hitos.push({ ts: (e.desde || '') + 'T00:00:00', clase: 'cambio',
+      q: 'Esperando transferencia · cita ' + e.cita,
+      d: 'desde el ' + e.desde + ' · ' + num(e.dias) + ' día(s)' + (e.urgente ? ' · hay que preguntar' : '') });
+  });
+  hitos.sort(function (a, b) { return String(b.ts).localeCompare(String(a.ts)); });
+
+  var caja = $('linea');
+  caja.textContent = '';
+  verCard('card-linea', !!hitos.length);
+  $('t-linea').textContent = 'Qué pasó · ' + hitos.length + ' hito(s)';
+  hitos.forEach(function (h) {
+    var l = document.createElement('div');
+    l.className = 'linea' + (h.clase ? ' ' + h.clase : '');
+    var pt = document.createElement('span'); pt.className = 'pt';
+    var cu = document.createElement('div'); cu.className = 'cu';
+    var q = document.createElement('div'); q.className = 'q'; q.textContent = h.q;
+    var dd = document.createElement('div'); dd.className = 'd'; dd.textContent = h.d;
+    cu.appendChild(q); cu.appendChild(dd);
+    l.appendChild(pt); l.appendChild(cu);
+    caja.appendChild(l);
+  });
+}
+
+function pintarApariciones(d) {
+  var filas = d.apariciones || [];
+  verCard('card-apar', !!filas.length);
+  $('t-apar').textContent = 'Cada vez que apareció en un reporte · ' + filas.length;
+  if (!filas.length) return;
+  tabla($('tb-apar'),
+    [{ t: 'Día' }, { t: 'Archivo', libre: true }, { t: 'Cita', mono: true }, { t: 'PO', mono: true },
+     { t: 'CD', mono: true }, { t: 'Total', n: true }, { t: 'Rechazados', n: true },
+     { t: 'A confirmar', n: true }, { t: 'Pedido', mono: true }, { t: 'Bandeja' }],
+    filas,
+    function (f) { return [f.dia, f.archivo || '', f.cita, f.po || '', f.cd || '',
+                           num(f.total), num(f.malos), num(f.canje),
+                           f.folio || '—', f.bandeja || '—']; },
+    'sin apariciones');
+}
+
+function pintarConfirmaciones(d) {
+  var filas = d.confirmaciones || [];
+  verCard('card-conf', !!filas.length);
+  $('t-conf').textContent = 'Qué confirmamos · ' + filas.length;
+  if (!filas.length) return;
+  tabla($('tb-conf'),
+    [{ t: 'Día' }, { t: 'Pedido', mono: true }, { t: 'Cita', mono: true }, { t: 'Cliente', libre: true },
+     { t: 'Despachado', n: true }, { t: 'Confirmado', n: true }, { t: 'Estado' },
+     { t: 'Quién', libre: true }, { t: 'Firma' }],
+    filas,
+    function (r) {
+      var rl = r.redlink || {}, rp = r.reporte || {};
+      return [r.dia, r.folio, rp.cita || '', rl.cliente || rp.razonSocial || '',
+              rl.despachado === null ? '' : num(rl.despachado),
+              r.cantidad === null ? '' : num(r.cantidad),
+              etiqueta(r.clase), r.quien || '', rl.firma || ''];
+    },
+    'sin confirmaciones');
+}
+
+/* Un enlace del tipo #traza:4149330 abre la pestaña y busca solo. */
+function arranqueDesdeHash() {
+  var h = decodeURIComponent(location.hash.slice(1));
+  if (!/^traza/.test(h)) return false;
+  verPestana('traza');
+  var t = h.split(':')[1];
+  if (t) { $('q').value = t; buscar(t); }
+  return true;
+}
+
 /* ── CSV ──────────────────────────────────────────────────────────────── */
 function csv() {
   var cab = ['dia','cita','folio','po','rut','cliente','bodega','despachado','confirmado','diferencia','estado','quien'];
@@ -673,10 +1045,14 @@ $('b-hoy').addEventListener('click', function () { cargar(hoyIso().slice(0, 7));
 if (location.protocol === 'file:' || location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
   window.__prueba = { S: S, pintarTodo: pintarTodo, cargar: cargar, tramosDe: tramosDe,
                       nivelDe: nivelDe, pasoDe: pasoDe, agrupar: agrupar, csv: csv, mesVecino: mesVecino,
-                      ultimoDia: ultimoDia, diaSemanaLunes: diaSemanaLunes };
+                      ultimoDia: ultimoDia, diaSemanaLunes: diaSemanaLunes,
+                      T: T, buscar: buscar, pintarTraza: pintarTraza, verPestana: verPestana,
+                      cargarAlarma: cargarAlarma };
 }
 
 cargar(hoyIso().slice(0, 7));
+cargarAlarma();
+arranqueDesdeHash();
 })();
 </script>
 </body>

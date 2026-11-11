@@ -95,6 +95,8 @@ function servidor(opciones) {
                                falloCuerpo: o.falloPreparado || null });
     }
     if (ruta === '/api/FormHeader' && (op || {}).method === 'PATCH') {
+      // Un corte EN la escritura: Redlink puede haberla procesado igual.
+      if (o.cortaPatch) return Promise.reject(o.cortaPatch);
       return Promise.resolve({ status: o.statusPatch || 200, texto: '{}' });
     }
     if (ruta.indexOf('/api/FormHeader/historico/') === 0) {
@@ -103,6 +105,8 @@ function servidor(opciones) {
     if (ruta.indexOf('/api/FormHeader/') === 0) {
       if (o.fallaDocumento) return Promise.resolve({ status: 500, texto: 'boom' });
       leidas++;
+      // Un corte en la RELECTURA: la escritura ya salió y no sabemos cómo quedó.
+      if (o.cortaRelectura && leidas > 1) return Promise.reject(o.cortaRelectura);
       const doc = (leidas === 1) ? (o.antes !== undefined ? o.antes : DOC) : despues;
       return Promise.resolve({ status: 200, texto: JSON.stringify(doc) });
     }
@@ -110,6 +114,10 @@ function servidor(opciones) {
   };
   return { pedir: pedir, visto: visto };
 }
+
+// Una marca que no aparece en ningún mensaje nuestro: si sale en pantalla, se
+// filtró el detalle interno.
+const SECRETO = 'MARCA-QUE-NO-DEBE-SALIR-7731';
 
 async function correr(S, hacerF) {
   const F = hacerF();
@@ -482,17 +490,85 @@ async function correr(S, hacerF) {
   pruebaAsync('F08 si algo revienta, el navegador NO recibe el detalle', async () => {
     // La excepción puede traer adentro la respuesta de Redlink, y ahí va
     // cualquier cosa. Lo que sale al navegador es lo que decidimos nosotros.
+    //
+    // Antes esto salía como 502 "revisar el log de la función", que no le
+    // servía a nadie: ni decía qué pasó ni si la transferencia se tocó. Caer
+    // leyendo el documento es ANTES del PATCH, así que ahora es un detener
+    // ordenado que dice las dos cosas.
     const c = ctx();
     await conEntorno(async () => {
       const Ffalla = hacerF({ fallaDocumento: true });
       await Ffalla(c, { method: 'POST', headers: { 'x-ms-client-principal': principal(['admin']) },
                         body: { folio: 4149330, cantidad: 1 } });
     });
-    igual(c.res.status, 502);
+    igual(c.res.status, 409, 'un corte de Redlink no es un bug nuestro');
     const texto = JSON.stringify(c.res.body);
     falso(/No se pudo leer el documento/.test(texto), 'se filtró el error interno: ' + texto);
+    cierto(/no se escribió nada/.test(texto), 'dice que la transferencia quedó intacta: ' + texto);
+    cierto(/reintentar/.test(texto), 'y que se puede reintentar: ' + texto);
+    igual(c.res.body.escribio, 'no', 'y lo deja en un campo, no sólo en la frase');
+  });
+  pruebaAsync('E40 si se corta EN el PATCH, no se dice que no escribió', async () => {
+    // Lo peor que puede hacer esta herramienta es invitar a reintentar algo que
+    // quizá ya se escribió: confirmar dos veces mueve inventario dos veces en
+    // SAP. Cuando el corte es en la escritura, la respuesta tiene que admitir
+    // que no se sabe.
+    const e = new Error('The operation was aborted due to timeout'); e.name = 'TimeoutError';
+    const s = servidor({ cortaPatch: e });
+    const r = await conEntorno(() => S.confirmarUna(4149330, 1, { pedir: s.pedir }));
+    igual(r.estado, 'detener');
+    igual(r.escribio, 'no-se-sabe', 'el campo que lo dice sin leer la frase');
+    cierto(/NO se sabe si alcanzó a escribir/.test(r.dice), r.dice);
+    cierto(/4149330/.test(r.dice), 'dice qué folio hay que ir a mirar: ' + r.dice);
+    cierto(/no respondió dentro del plazo/.test(r.dice), 'y de qué tipo fue la caída: ' + r.dice);
+    falso(/se puede reintentar/.test(r.dice), 'NUNCA invita a reintentar acá: ' + r.dice);
+  });
+
+  pruebaAsync('E41 si se corta en la RELECTURA, tampoco: la escritura ya salió', async () => {
+    const s = servidor({ cortaRelectura: new Error('No se pudo leer el documento 692187 (HTTP 502)') });
+    const r = await conEntorno(() => S.confirmarUna(4149330, 1, { pedir: s.pedir }));
+    igual([r.estado, r.escribio], ['detener', 'no-se-sabe']);
+    cierto(/HTTP 502/.test(r.dice), 'resume el tipo de caída: ' + r.dice);
+  });
+
+  pruebaAsync('E42 si se cae ANTES del PATCH, sí se puede reintentar', async () => {
+    const s = servidor({ fallaDocumento: true });
+    const r = await conEntorno(() => S.confirmarUna(4149330, 1, { pedir: s.pedir }));
+    igual([r.estado, r.escribio], ['detener', 'no']);
+    cierto(/no se escribió nada/.test(r.dice), r.dice);
+    cierto(/se puede reintentar/.test(r.dice), r.dice);
+  });
+
+  pruebaAsync('E43 el detalle crudo de Redlink no sale nunca, de ningún lado', async () => {
+    for (const op of [{ fallaDocumento: true }, { cortaPatch: new Error(SECRETO) },
+                      { cortaRelectura: new Error(SECRETO) }]) {
+      const s = servidor(op);
+      const r = await conEntorno(() => S.confirmarUna(4149330, 1, { pedir: s.pedir }));
+      falso(JSON.stringify(r).indexOf(SECRETO) >= 0, 'se filtró con ' + Object.keys(op)[0]);
+    }
+  });
+
+  pruebaAsync('E44 una caída sin forma conocida igual se nombra, no queda muda', async () => {
+    const s = servidor({ cortaPatch: new Error('socket hang up') });
+    const r = await conEntorno(() => S.confirmarUna(4149330, 1, { pedir: s.pedir }));
+    cierto(/no se pudo hablar con Redlink/.test(r.dice), r.dice);
+  });
+
+  pruebaAsync('F08b un bug NUESTRO sigue saliendo como 502 y sin detalle', async () => {
+    // Único camino que queda para el catch de la función: que confirmarUna se
+    // rompa sola. Ahí sí es culpa nuestra y va al log, no a la pantalla.
+    const c = ctx();
+    await conEntorno(async () => {
+      const Fbug = hacerF({ revientaConfirmar: true });
+      await Fbug(c, { method: 'POST', headers: { 'x-ms-client-principal': principal(['admin']) },
+                      body: { folio: 4149330, cantidad: 1 } });
+    });
+    igual(c.res.status, 502);
+    const texto = JSON.stringify(c.res.body);
+    falso(texto.indexOf(SECRETO) >= 0, 'se filtró el detalle interno: ' + texto);
     cierto(/revisar el log/.test(texto), texto);
   });
+
   pruebaAsync('F07 queda registrado QUIÉN lo pidió: en Redlink dice M3LinkSystem', async () => {
     // Sin esto, "lo confirmó el m3link" es todo lo que se podría averiguar.
     const c = ctx();
@@ -512,6 +588,19 @@ async function correr(S, hacerF) {
 }
 
 const MUTACIONES = [
+  // ── de qué lado del PATCH se murió ──────────────────────────────────────
+  ['X40 la marca de escritura se pone DESPUÉS del PATCH',
+      /  tocamosLaEscritura = true;\n  const res = await p\('\/api\/FormHeader', \{\n    method: 'PATCH',\n    headers: \{ 'Content-Type': 'application\/json' \},\n    body: prep\.texto {22}\/\/ los MISMOS bytes, sin reserializar\n  \}\);/,
+      "  const res = await p('/api/FormHeader', {\n    method: 'PATCH',\n    headers: { 'Content-Type': 'application/json' },\n    body: prep.texto\n  });\n  tocamosLaEscritura = true;"],
+  ['X41 la marca de escritura nunca se pone',          /  tocamosLaEscritura = true;\n  const res = await p/, '  const res = await p'],
+  ['X42 siempre se dice que no se escribió',           /if \(!tocamosLaEscritura\) \{/, 'if (true) {'],
+  ['X43 siempre se dice que no se sabe',               /if \(!tocamosLaEscritura\) \{/, 'if (false) {'],
+  ['X44 el camino seguro igual invita a dudar',        /'no se escribió nada: ' \+ porque \+ '\. La transferencia quedó como ' \+\n        'estaba y se puede reintentar\.'/, "'no se escribió nada'"],
+  ['X45 el camino dudoso no nombra el folio a revisar', /'a escribir en Redlink: revisa el folio ' \+ folio \+ ' antes de reintentar, porque confirmar '/, "'a escribir en Redlink: revisa el folio antes de reintentar, porque confirmar '"],
+  ['X46 un timeout se reporta como caída genérica',    /if \(\/TimeoutError\|AbortError\|aborted\|timed\?\[ -\]\?out\/i\.test\(n \+ ' ' \+ m\)\) \{\n    return 'Redlink no respondió dentro del plazo';\n  \}/, ''],
+  ['X47 un HTTP conocido se reporta como caída genérica', /if \(http\) return 'Redlink respondió HTTP ' \+ http\[1\];/, ''],
+  ['X48 el resumen deja pasar el detalle crudo',       /return 'no se pudo hablar con Redlink';/, 'return m;'],
+  ['X49 el campo escribio no viaja',                   /\{ escribio: 'no-se-sabe', id: id \}/, '{ id: id }'],
   ['X01 el cuerpo del PATCH se reserializa',            /body: prep\.texto {22}\/\/ los MISMOS bytes, sin reserializar/, 'body: JSON.stringify(JSON.parse(prep.texto))'],
   ['X02 no se relee el documento después de escribir',  /const despues = await leer\(id\);/, 'const despues = JSON.parse(prep.texto);'],
   ['X03 no se verifica la etapa final',                 /if \(!\/confirmada\/i\.test\(etapa\)\) problemas\.push/, 'if (false) problemas.push'],
@@ -588,6 +677,14 @@ function compilarFuncion(fuente, escrituraMutada, opcionesServidor) {
   m.require = function (pedido) {
     if (/confirmar-escritura\.js$/.test(pedido)) {
       const s = servidor(opcionesServidor);
+      // Para alcanzar el catch de último recurso de la función HTTP: ese camino
+      // ya no lo pisa una caída de Redlink (confirmarUna la resuelve ordenada),
+      // sólo un bug nuestro. Igual tiene que no filtrar nada.
+      if (opcionesServidor && opcionesServidor.revientaConfirmar) {
+        return Object.assign({}, escrituraMutada, {
+          confirmarUna: async () => { throw new Error('bug nuestro: ' + SECRETO); }
+        });
+      }
       return Object.assign({}, escrituraMutada, {
         confirmarUna: (folio, cantidad, o) => escrituraMutada.confirmarUna(folio, cantidad,
           Object.assign({}, o, { pedir: s.pedir }))

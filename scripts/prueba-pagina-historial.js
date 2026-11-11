@@ -250,14 +250,21 @@ const registro = require(path.join(RAIZ, 'api', 'shared', 'confirmaciones-regist
   ok(await pg.locator('#p-traza').getAttribute('aria-selected') === 'true', 'queda marcada');
 
   console.log('\n-- buscar un pedido que no existe --');
-  TRAZA = { termino: '9999999', almacenamiento: true, meses: 6, citas: [], folios: [],
+  TRAZA = { termino: '9999999', almacenamiento: true, meses: 6, desde: '2026-06-01',
+            universo: { confirmaciones: 104, apariciones: 0 },
+            citas: [], folios: [],
             apariciones: [], cambios: [], confirmaciones: [], pendientes: [], desajustes: [],
             hallado: false };
   await pg.locator('#q').fill('9999999');
   await pg.locator('#b-buscar').click();
   await pg.waitForTimeout(200);
   ok(consultas.length === 1 && consultas[0].q === '9999999', 'consulta con el término: ' + JSON.stringify(consultas[0]));
-  ok(/No hay nada guardado/.test(await pg.locator('#av-tz').innerText()), 'lo dice sin inventar');
+  const sinNada = await pg.locator('#av-tz').innerText();
+  ok(/No encontramos 9999999/.test(sinNada), 'lo dice sin inventar');
+  // Lo importante: que se vea que el buscador SÍ anduvo. Un "no hay nada" a
+  // secas deja pensando que la herramienta está rota.
+  ok(/104 confirmaci/.test(sinNada), 'y dice cuántas confirmaciones miró: ' + sinNada);
+  ok(/nunca confirmamos por acá/.test(sinNada), 'y por qué puede no estar');
   ok(await pg.locator('#card-apar').isHidden(), 'y no deja tablas vacías colgando');
 
   console.log('\n-- el caso de logística: 9 confirmados, Walmart ahora dice 20 --');

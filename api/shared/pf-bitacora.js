@@ -37,10 +37,17 @@ const CONN = process.env.PF_STORAGE_CONN
 const CONTAINER = process.env.PF_CONTAINER || 'redtec-confirmaciones';
 const PREFIJO = 'pf/relocalizaciones/';
 
-// Hasta dónde protege la idempotencia hacia atrás. PF hizo ~700 relocalizaciones
-// en 20 meses (medido sobre el reporte de uso que mandó Marcelo), o sea unas 35
-// al mes: leer seis meses son un par de cientos de líneas.
+// MEDIDO el 12-nov-2026 en producción: PF hace ~97 relocalizaciones AL DÍA
+// (8.663 en 90 días por el usuario API), no las ~35 al mes que sugería el
+// export viejo de 2024. Por eso la consulta de idempotencia NO barre el log:
+// leer seis meses serían ~17.500 registros en cada llamada.
+//
+// El estado vigente de cada llave vive en su propio blob y se lee directo; el
+// JSONL mensual queda como historia para auditar y para reconstruir si hiciera
+// falta. Son dos escrituras por evento, y la que importa para no duplicar es la
+// del estado.
 const MESES_ATRAS = Math.max(1, parseInt(process.env.PF_MESES || '6', 10) || 6);
+const PREFIJO_ESTADO = PREFIJO + 'estado/';
 
 const ESTADOS = ['intentando', 'creado', 'rechazado', 'en-duda'];
 // Los dos que significan "hubo una escritura que no sabemos cómo terminó".
@@ -48,6 +55,13 @@ const ESTADOS_EN_VILO = ['intentando', 'en-duda'];
 
 function contenedor() { return BlobServiceClient.fromConnectionString(CONN).getContainerClient(CONTAINER); }
 function blobMes(mes) { return PREFIJO + mes + '.jsonl'; }
+// La llave lleva '|', que en una ruta de blob es incómodo. Los componentes son
+// enteros, así que cualquier separador seguro sirve mientras la conversión no
+// junte dos llaves distintas en el mismo nombre.
+function nombreEstado(llave) {
+  return String(llave == null ? '' : llave).replace(/[^0-9A-Za-z]+/g, '_');
+}
+function blobEstado(llave) { return PREFIJO_ESTADO + nombreEstado(llave) + '.json'; }
 function hayStorage() { return !!CONN; }
 
 async function streamToString(readable) {
@@ -101,17 +115,35 @@ async function registrar(evento) {
   const ev = armarEvento(evento);
   if (!ev.llave) return { ok: false, motivo: 'el evento no trae llave' };
   if (!CONN) return { ok: false, motivo: 'no hay almacenamiento configurado' };
+
+  const c = contenedor();
+  // EL ESTADO VA PRIMERO, y su fallo es un fallo del registro entero. Es lo
+  // único que impide que la próxima llamada vuelva a escribir en Redlink: si
+  // no quedó anotado que estamos intentando, quien llame después no tiene cómo
+  // saberlo y duplicaría el documento.
   try {
-    const c = contenedor();
     await c.createIfNotExists();
+    const bb = c.getBlockBlobClient(blobEstado(ev.llave));
+    const cuerpo = JSON.stringify(ev);
+    await bb.upload(cuerpo, Buffer.byteLength(cuerpo),
+                    { blobHTTPHeaders: { blobContentType: 'application/json' } });
+  } catch (e) {
+    return { ok: false, motivo: (e && e.message) ? e.message : String(e) };
+  }
+
+  // La historia va después y su fallo NO tumba el registro: el estado ya quedó
+  // escrito y la seguridad está cubierta. Se avisa para que no pase inadvertido.
+  let historia = '';
+  try {
     const ab = c.getAppendBlobClient(blobMes(String(ev.ts).slice(0, 7)));
     await ab.createIfNotExists();
     const linea = JSON.stringify(ev) + '\n';
     await ab.appendBlock(linea, Buffer.byteLength(linea));
-    return { ok: true, motivo: '', evento: ev };
   } catch (e) {
-    return { ok: false, motivo: (e && e.message) ? e.message : String(e) };
+    historia = 'el estado quedó guardado pero no se pudo anotar en la historia: ' +
+               ((e && e.message) ? e.message : String(e));
   }
+  return { ok: true, motivo: '', historia: historia, evento: ev };
 }
 
 async function leerMes(mes) {
@@ -154,12 +186,29 @@ function estadoVigente(eventos) {
   return out;
 }
 
-async function leerEstado(llave, hoy, leer) {
+// Una sola lectura, directa. No depende del volumen del log.
+async function leerEstado(llave) {
+  if (!CONN || !llave) return null;
+  try {
+    const dl = await contenedor().getBlobClient(blobEstado(llave)).download();
+    const txt = await streamToString(dl.readableStreamBody);
+    const e = JSON.parse(txt);
+    return (e && e.llave) ? e : null;
+  } catch (e) {
+    if (esNoExiste(e)) return null;
+    // Un error que NO es "todavía no existe" se propaga a propósito: tratarlo
+    // como "no hay registro" sería dar vía libre a escribir de nuevo.
+    throw e;
+  }
+}
+
+// Reconstruye el estado desde la historia. Es el camino de rescate si los blobs
+// de estado se perdieran, no el de todos los días.
+async function reconstruir(hoy, leer) {
   const traer = leer || leerMes;
   let ev = [];
   for (const m of mesesRecientes(hoy, MESES_ATRAS)) ev = ev.concat(await traer(m));
-  const vig = estadoVigente(ev);
-  return vig[llave] || null;
+  return estadoVigente(ev);
 }
 
 // Para la vista de soporte: qué quedó en el aire y hay que mirar a mano.
@@ -170,6 +219,7 @@ function enVilo(vigentes) {
     .sort(function (a, b) { return String(b.ts || '').localeCompare(String(a.ts || '')); });
 }
 
-module.exports = { registrar, leerMes, leerEstado, estadoVigente, enVilo, armarEvento,
-                   mesesRecientes, hayStorage, blobMes, esNoExiste, texto, entero,
-                   ESTADOS, ESTADOS_EN_VILO, MESES_ATRAS, CONTAINER, PREFIJO };
+module.exports = { registrar, leerMes, leerEstado, reconstruir, estadoVigente, enVilo,
+                   armarEvento, mesesRecientes, hayStorage, blobMes, blobEstado, nombreEstado,
+                   esNoExiste, texto, entero,
+                   ESTADOS, ESTADOS_EN_VILO, MESES_ATRAS, CONTAINER, PREFIJO, PREFIJO_ESTADO };

@@ -46,11 +46,38 @@ async function obtenerDia(fecha, opts) {
   }
   // NO cachear un día 100% fallido: evita envenenar el caché y evita pisar dato
   // bueno con null si RDTOut falla en un run posterior.
+  //
+  // opts.noEmpeorar (lo usa la REPARACIÓN): además de lo anterior, nunca pisar
+  // un universo que YA tiene detalle de flujos con uno que viene sin él.
+  // MEDIDO el 12-nov-2026: 46 días de ago-nov quedaron congelados con los saldos
+  // pero los flujos en CERO — el proveedor contestó vacío y se guardó como
+  // bueno, porque acá alcanzaba con que el universo existiera. Reparar esos días
+  // vuelve a pasar por este mismo camino, así que sin este guard la reparación
+  // puede romper un día sano exactamente igual que se rompieron aquéllos.
+  if (opts.noEmpeorar) {
+    const previo = await leerBlob(cont, nombre);
+    if (previo) {
+      let conservados = [];
+      for (const u of UNIVERSOS) {
+        if (tieneFlujos(previo[u], u) && !tieneFlujos(dia[u], u)) {
+          dia[u] = previo[u];
+          conservados.push(u);
+        }
+      }
+      if (conservados.length) dia._conservado = conservados;
+    }
+  }
   if (dia.clientes || dia.retail) {
     await escribirBlob(cont, nombre, dia);
     return Object.assign({}, dia, { _origen: 'vivo' });
   }
   return Object.assign({}, dia, { _origen: 'error' });
+}
+
+/** ¿El universo trae detalle de movimiento, o vino con todo en cero? */
+function tieneFlujos(u, universo) {
+  if (!u) return false;
+  return (FLUJOS[universo] || []).some(function (c) { return (Number(u[c]) || 0) !== 0; });
 }
 
 // Arma un rango SIN sumar saldos: saldoInicial del primer día con dato,
@@ -102,4 +129,4 @@ function fechasEntre(desde, hasta) {
 }
 function p2(n) { return n < 10 ? '0' + n : '' + n; }
 
-module.exports = { obtenerDia, existeDia, diaValido, leerRango, fechasEntre, CONTENEDOR, UNIVERSOS };
+module.exports = { obtenerDia, existeDia, diaValido, leerRango, fechasEntre, tieneFlujos, CONTENEDOR, UNIVERSOS };

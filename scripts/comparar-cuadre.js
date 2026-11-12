@@ -61,6 +61,8 @@
 // ============================================================================
 'use strict';
 
+const fs   = require('fs');
+const path = require('path');
 const { FLUJOS } = require('../api/shared/stock-fetch');
 
 /* ── Los signos del cuadre ─────────────────────────────────────────────────
@@ -140,24 +142,83 @@ function comparar(provee, nuestro, universo) {
   });
 }
 
+/* ── Diferencias MEDIDAS y aceptadas ────────────────────────────────────────
+   Una diferencia que ya se investigo y se decidio conservar no puede quedar
+   para siempre en el renglon de pendientes: ahi se vuelve ruido y tapa a la
+   siguiente de verdad. Pero tampoco puede desaparecer, porque entonces nadie
+   sabe que esta ahi. Se restan del conteo y se siguen mostrando con su motivo.
+
+   DOS REGLAS, las mismas de dias-sin-reconstruir.json en el rollup del cold:
+   · un JSON roto FALLA, no se ignora. Una lista de excepciones que se vacia
+     sola es peor que no tenerla.
+   · la aceptacion es EXACTA (universo + rango + campo + valor). Si la
+     diferencia cambia de valor, ya no es la que se acepto: vuelve a salir
+     como desconocida. Asi una excepcion no puede esconder un problema nuevo. */
+const ARCHIVO_ACEPTADAS = path.join(__dirname, 'diferencias-cuadre-aceptadas.json');
+
+function cargarAceptadas(ignorar) {
+  if (ignorar) return [];
+  if (!fs.existsSync(ARCHIVO_ACEPTADAS)) return [];
+  let crudo;
+  try { crudo = JSON.parse(fs.readFileSync(ARCHIVO_ACEPTADAS, 'utf8')); }
+  catch (e) {
+    console.error('El registro de diferencias aceptadas no se puede leer: ' + ARCHIVO_ACEPTADAS);
+    console.error('  ' + e.message);
+    console.error('  Se para a proposito: una lista de excepciones rota que se ignora');
+    console.error('  haria pasar por aceptadas diferencias que nadie miro.');
+    process.exit(1);
+  }
+  const lista = (crudo && crudo.diferencias) || [];
+  lista.forEach(function (d, i) {
+    const falta = ['universo', 'rango', 'campo', 'motivo'].filter(k => !d[k]);
+    if (falta.length || typeof d.dif !== 'number') {
+      console.error('Entrada ' + i + ' del registro incompleta (falta ' +
+                    (falta.join(', ') || 'dif numerico') + '). Se para: una excepcion');
+      console.error('sin motivo escrito es una alfombra, no una decision.');
+      process.exit(1);
+    }
+  });
+  return lista;
+}
+
+/** ¿Esta fila distinta esta aceptada, con ESTE valor exacto? */
+function aceptada(lista, universo, nombreRango, fila) {
+  return lista.find(d => d.universo === universo && d.rango === nombreRango &&
+                         d.campo === fila.campo && d.dif === fila.dif) || null;
+}
+
 /* El veredicto de un rango, en un solo numero para no leer tablas al vuelo.
      0 calza        · todos los campos comparables son identicos
      1 solo totales · difieren totalEntradas/totalSalida, que leerRango no suma
      2 huecos       · al blob le faltan dias del rango: la diferencia se explica
      3 difiere      · hay conceptos distintos con el rango completo
      4 sin dato     · un lado no contesto                                     */
-function veredicto(filas, faltantes, hayProveedor) {
+function veredicto(filas, faltantes, hayProveedor, aceptadas, universo, nombreRango) {
   if (!hayProveedor) return { codigo: 4, texto: 'sin dato del proveedor' };
   const comparables = filas.filter(f => f.dif !== null);
   if (!comparables.length) return { codigo: 4, texto: 'nada comparable' };
-  const distintos = comparables.filter(f => f.dif !== 0);
-  if (!distintos.length) return { codigo: 0, texto: 'calza' };
+  let distintos = comparables.filter(f => f.dif !== 0);
+  // Las ya medidas y aceptadas salen del conteo, pero quedan anotadas para
+  // mostrarlas con su motivo: restarlas no es lo mismo que esconderlas.
+  const perdonadas = [];
+  if (aceptadas && aceptadas.length) {
+    distintos = distintos.filter(function (f) {
+      const a = aceptada(aceptadas, universo, nombreRango, f);
+      if (a) { perdonadas.push({ fila: f, motivo: a.motivo }); return false; }
+      return true;
+    });
+  }
+  if (!distintos.length) {
+    return perdonadas.length
+      ? { codigo: 0, texto: 'calza (' + perdonadas.length + ' diferencia(s) medida(s) y aceptada(s))', perdonadas: perdonadas }
+      : { codigo: 0, texto: 'calza' };
+  }
   if (faltantes && faltantes.length) {
     return { codigo: 2, texto: 'al blob le faltan ' + faltantes.length + ' dia(s) del rango' };
   }
   const soloTotales = distintos.every(f => f.campo === 'totalEntradas' || f.campo === 'totalSalida');
   if (soloTotales) return { codigo: 1, texto: 'solo difieren los totales (leerRango no los suma)' };
-  return { codigo: 3, texto: distintos.length + ' campo(s) distinto(s)' };
+  return { codigo: 3, texto: distintos.length + ' campo(s) distinto(s)', perdonadas: perdonadas };
 }
 
 /* La bateria por defecto. Rangos elegidos para que cada uno pueda fallar por
@@ -399,6 +460,9 @@ function pintarRango(r) {
     l.push('   dias que el blob NO tiene: ' + r.faltantes.length +
            ' (' + r.faltantes.slice(0, 6).join(', ') + (r.faltantes.length > 6 ? ', ...' : '') + ')');
   }
+  (r.veredicto.perdonadas || []).forEach(function (p) {
+    l.push('   ACEPTADA: ' + p.fila.campo + ' dif ' + p.fila.dif + ' — ' + p.motivo);
+  });
   l.push('   VEREDICTO: ' + r.veredicto.texto);
   return l.join('\n');
 }
@@ -501,6 +565,12 @@ function pintarHuecos(h) {
 async function main() {
   const args = process.argv.slice(2);
   const soloNuestro = args.includes('--solo-nuestro');
+  // Va ACA y no mas abajo: el camino --desde-captura corre antes que el resto
+  // de main() y tambien descuenta las aceptadas. Declararlo despues lo dejaba
+  // en la zona muerta del const y reventaba solo en ese camino.
+  // --ignorar-aceptadas muestra el crudo, sin descontar nada.
+  const ignorarAceptadas = args.includes('--ignorar-aceptadas');
+  const ACEPTADAS = cargarAceptadas(ignorarAceptadas);
   const unoSolo = (args.find(a => a.startsWith('--universo=')) || '').split('=')[1];
   const capturarEn = (args.find(a => a.startsWith('--capturar=')) || '').split('=')[1];
   const desdeCaptura = (args.find(a => a.startsWith('--desde-captura=')) || '').split('=')[1];
@@ -509,22 +579,33 @@ async function main() {
   /* Volver a comparar desde una captura no toca ni el almacen ni al proveedor:
      es para despues de la baja, cuando ya no hay con que medir de nuevo. */
   if (desdeCaptura) {
-    const fs = require('fs');
     const cap = JSON.parse(fs.readFileSync(desdeCaptura, 'utf8'));
     console.log('COMPARAR CUADRE · desde la captura ' + desdeCaptura);
     console.log('  capturada el ' + cap.generado + ' · ' + cap.rangos.length + ' rango(s)');
     let malos = 0;
+    const aceptadasVistas = [];
     cap.rangos.forEach(function (r) {
       const fila = Object.assign({}, r);
       fila.filas = comparar(r.proveedor, r.nuestro, r.universo);
       fila.identidadProveedor = r.proveedor ? identidad(r.universo, r.proveedor) : null;
       fila.identidadNuestro = r.nuestro ? identidad(r.universo, r.nuestro) : null;
-      fila.veredicto = veredicto(fila.filas, r.faltantes, !!r.proveedor);
+      fila.veredicto = veredicto(fila.filas, r.faltantes, !!r.proveedor, ACEPTADAS, r.universo, r.nombre);
       if (fila.veredicto.codigo === 3) malos++;
+      (fila.veredicto.perdonadas || []).forEach(p =>
+        aceptadasVistas.push(r.universo + ' · ' + r.nombre + ' · ' + p.fila.campo + ' dif ' + p.fila.dif));
       console.log(pintarRango(fila));
     });
     console.log('\n' + '='.repeat(70));
-    console.log('Rangos en la captura: ' + cap.rangos.length + '  ·  difieren: ' + malos);
+    // El renglon final tambien lleva las aceptadas: quien lee solo el resumen
+    // tiene que enterarse de que hubo salvedades, no solo quien lee todo.
+    console.log('Rangos en la captura: ' + cap.rangos.length + '  ·  difieren: ' + malos +
+                (aceptadasVistas.length ? '  ·  con diferencia aceptada: ' + aceptadasVistas.length : ''));
+    if (aceptadasVistas.length) {
+      console.log('\nDiferencias medidas y ACEPTADAS (no cuentan como pendientes):');
+      aceptadasVistas.forEach(x => console.log('  ' + x));
+      console.log('  El motivo de cada una esta en scripts/diferencias-cuadre-aceptadas.json');
+      console.log('  Para verlas como diferencias igual: --ignorar-aceptadas');
+    }
     process.exit(malos ? 1 : 0);
   }
 
@@ -572,7 +653,7 @@ async function main() {
         fila.filas = comparar(provee, nuestro, universo);
         fila.identidadProveedor = provee ? identidad(universo, provee) : null;
         fila.identidadNuestro = nuestro ? identidad(universo, nuestro) : null;
-        fila.veredicto = veredicto(fila.filas, fila.faltantes, !!provee);
+        fila.veredicto = veredicto(fila.filas, fila.faltantes, !!provee, ACEPTADAS, universo, r.nombre);
         /* Si la identidad no cierra, la brecha se descompone en el acto: decir
            "no cuadra" y no decir de donde sale obliga a otra corrida. */
         if (fila.identidadNuestro && !fila.identidadNuestro.cuadra) {
@@ -592,7 +673,6 @@ async function main() {
   }
 
   if (capturarEn) {
-    const fs = require('fs');
     fs.writeFileSync(capturarEn, JSON.stringify({
       generado: new Date().toISOString(),
       nota: 'Respuestas de los dos lados, guardadas mientras la llave del proveedor seguia viva. ' +
@@ -639,17 +719,32 @@ async function main() {
   }
 
   const malos = resultados.filter(r => r.veredicto.codigo === 3);
+  const conAceptadas = resultados.filter(r => (r.veredicto.perdonadas || []).length);
   console.log('Rangos comparados: ' + resultados.length +
               '  ·  calzan: ' + resultados.filter(r => r.veredicto.codigo === 0).length +
-              '  ·  difieren: ' + malos.length);
+              '  ·  difieren: ' + malos.length +
+              (conAceptadas.length ? '  ·  con diferencia aceptada: ' + conAceptadas.length : ''));
+  if (conAceptadas.length) {
+    // Se muestran SIEMPRE. Una excepcion que no se ve deja de ser una decision
+    // y pasa a ser un numero que nadie recuerda por que esta ahi.
+    console.log('\nDiferencias medidas y ACEPTADAS (no cuentan como pendientes):');
+    conAceptadas.forEach(r => r.veredicto.perdonadas.forEach(p =>
+      console.log('  ' + r.universo + ' · ' + r.nombre + ' · ' + p.fila.campo + ' dif ' + p.fila.dif)));
+    console.log('  El motivo de cada una esta en scripts/diferencias-cuadre-aceptadas.json');
+    console.log('  Para verlas como diferencias igual: --ignorar-aceptadas');
+  }
   if (malos.length) {
     console.log('\nNO alcanza para apuntar los proxies al blob todavia. Difieren:');
     malos.forEach(r => console.log('  ' + r.universo + ' · ' + r.nombre + ' · ' + r.veredicto.texto));
+  } else {
+    console.log('\nTodos los rangos calzan: el resumen que arma leerRango sobre los dias');
+    console.log('guardados reproduce lo que el proveedor responde por el rango.');
   }
   process.exit(malos.length ? 1 : 0);
 }
 
 module.exports = { SIGNOS, UNIVERSOS, MAX_DIAS_PROVEEDOR, identidad, camposDe, comparar,
+                   cargarAceptadas, aceptada, ARCHIVO_ACEPTADAS,
                    veredicto, resumenSoloNuestro, descomponer, rangosPorDefecto, rangosDeMeses, diasEntre, num,
                    pintaDeConexion,
                    fechaDeNombre, fechasDeNombres, tramos, huecos, comandosParaRellenar };

@@ -170,9 +170,104 @@ function listaEntidades(entidad, entidades) {
   return out;
 }
 
-async function consultarContraparte({ concepto, entidad, entidades, meses, desde, hasta }, ctx) {
+// ── TODOS los clientes de una vez ───────────────────────────────────────────
+// "todas las operaciones por cliente mensuales del 2025" no lo cubría ninguna
+// herramienta: el modelo terminaba yendo mes por mes (o cliente por cliente) y
+// agotando el tope de vueltas. El índice ya tiene a todos los clientes, así que
+// el ranking con su serie mensual sale de UNA lectura en memoria.
+const TOPE_DEF = 10, TOPE_MAX = 30;
+function esTodos(s) {
+  return /^(todos|todas|todo|\*|all|todos los clientes|todos mis clientes)$/i.test(String(s || '').trim());
+}
+function cuantos(top) {
+  const n = parseInt(top, 10);
+  return n > 0 ? Math.min(n, TOPE_MAX) : TOPE_DEF;
+}
+
+async function todosTransferencias(win, top) {
+  const d = await cargarIndice('resumen/transferencias.json');
+  const { desdeMes, hastaMes } = ventana(win, d.meses);
+  const enRango = m => m >= desdeMes && m <= hastaMes;
+  const filas = [];
+  const globalMes = {};
+  for (const nombre in (d.destinos || {})) {
+    const mm = {}; let D = 0, C = 0, N = 0;
+    for (const m in d.destinos[nombre].mes) {
+      if (!enRango(m)) continue;
+      const [d0, c0, n0] = d.destinos[nombre].mes[m];
+      mm[m] = { mes: m, despachado: d0, confirmado: c0 };
+      D += d0; C += c0; N += n0;
+      const g = globalMes[m] || (globalMes[m] = [0, 0]);
+      g[0] += d0; g[1] += c0;
+    }
+    if (N > 0) filas.push({ retail: nombre, despachado: D, confirmado: C, por_confirmar: D - C,
+      movimientos: N, tasa: D ? +(C / D).toFixed(4) : null,
+      por_mes: Object.keys(mm).sort().map(m => mm[m]) });
+  }
+  filas.sort((a, b) => b.despachado - a.despachado);
+  const n = cuantos(top);
+  const top_n = filas.slice(0, n), resto = filas.slice(n);
+  return {
+    fuente: 'transferencias.json (RDTOut directo; incluye confirmaciones tardías)',
+    concepto: 'transferencias', alcance: 'todos los clientes/retails',
+    desde_mes: desdeMes, hasta_mes: hastaMes, hasta_datos: d.hasta || d.generado,
+    clientes_con_movimiento: filas.length, mostrados: top_n.length,
+    total_general: { despachado: filas.reduce((a, x) => a + x.despachado, 0),
+                     confirmado: filas.reduce((a, x) => a + x.confirmado, 0) },
+    total_por_mes: Object.keys(globalMes).sort()
+      .map(m => ({ mes: m, despachado: globalMes[m][0], confirmado: globalMes[m][1] })),
+    clientes: top_n,
+    otros: resto.length ? { clientes: resto.length,
+      despachado: resto.reduce((a, x) => a + x.despachado, 0),
+      confirmado: resto.reduce((a, x) => a + x.confirmado, 0) } : null
+  };
+}
+
+async function todosContraparte(concepto, win, top) {
+  const d = await cargarIndice('resumen/contrapartes.json');
+  const { desdeMes, hastaMes } = ventana(win, d.meses);
+  const lado = LADO[concepto] || 'destino';
+  const enRango = m => m >= desdeMes && m <= hastaMes;
+  const clientes = d.clientes || {};
+  const filas = [];
+  const globalMes = {};
+  for (const nombre in clientes) {
+    const porConcepto = ((clientes[nombre] || {})[lado] || {})[concepto] || {};
+    const mm = {}; let T = 0;
+    for (const m in porConcepto) {
+      if (!enRango(m)) continue;
+      const v = porConcepto[m] || 0; if (!v) continue;
+      mm[m] = v; T += v;
+      globalMes[m] = (globalMes[m] || 0) + v;
+    }
+    if (T > 0) filas.push({ cliente: nombre, total: T,
+      por_mes: Object.keys(mm).sort().map(m => ({ mes: m, cantidad: mm[m] })) });
+  }
+  filas.sort((a, b) => b.total - a.total);
+  const n = cuantos(top);
+  const top_n = filas.slice(0, n), resto = filas.slice(n);
+  return {
+    fuente: 'contrapartes.json (histórico por contraparte)',
+    concepto, lado, alcance: 'todos los clientes',
+    desde_mes: desdeMes, hasta_mes: hastaMes, hasta_datos: d.hasta || d.generado,
+    clientes_con_movimiento: filas.length, mostrados: top_n.length,
+    total_general: filas.reduce((a, x) => a + x.total, 0),
+    total_por_mes: Object.keys(globalMes).sort().map(m => ({ mes: m, cantidad: globalMes[m] })),
+    clientes: top_n,
+    otros: resto.length ? { clientes: resto.length, total: resto.reduce((a, x) => a + x.total, 0) } : null
+  };
+}
+
+async function consultarContraparte({ concepto, entidad, entidades, top, meses, desde, hasta }, ctx) {
   const c = normConcepto(concepto);
   if (!c) throw new Error('concepto inválido: usa emisiones, retiros, transferencias o devoluciones');
+  // Modo "todos": el ranking de TODOS los clientes con su serie mensual, de una.
+  if (esTodos(entidad) || (!entidad && !entidades)) {
+    const r = (c === 'transferencias') ? await todosTransferencias({ meses, desde, hasta }, top)
+                                       : await todosContraparte(c, { meses, desde, hasta }, top);
+    if (ctx && ctx.log) ctx.log(`contraparte ${c} TODOS ${r.desde_mes}..${r.hasta_mes}: ${r.clientes_con_movimiento} clientes`);
+    return r;
+  }
   const lista = listaEntidades(entidad, entidades);
   if (!lista.length) throw new Error('falta la contraparte (entidad)');
   const win = { meses, desde, hasta };
@@ -216,12 +311,13 @@ const TOOL_SCHEMA = {
     'pásalos todos juntos separados por coma en `entidad` o como lista en ' +
     '`entidades`: la respuesta trae `comparativa:true` y un `resultados[]` con ' +
     'cada uno. NO los consultes uno por uno. Es dato operativo de pallets, ' +
-    'disponible para todos.',
+    'disponible para todos. Si piden "todas las operaciones POR CLIENTE" o "todos los clientes mes a mes", pasa entidad="todos": devuelve el ranking con la serie mensual de cada uno y el total global por mes en UNA sola llamada; NO consultes cliente por cliente.',
   input_schema: {
     type: 'object',
     properties: {
       concepto:  { type: 'string', description: 'emisiones | retiros | transferencias | devoluciones' },
-      entidad:   { type: 'string', description: 'Cliente o retail (o parte del nombre), ej. "Walmart". Para comparar varios, sepáralos con coma: "Walmart, Cencosud, Tottus".' },
+      entidad:   { type: 'string', description: 'Cliente o retail (o parte del nombre), ej. "Walmart". Para comparar varios, sepáralos con coma: "Walmart, Cencosud, Tottus". Para TODOS los clientes de una vez pasa "todos".' },
+      top:       { type: 'integer', description: 'Solo con entidad="todos": cuántos clientes devolver con su serie mensual (default 10, máximo 30). El resto se resume en `otros` y el total mensual global viene siempre completo.' },
       entidades: { type: 'array', items: { type: 'string' }, description: 'Alternativa a `entidad` para comparar varios: lista de clientes/retails. Ej. ["Walmart","Cencosud"].' },
       meses:     { type: 'integer', description: 'Cuántos meses hacia atrás (por defecto 12). Ignóralo si pasas desde/hasta.' },
       desde:     { type: 'string', description: 'Opcional. Mes o fecha de inicio (YYYY-MM o YYYY-MM-DD).' },

@@ -21,6 +21,7 @@ const FUENTE = fs.readFileSync(RUTA, 'utf8');
 process.env.PF_STORAGE_CONN = process.env.PF_STORAGE_CONN || 'FALSA';
 
 let ESCRITO = [], LEER = {};
+let FALLA_ESTADO = false, FALLA_HISTORIA = false, REVIENTA_LECTURA = false;
 function blobQueGuarda() {
   return { BlobServiceClient: { fromConnectionString: function () {
     return { getContainerClient: function () {
@@ -28,10 +29,20 @@ function blobQueGuarda() {
         createIfNotExists: async function () {},
         getAppendBlobClient: function (ruta) {
           return { createIfNotExists: async function () {},
-                   appendBlock: async function (b) { ESCRITO.push({ ruta, bloque: b }); } };
+                   appendBlock: async function (b) {
+                     if (FALLA_HISTORIA) throw new Error('append cortado');
+                     ESCRITO.push({ ruta, bloque: b });
+                   } };
+        },
+        getBlockBlobClient: function (ruta) {
+          return { upload: async function (cuerpo) {
+            if (FALLA_ESTADO) throw new Error('AuthorizationFailure en el estado');
+            LEER[ruta] = String(cuerpo); ESCRITO.push({ ruta, bloque: String(cuerpo) });
+          } };
         },
         getBlobClient: function (ruta) {
           return { download: async function () {
+            if (REVIENTA_LECTURA) throw new Error('AuthorizationFailure');
             if (!(ruta in LEER)) { const e = new Error('BlobNotFound'); e.statusCode = 404; throw e; }
             return { readableStreamBody: [Buffer.from(LEER[ruta], 'utf8')] };
           } };
@@ -76,6 +87,7 @@ async function correr(S, fuente) {
   FUENTE_ACTUAL = fuente || FUENTE;
   pend.length = 0; ok = 0; fallos = [];
   ESCRITO = []; LEER = {};
+  FALLA_ESTADO = false; FALLA_HISTORIA = false; REVIENTA_LECTURA = false;
 
   /* ── armar el evento ─────────────────────────────────────────────────── */
 
@@ -122,13 +134,57 @@ async function correr(S, fuente) {
 
   /* ── escribir ────────────────────────────────────────────────────────── */
 
-  pruebaAsync('B08 se escribe una línea en el archivo del mes del evento', async function () {
+  pruebaAsync('B08 se escriben DOS cosas: el estado de la llave y la línea de historia', async function () {
     const r = await S.registrar(ev('2026-11-12T10:00:00.000Z', 'intentando'));
     igual(r.ok, true, r.motivo);
-    igual(ESCRITO.length, 1);
-    igual(ESCRITO[0].ruta, 'pf/relocalizaciones/2026-11.jsonl');
-    cierto(/\n$/.test(ESCRITO[0].bloque), 'tiene que cerrar con salto');
+    const rutas = ESCRITO.map(e => e.ruta);
+    igual(rutas, ['pf/relocalizaciones/estado/499_5_45285.json',
+                  'pf/relocalizaciones/2026-11.jsonl'], 'el estado va PRIMERO');
+    cierto(/\n$/.test(ESCRITO[1].bloque), 'la historia cierra con salto');
     igual(JSON.parse(ESCRITO[0].bloque).llave, LL);
+  });
+
+  pruebaAsync('B08b el estado se lee directo, sin barrer la historia', async function () {
+    // PF hace ~97 relocalizaciones al día: barrer seis meses de log en cada
+    // llamada serían ~17.500 registros sólo para saber si una llave ya existe.
+    await S.registrar(ev('2026-11-12T10:00:00.000Z', 'creado', { folio: 4150001 }));
+    let leidas = 0;
+    const T = compilar(FUENTE_ACTUAL);
+    const e = await T.leerEstado(LL);
+    igual(e && e.folio, 4150001);
+    igual(await T.leerEstado('499|5|99999'), null, 'una llave que no existe da null');
+  });
+
+  pruebaAsync('B08c si NO se pudo guardar el estado, el registro falla entero', async function () {
+    // Es lo único que impide que la próxima llamada vuelva a escribir en Redlink.
+    FALLA_ESTADO = true;
+    const r = await S.registrar(ev('2026-11-12T10:00:00.000Z', 'intentando'));
+    igual(r.ok, false);
+    cierto(/AuthorizationFailure/.test(r.motivo), r.motivo);
+    igual(ESCRITO.length, 0, 'no se escribió historia de algo que no quedó registrado');
+  });
+
+  pruebaAsync('B08d si falla la HISTORIA, el registro vale igual pero se avisa', async function () {
+    // El estado ya quedó: la seguridad está cubierta y perder la auditoría no
+    // justifica hacerle creer a quien llama que no se registró nada.
+    FALLA_HISTORIA = true;
+    const r = await S.registrar(ev('2026-11-12T10:00:00.000Z', 'creado', { folio: 1 }));
+    igual(r.ok, true, r.motivo);
+    cierto(/no se pudo anotar en la historia/.test(r.historia), r.historia);
+  });
+
+  pruebaAsync('B08e un error que NO es 404 al leer el estado se propaga', async function () {
+    // Tratarlo como "no hay registro" sería dar vía libre a escribir de nuevo.
+    await S.registrar(ev('2026-11-12T10:00:00.000Z', 'creado', { folio: 1 }));
+    REVIENTA_LECTURA = true;
+    let lanzo = false;
+    try { await S.leerEstado(LL); } catch (e) { lanzo = true; }
+    cierto(lanzo, 'tiene que lanzar, no devolver null');
+  });
+
+  prueba('B08f dos llaves distintas no caen en el mismo archivo de estado', function () {
+    cierto(S.blobEstado('499|5|45285') !== S.blobEstado('499|5|45286'));
+    cierto(S.blobEstado('499|5|1') !== S.blobEstado('499|51|') , 'ni por el separador');
   });
 
   pruebaAsync('B09 un evento sin llave NO se guarda: sería un registro que nadie puede leer', async function () {
@@ -137,10 +193,10 @@ async function correr(S, fuente) {
     cierto(/llave/.test(r.motivo), r.motivo);
   });
 
-  pruebaAsync('B10 eventos de meses distintos van a archivos distintos', async function () {
+  pruebaAsync('B10 la historia de meses distintos va a archivos distintos', async function () {
     await S.registrar(ev('2026-10-31T23:00:00.000Z', 'intentando'));
     await S.registrar(ev('2026-11-01T01:00:00.000Z', 'creado', { folio: 1 }));
-    igual(ESCRITO.map(e => e.ruta),
+    igual(ESCRITO.map(e => e.ruta).filter(r => /jsonl$/.test(r)),
           ['pf/relocalizaciones/2026-10.jsonl', 'pf/relocalizaciones/2026-11.jsonl']);
   });
 
@@ -194,16 +250,17 @@ async function correr(S, fuente) {
     igual(Object.keys(v), []);
   });
 
-  pruebaAsync('B18 leerEstado encuentra la llave mirando varios meses', async function () {
+  pruebaAsync('B18 reconstruir arma el estado desde la historia, mirando varios meses', async function () {
+    // El camino de rescate si los blobs de estado se perdieran.
     const m = S.mesesRecientes('2026-11-12', S.MESES_ATRAS);
     LEER['pf/relocalizaciones/' + m[0] + '.jsonl'] =
       JSON.stringify(S.armarEvento(ev(m[0] + '-05T10:00:00.000Z', 'creado', { folio: 4140000 }))) + '\n';
-    const e = await S.leerEstado(LL, '2026-11-12');
-    igual(e && e.folio, 4140000, 'tiene que encontrarlo en el mes más viejo de la ventana');
+    const v = await S.reconstruir('2026-11-12');
+    igual(v[LL] && v[LL].folio, 4140000, 'tiene que encontrarlo en el mes más viejo de la ventana');
   });
 
   pruebaAsync('B19 una llave que no existe devuelve null, no un estado inventado', async function () {
-    igual(await S.leerEstado('no|existe|0', '2026-11-12'), null);
+    igual(await S.leerEstado('no|existe|0'), null);
   });
 
   prueba('B20 los meses van del más viejo al más nuevo e incluyen el actual', function () {
@@ -238,6 +295,7 @@ async function correr(S, fuente) {
 
   for (const [n, fn] of pend) {
     ESCRITO = []; LEER = {};
+    FALLA_ESTADO = false; FALLA_HISTORIA = false; REVIENTA_LECTURA = false;
     try { await fn(); ok++; } catch (e) { fallos.push(n + ' -> ' + (e && e.message ? e.message : String(e))); }
   }
   return { ok, fallos };
@@ -260,8 +318,12 @@ const MUTACIONES = [
   ['Z14 el reductor se queda con el más VIEJO',    /return String\(a\.ts \|\| ''\)\.localeCompare\(String\(b\.ts \|\| ''\)\); \}\)\n    \.forEach/, "return String(b.ts || '').localeCompare(String(a.ts || '')); })\n    .forEach"],
   ['Z15 el reductor acepta eventos sin llave',     /\.filter\(function \(e\) \{ return e && e\.llave; \}\)\n    /, ''],
   ['Z15b el filtro va después de ordenar',         /\.filter\(function \(e\) \{ return e && e\.llave; \}\)\n    \.sort\(function \(a, b\) \{ return String\(a\.ts \|\| ''\)\.localeCompare\(String\(b\.ts \|\| ''\)\); \}\)\n    \.forEach\(function \(e\) \{ out\[e\.llave\] = e; \}\);/, ".sort(function (a, b) { return String(a.ts || '').localeCompare(String(b.ts || '')); })\n    .filter(function (e) { return e && e.llave; })\n    .forEach(function (e) { out[e.llave] = e; });"],
-  ['Z16 leerEstado mira un solo mes',              /for \(const m of mesesRecientes\(hoy, MESES_ATRAS\)\) ev = ev\.concat\(await traer\(m\)\);/, 'ev = await traer(mesesRecientes(hoy, MESES_ATRAS).pop());'],
-  ['Z17 leerEstado inventa un estado si no hay',   /return vig\[llave\] \|\| null;/, "return vig[llave] || { estado: 'creado' };"],
+  ['Z16 reconstruir mira un solo mes',             /for \(const m of mesesRecientes\(hoy, MESES_ATRAS\)\) ev = ev\.concat\(await traer\(m\)\);/, 'ev = await traer(mesesRecientes(hoy, MESES_ATRAS).pop());'],
+  ['Z17 un error de lectura se traga como "no hay registro"', /if \(esNoExiste\(e\)\) return null;\n    \/\/ Un error que NO es/, 'return null;\n    // Un error que NO es'],
+  ['Z23 el estado se escribe DESPUÉS de la historia', /return \{ ok: false, motivo: \(e && e\.message\) \? e\.message : String\(e\) \};\n  \}\n\n  \/\/ La historia va después/, "return { ok: true, motivo: '' };\n  }\n\n  // La historia va después"],
+  ['Z24 un fallo al guardar el estado se reporta como ok', /  \} catch \(e\) \{\n    return \{ ok: false, motivo: \(e && e\.message\) \? e\.message : String\(e\) \};\n  \}/, "  } catch (e) {\n    return { ok: true, motivo: '' };\n  }"],
+  ['Z25 un fallo de la historia tumba el registro',  /historia = 'el estado quedó guardado pero no se pudo anotar en la historia: ' \+/, "return { ok: false, motivo: 'historia' }; historia = '' + "],
+  ['Z26 el nombre del estado junta llaves distintas', /\.replace\(\/\[\^0-9A-Za-z\]\+\/g, '_'\)/, ".replace(/[^0-9A-Za-z]+/g, '')"],
   ['Z18 los meses salen del nuevo al viejo',       /return out\.reverse\(\);/, 'return out;'],
   ['Z19 el salto de año no baja el año',           /if \(m < 1\) \{ m = 12; y--; \}/, 'if (m < 1) { m = 12; }'],
   ['Z20 enVilo incluye los creados',               /ESTADOS_EN_VILO\.indexOf\(e\.estado\) >= 0/, 'true'],

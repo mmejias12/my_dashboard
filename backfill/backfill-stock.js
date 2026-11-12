@@ -38,7 +38,11 @@ async function main() {
     await Promise.all(grupo.map(async function (f) {
       try {
         if (!FORZAR && await diaValido(f)) { saltados++; return; }   // freeze: no re-tocar días buenos
-        const r = await obtenerDia(f, { forzar: true });
+        // noEmpeorar: al FORZAR se re-pregunta un día que ya existe, así que
+        // una respuesta vacía del proveedor lo dejaría peor que antes.
+        const r = await obtenerDia(f, { forzar: true, noEmpeorar: FORZAR });
+        if (r._conservado) { console.warn('  ' + f + ': el proveedor vino SIN flujos en ' +
+          r._conservado.join(', ') + ' — se conservó lo que ya estaba (no se empeoró).'); }
         if (r._error_clientes || r._error_retail) { fallidos++; ultimoError = r._error_clientes || r._error_retail; }
         else nuevos++;
       } catch (e) { fallidos++; ultimoError = e.message; console.warn('  ' + f + ' falló: ' + e.message); }

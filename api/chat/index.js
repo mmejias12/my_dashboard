@@ -107,6 +107,30 @@ async function bloqueTransporteMes(context) {
   } catch (e) { context.log.warn('transporte mes: ' + e.message); return null; }
 }
 
+// ── Guard anti-promesa ──────────────────────────────────────────────────────
+// El modelo a veces ANUNCIA que va a trabajar ("voy a consultar mes a mes",
+// "los lanzo todos en paralelo, un momento") y CIERRA el turno sin llamar
+// ninguna herramienta. Para el usuario eso es indistinguible de un cuelgue: el
+// front borra los puntitos al llegar la respuesta y queda un mensaje que
+// promete datos que no van a llegar nunca (medido: 5+ min esperando el 12-nov).
+// No se arregla con un spinner — no hay nada corriendo. Acá se detecta esa
+// respuesta y se le devuelve el turno al modelo exigiéndole ejecutar YA.
+const PROMESA = /(\bvoy a\b|\bvamos a\b|\bd[ée]jame\b|\bperm[íi]te(me)?\b|\blos? (lanzo|consulto|reviso|busco)\b|\bahora (mismo )?(lo |los |las )?(lanzo|consulto|reviso|busco|verifico)\b|\bun momento\b|\bun segundo\b|\bensegu[íi]da\b|\ben seguida\b|\bya mismo\b|\bprocedo a\b|\bestoy (consultando|revisando|buscando)\b|\bdame un (segundo|momento|minuto)\b)/i;
+
+const EMPUJON =
+  'SISTEMA: No anuncies lo que vas a hacer — tu mensaje TERMINA el turno y el ' +
+  'usuario se queda esperando datos que nunca llegan. En ESTE mismo turno: ' +
+  'llama las herramientas que necesites y responde con los datos ya obtenidos. ' +
+  'Si son muchos periodos, usa la herramienta que trae la serie completa de una ' +
+  'sola vez (consultar_stock_mensual, consultar_contraparte) en vez de ir mes a ' +
+  'mes. Si ninguna herramienta cubre la pregunta, dilo en una frase y explica ' +
+  'qué falta. No prometas resultados futuros.';
+
+function textoDe(resp) {
+  return ((resp && resp.content) || [])
+    .filter(b => b && b.type === 'text').map(b => b.text || '').join('\n');
+}
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -240,6 +264,7 @@ module.exports = async function (context, req) {
     const t0Total = Date.now();
     const uso = { in: 0, out: 0, cacheR: 0, cacheW: 0 };
     const toolsUsados = new Set();
+    let empujado = false;          // el guard anti-promesa se usa UNA vez por turno
 
     for (let vuelta = 0; vuelta < MAX_VUELTAS; vuelta++) {
       resp = await llamarClaude({
@@ -255,7 +280,17 @@ module.exports = async function (context, req) {
         context.log(`claude v${vuelta}: in=${u.input_tokens} cacheW=${u.cache_creation_input_tokens || 0} cacheR=${u.cache_read_input_tokens || 0} out=${u.output_tokens}`);
       }
 
-      if (resp.stop_reason !== 'tool_use') break;   // respuesta final
+      if (resp.stop_reason !== 'tool_use') {
+        // ¿Prometió trabajar y cerró el turno? Se le devuelve el turno UNA vez.
+        if (!empujado && PROMESA.test(textoDe(resp)) && vuelta < MAX_VUELTAS - 1) {
+          empujado = true;
+          context.log.warn('guard anti-promesa: el modelo anunció sin ejecutar; se le devuelve el turno');
+          convo.push({ role: 'assistant', content: resp.content });
+          convo.push({ role: 'user', content: EMPUJON });
+          continue;
+        }
+        break;                                   // respuesta final
+      }
 
       // Claude pidió la herramienta: ejecutar y devolverle el resultado.
       convo.push({ role: 'assistant', content: resp.content });

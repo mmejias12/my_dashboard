@@ -131,6 +131,11 @@ body{font-family:var(--body);background:var(--void);color:var(--text);-webkit-fo
 .typing i{width:7px;height:7px;border-radius:50%;background:var(--mute);animation:tp 1.2s infinite}
 .typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
 @keyframes tp{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+.typing .tsec{font-family:var(--mono);font-size:11px;color:var(--mute);margin-left:7px;align-self:center;letter-spacing:.02em}
+.noact{margin-top:12px;border:1px solid var(--line);border-left:3px solid var(--red);border-radius:9px;padding:10px 13px;background:var(--surface)}
+.noact .t{font-size:12.5px;color:var(--text);margin:0 0 7px}
+.noact button{font:inherit;font-size:12px;padding:5px 11px;border-radius:7px;border:1px solid var(--line);background:transparent;color:var(--text);cursor:pointer}
+.noact button:hover{border-color:var(--red)}
 
 /* data card inside answer */
 .dcard{margin-top:14px;background:var(--surface);border:1px solid var(--line);border-radius:13px;overflow:hidden}
@@ -665,11 +670,38 @@ function addAssistant(html){
   d.innerHTML='<div class="who"><img src="'+LOGO+'"></div><div class="body">'+html+'</div>';
   t.appendChild(d);scrollDown();return d;
 }
+// Los puntitos solos no distinguen "trabajando" de "colgado": por eso llevan un
+// cronómetro vivo. Si el contador avanza, la consulta sigue en curso.
 function addTyping(){
   var t=document.getElementById('thread');
   var d=document.createElement('div');d.className='msg a';
-  d.innerHTML='<div class="who"><img src="'+LOGO+'"></div><div class="body"><div class="typing"><i></i><i></i><i></i></div></div>';
-  t.appendChild(d);scrollDown();return d;
+  d.innerHTML='<div class="who"><img src="'+LOGO+'"></div><div class="body">'+
+              '<div class="typing"><i></i><i></i><i></i><span class="tsec">consultando\u2026 0s</span></div></div>';
+  t.appendChild(d);scrollDown();
+  var t0=Date.now(), sp=d.querySelector('.tsec');
+  d._timer=setInterval(function(){
+    var s=Math.round((Date.now()-t0)/1000), txt;
+    if(s>=90)      txt='sigue trabajando\u2026 '+s+'s';
+    else if(s>=25) txt='consultando datos\u2026 '+s+'s';
+    else           txt='consultando\u2026 '+s+'s';
+    sp.textContent=txt;
+  },1000);
+  return d;
+}
+// Siempre por acá: si se borra el nodo sin matar el intervalo, queda corriendo.
+function quitarTyping(d){ if(!d) return; if(d._timer){clearInterval(d._timer);d._timer=null;} d.remove(); }
+// Un anuncio sin datos ("voy a consultar", "un momento") significa que el turno
+// terminó sin hacer nada: no va a llegar nada más. Se avisa y se ofrece reintentar.
+var RE_PROMESA=/(\bvoy a\b|\bvamos a\b|\bd[\u00e9e]jame\b|\bperm[\u00ed i]te(me)?\b|\blos? (lanzo|consulto|reviso|busco)\b|\bahora (mismo )?(lo |los |las )?(lanzo|consulto|reviso|busco)\b|\bun momento\b|\bun segundo\b|\bensegu[\u00ed i]da\b|\bya mismo\b|\bdame un (segundo|momento|minuto)\b)/i;
+function avisarSiNoEjecuto(nodo,texto,pregunta){
+  if(!nodo||!RE_PROMESA.test(texto||'')) return;
+  var b=nodo.querySelector('.body'); if(!b) return;
+  var q=esc(pregunta||'').replace(/"/g,'&quot;');
+  b.insertAdjacentHTML('beforeend',
+    '<div class="noact"><p class="t">El asistente anunci\u00f3 una consulta pero <b>no la ejecut\u00f3</b>, '+
+    'as\u00ed que no va a llegar nada m\u00e1s. No est\u00e1 trabajando en segundo plano.</p>'+
+    '<button onclick="ask(this.dataset.q)" data-q="'+q+'">Reintentar la pregunta</button></div>');
+  scrollDown();
 }
 function scrollDown(){var w=document.getElementById('threadWrap');w.scrollTop=w.scrollHeight;}
 
@@ -748,11 +780,15 @@ async function ask(q){
                                 .map(function(b){return b.text;}).join('\n').trim();
     if(!texto) throw new Error('respuesta vacía');
     hist.push({role:'assistant',content:texto}); persistirActiva();
-    t.remove();
+    quitarTyping(t);
     var p=parseFuentes(texto);
-    addAssistant(fmtTexto(p.texto)+(p.fuentes.length?srcHtml(p.fuentes):''));
+    var nodo=addAssistant(fmtTexto(p.texto)+(p.fuentes.length?srcHtml(p.fuentes):''));
+    // Red de seguridad: el relay ya empuja al modelo a ejecutar en vez de
+    // anunciar, pero si una promesa se cuela igual, hay que DECIRLO. Un mensaje
+    // que promete datos y termina el turno es indistinguible de un cuelgue.
+    avisarSiNoEjecuto(nodo, p.texto, q);
   }catch(e){
-    t.remove();
+    quitarTyping(t);
     hist.pop(); persistirActiva();   // no dejar la pregunta colgada en el historial
     addAssistant('<p>No pude consultar los datos de la operación en este momento.</p>'+
                  '<p class="hl">'+esc(e.message||e)+'</p>');

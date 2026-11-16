@@ -16,7 +16,21 @@
 
 const crypto = require('crypto');
 
-function configuradas(env) {
+// La forma simple, para el caso de UN cliente: tres variables sueltas, sin JSON
+// de por medio. Existe porque meter un JSON en una variable de entorno es una
+// fuente de errores que no aporta nada cuando hay un solo cliente — y porque
+// equivocarse ahí se ve exactamente igual que mandar la clave equivocada.
+function simple(env) {
+  const e = env || process.env;
+  const clave = String(e.PF_CLAVE || '').trim();
+  const bpId = Number(e.PF_BP_ID);
+  const usuarioIngresoId = Number(e.PF_USUARIO_ID);
+  if (clave.length < 24 || !(bpId > 0) || !(usuarioIngresoId > 0)) return [];
+  return [{ clave: clave, bpId: bpId, usuarioIngresoId: usuarioIngresoId,
+            nombre: String(e.PF_NOMBRE || 'PF') }];
+}
+
+function deLista(env) {
   const crudo = (env || process.env).PF_CLAVES;
   if (!crudo) return [];
   let lista;
@@ -30,6 +44,19 @@ function configuradas(env) {
              usuarioIngresoId: Number(x.usuarioIngresoId),
              nombre: String(x.nombre || ('bp' + x.bpId)) };
   });
+}
+
+// La lista manda cuando sirve; si no, la forma simple. Así una PF_CLAVES rota
+// no deja el servicio muerto si las tres variables sueltas están bien puestas.
+function configuradas(env) {
+  const lista = deLista(env);
+  return lista.length ? lista : simple(env);
+}
+
+function fuenteDe(env) {
+  if (deLista(env).length) return 'PF_CLAVES';
+  if (simple(env).length) return 'PF_CLAVE';
+  return '';
 }
 
 // Una clave corta no se acepta ni aunque esté configurada: 24 caracteres es el
@@ -86,22 +113,90 @@ function huella(clave) {
   return crypto.createHash('sha256').update(String(clave || ''), 'utf8').digest('hex').slice(0, 12);
 }
 
+// La FORMA del valor crudo, sin su contenido. Cuando el JSON no parsea, saber
+// con qué empieza y termina, si trae saltos de línea o comillas curvas resuelve
+// el problema al instante. La clave vive en el medio y nunca se muestra.
+function forma(crudo) {
+  const t = String(crudo == null ? '' : crudo);
+  // Los extremos sólo se muestran si el valor PARECE un contenedor JSON. Si no
+  // lo parece, lo más probable es que alguien haya pegado la clave sola — y
+  // entonces esos caracteres son parte del secreto, no de la sintaxis.
+  const pareceJson = /^\s*[\[{]/.test(t);
+  return {
+    largo: t.length,
+    pareceJson: pareceJson,
+    empieza: pareceJson ? t.slice(0, 2) : '',
+    termina: pareceJson ? t.slice(-2) : '',
+    saltosDeLinea: /[\r\n]/.test(t),
+    // Las comillas curvas son el culpable más común: pasan por Word, Outlook o
+    // cualquier editor con autocorrección y a ojo se ven iguales a las rectas.
+    comillasCurvas: /[\u201C\u201D\u2018\u2019]/.test(t),
+    espaciosAlBorde: t !== t.trim(),
+    comillasRectas: (t.match(/"/g) || []).length
+  };
+}
+
+function clientesDe(buenas) {
+  return buenas.map(function (x) {
+    return { nombre: x.nombre, bpId: x.bpId, usuarioIngresoId: x.usuarioIngresoId,
+             largoClave: x.clave.length, huella: huella(x.clave) };
+  });
+}
+
 function diagnostico(env) {
   const e = env || process.env;
+
+  // La forma simple se revisa primero para poder contestar derecho cuando es la
+  // que está en uso, en vez de hablar de un JSON que nadie puso.
+  const sim = simple(e);
+  if (!e.PF_CLAVES && sim.length) {
+    return { ok: true, fuente: 'PF_CLAVE', entradas: 1, activas: 1,
+             clientes: clientesDe(sim), descartadas: [], motivo: '' };
+  }
+
   const crudo = e.PF_CLAVES;
   if (!crudo) {
-    return { ok: false, entradas: 0, activas: 0, clientes: [], descartadas: [],
-             motivo: 'PF_CLAVES no está definida en la configuración' };
+    const p = [];
+    if (e.PF_CLAVE !== undefined && String(e.PF_CLAVE).trim().length < 24) {
+      p.push('PF_CLAVE tiene ' + String(e.PF_CLAVE).trim().length + ' caracteres y el mínimo son 24');
+    }
+    if (e.PF_CLAVE !== undefined && !(Number(e.PF_BP_ID) > 0)) p.push('falta PF_BP_ID');
+    if (e.PF_CLAVE !== undefined && !(Number(e.PF_USUARIO_ID) > 0)) p.push('falta PF_USUARIO_ID');
+    return { ok: false, fuente: '', entradas: 0, activas: 0, clientes: [], descartadas: [],
+             pistas: p,
+             motivo: 'no hay claves: pon PF_CLAVE + PF_BP_ID + PF_USUARIO_ID (lo más simple), ' +
+                     'o PF_CLAVES con la lista completa en JSON' };
   }
   let lista;
   try { lista = JSON.parse(crudo); }
   catch (err) {
-    return { ok: false, entradas: 0, activas: 0, clientes: [], descartadas: [],
-             motivo: 'PF_CLAVES no es JSON válido; tiene que ser una lista en una sola línea' };
+    const f = forma(crudo);
+    const pistas = [];
+    if (f.comillasCurvas) pistas.push('tiene comillas CURVAS (" ") en vez de rectas (")');
+    if (f.saltosDeLinea) pistas.push('tiene saltos de línea; va todo en una sola línea');
+    if (f.espaciosAlBorde) pistas.push('tiene espacios al principio o al final');
+    if (!f.pareceJson) {
+      pistas.push('el valor no parece JSON: no empieza con "[" ni con "{"');
+    } else {
+      if (f.empieza !== '[{') pistas.push('empieza con ' + JSON.stringify(f.empieza) + ' y debería empezar con "[{"');
+      if (f.termina !== '}]') pistas.push('termina con ' + JSON.stringify(f.termina) + ' y debería terminar con "}]"');
+    }
+    if (f.comillasRectas < 8) pistas.push('tiene ' + f.comillasRectas + ' comillas rectas y hacen falta al menos 8');
+    if (sim.length) {
+      return { ok: true, fuente: 'PF_CLAVE', entradas: 1, activas: 1,
+               clientes: clientesDe(sim), descartadas: [], forma: f, pistas: pistas,
+               motivo: 'PF_CLAVES está mal armada y se ignoró; se están usando PF_CLAVE/PF_BP_ID/PF_USUARIO_ID' };
+    }
+    pistas.push('PF_CLAVES lleva la LISTA COMPLETA en JSON, no la clave sola: ' +
+                '[{"clave":"…","bpId":…,"usuarioIngresoId":…}]');
+    return { ok: false, fuente: '', entradas: 0, activas: 0, clientes: [], descartadas: [],
+             motivo: 'PF_CLAVES no es JSON válido; tiene que ser una lista en una sola línea',
+             forma: f, pistas: pistas };
   }
   if (!Array.isArray(lista)) {
     return { ok: false, entradas: 0, activas: 0, clientes: [], descartadas: [],
-             motivo: 'PF_CLAVES tiene que ser una LISTA: [{"clave":"…","bpId":…,"usuarioIngresoId":…}]' };
+             motivo: 'PF_CLAVES tiene que ser una LISTA: [{"clave":"…","bpId":…,"usuarioIngresoId":…}]',
+             forma: forma(crudo) };
   }
   const descartadas = [];
   lista.forEach(function (x, i) {
@@ -120,15 +215,14 @@ function diagnostico(env) {
   const buenas = configuradas(e);
   return {
     ok: buenas.length > 0,
+    fuente: fuenteDe(e),
     entradas: lista.length,
     activas: buenas.length,
-    clientes: buenas.map(function (x) {
-      return { nombre: x.nombre, bpId: x.bpId, usuarioIngresoId: x.usuarioIngresoId,
-               largoClave: x.clave.length, huella: huella(x.clave) };
-    }),
+    clientes: clientesDe(buenas),
     descartadas: descartadas,
     motivo: buenas.length ? '' : 'ninguna entrada de PF_CLAVES quedó activa'
   };
 }
 
-module.exports = { configuradas, comparar, identificar, claveDe, huella, diagnostico };
+module.exports = { configuradas, deLista, simple, fuenteDe, comparar, identificar,
+                   claveDe, huella, diagnostico, forma };

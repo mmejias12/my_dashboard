@@ -41,7 +41,15 @@ function compilarF(fuenteF, fuenteL) {
     if (/pf-escritura\.js$/.test(p)) return { faltantes: () => FALTAN, get API_BASE() { return BASE; },
       bodegasDe: async function (bp) {
         BODEGAS_PEDIDAS.push(bp);
-        if (BODEGAS_FALLAN) throw new Error('No se pudo leer el maestro de bodegas (HTTP 502)');
+        if (BODEGAS_FALLAN) {
+          const e = new Error(BODEGAS_FALLAN === 'red' ? 'fetch failed'
+                                                       : 'No se pudo leer el maestro de bodegas (HTTP 502)');
+          if (BODEGAS_FALLAN === 'red') {
+            e.cause = Object.assign(new Error('Connect Timeout Error (attempted address: ' +
+              'api.portalredtec.cl:443, timeout: 10000ms)'), { code: 'UND_ERR_CONNECT_TIMEOUT' });
+          }
+          throw e;
+        }
         return [{ bodegaiD: 1535, bodegaCliente: 'PF INVENTARIO VIRTUAL', codigoSap: 'PF-0016' },
                 { bodegaiD: 1524, bodegaCliente: 'PF ANTOFAGASTA', codigoSap: 'PF-004' }];
       } };
@@ -313,6 +321,18 @@ async function correr(S, L, fuenteL) {
     } finally { BODEGAS_FALLAN = false; }
   });
 
+  pruebaAsync('T13d2 un "fetch failed" se explica: qué host y qué tipo de falla', async function () {
+    // "fetch failed" a secas no distingue "Redlink caído" de "credencial mala".
+    BODEGAS_FALLAN = 'red';
+    try {
+      const r = await pedir(S, ['admin'], 'GET', { probar: '1' });
+      const p = r.body.redlinkResponde[0];
+      igual([p.ok, p.motivo], [false, 'fetch failed']);
+      igual(p.causa, 'UND_ERR_CONNECT_TIMEOUT', 'el tipo de falla');
+      cierto(/api\.portalredtec\.cl/.test(p.detalleCausa), 'y contra qué host: ' + p.detalleCausa);
+    } finally { BODEGAS_FALLAN = false; }
+  });
+
   pruebaAsync('T13e sin rol admin, ?probar tampoco consulta', async function () {
     await pedir(S, ['logistica'], 'GET', { probar: '1' });
     igual(BODEGAS_PEDIDAS, [], 'el rol se mira ANTES de gastar una llamada a Redlink');
@@ -348,7 +368,9 @@ const MUT_F = [
   ['G12 la prueba no viaja en la respuesta', /redlinkResponde: prueba,/, ''],
   ['G13 las bodegas vienen sin nombre',     /nombre: x\.bodegaCliente \|\| x\.nombreBodega \|\| '',/, "nombre: '',"],
   ['G14 las bodegas no se ordenan',         /\}\)\.sort\(function \(p, q\) \{ return Number\(p\.id\) - Number\(q\.id\); \}\) \}\);/, '}) });'],
-  ['G15 la lista de bodegas no viaja',      /detalle: lista\.map\(function \(x\) \{/, 'detalle: [].map(function (x) {']
+  ['G15 la lista de bodegas no viaja',      /detalle: lista\.map\(function \(x\) \{/, 'detalle: [].map(function (x) {'],
+  ['G16 la causa del fallo no se informa',  /causa: causa \? String\(causa\.code \|\| causa\.name \|\| ''\) : '',/, "causa: '',"],
+  ['G17 no se dice contra qué host falló',  /detalleCausa: causa \? String\(causa\.message \|\| ''\)\.slice\(0, 200\) : ''/, "detalleCausa: ''"]
 ];
 const MUT_L = [
   ['H01 la huella es un trozo de la clave', /return crypto\.createHash\('sha256'\)\.update\(String\(clave \|\| ''\), 'utf8'\)\.digest\('hex'\)\.slice\(0, 12\);/, 'return String(clave || "").slice(0, 12);'],

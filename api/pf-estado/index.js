@@ -75,8 +75,14 @@ module.exports = async function (context, req) {
                       }).sort(function (p, q) { return Number(p.id) - Number(q.id); }) });
       } catch (e) {
         // Acá SÍ va el motivo: es el admin mirando su propia instalación.
+        // Y va con la CAUSA: "fetch failed" es lo genérico de Node y no dice
+        // nada; la causa nombra el host y el tipo de falla, que es lo que
+        // distingue "Redlink está caído" de "la credencial está mal".
+        const causa = (e && e.cause) ? e.cause : null;
         prueba.push({ bpId: c.bpId, ok: false, ms: Date.now() - t0,
-                      motivo: String((e && e.message) || e).slice(0, 300) });
+                      motivo: String((e && e.message) || e).slice(0, 300),
+                      causa: causa ? String(causa.code || causa.name || '') : '',
+                      detalleCausa: causa ? String(causa.message || '').slice(0, 200) : '' });
       }
     }
   }

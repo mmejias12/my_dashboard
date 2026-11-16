@@ -42,7 +42,8 @@ function compilarF(fuenteF, fuenteL) {
       bodegasDe: async function (bp) {
         BODEGAS_PEDIDAS.push(bp);
         if (BODEGAS_FALLAN) throw new Error('No se pudo leer el maestro de bodegas (HTTP 502)');
-        return [{ bodegaiD: 1524 }, { bodegaiD: 1525 }];
+        return [{ bodegaiD: 1535, bodegaCliente: 'PF INVENTARIO VIRTUAL', codigoSap: 'PF-0016' },
+                { bodegaiD: 1524, bodegaCliente: 'PF ANTOFAGASTA', codigoSap: 'PF-004' }];
       } };
     if (/pf-bitacora\.js$/.test(p)) return { hayStorage: () => STORAGE, CONTAINER: 'redtec-confirmaciones' };
     return propio(p);
@@ -293,6 +294,11 @@ async function correr(S, L, fuenteL) {
     igual(BODEGAS_PEDIDAS, [499]);
     igual([r.body.redlinkResponde[0].ok, r.body.redlinkResponde[0].bodegas], [true, 2]);
     cierto(typeof r.body.redlinkResponde[0].ms === 'number', 'y cuánto tardó');
+    // Con nombre e id, para poder elegir sin adivinar desde un export viejo.
+    igual(r.body.redlinkResponde[0].detalle,
+          [{ id: 1524, nombre: 'PF ANTOFAGASTA', codigoSap: 'PF-004' },
+           { id: 1535, nombre: 'PF INVENTARIO VIRTUAL', codigoSap: 'PF-0016' }],
+          'ordenadas por id');
   });
 
   pruebaAsync('T13d si Redlink falla, acá SÍ se dice el motivo', async function () {
@@ -338,8 +344,11 @@ const MUT_F = [
   ['G08 siempre se consulta a Redlink',    /if \(String\(\(req\.query \|\| \{\}\)\.probar \|\| ''\) === '1'\) \{/, 'if (true) {'],
   ['G09 un fallo de Redlink tumba el diagnóstico', /\} catch \(e\) \{\n        \/\/ Acá SÍ va el motivo[\s\S]*?\n      \}/, '} catch (e) { throw e; }'],
   ['G10 el motivo del fallo no se informa', /motivo: String\(\(e && e\.message\) \|\| e\)\.slice\(0, 300\)/, "motivo: ''"],
-  ['G11 no se informa cuántas bodegas vinieron', /bodegas: Array\.isArray\(b\) \? b\.length : 0,/, 'bodegas: 0,'],
-  ['G12 la prueba no viaja en la respuesta', /redlinkResponde: prueba,/, '']
+  ['G11 no se informa cuántas bodegas vinieron', /bodegas: lista\.length, ms: Date\.now\(\) - t0,/, 'bodegas: 0, ms: Date.now() - t0,'],
+  ['G12 la prueba no viaja en la respuesta', /redlinkResponde: prueba,/, ''],
+  ['G13 las bodegas vienen sin nombre',     /nombre: x\.bodegaCliente \|\| x\.nombreBodega \|\| '',/, "nombre: '',"],
+  ['G14 las bodegas no se ordenan',         /\}\)\.sort\(function \(p, q\) \{ return Number\(p\.id\) - Number\(q\.id\); \}\) \}\);/, '}) });'],
+  ['G15 la lista de bodegas no viaja',      /detalle: lista\.map\(function \(x\) \{/, 'detalle: [].map(function (x) {']
 ];
 const MUT_L = [
   ['H01 la huella es un trozo de la clave', /return crypto\.createHash\('sha256'\)\.update\(String\(clave \|\| ''\), 'utf8'\)\.digest\('hex'\)\.slice\(0, 12\);/, 'return String(clave || "").slice(0, 12);'],

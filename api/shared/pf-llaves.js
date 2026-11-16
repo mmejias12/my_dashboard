@@ -74,4 +74,61 @@ function claveDe(req) {
   return m ? m[1].trim() : '';
 }
 
-module.exports = { configuradas, comparar, identificar, claveDe };
+// Por qué una entrada de PF_CLAVES no quedó activa. configuradas() descarta en
+// silencio —que es lo correcto para servir pedidos— pero entonces una clave mal
+// puesta se ve igual que una clave equivocada: 401 y nada más. Esto lo explica,
+// sin mostrar ninguna clave.
+//
+// La HUELLA son los primeros 12 caracteres del sha256 de la clave. Permite
+// comparar "la que mando" con "la que está configurada" sin que ninguna de las
+// dos viaje ni quede escrita en ningún lado.
+function huella(clave) {
+  return crypto.createHash('sha256').update(String(clave || ''), 'utf8').digest('hex').slice(0, 12);
+}
+
+function diagnostico(env) {
+  const e = env || process.env;
+  const crudo = e.PF_CLAVES;
+  if (!crudo) {
+    return { ok: false, entradas: 0, activas: 0, clientes: [], descartadas: [],
+             motivo: 'PF_CLAVES no está definida en la configuración' };
+  }
+  let lista;
+  try { lista = JSON.parse(crudo); }
+  catch (err) {
+    return { ok: false, entradas: 0, activas: 0, clientes: [], descartadas: [],
+             motivo: 'PF_CLAVES no es JSON válido; tiene que ser una lista en una sola línea' };
+  }
+  if (!Array.isArray(lista)) {
+    return { ok: false, entradas: 0, activas: 0, clientes: [], descartadas: [],
+             motivo: 'PF_CLAVES tiene que ser una LISTA: [{"clave":"…","bpId":…,"usuarioIngresoId":…}]' };
+  }
+  const descartadas = [];
+  lista.forEach(function (x, i) {
+    const p = [];
+    if (!x || typeof x !== 'object' || Array.isArray(x)) p.push('la entrada no es un objeto');
+    else {
+      if (typeof x.clave !== 'string') p.push('falta "clave", o no es texto');
+      else if (x.clave.length < 24) {
+        p.push('la clave tiene ' + x.clave.length + ' caracteres y el mínimo son 24');
+      }
+      if (!(Number(x.bpId) > 0)) p.push('falta "bpId", o no es un número mayor que cero');
+      if (!(Number(x.usuarioIngresoId) > 0)) p.push('falta "usuarioIngresoId", o no es un número mayor que cero');
+    }
+    if (p.length) descartadas.push({ entrada: i + 1, problemas: p });
+  });
+  const buenas = configuradas(e);
+  return {
+    ok: buenas.length > 0,
+    entradas: lista.length,
+    activas: buenas.length,
+    clientes: buenas.map(function (x) {
+      return { nombre: x.nombre, bpId: x.bpId, usuarioIngresoId: x.usuarioIngresoId,
+               largoClave: x.clave.length, huella: huella(x.clave) };
+    }),
+    descartadas: descartadas,
+    motivo: buenas.length ? '' : 'ninguna entrada de PF_CLAVES quedó activa'
+  };
+}
+
+module.exports = { configuradas, comparar, identificar, claveDe, huella, diagnostico };

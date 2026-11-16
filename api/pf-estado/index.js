@@ -11,6 +11,11 @@
 //  configura puede calcular la misma huella de la clave que está mandando y
 //  compararlas, sin que ninguna de las dos viaje.
 //
+//  CON ?probar=1 además intenta hablar con Redlink de verdad: lee el maestro de
+//  bodegas de cada cliente configurado. Es SÓLO LECTURA y no escribe nada. Sirve
+//  para ver el motivo real de un 503, que al cliente se le oculta a propósito
+//  —puede traer la respuesta de Redlink— pero que a quien opera no debería.
+//
 //    PowerShell:
 //      $k = "<la clave que mandas>"
 //      $h = [System.Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($k))
@@ -49,6 +54,25 @@ module.exports = async function (context, req) {
   const falta = escritura.faltantes();
   const diag = llaves.diagnostico();
 
+  // La prueba contra Redlink es opcional porque cuesta segundos y puede fallar
+  // sola: el estado de la configuración tiene que poder verse igual.
+  let prueba;
+  if (String((req.query || {}).probar || '') === '1') {
+    prueba = [];
+    for (const c of (diag.clientes || [])) {
+      const t0 = Date.now();
+      try {
+        const b = await escritura.bodegasDe(c.bpId);
+        prueba.push({ bpId: c.bpId, ok: true, bodegas: Array.isArray(b) ? b.length : 0,
+                      ms: Date.now() - t0 });
+      } catch (e) {
+        // Acá SÍ va el motivo: es el admin mirando su propia instalación.
+        prueba.push({ bpId: c.bpId, ok: false, ms: Date.now() - t0,
+                      motivo: String((e && e.message) || e).slice(0, 300) });
+      }
+    }
+  }
+
   return salir(200, {
     claves: diag,
     credenciales: {
@@ -62,6 +86,7 @@ module.exports = async function (context, req) {
       almacenamiento: bit.hayStorage(),
       contenedor: bit.hayStorage() ? bit.CONTAINER : ''
     },
+    redlinkResponde: prueba,
     listoParaRecibir: diag.ok && falta.length === 0
   });
 };

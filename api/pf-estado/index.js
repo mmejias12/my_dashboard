@@ -63,8 +63,16 @@ module.exports = async function (context, req) {
       const t0 = Date.now();
       try {
         const b = await escritura.bodegasDe(c.bpId);
-        prueba.push({ bpId: c.bpId, ok: true, bodegas: Array.isArray(b) ? b.length : 0,
-                      ms: Date.now() - t0 });
+        const lista = Array.isArray(b) ? b : [];
+        // La lista va completa a propósito: elegir bodegas para una prueba
+        // REAL a partir de un export viejo es cómo se mueven pallets por
+        // error. Acá salen las que Redlink tiene ahora mismo.
+        prueba.push({ bpId: c.bpId, ok: true, bodegas: lista.length, ms: Date.now() - t0,
+                      detalle: lista.map(function (x) {
+                        return { id: x.bodegaiD !== undefined ? x.bodegaiD : x.bodegaId,
+                                 nombre: x.bodegaCliente || x.nombreBodega || '',
+                                 codigoSap: x.codigoSap || '' };
+                      }).sort(function (p, q) { return Number(p.id) - Number(q.id); }) });
       } catch (e) {
         // Acá SÍ va el motivo: es el admin mirando su propia instalación.
         prueba.push({ bpId: c.bpId, ok: false, ms: Date.now() - t0,

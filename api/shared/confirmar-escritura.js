@@ -142,12 +142,28 @@ async function idDeFolio(folio, desdeIso, hastaIso, pedirFn) {
 function resumirFalla(e) {
   const m = (e && e.message) ? String(e.message) : String(e);
   const n = (e && e.name) ? String(e.name) : '';
+  // La CAUSA es donde Node guarda lo útil. "fetch failed" a secas no distingue
+  // un host caído de un problema de DNS ni de un certificado, y hasta ahora
+  // esos tres caían todos en el cajón genérico. Medido el 16-nov-2026: el
+  // corte real era UND_ERR_CONNECT_TIMEOUT contra api.portalredtec.cl:443.
+  const c = (e && e.cause) ? e.cause : null;
+  const cod = c ? String(c.code || c.name || '') : '';
+  const cm = c ? String(c.message || '') : '';
+
   if (/TimeoutError|AbortError|aborted|timed?[ -]?out/i.test(n + ' ' + m)) {
     return 'Redlink no respondió dentro del plazo';
   }
   const http = m.match(/HTTP (\d{3})/);
   if (http) return 'Redlink respondió HTTP ' + http[1];
   if (/autenticar|access_token/i.test(m)) return 'no se pudo autenticar como M3LinkSystem';
+
+  // Las causas que de verdad aparecen, nombradas para que no haya que ir al log.
+  if (/CONNECT_TIMEOUT/i.test(cod)) return 'no se pudo abrir la conexión con Redlink (el servidor no contestó)';
+  if (/ENOTFOUND|EAI_AGAIN/i.test(cod)) return 'no se pudo resolver el nombre del servidor de Redlink';
+  if (/ECONNREFUSED/i.test(cod)) return 'Redlink rechazó la conexión';
+  if (/ECONNRESET|UND_ERR_SOCKET/i.test(cod)) return 'la conexión con Redlink se cortó a la mitad';
+  if (/CERT|SELF_SIGNED|ERR_TLS/i.test(cod + ' ' + cm)) return 'el certificado de Redlink no se pudo validar';
+  if (cod) return 'no se pudo hablar con Redlink (' + cod + ')';
   return 'no se pudo hablar con Redlink';
 }
 

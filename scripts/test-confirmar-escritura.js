@@ -554,6 +554,42 @@ async function correr(S, hacerF) {
     cierto(/no se pudo hablar con Redlink/.test(r.dice), r.dice);
   });
 
+  pruebaAsync('E45 un "fetch failed" dice QUÉ pasó, no el cajón genérico', async () => {
+    // Es el caso real del 19-nov con las confirmaciones de Walmart: la página
+    // mostraba "no se pudo hablar con Redlink" y logística no tenía cómo saber
+    // si era el servidor, el DNS o una credencial. Las tres se veían igual.
+    const casos = [
+      ['UND_ERR_CONNECT_TIMEOUT', /no se pudo abrir la conexión/],
+      ['ENOTFOUND',               /no se pudo resolver el nombre/],
+      ['ECONNREFUSED',            /rechazó la conexión/],
+      ['ECONNRESET',              /se cortó a la mitad/]
+    ];
+    for (const [cod, espera] of casos) {
+      const e = new Error('fetch failed');
+      e.cause = Object.assign(new Error('x'), { code: cod });
+      const s = servidor({ cortaPatch: e });
+      const r = await conEntorno(() => S.confirmarUna(4149330, 1, { pedir: s.pedir }));
+      cierto(espera.test(r.dice), 'con ' + cod + ' vino: ' + r.dice);
+    }
+  });
+
+  pruebaAsync('E46 una causa desconocida se nombra por su código, no se traga', async () => {
+    const e = new Error('fetch failed');
+    e.cause = Object.assign(new Error('x'), { code: 'EL_CODIGO_RARO' });
+    const s = servidor({ cortaPatch: e });
+    const r = await conEntorno(() => S.confirmarUna(4149330, 1, { pedir: s.pedir }));
+    cierto(/EL_CODIGO_RARO/.test(r.dice), r.dice);
+  });
+
+  pruebaAsync('E47 la causa NO pisa a las clasificaciones que ya funcionaban', async () => {
+    const e = new Error('The operation was aborted due to timeout');
+    e.name = 'TimeoutError';
+    e.cause = Object.assign(new Error('x'), { code: 'UND_ERR_CONNECT_TIMEOUT' });
+    const s = servidor({ cortaPatch: e });
+    const r = await conEntorno(() => S.confirmarUna(4149330, 1, { pedir: s.pedir }));
+    cierto(/no respondió dentro del plazo/.test(r.dice), r.dice);
+  });
+
   pruebaAsync('F08b un bug NUESTRO sigue saliendo como 502 y sin detalle', async () => {
     // Único camino que queda para el catch de la función: que confirmarUna se
     // rompa sola. Ahí sí es culpa nuestra y va al log, no a la pantalla.
@@ -599,7 +635,12 @@ const MUTACIONES = [
   ['X45 el camino dudoso no nombra el folio a revisar', /'a escribir en Redlink: revisa el folio ' \+ folio \+ ' antes de reintentar, porque confirmar '/, "'a escribir en Redlink: revisa el folio antes de reintentar, porque confirmar '"],
   ['X46 un timeout se reporta como caída genérica',    /if \(\/TimeoutError\|AbortError\|aborted\|timed\?\[ -\]\?out\/i\.test\(n \+ ' ' \+ m\)\) \{\n    return 'Redlink no respondió dentro del plazo';\n  \}/, ''],
   ['X47 un HTTP conocido se reporta como caída genérica', /if \(http\) return 'Redlink respondió HTTP ' \+ http\[1\];/, ''],
-  ['X48 el resumen deja pasar el detalle crudo',       /return 'no se pudo hablar con Redlink';/, 'return m;'],
+  ['X48 el resumen deja pasar el detalle crudo',       /  return 'no se pudo hablar con Redlink';\n\}/, '  return m;\n}'],
+  ['X50 la causa se ignora y todo cae al cajón genérico', /  const c = \(e && e\.cause\) \? e\.cause : null;/, '  const c = null;'],
+  ['X51 un timeout de conexión no se distingue',       /if \(\/CONNECT_TIMEOUT\/i\.test\(cod\)\) return 'no se pudo abrir la conexión con Redlink \(el servidor no contestó\)';/, ''],
+  ['X52 un fallo de DNS no se distingue',              /if \(\/ENOTFOUND\|EAI_AGAIN\/i\.test\(cod\)\) return 'no se pudo resolver el nombre del servidor de Redlink';/, ''],
+  ['X53 una causa desconocida se traga',               /if \(cod\) return 'no se pudo hablar con Redlink \(' \+ cod \+ '\)';/, ''],
+  ['X54 la causa pisa al timeout propio',              /  if \(\/TimeoutError\|AbortError\|aborted\|timed\?\[ -\]\?out\/i\.test\(n \+ ' ' \+ m\)\) \{\n    return 'Redlink no respondió dentro del plazo';\n  \}/, ''],
   ['X49 el campo escribio no viaja',                   /\{ escribio: 'no-se-sabe', id: id \}/, '{ id: id }'],
   ['X01 el cuerpo del PATCH se reserializa',            /body: prep\.texto {22}\/\/ los MISMOS bytes, sin reserializar/, 'body: JSON.stringify(JSON.parse(prep.texto))'],
   ['X02 no se relee el documento después de escribir',  /const despues = await leer\(id\);/, 'const despues = JSON.parse(prep.texto);'],

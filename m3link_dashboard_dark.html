@@ -4403,13 +4403,21 @@ document.addEventListener('click', function(e){
 #agB:hover .agR{box-shadow:0 2px 12px rgba(227,30,36,.65)}
 /*  LA R DE REDTEC, dibujada con tipografia y no con una imagen: pesa cero,
  *  se ve nitida en cualquier pantalla y toma el color de la marca. */
+/*  LA R ES LA DE LA MARCA, la misma que ya muestra el panel arriba a la
+ *  izquierda. No se copia el PNG —son 28 KB y el archivo ya lo trae dos
+ *  veces—: al cargar se lee el `src` de .logo-mark y se guarda en una
+ *  variable CSS. Asi una sola copia del dato sirve para el boton, el
+ *  encabezado del panel y el avatar de cada respuesta, y si algun dia cambia
+ *  el logo del panel cambian todos juntos.
+ *  La letra queda abajo como respaldo: si no hubiera logo en la pagina, se ve
+ *  una R y no un hueco. */
 #agB .agR{position:relative;width:23px;height:23px;flex-shrink:0;border-radius:7px;
-  /*  EL ROJO DE LA MARCA, #E31E24, y no el #E74C3C que traia el circulo viejo.
-   *  Aparte de ser el de verdad, la R blanca encima da 4,69:1 contra 3,82:1
-   *  del otro: una letra de 13px a 3,8 no se lee bien. */
   background:linear-gradient(135deg,#C0392B,#E31E24);color:#fff;
   font-weight:800;font-size:13px;line-height:23px;text-align:center;
   box-shadow:0 2px 8px rgba(227,30,36,.45);transition:box-shadow .18s}
+.rtcR #agB .agR{background:var(--rtc-r) center/contain no-repeat;
+  border-radius:0;box-shadow:none;font-size:0}
+.rtcR #agB:hover .agR{box-shadow:none;filter:brightness(1.15)}
 #agB .agL{display:flex;flex-direction:column;gap:1px;min-width:0}
 /*  EL NOMBRE VA EN EL COLOR DE TEXTO NORMAL, no en el gris apagado del menu.
  *  El gris de --text-muted da 2,7:1 sobre el fondo oscuro —por debajo de lo
@@ -4427,9 +4435,11 @@ document.addEventListener('click', function(e){
 .sidebar.collapsed #agB .agL{display:none}
 /*  El punto verde avisa que hay datos nuevos que analizar. Va pegado a la R
  *  para que tambien se vea con el menu colapsado. */
-#agBdot{position:absolute;top:-3px;right:-3px;width:8px;height:8px;
+#agBdot{position:absolute;top:-3px;right:-4px;width:8px;height:8px;
   background:#4ade80;border-radius:50%;border:2px solid var(--bg-surface);
   display:none}
+/*  Sin chip de fondo la R es mas angosta, asi que el punto se corre adentro. */
+.rtcR #agBdot{top:-2px;right:-2px}
 /*  Pie de trazabilidad: que galaxias del REDTEC OS se consultaron. */
 .agFu{margin-top:7px;padding-top:6px;border-top:1px solid rgba(255,255,255,.10);
   font-size:9.5px;letter-spacing:.3px;text-transform:uppercase;opacity:.75}
@@ -4473,7 +4483,10 @@ document.addEventListener('click', function(e){
 .am{display:flex;align-items:flex-start;gap:6px}
 .am.u{flex-direction:row-reverse}
 .aav{width:25px;height:25px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;flex-shrink:0}
-.aav.ai{background:linear-gradient(135deg,#C0392B,#E74C3C);color:#fff}
+.aav.ai{background:linear-gradient(135deg,#C0392B,#E31E24);color:#fff}
+.rtcR .aav.ai{background:var(--rtc-r) center/contain no-repeat;font-size:0}
+.rtcR #agAv{background:var(--rtc-r) center/contain no-repeat;font-size:0;
+  box-shadow:none;border-radius:0}
 .aav.us{background:rgba(255,255,255,.08);color:#8b90a8}
 .ab{max-width:87%;padding:7px 10px;border-radius:9px;font-size:11.5px;line-height:1.55}
 .ab.ai{background:rgba(255,255,255,.05);color:#f0f1f5;border-radius:2px 9px 9px 9px}
@@ -4541,6 +4554,18 @@ document.addEventListener('click', function(e){
   var busy = false;
   var hist = [];
 
+  /*  TOMAR LA R DEL PROPIO PANEL. Se lee el logo que ya esta en el encabezado y
+   *  se guarda en una variable CSS: una sola copia del PNG para todas las
+   *  erres del agente. Si no hubiera logo, no se pone la clase y queda la
+   *  letra de respaldo. */
+  (function ponerLaR() {
+    var img = document.querySelector('img.logo-mark');
+    var src = img && img.getAttribute('src');
+    if (!src || src.indexOf('data:image') !== 0) return;
+    document.documentElement.style.setProperty('--rtc-r', 'url("' + src + '")');
+    document.documentElement.classList.add('rtcR');
+  })();
+
   /*  El texto de una excepcion entra por innerHTML. Propio y no prestado: este
    *  bloque es autonomo y no puede depender de que otra parte de la pagina
    *  defina un esc(). */
@@ -4584,7 +4609,13 @@ document.addEventListener('click', function(e){
       p.classList.add('on');
       agColocar();
       document.getElementById('agBdot').style.display = 'none';
-      if (hist.length === 0) agWelcome();
+      /*  EL SALUDO VA UNA SOLA VEZ. Antes la condicion miraba `hist`, que es el
+       *  historial que se le manda al modelo, y agWelcome() no escribe ahi
+       *  —es un texto de la interfaz, no un turno de la conversacion—: la
+       *  condicion nunca dejaba de cumplirse y cada vez que se abria el panel
+       *  se apilaba otro "Hola". Lo que hay que mirar es si la lista de
+       *  mensajes ya tiene algo. */
+      if (!document.getElementById('agM').children.length) agWelcome();
       setTimeout(function() { document.getElementById('agTxt').focus(); }, 120);
     } else {
       p.classList.remove('on');

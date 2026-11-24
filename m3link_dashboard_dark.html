@@ -966,6 +966,11 @@
       <a href="asistencia-aldia.html" class="s-item"><i class="ti ti-calendar-week"></i> Asistencia al día</a>
     </div>
     <button class="sb-toggle" onclick="toggleSidebar()" title="Colapsar / expandir menú"><i class="ti ti-chevrons-left"></i><span>Colapsar</span></button>
+    <button id="agB" onclick="agT()" type="button"
+            title="Preguntar al agente de REDTEC OS" aria-label="Agente REDTEC">
+      <span class="agR">R<span id="agBdot"></span></span>
+      <span class="agL"><b>Agente REDTEC</b><i>Pregúntale a REDTEC OS</i></span>
+    </button>
   </div>
 
   <div class="main">
@@ -4377,25 +4382,64 @@ document.addEventListener('click', function(e){
 })();
 </script>
 
-</body>
-</html>
+<script src="/buildCtx.js"></script>
 <!-- ═══════════════════════════════════════════════════════════
      AGENTE IA — REDTEC OPERACIONES
      Posición: bottom-center (no interfiere al cambiar sección)
      ═══════════════════════════════════════════════════════════ -->
 <style>
-#agB{position:fixed;bottom:24px;right:250px;
-  width:52px;height:52px;
-  background:linear-gradient(135deg,#C0392B,#E74C3C);
-  border:none;border-radius:50%;cursor:pointer;
-  box-shadow:0 4px 18px rgba(192,57,43,.5);z-index:9999;
-  display:flex;align-items:center;justify-content:center;
-  transition:transform .18s,box-shadow .18s;user-select:none}
-#agB:hover{transform:scale(1.08);box-shadow:0 6px 24px rgba(192,57,43,.7)}
-#agBdot{width:7px;height:7px;background:#4ade80;border-radius:50%;
-  border:2px solid rgba(255,255,255,.3);display:none;flex-shrink:0}
+/*  EL AGENTE VIVE EN EL MENU, debajo de Colapsar.
+ *
+ *  Antes era un circulo rojo fijo abajo a la derecha: tapaba la vista, no se
+ *  entendia que era y quedaba lejos de donde se elige todo lo demas. Como
+ *  entrada del menu se lee igual que el resto, se colapsa con el menu y deja
+ *  la pantalla libre. Hereda el molde de .sb-toggle, que es su vecino. */
+#agB{width:100%;background:transparent;border:none;
+  border-top:1px solid var(--border);color:var(--text-muted);
+  padding:10px 10px;cursor:pointer;display:flex;align-items:center;
+  justify-content:flex-start;gap:9px;font-size:11.5px;font-family:inherit;
+  text-align:left;transition:background .15s,color .15s;user-select:none}
+#agB:hover{color:#ff6b70;background:rgba(227,30,36,0.07)}
+#agB:hover .agR{box-shadow:0 2px 12px rgba(227,30,36,.65)}
+/*  LA R DE REDTEC, dibujada con tipografia y no con una imagen: pesa cero,
+ *  se ve nitida en cualquier pantalla y toma el color de la marca. */
+#agB .agR{position:relative;width:23px;height:23px;flex-shrink:0;border-radius:7px;
+  /*  EL ROJO DE LA MARCA, #E31E24, y no el #E74C3C que traia el circulo viejo.
+   *  Aparte de ser el de verdad, la R blanca encima da 4,69:1 contra 3,82:1
+   *  del otro: una letra de 13px a 3,8 no se lee bien. */
+  background:linear-gradient(135deg,#C0392B,#E31E24);color:#fff;
+  font-weight:800;font-size:13px;line-height:23px;text-align:center;
+  box-shadow:0 2px 8px rgba(227,30,36,.45);transition:box-shadow .18s}
+#agB .agL{display:flex;flex-direction:column;gap:1px;min-width:0}
+/*  EL NOMBRE VA EN EL COLOR DE TEXTO NORMAL, no en el gris apagado del menu.
+ *  El gris de --text-muted da 2,7:1 sobre el fondo oscuro —por debajo de lo
+ *  legible— y ademas esto no es un control de utilidad como Colapsar: es la
+ *  entrada que se quiere que la gente apriete. La bajada si queda apagada,
+ *  que es secundaria. */
+#agB .agL b{font-weight:600;font-size:12px;color:var(--text-primary);line-height:1.3}
+/*  La bajada hereda el gris del menu y encima le bajaba la opacidad: quedaba
+ *  mas apagada que el texto mas apagado de la pagina. Va en el gris secundario
+ *  y sin opacidad. */
+#agB .agL i{font-style:normal;font-size:10px;color:var(--text-secondary);line-height:1.3;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/*  Con el menu colapsado queda solo la R, centrada, como los demas iconos. */
+.sidebar.collapsed #agB{justify-content:center;padding:10px 0;gap:0}
+.sidebar.collapsed #agB .agL{display:none}
+/*  El punto verde avisa que hay datos nuevos que analizar. Va pegado a la R
+ *  para que tambien se vea con el menu colapsado. */
+#agBdot{position:absolute;top:-3px;right:-3px;width:8px;height:8px;
+  background:#4ade80;border-radius:50%;border:2px solid var(--bg-surface);
+  display:none}
+/*  Pie de trazabilidad: que galaxias del REDTEC OS se consultaron. */
+.agFu{margin-top:7px;padding-top:6px;border-top:1px solid rgba(255,255,255,.10);
+  font-size:9.5px;letter-spacing:.3px;text-transform:uppercase;opacity:.75}
+:root[data-theme="light"] .agFu{border-top-color:rgba(16,24,40,.12)}
 
-#agP{position:fixed;bottom:88px;right:250px;
+/*  El panel se abre AL LADO del menu. El `left` real lo pone agT() leyendo
+ *  el ancho que el menu tiene en ese momento: colapsado mide 46px y
+ *  expandido 230px, y un numero fijo en el CSS se desalinea con uno de los
+ *  dos. */
+#agP{position:fixed;bottom:16px;left:246px;
   width:390px;max-height:560px;background:#0d111a;
   border:1px solid rgba(255,255,255,.1);border-radius:14px;
   display:none;flex-direction:column;overflow:hidden;
@@ -4461,31 +4505,25 @@ document.addEventListener('click', function(e){
 #agM::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:2px}
 </style>
 
-<!-- Botón central -->
-<button id="agB" onclick="agT()" title="Agente IA · Operaciones">
-  <div id="agBdot"></div>
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-</button>
-
 <!-- Panel -->
 <div id="agP">
   <div id="agH">
-    <div id="agAv">IA</div>
-    <div><div id="agHN">Agente REDTEC</div><div id="agHS">Operaciones · Análisis en tiempo real</div></div>
+    <div id="agAv">R</div>
+    <div><div id="agHN">Agente REDTEC</div><div id="agHS">Con los datos de REDTEC OS</div></div>
     <div id="agSt"></div>
     <button id="agClr" onclick="agClr()" title="Limpiar">↺</button>
     <button id="agX"   onclick="agT()"   title="Cerrar">✕</button>
   </div>
   <div id="agCtx" class="nd">
     <div id="agCtxDot"></div>
-    <span id="agCtxTxt">Carga datos del período para activar el análisis</span>
+    <span id="agCtxTxt">Sin período cargado: respondo con los datos de REDTEC OS</span>
   </div>
   <div id="agM"></div>
   <div id="agSugs">
-    <span class="asug" onclick="agSug(this)">¿Emisiones pendientes?</span>
     <span class="asug" onclick="agSug(this)">¿Qué hay sin despachar?</span>
+    <span class="asug" onclick="agSug(this)">¿Cómo viene el stock del pool?</span>
     <span class="asug" onclick="agSug(this)">Resumen del período</span>
-    <span class="asug" onclick="agSug(this)">Clientes con retiros</span>
+    <span class="asug" onclick="agSug(this)">Los clientes que más mueven</span>
   </div>
   <div id="agIn">
     <textarea id="agTxt" rows="1" placeholder="Pregunta sobre las operaciones..."
@@ -4503,11 +4541,48 @@ document.addEventListener('click', function(e){
   var busy = false;
   var hist = [];
 
+  /*  El texto de una excepcion entra por innerHTML. Propio y no prestado: este
+   *  bloque es autonomo y no puede depender de que otra parte de la pagina
+   *  defina un esc(). */
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  /*  DONDE SE ABRE EL PANEL. Se lee el borde derecho del menu en el momento de
+   *  abrir, en vez de clavar un numero: el menu mide 230px expandido y 46px
+   *  colapsado, y cualquiera de los dos valores fijos deja el panel encima del
+   *  menu o flotando lejos. En una pantalla angosta se pega al borde para no
+   *  salirse. */
+  function agColocar() {
+    var p = document.getElementById('agP');
+    if (!p) return;
+    var sb = document.getElementById('mainSidebar');
+    var vp = window.innerWidth;
+    /*  EN PANTALLA ANGOSTA EL PANEL OCUPA EL ANCHO. Con sus 390px fijos en un
+     *  telefono de 390 se salia por la derecha y tapaba el propio boton, que
+     *  es el unico modo de cerrarlo: quedabas encerrado en el panel. */
+    if (vp < 720) {
+      p.style.width = (vp - 16) + 'px';
+      p.style.left = '8px';
+      p.style.maxHeight = '68vh';
+      return;
+    }
+    p.style.width = '';
+    p.style.maxHeight = '';
+    var x = sb ? sb.getBoundingClientRect().right + 12 : 16;
+    var ancho = p.offsetWidth || 390;
+    p.style.left = Math.max(8, Math.min(x, vp - ancho - 12)) + 'px';
+  }
+  window.addEventListener('resize', function () { if (isOpen) agColocar(); });
+
   function agT() {
     isOpen = !isOpen;
     var p = document.getElementById('agP');
     if (isOpen) {
       p.classList.add('on');
+      agColocar();
       document.getElementById('agBdot').style.display = 'none';
       if (hist.length === 0) agWelcome();
       setTimeout(function() { document.getElementById('agTxt').focus(); }, 120);
@@ -4519,10 +4594,11 @@ document.addEventListener('click', function(e){
 
   function agWelcome() {
     agAdd('ai',
-      'Hola! Soy el agente de operaciones REDTEC.<br><br>' +
-      'Puedo analizar el período cargado: emisiones, retiros, transferencias, ' +
-      'clientes pendientes y cantidades.<br><br>' +
-      '<span style="color:var(--text-muted);font-size:10.5px">Elige un período arriba para activar el análisis.</span>'
+      'Hola. Pregúntame lo que necesites de la operación.<br><br>' +
+      'Leo los datos de REDTEC OS —stock, pool, clientes, transporte, reparación— ' +
+      'y también el período que tengas cargado en esta pantalla. ' +
+      'No hace falta que la respuesta esté a la vista.<br><br>' +
+      '<span style="color:var(--text-muted);font-size:10.5px">Si un dato no lo tengo, te lo digo. No invento cifras.</span>'
     );
   }
 
@@ -4551,9 +4627,17 @@ document.addEventListener('click', function(e){
     }
   };
 
-  function buildCtx() {
+  /*  LO QUE LA PERSONA TIENE EN PANTALLA.
+   *
+   *  Antes esto ERA el system completo —empezaba con "Eres un asistente..."— y
+   *  el agente no sabia nada mas que la tabla cargada. Ahora es un ANEXO: el
+   *  system de verdad lo arma buildCtx() de REDTEC OS, que trae el snapshot de
+   *  toda la operacion y las herramientas. Dos "Eres un asistente" en el mismo
+   *  prompt se contradicen, asi que esa linea se saco de aqui. Sin datos
+   *  cargados devuelve vacio: el anexo simplemente no viaja. */
+  function ctxPantalla() {
     var datos = (typeof raw !== 'undefined') ? raw : [];
-    if (!datos.length) return 'No hay datos cargados.';
+    if (!datos.length) return '';
 
     var d1el = document.getElementById('d1');
     var d2el = document.getElementById('d2');
@@ -4588,7 +4672,6 @@ document.addEventListener('click', function(e){
     }
 
     var lines = [];
-    lines.push('Eres un asistente de operaciones logisticas REDTEC. Responde en espanol, directo y con numeros.');
     lines.push('PERIODO: ' + d1 + ' a ' + d2 + ' | TOTAL REGISTROS: ' + datos.length);
     lines.push('');
     lines.push('OPERACIONES:');
@@ -4631,17 +4714,46 @@ document.addEventListener('click', function(e){
     var m = document.getElementById('agM');
     m.appendChild(ld); m.scrollTop = 99999;
 
-    fetch('https://redtecagente-e9hahhgvc0enc9an.westus3-01.azurewebsites.net/api/chat', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 800,
-        system: buildCtx(),
-        messages: hist
-      })
+    /*  AL RELAY DEL PROPIO PORTAL, no al host externo.
+     *
+     *  Antes apuntaba a redtecagente-....azurewebsites.net, otro origen. Eso
+     *  trae dos problemas: el navegador no manda la sesion de Entra, asi que
+     *  la Function no sabe QUIEN pregunta —y el relay de REDTEC OS usa
+     *  justamente el rol para decidir si puede mostrar Finanzas—, y ademas ese
+     *  endpoint queda expuesto por su cuenta. /api/chat es del mismo Static
+     *  Web App: la sesion viaja sola, el rol llega, y las herramientas del
+     *  REDTEC OS (stock, operacion, cliente, finanzas) ya estan declaradas
+     *  ahi, sin tener que repetirlas aca.
+     *
+     *  El system son DOS PARTES: el de REDTEC OS, que trae el snapshot de toda
+     *  la operacion y las reglas, y debajo lo que la persona tiene en
+     *  pantalla. Por eso puede contestar cosas que no estan a la vista. */
+    var ctxOS = (typeof buildCtx === 'function')
+      ? buildCtx()
+      : Promise.reject(new Error('falta /buildCtx.js'));
+    Promise.resolve(ctxOS).then(function (sysOS) {
+      var enPantalla = ctxPantalla();
+      var system = enPantalla
+        ? sysOS + '\n\nLO QUE LA PERSONA TIENE EN PANTALLA AHORA\n' +
+          'Es el panel de control del m3link, con el periodo que la persona eligio. ' +
+          'Si la pregunta es sobre lo que esta mirando, contesta con esto; si es ' +
+          'sobre otra cosa, usa los datos y las herramientas de arriba.\n' + enPantalla
+        : sysOS;
+      return fetch('/api/chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1200,
+          system: system,
+          messages: hist
+        })
+      });
     })
-    .then(function(r){ return r.json(); })
+    .then(function(r){
+      if (!r.ok) throw new Error('el asistente respondió HTTP ' + r.status);
+      return r.json();
+    })
     .then(function(data) {
       var el = document.getElementById('agLD');
       if (el) el.remove();
@@ -4649,8 +4761,20 @@ document.addEventListener('click', function(e){
         agAdd('ai', '<span style="color:var(--e-red)">Error: ' + (data.error.message || 'Sin respuesta') + '</span>');
         hist.pop();
       } else {
-        var reply = data.content[0].text;
-        agAdd('ai', reply.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>'));
+        var reply = ((data.content || []).filter(function (x) { return x.type === 'text'; })
+                                          .map(function (x) { return x.text; }).join('\n')).trim();
+        if (!reply) throw new Error('respuesta vacía');
+        /*  El prompt de REDTEC OS obliga a cerrar con "[FUENTES: pallet, pool]".
+         *  Mostrarla cruda al final del texto se lee como un error; se separa y
+         *  se pinta como pie de trazabilidad. */
+        var fuentes = '';
+        reply = reply.replace(/\n?\[FUENTES:([^\]]*)\]\s*$/i, function (m, g) {
+          fuentes = g.split(',').map(function (x) { return x.trim(); })
+                     .filter(Boolean).join(' · ');
+          return '';
+        }).trim();
+        agAdd('ai', reply.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>') +
+                    (fuentes ? '<div class="agFu">Fuentes: ' + fuentes + '</div>' : ''));
         hist.push({role:'assistant', content:reply});
       }
       busy = false;
@@ -4660,7 +4784,12 @@ document.addEventListener('click', function(e){
     .catch(function(e) {
       var el = document.getElementById('agLD');
       if (el) el.remove();
-      agAdd('ai', '<span style="color:var(--e-red)">No se pudo conectar. Reintenta.</span>');
+      /*  Decir QUE fallo. "Reintenta" a secas no distingue una caida de red de
+       *  una sesion vencida, que es el caso frecuente y se arregla recargando. */
+      agAdd('ai', '<span style="color:var(--e-red)">No pude consultar los datos de la ' +
+                  'operación.</span><br><span style="font-size:10.5px;opacity:.75">' +
+                  esc(e && e.message ? e.message : String(e)) +
+                  '. Si dice 401 o 403, vuelve a entrar al portal.</span>');
       hist.pop();
       busy = false;
       document.getElementById('agGo').disabled = false;
@@ -4673,7 +4802,7 @@ document.addEventListener('click', function(e){
     w.className = 'am' + (role === 'user' ? ' u' : '');
     var av = document.createElement('div');
     av.className = 'aav ' + (role === 'ai' ? 'ai' : 'us');
-    av.textContent = role === 'ai' ? 'IA' : 'Tú';
+    av.textContent = role === 'ai' ? 'R' : 'Tú';
     var b = document.createElement('div');
     b.className = 'ab ' + (role === 'ai' ? 'ai' : 'us');
     b.innerHTML = html;
@@ -4683,3 +4812,6 @@ document.addEventListener('click', function(e){
   }
 })();
 </script>
+
+</body>
+</html>

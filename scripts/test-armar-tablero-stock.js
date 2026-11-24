@@ -1412,5 +1412,17 @@ chk('cada fila trae RUT y nombre en minuscula para buscar',
 chk('y el aviso de sin resultados existe y arranca oculto',
     /data-vacio="t-c" hidden/.test(HST), '');
 
+/*  LA SERIE DIARIA TIENE QUE SOBREVIVIR EL CORTE. El cockpit relee la tabla
+ *  de socios a cualquier dia con estos pares; si cortarSocios los deja fuera,
+ *  el cockpit no se cae: muestra la lista de HOY con el titulo de enero. */
+const SOCS=[{cod:'S1',nom:'uno',nivel:100,partida:10,serie:[0,10,5,100]},
+            {cod:'S2',nom:'dos',nivel:7,partida:7}];
+chk('la serie diaria pasa el corte', JSON.stringify(A.cortarSocios(SOCS).top[0].serie)==='[0,10,5,100]',
+    JSON.stringify(A.cortarSocios(SOCS).top[0].serie));
+chk('el socio que nunca se movio queda con serie vacia',
+    Array.isArray(A.cortarSocios(SOCS).top[1].serie) && A.cortarSocios(SOCS).top[1].serie.length===0, '');
+chk('y la partida sigue publicandose como ini', A.cortarSocios(SOCS).top[0].ini===10,
+    String(A.cortarSocios(SOCS).top[0].ini));
+
 console.log('\n' + ok + ' ok, ' + fail + ' fallas');
 process.exit(fail ? 1 : 0);

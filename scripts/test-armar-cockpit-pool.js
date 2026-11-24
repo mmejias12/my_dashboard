@@ -1692,6 +1692,48 @@ chk('y la nota explica la diferencia, con el numero',
     /Hay <b>1\.445<\/b> más en la bodega que ninguna ubicación atribuye a un socio/.test(HSB),
     (HSB.match(/<p class="mut">[\s\S]{0,170}/)||[''])[0]);
 
+// ── leer la pata a un dia cualquiera ───────────────────────────────────────
+// La serie de cada socio son pares [indice, nivel] solo de los dias en que se
+// movio. nivelAlDia la lee; pataAlDia reordena la lista entera a ese dia.
+const DIASP=['2026-01-05','2026-01-06','2026-01-07','2026-01-08'];
+const SOCD=[{cod:'A',nom:'A',nivel:100,cambio:0,partida:10,serie:[0,50,3,100]},
+            {cod:'B',nom:'B',nivel:20, cambio:0,partida:80,serie:[1,20]},
+            {cod:'C',nom:'C',nivel:5,  cambio:0,partida:5, serie:[]}];
+const MPD=A.mayoresDePata(SOCD,0,0,DIASP);
+chk('la serie y la partida viajan al navegador',
+    MPD.top[0].serie.join(',')==='0,50,3,100' && MPD.top[0].s0===10,
+    JSON.stringify(MPD.top[0].serie)+'/'+MPD.top[0].s0);
+chk('y los dias de la pata tambien', MPD.dias.join(',')===DIASP.join(','), MPD.dias.join(','));
+const porCod=(p,c)=>p.top.filter(x=>x.cod===c)[0];
+chk('nivelAlDia lee el dia del movimiento',
+    A.nivelAlDia(porCod(MPD,'A'),0)===50 && A.nivelAlDia(porCod(MPD,'A'),3)===100, '');
+chk('un dia sin movimiento hereda el anterior',
+    A.nivelAlDia(porCod(MPD,'A'),1)===50 && A.nivelAlDia(porCod(MPD,'A'),2)===50, '');
+chk('antes del primer movimiento vale la partida',
+    A.nivelAlDia(porCod(MPD,'B'),0)===80, String(A.nivelAlDia(porCod(MPD,'B'),0)));
+chk('sin serie, siempre la partida',
+    A.nivelAlDia(porCod(MPD,'C'),0)===5 && A.nivelAlDia(porCod(MPD,'C'),3)===5, '');
+// EL ORDEN CAMBIA CON EL DIA: el 5 de enero manda B con 80 y no A con 50
+const D0=A.pataAlDia(MPD,0);
+chk('al elegir un dia se reordena por el nivel DE ESE DIA',
+    D0.top.map(x=>x.cod).join(',')==='B,A,C', D0.top.map(x=>x.cod+':'+x.nivel).join(' '));
+chk('y el total es el de ese dia', D0.total===80+50+5, String(D0.total));
+chk('el ultimo dia reproduce el de hoy',
+    A.pataAlDia(MPD,3).total===MPD.total, A.pataAlDia(MPD,3).total+' vs '+MPD.total);
+chk('un socio que ese dia estaba en cero no aparece',
+    A.pataAlDia(A.mayoresDePata([{cod:'Z',nom:'Z',nivel:9,partida:0,serie:[2,9]}],0,0,DIASP),0)
+      .top.length===0, '');
+chk('un dia fuera de rango devuelve la pata tal cual',
+    A.pataAlDia(MPD,-1)===MPD && A.pataAlDia(MPD,99)===MPD && A.pataAlDia(MPD,null)===MPD, '');
+chk('leer un dia no ensucia la pata original',
+    MPD.top.map(x=>x.cod).join(',')==='A,B,C' && MPD.total===125,
+    MPD.top.map(x=>x.cod+':'+x.nivel).join(' '));
+// el contexto "de X" se calla: no tenemos el saldo de bodega de ese dia
+chk('al elegir un dia no se repite el saldo de bodega de hoy',
+    D0.bodega===0 && D0.residuo===0 && !/<i>/.test(A.sociosHtml(D0,'x','')), '');
+chk('el navegador tiene con que leer un dia',
+    JSP.indexOf('function nivelAlDia')>0 && JSP.indexOf('function pataAlDia')>0, '');
+
 const HSP=A.sociosHtml(MP,'Quién tiene estos pallets','una nota');
 // VA PLEGADO: el cajon ya tiene la cifra, la grilla y el calendario
 chk('va plegado, no abierto', /<details class="socp"><summary>/.test(HSP) &&
@@ -1778,14 +1820,19 @@ chk('no se cruzan los saldos de bodega',
 chk('cada pata trae los suyos, no los del vecino',
     CSOC.pool.socios.CLIENTES.top[0].cod==='C1' && CSOC.pool.socios.RETAIL.top[0].cod==='R1',
     CSOC.pool.socios.CLIENTES.top[0].cod + '/' + CSOC.pool.socios.RETAIL.top[0].cod);
-// EL CAJON CORTA EN DIEZ: son unos 8 KB en la pagina; sin corte se van los 59
+// EL CAJON LOS LLEVA TODOS: gerencia pidio poder bajar hasta el ultimo dentro
+// del mismo bloque, asi que ya no se corta en diez
 const CTOP=A.composiciones(Object.assign({},D,{clientes:SOCP,retail:SOCP}),BS);
-chk('el cajon corta en diez aunque haya mas',
-    CTOP.pool.socios.CLIENTES.top.length===10 && CTOP.pool.socios.RETAIL.top.length===10,
+chk('el cajon lleva todos los socios, no los diez mayores',
+    CTOP.pool.socios.CLIENTES.top.length===15 && CTOP.pool.socios.RETAIL.top.length===15,
     String(CTOP.pool.socios.CLIENTES.top.length));
-chk('pero la nota cuenta a todos los que tienen saldo',
+chk('y entonces no queda resto que contar aparte',
+    CTOP.pool.socios.CLIENTES.resto.n===0 && CTOP.pool.socios.CLIENTES.resto.nivel===0,
+    JSON.stringify(CTOP.pool.socios.CLIENTES.resto));
+chk('la nota dice cuantos son y que el dia se puede elegir',
     CTOP.pool.socios.CLIENTES.conSaldo===15 &&
-    /El detalle de los 15 con saldo/.test(CTOP.pool.sociosNota.CLIENTES),
+    /Están los 15 con saldo/.test(CTOP.pool.sociosNota.CLIENTES) &&
+    /pasa a ese día/.test(CTOP.pool.sociosNota.CLIENTES),
     CTOP.pool.sociosNota.CLIENTES);
 const HC=A.desgloseHtml(CSOC.pool);
 chk('los dos bloques salen en el html, escondidos',
@@ -1798,13 +1845,174 @@ chk('retail declara que su partida esta incompleta',
 chk('y clientes no arrastra esa advertencia',
     !/incompleta/.test(HC.slice(HC.indexOf('data-socios="CLIENTES"'),
                                HC.indexOf('data-socios="RETAIL"'))), '');
-chk('las dos mandan al tablero por el detalle',
-    (HC.match(/está en el tablero/g)||[]).length===2, '');
+chk('las dos invitan a elegir un día',
+    (HC.match(/pasa a ese día/g)||[]).length===2, '');
 // el navegador necesita la funcion publicada
 chk('el navegador tiene con que dibujar y con que mostrar',
     JSP.indexOf('function mayoresDePata')>0 && JSP.indexOf('function sociosHtml')>0 &&
     JSP.indexOf('[data-socios]')>0, '');
 chk('y la planta no arma listas de socios', !A.composiciones(D,BS).planta.socios, '');
+
+/*  EL CAMINO DE LOS DATOS DE VERDAD. Los socios no llegan al cockpit como los
+ *  escribe saldo-pool: pasan por cortarSocios, que renombra `partida` a `ini`.
+ *  Todos los tests de arriba alimentan `partida` a mano, asi que ninguno
+ *  tocaba ese renombre —y leyendo solo `partida` el arranque quedaba en cero
+ *  contra el json real. Esto corre la cadena completa. */
+const PASOR=T.cortarSocios([{cod:'R1',nom:'uno',nivel:100,partida:40,serie:[3,100]},
+                           {cod:'R2',nom:'dos',nivel:9,partida:9}]);
+const MPR=A.mayoresDePata(PASOR.top, 0, 109, DIASP);
+chk('el arranque sobrevive el renombre del tablero', MPR.top[0].s0===40, String(MPR.top[0].s0));
+chk('y la serie tambien', JSON.stringify(MPR.top[0].serie)==='[3,100]', JSON.stringify(MPR.top[0].serie));
+chk('leido al dia 0 cada uno vale su partida',
+    A.pataAlDia(MPR,0).top.map(x=>x.cod+':'+x.nivel).join()==='R1:40,R2:9',
+    A.pataAlDia(MPR,0).top.map(x=>x.cod+':'+x.nivel).join());
+chk('y al ultimo dia vuelve el nivel de hoy',
+    A.pataAlDia(MPR,DIASP.length-1).top.map(x=>x.cod+':'+x.nivel).join()==='R1:100,R2:9',
+    A.pataAlDia(MPR,DIASP.length-1).top.map(x=>x.cod+':'+x.nivel).join());
+
+/*  ───────── pintarSociosAlDia, con un DOM de juguete ─────────
+ *
+ *  Esta funcion NO estaba probada y por eso se publico rota: leia el desglose
+ *  en `window.C.pool`, que es el nombre que el objeto tiene en el servidor —en
+ *  la pagina viaja como DESG—, asi que en el navegador devolvia false en
+ *  silencio y la lista se quedaba en el saldo de hoy con el titulo del dia
+ *  elegido. Un DOM de juguete alcanza: la funcion solo pide querySelector,
+ *  hidden e innerHTML. */
+function cajaFalsa() {
+  /*  `innerHTML = ...` tira el <details> viejo y nace cerrado: si la caja de
+   *  juguete recordara el estado, un mutante que borre `det.open = true`
+   *  pasaria los tests. */
+  const caja = { hidden: false, abierto: false, _html: '',
+                 get innerHTML() { return this._html; },
+                 set innerHTML(v) { this._html = v; this.abierto = false; },
+                 querySelector(q) { return q === 'details[open]'
+                                      ? (this.abierto ? { open: true } : null)
+                                      : (q === 'details' ? { set open(v) { caja.abierto = v; } } : null); } };
+  return { caja, querySelector(q) { return q === '.socw[data-socios="CLIENTES"]' ? caja : null; } };
+}
+const DESGF = { socios: { CLIENTES: MPR }, sociosNota: { CLIENTES: 'nota de hoy' },
+                sociosNotaDia: { CLIENTES: 'salvedad que no caduca' } };
+const cf1 = cajaFalsa();
+chk('pintarSociosAlDia escribe el bloque del dia elegido',
+    A.pintarSociosAlDia(cf1, 'CLIENTES', DIASP[0], DESGF) === true &&
+    cf1.caja.innerHTML.indexOf('Al cierre del ' + A.fechaCl(DIASP[0])) > 0,
+    cf1.caja.innerHTML.slice(0, 80));
+chk('y la nota del dia cuenta la tabla de ESE dia, no la de hoy',
+    /2 de los 2 con saldo tenían pallets ese día/.test(cf1.caja.innerHTML) &&
+    cf1.caja.innerHTML.indexOf('nota de hoy') < 0, '');
+chk('la salvedad que no depende del dia si se arrastra',
+    cf1.caja.innerHTML.indexOf('salvedad que no caduca') > 0, '');
+const cf2 = cajaFalsa();
+A.pintarSociosAlDia(cf2, 'CLIENTES', 'no-es-un-dia-de-esta-pata', DESGF);
+chk('un dia que esta pata no tiene vuelve a hoy, con su nota',
+    cf2.caja.innerHTML.indexOf('nota de hoy') > 0 &&
+    cf2.caja.innerHTML.indexOf('Al cierre') < 0, '');
+const cf3 = cajaFalsa(); cf3.caja.hidden = true;
+chk('un bloque escondido no se toca', A.pintarSociosAlDia(cf3, 'CLIENTES', DIASP[0], DESGF) === false &&
+    cf3.caja.innerHTML === '', '');
+chk('sin desglose no inventa nada', A.pintarSociosAlDia(cajaFalsa(), 'CLIENTES', DIASP[0], null) === false, '');
+chk('y una pata que no esta en el desglose tampoco',
+    A.pintarSociosAlDia(cajaFalsa(), 'RETAIL', DIASP[0], DESGF) === false, '');
+const cf4 = cajaFalsa(); cf4.caja.abierto = true;
+A.pintarSociosAlDia(cf4, 'CLIENTES', DIASP[0], DESGF);
+chk('si el bloque estaba abierto queda abierto', cf4.caja.abierto === true, '');
+const cf5 = cajaFalsa();   // cerrado antes: tiene que seguir cerrado
+A.pintarSociosAlDia(cf5, 'CLIENTES', DIASP[0], DESGF);
+chk('y si estaba cerrado no se abre solo', cf5.caja.abierto === false, '');
+
+/*  LA NOTA CUENTA LA TABLA DE ESE DIA, no la de hoy: con un socio que ese dia
+ *  estaba en cero los dos numeros tienen que ser distintos. */
+const MPZ = A.mayoresDePata([{cod:'Z1',nom:'uno',nivel:9,partida:9,serie:[]},
+                             {cod:'Z2',nom:'dos',nivel:4,partida:0,serie:[3,4]}], 0, 0, DIASP);
+const cfz = cajaFalsa();
+A.pintarSociosAlDia(cfz, 'CLIENTES', DIASP[0],
+                    { socios: { CLIENTES: MPZ }, sociosNota: { CLIENTES: '' }, sociosNotaDia: { CLIENTES: '' } });
+chk('la nota dice cuantos tenian pallets ESE dia, no cuantos hay hoy',
+    /1 de los 2 con saldo tenían pallets ese día/.test(cfz.caja.innerHTML),
+    (cfz.caja.innerHTML.match(/\d+ de los \d+ con saldo[^<]*/) || [''])[0]);
+
+/*  EL CANDADO: ninguna de estas funciones puede volver a buscar el desglose en
+ *  un global. Lo recibe quien la llama, que ya lo tiene en la mano. */
+/*  LA MINILINEA TIENE QUE TERMINAR EN EL NUMERO DE LA FILA. */
+const MMS=A.mayoresDePata([{cod:'M1',nom:'uno',nivel:50,partida:10,serie:[1,30,5,50],
+                            meses:[{mes:'2026-01',cierre:30},{mes:'2026-02',cierre:50}]}],0,0,DIASP);
+const MV=A.pataAlDia(MMS,2);
+chk('la minilinea va de la partida al dia elegido, por la serie diaria',
+    MV.top[0].meses.map(m=>m.mes+':'+m.cierre).join()===
+      DIASP[0]+':10,'+DIASP[1]+':30,'+DIASP[2]+':30',
+    MV.top[0].meses.map(m=>m.mes+':'+m.cierre).join());
+chk('no mete movimientos posteriores al dia elegido',
+    MV.top[0].meses.every(m=>String(m.mes)<=DIASP[2]), '');
+/*  Un socio muy movido no puede mandar cientos de puntos a 69 filas. */
+const MUCHO={cod:'X',nom:'x',nivel:300,s0:0,serie:[]};
+for(let i=0;i<300;i++) MUCHO.serie.push(i, i+1);
+const RAL=A.hastaElDia(MUCHO, DIASP.concat(Array.from({length:300},(_,i)=>'d'+i)), 299);
+chk('la minilinea se ralea pero conserva los dos extremos',
+    RAL.length<=60 && RAL[0].cierre===0 && RAL[RAL.length-1].cierre===300,
+    RAL.length+' pts '+RAL[0].cierre+'→'+RAL[RAL.length-1].cierre);
+chk('y su ultimo punto es exactamente el nivel de la fila',
+    MV.top[0].meses[MV.top[0].meses.length-1].cierre===MV.top[0].nivel, '');
+/*  El saldo de bodega de un dia pasado no lo tenemos por socio: repetir el de
+ *  hoy pondria "178.750 de 218.517" con un total de enero al lado de la bodega
+ *  de noviembre. Se calla, y con el se calla el residuo. */
+const MBO = A.mayoresDePata([{cod:'B1',nom:'uno',nivel:50,partida:10,serie:[1,30,5,50]}], 0, 80, DIASP);
+chk('hoy el bloque declara el saldo de bodega y su residuo',
+    MBO.bodega===80 && MBO.residuo===30, MBO.bodega+'/'+MBO.residuo);
+chk('al elegir un dia se callan los dos, que son los de hoy',
+    A.pataAlDia(MBO,2).bodega===0 && A.pataAlDia(MBO,2).residuo===0,
+    A.pataAlDia(MBO,2).bodega+'/'+A.pataAlDia(MBO,2).residuo);
+chk('sin dia elegido la minilinea queda completa',
+    MMS.top[0].meses.length===2, String(MMS.top[0].meses.length));
+chk('y el cambio al dia elegido se mide contra la partida, no contra hoy',
+    MV.top[0].cambio===20 && MMS.top[0].cambio===0,
+    MV.top[0].cambio+'/'+MMS.top[0].cambio);
+
+/*  ───────── el candado del toString ─────────
+ *
+ *  Las funciones viajan al navegador con toString(), que serializa el cuerpo y
+ *  NADA de lo que lo rodea. Una constante de modulo usada adentro compila bien
+ *  en node, pasa todos los tests, y revienta en el navegador recien cuando
+ *  alguien hace clic. Ya paso una vez (TOPE_MINI). Esto lo caza antes:
+ *  cualquier MAYUSCULA declarada a nivel de modulo que aparezca en el cuerpo de
+ *  una funcion publicada tiene que estar tambien publicada. */
+const FUENTE = require('fs').readFileSync(__dirname + '/armar-cockpit-pool.js', 'utf8');
+const sinCom = t => String(t).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+const CONSTANTES = [...sinCom(FUENTE).matchAll(/^(?:const|let|var)\s+([A-Z][A-Z0-9_]{2,})\s*=/gm)]
+                     .map(m => m[1]);
+const huerfanas = [];
+for (const [nom, f] of Object.entries(A)) {
+  if (typeof f !== 'function') continue;
+  if (JSP.indexOf('function ' + nom + '(') < 0) continue;   // no viaja al navegador
+  const cuerpo = sinCom(f);
+  for (const c of CONSTANTES)
+    if (new RegExp('\\b' + c + '\\b').test(cuerpo) && JSP.indexOf('var ' + c + ' =') < 0 &&
+        JSP.indexOf(c + ' = ') < 0)
+      huerfanas.push(nom + ' usa ' + c);
+}
+chk('ninguna funcion publicada depende de una constante que no viaja',
+    huerfanas.length === 0, huerfanas.join(' · '));
+chk('y el candado mira funciones de verdad', CONSTANTES.length > 2, CONSTANTES.join(','));
+
+const sinComentarios = f => String(f).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+chk('pintarSociosAlDia no mira ningun global',
+    sinComentarios(A.pintarSociosAlDia).indexOf('window') < 0 &&
+    sinComentarios(A.pataAlDia).indexOf('window') < 0, '');
+chk('y el cajon le pasa el desglose en los dos caminos —dia y mes—',
+    /pintarDia\(\$\("#dbody"\), cd\.getAttribute\("data-dia"\), serieDe\(cd\), desgDe\(cd\)\)/.test(JSP) &&
+    /g && g\.calUlt, g\)/.test(JSP), '');
+chk('y la funcion viaja al navegador', JSP.indexOf('function pintarSociosAlDia') > 0 &&
+    JSP.indexOf('function fechaCl') > 0 && JSP.indexOf('function hastaElDia') > 0, '');
+/*  Los dos eslabones internos: si alguno deja de pasar el desglose, elegir un
+ *  dia —o cambiar de mes— vuelve a dejar la lista en el saldo de hoy. */
+chk('pintarDia repinta la lista y le pasa el desglose',
+    /pintarSociosAlDia\(card, pata, dia, desg\)/.test(sinComentarios(A.pintarDia)), '');
+chk('y pintarMes le pasa el desglose a pintarDia',
+    /pintarDia\(cont, sel, serie, desg\)/.test(sinComentarios(A.pintarMes)), '');
+
+// la fecha como se escribe en Chile
+chk('la fecha se da vuelta', A.fechaCl('2026-01-13') === '13-01-2026', A.fechaCl('2026-01-13'));
+chk('lo que no es fecha vuelve igual', A.fechaCl('2026-01') === '2026-01' && A.fechaCl('') === '' &&
+    A.fechaCl(null) === '', '');
 
 console.log('\n' + ok + ' ok, ' + fail + ' fallas');
 process.exit(fail ? 1 : 0);

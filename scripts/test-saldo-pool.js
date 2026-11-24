@@ -54,6 +54,38 @@ chk('sin dias no se mueve', P.nivelDeSocio(100, new Map([['2026-01-03', 50]]), [
 const DIASM = ['2026-01-05','2026-01-20','2026-02-10','2026-02-28','2026-03-15'];
 const MS = P.nivelDeSocio(100, new Map([['2026-01-05',50],['2026-02-10',-30],['2026-03-15',7]]), DIASM);
 chk('sale un punto por mes', MS.meses.length === 3, JSON.stringify(MS.meses));
+
+// ── la serie diaria rala, para elegir un dia en el calendario ──────────────
+// Gerencia pide ver cuanto tenia cada socio EL DIA que elija, no al cierre del
+// mes. Se guardan solo los dias con movimiento, como pares planos
+// [indice, nivel] contra el arreglo de dias de la bodega.
+chk('solo guarda los dias en que el socio se movio',
+    MS.serie.length === 6, JSON.stringify(MS.serie));
+chk('y guarda indice y nivel, no la fecha',
+    MS.serie.join(',') === '0,150,2,120,4,127', MS.serie.join(','));
+// EL DIA 1 NO ESTA EN LA SERIE y sin embargo tiene nivel: es el del dia 0.
+// Esa es justamente la compresion, y el lector tiene que saber leerla.
+const nivelAl = (so, j) => { let v = so.s0;
+  for (let k = 0; k < so.serie.length; k += 2) { if (so.serie[k] > j) break; v = so.serie[k+1]; }
+  return v; };
+chk('un dia sin movimiento hereda el nivel del anterior',
+    nivelAl(MS,1) === 150 && nivelAl(MS,3) === 120, [0,1,2,3,4].map(j=>nivelAl(MS,j)).join(','));
+chk('antes del primer movimiento vale el saldo de partida',
+    P.nivelDeSocio(80, new Map([['2026-02-10',20]]), DIASM).serie.join(',') === '2,100' &&
+    nivelAl(P.nivelDeSocio(80, new Map([['2026-02-10',20]]), DIASM), 0) === 80, '');
+// LA INVARIANTE QUE IMPORTA: el ultimo dia de la serie TIENE que dar el nivel
+// de hoy, o el calendario y la cifra de arriba dirian cosas distintas.
+chk('el ultimo dia reconstruye el nivel de hoy',
+    nivelAl(MS, DIASM.length-1) === MS.nivel, nivelAl(MS,DIASM.length-1)+' vs '+MS.nivel);
+chk('un socio que nunca se movio no ocupa nada',
+    P.nivelDeSocio(500, null, DIASM).serie.length === 0 &&
+    nivelAl(P.nivelDeSocio(500, null, DIASM), 4) === 500);
+chk('sin dias la serie es un arreglo vacio y no undefined',
+    Array.isArray(P.nivelDeSocio(100, null, []).serie) &&
+    P.nivelDeSocio(100, null, []).serie.length === 0);
+// un movimiento que netea cero NO es un dia con movimiento
+chk('un delta de cero no se guarda',
+    P.nivelDeSocio(10, new Map([['2026-01-05',0],['2026-02-10',5]]), DIASM).serie.join(',') === '2,15');
 // SE GUARDA EL SALDO, NO EL MOVIMIENTO: lo que se quiere ver es cuanto tenia
 chk('y es el nivel al ULTIMO dia del mes, no el neto',
     MS.meses.map(x => x.mes + ':' + x.cierre).join(',') === '2026-01:150,2026-02:120,2026-03:127',

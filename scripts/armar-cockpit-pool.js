@@ -419,7 +419,7 @@ function chipsDeMesHtml(meses, mes) {
  *
  *  Once puntos por socio, no trescientos: la pregunta que trae a alguien acá
  *  es "cómo se movió Walmart este año", y eso son doce números. */
-function mayoresDePata(socios, cuantos, bodega) {
+function mayoresDePata(socios, cuantos, bodega, dias) {
   const ss = (Array.isArray(socios) ? socios : [])
     .filter(s => { if (!s) return false;
                    const v = Number(s.nivel);
@@ -435,7 +435,19 @@ function mayoresDePata(socios, cuantos, bodega) {
                                 nivel: Number(x.nivel) || 0,
                                 cambio: Number(x.cambio) || 0,
                                 cota: !!x.sinPartida,
-                                meses: Array.isArray(x.meses) ? x.meses : [] })),
+                                meses: Array.isArray(x.meses) ? x.meses : [],
+                                /*  La serie rala que arma saldo-pool: pares
+                                 *  [indice, nivel] contra `dias`, solo los dias
+                                 *  en que el socio se movio. Con esto el
+                                 *  navegador reconstruye cualquier dia sin
+                                 *  volver a pedir nada. */
+                                /*  DOS PRODUCTORES, UN SOLO CAMPO. saldo-pool
+                                 *  lo llama `partida`; el tablero lo republica
+                                 *  como `ini`. Leer solo uno de los dos deja el
+                                 *  arranque en cero contra los datos de verdad
+                                 *  —y el cero se lee como un saldo. */
+                                s0: Number(x.partida != null ? x.partida : x.ini) || 0,
+                                serie: Array.isArray(x.serie) ? x.serie : [] })),
            resto: { n: cola.length, nivel: cola.reduce((a, x) => a + (Number(x.nivel) || 0), 0) },
            total: tot, conSaldo: ss.length,
            /*  LO QUE DICE LA BODEGA, que NO es lo mismo que la suma de los
@@ -443,7 +455,103 @@ function mayoresDePata(socios, cuantos, bodega) {
             *  nadie. En clientes son 1.038 de 218.517 —medio por ciento— y ese
             *  numero cae justo entre dos cierres diarios de la misma semana,
             *  asi que sin decirlo se lee como si fuera el saldo de otro dia. */
-           bodega: bod, residuo: bod > tot ? bod - tot : 0 };
+           bodega: bod, residuo: bod > tot ? bod - tot : 0,
+           /*  LOS DIAS DE ESTA PATA, para traducir la fecha que trae la celda
+            *  del calendario al indice que usa la serie de cada socio. Cada
+            *  pata tiene los suyos y no se pueden mezclar. */
+           dias: Array.isArray(dias) ? dias.map(d => String(d && d.dia != null ? d.dia : d)) : [] };
+}
+
+/*  LA FECHA COMO SE ESCRIBE ACA: 13-01-2026, no 2026-01-13. Todo el resto de
+ *  la pagina usa dia-mes-anio y mezclar los dos formatos en el mismo cajon
+ *  hace dudar de cual es el mes. Lo que no tenga forma de fecha ISO vuelve tal
+ *  cual: inventar una fecha es peor que mostrar la cruda. */
+function fechaCl(iso) {
+  const t = String(iso == null ? '' : iso);
+  return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t.slice(8, 10) + '-' + t.slice(5, 7) + '-' + t.slice(0, 4) : t;
+}
+
+/*  EL NIVEL DE UN SOCIO EL DIA `j`, leyendo su serie rala.
+ *
+ *  Antes de su primer movimiento vale el saldo de partida; en un dia sin
+ *  movimiento vale el del ultimo dia que si se movio. Es la contraparte exacta
+ *  de como saldo-pool.js comprime la serie, y por eso vive al lado. */
+function nivelAlDia(s, j) {
+  if (!s) return 0;
+  const se = s.serie || [];
+  let v = Number(s.s0) || 0;
+  for (let k = 0; k < se.length; k += 2) {
+    if (se[k] > j) break;
+    v = se[k + 1];
+  }
+  return v;
+}
+
+/*  LA PATA RE-LEIDA A UN DIA: mismos socios, niveles de ese dia, reordenados.
+ *
+ *  El orden cambia con el dia a proposito: "quien tiene estos pallets el 13 de
+ *  enero" es una pregunta por ese dia, y dejarlos en el orden de hoy mostraria
+ *  los numeros de enero bajo el ranking de noviembre. */
+/*  LA MINILINEA DE UN SOCIO HASTA EL DIA `j`.
+ *
+ *  Al elegir un dia la fila dice el nivel de ESE dia; dejar la linea del año
+ *  completo ponia 26.819 al lado de un dibujo que seguia hasta noviembre y
+ *  terminaba mas arriba. Dos numeros distintos en la misma fila es lo primero
+ *  que se cuestiona en una reunion.
+ *
+ *  Se dibuja desde la SERIE DIARIA, no desde los cierres de mes: para un dia
+ *  de enero no hay ningun mes cerrado antes y la linea quedaba en un punto
+ *  suelto, que no dice nada. Empieza en el saldo de partida, pasa por cada
+ *  movimiento hasta el dia y cierra en el dia mismo, asi termina exactamente
+ *  en la cifra que esta al lado.
+ *
+ *  Un socio muy movido tendria cientos de puntos y son 69 filas dibujandose de
+ *  nuevo en el navegador, asi que la linea se ralea a lo sumo a 60 puntos
+ *  tomando uno de cada tantos. Los dos extremos nunca se ralean: son el saldo
+ *  de partida y la cifra de la fila.
+ *
+ *  EL TOPE VA ADENTRO a proposito. Al navegador estas funciones viajan con
+ *  toString(), que serializa el cuerpo y NADA de lo que lo rodea: una
+ *  constante de modulo se publica rota y revienta recien al hacer clic. */
+function hastaElDia(s, dias, j) {
+  const TOPE = 60;
+  const ds = Array.isArray(dias) ? dias : [];
+  if (!s || j == null || j < 0 || j >= ds.length) return (s && s.meses) || [];
+  const ser = Array.isArray(s.serie) ? s.serie : [];
+  const pts = [{ mes: ds[0], cierre: Number(s.s0) || 0 }];
+  for (let k = 0; k + 1 < ser.length; k += 2) {
+    if (ser[k] > j) break;
+    pts.push({ mes: ds[ser[k]], cierre: ser[k + 1] });
+  }
+  const fin = pts[pts.length - 1];
+  if (fin.mes !== ds[j]) pts.push({ mes: ds[j], cierre: fin.cierre });
+  if (pts.length <= TOPE) return pts;
+  const paso = Math.ceil(pts.length / (TOPE - 1));
+  const out = [];
+  for (let i = 0; i < pts.length - 1; i += paso) out.push(pts[i]);
+  out.push(pts[pts.length - 1]);
+  return out;
+}
+
+function pataAlDia(p, j) {
+  if (!p || !p.top) return p;
+  if (j == null || j < 0 || j >= (p.dias || []).length) return p;
+  /*  EL CAMBIO TAMBIEN SE RECALCULA. Es "cuanto se movio desde la partida", y
+   *  dejar el de hoy ponia +1.501 al lado de un nivel de enero que todavia no
+   *  se habia movido: la fila se contradecia sola. */
+  const top = p.top.map(s => { const v = nivelAlDia(s, j);
+                               return Object.assign({}, s, { nivel: v,
+                                                             meses: hastaElDia(s, p.dias, j),
+                                                             cambio: v - (Number(s.s0) || 0) }); })
+    .filter(s => s.nivel !== 0)
+    .sort((a, b) => b.nivel - a.nivel || (String(a.cod) < String(b.cod) ? -1 : 1));
+  const tot = top.reduce((a, s) => a + s.nivel, 0);
+  return Object.assign({}, p, { top, total: tot, conSaldo: top.length,
+                                /*  El saldo de bodega de ESE dia no lo tenemos
+                                 *  por socio, asi que el contexto "de X" se
+                                 *  calla en vez de repetir el de hoy. */
+                                bodega: 0, residuo: 0,
+                                resto: { n: 0, nivel: 0 }, dia: p.dias[j] });
 }
 
 /*  LOS MAYORES DIBUJADOS. Va plegado: el cajon ya tiene la cifra, la grilla,
@@ -471,7 +579,8 @@ function sociosHtml(p, rotulo, nota) {
     : mil(p.total);
   return '<details class="socp"><summary><span>' + esc(rotulo) + '</span>' +
          '<b>' + cifra + '</b></summary>' +
-         '<table class="socm"><tbody>' + p.top.map(fila).join('') + '</tbody></table>' +
+         '<div class="socm-scroll"><table class="socm"><tbody>' +
+         p.top.map(fila).join('') + '</tbody></table></div>' +
          '<p class="mut">' +
          (p.resto.n ? 'Los otros ' + mil(p.resto.n) + ' suman <b>' + mil(p.resto.nivel) + '</b>. ' : '') +
          (p.residuo ? 'Hay <b>' + mil(p.residuo) + '</b> más en la bodega que ninguna ubicación ' +
@@ -669,7 +778,7 @@ function calendarioHtml(cal, o) {
  *  Y CAMBIA EL ROTULO cuando el dia elegido no es el ultimo: una tarjeta que
  *  dice "Planta · indicador" mostrando el cierre del 29 de octubre se lee
  *  como el stock de hoy. */
-function pintarDia(card, dia, serie) {
+function pintarDia(card, dia, serie, desg) {
   if (!card || !card.querySelector) return false;
   const cal = card.querySelector('.calen');
   if (!cal) return false;
@@ -736,6 +845,55 @@ function pintarDia(card, dia, serie) {
     nota.textContent = notaDeDia(dia, Number(cal.getAttribute('data-hoy')) || 0,
                                  cal.getAttribute('data-ult') || '',
                                  cal.getAttribute('data-nom') || '');
+  pintarSociosAlDia(card, pata, dia, desg);
+  return true;
+}
+
+/*  LA LISTA DE SOCIOS, RE-LEIDA AL DIA ELEGIDO.
+ *
+ *  Es la otra mitad de elegir un dia: la grilla y la cifra ya se mueven, y la
+ *  lista de quien tiene los pallets se quedaba en el saldo de hoy. Con el dia
+ *  del 13 de enero arriba y los nombres de noviembre abajo, el cajon se
+ *  contradice solo.
+ *
+ *  Se rehace el html entero en vez de tocar celda por celda porque el orden
+ *  cambia: a otro dia mandan otros socios. Se conserva si el bloque estaba
+ *  abierto, que es lo unico que el usuario habia decidido. */
+function pintarSociosAlDia(card, pata, dia, desg) {
+  if (!card || !card.querySelector) return false;
+  const caja = card.querySelector('.socw[data-socios="' + pata + '"]');
+  if (!caja || caja.hidden) return false;
+  /*  EL DESGLOSE ENTRA POR ARGUMENTO, no se busca en un global.
+   *
+   *  La primera version leia `window.C.pool`, que es el nombre que tiene el
+   *  objeto EN EL SERVIDOR: a la pagina viaja como `DESG`. En el navegador
+   *  `window.C` no existe nunca, asi que la funcion devolvia false en
+   *  silencio y la lista se quedaba en el saldo de hoy con el titulo del dia
+   *  elegido. Pedirlo por argumento hace imposible esa clase de error: quien
+   *  llama ya tiene el desglose en la mano. */
+  const todo = desg || null;
+  const p = todo && todo.socios && todo.socios[pata];
+  if (!p) return false;
+  const j = (p.dias || []).indexOf(String(dia));
+  const abierto = !!caja.querySelector('details[open]');
+  /*  Sin dia elegido —o un dia que esta pata no tiene— vuelve a hoy, que es
+   *  la pata tal como vino. Un dia que no existe no se inventa. */
+  const vista = j < 0 ? p : pataAlDia(p, j);
+  /*  DOS NOTAS DISTINTAS, no una con un prefijo.
+   *
+   *  La de hoy termina invitando a elegir un dia; repetirla despues de elegirlo
+   *  deja el cajon pidiendo lo que ya se hizo. Y su recuento es el de hoy: al
+   *  13 de enero decia "estan los 69" sobre una tabla de 66. Para un dia
+   *  elegido se cuenta esa tabla y se arrastra solo la salvedad que sigue
+   *  valiendo —la partida corta de retail—, que no depende del dia. */
+  const notas = j < 0
+    ? ((todo.sociosNota && todo.sociosNota[pata]) || '')
+    : 'Al cierre del ' + fechaCl(dia) + ': ' + mil(vista.conSaldo || 0) + ' de los ' +
+      mil(p.conSaldo || 0) + ' con saldo tenían pallets ese día. ' +
+      ((todo.sociosNotaDia && todo.sociosNotaDia[pata]) || '');
+  caja.innerHTML = sociosHtml(vista, 'Quién tiene estos pallets', notas.trim());
+  const det = caja.querySelector('details');
+  if (det && abierto) det.open = true;
   return true;
 }
 
@@ -747,7 +905,7 @@ function pintarDia(card, dia, serie) {
  *
  *  Se RECALCULA con las mismas funciones del servidor en vez de dibujar los
  *  doce meses de antemano y esconder once. */
-function pintarMes(cont, mes, serie, traDias, hoy, ultimo) {
+function pintarMes(cont, mes, serie, traDias, hoy, ultimo, desg) {
   if (!cont || !cont.querySelector) return false;
   const viejo = cont.querySelector('.calen');
   if (!viejo) return false;
@@ -773,7 +931,10 @@ function pintarMes(cont, mes, serie, traDias, hoy, ultimo) {
     chips[i].classList.toggle('on', chips[i].getAttribute('data-pm') === mes);
   /*  La grilla se repinta con la serie COMPLETA: es el selector de pata, asi
    *  que tiene que seguir mostrando las tres y no solo la elegida. */
-  return pintarDia(cont, sel, serie);
+  /*  El desglose viaja hasta aca SOLO para que pintarDia pueda re-leer la lista
+   *  de socios: cambiar de mes marca el ultimo dia del mes nuevo, y sin esto el
+   *  calendario quedaba en el 31 de enero con la lista de hoy debajo. */
+  return pintarDia(cont, sel, serie, desg);
 }
 
 /*  ELEGIR UNA PATA: el calendario de abajo pasa a ser el de esa bodega.
@@ -1512,6 +1673,17 @@ details.socp>summary b i{font-style:normal;font-weight:400;margin-left:2px;color
     cifras en verde y mini-series dentro del cajon, asi que el problema lo
     trae el fondo, no la paleta: se le pone debajo la superficie para la que
     esos colores fueron elegidos. */
+/*  CON TODOS LOS SOCIOS ADENTRO, LA LISTA SE DESPLAZA SOLA. Son 69 y 60 filas:
+    sin tope el cajon se vuelve una pagina de scroll y el calendario de abajo
+    queda a kilometros. 340px son unas nueve filas, que es donde la vista deja
+    de ser una lista y pasa a ser un listado. El encabezado no se fija porque
+    no hay: la tabla no tiene thead, el rotulo vive en el summary. */
+.socm-scroll{max-height:340px;overflow-y:auto;overscroll-behavior:contain;
+  border-radius:10px;border:1px solid var(--line);background:var(--card);margin-top:6px}
+.socm-scroll::-webkit-scrollbar{width:9px}
+.socm-scroll::-webkit-scrollbar-thumb{background:var(--line2);border-radius:9px}
+.socm-scroll::-webkit-scrollbar-track{background:transparent}
+.socm-scroll table.socm{margin-top:0;border:none;border-radius:0}
 table.socm{width:100%;border-collapse:collapse;margin-top:6px;
   background:var(--card);border:1px solid var(--line);border-radius:10px}
 table.socm td:first-child{padding-left:10px}
@@ -1946,19 +2118,32 @@ function composiciones(datos, bodegas) {
    *  llama a desgloseHtml con DESG[clave]— asi que los dos tienen que estar
    *  ahi; mostrar uno es cambiar un atributo, no ir a buscar datos.
    *  Son 10 socios por pata con once puntos cada uno: unos 8 KB. */
+  /*  TODOS, no los diez mayores. Gerencia pidio poder bajar hasta el ultimo
+   *  dentro del mismo bloque, y de paso cada socio viaja con su serie diaria
+   *  para poder re-leer la lista al elegir un dia del calendario. */
   C.pool.socios = {
-    CLIENTES: mayoresDePata(d.clientes, 10, cli.nivel),
-    RETAIL: mayoresDePata(d.retail, 10, ret.nivel),
+    CLIENTES: mayoresDePata(d.clientes, 0, cli.nivel, diasDeArreglo(d.clientes_dias)),
+    RETAIL: mayoresDePata(d.retail, 0, ret.nivel, diasDeArreglo(d.retail_dias)),
   };
   C.pool.sociosNota = {
-    CLIENTES: 'El detalle de los ' + mil(C.pool.socios.CLIENTES.conSaldo || 0) +
-              ' con saldo está en el tablero de stock y flujos.',
+    CLIENTES: 'Están los ' + mil(C.pool.socios.CLIENTES.conSaldo || 0) +
+              ' con saldo. Elige un día del calendario y la lista pasa a ese día.',
     /*  LA SALVEDAD DE RETAIL VA PEGADA AL NUMERO. La semilla del 31-12-2025
      *  esta corta y ese hueco se reparte entre los retailers sin que sepamos
      *  como: sin decirlo aca, alguien lee el porcentaje del mayor como exacto. */
     RETAIL: 'La partida de retail al 31-12-2025 está incompleta, así que este reparto tiene un ' +
-            'margen que no sabemos repartir. El detalle de los ' +
-            mil(C.pool.socios.RETAIL.conSaldo || 0) + ' con saldo está en el tablero.',
+            'margen que no sabemos repartir. Están los ' +
+            mil(C.pool.socios.RETAIL.conSaldo || 0) +
+            ' con saldo. Elige un día del calendario y la lista pasa a ese día.',
+  };
+  /*  LO QUE SIGUE SIENDO CIERTO EN CUALQUIER DIA. Clientes no tiene salvedad
+   *  —su partida esta completa— y retail si, asi que la de retail viaja aparte
+   *  para poder pegarla a la nota del dia elegido sin arrastrar el recuento de
+   *  hoy ni la invitacion. */
+  C.pool.sociosNotaDia = {
+    CLIENTES: '',
+    RETAIL: 'La partida de retail al 31-12-2025 está incompleta, así que este reparto tiene un ' +
+            'margen que no sabemos repartir.',
   };
   C.pool.infoCal = 'Solo los meses en que las tres patas tienen serie diaria: clientes y retail ' +
     'llegan hasta el último mes cerrado y la planta arranca en octubre. Elegir un día cambia la ' +
@@ -2560,7 +2745,8 @@ function script(serie, mes0, desg, aper, datos) {
                matrizPlantaEtapa, matrizHtml, filaCartera, listaHtml, chipEstado,
                titular, contarSalud, nivelDiarioDePlanta, ultimaSemana,
                diasDeArreglo, serieDelPool, mesesComunes, serieDeCalendario,
-               chipsDeMesHtml, cabezalDeCalHtml, mayoresDePata, sociosHtml,
+               chipsDeMesHtml, cabezalDeCalHtml, mayoresDePata, sociosHtml, fechaCl, hastaElDia,
+               nivelAlDia, pataAlDia, pintarSociosAlDia,
                diaDeSemana, mesDelCalendario, calendarioDeMes, filasDelDia, pieDeDia,
                capital, transitoDePlanta, trioDeTransito,
                notaDeDia, calendarioHtml, pintarDia, pintarMes, pintarPata,
@@ -2764,7 +2950,7 @@ function script(serie, mes0, desg, aper, datos) {
     '        return (c && c.getAttribute("data-serie")) === "pool" ? DESG.pool : DESG.planta;',
     '      }',
     '      var cd = el.closest(".cd[data-dia]");',
-    '      if (cd) { pintarDia($("#dbody"), cd.getAttribute("data-dia"), serieDe(cd)); return true; }',
+    '      if (cd) { pintarDia($("#dbody"), cd.getAttribute("data-dia"), serieDe(cd), desgDe(cd)); return true; }',
     // La celda de la grilla elige la pata y va ANTES del [data-cod] que lleva
     // la misma celda: si no, CLIENTES se tomaria por un codigo de bodega y
     // abriria un cajon que no existe.
@@ -2780,7 +2966,7 @@ function script(serie, mes0, desg, aper, datos) {
     '      var pm = el.closest("[data-pm]");',
     '      if (pm) { var g = desgDe(pm);',
     '                pintarMes($("#dbody"), pm.getAttribute("data-pm"), serieDe(pm),',
-    '                          g && g.calTra, g && g.calHoy, g && g.calUlt);',
+    '                          g && g.calTra, g && g.calHoy, g && g.calUlt, g);',
     '                return true; }',
     // El chip de mes vive DENTRO del cajon: va primero, si no lo atrapa el
     // [data-cod] de la fila que lo abrio y el cajon se redibuja en su mes.
@@ -2867,7 +3053,8 @@ module.exports = { ETAPAS, GLIFO, ORDEN_SALUD, HITOS, CSS,
                    notaDeDia, calendarioHtml, pintarDia, pintarMes,
                    pintarPata, cierreDeBodegaEn, grillaBodegasHtml, infoHtml, queEs, QUE_ES,
                    DIA_CORTO, diasDeArreglo, serieDelPool, mesesComunes, serieDeCalendario,
-                   chipsDeMesHtml, cabezalDeCalHtml, mayoresDePata, sociosHtml,
+                   chipsDeMesHtml, cabezalDeCalHtml, mayoresDePata, sociosHtml, fechaCl, hastaElDia,
+                   nivelAlDia, pataAlDia, pintarSociosAlDia,
                    titular, tarjetas, decisiones, diasHasta, hitos,
                    desglose, composiciones, desgloseHtml, porRecorrido,
                    recortar, chipEstado, tarjetaHtml, matrizHtml, filaCartera, listaHtml,

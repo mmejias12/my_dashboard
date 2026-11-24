@@ -113,17 +113,31 @@ function nivelDeSocio(s0, deltaPorDia, dias) {
    *  Se guarda el nivel del ULTIMO dia de cada mes, no el neto del mes: lo que
    *  se quiere ver es el saldo, no el movimiento. El mes en curso entra con el
    *  ultimo dia que haya, que es parcial y por eso es el saldo de hoy. */
-  const meses = [];
+  /*  Y LA SERIE DIARIA, EN FORMA RALA. Gerencia pide poder elegir un dia del
+   *  calendario y ver cuanto tenia cada socio ESE dia, no al cierre del mes.
+   *
+   *  Se guardan solo los dias en que el socio SE MOVIO, como pares planos
+   *  [indice, nivel] contra el arreglo de dias de la bodega —que ya viaja en
+   *  la pagina—, no la fecha completa ni un punto por dia. Un socio que movio
+   *  40 de 327 dias ocupa 80 numeros y no 327: el nivel de un dia sin
+   *  movimiento es el del ultimo dia que si se movio, y antes del primero es
+   *  el saldo de partida.
+   *
+   *  Plano y no anidado a proposito: [3,120,9,80] pesa la mitad que
+   *  [[3,120],[9,80]] en JSON, y son 142 socios por trescientos y pico dias. */
+  const meses = [], serie = [];
   const ds = Array.isArray(dias) ? dias : [];
   for (let i = 0; i < ds.length; i++) {
     const d = ds[i];
-    nivel += (deltaPorDia && deltaPorDia.get(d)) || 0;
+    const paso = (deltaPorDia && deltaPorDia.get(d)) || 0;
+    nivel += paso;
+    if (paso) serie.push(i, nivel);
     if (nivel < min) { min = nivel; minDia = d; }
     const m = String(d).slice(0, 7);
     if (i === ds.length - 1 || String(ds[i + 1]).slice(0, 7) !== m)
       meses.push({ mes: m, cierre: nivel });
   }
-  return { s0: Number(s0) || 0, nivel, min, minDia, meses,
+  return { s0: Number(s0) || 0, nivel, min, minDia, meses, serie,
            cambio: nivel - (Number(s0) || 0) };
 }
 
@@ -500,7 +514,7 @@ function salidaJson(o) {
     socios: (b.niveles || []).map(x => ({
       cod: x.cod, nom: (b.nombre ? b.nombre(x.cod) : null), partida: x.s0, nivel: x.nivel,
       cambio: x.cambio, minimo: x.min, minimoDia: x.minDia, enSemilla: !!x.enSemilla,
-      meses: x.meses || [] })),
+      meses: x.meses || [], serie: x.serie || [] })),
     mensual: b.mensual || [],
     dias: b.dias || [],
     sinSocio: b.sinSocio || null,
@@ -1045,8 +1059,17 @@ async function main() {
       },
     });
     require('fs').writeFileSync(rutaJson, JSON.stringify(js2, null, 1) + '\n', { encoding: 'utf8' });
+    /*  CUANTO PESA LA SERIE DIARIA. Se declara en la corrida para no tener que
+     *  adivinarlo: son 142 socios por trescientos y pico dias y el tope teorico
+     *  es grande, pero solo se guardan los dias con movimiento. Si algun dia
+     *  esto se dispara, aca se ve antes de que la pagina engorde. */
+    const pts = js2.socios.reduce((a, x) => a + ((x.serie || []).length / 2), 0);
+    const tope = js2.socios.length * js2.dias.length;
     console.log('\n  tablero: ' + rutaJson + '   ·  ' + js2.socios.length + ' socios · ' +
                 js2.dias.length + ' dias · UTF-8 sin BOM');
+    console.log('  serie diaria por socio: ' + mil(pts) + ' puntos de ' + mil(tope) +
+                ' posibles (' + (tope ? (100 * pts / tope).toFixed(1) : '0') + '% de los dias movio) · ' +
+                (JSON.stringify(js2.socios.map(x => x.serie || [])).length / 1024).toFixed(0) + ' KB');
   }
 
   const v = veredicto(r);

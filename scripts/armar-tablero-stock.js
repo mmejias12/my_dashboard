@@ -294,7 +294,15 @@ function cortarSocios(socios, cuantos) {
                   *  para que el cockpit pueda dibujar la mini-serie de los
                   *  mayores. Son once puntos por socio: 35 KB en el json y
                   *  cero en las dos paginas. */
-                 meses: Array.isArray(s.meses) ? s.meses : [] }))
+                 meses: Array.isArray(s.meses) ? s.meses : [],
+                 /*  LA SERIE DIARIA RALA que arma saldo-pool: pares
+                  *  [indice, nivel] contra la lista de dias, y solo los dias
+                  *  en que el socio se movio. El tablero no la mira; viaja
+                  *  para que el cockpit pueda releer la tabla de socios a
+                  *  cualquier dia del calendario sin pedir nada mas. Si se
+                  *  cortara aqui, el cockpit mostraria la lista de hoy
+                  *  mientras el calendario dice enero. */
+                 serie: Array.isArray(s.serie) ? s.serie : [] }))
     .sort((a, b) => b.nivel - a.nivel || (a.cod < b.cod ? -1 : 1));
   // Sin tope se devuelven TODOS: la pregunta "cuanto tiene este cliente" no se
   // puede contestar con los 25 mas grandes.

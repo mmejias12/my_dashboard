@@ -261,6 +261,60 @@ function correr(S) {
     cierto(/la próxima llamada lo resuelve/.test(m), 'y que eso lo resuelve: ' + m);
   });
 
+  /* ── la llave de idempotencia y su invariante ────────────────────────── */
+
+  prueba('N40 llaveUsable exige lo mismo que validar para el documento', function () {
+    // ESTA es la prueba que sostiene el orden de `pf-escritura`: ahí se
+    // consulta la bitácora ANTES de validar, apoyándose en que todo pedido que
+    // pasa validar también pasa por llaveUsable. Si las dos condiciones se
+    // separan, habría pedidos válidos que nunca consultan la idempotencia y
+    // podrían escribirse dos veces.
+    const casos = [
+      {}, { DocumentoId: 0 }, { DocumentoId: -3 }, { DocumentoId: null },
+      { DocumentoNumero: 0 }, { DocumentoNumero: -1 }, { DocumentoNumero: null },
+      { DocumentoId: 'x' }, { DocumentoNumero: 'abc' }, { DocumentoNumero: '45285' },
+      { DocumentoId: 1, DocumentoNumero: 1 }
+    ];
+    for (const c of casos) {
+      const p = norm(c);
+      const v = S.validar(p, ID, BOD);
+      const problemaDeDocumento = v.problemas.some(x => /falta documentoId|falta documentoNumero/.test(x));
+      igual(S.llaveUsable(p), !problemaDeDocumento,
+            'no calzan con ' + JSON.stringify(c) + ': problemas=' + JSON.stringify(v.problemas));
+    }
+  });
+
+  prueba('N41 llaveUsable no opina de lo que no es el documento', function () {
+    // Una cantidad mala o una bodega ajena no invalidan la LLAVE: ese pedido
+    // igual tiene que poder consultar la bitácora, porque puede ser el
+    // reintento de algo ya creado.
+    cierto(S.llaveUsable(norm({ Cantidad: 0 })));
+    cierto(S.llaveUsable(norm({ BodegaDestinoId: 9999 })));
+    cierto(S.llaveUsable(norm({ OperacionId: 3 })));
+  });
+
+  /* ── los avisos, separados de la validación ──────────────────────────── */
+
+  prueba('N42 avisosDe da exactamente lo mismo que validar', function () {
+    // `pf-escritura` calcula los avisos por su cuenta para poder responder un
+    // conflicto sin haber validado. Si las dos listas se separaran, la misma
+    // llamada traería avisos distintos según por dónde saliera.
+    for (const c of [{}, { ModoProduccion: true }, { ClienteOrigenId: 77 },
+                     { ClienteDestinoId: 77 }, { ClienteOrigenId: 499 },
+                     { ModoProduccion: false, ClienteDestinoId: 12 }]) {
+      const p = norm(c);
+      igual(S.avisosDe(p, ID), S.validar(p, ID, BOD).avisos, 'con ' + JSON.stringify(c));
+    }
+  });
+
+  prueba('N43 avisosDe no necesita el maestro de bodegas', function () {
+    // Es justamente la razón de que exista aparte: se calcula sin red.
+    const a = S.avisosDe(norm({ ModoProduccion: true, ClienteOrigenId: 77 }), ID);
+    igual(a.length, 2);
+    cierto(a.some(x => /modoProduccion/.test(x)), a.join(' | '));
+    cierto(a.some(x => /clienteOrigenId 77/.test(x)), a.join(' | '));
+  });
+
   return { ok, fallos };
 }
 
@@ -302,6 +356,10 @@ const MUTACIONES = [
   ['X31 la observación entra en la intención', /'cantidad', 'documentoId', 'documentoNumero'\];/, "'cantidad', 'documentoId', 'documentoNumero', 'observacionOrigen'];"],
   ['X32 un rechazo previo bloquea el reintento', /if \(previo\.estado === 'rechazado'\) \{\n    \/\/ Lo rechazó Redlink[\s\S]*?\n    return \{ accion: 'escribir', motivo: '' \};\n  \}/, ''],
   ['X33 el mensaje de duda no dice qué hacer', /'la próxima llamada lo resuelve\.'/, "''"],
+  ['X35 llaveUsable acepta un documento en cero',  /return !\(p\.documentoId === null \|\| p\.documentoId <= 0\) &&\n         !\(p\.documentoNumero === null \|\| p\.documentoNumero <= 0\);/, '  return true;'],
+  ['X36 llaveUsable mira sólo el tipo de documento', /         !\(p\.documentoNumero === null \|\| p\.documentoNumero <= 0\);/, '         true;'],
+  ['X37 los avisos de validar se arman por otro lado', /avisos: avisosDe\(p, identidad\)/, 'avisos: []'],
+  ['X38 el aviso de modoProduccion desaparece',    /if \(p\.modoProduccionPedido !== undefined && p\.modoProduccionPedido !== null\) \{/, 'if (false) {'],
   ['X34 el mensaje de duda no nombra el documento', /'no se sabe si el documento ' \+ p\.documentoNumero \+ ' alcanzó a crearse en Redlink y '/, "'no se sabe si el documento alcanzó a crearse en Redlink y '"]
 ];
 

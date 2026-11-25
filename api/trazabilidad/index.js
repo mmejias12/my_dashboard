@@ -134,7 +134,8 @@ function armar(t, filas, confs, estados) {
     return { cita: c, folio: k.folio, declarado: declarado, confirmado: confirmado,
              faltan: declarado > confirmado ? declarado - confirmado : 0,
              sobran: confirmado > declarado ? confirmado - declarado : 0,
-             ultimoReporte: u.dia, archivo: u.archivo, confirmadoEl: String(k.ts).slice(0, 10),
+             ultimoReporte: planillas.cuando(u), archivo: u.archivo,
+             confirmadoEl: String(k.ts).slice(0, 10),
              confirmadoPor: k.quien };
   }).filter(Boolean);
 

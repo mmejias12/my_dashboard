@@ -164,9 +164,26 @@ function apariciones(filas, citas) {
     out.push(f);
   });
   return out.sort(function (a, b) {
-    return String(b.ts || '').localeCompare(String(a.ts || '')) ||
+    return cuando(b).localeCompare(cuando(a)) ||
+           String(b.ts || '').localeCompare(String(a.ts || '')) ||
            String(a.cita).localeCompare(String(b.cita));
   });
+}
+
+// CUÁNDO pasó lo que cuenta esta aparición: la fecha de recepción que trae el
+// propio reporte de Walmart, no `dia`, que es cuándo alguien subió el archivo.
+//
+// Ordenar por el día de carga parece lo mismo y no lo es: los reportes no se
+// suben en orden. El 19-nov-2026 se cargó el del 17 a las 14:06 y el del 16 a
+// las 16:53, y la alarma tomó el del 16 como "lo último que dijo Walmart".
+// Resultado: la cita 42768970 de CAMBIASO salió con "sobran 8" cuando estaba
+// correcta — los 31 pallets venían rechazados el 16 y aceptados el 17.
+//
+// `ts` queda de desempate para dos cargas del mismo día de recepción, y `dia`
+// de respaldo para las filas viejas que se guardaron sin `fecha`. Los tres
+// valores son YYYY-MM-DD al compararse, así que el respaldo no mezcla escalas.
+function cuando(f) {
+  return String((f && f.fecha) || (f && f.dia) || '');
 }
 
 // Lo que cambió entre una aparición y la siguiente. Es la pregunta que trajo
@@ -182,7 +199,7 @@ function cambios(apar) {
     for (let i = 1; i < lista.length; i++) {
       const a = lista[i - 1], b = lista[i];
       if (a.canje === b.canje && a.total === b.total) continue;
-      out.push({ cita: c, de: a.dia, a: b.dia,
+      out.push({ cita: c, de: cuando(a), a: cuando(b),
                  canjeAntes: a.canje, canjeAhora: b.canje,
                  totalAntes: a.total, totalAhora: b.total,
                  diferencia: b.canje - a.canje });
@@ -191,6 +208,6 @@ function cambios(apar) {
   return out.sort(function (x, y) { return String(y.a).localeCompare(String(x.a)); });
 }
 
-module.exports = { registrar, leerMes, mesesRecientes, apariciones, cambios, armarFila,
+module.exports = { registrar, leerMes, mesesRecientes, apariciones, cambios, cuando, armarFila,
                    hayStorage, blobMes, esNoExiste, esCita, texto, entero,
                    MAX_FILAS, MESES_ATRAS, CONTAINER };

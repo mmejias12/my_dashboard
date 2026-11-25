@@ -924,10 +924,18 @@ function pintarSaltos(d) {
 function pintarLinea(d) {
   var hitos = [];
   (d.apariciones || []).forEach(function (f) {
-    hitos.push({ ts: f.ts, clase: '', q: 'Walmart declara ' + num(f.canje) + ' pallet(s)' +
+    // La aparición se ubica por la fecha de RECEPCIÓN que trae el reporte, no
+    // por cuándo se subió el archivo: los reportes no se cargan en orden y la
+    // línea de tiempo quedaba contando los hechos al revés. Se le pone mediodía
+    // para que caiga dentro de su día frente a los hitos que sí tienen hora.
+    var cuando = f.fecha || f.dia;
+    hitos.push({ ts: cuando + 'T12:00:00', clase: '',
+      q: 'Walmart declara ' + num(f.canje) + ' pallet(s)' +
       (f.malos ? ' (' + num(f.malos) + ' rechazado(s) de ' + num(f.total) + ')' : '') +
       ' · cita ' + f.cita,
-      d: f.dia + ' · ' + (f.archivo || 'reporte') + (f.folio ? ' · pedido ' + f.folio : ' · sin cruce ese día') });
+      d: cuando + ' · ' + (f.archivo || 'reporte') +
+         (f.dia && f.dia !== cuando ? ' · cargado el ' + f.dia : '') +
+         (f.folio ? ' · pedido ' + f.folio : ' · sin cruce ese día') });
   });
   (d.confirmaciones || []).forEach(function (r) {
     var rl = r.redlink || {};

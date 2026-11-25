@@ -147,6 +147,29 @@ async function buscarPorDocumento(bpId, documentoNumero, p) {
 
 const resp = (http, estado, extra) => Object.assign({ http: http, estado: estado }, extra || {});
 
+// La idempotencia, resuelta sin tocar la red. Devuelve `{ resp }` cuando ya
+// hay respuesta final para PF, o `{ dec, previo }` cuando hay que seguir.
+async function idempotencia(d, p, llave, avisos) {
+  let previo;
+  try { previo = await d.leerEstado(llave); }
+  catch (e) {
+    // No saber qué hay NO autoriza a escribir.
+    return { resp: resp(503, 'no-disponible',
+      { dice: 'no se pudo consultar el registro de idempotencia; no se escribió nada' }) };
+  }
+
+  const dec = N.decidir(previo, p);
+  if (dec.accion === 'conflicto') {
+    return { resp: resp(409, 'conflicto', { dice: dec.motivo, avisos: avisos }) };
+  }
+  if (dec.accion === 'devolver') {
+    return { resp: resp(200, 'ya-existia',
+      { nroPedido: previo.folio, docId: previo.docId, repetido: true,
+        dice: dec.motivo, avisos: avisos }) };
+  }
+  return { dec: dec, previo: previo };
+}
+
 async function procesar(cuerpo, identidad, deps) {
   const d = Object.assign({
     bodegas: bodegasDe, crear: crear, buscar: buscarPorDocumento,
@@ -154,7 +177,27 @@ async function procesar(cuerpo, identidad, deps) {
   }, deps || {});
 
   const p = N.normalizar(cuerpo);
+  const avisos = N.avisosDe(p, identidad);
+  const llave = N.llaveDe(identidad.bpId, p.documentoId, p.documentoNumero);
+  const huella = N.huellaDe(p);
 
+  // PRIMERO la bitácora, que no necesita red. Un documento que ya creamos se
+  // responde con su folio aunque Redlink esté caído: ni la idempotencia ni el
+  // conflicto necesitan el maestro de bodegas, porque ninguno de los dos
+  // escribe. Al revés —preguntando primero el maestro— un reintento durante un
+  // corte moría en un 503 teniendo el folio guardado acá al lado, y le
+  // fallábamos a PF justo en la instrucción que le damos: "ante un corte,
+  // vuelve a llamar con los mismos datos".
+  //
+  // Medido el 24-nov-2026: con accounts.portalredtec.cl inalcanzable desde
+  // Azure, la llamada repetida del folio 4157023 devolvía 503 en vez del folio.
+  let paso = null;
+  if (N.llaveUsable(p)) {
+    paso = await idempotencia(d, p, llave, avisos);
+    if (paso.resp) return paso.resp;
+  }
+
+  // ...y recién acá, lo único que puede ESCRIBIR necesita el maestro.
   let bodegas;
   try { bodegas = await d.bodegas(identidad.bpId); }
   catch (e) {
@@ -163,28 +206,17 @@ async function procesar(cuerpo, identidad, deps) {
   }
 
   const v = N.validar(p, identidad, bodegas);
-  if (!v.ok) return resp(400, 'rechazado', { problemas: v.problemas, avisos: v.avisos });
+  if (!v.ok) return resp(400, 'rechazado', { problemas: v.problemas, avisos: avisos });
 
-  const llave = N.llaveDe(identidad.bpId, p.documentoId, p.documentoNumero);
-  const huella = N.huellaDe(p);
-
-  let previo;
-  try { previo = await d.leerEstado(llave); }
-  catch (e) {
-    // No saber qué hay NO autoriza a escribir.
-    return resp(503, 'no-disponible',
-      { dice: 'no se pudo consultar el registro de idempotencia; no se escribió nada' });
+  // Red de seguridad: validar exige lo mismo que `llaveUsable`, así que pasar
+  // por acá significa que las dos condiciones se separaron. Antes que escribir
+  // sin haber mirado la bitácora, se mira ahora.
+  if (!paso) {
+    paso = await idempotencia(d, p, llave, avisos);
+    if (paso.resp) return paso.resp;
   }
-
-  const dec = N.decidir(previo, p);
-  if (dec.accion === 'conflicto') {
-    return resp(409, 'conflicto', { dice: dec.motivo, avisos: v.avisos });
-  }
-  if (dec.accion === 'devolver') {
-    return resp(200, 'ya-existia',
-      { nroPedido: previo.folio, docId: previo.docId, repetido: true,
-        dice: dec.motivo, avisos: v.avisos });
-  }
+  const dec = paso.dec;
+  const previo = paso.previo;
 
   // Un intento anterior quedó sin respuesta: se MIRA, no se reescribe.
   if (dec.accion === 'resolver') {
@@ -193,7 +225,7 @@ async function procesar(cuerpo, identidad, deps) {
     catch (e) {
       await d.registrar({ llave, estado: 'en-duda', bpId: identidad.bpId, huella,
                           quien: identidad.nombre, detalle: 'no se pudo consultar Redlink' });
-      return resp(503, 'en-duda', { dice: N.dudaSinResolver(p), avisos: v.avisos });
+      return resp(503, 'en-duda', { dice: N.dudaSinResolver(p), avisos: avisos });
     }
     if (hall) {
       await d.registrar({ llave, estado: 'creado', folio: hall.folio, docId: hall.docId,
@@ -201,7 +233,7 @@ async function procesar(cuerpo, identidad, deps) {
                           detalle: 'resuelto releyendo tras un intento sin respuesta' });
       return resp(200, 'ya-existia',
         { nroPedido: hall.folio, docId: hall.docId, etapa: hall.etapa, repetido: true,
-          dice: 'el intento anterior sí había alcanzado a crearse', avisos: v.avisos });
+          dice: 'el intento anterior sí había alcanzado a crearse', avisos: avisos });
     }
     // No estaba: aquel intento no escribió. Se sigue y se crea.
   }
@@ -220,7 +252,7 @@ async function procesar(cuerpo, identidad, deps) {
   catch (e) {
     await d.registrar({ llave, estado: 'en-duda', bpId: identidad.bpId, huella,
                         quien: identidad.nombre, detalle: 'la escritura se cortó' });
-    return resp(503, 'en-duda', { dice: N.dudaSinResolver(p), avisos: v.avisos });
+    return resp(503, 'en-duda', { dice: N.dudaSinResolver(p), avisos: avisos });
   }
 
   // Un rechazo que NO es "ya existe" no escribió nada: se puede corregir y repetir.
@@ -228,7 +260,7 @@ async function procesar(cuerpo, identidad, deps) {
     await d.registrar({ llave, estado: 'rechazado', bpId: identidad.bpId, huella,
                         quien: identidad.nombre, detalle: r.motivo });
     return resp(400, 'rechazado',
-      { dice: 'Redlink no aceptó la relocalización', problemas: [r.motivo], avisos: v.avisos });
+      { dice: 'Redlink no aceptó la relocalización', problemas: [r.motivo], avisos: avisos });
   }
 
   // Haya salido bien o haya dicho "ya existe", el folio sólo sale de releer: el
@@ -243,7 +275,7 @@ async function procesar(cuerpo, identidad, deps) {
                                   detalle: r.yaExiste ? 'ya existía en Redlink' : '' });
     return resp(r.yaExiste ? 200 : 201, r.yaExiste ? 'ya-existia' : 'creada',
       { nroPedido: hall.folio, docId: hall.docId, etapa: hall.etapa,
-        repetido: !!r.yaExiste, avisos: v.avisos,
+        repetido: !!r.yaExiste, avisos: avisos,
         registro: g.ok ? undefined : 'quedó creada pero no se pudo guardar el registro' });
   }
 
@@ -252,7 +284,7 @@ async function procesar(cuerpo, identidad, deps) {
                       quien: identidad.nombre,
                       detalle: r.yaExiste ? 'Redlink dice que ya existe pero no aparece en el histórico'
                                           : 'se escribió pero no aparece todavía' });
-  return resp(503, 'en-duda', { dice: N.dudaSinResolver(p), avisos: v.avisos });
+  return resp(503, 'en-duda', { dice: N.dudaSinResolver(p), avisos: avisos });
 }
 
 module.exports = { procesar, crear, buscarPorDocumento, bodegasDe, pedir, faltantes,

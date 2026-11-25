@@ -128,8 +128,18 @@ function validar(p, identidad, bodegas) {
   if (!id.bpId) problemas.push('la llave de API no tiene cliente asociado');
   if (!id.usuarioIngresoId) problemas.push('la llave de API no tiene usuario de firma asociado');
 
-  // Avisos: no impiden nada, pero quedan en la respuesta para que PF sepa que
-  // mandó algo que no se usó, en vez de creer que surtió efecto.
+  return { ok: problemas.length === 0, problemas: problemas, avisos: avisosDe(p, identidad) };
+}
+
+// Los avisos viven APARTE de validar porque no dependen del maestro de bodegas:
+// se pueden calcular sin salir a la red. Eso importa desde que la idempotencia
+// se resuelve antes de pedirle nada a Redlink — las respuestas tempranas
+// (conflicto, ya-existia) tienen que llevar los mismos avisos que las demás.
+//
+// No impiden nada: le dicen a PF que mandó algo que no se usó, en vez de que
+// se quede creyendo que surtió efecto.
+function avisosDe(p, identidad) {
+  const id = identidad || {};
   const avisos = [];
   if (p.modoProduccionPedido !== undefined && p.modoProduccionPedido !== null) {
     avisos.push('modoProduccion se ignora: el ambiente lo fija el servidor');
@@ -140,8 +150,18 @@ function validar(p, identidad, bodegas) {
         avisos.push(par[0] + ' ' + par[1] + ' se ignora: se usa el cliente de la llave (' + id.bpId + ')');
       }
     });
+  return avisos;
+}
 
-  return { ok: problemas.length === 0, problemas: problemas, avisos: avisos };
+// ¿Sirve la llave de idempotencia de este pedido? Es la MISMA condición que
+// validar exige para documentoId y documentoNumero, y tiene que seguir
+// siéndolo: `pf-escritura` consulta la bitácora antes de validar, y se apoya
+// en que todo lo que pasa validar también pasa por acá. Si las dos se separan,
+// habría pedidos válidos que nunca consultan la bitácora. Hay una prueba que
+// compara las dos condiciones campo por campo.
+function llaveUsable(p) {
+  return !(p.documentoId === null || p.documentoId <= 0) &&
+         !(p.documentoNumero === null || p.documentoNumero <= 0);
 }
 
 // La traducción al formHeader nativo. El cliente, las bodegas ya validadas y el
@@ -210,6 +230,6 @@ function dudaSinResolver(p) {
 
 module.exports = {
   FORM_ID, SERVICIO_ID, ITEMS_ID, CANTIDAD_MAX, CAMPOS_INTENCION,
-  entero, texto, leer, normalizar, llaveDe, validar, aFormHeader,
+  entero, texto, leer, normalizar, llaveDe, llaveUsable, validar, avisosDe, aFormHeader,
   huellaDe, mismaIntencion, decidir, dudaSinResolver
 };

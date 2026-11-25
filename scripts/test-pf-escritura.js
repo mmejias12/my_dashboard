@@ -20,7 +20,7 @@ const Module = require('module');
 const RUTA = path.join(__dirname, '..', 'api', 'shared', 'pf-escritura.js');
 const FUENTE = fs.readFileSync(RUTA, 'utf8');
 
-function compilar(fuente) {
+function compilar(fuente, parcheNucleo) {
   const m = new Module(RUTA, null);
   m.filename = RUTA;
   m.paths = Module._nodeModulePaths(path.dirname(RUTA));
@@ -28,6 +28,11 @@ function compilar(fuente) {
   m.require = function (p) {
     // La bitácora real toca el blob: acá sólo hace falta su forma.
     if (/pf-bitacora\.js$/.test(p)) return { leerEstado: async () => null, registrar: async () => ({ ok: true }) };
+    // El parche del núcleo existe para UNA cosa: poder romper a propósito la
+    // invariante entre `validar` y `llaveUsable` y comprobar que la red de
+    // seguridad de `procesar` hace su trabajo. Sin esto esa rama es
+    // inalcanzable y no habría forma honesta de probarla.
+    if (parcheNucleo && /pf-nucleo\.js$/.test(p)) return Object.assign({}, propio(p), parcheNucleo);
     return propio(p);
   };
   m._compile(fuente, RUTA);
@@ -86,7 +91,7 @@ function mundo(op) {
   } };
 }
 
-async function correr(S) {
+async function correr(S, fuente) {
   ok = 0; fallos = []; pend.length = 0;
 
   /* ── el camino feliz ─────────────────────────────────────────────────── */
@@ -237,6 +242,81 @@ async function correr(S) {
     cierto(/no se pudo guardar el registro/.test(r.registro || ''), r.registro);
   });
 
+  /* ── la bitácora se resuelve ANTES de salir a la red ─────────────────── */
+
+  pruebaAsync('E21 un documento YA CREADO se devuelve aunque Redlink esté caído', async function () {
+    // El caso del 24-nov-2026: accounts.portalredtec.cl inalcanzable desde
+    // Azure. El folio está guardado en la bitácora; preguntarle el maestro a
+    // Redlink para poder devolverlo no tiene sentido, y rompía la instrucción
+    // que le damos a PF —"ante un corte, vuelve a llamar con los mismos datos".
+    const m = mundo({ bodegasFallan: true,
+                      previo: { estado: 'creado', folio: 4157023, docId: 699891,
+                                huella: null } });
+    m.deps.leerEstado = async function (llave) {
+      m.hecho.llaveConsultada = llave;
+      const N = require('../api/shared/pf-nucleo.js');
+      return { estado: 'creado', folio: 4157023, docId: 699891, huella: N.huellaDe(N.normalizar(PF())) };
+    };
+    const r = await S.procesar(PF(), ID, m.deps);
+    igual([r.http, r.estado, r.nroPedido, r.repetido], [200, 'ya-existia', 4157023, true]);
+    igual(m.hecho.escrituras, 0, 'no escribe');
+    igual(m.hecho.bodegasPedidas, 0, 'y ni siquiera le pregunta el maestro a Redlink');
+  });
+
+  pruebaAsync('E22 el conflicto también se resuelve con Redlink caído', async function () {
+    // Mismo número de documento con otra cantidad. Tampoco necesita el maestro:
+    // no se va a escribir nada en ninguno de los dos casos.
+    const m = mundo({ bodegasFallan: true });
+    m.deps.leerEstado = async function () {
+      const N = require('../api/shared/pf-nucleo.js');
+      const otro = N.normalizar(Object.assign(PF(), { Cantidad: 99 }));
+      return { estado: 'creado', folio: 4157023, docId: 699891, huella: N.huellaDe(otro) };
+    };
+    const r = await S.procesar(PF(), ID, m.deps);
+    igual([r.http, r.estado], [409, 'conflicto']);
+    igual(m.hecho.escrituras, 0);
+    igual(m.hecho.bodegasPedidas, 0);
+  });
+
+  pruebaAsync('E23 un documento NUEVO sí necesita el maestro antes de escribir', async function () {
+    // La contracara de E21: saltarse el maestro sólo vale para lo que NO
+    // escribe. Si no hay registro previo, hay que validar las bodegas.
+    const m = mundo({ bodegasFallan: true });
+    const r = await S.procesar(PF(), ID, m.deps);
+    igual([r.http, r.estado], [503, 'no-disponible']);
+    cierto(/maestro de bodegas/.test(r.dice || ''), r.dice);
+    igual(m.hecho.escrituras, 0);
+    igual(m.hecho.bodegasPedidas, 1, 'lo pidió');
+  });
+
+  pruebaAsync('E24 sin número de documento no se consulta la bitácora, se rechaza', async function () {
+    // La llave sería basura. Se cae por el camino normal de validación.
+    const m = mundo();
+    const r = await S.procesar(Object.assign(PF(), { DocumentoNumero: 0 }), ID, m.deps);
+    igual([r.http, r.estado], [400, 'rechazado']);
+    igual(m.hecho.escrituras, 0);
+    igual(m.hecho.llaveConsultada, undefined, 'ni siquiera consultó la bitácora');
+    cierto(/documentoNumero/.test(r.problemas.join(' ')), r.problemas.join(' '));
+  });
+
+  pruebaAsync('E25 si la invariante se rompiera, igual se mira la bitácora antes de escribir', async function () {
+    // `validar` y `llaveUsable` exigen lo mismo, así que esta rama hoy no se
+    // alcanza. Se prueba igual porque el día que alguien toque una de las dos
+    // y no la otra, lo que está en juego es escribir sin consultar la
+    // idempotencia: dos relocalizaciones y pallets movidos dos veces.
+    const S2 = compilar(fuente || FUENTE, { llaveUsable: function () { return false; } });
+    const m = mundo();
+    m.deps.leerEstado = async function (llave) {
+      m.hecho.llaveConsultada = llave;
+      const N = require('../api/shared/pf-nucleo.js');
+      return { estado: 'creado', folio: 4157023, docId: 699891, huella: N.huellaDe(N.normalizar(PF())) };
+    };
+    const r = await S2.procesar(PF(), ID, m.deps);
+    igual([r.http, r.estado, r.nroPedido], [200, 'ya-existia', 4157023]);
+    igual(m.hecho.escrituras, 0, 'no escribió pese a saltarse la consulta temprana');
+    igual(m.hecho.llaveConsultada, '499|1|45285', 'la consultó en la red de seguridad');
+  });
+
   /* ── validación y avisos ─────────────────────────────────────────────── */
 
   pruebaAsync('E16 un payload inválido se rechaza ANTES de tocar Redlink', async function () {
@@ -299,13 +379,13 @@ const MUTACIONES = [
   ['V08 no se relee después de escribir',          /  let hall = null;\n  try \{ hall = await d\.buscar\(identidad\.bpId, p\.documentoNumero\); \}\n  catch \(e\) \{ hall = null; \}/, '  let hall = { folio: r.docId, docId: r.docId, etapa: "" };'],
   ['V09 "ya existe" se trata como rechazo',        /if \(!r\.ok && !r\.yaExiste\) \{/, 'if (!r.ok) {'],
   ['V10 un rechazo de contenido se trata como "ya existe"', /if \(!r\.ok && !r\.yaExiste\) \{[\s\S]*?\n  \}/, ''],
-  ['V11 no encontrar tras escribir se canta como éxito', /  await d\.registrar\(\{ llave, estado: 'en-duda', bpId: identidad\.bpId, huella,\n                      quien: identidad\.nombre,\n                      detalle: r\.yaExiste[\s\S]*?\n  return resp\(503, 'en-duda', \{ dice: N\.dudaSinResolver\(p\), avisos: v\.avisos \}\);/, "  return resp(201, 'creada', { nroPedido: null });"],
-  ['V12 la validación no detiene nada',            /if \(!v\.ok\) return resp\(400, 'rechazado', \{ problemas: v\.problemas, avisos: v\.avisos \}\);/, ''],
+  ['V11 no encontrar tras escribir se canta como éxito', /  await d\.registrar\(\{ llave, estado: 'en-duda', bpId: identidad\.bpId, huella,\n                      quien: identidad\.nombre,\n                      detalle: r\.yaExiste[\s\S]*?\n  return resp\(503, 'en-duda', \{ dice: N\.dudaSinResolver\(p\), avisos: avisos \}\);/, "  return resp(201, 'creada', { nroPedido: null });"],
+  ['V12 la validación no detiene nada',            /if \(!v\.ok\) return resp\(400, 'rechazado', \{ problemas: v\.problemas, avisos: avisos \}\);/, ''],
   ['V13 sin maestro de bodegas se sigue igual',    /  catch \(e\) \{\n    return resp\(503, 'no-disponible',\n      \{ dice: 'no se pudo verificar el maestro de bodegas en Redlink; no se escribió nada' \}\);\n  \}/, '  catch (e) { bodegas = []; }'],
   ['V14 la llave ignora el documento',             /const llave = N\.llaveDe\(identidad\.bpId, p\.documentoId, p\.documentoNumero\);/, 'const llave = N.llaveDe(identidad.bpId, 0, 0);'],
   ['V15 el estado creado no guarda el folio',      /\{ llave, estado: 'creado', folio: hall\.folio, docId: hall\.docId,\n                                  bpId: identidad\.bpId/, "{ llave, estado: 'creado', docId: hall.docId,\n                                  bpId: identidad.bpId"],
   ['V16 un fallo al registrar lo creado tumba la respuesta', /registro: g\.ok \? undefined : 'quedó creada pero no se pudo guardar el registro'/, "registro: undefined"],
-  ['V17 los avisos no viajan en el rechazo',       /\{ dice: 'Redlink no aceptó la relocalización', problemas: \[r\.motivo\], avisos: v\.avisos \}/, "{ dice: 'Redlink no aceptó la relocalización', problemas: [r.motivo] }"],
+  ['V17 los avisos no viajan en el rechazo',       /\{ dice: 'Redlink no aceptó la relocalización', problemas: \[r\.motivo\], avisos: avisos \}/, "{ dice: 'Redlink no aceptó la relocalización', problemas: [r.motivo] }"],
   // V18 ("el entero del POST se confunde con una lista") se RETIRÓ: era
   // equivalente. Una lista no tiene formHeaderiD, así que con o sin el guardia
   // de Array.isArray el resultado es null. El guardia se deja igual porque
@@ -313,6 +393,9 @@ const MUTACIONES = [
   ['V18 cualquier texto se lee como id',           /\/\^\\s\*\\d\+\\s\*\$\/\.test\(r\.texto\)/, 'true'],
   ['V19 "ya existe" se reconoce sólo exacto',      /\/ya\\s\*existe\\s\*documento\/i/, '/^Ya existe Documento$/'],
   ['V20 el motivo no se acota',                    /return N\.texto\(t, 300\);/, 'return t;'],
+  ['V22 la bitácora se consulta sólo después del maestro', /  let paso = null;\n  if \(N\.llaveUsable\(p\)\) \{\n    paso = await idempotencia\(d, p, llave, avisos\);\n    if \(paso\.resp\) return paso\.resp;\n  \}/, '  let paso = null;'],
+  ['V23 la red de seguridad no mira la bitácora', /  if \(!paso\) \{\n    paso = await idempotencia\(d, p, llave, avisos\);\n    if \(paso\.resp\) return paso\.resp;\n  \}/, '  if (!paso) { paso = { dec: { accion: "escribir" }, previo: null }; }'],
+  ['V24 cualquier llave se considera usable',      /if \(N\.llaveUsable\(p\)\) \{/, 'if (true) {'],
   ['V21 el intento se anota DESPUÉS de escribir',  /  const marca = await d\.registrar\(\{ llave, estado: 'intentando', bpId: identidad\.bpId,\n                                    huella, quien: identidad\.nombre \}\);/, '  const marca = { ok: true };']
 ];
 
@@ -324,14 +407,14 @@ async function mutar() {
     const mutado = FUENTE.replace(busca, pone);
     if (mutado === FUENTE) { noAplican.push(nombre); continue; }
     let r;
-    try { r = await correr(compilar(mutado)); } catch (e) { muertas++; continue; }
+    try { r = await correr(compilar(mutado), mutado); } catch (e) { muertas++; continue; }
     if (r.fallos.length) muertas++; else vivas.push(nombre);
   }
   return { vivas, muertas, noAplican, total: MUTACIONES.length };
 }
 
 (async function () {
-  const r = await correr(compilar(FUENTE));
+  const r = await correr(compilar(FUENTE), FUENTE);
   console.log('\nPruebas: ' + r.ok + ' pasan, ' + r.fallos.length + ' fallan');
   for (const f of r.fallos) console.log('  FALLA ' + f);
   if (!r.fallos.length || process.argv.indexOf('--mutaciones') >= 0) {

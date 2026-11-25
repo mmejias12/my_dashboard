@@ -36,6 +36,7 @@ function planFalso() {
     mesesRecientes: realPlan.mesesRecientes,
     apariciones: realPlan.apariciones,
     cambios: realPlan.cambios,
+    cuando: realPlan.cuando,
     leerMes: async (m) => {
       if (REVIENTA) throw new Error('AuthorizationFailure');
       return FILAS.filter(function (f) { return String(f.ts).slice(0, 7) === m; });
@@ -298,6 +299,34 @@ async function correr(S) {
     igual(r.body.desajustes, []);
   });
 
+  pruebaAsync('T13c el desajuste se mide contra el reporte de recepción más nueva', async function () {
+    // Los reportes no se cargan en orden. Acá los dos entraron el mismo día y
+    // el de la recepción MÁS VIEJA se subió último. Si mandara el orden de
+    // carga, el desajuste se mediría contra el reporte equivocado: es lo que
+    // pasó con la cita 42768970 de CAMBIASO, que salió con "sobran 8" estando
+    // correcta.
+    FILAS = [
+      ap(dia(1), '42510877', { fecha: '2026-11-17', archivo: 'r15.xlsx',
+                               ts: dia(1) + 'T14:06:00.000Z', total: 31, malos: 0, canje: 31 }),
+      ap(dia(1), '42510877', { fecha: '2026-11-16', archivo: 'r14.xlsx',
+                               ts: dia(1) + 'T16:53:00.000Z', total: 54, malos: 31, canje: 23 })
+    ];
+    CONFS = [conf(dia(1), 4149330, '42510877', 31)];
+    const r = await pedir(S, { q: '42510877' }, 'GET');
+    igual(r.body.desajustes, [], 'confirmamos 31 y el reporte del 17 declara 31');
+  });
+
+  pruebaAsync('T13d ultimoReporte muestra la fecha de recepción, no la de carga', async function () {
+    // Con todos los reportes cargados el mismo día, decir "19 → 19" no le
+    // sirve a nadie para saber qué reporte mandó.
+    FILAS = [ap(dia(1), '42510877', { fecha: '2026-11-18', total: 28, canje: 28 })];
+    CONFS = [conf(dia(1), 4149330, '42510877', 24)];
+    const r = await pedir(S, { q: '42510877' }, 'GET');
+    igual(r.body.desajustes.length, 1);
+    igual(r.body.desajustes[0].ultimoReporte, '2026-11-18');
+    igual(r.body.desajustes[0].faltan, 4);
+  });
+
   pruebaAsync('T14 si confirmamos lo que Walmart declara, no hay desajuste', async function () {
     FILAS = [ap(dia(1), '42510877', { total: 20, canje: 20 })];
     CONFS = [conf(dia(1), 4149330, '42510877', 20)];
@@ -422,6 +451,8 @@ async function correr(S) {
 }
 
 const MUTACIONES = [
+  ['Y30 ultimoReporte informa el día de carga', /ultimoReporte: planillas\.cuando\(u\)/, 'ultimoReporte: u.dia'],
+
   ['Y01 comercial puede escribir',             /if \(!q\.roles\.some\(r => \['admin', 'logistica', 'jefatura'\]\.indexOf\(r\) >= 0\)\) \{\n        return salir\(403[\s\S]*?\n      \}/, ''],
   ['Y02 cualquiera ve la trazabilidad',        /if \(!q\.roles\.some\(r => ROLES\.indexOf\(r\) >= 0\)\) \{/, 'if (false) {'],
   ['Y03 el término no se valida',              /if \(!\/\^\[A-Za-z0-9-\]\{3,30\}\$\/\.test\(t\)\) return \{ ok: false/, 'if (false) return { ok: false'],

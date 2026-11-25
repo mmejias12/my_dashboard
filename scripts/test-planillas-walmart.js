@@ -258,6 +258,42 @@ async function correr(S, fuente) {
     igual(a.map(x => x.cita), ['42751929', '42751936'], 'desempate por cita');
   });
 
+  prueba('P23b manda la fecha de recepción del reporte, no cuándo se subió', function () {
+    // El 19-nov-2026 se cargaron los dos reportes de la cita 42768970 de
+    // CAMBIASO fuera de orden: el del 17 a las 14:06 y el del 16 a las 16:53.
+    // Ordenando por el día de carga, "lo último que dijo Walmart" resultaba ser
+    // el del 16 —donde los 31 pallets venían rechazados— y la alarma marcaba
+    // "sobran 8" sobre una cita que estaba correcta.
+    const del16 = ap('2026-11-19', '42768970', { fecha: '2026-11-16', archivo: 'Reporte-RedTec14.xlsx',
+                                                 ts: '2026-11-19T16:53:17.088Z',
+                                                 total: 54, malos: 31, canje: 23 });
+    const del17 = ap('2026-11-19', '42768970', { fecha: '2026-11-17', archivo: 'Reporte-RedTec15.xlsx',
+                                                 ts: '2026-11-19T14:06:53.225Z',
+                                                 total: 31, malos: 0, canje: 31 });
+    const a = S.apariciones([del16, del17], []);
+    igual(a.map(x => x.fecha), ['2026-11-17', '2026-11-16'], 'primero la recepción más nueva');
+    igual(a[0].canje, 31, 'y es la que la alarma toma como lo último declarado');
+  });
+
+  prueba('P23c una fila sin fecha se ordena por el día de carga', function () {
+    // Las filas guardadas antes de que existiera `fecha` no pueden caerse de la
+    // lista ni irse todas al final. El respaldo es `dia`, que está en la misma
+    // escala YYYY-MM-DD, así que la comparación no mezcla formatos.
+    const vieja = ap('2026-11-10', '42751929', { fecha: '' });
+    const nueva = ap('2026-11-12', '42751929', { fecha: '', canje: 7 });
+    igual(S.apariciones([vieja, nueva], []).map(x => x.dia), ['2026-11-12', '2026-11-10']);
+    igual(S.cuando(vieja), '2026-11-10', 'cae al día de carga');
+    igual(S.cuando({}), '', 'y sin nada no inventa una fecha');
+  });
+
+  prueba('P23d dos cargas de la misma recepción desempatan por hora', function () {
+    const temprano = ap('2026-11-19', '42751929', { fecha: '2026-11-17', archivo: 'a.xlsx',
+                                                    ts: '2026-11-19T09:00:00.000Z', canje: 10 });
+    const tarde    = ap('2026-11-19', '42751929', { fecha: '2026-11-17', archivo: 'b.xlsx',
+                                                    ts: '2026-11-19T17:00:00.000Z', canje: 12 });
+    igual(S.apariciones([temprano, tarde], []).map(x => x.archivo), ['b.xlsx', 'a.xlsx']);
+  });
+
   /* ---- cambios: el caso que trajo logística ----------------------------- */
 
   prueba('P24 Walmart dijo 9 y después 20: queda escrito el salto', function () {
@@ -267,6 +303,21 @@ async function correr(S, fuente) {
     igual(c.length, 1);
     igual([c[0].de, c[0].a, c[0].canjeAntes, c[0].canjeAhora, c[0].diferencia],
           ['2026-07-10', '2026-07-14', 9, 20, 11]);
+  });
+
+  prueba('P24b el salto se informa con las fechas de recepción', function () {
+    // Es el caso real de MOLINO PUENTE ALTO, cita 42766335: Walmart declaró 24
+    // el 17 y 28 el 18, y los dos reportes se cargaron el mismo 19. Si el aviso
+    // dijera "19 → 19" no se entendería nada.
+    const c = S.cambios(S.apariciones([
+      ap('2026-11-19', '42766335', { fecha: '2026-11-17', total: 24, canje: 24,
+                                     archivo: 'r15.xlsx', ts: '2026-11-19T10:00:00.000Z' }),
+      ap('2026-11-19', '42766335', { fecha: '2026-11-18', total: 28, canje: 28,
+                                     archivo: 'r16.xlsx', ts: '2026-11-19T10:00:01.000Z' })
+    ], []));
+    igual(c.length, 1);
+    igual([c[0].de, c[0].a], ['2026-11-17', '2026-11-18'], 'y no el 19, que es cuándo se cargaron');
+    igual(c[0].diferencia, 4);
   });
 
   prueba('P25 la misma cantidad en dos reportes NO es un cambio', function () {
@@ -371,7 +422,12 @@ const MUTACIONES = [
   ['X14 una línea corrupta bota el mes',          /try \{ return JSON\.parse\(l\); \} catch \(e\) \{ return null; \}/, 'return JSON.parse(l);'],
   ['X15 un 404 al leer el mes lanza',             /if \(esNoExiste\(e\)\) return \[\];/, ''],
   ['X16 un 403 se trata como "no existe"',        /return !!e && \(e\.statusCode === 404/, 'return !!e && (true'],
-  ['X17 las apariciones salen de la vieja a la nueva', /return String\(b\.ts \|\| ''\)\.localeCompare\(String\(a\.ts \|\| ''\)\) \|\|/, "return String(a.ts || '').localeCompare(String(b.ts || '')) ||"],
+  ['X17 las apariciones salen de la vieja a la nueva', /return cuando\(b\)\.localeCompare\(cuando\(a\)\) \|\|/, 'return cuando(a).localeCompare(cuando(b)) ||'],
+  ['X17b las apariciones se ordenan por el día de CARGA', /    return cuando\(b\)\.localeCompare\(cuando\(a\)\) \|\|\n           String\(b\.ts \|\| ''\)\.localeCompare\(String\(a\.ts \|\| ''\)\) \|\|/, "    return String(b.ts || '').localeCompare(String(a.ts || '')) ||"],
+  ['X17c el desempate por ts desaparece',          /           String\(b\.ts \|\| ''\)\.localeCompare\(String\(a\.ts \|\| ''\)\) \|\|\n           String\(a\.cita\)/, '           String(a.cita)'],
+  ['X17d cuando() usa el día de carga primero',    /return String\(\(f && f\.fecha\) \|\| \(f && f\.dia\) \|\| ''\);/, "return String((f && f.dia) || (f && f.fecha) || '');"],
+  ['X17e cuando() se queda sin respaldo',          /\|\| \(f && f\.dia\) \|\| ''\);/, "|| '');"],
+  ['X17f cambios informa el día de carga',         /out\.push\(\{ cita: c, de: cuando\(a\), a: cuando\(b\),/, 'out.push({ cita: c, de: a.dia, a: b.dia,'],
   ['X18 no hay desempate entre citas del mismo día', /String\(a\.cita\)\.localeCompare\(String\(b\.cita\)\);/, '0;'],
   ['X19 la llave de dedup ignora las cantidades', /const llave = \[f\.cita, f\.archivo, f\.dia, f\.total, f\.malos, f\.canje, f\.recepcion\]\.join\('\|'\);/, "const llave = [f.cita, f.archivo, f.dia].join('|');"],
   ['X20 la llave de dedup ignora el archivo',     /\[f\.cita, f\.archivo, f\.dia, f\.total/, '[f.cita, f.dia, f.total'],

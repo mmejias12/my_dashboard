@@ -335,6 +335,38 @@ const registro = require(path.join(RAIZ, 'api', 'shared', 'confirmaciones-regist
   console.log('\n-- el enlace queda compartible --');
   ok(/#traza:42510877/.test(pg.url()), 'el hash lleva el término: ' + pg.url().split('#')[1]);
 
+  console.log('\n-- reportes cargados fuera de orden --');
+  // El caso real de la cita 42768970 de CAMBIASO: los dos reportes se cargaron
+  // el mismo día y el de la recepción MÁS VIEJA entró último. La línea de
+  // tiempo tiene que ordenarse por la fecha de recepción del reporte, no por
+  // cuándo se subió el archivo.
+  const vR = (fecha, carga, hora, canje, archivo) => ({
+    ts: carga + 'T' + hora + ':00.000Z', dia: carga, archivo: archivo, quien: 'mmejias',
+    cita: '42768970', po: '2851159072', rut: '91438000-6', cliente: 'CAMBIASO HNOS S A C',
+    cd: '6009', recepcion: '408469', fecha: fecha, total: canje, malos: 0, canje: canje,
+    folio: 4152168, bandeja: 'porConfirmar'
+  });
+  TRAZA = {
+    termino: '42768970', almacenamiento: true, meses: 6, hallado: true,
+    citas: ['42768970'], folios: ['4152168'],
+    universo: { confirmaciones: 104, apariciones: 2 },
+    apariciones: [vR(hoy, hoy, '14:06', 31, 'r15.xlsx'), vR(d4, hoy, '16:53', 23, 'r14.xlsx')],
+    cambios: [], confirmaciones: [], pendientes: [], desajustes: []
+  };
+  await pg.locator('#q').fill('42768970');
+  await pg.locator('#b-buscar').click();
+  await pg.waitForTimeout(250);
+  const dOrden = await pg.locator('#linea .linea .d').allInnerTexts();
+  ok(dOrden.length === 2, 'las dos apariciones en la línea: ' + dOrden.length);
+  ok(dOrden[0].indexOf(hoy) === 0,
+     'arriba la de recepción más nueva, aunque se haya subido antes: ' + dOrden[0]);
+  ok(dOrden[1].indexOf(d4) === 0, 'y abajo la más vieja: ' + dOrden[1]);
+  // Y que se note la diferencia, para que nadie se pregunte por qué el orden
+  // no calza con el nombre del archivo.
+  ok(/cargado el/.test(dOrden[1]), 'dice cuándo se cargó cuando no es el mismo día: ' + dOrden[1]);
+  const qOrden = await pg.locator('#linea .linea .q').first().innerText();
+  ok(/declara 31 pallet/.test(qOrden), 'y la de arriba es la del reporte nuevo: ' + qOrden);
+
   console.log('\n-- buscar vacío no pega al api --');
   const antes = consultas.length;
   await pg.locator('#q').fill('');

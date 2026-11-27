@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>REDTEC · Plataforma de inteligencia operacional</title>
+<link rel="icon" type="image/png" href="data:image/png;base64,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">
+<link rel="manifest" href="/manifest.json">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --red:#E31E24; --red2:#c0171c;
+  --bg:#0a0a0a; --s1:#141414; --s2:#1e1e1e; --tx:#ededed; --mu:#8a8a8a;
+  --line:rgba(255,255,255,.07); --ok:#45a06a; --fav:#e8b53a;
+}
+[data-theme="light"]{
+  --bg:#f4f5f7; --s1:#ffffff; --s2:#eef0f3; --tx:#15212e; --mu:#5d6b7a;
+  --line:rgba(16,42,67,.12); --ok:#1d7a47; --fav:#b9881c;
+}
+body{background:var(--bg);color:var(--tx);font-family:'Inter','Helvetica Neue',Arial,sans-serif;
+     font-size:14px;min-height:100vh;position:relative;transition:background .18s,color .18s}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(900px 420px at 88% -8%,rgba(227,30,36,.14),transparent 60%),
+             radial-gradient(700px 380px at 4% 108%,rgba(227,30,36,.07),transparent 60%),
+             repeating-linear-gradient(0deg,transparent 0 59px,rgba(255,255,255,.016) 59px 60px),
+             repeating-linear-gradient(90deg,transparent 0 59px,rgba(255,255,255,.016) 59px 60px)}
+[data-theme="light"] body::before{
+  background:radial-gradient(900px 420px at 88% -8%,rgba(227,30,36,.07),transparent 60%),
+             repeating-linear-gradient(0deg,transparent 0 59px,rgba(16,42,67,.03) 59px 60px),
+             repeating-linear-gradient(90deg,transparent 0 59px,rgba(16,42,67,.03) 59px 60px)}
+.wrap{position:relative;z-index:1;max-width:1340px;margin:0 auto;padding:0 34px}
+
+/* ── barra ── */
+.bar{position:sticky;top:0;z-index:30;border-bottom:1px solid var(--line);
+     background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(12px)}
+.bar .wrap{display:flex;align-items:center;gap:20px;padding-top:11px;padding-bottom:11px}
+.marca{display:flex;align-items:center;gap:11px;text-decoration:none;flex-shrink:0}
+.marca img{height:30px;width:auto;display:block}
+[data-theme="light"] .marca img{filter:none}
+.buscar{flex:1;max-width:430px;position:relative}
+.buscar input{width:100%;background:var(--s1);border:1px solid var(--line);border-radius:9px;
+  padding:9px 13px 9px 34px;color:var(--tx);font-size:13px;font-family:inherit}
+.buscar input:focus{outline:none;border-color:rgba(227,30,36,.5)}
+.buscar svg{position:absolute;left:11px;top:9px;width:15px;height:15px;stroke:var(--mu);fill:none;stroke-width:2}
+.res{position:absolute;top:calc(100% + 7px);left:0;right:0;background:var(--s1);
+  border:1px solid var(--line);border-radius:11px;padding:6px;z-index:40;
+  box-shadow:0 18px 40px rgba(0,0,0,.45);max-height:390px;overflow:auto}
+[data-theme="light"] .res{box-shadow:0 18px 40px rgba(16,42,67,.16)}
+.res .gr{font-size:8.8px;letter-spacing:1.8px;text-transform:uppercase;color:var(--mu);
+  font-family:ui-monospace,monospace;padding:8px 10px 5px}
+.res a{display:grid;grid-template-columns:26px 1fr auto;gap:9px;align-items:center;
+  padding:8px 10px;border-radius:7px;text-decoration:none;color:var(--tx);font-size:12.6px}
+.res a:hover,.res a.sel{background:var(--s2)}
+.res a .ic{font-family:ui-monospace,monospace;font-size:9px;color:var(--red);
+  border:1px solid rgba(227,30,36,.35);border-radius:4px;text-align:center;padding:2px 0;line-height:1.25}
+.res a .d{font-size:10.4px;color:var(--mu);display:block;margin-top:1px}
+.res a .ir{font-size:9.5px;color:var(--mu);font-family:ui-monospace,monospace;white-space:nowrap}
+.res .vacio{padding:12px 10px;font-size:11.8px;color:var(--mu);line-height:1.5}
+.res mark{background:transparent;color:var(--red);font-weight:700}
+.ind{display:flex;align-items:center;gap:14px;font-family:ui-monospace,monospace;font-size:10.5px;
+     letter-spacing:.6px;color:var(--mu);white-space:nowrap}
+.ind b{color:var(--tx);font-weight:600}
+.ind span{display:flex;gap:5px;align-items:baseline}
+.ind em{font-style:normal;opacity:.6;font-size:9px;letter-spacing:1.3px;text-transform:uppercase}
+@media(max-width:1180px){.ind{display:none}}
+.der{margin-left:auto;display:flex;align-items:center;gap:14px;position:relative}
+.tema{width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:transparent;
+  cursor:pointer;color:var(--mu);display:flex;align-items:center;justify-content:center;font-size:14px}
+.tema:hover{color:var(--tx);border-color:rgba(227,30,36,.5)}
+.yo{display:flex;align-items:center;gap:10px;cursor:pointer;background:none;border:0;
+    font:inherit;color:inherit;padding:0}
+.yo .av{width:31px;height:31px;border-radius:50%;background:var(--red);color:#fff;font-weight:700;
+  font-size:11.5px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.yo .n{display:block;font-size:12px;font-weight:600;text-align:left;line-height:1.3}
+.yo .r{display:block;font-size:9.5px;color:var(--mu);letter-spacing:1.2px;text-transform:uppercase;
+  text-align:left;line-height:1.3}
+@media(max-width:780px){.yo .n,.yo .r{display:none}}
+.pop{position:absolute;top:calc(100% + 10px);right:0;background:var(--s1);border:1px solid var(--line);
+  border-radius:11px;min-width:238px;padding:7px;z-index:50;box-shadow:0 18px 40px rgba(0,0,0,.45)}
+.pop .co{padding:10px 11px;border-bottom:1px solid var(--line);margin-bottom:5px}
+.pop .co em{font-style:normal;font-size:9px;letter-spacing:1.6px;text-transform:uppercase;color:var(--mu);
+  display:block;margin-bottom:3px}
+.pop .co b{font-size:12px;font-weight:600;word-break:break-all}
+.pop a{display:block;padding:9px 11px;border-radius:7px;text-decoration:none;color:var(--tx);font-size:12.5px}
+.pop a:hover{background:var(--s2)}
+
+/* ── saludo ── */
+.saludo{padding:30px 0 6px}
+.eti{display:inline-flex;align-items:center;gap:7px;font-size:9.5px;letter-spacing:2.2px;
+  text-transform:uppercase;color:var(--red);border:1px solid rgba(227,30,36,.3);
+  padding:5px 11px;border-radius:4px;font-family:ui-monospace,monospace}
+.eti i{width:5px;height:5px;background:var(--red);border-radius:50%;font-style:normal}
+.saludo h1{font-size:25px;font-weight:700;letter-spacing:-.4px;margin-top:14px}
+.saludo h1 em{font-style:normal;color:var(--red)}
+.saludo p{color:var(--mu);font-size:12.5px;margin-top:5px}
+
+/* ── frescura ── */
+.fuentes{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:15px}
+.fu{display:inline-flex;align-items:center;gap:7px;background:var(--s1);
+  border:1px solid var(--line);border-radius:999px;padding:5px 12px 5px 10px;
+  font-size:11.3px;color:var(--mu);text-decoration:none}
+.fu i{width:6px;height:6px;border-radius:50%;background:var(--ok);flex-shrink:0;font-style:normal}
+.fu b{color:var(--tx);font-weight:600;font-size:11.5px}
+.fu u{text-decoration:none;font-family:ui-monospace,monospace;font-size:10.3px;opacity:.85}
+.fu.viejo{border-color:rgba(232,181,58,.45)}
+.fu.viejo i{background:var(--fav)}
+.fu.viejo u{color:var(--fav);opacity:1}
+a.fu:hover{border-color:rgba(227,30,36,.5)}
+.fuentes .leyenda{font-size:10.6px;color:var(--mu);opacity:.75;margin-left:2px}
+
+/* ── accesos ── */
+.tit{font-size:9.5px;letter-spacing:2.2px;text-transform:uppercase;color:var(--mu);
+  font-family:ui-monospace,monospace;margin:30px 0 13px;padding-top:22px;border-top:1px solid var(--line)}
+.chips{display:flex;flex-wrap:wrap;gap:9px}
+.chip{display:inline-flex;align-items:center;gap:9px;background:var(--s1);border:1px solid var(--line);
+  border-radius:10px;padding:11px 15px;text-decoration:none;color:var(--tx);font-size:12.8px;
+  font-weight:500;transition:border-color .15s,transform .15s}
+.chip:hover{border-color:rgba(227,30,36,.55);transform:translateY(-1px)}
+.chip i{font-style:normal;color:var(--red);font-size:10px;font-family:ui-monospace,monospace}
+.nota{font-size:11.2px;color:var(--mu);margin-top:12px;line-height:1.55}
+
+/* ── entrar al panel ── */
+.entrar{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:26px;
+  background:linear-gradient(135deg,rgba(227,30,36,.12),rgba(227,30,36,.03));
+  border:1px solid rgba(227,30,36,.28);border-radius:14px;padding:19px 22px}
+.entrar b{font-size:14.5px;display:block}
+.entrar span{font-size:11.8px;color:var(--mu);display:block;margin-top:3px}
+.btn{margin-left:auto;background:var(--red);color:#fff;text-decoration:none;font-weight:700;
+  font-size:13.5px;padding:12px 22px;border-radius:9px;white-space:nowrap}
+.btn:hover{background:var(--red2)}
+
+/* ── columnas ── */
+.cols{display:grid;grid-template-columns:1fr 326px;gap:22px;align-items:start;padding-bottom:50px}
+@media(max-width:1080px){.cols{grid-template-columns:1fr}.os{position:static !important}}
+
+/* ── calendario ── */
+.cal{background:var(--s1);border:1px solid var(--line);border-radius:14px;padding:16px 18px 14px;
+     border-top:2px solid rgba(227,30,36,.5);margin-bottom:14px}
+.cal .ch2{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.cal .ch2 b{font-size:10px;letter-spacing:2.2px;text-transform:uppercase;color:var(--red);
+  font-family:ui-monospace,monospace}
+.cal .ch2 a{font-size:10.5px;color:var(--mu);text-decoration:none}
+.cal .ch2 a:hover{color:var(--tx)}
+.plegar{background:transparent;border:1px solid var(--line);color:var(--mu);font:inherit;
+  font-size:9.5px;letter-spacing:1.2px;text-transform:uppercase;border-radius:6px;
+  padding:4px 9px;cursor:pointer;margin-left:auto}
+.plegar:hover{color:var(--tx);border-color:rgba(227,30,36,.5)}
+.plegado > *:not(.ch2):not(.cab){display:none}
+.plegado{padding-bottom:14px}
+.cal ul{list-style:none;margin-top:12px}
+.cal li{display:grid;grid-template-columns:62px 1fr;gap:10px;padding:8px 0;
+  border-top:1px solid var(--line)}
+.cal li:first-child{border-top:0;padding-top:2px}
+.cal .hh{font-size:11px;color:var(--mu);font-family:ui-monospace,monospace;line-height:1.4;padding-top:1px}
+.cal .tt{display:block;font-size:12.4px;font-weight:600;line-height:1.35}
+.cal .ll{display:block;font-size:10.6px;color:var(--mu);margin-top:2px}
+.cal li.ahora .hh{color:var(--red);font-weight:700}
+.cal li.ahora .tt::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;
+  background:var(--red);margin-right:7px;vertical-align:middle}
+.cal .libre{font-size:11.6px;color:var(--mu);padding:10px 0 2px;line-height:1.5}
+.cal .fin{font-size:10.3px;color:var(--mu);opacity:.75;margin-top:11px;padding-top:10px;
+  border-top:1px solid var(--line);line-height:1.45}
+.cal .fin a{color:var(--mu)}
+
+/* ── REDTEC OS ── */
+.os{background:var(--s1);border:1px solid var(--line);border-radius:14px;padding:17px 18px;
+    border-top:2px solid rgba(227,30,36,.5);position:sticky;top:78px}
+.os .cab{display:flex;align-items:center;gap:10px;position:relative}
+.os .ico{width:30px;height:30px;border-radius:7px;background:linear-gradient(135deg,var(--red),#7d0e12);
+  display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:13px}
+.os .cab b{font-size:13px;display:block}
+.os .cab span{font-size:10px;color:var(--mu);letter-spacing:1.4px;text-transform:uppercase}
+.os p{font-size:11.6px;color:var(--mu);line-height:1.6;margin-top:12px}
+.os .pre{display:block;width:100%;text-align:left;background:var(--s2);border:1px solid var(--line);
+  border-radius:9px;padding:10px 12px;margin-top:9px;color:var(--tx);font:inherit;font-size:11.9px;
+  cursor:pointer;line-height:1.45}
+.os .pre:hover{border-color:rgba(227,30,36,.5)}
+.os .abrir{display:block;width:100%;margin-top:12px;background:transparent;border:1px solid var(--line);
+  color:var(--tx);font:inherit;font-size:12.3px;font-weight:600;padding:10px;border-radius:9px;cursor:pointer}
+.os .abrir:hover{border-color:rgba(227,30,36,.6);color:var(--red)}
+</style>
+</head>
+<body>
+
+<div class="bar"><div class="wrap">
+  <a class="marca" href="/index.html" title="REDTEC">
+    <img src="data:image/png;base64,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" alt="REDTEC">
+  </a>
+  <div class="buscar">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+    <input id="q" placeholder="Busca una vista, una cita, un folio o un cliente…"
+           autocomplete="off" aria-label="Buscar">
+    <div class="res" id="res" style="display:none"></div>
+  </div>
+  <div class="ind" id="ind"></div>
+  <div class="der">
+    <button class="tema" id="btema" title="Cambiar entre claro y oscuro" aria-label="Cambiar tema"></button>
+    <button class="yo" id="byo" aria-haspopup="true" aria-expanded="false">
+      <span class="av" id="av">··</span>
+      <span><span class="n" id="nom">Cargando…</span><span class="r" id="rol">—</span></span>
+    </button>
+    <div class="pop" id="pop" hidden>
+      <div class="co"><em>Sesión iniciada como</em><b id="correo">—</b></div>
+      <a href="/m3link_dashboard_dark.html">Ir al panel de control</a>
+      <a href="/logout">Cerrar sesión</a>
+    </div>
+  </div>
+</div></div>
+
+<div class="wrap"><div class="cols">
+  <div>
+    <div class="saludo">
+      <div class="eti"><i></i><span id="etiqueta">Sistema de inteligencia operacional</span></div>
+      <h1 id="saludo">Hola</h1>
+      <p id="bajada">Esto es lo que necesita atención hoy</p>
+      <div class="fuentes" id="fuentes"></div>
+    </div>
+
+    <div id="bloqueAccesos" hidden>
+      <div class="tit" id="tituloAccesos">Accesos del área</div>
+      <div class="chips" id="accesos"></div>
+      <div class="nota" id="notaAccesos"></div>
+    </div>
+
+    <div class="entrar">
+      <div><b>Panel de control M3LINK</b>
+        <span>Todas tus vistas por área, con pestañas, favoritos y buscador de módulos</span></div>
+      <a class="btn" href="/m3link_dashboard_dark.html">Entrar al panel →</a>
+    </div>
+  </div>
+
+  <aside>
+    <div id="cal"></div>
+    <div class="os">
+      <div class="cab"><div class="ico">R</div>
+        <div><b>REDTEC OS</b><span>Asistente</span></div>
+        <button class="plegar" data-plega="os">Ocultar</button></div>
+      <p>Pregúntale algo de la operación y se abre en su propia ventana, al lado
+         del panel. Queda viva mientras trabajas: puedes seguir navegando sin
+         perder la conversación.</p>
+      <div id="preguntas"></div>
+      <button class="abrir" id="abrirOS">Abrir REDTEC OS →</button>
+    </div>
+  </aside>
+</div></div>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.27.0/lib/msal-browser.min.js"></script>
+<script>
+'use strict';
+/* ══════════════════════════════════════════════════════════════════════════
+   index · el recibidor del M3LINK
+   La navegación completa vive en el panel; acá va lo que sirve ANTES de
+   entrar: quién eres, si el dato está fresco, tus accesos, tu día y el
+   asistente. Un buscador que reconoce la forma del dato cierra el hueco real:
+   con 35 vistas, el problema no es que falte una, es saber cuál abrir.
+   ══════════════════════════════════════════════════════════════════════════ */
+var $ = function (id) { return document.getElementById(id); };
+var BASE = '/';
+var ir = function (v) { return BASE + 'm3link_dashboard_dark.html?abrir=' + encodeURIComponent(v); };
+
+/* ── Tema ───────────────────────────────────────────────────────────────
+   Misma llave que persiste el panel: cambiarlo en un lado lo cambia en el
+   otro. Dos llaves distintas era la plataforma peleando consigo misma. */
+var LLAVE = 'ops_theme';
+function aplicarTema(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  var b = $('btema'); if (b) b.textContent = t === 'light' ? '☾' : '☀';
+  try { localStorage.setItem(LLAVE, t); } catch (e) {}
+}
+function alternarTema() {
+  aplicarTema(document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
+}
+
+/* ── Registro de uso ────────────────────────────────────────────────────
+   El panel ya registraba su ingreso; el index no, así que una visita que se
+   quedaba acá no existía para la telemetría. */
+function logUso(vista, area) {
+  try {
+    var body = JSON.stringify({ vista: vista || '(sin vista)', area: area || '' });
+    if (navigator.sendBeacon) navigator.sendBeacon('/api/uso-registro', new Blob([body], {type:'application/json'}));
+    else fetch('/api/uso-registro', {method:'POST', headers:{'Content-Type':'application/json'},
+                                     body:body, keepalive:true}).catch(function(){});
+  } catch (e) {}
+}
+
+/* ── Áreas ──────────────────────────────────────────────────────────────
+   Los rótulos y los alias de rol son los MISMOS que usa el panel: si acá se
+   normaliza distinto, una persona vería un index de un área y un menú de
+   otra. Los accesos salen del menú real del panel, verificados contra él.  */
+var ALIAS_ROL = {
+  stocks:'stock', stocksap:'stock', sap:'stock',
+  transporte:'transportes', transportista:'transportes',
+  loginversa:'logistica', logisticainversa:'logistica', inversa:'logistica',
+  retiro:'retiros', retirosretail:'retiros', programacionretiros:'retiros',
+  logistico:'logistica', logisticos:'logistica',
+  comercia:'comercial', comerciales:'comercial',
+  gerencial:'gerencia', gerente:'gerencia',
+  finanza:'finanzas', finanzs:'finanzas',
+  operacion:'operaciones', operacional:'operaciones',
+  recursoshumanos:'rrhh', rrh:'rrhh', personas:'rrhh'
+};
+function normRol(r) { return String(r || '').toLowerCase().trim().replace(/[\s._\-]+/g, ''); }
+
+var AREAS = {
+  logistica: { n:'Logística inversa', fuentes:['ops','walmart'],
+    accesos:[['Confirmaciones Walmart','confirmaciones-walmart'],
+             ['Historial y trazabilidad','historial-confirmaciones'],
+             ['Gestión de clientes e inventario','clientes-conteos'],
+             ['Programación de retiros','retiros-programacion'],
+             ['Circuito del pool','circuito-pool']],
+    preguntas:['¿Qué se está programando para retirar mañana?',
+               '¿Cuánto se pretende retirar hoy según lo solicitado?',
+               '¿Cuántos pallets tiene un retail a la fecha?',
+               '¿Qué citas de Walmart quedaron sin cruzar?'] },
+  comercial: { n:'Comercial', fuentes:['ops'],
+    accesos:[['Ops x rango fechas','ops'],
+             ['Emisiones vs transferencias','analisis-transferencias'],
+             ['Análisis por cliente','analisis-cliente'],
+             ['Transferencias clientes','transferencias-clientes']],
+    preguntas:['¿Cuántos pallets se emitieron ayer?',
+               '¿Cuántos se solicitaron hoy?',
+               '¿Qué cliente creció más este mes?',
+               '¿Qué clientes bajaron respecto del mes pasado?'] },
+  transportes: { n:'Transportes', fuentes:['ops'],
+    accesos:[['Retiros del día','transporte-retiros'],
+             ['Monitor de andén','monitor-anden'],
+             ['Tiempos en puntos','transportes-tiempos'],
+             ['Conciliación guía vs cámara','recepcion-conciliacion']],
+    preguntas:['¿Qué retiros tengo cargados para hoy?',
+               '¿Qué camiones están demorando más en punto?',
+               '¿Qué guías no cuadran con la cámara?',
+               '¿Cuántos retiros quedaron sin ejecutar ayer?'] },
+  stock: { n:'Stock SAP', fuentes:['sap','ops'],
+    accesos:[['Stock Sistema','stocks-unificado'],
+             ['Cockpit del Pool','cockpit-pool'],
+             ['Stock y flujos de pallets','stock-flujos-pallets'],
+             ['Calendario de stock','stock-calendario']],
+    preguntas:['¿Cómo está el stock del pool por planta?',
+               '¿Qué bodega bajó más esta semana?',
+               '¿Cuántos pallets hay en reparación?',
+               '¿Cómo viene el saldo respecto del mes pasado?'] },
+  operaciones: { n:'Operaciones', fuentes:['ops','sap'],
+    accesos:[['Gestión operacional','gestion-operacional'],
+             ['Ops x rango fechas','ops']],
+    preguntas:['¿Cómo viene el día de operaciones?',
+               '¿Qué quedó pendiente de ayer?'] },
+  gerencia: { n:'Gerencia', fuentes:['ops','sap','walmart'],
+    accesos:[['Dashboard ejecutivo','gerencia-grilla2026'],
+             ['Operaciones REDTEC','operaciones-redtec'],
+             ['Circuito del pool','circuito-pool'],
+             ['Cartola financiera','cartola-financiera']],
+    preguntas:['¿Cuántos pallets emitimos y retiramos ayer?',
+               '¿Qué cliente creció más este mes?',
+               '¿Cómo está el stock del pool por planta?',
+               '¿Qué áreas tienen pendientes hoy?'] },
+  finanzas: { n:'Finanzas', fuentes:['ops'],
+    accesos:[['Facturación con guías','facturacion-guias'],
+             ['Cartola financiera','cartola-financiera']],
+    preguntas:['¿Cómo viene la facturación del mes?',
+               '¿Qué guías quedaron sin facturar?'] },
+  rrhh: { n:'Recursos humanos', fuentes:['talana'],
+    accesos:[['Asistencia al día','asistencia-aldia'],
+             ['Personas y dotación','rrhh-dashboard']],
+    preguntas:['¿Cómo viene la asistencia de hoy?',
+               '¿Quién tiene marcas incompletas esta semana?'] },
+  retiros: { n:'Retiros', fuentes:['ops'],
+    accesos:[['Programación de retiros','retiros-programacion'],
+             ['Ops x rango fechas','ops']],
+    preguntas:['¿Qué retiros tengo asignados hoy?',
+               '¿Qué quedó programado para mañana?'] }
+};
+var ORDEN = ['logistica','comercial','transportes','stock','operaciones','gerencia','finanzas','rrhh','retiros'];
+
+/* ── Buscador que enruta ────────────────────────────────────────────────
+   El panel valida el ?abrir= contra el menú ya recortado por rol, así que
+   acá no se duplica el modelo de permisos: si alguien busca algo que no le
+   toca, el enlace existe pero el panel no lo abre. */
+var VISTAS = [
+  ['Ops x rango fechas','ops','operaciones movimientos rango fechas emisiones'],
+  ['Circuito del pool','circuito-pool','circuito pool flujo pallets'],
+  ['Confirmaciones Walmart','confirmaciones-walmart','walmart confirmaciones citas recepcion'],
+  ['Historial y trazabilidad','historial-confirmaciones','historial trazabilidad folio linea cita'],
+  ['Gestión de clientes e inventario','clientes-conteos','clientes inventario conteos maestro'],
+  ['Programación de retiros','retiros-programacion','retiros programacion'],
+  ['Calendario retiro pallets','calendario-retiro-pallets','calendario retiro'],
+  ['Comparativo retiros','comparativo-retiros','comparativo retiros'],
+  ['Mapa de retiros','mapa-retiros','mapa retiros geografico'],
+  ['KPI diario','kpi-diario','kpi diario'],
+  ['Operaciones REDTEC','operaciones-redtec','operaciones redtec'],
+  ['Retiros del día','transporte-retiros','retiros dia transporte'],
+  ['Tiempos en puntos','transportes-tiempos','tiempos puntos transporte demora'],
+  ['Pagos SPOT','transportes-pagos','pagos spot transporte'],
+  ['Monitor de andén','monitor-anden','anden monitor carga'],
+  ['Conciliación guía vs cámara','recepcion-conciliacion','conciliacion guia camara spotvision'],
+  ['Stock Sistema','stocks-unificado','stock planta bodegas sap sistema'],
+  ['Cockpit del Pool','cockpit-pool','cockpit pool'],
+  ['Stock y flujos de pallets','stock-flujos-pallets','stock flujos pallets'],
+  ['Calendario de stock','stock-calendario','calendario stock'],
+  ['Emisiones vs transferencias','analisis-transferencias','emisiones transferencias comercial'],
+  ['Transferencias clientes','transferencias-clientes','transferencias clientes'],
+  ['Análisis por cliente','analisis-cliente','cliente analisis comercial'],
+  ['Top 10 emisiones','top10','top diez emisiones ranking'],
+  ['Emisiones detalle','Emisiones_Detalle','emisiones detalle'],
+  ['Resumen de operaciones','Resumen_Operaciones','resumen operaciones'],
+  ['Control pallets blancos','Control_Blancos','blancos control pallets'],
+  ['Cartola financiera','cartola-financiera','cartola financiera'],
+  ['Facturación con guías','facturacion-guias','facturacion guias'],
+  ['Dashboard ejecutivo','gerencia-grilla2026','gerencia ejecutivo dashboard'],
+  ['Asistencia al día','asistencia-aldia','asistencia marcas talana'],
+  ['Personas y dotación','rrhh-dashboard','personas dotacion rrhh'],
+  ['Gestión operacional','gestion-operacional','gestion operacional']
+];
+var CLIENTES = [['Walmart','walmart'],['Nestlé','nestle'],
+                ['Productos Fernández','pf'],['Cambiaso','cambiaso']];
+
+function sinTildes(x) {
+  return String(x).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+/* Reconoce la FORMA del texto. Los parámetros de filtro (&cita=, &folio=) van
+   puestos desde ya: el panel todavía no los reparte a cada vista, pero el
+   enlace queda correcto y abrir la vista correcta ya es la mayor parte. */
+function porDato(t) {
+  var out = [], d = t.replace(/[.\s]/g, '');
+  if (/^\d{8}$/.test(d)) {
+    out.push(['CITA','Cita Walmart ' + d,'Confirmaciones Walmart, filtrada en esa cita',
+              ir('confirmaciones-walmart') + '&cita=' + d]);
+    out.push(['HIST','Historial de la cita ' + d,'Línea de tiempo completa de esa cita',
+              ir('historial-confirmaciones') + '&cita=' + d]);
+  } else if (/^\d{6,7}$/.test(d)) {
+    out.push(['FOLIO','Folio / nro de pedido ' + d,'Historial y trazabilidad de ese documento',
+              ir('historial-confirmaciones') + '&folio=' + d]);
+  }
+  var n = sinTildes(t);
+  if (n.length >= 3) CLIENTES.forEach(function (c) {
+    if (sinTildes(c[0]).indexOf(n) === 0)
+      out.push(['CLI','Cliente ' + c[0],'Análisis por cliente, ya filtrado',
+                ir('analisis-cliente') + '&cliente=' + c[1]]);
+  });
+  return out;
+}
+function porVista(t) {
+  var n = sinTildes(t);
+  if (!n) return [];
+  return VISTAS.filter(function (v) { return sinTildes(v[0] + ' ' + v[2]).indexOf(n) >= 0; })
+    .slice(0, 6).map(function (v) { return ['VISTA', v[0], 'Abrir en el panel', ir(v[1])]; });
+}
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, function (c) {
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; });
+}
+function resaltar(txt, t) {
+  var i = sinTildes(txt).indexOf(sinTildes(t));
+  if (i < 0 || !t) return esc(txt);
+  return esc(txt.slice(0, i)) + '<mark>' + esc(txt.slice(i, i + t.length)) + '</mark>' +
+         esc(txt.slice(i + t.length));
+}
+function pintarRes(t) {
+  var caja = $('res');
+  if (!t) { caja.style.display = 'none'; caja.innerHTML = ''; return 0; }
+  var datos = porDato(t), vistas = porVista(t), html = '';
+  function bloque(rot, arr) {
+    if (!arr.length) return '';
+    return '<div class="gr">' + rot + '</div>' + arr.map(function (r) {
+      return '<a href="' + esc(r[3]) + '"><span class="ic">' + r[0] + '</span>' +
+             '<span>' + resaltar(r[1], t) + '<span class="d">' + esc(r[2]) + '</span></span>' +
+             '<span class="ir">abrir &rarr;</span></a>';
+    }).join('');
+  }
+  html += bloque('Ir al dato', datos);
+  html += bloque('Vistas', vistas);
+  if (!html) html = '<div class="vacio">Nada reconocido en “' + esc(t) + '”. ' +
+    'Prueba una cita de 8 dígitos, un folio de 6 o 7, un cliente, o el nombre de una vista.</div>';
+  caja.innerHTML = html;
+  caja.style.display = '';
+  var a = caja.querySelector('a'); if (a) a.classList.add('sel');
+  return datos.length + vistas.length;
+}
+function moverSel(paso) {
+  var links = [].slice.call($('res').querySelectorAll('a'));
+  if (!links.length) return;
+  var i = -1;
+  links.forEach(function (x, k) { if (x.classList.contains('sel')) i = k; x.classList.remove('sel'); });
+  var j = Math.max(0, Math.min(links.length - 1, i < 0 ? 0 : i + paso));
+  links[j].classList.add('sel');
+  links[j].scrollIntoView({ block:'nearest' });
+}
+
+/* ── Plegables ──────────────────────────────────────────────────────────── */
+function plegable(nodo, llave) {
+  if (!nodo) return;
+  var b = nodo.querySelector('[data-plega]'); if (!b) return;
+  var k = 'redtec_plegado_' + llave, on = false;
+  try { on = localStorage.getItem(k) === '1'; } catch (e) {}
+  function pintar() {
+    nodo.classList.toggle('plegado', on);
+    b.textContent = on ? 'Mostrar' : 'Ocultar';
+  }
+  b.addEventListener('click', function () {
+    on = !on; try { localStorage.setItem(k, on ? '1' : '0'); } catch (e) {} pintar();
+  });
+  pintar();
+}
+
+/* ── Identidad ──────────────────────────────────────────────────────────
+   El nombre se arma igual que en el panel (parte local del correo,
+   capitalizada) para que la plataforma llame a la persona de una sola
+   manera. Si MSAL alcanza a resolver, se reemplaza por el nombre de pila
+   real de Entra, que es mejor. */
+var YO = { correo:'', roles:[], areas:[], admin:false, nombre:'', pila:'' };
+
+function nombreDeCorreo(correo) {
+  var local = (correo.indexOf('@') > 0 ? correo.split('@')[0] : correo) || '';
+  var partes = local.split(/[._\-]+/).filter(Boolean);
+  return partes.map(function (w) { return w.charAt(0).toUpperCase() + w.slice(1); }).join(' ') || correo;
+}
+function iniciales(nombre) {
+  var p = String(nombre || '').trim().split(/\s+/).filter(Boolean);
+  if (!p.length) return '··';
+  return (p[0].charAt(0) + (p.length > 1 ? p[p.length - 1].charAt(0) : '')).toUpperCase();
+}
+function franjaHoraria() {
+  var h = new Date().getHours();
+  return h < 12 ? 'Buenos días' : h < 20 ? 'Buenas tardes' : 'Buenas noches';
+}
+
+async function cargarIdentidad() {
+  try {
+    var r = await fetch('/.auth/me');
+    var d = await r.json();
+    var p = d && d.clientPrincipal;
+    if (!p) throw new Error('sin sesión');
+    YO.correo = String(p.userDetails || '');
+    YO.roles = (p.userRoles || []).map(function (x) {
+      var n = normRol(x); return ALIAS_ROL[n] || n; });
+    YO.admin = YO.roles.indexOf('admin') >= 0 || YO.roles.indexOf('interno') >= 0;
+    YO.areas = ORDEN.filter(function (a) { return YO.roles.indexOf(a) >= 0; });
+    if (YO.admin && !YO.areas.length) YO.areas = ORDEN.slice();
+    YO.nombre = nombreDeCorreo(YO.correo);
+    YO.pila = YO.nombre.split(' ')[0];
+  } catch (e) {
+    YO.correo = ''; YO.nombre = ''; YO.pila = '';
+  }
+  pintarIdentidad();
+}
+
+function pintarIdentidad() {
+  $('nom').textContent = YO.nombre || 'Usuario';
+  $('correo').textContent = YO.correo || '—';
+  $('av').textContent = iniciales(YO.nombre);
+  var rot = YO.admin ? 'Administrador'
+          : YO.areas.length ? AREAS[YO.areas[0]].n : 'Usuario';
+  $('rol').textContent = rot;
+  $('etiqueta').textContent = YO.admin ? 'Sistema de inteligencia operacional' : rot;
+  $('saludo').innerHTML = franjaHoraria() + (YO.pila ? ', <em>' + esc(YO.pila) + '</em>' : '');
+  pintarAccesos();
+  pintarPreguntas();
+}
+
+/* ── Accesos del área ───────────────────────────────────────────────────
+   Lista fija por área, no favoritos por persona: eso todavía no existe.
+   Se dice en la nota en vez de dejar creer que son suyos. */
+function pintarAccesos() {
+  var vistas = [], vistos = {};
+  (YO.areas.length ? YO.areas : []).forEach(function (a) {
+    (AREAS[a].accesos || []).forEach(function (x) {
+      if (vistos[x[1]]) return; vistos[x[1]] = 1; vistas.push(x);
+    });
+  });
+  vistas = vistas.slice(0, YO.admin ? 8 : 6);
+  if (!vistas.length) { $('bloqueAccesos').hidden = true; return; }
+  $('bloqueAccesos').hidden = false;
+  $('tituloAccesos').textContent = YO.admin ? 'Accesos directos'
+    : 'Accesos de ' + AREAS[YO.areas[0]].n;
+  $('accesos').innerHTML = vistas.map(function (x) {
+    return '<a class="chip" href="' + esc(ir(x[1])) + '"><i>↗</i>' + esc(x[0]) + '</a>';
+  }).join('');
+  $('notaAccesos').textContent = 'Lista fija del área. Cuando los favoritos sean por persona, ' +
+    'acá aparecen las estrellas de cada uno.';
+}
+
+/* ── REDTEC OS ──────────────────────────────────────────────────────────
+   Es la MISMA página que la del menú, no otra: mismo origen, mismo
+   localStorage, mismas conversaciones. Se abre a 900px a propósito, porque
+   bajo 820 el propio redtec-os.html esconde la barra de "Recientes" y
+   parecía un asistente distinto que no se acordaba de nada. */
+var OS_ANCHO = 900, OS_ALTO = 780;
+function abrirOS(pregunta) {
+  var u = BASE + 'redtec-os.html' + (pregunta ? ('?q=' + encodeURIComponent(pregunta)) : '');
+  var w = window.open(u, 'redtecos', 'width=' + OS_ANCHO + ',height=' + OS_ALTO +
+                      ',menubar=no,toolbar=no,location=no');
+  if (w) { try { w.focus(); } catch (e) {} } else { location.href = u; }
+}
+function pintarPreguntas() {
+  var qs = [], vistos = {};
+  (YO.areas.length ? YO.areas : ['gerencia']).forEach(function (a) {
+    (AREAS[a].preguntas || []).forEach(function (q) {
+      if (vistos[q]) return; vistos[q] = 1; qs.push(q); });
+  });
+  $('preguntas').innerHTML = qs.slice(0, 4).map(function (q) {
+    return '<button class="pre" type="button">' + esc(q) + '</button>'; }).join('');
+  [].slice.call($('preguntas').children).forEach(function (b) {
+    b.addEventListener('click', function () { abrirOS(b.textContent); });
+  });
+}
+
+/* ── Frescura del dato ──────────────────────────────────────────────────
+   Un dato viejo que se ve fresco es peor que no tener el dato. Solo la
+   fuente atrasada es enlace y se pinta ámbar: las sanas no compiten por la
+   atención. Si el endpoint falla, la franja no se dibuja — media verdad
+   sobre frescura es peor que ninguna. */
+async function cargarFrescura() {
+  var caja = $('fuentes');
+  try {
+    var r = await fetch('/api/frescura', { headers:{ 'Accept':'application/json' } });
+    if (!r.ok) throw new Error('http ' + r.status);
+    var d = await r.json();
+    if (!d || !d.fuentes || !d.fuentes.length) { caja.innerHTML = ''; return; }
+
+    var miras = {};
+    (YO.areas.length ? YO.areas : ORDEN).forEach(function (a) {
+      (AREAS[a].fuentes || []).forEach(function (f) { miras[f] = 1; });
+    });
+    var fs = d.fuentes.filter(function (f) { return miras[f.id]; });
+    if (!fs.length) { caja.innerHTML = ''; return; }
+
+    var atrasadas = 0;
+    caja.innerHTML = fs.map(function (f) {
+      if (f.viejo) atrasadas++;
+      var cuando = f.cuando ? (f.dice === 'hoy' ? 'hoy' : f.dice) : 'sin dato';
+      var cuerpo = '<i></i><b>' + esc(f.n) + '</b><u>' + esc(cuando) + '</u>';
+      return f.viejo
+        ? '<a class="fu viejo" href="' + esc(ir(f.vista)) + '" title="' +
+          esc(f.nota + ' · último dato: ' + (f.cuando || 'ninguno')) + '">' + cuerpo + '</a>'
+        : '<span class="fu" title="' + esc(f.nota) + '">' + cuerpo + '</span>';
+    }).join('') + '<span class="leyenda">' +
+      (atrasadas ? (atrasadas === 1 ? '1 fuente atrasada' : atrasadas + ' fuentes atrasadas')
+                 : 'todo al día') + '</span>';
+  } catch (e) {
+    caja.innerHTML = '';
+  }
+}
+
+/* ── UF y dólar ─────────────────────────────────────────────────────────
+   Dato de contexto, no operacional: si no llega, la franja simplemente no
+   aparece. No vale la pena un error en pantalla por esto. */
+async function indicadores() {
+  try {
+    var r = await fetch('https://mindicador.cl/api', { cache:'no-store' });
+    if (!r.ok) return;
+    var d = await r.json();
+    var uf = d.uf && d.uf.valor, dolar = d.dolar && d.dolar.valor;
+    if (!uf && !dolar) return;
+    var fmt = function (v) { return v.toLocaleString('es-CL', { minimumFractionDigits:2, maximumFractionDigits:2 }); };
+    $('ind').innerHTML =
+      (uf ? '<span><em>UF</em><b>$' + fmt(uf) + '</b></span>' : '') +
+      (dolar ? '<span><em>Dólar</em><b>$' + fmt(dolar) + '</b></span>' : '');
+  } catch (e) {}
+}
+
+/* ── Calendario de Outlook ──────────────────────────────────────────────
+   Lee la agenda del día DIRECTO desde Microsoft Graph, en el navegador de
+   la persona: la plataforma no ve, no guarda y no puede leer esos eventos.
+   El token se pide en silencio; con el consentimiento de administrador ya
+   otorgado, nadie ve una ventana de permisos.
+   Ids del registro de aplicación en Entra. No son secretos: identifican a
+   la aplicación, no autorizan nada por sí solos.                          */
+var CAL = {
+  cliente:  '7feaad18-de29-4586-906f-fe074b401bd1',
+  inquilino:'1bdfd0dd-fe9e-40d9-8dbe-5d0978861728',
+  tope: 5          // más de cinco deja de leerse de un vistazo
+};
+var ZONA = 'America/Santiago';
+
+/* OJO: con el encabezado Prefer, Graph YA entrega la hora en la zona pedida
+   (dateTime 08:00 + timeZone America/Santiago). Volver a interpretarla como
+   UTC la corre tres horas: una reunión de las 08:00 se mostraba a las 05:00.
+   Solo se convierte cuando Graph responde timeZone UTC. */
+function horaDe(t) {
+  if (!t) return '';
+  var s = String(t.dateTime || '');
+  if (String(t.timeZone || '').toUpperCase() !== 'UTC') return s.slice(11, 16);
+  var d = new Date(s.slice(0, 19) + 'Z');
+  return isNaN(d.getTime()) ? s.slice(11, 16)
+    : d.toLocaleTimeString('es-CL', { hour:'2-digit', minute:'2-digit', hour12:false });
+}
+function finEnMs(e) {
+  var s = String((e.end && e.end.dateTime) || '').slice(0, 19);
+  if (!s) return 0;
+  var utc = String((e.end && e.end.timeZone) || '').toUpperCase() === 'UTC';
+  var d = new Date(s + (utc ? 'Z' : ''));
+  return isNaN(d.getTime()) ? 0 : d.getTime();
+}
+
+function pintarCal(eventos, cuantosPasaron) {
+  var c = $('cal');
+  var cab = '<div class="ch2"><b>Mi día</b>' +
+            '<a href="https://outlook.office.com/calendar/view/day" target="_blank" rel="noopener">Ver en Outlook ↗</a>' +
+            '<button class="plegar" data-plega="cal">Ocultar</button></div>';
+  var dentro;
+  if (!eventos.length) {
+    dentro = '<div class="libre">' + (cuantosPasaron
+      ? 'Sin reuniones por el resto del día. Tuviste ' + cuantosPasaron +
+        (cuantosPasaron === 1 ? ' esta jornada.' : ' esta jornada.')
+      : 'Sin reuniones hoy.') + '</div>';
+  } else {
+    var ahora = Date.now();
+    var muestra = eventos.slice(0, CAL.tope), resto = eventos.length - muestra.length;
+    dentro = '<ul>' + muestra.map(function (e, i) {
+      var lug = (e.location && e.location.displayName) ||
+                (e.isOnlineMeeting ? 'Reunión en línea' : '');
+      var enCurso = i === 0 && finEnMs(e) > ahora &&
+                    new Date(String((e.start && e.start.dateTime) || '').slice(0, 19) +
+                      (String((e.start && e.start.timeZone) || '').toUpperCase() === 'UTC' ? 'Z' : '')).getTime() <= ahora;
+      return '<li class="' + (enCurso ? 'ahora' : '') + '">' +
+             '<span class="hh">' + esc(horaDe(e.start)) + '<br>' + esc(horaDe(e.end)) + '</span>' +
+             '<span><span class="tt">' + esc(e.subject || '(sin asunto)') + '</span>' +
+             (lug ? '<span class="ll">' + esc(lug) + '</span>' : '') + '</span></li>';
+    }).join('') + '</ul>';
+    if (resto > 0) dentro += '<div class="fin">' + resto +
+      (resto === 1 ? ' reunión más hoy · ' : ' reuniones más hoy · ') +
+      '<a href="https://outlook.office.com/calendar/view/day" target="_blank" rel="noopener">verlas en Outlook ↗</a></div>';
+  }
+  c.innerHTML = '<div class="cal">' + cab + dentro + '</div>';
+  plegable(c.querySelector('.cal'), 'cal');
+}
+
+async function cargarCalendario() {
+  if (typeof msal === 'undefined' || !CAL.cliente || !CAL.inquilino) return;
+  /* Sin sesión de la plataforma no hay a quién pedirle el calendario, y sin
+     loginHint MSAL podría resolver la cuenta de otra persona que haya quedado
+     en caché en ese navegador. */
+  if (!YO.correo) return;
+  var app, tok;
+  try {
+    app = new msal.PublicClientApplication({
+      auth: { clientId: CAL.cliente,
+              authority: 'https://login.microsoftonline.com/' + CAL.inquilino,
+              redirectUri: location.origin + location.pathname },
+      cache: { cacheLocation:'localStorage', storeAuthStateInCookie:false }
+    });
+    await app.initialize();
+    var pide = { scopes:['Calendars.Read'] };
+    var cuentas = app.getAllAccounts();
+    /* loginHint: sin esto, ssoSilent tiene que adivinar a quién buscar y en
+       un equipo con más de una cuenta Microsoft falla y abriría ventana. */
+    if (cuentas.length) tok = await app.acquireTokenSilent(
+      Object.assign({ account: cuentas[0] }, pide));
+    else tok = await app.ssoSilent(Object.assign({ loginHint: YO.correo }, pide));
+  } catch (e) {
+    /* El silencio no alcanzó. NO se abre una ventana sin que la persona la
+       pida: una ventana emergente al entrar al index es exactamente la
+       molestia que este bloque tenía que evitar. */
+    $('cal').innerHTML = '';
+    return;
+  }
+  try {
+    var hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    var fin = new Date(hoy); fin.setDate(fin.getDate() + 1);
+    var url = 'https://graph.microsoft.com/v1.0/me/calendarView' +
+      '?startDateTime=' + encodeURIComponent(hoy.toISOString()) +
+      '&endDateTime=' + encodeURIComponent(fin.toISOString()) +
+      '&$select=subject,start,end,location,isOnlineMeeting' +
+      '&$orderby=' + encodeURIComponent('start/dateTime') + '&$top=25';
+    var r = await fetch(url, { headers: {
+      Authorization: 'Bearer ' + tok.accessToken,
+      Prefer: 'outlook.timezone="' + ZONA + '"' } });
+    if (!r.ok) { $('cal').innerHTML = ''; return; }
+    var j = await r.json();
+    var todos = (j.value || []);
+    /* Lo que QUEDA del día, no el día entero: a las 16:00 la reunión de las
+       09:00 ya no es información, es relleno. El bloque se encoge solo. */
+    var ahora = Date.now();
+    var quedan = todos.filter(function (e) { return finEnMs(e) >= ahora; });
+    pintarCal(quedan, todos.length - quedan.length);
+
+    /* El nombre de pila real de Entra es mejor que el deducido del correo. */
+    try {
+      var rp = await fetch('https://graph.microsoft.com/v1.0/me?$select=givenName,displayName',
+                           { headers:{ Authorization:'Bearer ' + tok.accessToken } });
+      if (rp.ok) {
+        var me = await rp.json();
+        if (me.givenName) {
+          YO.pila = me.givenName;
+          if (me.displayName) { YO.nombre = me.displayName; $('nom').textContent = me.displayName;
+                                $('av').textContent = iniciales(me.displayName); }
+          $('saludo').innerHTML = franjaHoraria() + ', <em>' + esc(YO.pila) + '</em>';
+        }
+      }
+    } catch (e) {}
+  } catch (e) { $('cal').innerHTML = ''; }
+}
+
+/* ── Arranque ───────────────────────────────────────────────────────────── */
+(function () {
+  var guardado = null;
+  try { guardado = localStorage.getItem(LLAVE); } catch (e) {}
+  aplicarTema(guardado === 'light' ? 'light' : 'dark');
+  $('btema').addEventListener('click', alternarTema);
+
+  var cq = $('q');
+  cq.addEventListener('input', function () { pintarRes(cq.value.trim()); });
+  cq.addEventListener('keydown', function (e) {
+    var caja = $('res');
+    if (e.key === 'ArrowDown') { e.preventDefault(); moverSel(1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); moverSel(-1); }
+    else if (e.key === 'Enter') { var a = caja.querySelector('a.sel'); if (a) { e.preventDefault(); location.href = a.href; } }
+    else if (e.key === 'Escape') { caja.style.display = 'none'; cq.blur(); }
+  });
+  cq.addEventListener('focus', function () { if (cq.value.trim()) pintarRes(cq.value.trim()); });
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('.buscar')) $('res').style.display = 'none';
+  });
+  /* Ctrl+K es el atajo del buscador del panel: la misma tecla acá evita que
+     la memoria muscular se rompa al cambiar de pantalla. */
+  document.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); cq.focus(); cq.select(); }
+  });
+
+  var byo = $('byo'), pop = $('pop');
+  byo.addEventListener('click', function (e) {
+    e.stopPropagation();
+    pop.hidden = !pop.hidden;
+    byo.setAttribute('aria-expanded', pop.hidden ? 'false' : 'true');
+  });
+  document.addEventListener('click', function (e) {
+    if (!pop.hidden && !pop.contains(e.target) && !byo.contains(e.target)) {
+      pop.hidden = true; byo.setAttribute('aria-expanded', 'false'); }
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') pop.hidden = true; });
+
+  $('abrirOS').addEventListener('click', function () { abrirOS(''); });
+  plegable(document.querySelector('.os'), 'os');
+
+  indicadores();
+  logUso('(ingreso al index)', '');
+  cargarIdentidad().then(function () {
+    cargarFrescura();
+    cargarCalendario();
+  });
+})();
+</script>
+</body>
+</html>

@@ -52,11 +52,14 @@ async function abrir(b, o){
       this.ssoSilent = async (r) => { window.__hint = r.loginHint;
         if (cfg.msal==='falla') { const e=new Error('x'); e.errorCode='consent_required'; throw e; } return tok; };
       this.loginPopup = async () => { window.__huboPopup = true; return tok; };
+      this.acquireTokenPopup = async () => { window.__popupCal = (window.__popupCal||0) + 1;
+        if (cfg.popup === 'rechaza') throw new Error('user_cancelled');
+        return tok; };
     }};
     window.__popups = [];
     const wo = window.open;
     window.open = function(u, n, f){ window.__popups.push({u:u,n:n,f:f}); return { focus(){} }; };
-  }, { msal: o.msal || 'cache' });
+  }, { msal: o.msal || 'cache', popup: o.popup || '' });
 
   await p.route('**/*', async (route) => {
     const u = route.request().url();
@@ -177,12 +180,31 @@ async function abrir(b, o){
     es('G','el nombre se actualiza desde Graph','Mónica Cantos',(await txt(p,'#nom')).trim());
     await p.close(); }
 
-  /* H · calendario: el silencio NO alcanza → nada de ventanas */
+  /* H · el silencio NO alcanza (iframe bloqueado por cookies de terceros):
+     aparece la tarjeta para autorizar a mano, y NADA se abre solo. */
   { const {p,errs} = await abrir(b,{roles:['logistica'],msal:'falla'});
     es('H','sin errores de js',0,errs.length);
-    es('H','no abre ventana al entrar',0,(await p.evaluate(()=>window.__popups.length)));
-    es('H','no deja un bloque roto','',(await txt(p,'#cal')).trim());
+    es('H','no abre ventana al entrar',0,await p.evaluate(()=>window.__popupCal||0));
+    es('H','ofrece conectar',1,await p.locator('#conectarCal').count());
+    es('H','explica por qué',true,/autorizarla una vez/.test(await txt(p,'#cal')));
     es('H','el resto sigue vivo',true,(await txt(p,'#accesos')).length>10);
+    await p.close(); }
+
+  /* H2 · un clic y queda */
+  { const {p} = await abrir(b,{roles:['logistica'],msal:'falla',
+      eventos:[EVrel(60,90,'Reunión de prueba')]});
+    await p.click('#conectarCal'); await p.waitForTimeout(500);
+    es('H2','abrió la ventana solo al apretar',1,await p.evaluate(()=>window.__popupCal||0));
+    es('H2','ya no ofrece conectar',0,await p.locator('#conectarCal').count());
+    es('H2','pinta la agenda',true,/Reunión de prueba/.test(await txt(p,'#cal')));
+    await p.close(); }
+
+  /* H3 · si la rechaza, vuelve la tarjeta y no insiste */
+  { const {p,errs} = await abrir(b,{roles:['logistica'],msal:'falla',popup:'rechaza'});
+    await p.click('#conectarCal'); await p.waitForTimeout(400);
+    es('H3','sin errores de js',0,errs.length);
+    es('H3','la tarjeta vuelve',1,await p.locator('#conectarCal').count());
+    es('H3','no reabre sola',1,await p.evaluate(()=>window.__popupCal||0));
     await p.close(); }
 
   /* I · sin MSAL en absoluto (CDN caído) */

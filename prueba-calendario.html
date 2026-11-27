@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prueba · calendario de Outlook en el m3link</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0a0a0a;color:#ededed;font-family:'Inter',Arial,sans-serif;font-size:14px;
+     padding:34px 26px 60px}
+.w{max-width:860px;margin:0 auto}
+h1{font-size:21px;letter-spacing:-.3px}
+h1 em{font-style:normal;color:#E31E24}
+p.d{color:#8a8a8a;font-size:12.6px;margin-top:7px;line-height:1.55}
+.card{background:#141414;border:1px solid rgba(255,255,255,.07);border-radius:13px;
+      padding:18px 20px;margin-top:18px;border-top:2px solid rgba(227,30,36,.5)}
+.card h2{font-size:10px;letter-spacing:2.2px;text-transform:uppercase;color:#E31E24;
+         font-family:ui-monospace,monospace;margin-bottom:12px}
+label{display:block;font-size:11px;letter-spacing:1.3px;text-transform:uppercase;color:#8a8a8a;
+      margin:11px 0 5px}
+input{width:100%;background:#1e1e1e;border:1px solid rgba(255,255,255,.07);border-radius:8px;
+      padding:10px 12px;color:#ededed;font:inherit;font-size:13px;font-family:ui-monospace,monospace}
+input:focus{outline:none;border-color:rgba(227,30,36,.5)}
+.btn{display:inline-flex;align-items:center;gap:9px;background:#E31E24;color:#fff;border:0;
+     font:inherit;font-weight:700;font-size:13.5px;padding:12px 22px;border-radius:9px;
+     cursor:pointer;margin-top:15px}
+.btn:hover{background:#c0171c}
+.btn[disabled]{opacity:.45;cursor:default}
+.sec{background:transparent;border:1px solid rgba(255,255,255,.12);color:#ededed;margin-left:8px}
+.log{font-family:ui-monospace,monospace;font-size:11.6px;line-height:1.75;margin-top:14px;
+     background:#101010;border:1px solid rgba(255,255,255,.06);border-radius:9px;padding:13px 15px;
+     white-space:pre-wrap;word-break:break-word;max-height:340px;overflow:auto}
+.log .ok{color:#45a06a}.log .er{color:#ff5a5f}.log .in{color:#8a8a8a}
+ul{list-style:none;margin-top:6px}
+li{display:grid;grid-template-columns:72px 1fr;gap:12px;padding:9px 0;
+   border-top:1px solid rgba(255,255,255,.07)}
+li:first-child{border-top:0}
+.hh{font-family:ui-monospace,monospace;font-size:11.5px;color:#8a8a8a;line-height:1.4}
+.tt{display:block;font-size:13px;font-weight:600}
+.ll{display:block;font-size:11px;color:#8a8a8a;margin-top:2px}
+.nota{font-size:11.5px;color:#8a8a8a;line-height:1.6;margin-top:12px}
+code{background:#1e1e1e;padding:1px 5px;border-radius:4px;font-size:11.5px}
+</style>
+</head>
+<body><div class="w">
+
+<h1>Prueba del <em>calendario</em></h1>
+<p class="d">Comprueba que el m3link puede mostrar tu agenda de Outlook. No guarda nada:
+pide el permiso, lee tus eventos de hoy y los muestra. Puedes borrar esta página después.</p>
+
+<div class="card">
+  <h2>1 · Datos del registro de aplicación</h2>
+  <label for="cid">Id. de aplicación (cliente)</label>
+  <input id="cid" placeholder="00000000-0000-0000-0000-000000000000" autocomplete="off" spellcheck="false">
+  <label for="tid">Id. de directorio (inquilino)</label>
+  <input id="tid" placeholder="00000000-0000-0000-0000-000000000000" autocomplete="off" spellcheck="false">
+  <p class="nota">Los dos salen de la página de la aplicación en Entra. No son secretos:
+     se quedan guardados en este navegador para no volver a escribirlos.</p>
+  <button class="btn" id="probar">Probar con mi cuenta →</button>
+  <button class="btn sec" id="limpiar">Olvidar y cerrar sesión</button>
+</div>
+
+<div class="card" id="cres" style="display:none">
+  <h2>2 · Tu agenda de hoy</h2>
+  <div id="agenda"></div>
+</div>
+
+<div class="card">
+  <h2>3 · Qué fue pasando</h2>
+  <div class="log" id="log"><span class="in">Esperando…</span></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.27.0/lib/msal-browser.min.js"></script>
+<script>
+'use strict';
+var $ = function(id){ return document.getElementById(id); };
+var t0 = 0;
+function log(txt, clase){
+  var d = document.createElement('div');
+  d.className = clase || 'in';
+  d.textContent = (t0 ? ('+' + String(Date.now()-t0).padStart(5,' ') + 'ms  ') : '') + txt;
+  var c = $('log'); if (c.firstChild && c.firstChild.className === 'in' && !t0) c.textContent = '';
+  c.appendChild(d); c.scrollTop = c.scrollHeight;
+}
+
+try {
+  $('cid').value = localStorage.getItem('cal_cid') || '';
+  $('tid').value = localStorage.getItem('cal_tid') || '';
+} catch(e){}
+
+var app = null;
+function crear(){
+  var cid = $('cid').value.trim(), tid = $('tid').value.trim();
+  if (!cid || !tid) { log('Faltan el id de aplicación o el de inquilino.', 'er'); return null; }
+  try { localStorage.setItem('cal_cid', cid); localStorage.setItem('cal_tid', tid); } catch(e){}
+  return new msal.PublicClientApplication({
+    auth: { clientId: cid, authority: 'https://login.microsoftonline.com/' + tid,
+            redirectUri: location.origin + location.pathname },
+    cache: { cacheLocation: 'sessionStorage' }
+  });
+}
+
+function pintar(eventos){
+  $('cres').style.display = '';
+  if (!eventos.length) {
+    $('agenda').innerHTML = '<p class="nota">Hoy no tienes eventos. La consulta funcionó igual: ' +
+      'Graph respondió con una lista vacía, que es distinto de un error.</p>';
+    return;
+  }
+  /* OJO: con el encabezado Prefer, Graph YA devuelve la hora en la zona pedida
+     (dateTime 08:00 + timeZone America/Santiago). Volver a interpretarla como UTC
+     la corre 3 horas. Solo se convierte cuando Graph responde timeZone UTC. */
+  var hora = function(t){
+    if (!t) return '';
+    var s = String(t.dateTime || '');
+    if (String(t.timeZone || '').toUpperCase() !== 'UTC') return s.slice(11,16);
+    var d = new Date(s.slice(0,19) + 'Z');
+    return isNaN(d.getTime()) ? s.slice(11,16)
+      : d.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',hour12:false});
+  };
+  $('agenda').innerHTML = '<ul>' + eventos.map(function(e){
+    var lug = (e.location && e.location.displayName) ||
+              (e.isOnlineMeeting ? 'Reunión en línea' : '');
+    return '<li><span class="hh">' + hora(e.start) + '<br>' + hora(e.end) + '</span>' +
+           '<span><span class="tt">' + (e.subject || '(sin asunto)').replace(/[<>&]/g,'') + '</span>' +
+           (lug ? '<span class="ll">' + lug.replace(/[<>&]/g,'') + '</span>' : '') + '</span></li>';
+  }).join('') + '</ul>' +
+  '<p class="nota">Son ' + eventos.length + ' evento(s) leídos directo de Microsoft Graph. ' +
+  'No pasaron por ningún servidor de REDTEC.</p>';
+}
+
+$('probar').addEventListener('click', async function(){
+  $('log').textContent = ''; t0 = Date.now();
+  this.disabled = true;
+  try {
+    app = crear(); if (!app) { this.disabled = false; return; }
+    await app.initialize();
+    log('MSAL iniciado. Origen registrado que debe coincidir: ' + location.origin + location.pathname);
+
+    var peticion = { scopes: ['Calendars.Read'] };
+    var r = null;
+    var cuentas = app.getAllAccounts();
+    if (cuentas.length) {
+      peticion.account = cuentas[0];
+      log('Hay una cuenta en caché: ' + cuentas[0].username);
+    }
+    try {
+      log('Intentando en SILENCIO (sin ventanas)…');
+      r = cuentas.length ? await app.acquireTokenSilent(peticion)
+                         : await app.ssoSilent({ scopes: peticion.scopes });
+      log('SILENCIO OK — la persona no vería ninguna ventana.', 'ok');
+    } catch (e1) {
+      log('El silencio no alcanzó (' + (e1.errorCode || e1.name) + '). Abriendo ventana…');
+      r = await app.loginPopup(peticion);
+      log('Ventana aceptada.', 'ok');
+    }
+
+    var cuenta = r.account || app.getAllAccounts()[0];
+    log('Cuenta: ' + (cuenta ? cuenta.username : '?'));
+    if (!r.accessToken) {
+      r = await app.acquireTokenSilent({ scopes: peticion.scopes, account: cuenta });
+    }
+    log('Token obtenido para: ' + (r.scopes || []).join(', '));
+
+    var hoy = new Date(); hoy.setHours(0,0,0,0);
+    var fin = new Date(hoy); fin.setDate(fin.getDate()+1);
+    var url = 'https://graph.microsoft.com/v1.0/me/calendarView' +
+      '?startDateTime=' + hoy.toISOString() + '&endDateTime=' + fin.toISOString() +
+      '&$select=subject,start,end,location,isOnlineMeeting&$orderby=start/dateTime&$top=20';
+    log('Consultando Graph…');
+    var resp = await fetch(url, { headers: {
+      Authorization: 'Bearer ' + r.accessToken,
+      Prefer: 'outlook.timezone="America/Santiago"' } });
+    log('Graph respondió HTTP ' + resp.status, resp.ok ? 'ok' : 'er');
+    var j = await resp.json();
+    if (!resp.ok) {
+      log('Detalle: ' + ((j.error && (j.error.code + ' · ' + j.error.message)) || '—'), 'er');
+    } else {
+      var z = (j.value && j.value[0] && j.value[0].start && j.value[0].start.timeZone) || '—';
+      log('Zona horaria que devolvió Graph: ' + z +
+          (z === 'UTC' ? '  (no tomó el Prefer; se convierte en el navegador)' : '  (tomó el Prefer)'));
+      pintar(j.value || []);
+      log('Listo. ' + (j.value || []).length + ' evento(s).', 'ok');
+    }
+  } catch (e) {
+    log('FALLÓ: ' + (e.errorCode || e.name || '') + ' · ' + (e.errorMessage || e.message || e), 'er');
+    log('Si dice redirect_uri_mismatch, el origen registrado no calza con ' +
+        location.origin + location.pathname, 'in');
+  }
+  this.disabled = false;
+});
+
+$('limpiar').addEventListener('click', async function(){
+  try { localStorage.removeItem('cal_cid'); localStorage.removeItem('cal_tid'); } catch(e){}
+  if (app) { try { await app.logoutPopup(); } catch(e){} }
+  location.reload();
+});
+</script>
+</div></body>
+</html>

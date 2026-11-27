@@ -161,6 +161,11 @@ a.fu:hover{border-color:rgba(227,30,36,.5)}
 .cal .fin{font-size:10.3px;color:var(--mu);opacity:.75;margin-top:11px;padding-top:10px;
   border-top:1px solid var(--line);line-height:1.45}
 .cal .fin a{color:var(--mu)}
+.cal .conectar{display:block;width:100%;margin-top:11px;background:transparent;
+  border:1px solid rgba(227,30,36,.45);color:var(--tx);font:inherit;font-size:12.2px;
+  font-weight:600;padding:9px;border-radius:9px;cursor:pointer}
+.cal .conectar:hover{background:rgba(227,30,36,.1);color:var(--red)}
+.cal .conectar[disabled]{opacity:.5;cursor:default}
 
 /* ── REDTEC OS ── */
 .os{background:var(--s1);border:1px solid var(--line);border-radius:14px;padding:17px 18px;
@@ -724,35 +729,73 @@ function pintarCal(eventos, cuantosPasaron) {
   plegable(c.querySelector('.cal'), 'cal');
 }
 
+var APP = null;
+
+/* Pide el token SIN ventanas. Dos caminos distintos, y la diferencia importa:
+   · Con una cuenta ya en caché usa el token de actualización guardado en
+     localStorage. No necesita iframe ni cookies: funciona siempre.
+   · Sin cuenta en caché cae en ssoSilent, que abre un iframe oculto hacia
+     login.microsoftonline.com. Chrome está restringiendo las cookies de
+     terceros, así que ese iframe muchas veces no vuelve y MSAL responde
+     monitor_window_timeout.
+   Por eso la primera vez hay que autorizar a mano UNA vez: de ahí en adelante
+   siempre cae en el primer camino. */
+async function tokenSilencioso() {
+  if (!APP) {
+    APP = new msal.PublicClientApplication({
+      auth: { clientId: CAL.cliente,
+              authority: 'https://login.microsoftonline.com/' + CAL.inquilino,
+              redirectUri: location.origin + location.pathname },
+      cache: { cacheLocation:'localStorage', storeAuthStateInCookie:false }
+    });
+    await APP.initialize();
+  }
+  var pide = { scopes:['Calendars.Read'] };
+  var cuentas = APP.getAllAccounts();
+  if (cuentas.length) return await APP.acquireTokenSilent(Object.assign({ account: cuentas[0] }, pide));
+  return await APP.ssoSilent(Object.assign({ loginHint: YO.correo }, pide));
+}
+
+/* La tarjeta de "conectar": aparece SOLO cuando el silencio no alcanzó, y no
+   hace nada hasta que la persona aprieta. Una ventana emergente que salta sola
+   al entrar al index es justo la molestia que este bloque debía evitar. */
+function pintarConectar(ocupado) {
+  var c = $('cal');
+  c.innerHTML = '<div class="cal">' +
+    '<div class="ch2"><b>Mi día</b>' +
+    '<button class="plegar" data-plega="cal">Ocultar</button></div>' +
+    '<div class="libre">Tu agenda de Outlook puede verse acá. Chrome bloquea la ' +
+    'conexión automática, así que hay que autorizarla una vez en este navegador.</div>' +
+    '<button class="conectar" id="conectarCal"' + (ocupado ? ' disabled' : '') + '>' +
+    (ocupado ? 'Conectando…' : 'Conectar mi calendario') + '</button></div>';
+  plegable(c.querySelector('.cal'), 'cal');
+  var b = $('conectarCal');
+  if (b && !ocupado) b.addEventListener('click', async function () {
+    pintarConectar(true);
+    try {
+      var t = await APP.acquireTokenPopup({ scopes:['Calendars.Read'], loginHint: YO.correo });
+      await traerAgenda(t);
+    } catch (e) {
+      /* Si cerró la ventana o la rechazó, se vuelve a dejar la tarjeta y
+         nada más: no se insiste ni se reabre sola. */
+      pintarConectar(false);
+    }
+  });
+}
+
 async function cargarCalendario() {
   if (typeof msal === 'undefined' || !CAL.cliente || !CAL.inquilino) return;
   /* Sin sesión de la plataforma no hay a quién pedirle el calendario, y sin
      loginHint MSAL podría resolver la cuenta de otra persona que haya quedado
      en caché en ese navegador. */
   if (!YO.correo) return;
-  var app, tok;
-  try {
-    app = new msal.PublicClientApplication({
-      auth: { clientId: CAL.cliente,
-              authority: 'https://login.microsoftonline.com/' + CAL.inquilino,
-              redirectUri: location.origin + location.pathname },
-      cache: { cacheLocation:'localStorage', storeAuthStateInCookie:false }
-    });
-    await app.initialize();
-    var pide = { scopes:['Calendars.Read'] };
-    var cuentas = app.getAllAccounts();
-    /* loginHint: sin esto, ssoSilent tiene que adivinar a quién buscar y en
-       un equipo con más de una cuenta Microsoft falla y abriría ventana. */
-    if (cuentas.length) tok = await app.acquireTokenSilent(
-      Object.assign({ account: cuentas[0] }, pide));
-    else tok = await app.ssoSilent(Object.assign({ loginHint: YO.correo }, pide));
-  } catch (e) {
-    /* El silencio no alcanzó. NO se abre una ventana sin que la persona la
-       pida: una ventana emergente al entrar al index es exactamente la
-       molestia que este bloque tenía que evitar. */
-    $('cal').innerHTML = '';
-    return;
-  }
+  var tok;
+  try { tok = await tokenSilencioso(); }
+  catch (e) { pintarConectar(false); return; }
+  await traerAgenda(tok);
+}
+
+async function traerAgenda(tok) {
   try {
     var hoy = new Date(); hoy.setHours(0, 0, 0, 0);
     var fin = new Date(hoy); fin.setDate(fin.getDate() + 1);

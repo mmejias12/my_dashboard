@@ -912,6 +912,8 @@
     <div class="s-hdr" onclick="tog('g-logistica',this)" data-cat="cat" data-tip="Logística inversa"><i class="ti ti-arrow-back-up s-leading"></i> Logística inversa <i class="ti ti-chevron-right s-chevron"></i></div>
     <div class="s-sub" id="g-logistica" style="max-height:0">
       <a href="confirmaciones-walmart.html" class="s-item"><i class="ti ti-clipboard-check"></i> Confirmaciones Walmart <span class="soon-tag">nuevo</span></a>
+      <a href="historial-confirmaciones.html" class="s-item"><i class="ti ti-history"></i> Historial y trazabilidad</a>
+      <a href="clientes-conteos.html" class="s-item"><i class="ti ti-users-group"></i> Gestión de clientes e inventario</a>
       <a href="retiros-programacion.html" class="s-item"><i class="ti ti-truck-loading"></i> Programación de retiros</a>
       <a href="/calendario-retiro-pallets.html" class="s-item"><i class="ti ti-calendar"></i> Calendario retiro pallets</a>
       <a href="?vista=ops" onclick="setVista(this,'ops');return false" class="s-item"><i class="ti ti-chart-line"></i> Ops x rango fechas <span class="dup-tag">↔</span></a>
@@ -3008,6 +3010,55 @@ function exportXLSX() {
   } catch(e) {
     console.warn('No se pudo cargar usuario:', e);
   }
+  /* El recorte por rol ya terminó (haya recortado o no). Recién acá el menú
+     sabe qué puede ver esta persona, y recién acá tiene sentido atender un
+     ?abrir= que venga del index. */
+  try { document.dispatchEvent(new Event('perfil-listo')); } catch(e){}
+})();
+
+/* ═══ ?abrir=<vista> ═══════════════════════════════════════════════════════
+   El index enlaza hacia acá con la vista que la persona eligió.
+   NO se valida contra una lista propia de vistas permitidas: eso sería un
+   segundo modelo de permisos, y dos modelos siempre terminan desalineados.
+   Se busca el item en el menú YA RECORTADO por rol y se le da clic. Si el
+   item no está visible, esta persona no puede verlo y no se abre nada.
+   Darle clic al item real, además, reusa todo lo que ya existe: la apertura
+   como pestaña, el rótulo, las vistas internas del shell y el registro de uso.
+   ═════════════════════════════════════════════════════════════════════════ */
+(function(){
+  var pedida = '';
+  try { pedida = (new URLSearchParams(location.search).get('abrir') || '').trim(); } catch(e){}
+  if (!pedida) return;
+
+  function norm(h){ return String(h || '').replace(/^\.?\//, '').toLowerCase(); }
+
+  function visible(a){
+    if (a.classList.contains('s-oculto') || a.classList.contains('rol-oculto')) return false;
+    for (var n = a; n && n !== document.body; n = n.parentElement) {
+      if (n.style && n.style.display === 'none') return false;
+      if (n.classList && n.classList.contains('s-oculto')) return false;
+    }
+    return true;
+  }
+
+  function buscar(){
+    var items = [].slice.call(document.querySelectorAll('a.s-item')).filter(visible);
+    var pagina  = norm(/\.html?$/i.test(pedida) ? pedida : pedida + '.html');
+    var interna = norm('?vista=' + pedida);
+    for (var i = 0; i < items.length; i++) {
+      var h = norm(items[i].getAttribute('href'));
+      if (h === pagina || h === interna) return items[i];
+    }
+    return null;
+  }
+
+  function intentar(){
+    var a = buscar();
+    if (!a) { console.warn('?abrir=' + pedida + ': no visible para este perfil'); return; }
+    a.click();
+  }
+
+  document.addEventListener('perfil-listo', function(){ setTimeout(intentar, 0); });
 })();
 
 /* Menú de cuenta: abrir/cerrar el popover del avatar */

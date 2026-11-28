@@ -50,7 +50,10 @@ async function abrir(b, o){
       this.getAllAccounts = () => cfg.msal === 'cache' ? [{username:'p@redtecsa.com'}] : [];
       this.acquireTokenSilent = async () => { if (cfg.msal==='falla') throw new Error('x'); return tok; };
       this.ssoSilent = async (r) => { window.__hint = r.loginHint;
-        if (cfg.msal==='falla') { const e=new Error('x'); e.errorCode='consent_required'; throw e; } return tok; };
+        if (cfg.msal==='falla') { const e=new Error('x'); e.errorCode='consent_required'; throw e; }
+        if (cfg.msal==='mal_config') { const e=new Error("AADSTS90002: Tenant 'x' not found.");
+          e.errorCode='invalid_request'; throw e; }
+        return tok; };
       this.loginPopup = async () => { window.__huboPopup = true; return tok; };
       this.acquireTokenPopup = async () => { window.__popupCal = (window.__popupCal||0) + 1;
         if (cfg.popup === 'rechaza') throw new Error('user_cancelled');
@@ -279,6 +282,24 @@ async function abrir(b, o){
     const c = await txt(p,'#cal');
     es('O','avisa cuántas quedan fuera',true,/3 reuniones más hoy/.test(c));
     es('O','con enlace a Outlook',true,/verlas en Outlook/.test(c));
+    await p.close(); }
+
+  /* P · el id del inquilino, clavado.
+     Lo escribí mal una vez leyéndolo de una captura: ceros por des, es por des.
+     Este valor sale de
+     login.microsoftonline.com/redtecsa.com/v2.0/.well-known/openid-configuration
+     y esta prueba existe para que no vuelva a cambiarse a ojo. */
+  { const src = require('fs').readFileSync(__dirname + '/index-nuevo.html','utf8');
+    es('P','inquilino de REDTEC',true, src.includes("inquilino:'1bdfd00d-fe9e-40e9-8cbe-3c0978861728'"));
+    es('P','aplicación m3link – calendario',true, src.includes("cliente:  '7feaad18-de29-4586-906f-fe074b401bd1'")); }
+
+  /* Q · un error de CONFIGURACIÓN no se disfraza de "falta autorizar" */
+  { const {p,errs} = await abrir(b,{roles:['logistica'],msal:'mal_config'});
+    es('Q','sin errores de js',0,errs.length);
+    es('Q','NO ofrece un botón que no serviría',0,await p.locator('#conectarCal').count());
+    const t = await txt(p,'#cal');
+    es('Q','dice que está mal configurado',true,/mal configurado/.test(t));
+    es('Q','no culpa a Chrome',false,/Chrome bloquea/.test(t));
     await p.close(); }
 
   console.log('\n' + ok + ' ok · ' + mal + ' mal');

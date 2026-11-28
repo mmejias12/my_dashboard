@@ -28,7 +28,13 @@ const TODAS = [
      alguien se le ocurra poner texto libre en un título. */
   ['el calendario corre sin sesión', "if (!YO.correo) return;", ""],
   ['muestra el día entero y no lo que queda', "return finEnMs(e) >= ahora;", "return true;"],
-  ['sin tope de eventos', "eventos.slice(0, CAL.tope)", "eventos.slice(0, 99)"]
+  ['sin tope de eventos', "eventos.slice(0, CAL.tope)", "eventos.slice(0, 99)"],
+  ['un dígito cambiado en el id del inquilino',
+   "inquilino:'1bdfd00d-fe9e-40e9-8cbe-3c0978861728'", "inquilino:'1bdfd0dd-fe9e-40e9-8cbe-3c0978861728'"],
+  ['el error de configuración se disfraza de falta de permiso',
+   "return 'config';", "return 'permiso';"],
+  ['ofrece el botón aunque esté mal configurado',
+   "(motivo === 'config' ? '' :", "(false ? '' :"]
 ];
 const MUT = TODAS.slice(Number(process.argv[2]||0), Number(process.argv[3]||99));
 let vivas = 0;

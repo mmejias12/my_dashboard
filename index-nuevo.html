@@ -671,7 +671,11 @@ async function indicadores() {
    la aplicación, no autorizan nada por sí solos.                          */
 var CAL = {
   cliente:  '7feaad18-de29-4586-906f-fe074b401bd1',
-  inquilino:'1bdfd0dd-fe9e-40d9-8dbe-5d0978861728',
+  /* Id. del inquilino de REDTEC. Comprobable sin entrar a Azure:
+     https://login.microsoftonline.com/redtecsa.com/v2.0/.well-known/openid-configuration
+     lo publica en "issuer". Si alguna vez hay que cambiarlo, sacarlo de ahí y
+     no de una captura de pantalla: los ceros, las des y las es se confunden. */
+  inquilino:'1bdfd00d-fe9e-40e9-8cbe-3c0978861728',
   tope: 5          // más de cinco deja de leerse de un vistazo
 };
 var ZONA = 'America/Santiago';
@@ -759,15 +763,31 @@ async function tokenSilencioso() {
 /* La tarjeta de "conectar": aparece SOLO cuando el silencio no alcanzó, y no
    hace nada hasta que la persona aprieta. Una ventana emergente que salta sola
    al entrar al index es justo la molestia que este bloque debía evitar. */
-function pintarConectar(ocupado) {
+/* Separa "falta autorizar" de "está mal configurado". No es cosmético: con el
+   mismo texto para los dos, un id de inquilino mal escrito manda a la persona
+   a apretar un botón que nunca va a funcionar. */
+function motivoDe(e) {
+  var cod = String((e && (e.errorCode || e.name)) || '');
+  var msg = String((e && (e.errorMessage || e.message)) || '');
+  if (/AADSTS90002|AADSTS700016|unauthorized_client|invalid_client|invalid_request/.test(cod + ' ' + msg))
+    return 'config';
+  return 'permiso';
+}
+
+function pintarConectar(ocupado, motivo) {
   var c = $('cal');
+  var texto = motivo === 'config'
+    ? 'El calendario está mal configurado: la aplicación de Entra no responde. ' +
+      'Avísale a quien administra la plataforma; apretar el botón no lo va a resolver.'
+    : 'Tu agenda de Outlook puede verse acá. Chrome bloquea la conexión automática, ' +
+      'así que hay que autorizarla una vez en este navegador.';
   c.innerHTML = '<div class="cal">' +
     '<div class="ch2"><b>Mi día</b>' +
     '<button class="plegar" data-plega="cal">Ocultar</button></div>' +
-    '<div class="libre">Tu agenda de Outlook puede verse acá. Chrome bloquea la ' +
-    'conexión automática, así que hay que autorizarla una vez en este navegador.</div>' +
-    '<button class="conectar" id="conectarCal"' + (ocupado ? ' disabled' : '') + '>' +
-    (ocupado ? 'Conectando…' : 'Conectar mi calendario') + '</button></div>';
+    '<div class="libre">' + texto + '</div>' +
+    (motivo === 'config' ? '' :
+     '<button class="conectar" id="conectarCal"' + (ocupado ? ' disabled' : '') + '>' +
+     (ocupado ? 'Conectando…' : 'Conectar mi calendario') + '</button>') + '</div>';
   plegable(c.querySelector('.cal'), 'cal');
   var b = $('conectarCal');
   if (b && !ocupado) b.addEventListener('click', async function () {
@@ -778,7 +798,8 @@ function pintarConectar(ocupado) {
     } catch (e) {
       /* Si cerró la ventana o la rechazó, se vuelve a dejar la tarjeta y
          nada más: no se insiste ni se reabre sola. */
-      pintarConectar(false);
+      try { console.warn('[calendario] ventana falló:', e.errorCode || e.name, e.errorMessage || e.message); } catch (x) {}
+      pintarConectar(false, motivoDe(e));
     }
   });
 }
@@ -791,7 +812,14 @@ async function cargarCalendario() {
   if (!YO.correo) return;
   var tok;
   try { tok = await tokenSilencioso(); }
-  catch (e) { pintarConectar(false); return; }
+  catch (e) {
+    /* El motivo no se pierde: sin esto, un id mal escrito y una cookie
+       bloqueada se ven exactamente igual desde afuera — la misma tarjeta
+       muda— y se depura a ciegas. */
+    try { console.warn('[calendario] silencio falló:', e.errorCode || e.name, e.errorMessage || e.message); } catch (x) {}
+    pintarConectar(false, motivoDe(e));
+    return;
+  }
   await traerAgenda(tok);
 }
 

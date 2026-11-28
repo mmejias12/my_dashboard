@@ -166,14 +166,19 @@ async function abrir(b, o){
     await p.close(); }
 
   /* G · calendario: silencio OK */
-  { const {p,errs,visto} = await abrir(b,{roles:['logistica'],msal:'cache',
-      eventos:[EV('08:00','08:30','Revisión STOCK PLANTAS','Sala Gerencia'),
-               EV('23:00','23:30','Cierre del día',null,true)]});
+  /* Las horas van relativas al reloj. Antes estaban fijas al 2026-11-27 y la
+     prueba empezó a fallar sola al día siguiente: el filtro de "lo que queda
+     del día" las mandaba al pasado. Una prueba que caduca es ruido. */
+  { const hhmm = (min) => local(min).slice(11,16);
+    const {p,errs,visto} = await abrir(b,{roles:['logistica'],msal:'cache',
+      eventos:[EVrel(-120,-90,'Revisión STOCK PLANTAS'),
+               EVrel(90,120,'Cierre del día')]});
     es('G','sin errores de js',0,errs.length);
     es('G','consultó Graph',true,visto.graph>0);
     const c = await txt(p,'#cal');
     es('G','pinta el bloque',true,/MI DÍA|Mi día/i.test(c));
-    es('G','hora sin correr 3 horas',true,/23:00/.test(c));
+    { const esperada = local(90).slice(11,16);
+      es('G','hora sin correr 3 horas',true,c.includes(esperada)); }
     es('G','no abrió ninguna ventana',0,(await p.evaluate(()=>window.__popups.length)));
     es('G','usa localStorage para el token','localStorage',
        await p.evaluate(()=>window.__cfgMsal.cache.cacheLocation));
